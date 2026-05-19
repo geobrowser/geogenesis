@@ -13,7 +13,15 @@ export function useCreateEntityWithFilters(spaceId: string) {
   const { storage } = useMutate();
 
   const onClick = React.useCallback(
-    ({ name, filters }: { name?: string | null; filters?: Filter[] }) => {
+    ({
+      name,
+      filters,
+      advanceNextId = true,
+    }: {
+      name?: string | null;
+      filters?: Filter[];
+      advanceNextId?: boolean;
+    }) => {
       if (name) {
         storage.entities.name.set(nextEntityId, spaceId, name);
       }
@@ -61,7 +69,9 @@ export function useCreateEntityWithFilters(spaceId: string) {
         }
       }
 
-      setNextEntityId(IdUtils.generate());
+      if (advanceNextId) {
+        setNextEntityId(IdUtils.generate());
+      }
     },
     [nextEntityId, spaceId, storage]
   );
