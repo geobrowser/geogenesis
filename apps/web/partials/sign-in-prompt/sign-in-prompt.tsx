@@ -84,7 +84,7 @@ export function SignInPrompt() {
               </Description>
             </div>
             <Button onClick={handleSignIn} className="w-full">
-              Sign in
+              Sign up
             </Button>
           </div>
         </Content>
