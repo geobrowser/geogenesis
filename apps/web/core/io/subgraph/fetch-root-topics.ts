@@ -1,7 +1,12 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect, Either } from 'effect';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import {
+  CURATED_TOPIC_TAG_ID,
+  SUBTOPIC_RELATION_TYPE_ID,
+  TAG_PROPERTY_ID,
+  TOPIC_TYPE_ID,
+} from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
@@ -72,6 +77,8 @@ interface TopicEntityNode {
   spacesInConnection: {
     nodes: TopicSpaceInNode[];
   };
+  /** Presence check: at least one incoming SUBTOPIC relation = this is a subtopic of some parent. */
+  subtopicParentProbe: Array<{ typeId: string }>;
 }
 
 interface NetworkResult {
@@ -134,6 +141,9 @@ const QUERY = `
         spacesInConnection {
           nodes { id }
         }
+        subtopicParentProbe: backlinksList(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }, first: 1) {
+          typeId
+        }
       }
     }
   }
@@ -179,6 +189,13 @@ export async function fetchRootTopics(): Promise<RootTopicsData> {
     const image = resolveSpaceImage(entity.relationsList ?? []);
 
     if (spaceCount === 0) {
+      // "Any topic" surfaces the union of immediate subtopics across all
+      // parent topics, restricted to unclaimed entries. Skip curated topics
+      // that are themselves top-level (no incoming SUBTOPIC backlinks) — those
+      // belong in the parent-topic dropdown, not the chip list.
+      const isSubtopic = (entity.subtopicParentProbe?.length ?? 0) > 0;
+      if (!isSubtopic) continue;
+
       const spaceIds = (entity.spacesInConnection?.nodes ?? []).map(s => s.id);
       // Skip topics with no containing space — we'd have nowhere to link the
       // chip to, and pointing at ROOT_SPACE would trigger SpaceRedirect's
