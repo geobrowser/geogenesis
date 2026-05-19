@@ -1,0 +1,19 @@
+'use client';
+
+import * as React from 'react';
+
+export function useElevatedPopoverPortal() {
+  const [portalContainer, setPortalContainer] = React.useState<HTMLDivElement | null>(null);
+
+  React.useLayoutEffect(() => {
+    const el = document.createElement('div');
+    el.className = 'elevated-popover';
+    document.body.appendChild(el);
+    setPortalContainer(el);
+    return () => {
+      document.body.removeChild(el);
+    };
+  }, []);
+
+  return portalContainer;
+}

@@ -195,10 +195,7 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
         <CloseSidePanel color="grey-04" />
       </button>
 
-      <Link
-        href={NavUtils.toSpace(entitySpaceId)}
-        className="flex min-w-0 flex-1 items-center gap-1.5 rounded-sm px-1 py-1"
-      >
+      <div className="flex min-w-0 max-w-[min(100%,14rem)] shrink items-center gap-1.5 px-1 py-1">
         <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage
             value={space?.entity?.image || PLACEHOLDER_SPACE_IMAGE}
@@ -211,7 +208,9 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
         <Truncate shouldTruncate variant="breadcrumb" maxLines={1} className="min-w-0 font-medium">
           {displayName}
         </Truncate>
-      </Link>
+      </div>
+
+      <div className="min-w-0 flex-1" aria-hidden />
 
       <EntitySidePanelModeToggle />
 
@@ -490,7 +489,7 @@ export function EntitySidePanel() {
   const { entityId, spaceId, openedWithMainViewEditing } = sidePanelTarget;
 
   return createPortal(
-    <RemoveScroll>
+    <RemoveScroll noIsolation>
       <div className="fixed inset-0 z-[200]">
         <button
           type="button"
