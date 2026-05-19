@@ -24,6 +24,11 @@ import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 // union of subtopics across the parents shown in the dropdown.
 const PARENT_PAGE_SIZE = 100;
 
+// Cap subtopics per parent. Without this, a single popular parent with
+// hundreds of subtopics could balloon the SSR payload. 200 is well above the
+// chip list's INITIAL_VISIBLE_COUNT + "Show more" expansion needs.
+const SUBTOPICS_PER_PARENT = 200;
+
 /** Chip representation of an unclaimed curated topic — shared with the per-parent fetch. */
 export interface RootTopicChip {
   id: string;
@@ -78,7 +83,7 @@ const QUERY = `
     ) {
       nodes {
         id
-        subtopics: relations(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }) {
+        subtopics: relations(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }, first: ${SUBTOPICS_PER_PARENT}) {
           nodes {
             toEntity {
               id

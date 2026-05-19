@@ -103,6 +103,9 @@ export function useOpenCreateSpaceDialog() {
 
   return useCallback(
     (preset?: OpenDialogPreset) => {
+      // Reset the auto-run latch so a second claim attempt on a different
+      // topic (without an intervening close) doesn't silently no-op.
+      autoRunFired = false;
       setName(preset?.name ?? '');
       setImage(preset?.image ?? '');
       setTopicId(preset?.topicId ?? '');
@@ -166,10 +169,16 @@ export function CreateSpaceDialog() {
   // effect re-runs don't fire deploy twice. Declared above the early
   // `return null` for !address so the hook count stays stable when the user
   // signs in / out while the dialog is mounted.
+  //
+  // We require name + topicId to be non-empty before firing: the entity-page
+  // claim button sets name via the live entity store, which can be `''` on
+  // the first render before hydration completes. Without this check the
+  // deploy would go out with an empty space name.
   React.useEffect(() => {
     if (!open || !autoRun) return;
     if (step !== 'create-space') return;
     if (!spaceType || !address) return;
+    if (!name || !topicId) return;
     if (autoRunFired) return;
     autoRunFired = true;
     createSpaces(spaceType);
@@ -203,7 +212,6 @@ export function CreateSpaceDialog() {
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
-      console.error(error);
       const message = describeError(error);
       if (autoRun) {
         // Auto-run flow has no useful form state to recover to — close the

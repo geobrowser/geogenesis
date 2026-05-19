@@ -21,8 +21,8 @@ const INITIAL_VISIBLE_COUNT = 12;
 const ANY_TOPIC_VALUE = 'all';
 const ANY_TOPIC_LABEL = 'Any topic';
 
-async function fetchSubtopicsForParent(parentId: string): Promise<RootTopicChip[]> {
-  const res = await fetch(`/api/explore/topics?parentId=${encodeURIComponent(parentId)}`);
+async function fetchSubtopicsForParent(parentId: string, signal?: AbortSignal): Promise<RootTopicChip[]> {
+  const res = await fetch(`/api/explore/topics?parentId=${encodeURIComponent(parentId)}`, { signal });
   if (!res.ok) throw new Error('Failed to load subtopics');
   const data = (await res.json()) as { topics: RootTopicChip[] };
   return data.topics;
@@ -38,9 +38,12 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
   // us the full set for the selected parent.
   const subtopicsQuery = useQuery({
     queryKey: ['explore-subtopics', selectedParentId],
-    queryFn: () => fetchSubtopicsForParent(selectedParentId),
+    queryFn: ({ signal }) => fetchSubtopicsForParent(selectedParentId, signal),
     enabled: selectedParentId !== ANY_TOPIC_VALUE,
     staleTime: 30_000,
+    // Drop cached parent results after 5 minutes of disuse — most users only
+    // browse a few parents per session, so unbounded caching is wasteful.
+    gcTime: 5 * 60_000,
   });
 
   const isLoading = selectedParentId !== ANY_TOPIC_VALUE && subtopicsQuery.isFetching && !subtopicsQuery.data;
@@ -117,6 +120,7 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
               <Link
                 key={topic.id}
                 href={NavUtils.toEntity(linkSpaceId, topic.id)}
+                aria-label={topic.name}
                 className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 px-2.5 py-1 text-[13px] leading-[14px] text-text transition-colors hover:bg-grey-01"
               >
                 <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">

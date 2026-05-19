@@ -1,6 +1,7 @@
 'use client';
 
 import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -13,10 +14,6 @@ type Props = {
   pendingMembershipSpaceIds: Set<string>;
   memberOrEditorSpaceIds: Set<string>;
 };
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 function formatMembers(count: number): string {
   if (count === 1) return '1 member';

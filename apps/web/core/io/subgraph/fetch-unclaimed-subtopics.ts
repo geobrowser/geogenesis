@@ -42,7 +42,7 @@ interface NetworkResult {
 const buildQuery = (parentId: string) => `
   {
     entity(id: ${JSON.stringify(parentId)}) {
-      subtopics: relations(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }) {
+      subtopics: relations(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }, first: 500) {
         nodes {
           toEntity {
             id

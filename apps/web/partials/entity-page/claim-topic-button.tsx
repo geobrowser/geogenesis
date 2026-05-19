@@ -27,6 +27,11 @@ export function ClaimTopicButton({ entityId, spaceId, coverUrl }: Props) {
   if (!smartAccount?.account.address) return null;
 
   const handleClick = () => {
+    // Guard against firing before the entity store hydrates — the auto-run
+    // path requires non-empty name + topicId too, but failing the click
+    // explicitly gives the user a clearer signal (no silent no-op).
+    if (!name) return;
+
     openCreateSpaceDialog({
       topicId: entityId,
       name,
@@ -50,7 +55,9 @@ export function ClaimTopicButton({ entityId, spaceId, coverUrl }: Props) {
     <button
       type="button"
       onClick={handleClick}
-      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-text px-3 py-1.5 text-[14px] leading-[16px] font-medium text-white transition-opacity hover:opacity-90"
+      disabled={!name}
+      aria-disabled={!name}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-text px-3 py-1.5 text-[14px] leading-[16px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
     >
       <span className="flex h-3 w-3 items-center justify-center">
         <Plus />

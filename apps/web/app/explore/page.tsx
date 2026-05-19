@@ -11,14 +11,11 @@ import {
   type RecentlyClaimedSpace,
   fetchRecentlyClaimedSpaces,
 } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
+import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
 
 import { ExplorePage } from '~/partials/explore/explore-page';
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 export default async function ExploreRoutePage() {
   const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;

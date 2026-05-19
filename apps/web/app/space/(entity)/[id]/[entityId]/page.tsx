@@ -23,17 +23,18 @@ export default async function EntityTemplateStrategy(props: Props) {
     notFound();
   }
 
-  const result = await cachedFetchEntityPage(params.entityId, params.id);
-
   // Claimable topics always render via DefaultEntityPage so the "Claim topic"
   // button on EntityPageHeader is visible — without this, person- or post-
   // typed topics would route to a specialized container and the button
-  // would never render.
-  const claimEligibility = await fetchTopicClaimEligibility(params.entityId).catch(() => ({
-    isTopic: false,
-    isClaimed: false,
-    canClaim: false,
-  }));
+  // would never render. The two fetches are independent; run them in parallel.
+  const [result, claimEligibility] = await Promise.all([
+    cachedFetchEntityPage(params.entityId, params.id),
+    fetchTopicClaimEligibility(params.entityId).catch(() => ({
+      isTopic: false,
+      isClaimed: false,
+      canClaim: false,
+    })),
+  ]);
 
   if (!claimEligibility.canClaim && result?.entity?.types.map(t => t.id).includes(SystemIds.PERSON_TYPE)) {
     return <ProfileEntityServerContainer params={params} searchParams={searchParams} />;

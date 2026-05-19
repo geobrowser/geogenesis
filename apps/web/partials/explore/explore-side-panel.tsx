@@ -3,6 +3,7 @@
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
+import { normId } from '~/core/utils/norm-id';
 
 import { ClaimATopicSection } from './claim-a-topic-section';
 import { RecentlyClaimedSection } from './recently-claimed-section';
@@ -14,10 +15,6 @@ export type ExploreSidePanelProps = {
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
 };
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
 
 export function ExploreSidePanel({
   unclaimedTopics,
