@@ -22,7 +22,6 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -30,13 +29,15 @@ import { LayoutGroup, motion } from 'framer-motion';
 
 import React from 'react';
 
-const wrappedLayoutTransition = { type: 'spring' as const, stiffness: 500, damping: 38 };
-
 import { useMutate } from '~/core/sync/use-mutate';
 import { Relation } from '~/core/types';
 import { sortRelations } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from './chip';
+
+const wrappedLayoutTransition = { type: 'spring' as const, stiffness: 500, damping: 38 };
+const chipListClassName =
+  'relative flex w-full min-w-0 max-w-full flex-row flex-wrap content-start justify-start items-start gap-1';
 
 type OverlaySize = { width: number; height: number };
 type LayoutMode = 'vertical' | 'inline';
@@ -241,33 +242,29 @@ export default function ReorderableRelationChipsDnd({
   const [overlaySize, setOverlaySize] = React.useState<OverlaySize | null>(null);
 
   const activeRelation = activeId ? sortedRelations.find(r => r.id === activeId) : null;
-  const useWrappedInlineDnD =
-    layoutMode === 'inline' &&
-    (inlineWrapsMultipleRows ||
-      (activeId != null && measureWrapsMultipleRows(listLayoutRef.current)));
+  const chipsWrapMultipleRows =
+    inlineWrapsMultipleRows ||
+    (activeId != null && measureWrapsMultipleRows(listLayoutRef.current));
+  const useWrappedInlineDnD = sortedRelations.length > 1 && chipsWrapMultipleRows;
   const wrappedLayoutAnimate = useWrappedInlineDnD && activeId != null;
   const activeIndex = activeId ? sortedRelations.findIndex(r => r.id === activeId) : -1;
 
-  const sortingStrategy: SortingStrategy =
-    layoutMode === 'vertical'
-      ? verticalListSortingStrategy
-      : useWrappedInlineDnD
-        ? inlineWrappedSortingStrategy
-        : horizontalListSortingStrategy;
+  const sortingStrategy: SortingStrategy = useWrappedInlineDnD
+    ? inlineWrappedSortingStrategy
+    : horizontalListSortingStrategy;
 
   const relationListKey = sortedRelations.map(r => r.id).join('\0');
 
   React.useLayoutEffect(() => {
-    if (sortedRelations.length <= 1 || layoutMode !== 'inline') {
+    if (sortedRelations.length <= 1) {
       setInlineWrapsMultipleRows(false);
       return;
     }
     if (activeIdRef.current) return;
     setInlineWrapsMultipleRows(measureWrapsMultipleRows(listLayoutRef.current));
-  }, [relationListKey, sortedRelations.length, layoutMode, activeId]);
+  }, [relationListKey, sortedRelations.length, activeId]);
 
   React.useEffect(() => {
-    if (layoutMode !== 'inline') return;
     const el = listLayoutRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
@@ -278,7 +275,7 @@ export default function ReorderableRelationChipsDnd({
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [relationListKey, layoutMode]);
+  }, [relationListKey]);
 
   const registerChipNode = React.useCallback((relationId: string, node: HTMLDivElement | null) => {
     if (node) {
@@ -332,7 +329,7 @@ export default function ReorderableRelationChipsDnd({
       }
     }
 
-    if (layoutMode === 'inline' && measureWrapsMultipleRows(listLayoutRef.current)) {
+    if (measureWrapsMultipleRows(listLayoutRef.current)) {
       setInlineWrapsMultipleRows(true);
       updateInsertIndexFromPointer(pointerFromDragEvent(event), id, true);
     }
@@ -398,14 +395,11 @@ export default function ReorderableRelationChipsDnd({
         spaceId={spaceId}
         layoutMode={layoutMode}
         layoutAnimate={wrappedLayoutAnimate}
-        collapseInPlaceWhenDragging={useWrappedInlineDnD}
+        collapseInPlaceWhenDragging
+        isListDragging={activeId != null}
         onMeasureSize={node => registerChipNode(relation.id, node)}
       />
     );
-
-    if (layoutMode === 'vertical') {
-      return React.cloneElement(chip, { key: relation.id });
-    }
 
     return (
       <React.Fragment key={relation.id}>
@@ -441,7 +435,7 @@ export default function ReorderableRelationChipsDnd({
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={layoutMode === 'vertical' ? closestCenter : inlineWrappedCollisionDetection}
+      collisionDetection={useWrappedInlineDnD ? inlineWrappedCollisionDetection : closestCenter}
       measuring={{
         droppable: {
           strategy: MeasuringStrategy.Always,
@@ -454,17 +448,9 @@ export default function ReorderableRelationChipsDnd({
       onDragCancel={clearDragState}
     >
       <SortableContext items={sortedRelations.map(r => r.id)} strategy={sortingStrategy}>
-        {layoutMode === 'vertical' ? (
-          <div className="flex w-full flex-col gap-1">
-            {sortableItems}
-            {afterChips}
-          </div>
-        ) : wrappedLayoutAnimate ? (
+        {wrappedLayoutAnimate ? (
           <LayoutGroup>
-            <motion.div
-              ref={listLayoutRef}
-              className="relative flex w-full min-w-0 flex-row flex-wrap content-start justify-start items-start gap-1"
-            >
+            <motion.div ref={listLayoutRef} className={chipListClassName}>
               {sortableItems}
               {showTrailingGap ? (
                 <DragInsertGap width={gapSize!.width} height={gapSize!.height} animateLayout />
@@ -473,20 +459,21 @@ export default function ReorderableRelationChipsDnd({
             </motion.div>
           </LayoutGroup>
         ) : (
-          <div
-            ref={listLayoutRef}
-            className="relative flex w-full min-w-0 flex-row flex-wrap content-start justify-start items-start gap-1"
-          >
+          <motion.div ref={listLayoutRef} className={chipListClassName}>
             {sortableItems}
             {showTrailingGap ? (
               <DragInsertGap width={gapSize!.width} height={gapSize!.height} animateLayout={false} />
             ) : null}
             {afterChips}
-          </div>
+          </motion.div>
         )}
       </SortableContext>
 
-      <DragOverlay dropAnimation={null} modifiers={useWrappedInlineDnD ? [snapCenterToCursor] : undefined}>
+      <DragOverlay
+        dropAnimation={null}
+        zIndex={10002}
+        modifiers={useWrappedInlineDnD ? [snapCenterToCursor] : undefined}
+      >
         {activeId && activeRelation ? (
           <RelationChipDragOverlay
             relation={activeRelation}
@@ -515,14 +502,12 @@ function RelationChipDragOverlay({
   const truncateLabel = shouldTruncateLabel(label, layoutMode);
 
   return (
-    <div
-      className={layoutMode === 'vertical' ? 'pointer-events-none block w-full cursor-grabbing' : 'pointer-events-none inline-block max-w-full cursor-grabbing'}
+    <motion.div
+      className="pointer-events-none inline-block max-w-full min-w-0 cursor-grabbing"
       style={
         size
-          ? { width: size.width, minHeight: size.height, maxWidth: layoutMode === 'inline' ? size.width : undefined }
-          : layoutMode === 'inline'
-            ? { maxWidth: 320 }
-            : undefined
+          ? { width: size.width, minHeight: size.height, maxWidth: size.width }
+          : { maxWidth: 320 }
       }
     >
       <LinkableRelationChip
@@ -530,7 +515,7 @@ function RelationChipDragOverlay({
         small
         disableLink
         truncateLabel={truncateLabel}
-        className={layoutMode === 'vertical' ? 'w-full shadow-lg' : 'shadow-lg'}
+        className="max-w-full min-w-0 shadow-lg"
         currentSpaceId={spaceId}
         entityId={relation.toEntity.id}
         relationId={relation.id}
@@ -540,7 +525,7 @@ function RelationChipDragOverlay({
       >
         {label}
       </LinkableRelationChip>
-    </div>
+    </motion.div>
   );
 }
 
@@ -561,7 +546,7 @@ function RelationChip({
       isEditing
       small
       truncateLabel={shouldTruncateLabel(label, layoutMode)}
-      className={layoutMode === 'vertical' ? 'w-full' : undefined}
+      className="max-w-full min-w-0"
       onDelete={() => storage.relations.delete(relation)}
       onDone={result => {
         storage.relations.update(relation, draft => {
@@ -591,9 +576,9 @@ function StaticRelationChip({
   layoutMode: LayoutMode;
 }) {
   return (
-    <div className={layoutMode === 'vertical' ? 'block w-full min-w-0 max-w-full' : 'inline-block max-w-full min-w-0'}>
+    <motion.div className="inline-block max-w-full min-w-0">
       <RelationChip relation={relation} spaceId={spaceId} layoutMode={layoutMode} />
-    </div>
+    </motion.div>
   );
 }
 
@@ -603,6 +588,7 @@ interface SortableRelationChipProps {
   layoutMode: LayoutMode;
   layoutAnimate: boolean;
   collapseInPlaceWhenDragging: boolean;
+  isListDragging: boolean;
   onMeasureSize: (node: HTMLDivElement | null) => void;
 }
 
@@ -612,6 +598,7 @@ function SortableRelationChip({
   layoutMode,
   layoutAnimate,
   collapseInPlaceWhenDragging,
+  isListDragging,
   onMeasureSize,
 }: SortableRelationChipProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -622,6 +609,7 @@ function SortableRelationChip({
   const shouldLayoutAnimate = layoutAnimate && !collapseInPlace;
 
   const style: React.CSSProperties = {
+    position: 'relative',
     transition: collapseInPlaceWhenDragging && isDragging ? 'none' : transition,
     ...(collapseInPlace
       ? {
@@ -635,10 +623,12 @@ function SortableRelationChip({
           borderWidth: 0,
           pointerEvents: 'none',
           transform: 'none',
+          zIndex: 0,
         }
       : {
           transform: CSS.Translate.toString(transform),
           opacity: isDragging ? 0 : 1,
+          zIndex: isDragging ? 1 : isListDragging ? 0 : undefined,
         }),
   };
 
@@ -668,13 +658,10 @@ function SortableRelationChip({
     [onMeasureSize, setNodeRef]
   );
 
-  const shellClassName =
-    layoutMode === 'vertical' ? 'relative block w-full min-w-0' : 'relative inline-block max-w-full min-w-0';
+  const shellClassName = 'relative inline-block max-w-full min-w-0';
 
   const handleClassName =
-    layoutMode === 'vertical'
-      ? 'flex w-full min-w-0 cursor-grab items-stretch active:cursor-grabbing'
-      : 'inline-flex max-w-full min-w-0 cursor-grab items-center active:cursor-grabbing';
+    'inline-flex max-w-full min-w-0 cursor-grab items-center active:cursor-grabbing';
 
   return (
     <SortableRelationChipShell

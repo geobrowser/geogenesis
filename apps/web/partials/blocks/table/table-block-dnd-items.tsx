@@ -133,6 +133,7 @@ export const TableBlockDndItems = ({
     }
 
     setActiveId(null);
+    setActiveWidth(null);
   };
 
   const handleMove = (targetPosition: number, currentPosition?: number) => {
@@ -256,7 +257,7 @@ export const TableBlockDndItems = ({
         {items}
       </SortableContext>
 
-      <DragOverlay>
+      <DragOverlay zIndex={10002}>
         {activeId && activeRow ? (
           <div style={{ width: activeWidth ?? undefined }}>
             {config.renderDragOverlay({
@@ -316,11 +317,23 @@ const SortableItem = ({
   const [hovered, setHovered] = React.useState(false);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0 : 1,
-    zIndex: isDragging ? 1000 : 'auto',
+  const style: React.CSSProperties = {
+    position: 'relative',
+    transition: isDragging ? 'none' : transition,
+    ...(isDragging
+      ? {
+          height: 0,
+          overflow: 'hidden',
+          opacity: 0,
+          margin: 0,
+          padding: 0,
+          pointerEvents: 'none',
+          transform: 'none',
+          zIndex: 0,
+        }
+      : {
+          transform: CSS.Translate.toString(transform),
+        }),
   };
 
   const [justDragged, setJustDragged] = React.useState(false);
