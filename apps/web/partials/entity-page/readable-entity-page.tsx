@@ -38,7 +38,6 @@ import { Map as GeoMap } from '~/design-system/map';
 import { Text } from '~/design-system/text';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
-import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 interface Props {
@@ -162,7 +161,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
+    <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
       {groupedSections.hasGroups &&
         groupedSections.groups.map(group => {
           const isCollapsed = collapsedGroups[group.id] ?? false;
@@ -187,20 +186,17 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               </button>
 
               {!isCollapsed && (
-                <div className="flex flex-col gap-2 sm:gap-5">
+                <div className="flex flex-col gap-6">
                   {group.propertyIds.map(propertyId => {
                     const property = renderedProperties[propertyId];
                     if (!property) return null;
+                    const isRelation = property.dataType === 'RELATION';
 
-                    return (
-                      <ReadablePropertyRow
-                        key={propertyId}
-                        entityId={entityId}
-                        spaceId={spaceId}
-                        propertyId={propertyId}
-                        property={property}
-                      />
-                    );
+                    if (isRelation) {
+                      return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+                    }
+
+                    return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
                   })}
                 </div>
               )}
@@ -215,52 +211,20 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               Ungrouped properties
             </Text>
           )}
-          <div className="flex flex-col gap-2 sm:gap-5">
+          <div className="flex flex-col gap-6">
             {groupedSections.ungrouped.map(propertyId => {
               const property = renderedProperties[propertyId];
               if (!property) return null;
-              return (
-                <ReadablePropertyRow
-                  key={propertyId}
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  propertyId={propertyId}
-                  property={property}
-                />
-              );
+              const isRelation = property.dataType === 'RELATION';
+
+              if (isRelation) {
+                return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+              }
+
+              return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
             })}
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function ReadablePropertyRow({
-  entityId,
-  spaceId,
-  propertyId,
-  property,
-}: {
-  entityId: string;
-  spaceId: string;
-  propertyId: string;
-  property: { id: string; name: string | null; dataType: DataType; renderableTypeStrict?: string | null; renderableType?: string | null };
-}) {
-  const isRelation = property.dataType === 'RELATION';
-
-  return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1 sm:gap-1">
-      <div className="inline-flex min-w-0 items-start gap-2 text-text">
-        <span className="flex h-[1.5rem] shrink-0 items-center">
-          <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
-        </span>
-        <PropertyNameLink property={property} spaceId={spaceId} />
-      </div>
-      {isRelation ? (
-        <RelationsGroup entityId={entityId} spaceId={spaceId} propertyId={propertyId} hidePropertyName />
-      ) : (
-        <ValuesGroup entityId={entityId} propertyId={propertyId} spaceId={spaceId} hidePropertyName />
       )}
     </div>
   );
@@ -289,12 +253,10 @@ function ValuesGroup({
   entityId,
   spaceId,
   propertyId,
-  hidePropertyName,
 }: {
   entityId: string;
   spaceId: string;
   propertyId: string;
-  hidePropertyName?: boolean;
 }) {
   // @TODO: This should be prefetched with _all_ the properties
   const { property } = useQueryProperty({ id: propertyId });
@@ -324,7 +286,7 @@ function ValuesGroup({
         }
         return (
           <div key={`${entityId}-${propertyId}-${index}`} className="max-w-full min-w-0 break-words">
-            {!hidePropertyName && <PropertyNameLink property={property} spaceId={spaceId} />}
+            <PropertyNameLink property={property} spaceId={spaceId} />
             <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
               <RenderedValue
                 propertyId={propertyId}
@@ -346,13 +308,11 @@ export function RelationsGroup({
   spaceId,
   propertyId,
   isMetadataHeader,
-  hidePropertyName,
 }: {
   entityId: string;
   propertyId: string;
   spaceId: string;
   isMetadataHeader?: boolean;
-  hidePropertyName?: boolean;
 }) {
   const { property } = useQueryProperty({ id: propertyId });
 
@@ -395,7 +355,7 @@ export function RelationsGroup({
   return (
     <>
       <div key={`${propertyId}-${property.name}`} className="max-w-full min-w-0 break-words">
-        {!hidePropertyName && propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
+        {propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
 
         <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
           {relations.map(r => {

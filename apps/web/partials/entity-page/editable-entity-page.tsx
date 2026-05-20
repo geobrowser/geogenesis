@@ -60,7 +60,8 @@ import { Text } from '~/design-system/text';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
-import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
+import { DataTypePill } from '~/partials/entity-page/data-type-pill';
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
 type EditableEntityPageProps = {
@@ -309,31 +310,27 @@ function InlinePropertyRow({
   hideActions?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1 sm:gap-1">
-      <div className="inline-flex min-w-0 items-center gap-2 pt-[3px] text-text">
-        <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
-        <span className="truncate text-tableCell font-medium">{property.name}</span>
-      </div>
-      <div className="min-w-0">
-        {isRelation || isVideo ? (
-          <RelationPropertyWithDelete
-            propertyId={propertyId}
-            entityId={entityId}
-            spaceId={spaceId}
-            property={property}
-            isSchemaProperty={isSchemaProperty}
-            hideActions={hideActions}
-          />
-        ) : (
-          <RenderedValue
-            propertyId={propertyId}
-            entityId={entityId}
-            spaceId={spaceId}
-            property={property}
-            hideActions={hideActions}
-          />
-        )}
-      </div>
+    <div className="w-full max-w-full min-w-0 break-words">
+      <PropertyNameLink property={property} spaceId={spaceId} />
+
+      {isRelation || isVideo ? (
+        <RelationPropertyWithDelete
+          propertyId={propertyId}
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          isSchemaProperty={isSchemaProperty}
+          hideActions={hideActions}
+        />
+      ) : (
+        <RenderedValue
+          propertyId={propertyId}
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          hideActions={hideActions}
+        />
+      )}
     </div>
   );
 }
@@ -412,8 +409,18 @@ function RelationPropertyWithDelete({
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>
-      {!hideActions && (!isSchemaProperty || propertyRelations.length > 0) && (
-        <div className="flex shrink-0 items-center">
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill
+          dataType={property.dataType}
+          renderableType={
+            property.renderableTypeStrict
+              ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
+              : null
+          }
+          spaceId={spaceId}
+          iconOnly={true}
+        />
+        {!hideActions && (!isSchemaProperty || propertyRelations.length > 0) && (
           <SquareButton
             icon={<Trash />}
             onClick={() => {
@@ -425,8 +432,8 @@ function RelationPropertyWithDelete({
               }
             }}
           />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -1183,11 +1190,19 @@ function RenderedValue({
   return (
     <div className="flex w-full items-start justify-between gap-2">
       <div className="min-w-0 flex-1">{renderField()}</div>
-      {!hideActions && rawValue && (
-        <div className="flex shrink-0 items-center">
-          <SquareButton icon={<Trash />} onClick={onDelete} />
-        </div>
-      )}
+      <div className="flex shrink-0 items-center gap-1">
+        <DataTypePill
+          dataType={property.dataType}
+          renderableType={
+            property.renderableTypeStrict
+              ? { id: property.renderableType ?? null, name: property.renderableTypeStrict }
+              : null
+          }
+          spaceId={spaceId}
+          iconOnly={true}
+        />
+        {!hideActions && rawValue && <SquareButton icon={<Trash />} onClick={onDelete} />}
+      </div>
     </div>
   );
 }
