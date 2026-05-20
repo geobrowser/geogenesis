@@ -311,7 +311,7 @@ function InlinePropertyRow({
 }) {
   return (
     <div className="w-full max-w-full min-w-0 break-words">
-      <PropertyNameLink property={property} spaceId={spaceId} />
+      <PropertyNameLink property={property} spaceId={spaceId} showDescriptionTooltip={false} />
 
       {isRelation || isVideo ? (
         <RelationPropertyWithDelete
