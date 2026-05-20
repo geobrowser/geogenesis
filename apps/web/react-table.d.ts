@@ -1,5 +1,7 @@
 import '@tanstack/react-table';
 
+import type * as React from 'react';
+
 import { Source } from './core/blocks/data/source';
 import { Property } from './core/types';
 import { onChangeEntryFn, onLinkEntryFn } from './partials/blocks/table/change-entry';
@@ -19,6 +21,7 @@ declare module '@tanstack/react-table' {
     source: Source;
     shouldAutoFocusPlaceholder?: boolean;
     placeholderFocusKey?: number;
+    focusRowEntityIdRef?: React.RefObject<string | null>;
     collectionTypeFilters?: { id: string; name: string | null }[];
   }
 }

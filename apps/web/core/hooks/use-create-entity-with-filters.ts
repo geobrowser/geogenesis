@@ -11,7 +11,13 @@ import { useMutate } from '../sync/use-mutate';
 
 export function useCreateEntityWithFilters(defaultSpaceId: string) {
   const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
+  const nextEntityIdRef = React.useRef(nextEntityId);
+  nextEntityIdRef.current = nextEntityId;
   const { storage } = useMutate();
+
+  const rotateNextEntityId = React.useCallback(() => {
+    setNextEntityId(IdUtils.generate());
+  }, []);
 
   const onClick = React.useCallback(
     ({
@@ -23,10 +29,11 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
       filters?: Filter[];
       spaceId?: string | null;
     }) => {
+      const entityId = nextEntityIdRef.current;
       const targetSpaceId = overrideSpaceId ? overrideSpaceId : defaultSpaceId;
 
       if (name) {
-        storage.entities.name.set(nextEntityId, targetSpaceId, name);
+        storage.entities.name.set(entityId, targetSpaceId, name);
       }
 
       /**
@@ -43,7 +50,7 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
             spaceId: targetSpaceId,
             renderableType: 'RELATION',
             fromEntity: {
-              id: nextEntityId,
+              id: entityId,
               name: null,
             },
             toEntity: {
@@ -59,7 +66,7 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
         } else if (filter.valueType === 'TEXT' && filter.columnId !== SystemIds.NAME_PROPERTY) {
           writeValue(
             storage,
-            nextEntityId,
+            entityId,
             targetSpaceId,
             {
               id: filter.columnId,
@@ -72,13 +79,17 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
         }
       }
 
-      setNextEntityId(IdUtils.generate());
+      const newId = IdUtils.generate();
+      nextEntityIdRef.current = newId;
+      setNextEntityId(newId);
+      return entityId;
     },
-    [nextEntityId, defaultSpaceId, storage]
+    [defaultSpaceId, storage]
   );
 
   return {
     onClick,
     nextEntityId,
+    rotateNextEntityId,
   };
 }

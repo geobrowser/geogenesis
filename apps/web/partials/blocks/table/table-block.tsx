@@ -71,13 +71,52 @@ interface Props {
   onConsumedInitialFiltersOpen?: () => void;
 }
 
-function makePlaceholderRow(entityId: string, properties: { id: string; name: string | null }[]) {
+type PendingEntity = { entityId: string; spaceId: string };
+
+const pendingEntitiesByBlockId = new Map<string, PendingEntity[]>();
+
+function pendingSessionKey(blockEntityId: string) {
+  return `geogenesis:data-block-pending:${blockEntityId}`;
+}
+
+function readPendingFromSession(blockEntityId: string): PendingEntity[] {
+  if (typeof sessionStorage === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(pendingSessionKey(blockEntityId));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as PendingEntity[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePendingToSession(blockEntityId: string, pending: PendingEntity[]) {
+  if (typeof sessionStorage === 'undefined') return;
+  const key = pendingSessionKey(blockEntityId);
+  if (pending.length === 0) {
+    sessionStorage.removeItem(key);
+  } else {
+    sessionStorage.setItem(key, JSON.stringify(pending));
+  }
+}
+
+function stableCellPropertyId(entityId: string, slotId: string): string {
+  return `${entityId}::${slotId}`;
+}
+
+function makePlaceholderRow(
+  entityId: string,
+  properties: { id: string; name: string | null }[],
+  targetSpaceId?: string | null
+) {
   const columns: Record<string, Cell> = {};
 
   columns[SystemIds.NAME_PROPERTY] = {
     slotId: SystemIds.NAME_PROPERTY,
-    propertyId: ID.createEntityId(),
+    propertyId: stableCellPropertyId(entityId, SystemIds.NAME_PROPERTY),
     name: null,
+    ...(targetSpaceId ? { space: targetSpaceId } : {}),
   };
 
   for (const p of properties) {
@@ -86,7 +125,7 @@ function makePlaceholderRow(entityId: string, properties: { id: string; name: st
     if (!maybeColumn) {
       columns[p.id] = {
         slotId: p.id,
-        propertyId: ID.createEntityId(),
+        propertyId: stableCellPropertyId(entityId, p.id),
         name: null,
       };
     }
@@ -99,12 +138,45 @@ function makePlaceholderRow(entityId: string, properties: { id: string; name: st
   };
 }
 
+/** Committed locally but not yet returned by the query */
+function makeOptimisticRow(
+  entityId: string,
+  properties: { id: string; name: string | null }[],
+  targetSpaceId: string
+): Row {
+  const columns: Record<string, Cell> = {};
+
+  columns[SystemIds.NAME_PROPERTY] = {
+    slotId: SystemIds.NAME_PROPERTY,
+    propertyId: stableCellPropertyId(entityId, SystemIds.NAME_PROPERTY),
+    name: null,
+    space: targetSpaceId,
+  };
+
+  for (const p of properties) {
+    if (!columns[p.id]) {
+      columns[p.id] = {
+        slotId: p.id,
+        propertyId: stableCellPropertyId(entityId, p.id),
+        name: null,
+      };
+    }
+  }
+
+  return {
+    placeholder: false,
+    columns,
+    entityId,
+  };
+}
+
 // @TODO: Maybe this can live in the useDataBlock hook? Probably want it to so
 // we can access it deeply in table cells, etc.
 //
 // We might want a way to store this in some local state so changes are optimistic
 // and we don't have to enter loading states when adding/removing entries
 function useEntries(
+  blockEntityId: string,
   entries: Row[],
   properties: { id: string; name: string | null }[],
   spaceId: string,
@@ -118,16 +190,42 @@ function useEntries(
   const { setEditable } = useEditable();
 
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
-  const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [placeholderFocusKey, setPlaceholderFocusKey] = React.useState(0);
+  const focusRowEntityIdRef = React.useRef<string | null>(null);
   // Space that newly-created entities (from the placeholder row) should be written to.
   // For query data blocks the user picks this when clicking "+". For collections and
   // when no override is provided we fall back to the block's space.
   const [placeholderTargetSpaceId, setPlaceholderTargetSpaceId] = React.useState<string | null>(null);
   const placeholderCreateSpaceRef = React.useRef<string | null>(null);
 
+  const entityTargetSpaceRef = React.useRef<Map<string, string>>(new Map());
+
+  const [pendingEntities, setPendingEntities] = React.useState<PendingEntity[]>(() => {
+    const inMemory = pendingEntitiesByBlockId.get(blockEntityId);
+    const initial = inMemory?.length ? inMemory : readPendingFromSession(blockEntityId);
+    for (const p of initial) {
+      entityTargetSpaceRef.current.set(p.entityId, p.spaceId);
+    }
+    return initial;
+  });
+
+  React.useEffect(() => {
+    if (pendingEntities.length > 0) {
+      pendingEntitiesByBlockId.set(blockEntityId, pendingEntities);
+      writePendingToSession(blockEntityId, pendingEntities);
+      for (const p of pendingEntities) {
+        entityTargetSpaceRef.current.set(p.entityId, p.spaceId);
+      }
+    } else {
+      pendingEntitiesByBlockId.delete(blockEntityId);
+      writePendingToSession(blockEntityId, []);
+    }
+  }, [blockEntityId, pendingEntities]);
+
   const { storage } = useMutate();
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const { nextEntityId, onClick: createEntityWithTypes, rotateNextEntityId } =
+    useCreateEntityWithFilters(spaceId);
+  const committedPlaceholderIdsRef = React.useRef(new Set<string>());
 
   const entriesWithPosition = React.useMemo(() => {
     return entries.map(row => {
@@ -144,36 +242,65 @@ function useEntries(
     });
   };
 
-  // Clear pending ID once it appears in entries
+  // Drop pending rows
   React.useEffect(() => {
-    if (pendingEntityId && entries.find(e => e.entityId === pendingEntityId)) {
-      setPendingEntityId(null);
-    }
-  }, [entries, pendingEntityId]);
+    setPendingEntities(prev => {
+      const next = prev.filter(p => !entries.some(e => e.entityId === p.entityId));
+      if (next.length === prev.length) return prev;
+      return next;
+    });
+  }, [entries]);
 
   const collectionEmptyEditable =
     source.type === 'COLLECTION' && entries.length === 0 && canEdit && collectionDataReady;
 
-  // Show the placeholder row if we're editing and either:
-  // 1. We have hasPlaceholderRow set and no entry exists with nextEntityId
-  // 2. We have a pendingEntityId that hasn't appeared in entries yet
-  const shouldShowPlaceholder =
-    collectionEmptyEditable ||
-    (isEditing &&
-      ((hasPlaceholderRow && !entries.find(e => e.entityId === nextEntityId)) ||
-        (pendingEntityId && !entries.find(e => e.entityId === pendingEntityId))));
+  const showActivePlaceholder =
+    hasPlaceholderRow && !entries.some(e => e.entityId === nextEntityId);
 
-  const placeholderEntityId = pendingEntityId || nextEntityId;
-
-  const renderedEntries = React.useMemo(
-    () =>
-      shouldShowPlaceholder
-        ? [makePlaceholderRow(placeholderEntityId, properties), ...entriesWithPosition]
-        : entriesWithPosition,
-    [entriesWithPosition, placeholderEntityId, properties, shouldShowPlaceholder]
+  const pendingNotInQuery = React.useMemo(
+    () => pendingEntities.filter(p => !entries.some(e => e.entityId === p.entityId)),
+    [pendingEntities, entries]
   );
 
-  const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntries);
+  const activePlaceholderSpaceId =
+    placeholderTargetSpaceId ?? placeholderCreateSpaceRef.current ?? spaceId;
+
+  const renderedEntries = React.useMemo(() => {
+    if (collectionEmptyEditable) {
+      return [makePlaceholderRow(nextEntityId, properties), ...entriesWithPosition];
+    }
+
+    const activePlaceholderRow =
+      isEditing && showActivePlaceholder
+        ? makePlaceholderRow(nextEntityId, properties, activePlaceholderSpaceId)
+        : null;
+
+    const optimisticRows = pendingNotInQuery.map(p =>
+      makeOptimisticRow(p.entityId, properties, p.spaceId)
+    );
+
+    return [
+      ...(activePlaceholderRow ? [activePlaceholderRow] : []),
+      ...optimisticRows,
+      ...entriesWithPosition,
+    ];
+  }, [
+    activePlaceholderSpaceId,
+    collectionEmptyEditable,
+    entriesWithPosition,
+    isEditing,
+    nextEntityId,
+    pendingNotInQuery,
+    properties,
+    showActivePlaceholder,
+  ]);
+
+  const renderedEntriesKey = React.useMemo(
+    () => renderedEntries.map(e => `${e.entityId}:${e.placeholder ? 1 : 0}`).join('|'),
+    [renderedEntries]
+  );
+
+  const shouldAutoFocusPlaceholder = usePlaceholderAutofocus(renderedEntriesKey, renderedEntries);
 
   const onChangeEntry: onChangeEntryFn = (entityId, actionSpaceId, action) => {
     console.assert(entityId.length > 0, 'onChangeEntry: entityId must be non-empty');
@@ -181,10 +308,16 @@ function useEntries(
 
     // For placeholder rows, prefer the target space picked from the "+" dropdown
     // so the new entity's data is written there instead of the block's space.
-    const isActiveQueryPlaceholderEntity = entityId === nextEntityId || (pendingEntityId !== null && entityId === pendingEntityId);
-    const effectiveSpaceId = isActiveQueryPlaceholderEntity
-      ? (placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId ?? actionSpaceId)
-      : actionSpaceId;
+    const pendingMeta = pendingEntities.find(p => p.entityId === entityId);
+    const pickerSpaceId = entityTargetSpaceRef.current.get(entityId);
+
+    const effectiveSpaceId =
+      pickerSpaceId ??
+      pendingMeta?.spaceId ??
+      (entityId === nextEntityId
+        ? placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId
+        : undefined) ??
+      actionSpaceId;
 
     // Step 1: Handle data writes
     switch (action.type) {
@@ -234,24 +367,47 @@ function useEntries(
           verified: to.verified,
         });
 
-        setPendingEntityId(to.id);
+        const pendingSpaceId = to.space ?? effectiveSpaceId;
+        setPendingEntities(prev => [
+          { entityId: to.id, spaceId: pendingSpaceId },
+          ...prev.filter(p => p.entityId !== to.id),
+        ]);
       }
     }
 
-    // Step 3: Handle placeholder → entity creation
-    if (entityId === nextEntityId) {
-      setHasPlaceholderRow(false);
+    // Step 3: Handle placeholder -> entity creation
+    const isNewPlaceholderRow = entityId === nextEntityId;
+    const isPendingOptimisticRow = pendingMeta !== undefined;
+
+    if (isNewPlaceholderRow || isPendingOptimisticRow) {
+      if (isNewPlaceholderRow) {
+        setHasPlaceholderRow(false);
+      }
 
       // Find means the entity already exists — don't create a new one.
-      if (action.type !== 'FIND_ENTITY') {
-        const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
+      if (
+        action.type !== 'FIND_ENTITY' &&
+        !committedPlaceholderIdsRef.current.has(entityId)
+      ) {
+        committedPlaceholderIdsRef.current.add(entityId);
 
-        setPendingEntityId(entityId);
+        const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
+        const commitSpaceId =
+          entityTargetSpaceRef.current.get(entityId) ??
+          placeholderCreateSpaceRef.current ??
+          placeholderTargetSpaceId ??
+          effectiveSpaceId;
+
+        entityTargetSpaceRef.current.set(entityId, commitSpaceId);
+        setPendingEntities(prev => [
+          { entityId, spaceId: commitSpaceId },
+          ...prev.filter(p => p.entityId !== entityId),
+        ]);
 
         createEntityWithTypes({
           name: maybeName,
           filters: filterState,
-          spaceId: placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId,
+          spaceId: commitSpaceId,
         });
       }
 
@@ -283,6 +439,60 @@ function useEntries(
 
   const onAddPlaceholder = (targetSpaceId?: string | null) => {
     setEditable(true);
+
+    const isQueryBlock = source.type === 'SPACES' || source.type === 'GEO';
+
+    // Query blocks: picking a space creates and keeps all
+    if (isQueryBlock && targetSpaceId !== undefined && targetSpaceId !== null) {
+      if (
+        hasPlaceholderRow &&
+        !committedPlaceholderIdsRef.current.has(nextEntityId) &&
+        !entries.some(e => e.entityId === nextEntityId)
+      ) {
+        const priorSpaceId =
+          placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId ?? spaceId;
+        const priorId = createEntityWithTypes({
+          filters: filterState,
+          spaceId: priorSpaceId,
+        });
+        committedPlaceholderIdsRef.current.add(priorId);
+        entityTargetSpaceRef.current.set(priorId, priorSpaceId);
+        setPendingEntities(prev => [
+          { entityId: priorId, spaceId: priorSpaceId },
+          ...prev.filter(p => p.entityId !== priorId),
+        ]);
+      } else if (entries.some(e => e.entityId === nextEntityId)) {
+        rotateNextEntityId();
+      }
+
+      const idToCreate = createEntityWithTypes({
+        filters: filterState,
+        spaceId: targetSpaceId,
+      });
+
+      committedPlaceholderIdsRef.current.add(idToCreate);
+      entityTargetSpaceRef.current.set(idToCreate, targetSpaceId);
+      setPendingEntities(prev => [
+        { entityId: idToCreate, spaceId: targetSpaceId },
+        ...prev.filter(p => p.entityId !== idToCreate),
+      ]);
+
+      placeholderCreateSpaceRef.current = targetSpaceId;
+      setPlaceholderTargetSpaceId(targetSpaceId);
+      setHasPlaceholderRow(false);
+      focusRowEntityIdRef.current = idToCreate;
+      setPlaceholderFocusKey(k => k + 1);
+      window.setTimeout(() => {
+        if (focusRowEntityIdRef.current === idToCreate) {
+          focusRowEntityIdRef.current = null;
+        }
+      }, 300);
+      return;
+    }
+
+    if (entries.some(e => e.entityId === nextEntityId)) {
+      rotateNextEntityId();
+    }
     setHasPlaceholderRow(true);
     setPlaceholderFocusKey(k => k + 1);
     if (targetSpaceId !== undefined) {
@@ -299,6 +509,7 @@ function useEntries(
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    focusRowEntityIdRef,
     placeholderTargetSpaceId,
   };
 }
@@ -544,7 +755,18 @@ const ConfiguredTableBlock = ({
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
-  } = useEntries(rows, properties, spaceId, activeFilters, relations, source, canEdit, isFetched && !isLoading);
+    focusRowEntityIdRef,
+  } = useEntries(
+    entityId,
+    rows,
+    properties,
+    spaceId,
+    activeFilters,
+    relations,
+    source,
+    canEdit,
+    isFetched && !isLoading
+  );
 
   const collectionTypeFilters = React.useMemo(
     () =>
@@ -634,6 +856,7 @@ const ConfiguredTableBlock = ({
       onAddPlaceholder={onAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       placeholderFocusKey={placeholderFocusKey}
+      focusRowEntityIdRef={focusRowEntityIdRef}
       collectionTypeFilters={collectionTypeFilters}
       sortState={sortState}
       onSort={handleSortChange}

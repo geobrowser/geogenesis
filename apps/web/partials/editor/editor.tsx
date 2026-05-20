@@ -240,11 +240,18 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     // recreates the editor on every block addition, wiping data block state.
     // `activeEntityId` handles tab switches; `editorContentVersion` handles
     // external resets (discard, IndexedDB restore).
-    [editable, activeEntityId, editorContentVersion]
+    // Do NOT include `editable` — recreating the editor on edit↔view remounts
+    // data blocks and clears optimistic rows for newly created entities.
+    [activeEntityId, editorContentVersion]
   );
 
   // Keep editorRef in sync so the edit→view transition effect can persist state
   editorRef.current = editor;
+
+  React.useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(editable);
+  }, [editor, editable]);
 
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 

@@ -116,11 +116,11 @@ export function EditableEntityTableCell({
               value={name ?? ''}
               onEnterKey={onAddPlaceholder}
               onChange={value => {
-                onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
               }}
             />
             <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+              <NavigateButton spaceId={spaceId} entityId={entityId} />
             </div>
           </div>
         ) : (
@@ -143,7 +143,7 @@ export function EditableEntityTableCell({
                 value={name ?? ''}
                 onEnterKey={onAddPlaceholder}
                 onChange={value => {
-                  onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                  onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
                 }}
               />
             </div>
