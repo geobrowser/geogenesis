@@ -20,8 +20,11 @@ const anthropic = createAnthropic({
 
 const MAX_URL_CHARS = 2_048;
 
-// Registrable domains only. Subdomains (www, english, amp, edition, …) are
-// matched by suffix in `matchesNewsHost`, so don't list them here.
+// Mostly registrable domains; `matchesNewsHost` matches each entry and its
+// subdomains by suffix, so don't add www/english/amp/edition variants. A few
+// entries are intentionally specific subdomains (e.g. news.sky.com,
+// abcnews.go.com, timesofindia.indiatimes.com) to avoid matching an outlet's
+// unrelated non-news subdomains.
 const NEWS_HOSTS: ReadonlySet<string> = new Set([
   // US national / general
   'nytimes.com',
