@@ -21,6 +21,11 @@ const VIEWPORT_PADDING_PX = 16;
 
 const SCROLLBAR_GUTTER_PX = 20;
 
+const TIP_Z_BACKDROP = 1000;
+const TIP_Z = 1001;
+
+const SPOTLIGHT_PADDING_PX = 0;
+
 export function useEditModeToggleTip() {
   const hydrated = useHydrated();
   const spaceId = useSpaceId();
@@ -67,6 +72,23 @@ type TipPosition = {
   arrowLeft: number;
 };
 
+type AnchorRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
+
+function computeAnchorRect(anchor: HTMLElement): AnchorRect {
+  const rect = anchor.getBoundingClientRect();
+  return {
+    top: rect.top - SPOTLIGHT_PADDING_PX,
+    left: rect.left - SPOTLIGHT_PADDING_PX,
+    width: rect.width + SPOTLIGHT_PADDING_PX * 2,
+    height: rect.height + SPOTLIGHT_PADDING_PX * 2,
+  };
+}
+
 function computeTipPosition(anchor: HTMLElement): TipPosition {
   const rect = anchor.getBoundingClientRect();
   const viewportWidth = window.innerWidth;
@@ -90,18 +112,69 @@ type EditModeToggleTipProps = {
   anchorRef: React.RefObject<HTMLElement | null>;
 };
 
+const backdropMotionProps = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.2 },
+} as const;
+
+/** Dim everything except the anchor — no element is placed over the toggle itself. */
+function TipBackdrop({ anchorRect }: { anchorRect: AnchorRect }) {
+  const { top, left, width, height } = anchorRect;
+  const right = left + width;
+  const bottom = top + height;
+  const panelClass = 'pointer-events-none fixed bg-text/20';
+
+  return (
+    <>
+      <motion.div
+        key="edit-mode-tip-backdrop-top"
+        aria-hidden
+        className={panelClass}
+        style={{ zIndex: TIP_Z_BACKDROP, top: 0, left: 0, right: 0, height: top }}
+        {...backdropMotionProps}
+      />
+      <motion.div
+        key="edit-mode-tip-backdrop-left"
+        aria-hidden
+        className={panelClass}
+        style={{ zIndex: TIP_Z_BACKDROP, top, left: 0, width: left, height }}
+        {...backdropMotionProps}
+      />
+      <motion.div
+        key="edit-mode-tip-backdrop-right"
+        aria-hidden
+        className={panelClass}
+        style={{ zIndex: TIP_Z_BACKDROP, top, left: right, right: 0, height }}
+        {...backdropMotionProps}
+      />
+      <motion.div
+        key="edit-mode-tip-backdrop-bottom"
+        aria-hidden
+        className={panelClass}
+        style={{ zIndex: TIP_Z_BACKDROP, top: bottom, left: 0, right: 0, bottom: 0 }}
+        {...backdropMotionProps}
+      />
+    </>
+  );
+}
+
 export function EditModeToggleTip({ open, dismiss, anchorRef }: EditModeToggleTipProps) {
   const [position, setPosition] = React.useState<TipPosition | null>(null);
+  const [anchorRect, setAnchorRect] = React.useState<AnchorRect | null>(null);
 
   const updatePosition = React.useCallback(() => {
     const anchor = anchorRef.current;
     if (!anchor) return;
+    setAnchorRect(computeAnchorRect(anchor));
     setPosition(computeTipPosition(anchor));
   }, [anchorRef]);
 
   React.useLayoutEffect(() => {
     if (!open) {
       setPosition(null);
+      setAnchorRect(null);
       return;
     }
     updatePosition();
@@ -119,23 +192,15 @@ export function EditModeToggleTip({ open, dismiss, anchorRef }: EditModeToggleTi
 
   return createPortal(
     <AnimatePresence>
-      {open && position ? (
+      {open && position && anchorRect ? (
         <>
-          <motion.div
-            key="edit-mode-tip-backdrop"
-            className="pointer-events-none fixed inset-0 z-1000 bg-text/20"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            aria-hidden
-          />
+          <TipBackdrop anchorRect={anchorRect} />
           <motion.div
             key="edit-mode-tip"
             role="dialog"
             aria-labelledby="edit-mode-toggle-tip-title"
-            className="pointer-events-auto fixed z-1001"
-            style={{ top: position.top, left: position.left, width: TIP_WIDTH_PX }}
+            className="pointer-events-auto fixed"
+            style={{ zIndex: TIP_Z, top: position.top, left: position.left, width: TIP_WIDTH_PX }}
             initial={{ opacity: 0, scale: 0.95, y: -8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: -8 }}

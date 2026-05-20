@@ -20,6 +20,15 @@ const SLIDE_UP_SETTLE_MS = 600;
 const TIP_Z_BACKDROP = 10050;
 const TIP_Z = 10051;
 
+const SPOTLIGHT_PADDING_PX = 0;
+
+const backdropMotionProps = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.2 },
+} as const;
+
 export function useProposalNameTip({ enabled }: { enabled: boolean }) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
@@ -49,6 +58,26 @@ type TipPosition = {
   left: number;
   arrowLeft: number;
 };
+
+type CutoutRect = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  borderRadius: string;
+};
+
+function computeCutoutRect(anchor: HTMLElement): CutoutRect {
+  const rect = anchor.getBoundingClientRect();
+  const { borderRadius } = window.getComputedStyle(anchor);
+  return {
+    top: rect.top - SPOTLIGHT_PADDING_PX,
+    left: rect.left - SPOTLIGHT_PADDING_PX,
+    width: rect.width + SPOTLIGHT_PADDING_PX * 2,
+    height: rect.height + SPOTLIGHT_PADDING_PX * 2,
+    borderRadius,
+  };
+}
 
 function isAnchorVisibleInViewport(anchor: HTMLElement): boolean {
   const rect = anchor.getBoundingClientRect();
@@ -80,18 +109,44 @@ type ProposalNameTipProps = {
   anchorRef: React.RefObject<HTMLElement | null>;
 };
 
+/** Dim everything except the anchor — no overlay on the proposal name section itself. */
+function TipBackdrop({ cutoutRect }: { cutoutRect: CutoutRect }) {
+  const { top, left, width, height, borderRadius } = cutoutRect;
+
+  return (
+    <motion.div
+      key="proposal-name-tip-backdrop"
+      aria-hidden
+      className="pointer-events-none fixed bg-transparent"
+      style={{
+        zIndex: TIP_Z_BACKDROP,
+        top,
+        left,
+        width,
+        height,
+        borderRadius,
+        boxShadow: '0 0 0 9999px color-mix(in srgb, var(--color-text) 20%, transparent)',
+      }}
+      {...backdropMotionProps}
+    />
+  );
+}
+
 export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipProps) {
   const [position, setPosition] = React.useState<TipPosition | null>(null);
+  const [cutoutRect, setCutoutRect] = React.useState<CutoutRect | null>(null);
 
   const updatePosition = React.useCallback(() => {
     const anchor = anchorRef.current;
     if (!anchor || !isAnchorVisibleInViewport(anchor)) return;
+    setCutoutRect(computeCutoutRect(anchor));
     setPosition(computeTipPosition(anchor));
   }, [anchorRef]);
 
   React.useLayoutEffect(() => {
     if (!open) {
       setPosition(null);
+      setCutoutRect(null);
       return;
     }
 
@@ -149,18 +204,9 @@ export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipPro
 
   return createPortal(
     <AnimatePresence>
-      {open && position ? (
+      {open && position && cutoutRect ? (
         <>
-          <motion.div
-            key="proposal-name-tip-backdrop"
-            className="pointer-events-none fixed inset-0 bg-text/20"
-            style={{ zIndex: TIP_Z_BACKDROP }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            aria-hidden
-          />
+          <TipBackdrop cutoutRect={cutoutRect} />
           <motion.div
             key="proposal-name-tip"
             role="dialog"
