@@ -1,6 +1,5 @@
 // POST /api/chat/inject — submits a URL to the external inject pipeline.
-// We proxy here so the bearer token stays server-side. The actual path on the
-// inject service may be `/inject` or `/admin/inject`; we try `/inject` first.
+// We proxy here so the bearer token stays server-side.
 import { cookies } from 'next/headers';
 
 import type { InjectType } from '~/core/chat/inject-types';
@@ -128,10 +127,6 @@ export async function POST(req: Request) {
   let res: Response;
   try {
     res = await postToInject('/inject', payload, apiKey);
-    if (res.status === 404) {
-      console.log('[chat/inject] /inject returned 404, falling back to /admin/inject');
-      res = await postToInject('/admin/inject', payload, apiKey);
-    }
   } catch (err) {
     console.error('[chat/inject] proxy fetch failed', err);
     if (err instanceof Error && err.name === 'AbortError') {
