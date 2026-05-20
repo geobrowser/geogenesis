@@ -20,44 +20,145 @@ const anthropic = createAnthropic({
 
 const MAX_URL_CHARS = 2_048;
 
+// Registrable domains only. Subdomains (www, english, amp, edition, …) are
+// matched by suffix in `matchesNewsHost`, so don't list them here.
 const NEWS_HOSTS: ReadonlySet<string> = new Set([
+  // US national / general
   'nytimes.com',
-  'www.nytimes.com',
-  'bbc.com',
-  'www.bbc.com',
-  'bbc.co.uk',
-  'www.bbc.co.uk',
-  'theguardian.com',
-  'www.theguardian.com',
-  'apnews.com',
-  'www.apnews.com',
-  'reuters.com',
-  'www.reuters.com',
   'washingtonpost.com',
-  'www.washingtonpost.com',
-  'wsj.com',
-  'www.wsj.com',
-  'bloomberg.com',
-  'www.bloomberg.com',
-  'axios.com',
-  'www.axios.com',
-  'politico.com',
-  'www.politico.com',
-  'npr.org',
-  'www.npr.org',
-  'ft.com',
-  'www.ft.com',
-  'aljazeera.com',
-  'www.aljazeera.com',
+  'usatoday.com',
+  'latimes.com',
+  'chicagotribune.com',
+  'bostonglobe.com',
+  'sfgate.com',
+  'nypost.com',
+  'newsday.com',
+  'startribune.com',
+  'dallasnews.com',
+  'seattletimes.com',
+  'denverpost.com',
+  'azcentral.com',
+  'tampabay.com',
+  // US broadcast / cable
   'cnn.com',
-  'www.cnn.com',
-  'economist.com',
-  'www.economist.com',
+  'foxnews.com',
+  'nbcnews.com',
+  'abcnews.go.com',
+  'cbsnews.com',
+  'msnbc.com',
+  'npr.org',
+  'pbs.org',
+  'newsnationnow.com',
+  'cnbc.com',
+  // US digital-native / magazine
+  'axios.com',
+  'politico.com',
+  'thehill.com',
+  'vox.com',
+  'slate.com',
+  'salon.com',
+  'huffpost.com',
+  'buzzfeednews.com',
+  'businessinsider.com',
   'theatlantic.com',
-  'www.theatlantic.com',
   'newyorker.com',
-  'www.newyorker.com',
+  'time.com',
+  'newsweek.com',
+  'vanityfair.com',
+  'theintercept.com',
+  'motherjones.com',
+  'propublica.org',
+  'thedailybeast.com',
+  'semafor.com',
+  'mediaite.com',
+  // Wire services
+  'apnews.com',
+  'reuters.com',
+  'afp.com',
+  'upi.com',
+  // Business / finance
+  'wsj.com',
+  'bloomberg.com',
+  'ft.com',
+  'economist.com',
+  'forbes.com',
+  'fortune.com',
+  'marketwatch.com',
+  'barrons.com',
+  'fastcompany.com',
+  'inc.com',
+  // Tech / science
+  'wired.com',
+  'theverge.com',
+  'techcrunch.com',
+  'arstechnica.com',
+  'engadget.com',
+  'gizmodo.com',
+  'cnet.com',
+  'mashable.com',
+  'venturebeat.com',
+  'scientificamerican.com',
+  'nationalgeographic.com',
+  // UK
+  'bbc.com',
+  'bbc.co.uk',
+  'theguardian.com',
+  'telegraph.co.uk',
+  'thetimes.co.uk',
+  'independent.co.uk',
+  'dailymail.co.uk',
+  'mirror.co.uk',
+  'thesun.co.uk',
+  'standard.co.uk',
+  'metro.co.uk',
+  'express.co.uk',
+  'news.sky.com',
+  // International / global English
+  'aljazeera.com',
+  'aljazeera.net',
+  'dw.com',
+  'france24.com',
+  'rfi.fr',
+  'euronews.com',
+  'politico.eu',
+  'thelocal.com',
+  'rt.com',
+  'cgtn.com',
+  'scmp.com',
+  'japantimes.co.jp',
+  'asahi.com',
+  'straitstimes.com',
+  'channelnewsasia.com',
+  'thehindu.com',
+  'timesofindia.indiatimes.com',
+  'indianexpress.com',
+  'ndtv.com',
+  'hindustantimes.com',
+  'haaretz.com',
+  'timesofisrael.com',
+  'jpost.com',
+  'middleeasteye.net',
+  'globeandmail.com',
+  'cbc.ca',
+  'ctvnews.ca',
+  'abc.net.au',
+  'smh.com.au',
+  'theage.com.au',
+  'news.com.au',
+  'nzherald.co.nz',
+  'irishtimes.com',
+  'spiegel.de',
+  'lemonde.fr',
+  'elpais.com',
+  'corriere.it',
 ]);
+
+function matchesNewsHost(host: string): boolean {
+  for (const domain of NEWS_HOSTS) {
+    if (host === domain || host.endsWith(`.${domain}`)) return true;
+  }
+  return false;
+}
 
 const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean; type: InjectType }> = [
   { match: host => host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com', type: 'tweet' },
@@ -68,7 +169,7 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
   },
   { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
   { match: host => host === 'linkedin.com' || host === 'www.linkedin.com', type: 'news-story-single' },
-  { match: host => NEWS_HOSTS.has(host), type: 'news-story-single' },
+  { match: host => matchesNewsHost(host), type: 'news-story-single' },
 ];
 
 const CLASSIFIER_SYSTEM_PROMPT = `You are routing a URL to one of two pipelines for a knowledge-graph app.
@@ -79,17 +180,17 @@ Return route="inject" when the URL points to:
 - A LinkedIn profile or personal/portfolio site.
 - A social post (X / Twitter / Reddit) you would expect to discuss a current happening.
 
-Return route="chat" when the URL points to:
-- Static documentation, marketing pages, product listings, generic blogs.
-- Reference material with no time-sensitive component (developer docs, manuals, encyclopedic definitions of static concepts).
-- Anything you can't confidently classify as a news story, biography, or social post.
+Return route="chat" ONLY when the URL clearly points to:
+- Static documentation, manuals, or developer/API references.
+- Marketing or product/landing pages and product listings.
+- Encyclopedic definitions of static concepts with no time-sensitive component.
 
 When route="inject", also pick the most appropriate type:
 - "news-story-single" — any news article, current event, Wikipedia article, LinkedIn profile, or personal/portfolio site.
 - "tweet" — X / Twitter URL.
 - "post" — Reddit URL.
 
-If unsure, prefer route="chat". Never invent a URL or visit it; decide from the URL itself.`;
+Bias toward route="inject": if the URL plausibly looks like a news article, current event, biography, or social post, choose inject. Only choose chat when the page is clearly static/reference/marketing content. When genuinely unsure, prefer route="inject" with type="news-story-single". Never invent a URL or visit it; decide from the URL itself.`;
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
