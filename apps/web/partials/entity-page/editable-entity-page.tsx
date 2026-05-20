@@ -183,7 +183,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                 const isCollapsed = sectionCollapsed;
 
                 return (
-                  <div key={section.id} className={isTypeEntity ? 'flex flex-col gap-2' : 'flex flex-col gap-4'}>
+                  <div key={section.id} className={isTypeEntity ? 'flex flex-col gap-2 sm:gap-5' : 'flex flex-col gap-4 sm:gap-5'}>
                     {effectiveHasGroups && section.isGroup && collapsible && (
                       <button
                         type="button"
@@ -309,7 +309,7 @@ function InlinePropertyRow({
   hideActions?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1 sm:gap-1">
       <div className="inline-flex min-w-0 items-center gap-2 pt-[3px] text-text">
         <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
         <span className="truncate text-tableCell font-medium">{property.name}</span>

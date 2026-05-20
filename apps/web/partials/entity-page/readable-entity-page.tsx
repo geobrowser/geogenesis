@@ -13,7 +13,7 @@ import {
   VENUE_PROPERTY,
 } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
-import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
+import { useEntitySchemaWithGroups, useEntityTypes } from '~/core/state/entity-page-store/entity-store';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -47,8 +47,6 @@ interface Props {
 }
 
 const SKIPPED_PROPERTIES: string[] = [
-  SystemIds.PROPERTIES,
-  PROPERTY_GROUPS_PROPERTY,
   SystemIds.TYPES_PROPERTY,
   SystemIds.NAME_PROPERTY,
   SystemIds.DESCRIPTION_PROPERTY,
@@ -60,10 +58,24 @@ const SKIPPED_PROPERTIES: string[] = [
   SCORE_SYSTEM_PROPERTY,
 ];
 
-function countRenderableProperty(renderedProperties: string[]): number {
+function useReadableSkippedPropertyIds(entityId: string, spaceId: string): Set<string> {
+  const entityTypes = useEntityTypes(entityId, spaceId);
+  const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
+
+  return React.useMemo(() => {
+    const skipped = new Set(SKIPPED_PROPERTIES);
+    if (isTypeEntity) {
+      skipped.add(SystemIds.PROPERTIES);
+      skipped.add(PROPERTY_GROUPS_PROPERTY);
+    }
+    return skipped;
+  }, [isTypeEntity]);
+}
+
+function countRenderableProperty(renderedProperties: string[], skippedPropertyIds: Set<string>): number {
   let count = 0;
   renderedProperties.forEach(propertyId => {
-    if (!SKIPPED_PROPERTIES.includes(propertyId)) {
+    if (!skippedPropertyIds.has(propertyId)) {
       count++;
     }
   });
@@ -72,7 +84,8 @@ function countRenderableProperty(renderedProperties: string[]): number {
 
 export function useReadableEntityHasContent(entityId: string, spaceId: string): boolean {
   const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
-  return countRenderableProperty(Object.keys(renderedProperties)) > 0;
+  const skippedPropertyIds = useReadableSkippedPropertyIds(entityId, spaceId);
+  return countRenderableProperty(Object.keys(renderedProperties), skippedPropertyIds) > 0;
 }
 
 export function ReadableEntityPage({ id, spaceId }: Props) {
@@ -88,6 +101,7 @@ export function ReadableEntityPage({ id, spaceId }: Props) {
 export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
   const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
   const schemaWithGroups = useEntitySchemaWithGroups(entityId, spaceId);
+  const skippedPropertyIds = useReadableSkippedPropertyIds(entityId, spaceId);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
@@ -110,7 +124,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
 
   const groupedSections = React.useMemo(() => {
     const visiblePropertyIds = new Set(
-      Object.keys(renderedProperties).filter(propertyId => !SKIPPED_PROPERTIES.includes(propertyId))
+      Object.keys(renderedProperties).filter(propertyId => !skippedPropertyIds.has(propertyId))
     );
 
     if (!schemaWithGroups.hasPropertyGroups) {
@@ -155,9 +169,9 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       groups,
       ungrouped: orderedUngrouped,
     };
-  }, [renderedProperties, schemaWithGroups]);
+  }, [renderedProperties, schemaWithGroups, skippedPropertyIds]);
 
-  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
+  if (countRenderableProperty(Object.keys(renderedProperties), skippedPropertyIds) <= 0) {
     return null;
   }
 
@@ -187,7 +201,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               </button>
 
               {!isCollapsed && (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 sm:gap-5">
                   {group.propertyIds.map(propertyId => {
                     const property = renderedProperties[propertyId];
                     if (!property) return null;
@@ -215,7 +229,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               Ungrouped properties
             </Text>
           )}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:gap-5">
             {groupedSections.ungrouped.map(propertyId => {
               const property = renderedProperties[propertyId];
               if (!property) return null;
@@ -250,7 +264,7 @@ function ReadablePropertyRow({
   const isRelation = property.dataType === 'RELATION';
 
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1 sm:gap-1">
       <div className="inline-flex min-w-0 items-start gap-2 text-text">
         <span className="flex h-[1.5rem] shrink-0 items-center">
           <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />

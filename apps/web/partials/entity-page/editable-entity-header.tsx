@@ -29,7 +29,16 @@ import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 
-export function EditableHeading({ spaceId, entityId }: { spaceId: string; entityId: string }) {
+export function EditableHeading({
+  spaceId,
+  entityId,
+  topRightSlot,
+}: {
+  spaceId: string;
+  entityId: string;
+  /** Optional action that stacks above the history/context-menu cluster on the right. */
+  topRightSlot?: React.ReactNode;
+}) {
   const { values } = useSyncEngine();
 
   const name = useSelector(values, v => {
@@ -87,6 +96,7 @@ export function EditableHeading({ spaceId, entityId }: { spaceId: string; entity
         )}
 
         <div className="flex shrink-0 items-center gap-5">
+          {topRightSlot}
           {isEditing && (
             <Link
               href={NavUtils.toEntity(spaceId, ID.createEntityId())}
