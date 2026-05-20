@@ -184,12 +184,17 @@ function buildFeedFilter(args: {
   time: ExploreTime;
   typeIds?: readonly string[];
   requireName?: boolean;
+  includeEntityScopeInFilter?: boolean;
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
-    spaceIds: { overlaps: [...args.spaceIds] },
-    ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+    ...(args.includeEntityScopeInFilter
+      ? {
+          spaceIds: { overlaps: [...args.spaceIds] },
+          ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
+        }
+      : {}),
     ...(args.requireName !== false
       ? {
           values: {
@@ -223,6 +228,8 @@ async function fetchExploreEntitiesPage(args: {
         after: args.after,
         filter: buildFeedFilter(args),
         orderBy: args.orderBy,
+        spaceIds: { in: args.spaceIds },
+        typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
@@ -230,7 +237,7 @@ async function fetchExploreEntitiesPage(args: {
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
-// The endpoint takes `spaceIds` only inside `filter` (no top-level arg, unlike `entitiesConnection`).
+// This endpoint does not expose top-level `spaceIds` / `typeIds` args, unlike `entitiesConnection`.
 async function fetchTopEntitiesPage(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -246,7 +253,7 @@ async function fetchTopEntitiesPage(args: {
       variables: {
         first: args.limit,
         after: args.after,
-        filter: buildFeedFilter(args),
+        filter: buildFeedFilter({ ...args, includeEntityScopeInFilter: true }),
         propertyId: SCORE_SYSTEM_PROPERTY,
         dataType: 'integer',
         sortDirection: 'DESC',
