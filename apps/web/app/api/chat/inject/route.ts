@@ -12,6 +12,17 @@ const VALID_TYPES: ReadonlySet<InjectType> = new Set(['news-story-single', 'post
 const INJECT_FETCH_TIMEOUT_MS = 15_000;
 
 function isSameOrigin(req: Request): boolean {
+  // Prefer Sec-Fetch-Site when the browser provides it (Fetch Metadata).
+  // Browsers omit `Origin` on same-origin GET/HEAD requests per the Fetch
+  // spec, which previously caused poll GETs to be rejected here even though
+  // they come from the same React app as the POST that just succeeded.
+  // Sec-Fetch-Site is sent on every fetch regardless of method.
+  const site = req.headers.get('sec-fetch-site');
+  if (site !== null) {
+    return site === 'same-origin' || site === 'none';
+  }
+  // Legacy fallback for non-browser clients / older browsers that don't
+  // emit Sec-Fetch-Site. Same check as before.
   const origin = req.headers.get('origin');
   const host = req.headers.get('host');
   if (!origin) return process.env.NODE_ENV !== 'production';
