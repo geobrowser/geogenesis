@@ -392,6 +392,7 @@ function EntitySidePanelBody({
         initialBlockRelations={blockRelations}
         initialTabs={initialTabs}
         initialCollectionItems={initialCollectionItems}
+        ignoreRouteTabId
       >
         <div className="px-4 pt-6 pb-12 sm:px-5">
           <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage />

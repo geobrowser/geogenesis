@@ -23,6 +23,7 @@ type EditorProviderProps = {
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;
   initialCollectionItems?: Record<string, Entity[]>;
+  ignoreRouteTabId?: boolean;
   children: React.ReactNode;
 };
 
@@ -33,6 +34,7 @@ export const EditorProvider = ({
   initialBlockRelations,
   initialTabs,
   initialCollectionItems,
+  ignoreRouteTabId = false,
   children,
 }: EditorProviderProps) => {
   const { store } = useSyncEngine();
@@ -75,8 +77,9 @@ export const EditorProvider = ({
       initialBlocks,
       initialTabs,
       initialCollectionItems,
+      ignoreRouteTabId,
     };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems]);
+  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems, ignoreRouteTabId]);
 
   return (
     <EditorContext.Provider value={value}>
@@ -118,21 +121,26 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
     initialBlocks,
     initialTabs,
     initialCollectionItems: allCollectionItems,
+    ignoreRouteTabId,
   } = useEditorInstance();
 
-  const tabId = useTabIdFromSearchParams();
-  const activeEntityId = tabId ?? entityId;
-  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
+  const routeTabId = ignoreRouteTabId ? null : useTabIdFromSearchParams();
+  const isTab = React.useMemo(
+    () => Boolean(routeTabId && initialTabs && Object.hasOwn(initialTabs, routeTabId)),
+    [initialTabs, routeTabId]
+  );
+  // Side panel sets ignoreRouteTabId so only the panel entity's blocks are used.
+  const activeEntityId = routeTabId ?? entityId;
 
   const blockRelations = useBlocks(
     activeEntityId,
     spaceId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
+    isTab ? initialTabs![routeTabId as EntityId].entity.relations : initialBlockRelations
   );
 
   const initialBlockEntities = React.useMemo(() => {
-    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-  }, [initialBlocks, initialTabs, isTab, tabId]);
+    return isTab ? initialTabs![routeTabId as EntityId].blocks : initialBlocks;
+  }, [initialBlocks, initialTabs, isTab, routeTabId]);
 
   const value = React.useMemo(
     () => ({ blockRelations, initialBlockEntities, initialCollectionItems: allCollectionItems ?? {} }),

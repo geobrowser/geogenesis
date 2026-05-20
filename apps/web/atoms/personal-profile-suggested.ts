@@ -56,3 +56,13 @@ export function propertyIsSkillsProperty(propertyId: string): boolean {
 }
 
 export const personalProfileBioStarterTriggerAtom = atom(0);
+
+export type PendingCreatePostSidePanel = {
+  postEntityId: string;
+  spaceId: string;
+  profileEntityId: string;
+  postsTabEntityId: string;
+  profilePathname: string;
+};
+
+export const pendingCreatePostSidePanelAtom = atom<PendingCreatePostSidePanel | null>(null);

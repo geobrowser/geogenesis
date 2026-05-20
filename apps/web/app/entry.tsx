@@ -23,6 +23,7 @@ import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
+import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
 import { SearchDialog } from '~/partials/search';
 
@@ -77,6 +78,9 @@ export function App({ children }: { children: React.ReactNode }) {
           <Main>{children}</Main>
         </div>
       </div>
+      <React.Suspense fallback={null}>
+        <PersonalProfileCreatePostSidePanelSync />
+      </React.Suspense>
       <EntitySidePanel />
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>

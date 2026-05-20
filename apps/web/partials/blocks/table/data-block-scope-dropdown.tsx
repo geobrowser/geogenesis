@@ -26,6 +26,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 const listScrollClassName =
   'max-h-[198px] min-h-0 overflow-y-auto overscroll-contain scroll-smooth snap-y snap-mandatory';
@@ -163,6 +164,7 @@ export function DataBlockScopeDropdown({
   variant = 'default',
 }: DataBlockScopeDropdownProps) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
   const sourceRef = React.useRef(source);
   sourceRef.current = source;
   const setSourceRef = React.useRef(setSource);
@@ -316,7 +318,7 @@ export function DataBlockScopeDropdown({
           )}
         </button>
       </Dropdown.Trigger>
-      <Dropdown.Portal>
+      <Dropdown.Portal container={elevatedPopoverPortal ?? undefined}>
         <Dropdown.Content
           side={side}
           align={variant === 'setup' ? 'start' : align}

@@ -13,7 +13,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
+import { ensureProfilePageTab, runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton, SquareButton } from '~/design-system/button';
@@ -23,6 +23,7 @@ import { Menu, MenuItem } from '~/design-system/menu';
 
 import {
   clearPersonalProfileSessionDismissStorage,
+  pendingCreatePostSidePanelAtom,
   personalProfileBioStarterTriggerAtom,
   PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
   personalProfileSkillsRowIntentAtom,
@@ -92,6 +93,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const [mounted, setMounted] = React.useState(false);
   const [createPostPending, setCreatePostPending] = React.useState(false);
   const createPostLockedRef = React.useRef(false);
+  const setPendingCreatePostSidePanel = useSetAtom(pendingCreatePostSidePanelAtom);
 
   const sessionDismissStorageKey = React.useMemo(() => {
     if (!address) return null;
@@ -248,15 +250,47 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         profileEntityId: entityId,
         authorDisplayName: displayName,
       });
-      setSuggestedTasks(t => ({ ...t, post: true }));
-      router.push(NavUtils.toEntity(spaceId, postEntityId, true));
+      const postsTabEntityId = ensureProfilePageTab(entityId, spaceId, 'Posts');
+
+      const profilePathname = isMyPersonalSpaceRoute
+        ? NavUtils.toSpace(spaceId)
+        : NavUtils.toEntity(spaceId, entityId, false);
+
+      setPendingCreatePostSidePanel({
+        postEntityId,
+        spaceId,
+        profileEntityId: entityId,
+        postsTabEntityId,
+        profilePathname,
+      });
+
+      const postsTabUrl = `${profilePathname}?tabId=${postsTabEntityId}`;
+
+      setEditable(true);
+
+      try {
+        const nav = router.push(postsTabUrl, { scroll: false }) as void | Promise<unknown>;
+        if (nav != null && typeof (nav as Promise<unknown>).catch === 'function') {
+          void (nav as Promise<unknown>).catch(() => {});
+        }
+      } catch {
+        setPendingCreatePostSidePanel(null);
+      }
     } catch (e) {
       console.error('[PersonalProfileSuggestedCard] create post failed', e);
     } finally {
       createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [displayName, entityId, router, setSuggestedTasks, spaceId]);
+  }, [
+    displayName,
+    entityId,
+    isMyPersonalSpaceRoute,
+    router,
+    setEditable,
+    setPendingCreatePostSidePanel,
+    spaceId,
+  ]);
 
   if (!visible) {
     return null;
