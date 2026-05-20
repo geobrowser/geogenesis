@@ -229,7 +229,7 @@ async function fetchExploreEntitiesPage(args: {
         filter: buildFeedFilter(args),
         orderBy: args.orderBy,
         spaceIds: { in: args.spaceIds },
-        typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : null,
+        typeIds: args.typeIds?.length ? { in: [...args.typeIds] } : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })
