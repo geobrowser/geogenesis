@@ -798,6 +798,70 @@ describe('GeoStore', () => {
         spaceId: 'space-1',
       });
     });
+
+    it('should immediately restore a locally deleted remote relation from the synced baseline', () => {
+      const remoteRelation: Relation = {
+        ...mockRelation1,
+        type: { id: SystemIds.PROPERTIES, name: 'Properties' },
+        isLocal: false,
+        hasBeenPublished: true,
+        isDeleted: false,
+      };
+      const localDeletedRelation: Relation = {
+        ...remoteRelation,
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: true,
+      };
+
+      syncedEntities.set('entity-1', {
+        ...mockEntity1,
+        relations: [remoteRelation],
+      });
+      reactiveRelations.set([localDeletedRelation]);
+
+      store.clearLocalChangesByIds({
+        spaceId: 'space-1',
+        valueIds: [],
+        relationIds: [remoteRelation.id],
+      });
+
+      expect(reactiveRelations.get()).toEqual([remoteRelation]);
+    });
+  });
+
+  describe('clearLocalChangesForSpace', () => {
+    it('should immediately restore locally deleted remote type properties from the synced baseline', () => {
+      const remotePropertyRelation: Relation = {
+        ...mockRelation1,
+        id: 'type-property-relation',
+        type: { id: SystemIds.PROPERTIES, name: 'Properties' },
+        toEntity: { id: 'property-1', name: 'Property 1', value: 'property-1' },
+        isLocal: false,
+        hasBeenPublished: true,
+        isDeleted: false,
+      };
+      const localDeletedPropertyRelation: Relation = {
+        ...remotePropertyRelation,
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: true,
+      };
+
+      syncedEntities.set('entity-1', {
+        ...mockEntity1,
+        relations: [remotePropertyRelation],
+      });
+      reactiveRelations.set([localDeletedPropertyRelation]);
+
+      store.clearLocalChangesForSpace('space-1');
+
+      expect(reactiveRelations.get()).toEqual([remotePropertyRelation]);
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.HYDRATE,
+        entities: ['entity-1'],
+      });
+    });
   });
 
   describe('findReferencingEntities', () => {

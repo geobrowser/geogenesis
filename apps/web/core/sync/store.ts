@@ -262,7 +262,9 @@ export class GeoStore {
     // Remove local relations for this space
     reactiveRelations.set(prev => prev.filter(r => !localRelationIds.has(r.id)));
 
-    // Re-hydrate affected entities to restore their server state
+    this.restoreSyncedBaselines(affectedEntityIds);
+
+    // Re-hydrate affected entities to refresh their server state
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -300,6 +302,8 @@ export class GeoStore {
     reactiveValues.set(prev => prev.filter(v => !(valueIdsSet.has(v.id) && v.isLocal === true)));
     reactiveRelations.set(prev => prev.filter(r => !(relationIdsSet.has(r.id) && r.isLocal === true)));
 
+    this.restoreSyncedBaselines(affectedEntityIds);
+
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -317,6 +321,15 @@ export class GeoStore {
     }
 
     this.hydrateReactiveState(entities);
+  }
+
+  private restoreSyncedBaselines(entityIds: Set<string>) {
+    if (entityIds.size === 0) return;
+
+    const baselines = [...entityIds]
+      .map(id => syncedEntities.get(id))
+      .filter((entity): entity is Entity => entity != null);
+    this.hydrateReactiveState(baselines);
   }
 
   private hydrateReactiveState(entities: Entity[]) {
