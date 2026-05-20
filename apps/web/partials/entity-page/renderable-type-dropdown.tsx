@@ -72,7 +72,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
           ref={triggerRef}
-          className={`flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
+          className={`flex shrink-0 items-center gap-[6px] whitespace-nowrap rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
         >
           <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}

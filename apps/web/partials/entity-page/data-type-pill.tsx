@@ -62,7 +62,7 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   if (!isClickable) {
     // Non-clickable pill (data type only)
     return (
-      <span className="inline-flex items-center gap-1 rounded border border-grey-02 bg-white px-1.5 py-px text-metadata tabular-nums">
+      <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-grey-02 bg-white px-1.5 py-px text-metadata tabular-nums">
         {IconComponent && <IconComponent color="grey-04" />}
         <span>{formattedType}</span>
       </span>
@@ -73,7 +73,7 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
   return (
     <Link
       href={NavUtils.toEntity(spaceId, targetId!)}
-      className="group inline-flex items-center gap-1 rounded border border-grey-02 bg-white py-px pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
+      className="group inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded border border-grey-02 bg-white py-px pl-1.5 text-metadata tabular-nums hover:cursor-pointer hover:border-text hover:text-text focus:cursor-pointer focus:border-text focus:bg-ctaTertiary focus:text-text focus:shadow-inner-lg"
     >
       {IconComponent && <IconComponent color="grey-04" />}
       <span className="pr-1.5">{formattedType}</span>
