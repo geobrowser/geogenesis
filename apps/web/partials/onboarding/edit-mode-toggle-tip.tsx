@@ -77,15 +77,18 @@ type AnchorRect = {
   left: number;
   width: number;
   height: number;
+  borderRadius: string;
 };
 
 function computeAnchorRect(anchor: HTMLElement): AnchorRect {
   const rect = anchor.getBoundingClientRect();
+  const { borderRadius } = window.getComputedStyle(anchor);
   return {
     top: rect.top - SPOTLIGHT_PADDING_PX,
     left: rect.left - SPOTLIGHT_PADDING_PX,
     width: rect.width + SPOTLIGHT_PADDING_PX * 2,
     height: rect.height + SPOTLIGHT_PADDING_PX * 2,
+    borderRadius,
   };
 }
 
@@ -121,42 +124,24 @@ const backdropMotionProps = {
 
 /** Dim everything except the anchor — no element is placed over the toggle itself. */
 function TipBackdrop({ anchorRect }: { anchorRect: AnchorRect }) {
-  const { top, left, width, height } = anchorRect;
-  const right = left + width;
-  const bottom = top + height;
-  const panelClass = 'pointer-events-none fixed bg-text/20';
+  const { top, left, width, height, borderRadius } = anchorRect;
 
   return (
-    <>
-      <motion.div
-        key="edit-mode-tip-backdrop-top"
-        aria-hidden
-        className={panelClass}
-        style={{ zIndex: TIP_Z_BACKDROP, top: 0, left: 0, right: 0, height: top }}
-        {...backdropMotionProps}
-      />
-      <motion.div
-        key="edit-mode-tip-backdrop-left"
-        aria-hidden
-        className={panelClass}
-        style={{ zIndex: TIP_Z_BACKDROP, top, left: 0, width: left, height }}
-        {...backdropMotionProps}
-      />
-      <motion.div
-        key="edit-mode-tip-backdrop-right"
-        aria-hidden
-        className={panelClass}
-        style={{ zIndex: TIP_Z_BACKDROP, top, left: right, right: 0, height }}
-        {...backdropMotionProps}
-      />
-      <motion.div
-        key="edit-mode-tip-backdrop-bottom"
-        aria-hidden
-        className={panelClass}
-        style={{ zIndex: TIP_Z_BACKDROP, top: bottom, left: 0, right: 0, bottom: 0 }}
-        {...backdropMotionProps}
-      />
-    </>
+    <motion.div
+      key="edit-mode-tip-backdrop"
+      aria-hidden
+      className="pointer-events-none fixed bg-transparent"
+      style={{
+        zIndex: TIP_Z_BACKDROP,
+        top,
+        left,
+        width,
+        height,
+        borderRadius,
+        boxShadow: '0 0 0 9999px color-mix(in srgb, var(--color-text) 20%, transparent)',
+      }}
+      {...backdropMotionProps}
+    />
   );
 }
 

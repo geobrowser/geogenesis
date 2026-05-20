@@ -20,6 +20,8 @@ const SCROLLBAR_GUTTER_PX = 20;
 const TIP_Z_BACKDROP = 10050;
 const TIP_Z = 10051;
 
+const FLOWBAR_SETTLE_MS = 400;
+
 export function useReviewEditsTip({ flowBarVisible }: { flowBarVisible: boolean }) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
@@ -147,14 +149,66 @@ export function ReviewEditsTip({ open, dismiss, anchorRef }: ReviewEditsTipProps
       setCutoutRect(null);
       return;
     }
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+
+    let cancelled = false;
+    let rafId = 0;
+    let lastTop: number | null = null;
+    let stableFrames = 0;
+    const maxFrames = 60;
+    let framesElapsed = 0;
+
+    let resizeObserver: ResizeObserver | undefined;
+
+    const measureAndObserve = () => {
+      if (cancelled) return;
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      updatePosition();
+      if (!resizeObserver && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => {
+          if (!cancelled) updatePosition();
+        });
+        resizeObserver.observe(getFlowBarElement(anchor));
+      }
     };
-  }, [open, updatePosition]);
+
+    // Re-measure each frame until the flow bar's bounding rect stabilizes (its
+    // entry y-animation has settled), so the cutout snaps to the final pill
+    // position rather than getting frozen mid-animation.
+    const trackUntilSettled = () => {
+      if (cancelled) return;
+      measureAndObserve();
+      const anchor = anchorRef.current;
+      const flowBar = anchor ? getFlowBarElement(anchor) : null;
+      const top = flowBar?.getBoundingClientRect().top ?? null;
+      if (top !== null && lastTop !== null && Math.abs(top - lastTop) < 0.5) {
+        stableFrames += 1;
+      } else {
+        stableFrames = 0;
+      }
+      lastTop = top;
+      framesElapsed += 1;
+      if (stableFrames < 3 && framesElapsed < maxFrames) {
+        rafId = requestAnimationFrame(trackUntilSettled);
+      }
+    };
+
+    measureAndObserve();
+    rafId = requestAnimationFrame(trackUntilSettled);
+    const settleTimeout = window.setTimeout(measureAndObserve, FLOWBAR_SETTLE_MS);
+
+    window.addEventListener('resize', measureAndObserve);
+    window.addEventListener('scroll', measureAndObserve, true);
+
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(settleTimeout);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', measureAndObserve);
+      window.removeEventListener('scroll', measureAndObserve, true);
+    };
+  }, [open, updatePosition, anchorRef]);
 
   if (typeof document === 'undefined') {
     return null;
