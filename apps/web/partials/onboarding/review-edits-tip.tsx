@@ -20,8 +20,6 @@ const SCROLLBAR_GUTTER_PX = 20;
 const TIP_Z_BACKDROP = 10050;
 const TIP_Z = 10051;
 
-const FLOWBAR_SETTLE_MS = 400;
-
 export function useReviewEditsTip({ flowBarVisible }: { flowBarVisible: boolean }) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
@@ -66,12 +64,40 @@ function getFlowBarElement(anchor: HTMLElement): HTMLElement {
   return anchor.parentElement ?? anchor;
 }
 
+/**
+ * Sum the translation of every ancestor transform so we can subtract it from
+ * the element's bounding rect. The flow bar mounts with a small entry slide
+ * (`y: 4 → 0`); without this, getBoundingClientRect captures the in-flight
+ * transform and the cutout would follow the animation instead of snapping to
+ * the final pill position.
+ */
+function getAncestorTransformOffset(element: HTMLElement): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  let current: HTMLElement | null = element.parentElement;
+  while (current && current !== document.body) {
+    const transform = window.getComputedStyle(current).transform;
+    if (transform && transform !== 'none') {
+      try {
+        const matrix = new DOMMatrixReadOnly(transform);
+        x += matrix.e;
+        y += matrix.f;
+      } catch {
+        // ignore unparseable transforms
+      }
+    }
+    current = current.parentElement;
+  }
+  return { x, y };
+}
+
 function computeCutoutRect(element: HTMLElement): CutoutRect {
   const rect = element.getBoundingClientRect();
   const { borderRadius } = window.getComputedStyle(element);
+  const offset = getAncestorTransformOffset(element);
   return {
-    top: rect.top,
-    left: rect.left,
+    top: rect.top - offset.y,
+    left: rect.left - offset.x,
     width: rect.width,
     height: rect.height,
     borderRadius,
@@ -151,12 +177,6 @@ export function ReviewEditsTip({ open, dismiss, anchorRef }: ReviewEditsTipProps
     }
 
     let cancelled = false;
-    let rafId = 0;
-    let lastTop: number | null = null;
-    let stableFrames = 0;
-    const maxFrames = 60;
-    let framesElapsed = 0;
-
     let resizeObserver: ResizeObserver | undefined;
 
     const measureAndObserve = () => {
@@ -172,38 +192,13 @@ export function ReviewEditsTip({ open, dismiss, anchorRef }: ReviewEditsTipProps
       }
     };
 
-    // Re-measure each frame until the flow bar's bounding rect stabilizes (its
-    // entry y-animation has settled), so the cutout snaps to the final pill
-    // position rather than getting frozen mid-animation.
-    const trackUntilSettled = () => {
-      if (cancelled) return;
-      measureAndObserve();
-      const anchor = anchorRef.current;
-      const flowBar = anchor ? getFlowBarElement(anchor) : null;
-      const top = flowBar?.getBoundingClientRect().top ?? null;
-      if (top !== null && lastTop !== null && Math.abs(top - lastTop) < 0.5) {
-        stableFrames += 1;
-      } else {
-        stableFrames = 0;
-      }
-      lastTop = top;
-      framesElapsed += 1;
-      if (stableFrames < 3 && framesElapsed < maxFrames) {
-        rafId = requestAnimationFrame(trackUntilSettled);
-      }
-    };
-
     measureAndObserve();
-    rafId = requestAnimationFrame(trackUntilSettled);
-    const settleTimeout = window.setTimeout(measureAndObserve, FLOWBAR_SETTLE_MS);
 
     window.addEventListener('resize', measureAndObserve);
     window.addEventListener('scroll', measureAndObserve, true);
 
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
-      window.clearTimeout(settleTimeout);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', measureAndObserve);
       window.removeEventListener('scroll', measureAndObserve, true);
