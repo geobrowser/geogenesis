@@ -16,12 +16,14 @@ import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
+import { store } from '~/core/sync/use-sync-engine';
 import { getRelation } from '~/core/sync/use-store';
 import { Cell, Relation, Row } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
@@ -118,6 +120,7 @@ function useEntries(
   const [placeholderFocusKey, setPlaceholderFocusKey] = React.useState(0);
 
   const { storage } = useMutate();
+  const { openSidePanel } = useEntitySidePanel();
   const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
 
   const entriesWithPosition = React.useMemo(() => {
@@ -229,13 +232,21 @@ function useEntries(
       // Find means the entity already exists — don't create a new one.
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
+        const existing = store.getEntity(nextEntityId, { spaceId: actionSpaceId });
+        const alreadyMaterialized =
+          (existing?.values.some(v => !v.isDeleted) ?? false) ||
+          (existing?.relations.some(r => !r.isDeleted) ?? false);
 
         setPendingEntityId(entityId);
 
-        createEntityWithTypes({
-          name: maybeName,
-          filters: filterState,
-        });
+        if (!alreadyMaterialized) {
+          createEntityWithTypes({
+            name: maybeName,
+            filters: filterState,
+          });
+        } else if (maybeName) {
+          storage.entities.name.set(entityId, actionSpaceId, maybeName);
+        }
       }
     }
   };
@@ -265,6 +276,11 @@ function useEntries(
     setEditable(true);
     setHasPlaceholderRow(true);
     setPlaceholderFocusKey(k => k + 1);
+
+    if (source.type !== 'COLLECTION') {
+      createEntityWithTypes({ filters: filterState, advanceNextId: false });
+      openSidePanel(nextEntityId, spaceId, true);
+    }
   };
 
   return {
