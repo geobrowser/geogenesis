@@ -245,11 +245,11 @@ export function useEditorStoreLite() {
 }
 
 export function useEditorStore() {
-  const { id: entityId, spaceId } = useEditorInstance();
+  const { id: entityId, spaceId, ignoreRouteTabId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
-  const tabId = useTabId();
-  const activeEntityId = tabId ?? entityId;
+  const routeTabId = ignoreRouteTabId ? null : useTabId();
+  const activeEntityId = routeTabId ?? entityId;
 
   const { blockRelations, initialBlockEntities } = useEditorBlocks();
 

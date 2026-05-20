@@ -5,6 +5,16 @@ export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
 
+export type EntitySidePanelTarget = {
+  entityId: string;
+  spaceId: string;
+  openedWithMainViewEditing: boolean;
+};
+
+export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
+
+export const entitySidePanelWantsEditAtom = atom(false);
+
 export const editorHasContentAtom = atom<boolean>(false);
 
 // Bumped to force the TipTap editor to recreate with fresh content.

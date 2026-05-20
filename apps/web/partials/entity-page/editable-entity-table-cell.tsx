@@ -7,6 +7,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
@@ -21,7 +22,8 @@ import { PageStringField, TableImageField, TableStringField } from '~/design-sys
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -32,6 +34,7 @@ import {
   writeValue,
 } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type Props = {
   entityId: string;
@@ -75,6 +78,7 @@ export function EditableEntityTableCell({
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
+  const openedWithMainViewEditing = useUserIsEditing(currentSpaceId);
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
@@ -109,19 +113,28 @@ export function EditableEntityTableCell({
     return (
       <>
         {source.type !== 'COLLECTION' ? (
-          <div className="group/name-cell relative flex w-full items-center">
-            <PageStringField
-              variant="tableCell"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onEnterKey={onAddPlaceholder}
-              onChange={value => {
-                onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
-              }}
-            />
-            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+          <div className="group/name-cell flex w-full min-w-0 items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <PageStringField
+                variant="tableCell"
+                placeholder="Entity name..."
+                value={name ?? ''}
+                onEnterKey={onAddPlaceholder}
+                onChange={value => {
+                  onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                }}
+              />
             </div>
+            {!isPlaceholderRow && (
+              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100">
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={spaceId}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+                <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+              </div>
+            )}
           </div>
         ) : (
           <CollectionMetadata
@@ -135,6 +148,8 @@ export function EditableEntityTableCell({
             relationId={relationId}
             verified={verified}
             onLinkEntry={onLinkEntry}
+            showSidePanel={!isPlaceholderRow}
+            openedWithMainViewEditing={openedWithMainViewEditing}
           >
             <div className="pointer-events-auto">
               <PageStringField
@@ -329,11 +344,24 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
   const router = useRouter();
 
   const handleClick = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
-  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
+  return (
+    <Link
+      href={NavUtils.toEntity(spaceId, entityId, true)}
+      entityId={entityId}
+      spaceId={spaceId}
+      aria-label="Navigate to entity"
+      className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      onMouseDown={e => e.stopPropagation()}
+      onClick={handleClick}
+    >
+      <RightArrowLongChip />
+    </Link>
+  );
 }
 
 function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {

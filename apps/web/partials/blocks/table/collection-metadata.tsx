@@ -25,6 +25,7 @@ import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type CollectionMetadataProps = {
   view: DataBlockView;
@@ -39,6 +40,8 @@ type CollectionMetadataProps = {
   verified?: boolean;
   onLinkEntry: onLinkEntryFn;
   children: ReactNode;
+  showSidePanel?: boolean;
+  openedWithMainViewEditing?: boolean;
 };
 
 export const CollectionMetadata = ({
@@ -53,6 +56,8 @@ export const CollectionMetadata = ({
   verified,
   onLinkEntry,
   children,
+  showSidePanel = true,
+  openedWithMainViewEditing = false,
 }: CollectionMetadataProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
@@ -208,6 +213,15 @@ export const CollectionMetadata = ({
                 </Popover.Portal>
               </Popover.Root>
             </div>
+          )}
+          {showSidePanel && isHovered && (
+            <span className="pointer-events-auto ml-1 inline-flex items-center">
+              <DataBlockOpenSidePanelButton
+                entityId={entityId}
+                entitySpaceId={spaceId ?? currentSpaceId}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            </span>
           )}
           {isHovered && isEditing && (
             <span
