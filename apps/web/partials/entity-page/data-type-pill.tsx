@@ -53,7 +53,11 @@ export function DataTypePill({ dataType, renderableType, spaceId, iconOnly = fal
 
   if (iconOnly) {
     return (
-      <span className="inline-flex items-center rounded border border-grey-02 bg-white p-1 text-metadata tabular-nums">
+      <span
+        role="img"
+        aria-label={`${formattedType} property type`}
+        className="inline-flex items-center rounded border border-grey-02 bg-white p-1 text-metadata tabular-nums"
+      >
         {IconComponent && <IconComponent color="grey-04" />}
       </span>
     );
