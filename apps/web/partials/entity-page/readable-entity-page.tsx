@@ -187,7 +187,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               </button>
 
               {!isCollapsed && (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2 sm:gap-5">
                   {group.propertyIds.map(propertyId => {
                     const property = renderedProperties[propertyId];
                     if (!property) return null;
@@ -215,7 +215,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               Ungrouped properties
             </Text>
           )}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:gap-5">
             {groupedSections.ungrouped.map(propertyId => {
               const property = renderedProperties[propertyId];
               if (!property) return null;
@@ -250,7 +250,7 @@ function ReadablePropertyRow({
   const isRelation = property.dataType === 'RELATION';
 
   return (
-    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4">
+    <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-1 sm:gap-1">
       <div className="inline-flex min-w-0 items-start gap-2 text-text">
         <span className="flex h-[1.5rem] shrink-0 items-center">
           <InlinePropertyTypeIcon dataType={property.dataType} renderableType={property.renderableTypeStrict ?? property.renderableType} />
