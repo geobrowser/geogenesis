@@ -4,16 +4,19 @@ import * as React from 'react';
 
 import type { UIMessage } from 'ai';
 import { isTextUIPart, isToolUIPart } from 'ai';
+import { useAtomValue } from 'jotai';
 
 import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { buildEntityCacheFromMessages } from '~/core/chat/entity-cache';
 import type { EntityCache } from '~/core/chat/entity-cache';
+import { injectInlineAtom } from '~/core/state/chat-store';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 import { Spinner } from '~/design-system/spinner';
 
 import { ChatMarkdown } from './chat-markdown';
 import { ChatSourceLink } from './chat-source-pill';
+import { InjectInlineProgress } from './inject-progress-bar';
 import { useSmoothStream } from './use-smooth-stream';
 
 // Off by default in dev — the per-state-flip transcript was unreadably noisy
@@ -366,6 +369,7 @@ type Props = {
 
 export function ChatMessages({ messages, status, error, onSuggestion, disabled }: Props) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const injectInline = useAtomValue(injectInlineAtom);
 
   const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
   const lastAssistantId = lastAssistant?.id;
@@ -488,6 +492,16 @@ export function ChatMessages({ messages, status, error, onSuggestion, disabled }
             return (
               <div key={message.id} data-message-id={message.id} className="flex justify-end">
                 <div className="max-w-[80%] rounded-md bg-grey-01 px-2 py-1.5 text-chat text-text">{text}</div>
+              </div>
+            );
+          }
+
+          // Inject pending: swap the standard sparkle+text body for the
+          // dedicated inline progress UI (rotating phrase + thin bar).
+          if (injectInline && injectInline.assistantMessageId === message.id && injectInline.status === 'pending') {
+            return (
+              <div key={message.id} data-message-id={message.id}>
+                <InjectInlineProgress state={injectInline} />
               </div>
             );
           }
