@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { useAtom, useSetAtom } from 'jotai';
 
+import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { addDataPanelExpandedAtom, assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 
@@ -31,19 +32,66 @@ export function AddDataPanel({ spaceId }: Props) {
   const setSeed = useSetAtom(assistantSeedAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [url, setUrl] = React.useState('');
+  const [submitting, setSubmitting] = React.useState(false);
 
   if (!canEdit || !expanded) return null;
 
   const trimmed = url.trim();
-  const canSubmit = isValidHttpUrl(trimmed);
+  const canSubmit = isValidHttpUrl(trimmed) && !submitting;
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (!isValidHttpUrl(trimmed) || submitting) return;
+    setSubmitting(true);
+
+    let classification: ClassifyUrlResponse = { route: 'chat' };
+    try {
+      const res = await fetch('/api/chat/classify-url', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmed }),
+      });
+      if (res.ok) {
+        classification = (await res.json()) as ClassifyUrlResponse;
+      } else {
+        console.warn('[AddDataPanel] classify-url returned', res.status);
+      }
+    } catch (err) {
+      console.warn('[AddDataPanel] classify-url failed; falling back to chat flow', err);
+    }
+
+    if (classification.route === 'inject') {
+      try {
+        const res = await fetch('/api/chat/inject', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: trimmed, type: classification.type }),
+        });
+        if (res.ok || res.status === 202) {
+          const body = (await res.json()) as { jobId: string };
+          if (body.jobId) {
+            setSeed({ mode: 'inject', url: trimmed, jobId: body.jobId, injectType: classification.type });
+            setChatOpen(true);
+            setExpanded(false);
+            setUrl('');
+            setSubmitting(false);
+            return;
+          }
+        } else {
+          console.warn('[AddDataPanel] inject submit returned', res.status);
+        }
+      } catch (err) {
+        console.warn('[AddDataPanel] inject submit failed; falling back to chat flow', err);
+      }
+    }
+
     setSeed({ mode: 'ingestion', url: trimmed });
     setChatOpen(true);
     setExpanded(false);
     setUrl('');
+    setSubmitting(false);
   };
 
   return (

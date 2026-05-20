@@ -6,12 +6,14 @@ import * as React from 'react';
 
 import { DefaultChatTransport, isToolUIPart } from 'ai';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
+import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
+import type { InjectType } from '~/core/chat/inject-types';
 import { ENTITY_ID_REGEX } from '~/core/chat/limits';
 import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
 import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
@@ -19,8 +21,9 @@ import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
+import { useInjectJob } from '~/core/hooks/use-inject-job';
 import { useSpace } from '~/core/hooks/use-space';
-import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import { assistantSeedAtom, injectInlineAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -90,6 +93,7 @@ type ChatMode = 'default' | 'ingestion';
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useAtom(isChatOpenAtom);
   const [seed, setSeed] = useAtom(assistantSeedAtom);
+  const setInjectInline = useSetAtom(injectInlineAtom);
   const [input, setInput] = React.useState('');
 
   const pathname = usePathname();
@@ -130,6 +134,19 @@ export function ChatWidget() {
 
   // Persists across follow-up turns; reset by `handleNewChat`.
   const modeRef = React.useRef<ChatMode>('default');
+
+  // Inject pipeline: when the seed signals an inject route, we hold its jobId
+  // here and let `useInjectJob` drive the polling + status. The assistant
+  // message id is stable so the polling effect can update its text in place.
+  const [injectJob, setInjectJob] = React.useState<{
+    jobId: string;
+    spaceId: string;
+    url: string;
+    injectType: InjectType;
+    assistantMessageId: string;
+    applied: boolean;
+  } | null>(null);
+  const injectState = useInjectJob({ jobId: injectJob?.jobId ?? null, enabled: injectJob !== null });
 
   const transport = React.useMemo(
     () =>
@@ -392,6 +409,8 @@ export function ChatWidget() {
     clearError();
     modeRef.current = 'default';
     stoppedRef.current = false;
+    setInjectJob(null);
+    setInjectInline(null);
     conversationIdRef.current = createTrackingId('conversation');
   };
 
@@ -399,16 +418,105 @@ export function ChatWidget() {
   React.useEffect(() => {
     if (!seed) return;
     if (isBusy) return;
-    modeRef.current = seed.mode;
     stoppedRef.current = false;
     // Drop any stale error so the StatusBar retry doesn't regenerate the previous failed turn.
     clearError();
+
+    if (seed.mode === 'inject') {
+      // Push a synthetic user + empty-assistant pair. The assistant slot is
+      // claimed by `InjectInlineProgress` (via injectInlineAtom) while polling;
+      // its text is filled in with the summary once the job completes.
+      const assistantMessageId = createTrackingId('inject-msg');
+      const userText = `Importing from \`${seed.url}\``;
+      modeRef.current = 'ingestion'; // unused for inject path but keeps default in sync
+      setMessages(prev => [
+        ...prev,
+        { id: createTrackingId('inject-user'), role: 'user', parts: [{ type: 'text', text: userText }] },
+        { id: assistantMessageId, role: 'assistant', parts: [{ type: 'text', text: '' }] },
+      ]);
+      setInjectInline({ assistantMessageId, status: 'pending', startedAt: Date.now() });
+      setInjectJob({
+        jobId: seed.jobId,
+        spaceId: currentSpaceId ?? '',
+        url: seed.url,
+        injectType: seed.injectType,
+        assistantMessageId,
+        applied: false,
+      });
+      setSeed(null);
+      return;
+    }
+
+    modeRef.current = seed.mode;
     // Backtick-wrap the URL so markdown doesn't mangle special chars.
     const text = `Please ingest this URL into this space and stage the entities: \`${seed.url}\``;
     trackAssistantMessage(text, 'typed');
     sendMessageRef.current({ text });
     setSeed(null);
-  }, [seed, isBusy, clearError, setSeed, trackAssistantMessage]);
+  }, [seed, isBusy, clearError, setSeed, trackAssistantMessage, currentSpaceId, setMessages]);
+
+  // On a terminal inject state, apply the decoded ops to the local store, write
+  // the summary into the synthetic assistant message, and navigate to the new
+  // article. On failure, fall back to the standard chat-driven ingestion flow.
+  React.useEffect(() => {
+    if (!injectJob) return;
+
+    const updateAssistantText = (text: string) => {
+      setMessages(prev => {
+        const idx = prev.findIndex(m => m.id === injectJob.assistantMessageId);
+        if (idx === -1) return prev;
+        const next = [...prev];
+        next[idx] = { ...prev[idx], parts: [{ type: 'text', text }] };
+        return next;
+      });
+    };
+
+    // During pending: `InjectInlineProgress` (driven by `injectInlineAtom`)
+    // owns the assistant slot and animates its own label + bar. Nothing to do.
+    if (injectState.status === 'pending') return;
+
+    if (injectState.status === 'completed' && injectState.ops && !injectJob.applied) {
+      if (!injectJob.spaceId) {
+        updateAssistantText("Couldn't import: no active space.");
+        setInjectInline(null);
+        setInjectJob(null);
+        return;
+      }
+      const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      const primaryPill =
+        result.primaryEntityId && result.primaryEntityName
+          ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
+          : null;
+      const supportingCount = Math.max(0, result.entitiesCreated - (primaryPill ? 1 : 0));
+      const supportingClause =
+        supportingCount > 0
+          ? ` and ${supportingCount} supporting ${supportingCount === 1 ? 'entity' : 'entities'}`
+          : '';
+      const summary = primaryPill
+        ? `Imported ${primaryPill}${supportingClause}. Review and publish when ready.`
+        : `Imported ${result.entitiesCreated} ${result.entitiesCreated === 1 ? 'entity' : 'entities'}. Review and publish when ready.`;
+      updateAssistantText(summary);
+      setInjectInline(null);
+      // Navigate straight to the imported article. The staged edits stay in the
+      // store for the user to review + publish from the article page when ready.
+      if (result.primaryEntityId) {
+        router.push(NavUtils.toEntity(injectJob.spaceId, result.primaryEntityId));
+      }
+      setInjectJob({ ...injectJob, applied: true });
+      return;
+    }
+
+    if (injectState.status === 'failed') {
+      const reason = injectState.error ?? 'Inject failed';
+      updateAssistantText(`News pipeline didn't return results (${reason}) — falling back to the standard import.`);
+      setInjectInline(null);
+      modeRef.current = 'ingestion';
+      const fallbackText = `Please ingest this URL into this space and stage the entities: \`${injectJob.url}\``;
+      trackAssistantMessage(fallbackText, 'typed');
+      sendMessageRef.current({ text: fallbackText });
+      setInjectJob(null);
+    }
+  }, [injectJob, injectState, setMessages, setInjectInline, trackAssistantMessage, router]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
