@@ -60,6 +60,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
   const [groupOverlayWidths, setGroupOverlayWidths] = React.useState<Record<string, number>>({});
+  const [autoFocusGroupEntityId, setAutoFocusGroupEntityId] = React.useState<string | null>(null);
 
   const typePropertyRelations = sortRelations(
     useRelations({
@@ -219,6 +220,8 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
       fromEntity: { id: entityId, name: null },
       toEntity: { id: groupEntityId, name: null, value: groupEntityId },
     });
+
+    setAutoFocusGroupEntityId(groupEntityId);
   };
 
   const onDeleteGroup = (groupRelation: Relation) => {
@@ -433,6 +436,8 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
                     createProperty={createProperty}
+                    autoFocusName={autoFocusGroupEntityId === container.groupEntityId}
+                    onNameAutoFocused={() => setAutoFocusGroupEntityId(null)}
                     onMeasureWidth={width =>
                       setGroupOverlayWidths(previous => {
                         if (previous[container.groupRelation.id] === width) return previous;
