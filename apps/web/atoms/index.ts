@@ -9,6 +9,7 @@ export type EntitySidePanelTarget = {
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;
+  openedFromReviewEdits?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);

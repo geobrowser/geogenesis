@@ -18,13 +18,17 @@ export const EntitySidePanelEditContext = React.createContext<EntitySidePanelEdi
 export function EntitySidePanelEditModeProvider({
   entitySpaceId,
   openedWithMainViewEditing,
+  openedFromReviewEdits = false,
   children,
 }: {
   entitySpaceId: string;
   openedWithMainViewEditing: boolean;
+  openedFromReviewEdits?: boolean;
   children: React.ReactNode;
 }) {
-  const [panelWantsEdit, setPanelWantsEdit] = React.useState(openedWithMainViewEditing);
+  const [panelWantsEdit, setPanelWantsEdit] = React.useState(
+    openedFromReviewEdits ? true : openedWithMainViewEditing
+  );
   const setGlobalPanelWantsEdit = useSetAtom(entitySidePanelWantsEditAtom);
   const { canEdit, isLoading } = useAccessControl(entitySpaceId);
 
@@ -34,8 +38,8 @@ export function EntitySidePanelEditModeProvider({
   }, [panelWantsEdit, setGlobalPanelWantsEdit]);
 
   React.useEffect(() => {
-    setPanelWantsEdit(openedWithMainViewEditing);
-  }, [entitySpaceId, openedWithMainViewEditing]);
+    setPanelWantsEdit(openedFromReviewEdits ? true : openedWithMainViewEditing);
+  }, [entitySpaceId, openedWithMainViewEditing, openedFromReviewEdits]);
 
   React.useEffect(() => {
     if (!isLoading && !canEdit) {

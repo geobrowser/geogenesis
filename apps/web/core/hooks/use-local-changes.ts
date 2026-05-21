@@ -2,6 +2,9 @@
 
 import * as React from 'react';
 
+import { createAtom } from '@xstate/store';
+import { useSelector } from '@xstate/store/react';
+
 import { reactiveRelations, reactiveValues } from '../sync/store';
 import type { Relation, Value } from '../types';
 import { Diff, type EntityDiff } from '../utils/diff';
@@ -14,6 +17,15 @@ type UseLocalChangesOptions = {
 const EMPTY_VALUES: Value[] = [];
 const EMPTY_RELATIONS: Relation[] = [];
 
+const localChangesStoreTick = createAtom(
+  () => {
+    reactiveValues.get();
+    reactiveRelations.get();
+    return 0;
+  },
+  { compare: () => false }
+);
+
 export const useLocalChanges = (
   spaceId?: string,
   version = 0,
@@ -23,16 +35,25 @@ export const useLocalChanges = (
   const mergeWithRelations = options.mergeWithRelations ?? EMPTY_RELATIONS;
   const [diffs, setDiffs] = React.useState<EntityDiff[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const storeTick = useSelector(localChangesStoreTick, s => s);
+  const lastLoadingKeyRef = React.useRef<string>('');
 
   React.useEffect(() => {
     if (!spaceId) {
       setDiffs([]);
       setIsLoading(false);
+      lastLoadingKeyRef.current = '';
       return;
     }
 
+    const loadingKey = `${spaceId}:${version}`;
+    const shouldShowLoading = lastLoadingKeyRef.current !== loadingKey;
+    if (shouldShowLoading) {
+      lastLoadingKeyRef.current = loadingKey;
+      setIsLoading(true);
+    }
+
     let cancelled = false;
-    setIsLoading(true);
 
     const storeValues = reactiveValues
       .get()
@@ -70,7 +91,7 @@ export const useLocalChanges = (
     return () => {
       cancelled = true;
     };
-  }, [spaceId, version, mergeWithValues, mergeWithRelations]);
+  }, [spaceId, version, storeTick, mergeWithValues, mergeWithRelations]);
 
   return [diffs, isLoading] as const;
 };

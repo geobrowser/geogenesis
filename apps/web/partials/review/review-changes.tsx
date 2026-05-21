@@ -13,6 +13,7 @@ import { useSetAtom, useStore } from 'jotai';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -80,6 +81,7 @@ export const ReviewChanges = () => {
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const resetSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
+  const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -451,6 +453,20 @@ export const ReviewChanges = () => {
     overscan: 3,
     gap: 8,
   });
+
+  React.useEffect(() => {
+    rowVirtualizer.measure();
+  }, [entities, visibleEntities.length]);
+
+  const handleOpenReviewEntity = React.useCallback(
+    (entityId: string) => {
+      if (!activeSpace) return;
+
+      bumpEditorContentVersion(v => v + 1);
+      openSidePanel(entityId, activeSpace, true, { openedFromReviewEdits: true });
+    },
+    [activeSpace, bumpEditorContentVersion, openSidePanel]
+  );
 
   const handleProposalNameChange = (name: string) => {
     setProposals(prev => ({
@@ -847,7 +863,11 @@ export const ReviewChanges = () => {
                           >
                             <div className="px-6 py-4">
                               <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                                <ChangedEntity entity={entity} spaceId={activeSpace} />
+                                <ChangedEntity
+                                  entity={entity}
+                                  spaceId={activeSpace}
+                                  onOpenEntity={handleOpenReviewEntity}
+                                />
                               </div>
                             </div>
                           </div>

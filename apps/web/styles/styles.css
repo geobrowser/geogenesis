@@ -496,7 +496,20 @@
 
 /* Radix UI */
 .elevated-popover > [data-radix-popper-content-wrapper] {
-  z-index: 1001 !important;
+  z-index: var(--elevated-popover-z, 1001) !important;
+}
+
+body[data-entity-side-panel-open] {
+  --elevated-popover-z: 10002;
+}
+
+body[data-entity-side-panel-open] .elevated-popover {
+  z-index: 10002;
+  position: relative;
+}
+
+body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
+  z-index: 10002 !important;
 }
 
 /* https://github.com/radix-ui/primitives/issues/2908 */

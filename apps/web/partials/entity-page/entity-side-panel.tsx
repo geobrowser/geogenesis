@@ -5,15 +5,19 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
+import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { motion, useAnimation } from 'framer-motion';
+
+import { editorContentVersionAtom } from '~/atoms';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useDiff } from '~/core/state/diff-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -176,8 +180,15 @@ function EntitySidePanelModeToggle() {
   );
 }
 
-function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; entitySpaceId: string }) {
-  const { closeSidePanel } = useEntitySidePanel();
+function EntitySidePanelHeader({
+  entityId,
+  entitySpaceId,
+  onClose,
+}: {
+  entityId: string;
+  entitySpaceId: string;
+  onClose: () => void;
+}) {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
   const { space } = useSpace(entitySpaceId);
 
@@ -188,7 +199,7 @@ function EntitySidePanelHeader({ entityId, entitySpaceId }: { entityId: string; 
     <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-divider bg-white px-4 py-1 sm:px-5">
       <button
         type="button"
-        onClick={() => closeSidePanel()}
+        onClick={onClose}
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01"
         aria-label="Close side panel"
       >
@@ -435,20 +446,29 @@ function EntitySidePanelSurface({
   entityId,
   requestedSpaceId,
   openedWithMainViewEditing,
+  openedFromReviewEdits,
+  onClose,
 }: {
   entityId: string;
   requestedSpaceId: string;
   openedWithMainViewEditing: boolean;
+  openedFromReviewEdits?: boolean;
+  onClose: () => void;
 }) {
   const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId);
+  const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   return (
-    <EntitySidePanelEditModeProvider entitySpaceId={effectiveSpaceId} openedWithMainViewEditing={openedWithMainViewEditing}>
+    <EntitySidePanelEditModeProvider
+      entitySpaceId={effectiveSpaceId}
+      openedWithMainViewEditing={openedWithMainViewEditing}
+      openedFromReviewEdits={openedFromReviewEdits}
+    >
       <div className="flex min-h-0 flex-1 flex-col">
-        <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} />
+        <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <EntitySidePanelBody
-            key={`${effectiveSpaceId}:${entityId}`}
+            key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
             entityId={entityId}
             entitySpaceId={effectiveSpaceId}
             entity={entity}
@@ -462,8 +482,27 @@ function EntitySidePanelSurface({
 
 export function EntitySidePanel() {
   const pathname = usePathname();
+  const { isReviewOpen, bumpReviewVersion } = useDiff();
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
   const pathnameWhenOpenedRef = React.useRef<string | null>(null);
+
+  const handleCloseSidePanel = React.useCallback(() => {
+    if (sidePanelTarget?.openedFromReviewEdits) {
+      bumpReviewVersion();
+    }
+    closeSidePanel();
+  }, [sidePanelTarget?.openedFromReviewEdits, bumpReviewVersion, closeSidePanel]);
+
+  React.useLayoutEffect(() => {
+    if (sidePanelTarget) {
+      document.body.setAttribute('data-entity-side-panel-open', '');
+    } else {
+      document.body.removeAttribute('data-entity-side-panel-open');
+    }
+    return () => {
+      document.body.removeAttribute('data-entity-side-panel-open');
+    };
+  }, [sidePanelTarget]);
 
   React.useEffect(() => {
     if (!sidePanelTarget) {
@@ -478,9 +517,9 @@ export function EntitySidePanel() {
 
     if (pathnameWhenOpenedRef.current !== pathname) {
       pathnameWhenOpenedRef.current = null;
-      closeSidePanel();
+      handleCloseSidePanel();
     }
-  }, [pathname, sidePanelTarget, closeSidePanel]);
+  }, [pathname, sidePanelTarget, handleCloseSidePanel]);
 
   if (!sidePanelTarget) {
     return null;
@@ -490,22 +529,24 @@ export function EntitySidePanel() {
     return null;
   }
 
-  const { entityId, spaceId, openedWithMainViewEditing } = sidePanelTarget;
+  const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits } = sidePanelTarget;
 
   return createPortal(
     <RemoveScroll noIsolation>
-      <div className="fixed inset-0 z-[200]">
+      <div className={isReviewOpen ? 'fixed inset-0 z-[10001]' : 'fixed inset-0 z-[200]'}>
         <button
           type="button"
           aria-label="Close side panel backdrop"
           className="absolute inset-0 bg-grey-03/40"
-          onClick={() => closeSidePanel()}
+          onClick={handleCloseSidePanel}
         />
         <aside className="absolute inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl">
           <EntitySidePanelSurface
             entityId={entityId}
             requestedSpaceId={spaceId}
             openedWithMainViewEditing={openedWithMainViewEditing}
+            openedFromReviewEdits={openedFromReviewEdits}
+            onClose={handleCloseSidePanel}
           />
         </aside>
       </div>
