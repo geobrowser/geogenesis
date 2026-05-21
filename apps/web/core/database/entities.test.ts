@@ -157,6 +157,37 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
     expect(result.hasPropertyGroups).toBe(true);
   });
 
+  it('does not render an isType group when the target entity has no properties', async () => {
+    mocks.propertiesById.set(
+      'is-type-property',
+      property('is-type-property', 'Is type property', { dataType: 'RELATION', isType: true })
+    );
+    mocks.entitiesById.set(
+      'type',
+      entity('type', 'Type', [
+        relation({ id: 'type-is-type-property', from: 'type', type: SystemIds.PROPERTIES, to: 'is-type-property' }),
+      ])
+    );
+    mocks.entitiesById.set('target', entity('target', 'Target type'));
+
+    const result = await getSchemaWithGroupsFromTypeIdsAndRelations(
+      [{ id: 'type', spaceId }],
+      [
+        relation({
+          id: 'entity-is-type-relation',
+          from: 'entity',
+          type: 'is-type-property',
+          to: 'target',
+          toName: 'Target type',
+        }),
+      ]
+    );
+
+    expect(result.propertyGroups).toEqual([]);
+    expect(result.ungroupedPropertyIds).toEqual(['is-type-property']);
+    expect(result.hasPropertyGroups).toBe(false);
+  });
+
   it('places isType groups directly after the explicit group containing the triggering property', async () => {
     mocks.propertiesById.set(
       'is-type-property',
