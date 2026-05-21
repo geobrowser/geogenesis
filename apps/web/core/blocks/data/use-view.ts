@@ -3,11 +3,16 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { useSelector } from '@xstate/store/react';
+import equal from 'fast-deep-equal';
+
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { reactiveRelations } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -29,20 +34,24 @@ export function useView() {
     id: entityId,
   });
 
-  const { blockRelations, initialBlockEntities } = useEditorStoreLite();
+  const { blockRelations } = useEditorStoreLite();
   const blocksRelationEntityId =
     relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
 
-  const initialBlockRelation = initialBlockEntities.find(b => b.id === blocksRelationEntityId) ?? null;
-
-  const { entity: blockRelation } = useQueryEntity({
-    spaceId,
-    id: blocksRelationEntityId,
-    enabled: Boolean(blocksRelationEntityId),
-  });
-
-  const blockRelationRelations = blockRelation?.relations ?? initialBlockRelation?.relations ?? [];
-  const blockRelationName = blockRelation?.name ?? initialBlockRelation?.name ?? null;
+  // Read shown-column / view config from the reactive sync store only
+  const { blockRelationRelations, blockRelationName } = useSelector(
+    reactiveRelations,
+    () => {
+      if (!blocksRelationEntityId) {
+        return { blockRelationRelations: [] as Relation[], blockRelationName: null as string | null };
+      }
+      return {
+        blockRelationRelations: store.getResolvedRelations(blocksRelationEntityId),
+        blockRelationName: store.getEntity(blocksRelationEntityId)?.name ?? null,
+      };
+    },
+    equal
+  );
 
   const viewRelation = React.useMemo(
     () => selectViewRelation(blockRelationRelations),
@@ -80,7 +89,6 @@ export function useView() {
 
   const setView = React.useCallback(
     async (newView: DataBlockViewDetails) => {
-      console.log('isCurrentView123', newView, view, blocksRelationEntityId);
       if (newView.value === view || !blocksRelationEntityId) return;
 
       const activeViewRelations = blockRelationRelations.filter(
@@ -273,7 +281,7 @@ export function useView() {
 
   return {
     isLoading,
-    isFetched,
+    isFetched: Boolean(blocksRelationEntityId),
     view,
     placeholder,
     viewRelation,

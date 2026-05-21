@@ -55,7 +55,6 @@ const reactive = createAtom(
   { compare: () => false }
 );
 
-/** Entity ids with unpublished local values or relations */
 function getUnpublishedLocalEntityIds(): string[] {
   const ids = new Set<string>();
   for (const v of reactiveValues.get()) {

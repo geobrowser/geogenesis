@@ -957,6 +957,9 @@ const ConfiguredTableBlock = ({
 
   const singleSpaceTarget =
     source.type === 'SPACES' && source.value.length === 1 ? source.value[0] : null;
+  const canCreateInSingleSpace = useCanUserEdit(singleSpaceTarget ?? spaceId);
+  const showCreateEntityPlus =
+    renderPlusButtonAsInline && (!singleSpaceTarget || canCreateInSingleSpace);
 
   const onAddPlaceholderClick = React.useCallback(() => {
     onAddPlaceholder(singleSpaceTarget ?? null);
@@ -999,7 +1002,7 @@ const ConfiguredTableBlock = ({
           </Link>
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
-          {renderPlusButtonAsInline &&
+          {showCreateEntityPlus &&
             (usesCreateEntitySpaceDropdown ? (
               <DataBlockCreateEntitySpaceDropdown
                 source={source}
