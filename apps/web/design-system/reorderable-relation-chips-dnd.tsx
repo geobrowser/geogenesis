@@ -116,14 +116,6 @@ function findContainerForOverId(
   return relationIdToContainerId.get(overId) ?? null;
 }
 
-function measureWrapsMultipleRows(container: HTMLElement | null): boolean {
-  if (!container) return false;
-  const children = Array.from(container.children) as HTMLElement[];
-  if (children.length <= 1) return false;
-  const tops = children.map(ch => Math.round(ch.getBoundingClientRect().top));
-  return new Set(tops).size > 1;
-}
-
 const inlineWrappedSortingStrategy: SortingStrategy = () => ({
   x: 0,
   y: 0,
@@ -392,7 +384,6 @@ export function RelationChipsDndRoot({
   const [destinationContainerId, setDestinationContainerId] = React.useState<string | null>(null);
   const [insertBeforeIndex, setInsertBeforeIndex] = React.useState<number | null>(null);
   const [overlaySize, setOverlaySize] = React.useState<OverlaySize | null>(null);
-  const [inlineWrapsMultipleRows, setInlineWrapsMultipleRows] = React.useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -483,7 +474,6 @@ export function RelationChipsDndRoot({
     setDestinationContainerId(null);
     setInsertBeforeIndex(null);
     setOverlaySize(null);
-    setInlineWrapsMultipleRows(false);
     lastOverIdRef.current = null;
   };
 
@@ -508,11 +498,6 @@ export function RelationChipsDndRoot({
       } else {
         setOverlaySize(null);
       }
-    }
-
-    const sourceRegistration = getRegistrationForRelation(id);
-    if (sourceRegistration?.listLayoutRef.current && measureWrapsMultipleRows(sourceRegistration.listLayoutRef.current)) {
-      setInlineWrapsMultipleRows(true);
     }
 
     updateDestinationFromPointer(pointerFromDragEvent(event), id, null);
@@ -601,20 +586,14 @@ export function RelationChipsDndRoot({
       const gapContainerId = destinationContainerId ?? activeSourceContainerId;
       const showInThisContainer = activeId != null && gapContainerId === containerId;
       const useInsertGapDnD = relations.length > 1;
-      const chipsWrapMultipleRows =
-        inlineWrapsMultipleRows ||
-        (activeId != null &&
-          (containersRef.current.get(containerId)?.listLayoutRef.current
-            ? measureWrapsMultipleRows(containersRef.current.get(containerId)!.listLayoutRef.current)
-            : false));
 
       return {
         gapSize: showInThisContainer ? overlaySize ?? (activeId ? itemSizesRef.current[activeId] : null) : null,
         insertBeforeIndex: showInThisContainer ? insertBeforeIndex : null,
-        useLayoutAnimateWhileDragging: useInsertGapDnD && activeId != null && chipsWrapMultipleRows,
+        useLayoutAnimateWhileDragging: useInsertGapDnD && activeId != null,
       };
     },
-    [activeId, activeSourceContainerId, destinationContainerId, insertBeforeIndex, inlineWrapsMultipleRows, overlaySize]
+    [activeId, activeSourceContainerId, destinationContainerId, insertBeforeIndex, overlaySize]
   );
 
   const contextValue = React.useMemo<RelationChipsDndRootContextValue>(
@@ -773,7 +752,6 @@ export default function ReorderableRelationChipsDnd({
   const listLayoutRef = React.useRef<HTMLDivElement>(null);
   const chipNodesRef = React.useRef<Map<string, HTMLElement>>(new Map());
   const activeIdRef = React.useRef<string | null>(null);
-  const [inlineWrapsMultipleRows, setInlineWrapsMultipleRows] = React.useState(false);
   const [insertBeforeIndex, setInsertBeforeIndex] = React.useState<number | null>(null);
   const itemSizesRef = React.useRef<Record<string, OverlaySize>>({});
 
@@ -792,40 +770,13 @@ export default function ReorderableRelationChipsDnd({
   const [overlaySize, setOverlaySize] = React.useState<OverlaySize | null>(null);
 
   const activeRelation = activeId ? sortedRelations.find(r => r.id === activeId) : null;
-  const chipsWrapMultipleRows =
-    inlineWrapsMultipleRows ||
-    (activeId != null && measureWrapsMultipleRows(listLayoutRef.current));
   const useInsertGapDnD = sortedRelations.length > 1;
-  const useLayoutAnimateWhileDragging = useInsertGapDnD && activeId != null && chipsWrapMultipleRows;
+  const useLayoutAnimateWhileDragging = useInsertGapDnD && activeId != null;
   const activeIndex = activeId ? sortedRelations.findIndex(r => r.id === activeId) : -1;
 
   const sortingStrategy: SortingStrategy = useInsertGapDnD
     ? inlineWrappedSortingStrategy
     : horizontalListSortingStrategy;
-
-  const relationListKey = sortedRelations.map(r => r.id).join('\0');
-
-  React.useLayoutEffect(() => {
-    if (sortedRelations.length <= 1) {
-      setInlineWrapsMultipleRows(false);
-      return;
-    }
-    if (activeIdRef.current) return;
-    setInlineWrapsMultipleRows(measureWrapsMultipleRows(listLayoutRef.current));
-  }, [relationListKey, sortedRelations.length, activeId]);
-
-  React.useEffect(() => {
-    const el = listLayoutRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      requestAnimationFrame(() => {
-        if (activeIdRef.current) return;
-        setInlineWrapsMultipleRows(measureWrapsMultipleRows(listLayoutRef.current));
-      });
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [relationListKey]);
 
   const registerChipNode = React.useCallback((relationId: string, node: HTMLDivElement | null) => {
     if (node) {
@@ -880,10 +831,6 @@ export default function ReorderableRelationChipsDnd({
     }
 
     updateInsertIndexFromPointer(pointerFromDragEvent(event), id);
-
-    if (measureWrapsMultipleRows(listLayoutRef.current)) {
-      setInlineWrapsMultipleRows(true);
-    }
   };
 
   const clearDragState = () => {
