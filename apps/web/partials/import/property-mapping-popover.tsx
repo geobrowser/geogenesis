@@ -66,7 +66,6 @@ interface PropertyMappingPopoverProps {
   onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   onCreateProperty?: (csvColumnIndex: number, propertyId: string, property: Property) => void;
   trigger: React.ReactNode;
-  initialQuery?: string;
   selectedEntityId?: string;
 }
 
@@ -76,7 +75,6 @@ export function PropertyMappingPopover({
   onSelectProperty,
   onCreateProperty,
   trigger,
-  initialQuery,
   selectedEntityId,
 }: PropertyMappingPopoverProps) {
   const [open, setOpen] = React.useState(false);
@@ -131,7 +129,6 @@ export function PropertyMappingPopover({
             <FindOrCreatePropertyView
               spaceId={spaceId}
               propertyType={step.propertyType}
-              initialQuery={initialQuery}
               selectedEntityId={selectedEntityId}
               onBack={() => setStep({ kind: 'type' })}
               onSelectProperty={onSelectProperty}
@@ -153,7 +150,6 @@ export function PropertyMappingPopover({
             <FindOrCreateRelationPropertyView
               spaceId={spaceId}
               toEntityType={step.toEntityType}
-              initialQuery={initialQuery}
               selectedEntityId={selectedEntityId}
               onBack={() => setStep({ kind: 'toType' })}
               onSelectProperty={onSelectProperty}
@@ -262,7 +258,6 @@ function TypeChip({
 function FindOrCreatePropertyView({
   spaceId,
   propertyType,
-  initialQuery,
   selectedEntityId,
   onBack,
   onSelectProperty,
@@ -272,7 +267,6 @@ function FindOrCreatePropertyView({
 }: {
   spaceId: string;
   propertyType: SwitchableRenderableType;
-  initialQuery?: string;
   selectedEntityId?: string;
   onBack: () => void;
   onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
@@ -286,10 +280,14 @@ function FindOrCreatePropertyView({
   const { createProperty } = useCreateProperty(spaceId);
   const [, setToast] = useToast();
 
+  // Pre-populate immediately (`enabled: true`) by hitting REST `/search` with
+  // `type_ids=PROPERTY`, then filter the candidate list down to properties
+  // matching the picked propertyType (dataType + renderableType). The wrapper
+  // auto-paginates if the filter shrinks a page below `MIN_FILTERED_RESULTS`.
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearchProperties({
     dataType: baseDataType,
     renderableTypeId,
-    initialQuery,
+    enabled: true,
   });
 
   const typeLabel = SWITCHABLE_RENDERABLE_TYPE_LABELS[propertyType];
@@ -358,6 +356,7 @@ function FindOrCreateToTypeView({
   const [, setToast] = useToast();
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
     filterByTypes: [SystemIds.SCHEMA_TYPE],
+    enabled: true,
   });
 
   const handleCreate = (name: string) => {
@@ -402,7 +401,6 @@ function FindOrCreateToTypeView({
 function FindOrCreateRelationPropertyView({
   spaceId,
   toEntityType,
-  initialQuery,
   selectedEntityId,
   onBack,
   onSelectProperty,
@@ -412,7 +410,6 @@ function FindOrCreateRelationPropertyView({
 }: {
   spaceId: string;
   toEntityType: { id: string; name: string | null };
-  initialQuery?: string;
   selectedEntityId?: string;
   onBack: () => void;
   onSelectProperty: (csvColumnIndex: number, propertyId: string, property: Property) => void;
@@ -424,11 +421,14 @@ function FindOrCreateRelationPropertyView({
   const { createProperty } = useCreateProperty(spaceId);
   const [, setToast] = useToast();
 
+  // Pre-populate, then narrow to relation properties whose value type matches
+  // the chosen `toEntityType`. The wrapper pumps additional pages when this
+  // narrow filter strips the initial result set too aggressively.
   const { query, onQueryChange, isLoading, isEmpty, results } = useSearchProperties({
     dataType: 'RELATION',
     renderableTypeId: null,
     requiredRelationValueTypeIds: [toEntityType.id],
-    initialQuery,
+    enabled: true,
   });
 
   const handleSelectExisting = async (result: { id: string; name: string | null }) => {
@@ -588,7 +588,6 @@ function SearchBlock({
       <ResultsArea
         isLoading={isLoading}
         isEmpty={isEmpty}
-        query={query}
         results={results}
         selectedEntityId={selectedEntityId}
         selectedIndex={selectedIndex}
@@ -619,7 +618,6 @@ function SearchBlock({
 function ResultsArea({
   isLoading,
   isEmpty,
-  query,
   results,
   selectedEntityId,
   selectedIndex,
@@ -629,7 +627,6 @@ function ResultsArea({
 }: {
   isLoading: boolean;
   isEmpty: boolean;
-  query: string;
   results: SearchResult[];
   selectedEntityId?: string;
   selectedIndex: number;
@@ -637,10 +634,6 @@ function ResultsArea({
   itemRefs: React.MutableRefObject<Array<HTMLDivElement | null>>;
   onSelect: (result: SearchResult) => void;
 }) {
-  if (!query) {
-    return <div className="px-3 py-3 text-metadata text-grey-04">Start typing to search…</div>;
-  }
-
   if (isLoading && results.length === 0) {
     return <div className="px-3 py-3 text-metadata text-grey-04">Loading…</div>;
   }

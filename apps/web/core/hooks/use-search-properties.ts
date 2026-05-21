@@ -15,7 +15,7 @@ import { hydrateRelationValueTypes } from '~/partials/import/import-generation';
 import { useSearch } from './use-search';
 
 interface UseSearchPropertiesOptions {
-  /** Filter results to properties whose base dataType equals this. Optional. */
+  /** Filter results to properties whose base dataType equals this. */
   dataType?: DataType;
   /**
    * Filter results to properties whose renderable type ID matches.
@@ -28,39 +28,60 @@ interface UseSearchPropertiesOptions {
    * list. Only meaningful for RELATION properties.
    */
   requiredRelationValueTypeIds?: string[];
-  /** Initial query string to seed the search input. */
-  initialQuery?: string;
+  /**
+   * When true, run the search even with an empty query — REST `/search`
+   * returns the top-N PROPERTY-typed entities, which we then post-filter by
+   * dataType to give the popover a pre-populated list on open.
+   */
+  enabled?: boolean;
 }
 
 /**
+ * Page size we ask `useSearch` for. The REST endpoint returns top PROPERTY
+ * entities sorted by relevance, but they span every `dataType` (TEXT, RELATION,
+ * BOOLEAN, etc.). With the default page of 10 the post-hydration `dataType`
+ * filter often yields 0-2 rows. 30 gives the filter a wider candidate pool
+ * without blowing up the initial network cost.
+ */
+const PROPERTY_SEARCH_PAGE_SIZE = 30;
+
+/**
+ * Minimum filtered-result count we'll accept before triggering another page
+ * fetch. Below this threshold we ask for more pages so a narrow filter (e.g.
+ * "RELATION → Person") still has a chance to surface matches.
+ */
+const MIN_FILTERED_RESULTS = 5;
+
+/**
+ * Max number of times we'll pump pages chasing more matches. Without this, a
+ * very narrow filter would walk the entire result set page by page.
+ */
+const MAX_FILTER_PUMP = 5;
+
+/**
  * Property-aware wrapper around `useSearch`. Adds client-side filtering for
- * `dataType`, `renderableType`, and required `relationValueTypes`.
- *
- * Hydration cost: each unique result is looked up in the local store first; on
- * miss we fall back to the network `getProperty`. RELATION-typed results also
- * pull entity relations via `hydrateRelationValueTypes` so the value-type
- * filter is reliable.
+ * `dataType`, `renderableType`, and required `relationValueTypes`, hydrates
+ * each candidate via local store (or network) so those fields are reliable,
+ * and auto-paginates when the filter yields too few rows.
  */
 export function useSearchProperties({
   dataType,
   renderableTypeId,
   requiredRelationValueTypeIds,
-  initialQuery,
+  enabled,
 }: UseSearchPropertiesOptions = {}) {
   const { store } = useSyncEngine();
 
   const search = useSearch({
     filterByTypes: [SystemIds.PROPERTY],
-    initialQuery,
+    enabled,
+    pageSize: PROPERTY_SEARCH_PAGE_SIZE,
   });
 
-  // Cache hydrated properties by ID across query changes so we don't re-fetch
-  // the same property on every keystroke.
   const cacheRef = React.useRef<Map<string, Property | null>>(new Map());
-  // `cacheVersion` is bumped whenever `cacheRef` is mutated. The `useMemo`s
-  // below MUST include it in their deps — otherwise React keeps returning the
-  // previously-cached filter result even though the underlying ref has new
-  // entries, leaving the dropdown stuck on "Loading…"/empty forever.
+  // Bump whenever `cacheRef` mutates so the downstream `useMemo`s recompute.
+  // Without this they lock onto a stale result and never refresh after
+  // hydration completes.
   const [cacheVersion, bumpCacheVersion] = React.useReducer((x: number) => x + 1, 0);
 
   const resultIdsKey = search.results.map(r => r.id).join(',');
@@ -77,12 +98,10 @@ export function useSearchProperties({
 
     if (needsHydration.length === 0) return;
 
-    // Seed entries we can resolve synchronously from the store to avoid an
-    // unnecessary network round-trip + re-render. RELATION properties with an
-    // empty `relationValueTypes` are intentionally NOT trusted: cross-space
-    // sync (engine.ts calls getBatchEntities without a spaceId) often leaves
-    // those relations unloaded, so the store would lie by omission. Route
-    // those through the network path so the async branch can hydrate them.
+    // Seed cache from the local store when we can resolve synchronously. We
+    // intentionally route RELATION properties with empty `relationValueTypes`
+    // through the network path — cross-space sync sometimes leaves those
+    // relations unloaded, so the store would lie by omission.
     const remaining: SearchResult[] = [];
     for (const r of needsHydration) {
       const fromStore = store.getProperty(r.id);
@@ -100,7 +119,6 @@ export function useSearchProperties({
       return;
     }
 
-    // Fetch the rest in parallel.
     void Promise.all(
       remaining.map(async r => {
         try {
@@ -109,9 +127,8 @@ export function useSearchProperties({
             cache.set(r.id, null);
             return;
           }
-          // `getProperty` reliably returns dataType + renderableType, but the
-          // GraphQL decoder leaves `relationValueTypes` empty. Hydrate it when
-          // we'll need to filter by it.
+          // GraphQL decoder leaves `relationValueTypes` empty; hydrate it for
+          // RELATION properties so the filter is reliable.
           const hydrated = fetched.dataType === 'RELATION' ? await hydrateRelationValueTypes(fetched) : fetched;
           cache.set(r.id, hydrated);
         } catch {
@@ -131,8 +148,6 @@ export function useSearchProperties({
     const cache = cacheRef.current;
     return search.results.filter(r => {
       const property = cache.get(r.id);
-      // While hydration is in flight, keep the entry out of view rather than
-      // letting it flicker between unfiltered → filtered states.
       if (property === undefined || property === null) return false;
 
       if (dataType && property.dataType !== dataType) return false;
@@ -153,18 +168,51 @@ export function useSearchProperties({
     });
   }, [search.results, dataType, renderableTypeId, requiredRelationValueTypeIds, cacheVersion]);
 
-  // Any result whose hydration is still pending counts toward `isLoading` so
-  // the UI can show a spinner instead of a stale "no matches" state.
   const isHydrating = React.useMemo(() => {
     const cache = cacheRef.current;
     return search.results.some(r => !cache.has(r.id));
   }, [search.results, cacheVersion]);
 
+  // Pump additional pages when the post-hydration filter is too narrow.
+  // `useSearch` already pumps when its REST-side filter strips a page to
+  // empty, but our filter runs *after* that and can shrink the page further.
+  // Wait for hydration of the current page to finish before deciding whether
+  // to ask for more, and reset the pump counter whenever the query changes so
+  // each new search gets a fresh budget.
+  const pumpCountRef = React.useRef(0);
+  React.useEffect(() => {
+    pumpCountRef.current = 0;
+  }, [search.query, dataType, renderableTypeId, requiredRelationValueTypeIds]);
+
+  const pumpsExhausted = pumpCountRef.current >= MAX_FILTER_PUMP;
+
+  React.useEffect(() => {
+    if (isHydrating) return;
+    if (search.isFetchingNextPage) return;
+    if (!search.hasNextPage) return;
+    if (filteredResults.length >= MIN_FILTERED_RESULTS) return;
+    if (pumpCountRef.current >= MAX_FILTER_PUMP) return;
+    pumpCountRef.current += 1;
+    void search.fetchNextPage();
+  }, [
+    isHydrating,
+    filteredResults.length,
+    search.hasNextPage,
+    search.isFetchingNextPage,
+    search.fetchNextPage,
+  ]);
+
   return {
     query: search.query,
     onQueryChange: search.onQueryChange,
-    isLoading: search.isLoading || isHydrating,
-    isEmpty: !search.isLoading && !isHydrating && filteredResults.length === 0 && search.query !== '',
+    isLoading: search.isLoading || isHydrating || search.isFetchingNextPage,
+    isEmpty:
+      !search.isLoading &&
+      !isHydrating &&
+      !search.isFetchingNextPage &&
+      (!search.hasNextPage || pumpsExhausted) &&
+      filteredResults.length === 0 &&
+      (Boolean(enabled) || search.query !== ''),
     results: filteredResults,
   };
 }

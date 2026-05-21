@@ -156,8 +156,15 @@ export function useSearch({
 
         return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
       } catch (error) {
-        // Plain try/catch: failures become an empty page (throwOnError: false). Effect.either was equivalent
-        // — the catch always coerced errors to AbortError, so the throw branch never ran.
+        // Re-throw cancellations so React Query treats them as a cancel, not a
+        // successful empty result. Returning `emptySearchPage` here would let RQ
+        // cache the empty page under the canceled queryKey — leaving popovers
+        // stuck on "No matches" when the key changes mid-fetch (e.g.
+        // `additionalSpaceIds` settles after mount, or React StrictMode
+        // double-mounts in dev).
+        if (signal.aborted || (error as { name?: string })?.name === 'AbortError') {
+          throw error;
+        }
         console.error(error);
         return emptySearchPage(pageParam);
       }
