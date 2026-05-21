@@ -567,6 +567,7 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
         globalSeenPropertyIds.add(propertyId);
         return true;
       });
+      if (uniqueTargetPropertyIds.length === 0) continue;
 
       const isTypeGroup: SchemaPropertyGroup = {
         id: `is-type-${relation.relationId}`,
