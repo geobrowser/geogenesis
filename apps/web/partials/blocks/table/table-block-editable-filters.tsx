@@ -79,7 +79,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             },
             {
               columnId: SystemIds.RELATION_TYPE_PROPERTY,
-              columnName: 'Relation type',
+              columnName: 'Relation property',
               valueType: 'RELATION',
               value: '',
               valueName: null,

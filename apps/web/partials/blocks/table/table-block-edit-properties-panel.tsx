@@ -17,7 +17,7 @@ import { ID } from '~/core/id';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE, RELATION_ENTITY_RELATIONSHIP_TYPE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
@@ -73,14 +73,32 @@ function RelationsPropertySelector() {
     },
   });
 
+  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_PROPERTY)?.value;
+
+  const { data: relationPropertyEntity } = useQuery({
+    enabled: source.type === 'RELATIONS' && Boolean(filteredPropertyId),
+    queryKey: ['relation-property-entity-for-data-block-properties', filteredPropertyId],
+    queryFn: async () => {
+      if (!filteredPropertyId) {
+        return null;
+      }
+
+      return await findOne(filteredPropertyId);
+    },
+  });
+
   if (sourceEntity === null || sourceEntity === undefined || source.type !== 'RELATIONS') {
     return null;
   }
 
-  // @TODO: This should be stored as a data structure somewhere
-  const filteredPropertyId = filterState.find(r => r.columnId === SystemIds.RELATION_TYPE_PROPERTY)?.value;
-  const relationIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.id);
-  const toIds = sourceEntity.relations.filter(r => r.type.id === filteredPropertyId).map(r => r.toEntity.id);
+  const relationEntityTypeIds =
+    relationPropertyEntity?.relations
+      .filter(r => r.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
+      .map(r => r.toEntity.id) ?? [];
+  const toTypeIds =
+    relationPropertyEntity?.relations
+      .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
+      .map(r => r.toEntity.id) ?? [];
 
   const maybeSourceEntityImage = sourceEntity.relations.find(r => r.type.id === ContentIds.AVATAR_PROPERTY)?.toEntity
     .value;
@@ -121,7 +139,7 @@ function RelationsPropertySelector() {
             </div>
           </MenuItem>
 
-          <MenuItem onClick={() => setSelectedEntities({ type: 'SOURCE', entityIds: relationIds })}>
+          <MenuItem onClick={() => setSelectedEntities({ type: 'SOURCE', entityIds: relationEntityTypeIds })}>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="flex h-4 w-4 items-center justify-center rounded bg-grey-04">
@@ -132,7 +150,7 @@ function RelationsPropertySelector() {
               <p className="text-button">Relation entity</p>
             </div>
           </MenuItem>
-          <MenuItem onClick={() => setSelectedEntities({ type: 'TO', entityIds: toIds })}>
+          <MenuItem onClick={() => setSelectedEntities({ type: 'TO', entityIds: toTypeIds })}>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1">
                 <div className="flex h-4 w-4 items-center justify-center rounded bg-grey-04">

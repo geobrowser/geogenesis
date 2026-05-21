@@ -3,7 +3,7 @@ import { GraphUrl, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { store } from '~/core/sync/use-sync-engine';
-import { Entity } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 
 type TripleSegment = {
   type: 'TRIPLE';
@@ -137,6 +137,75 @@ export async function mapSelectorLexiconToSourceEntity(
   }
 
   return [];
+}
+
+export async function mapSelectorLexiconToRelationEntities(
+  lexicon: PathSegment[],
+  relation: Relation
+): Promise<Entity[]> {
+  let input = await getRelationSelectorRoot(lexicon, relation);
+  const startIndex = getRelationSelectorStartIndex(lexicon);
+
+  for (const segment of lexicon.slice(startIndex)) {
+    if (segment.type === 'TRIPLE') {
+      continue;
+    }
+
+    const relations = input?.relations.filter(r => r.type.id === segment.property) ?? [];
+
+    if (relations.length === 0) {
+      return [];
+    }
+
+    return await E.findMany({
+      store,
+      cache: queryClient,
+      where: { id: { in: relations.map(r => r.toEntity.id) } },
+      first: 100,
+    });
+  }
+
+  return input ? [input] : [];
+}
+
+async function getRelationSelectorRoot(lexicon: PathSegment[], relation: Relation): Promise<Entity | null> {
+  const firstSegment = lexicon[0];
+
+  if (!firstSegment) {
+    return await findEntityForRelationSelector(relation.toEntity.id);
+  }
+
+  if (firstSegment.type !== 'RELATION') {
+    return await findEntityForRelationSelector(relation.entityId);
+  }
+
+  if (firstSegment.property === SystemIds.RELATION_TO_PROPERTY) {
+    return await findEntityForRelationSelector(relation.toEntity.id);
+  }
+
+  if (firstSegment.property === SystemIds.RELATION_FROM_PROPERTY) {
+    return await findEntityForRelationSelector(relation.fromEntity.id);
+  }
+
+  return await findEntityForRelationSelector(relation.entityId);
+}
+
+function getRelationSelectorStartIndex(lexicon: PathSegment[]): number {
+  const firstSegment = lexicon[0];
+
+  if (
+    firstSegment?.type === 'RELATION' &&
+    (firstSegment.property === SystemIds.RELATION_TO_PROPERTY ||
+      firstSegment.property === SystemIds.RELATION_FROM_PROPERTY)
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+async function findEntityForRelationSelector(id: string): Promise<Entity | null> {
+  return await E.findOne({ id, cache: queryClient, store });
 }
 
 const valueRenderableTypes: string[] = ['TEXT', 'NUMBER', 'TIME', 'CHECKBOX'];

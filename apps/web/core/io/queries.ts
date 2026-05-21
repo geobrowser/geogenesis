@@ -14,10 +14,12 @@ import {
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
+  type RelationFilter,
+  type RelationsOrderBy,
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
-import { Entity, SearchResult } from '~/core/types';
+import { Entity, Relation, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
@@ -29,6 +31,7 @@ import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
 import { graphql } from './graphql-client';
+import { relationsConnectionDocument } from './relations-connection-document';
 import {
   entitiesBatchQuery,
   entitySpacesBatchQuery,
@@ -137,6 +140,12 @@ export type EntitiesPage = {
   hasNextPage: boolean;
 };
 
+export type RelationsPage = {
+  relations: Relation[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
 type EntitiesConnectionShape = {
   nodes?: unknown[] | null;
   pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
@@ -152,6 +161,45 @@ function decodeEntitiesConnectionPage(connection: EntitiesConnectionShape): Enti
     endCursor: connection?.pageInfo?.endCursor ?? null,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
   };
+}
+
+type RelationsConnectionShape = {
+  nodes?: unknown[] | null;
+  pageInfo?: { endCursor?: string | null; hasNextPage?: boolean | null } | null;
+} | null;
+
+function decodeRelationsConnectionPage(connection: RelationsConnectionShape): RelationsPage {
+  const relations =
+    connection?.nodes
+      ?.map((n: unknown) => RelationDecoder.decode(n))
+      .filter((relation: Relation | null): relation is Relation => relation !== null) ?? [];
+
+  return {
+    relations,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
+  };
+}
+
+type GetRelationsConnectionOptions = {
+  filter?: RelationFilter;
+  first?: number;
+  after?: string;
+  offset?: number;
+  orderBy?: RelationsOrderBy[];
+};
+
+export function getRelationsConnection(
+  { filter, first, after, offset, orderBy }: GetRelationsConnectionOptions,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: relationsConnectionDocument,
+    decoder: (data: { relationsConnection?: RelationsConnectionShape }) =>
+      decodeRelationsConnectionPage(data.relationsConnection ?? null),
+    variables: { filter, first, after, offset, orderBy },
+    signal,
+  });
 }
 
 export function getAllEntities(

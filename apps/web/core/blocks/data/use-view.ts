@@ -57,10 +57,7 @@ export function useView() {
     [shownColumnRelations]
   );
 
-  const { mapping, isLoading, isFetched } = useMapping(
-    entityId,
-    orderedShownColumnRelations.map(r => r.id)
-  );
+  const { mapping, isLoading, isFetched } = useMapping(entityId, orderedShownColumnRelations);
 
   const shownColumnIds = [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(r => r.toEntity.id)];
 

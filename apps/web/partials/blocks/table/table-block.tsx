@@ -36,10 +36,12 @@ import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { SelectEntity } from '~/design-system/select-entity';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
+import { Toggle } from '~/design-system/toggle';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
@@ -303,12 +305,47 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const { filterState, setFilterState } = useFilters(canEdit);
   const { source, setSource } = useSource({ filterState, setFilterState });
+  const relationSource = source.type === 'RELATIONS' ? source : null;
+  const isRelationsMode = relationSource !== null;
+  const relationTypeFilter = filterState.find(f => f.columnId === SystemIds.RELATION_TYPE_PROPERTY);
+  const canConfirmQuerySetup =
+    canEdit && (!relationSource || Boolean(relationSource.value && relationTypeFilter?.value));
 
   const handleConfirmQuerySetup = React.useCallback(() => {
+    if (!canConfirmQuerySetup) return;
     setSource(source);
     setEditable(true);
     onCompleteQuerySetup?.();
-  }, [onCompleteQuerySetup, setEditable, setSource, source]);
+  }, [canConfirmQuerySetup, onCompleteQuerySetup, setEditable, setSource, source]);
+
+  const setRelationType = React.useCallback(
+    (entity: { id: string; name: string | null }) => {
+      const withoutRelationType = filterState.filter(f => f.columnId !== SystemIds.RELATION_TYPE_PROPERTY);
+      setFilterState([
+        ...withoutRelationType,
+        {
+          columnId: SystemIds.RELATION_TYPE_PROPERTY,
+          columnName: 'Relation property',
+          valueType: 'RELATION',
+          value: entity.id,
+          valueName: entity.name,
+        },
+      ]);
+    },
+    [filterState, setFilterState]
+  );
+
+  const setRelationsMode = React.useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSource({ type: 'RELATIONS', value: source.type === 'RELATIONS' ? source.value : '', name: null });
+        return;
+      }
+
+      setSource({ type: 'GEO' });
+    },
+    [setSource, source]
+  );
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -328,14 +365,53 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
         </div>
       </div>
 
-      <div className="flex min-h-[92px] flex-col items-center justify-center gap-2 rounded-lg bg-grey-01 px-4 py-5">
+      <div className="flex min-h-[92px] flex-col items-center justify-center gap-3 rounded-lg bg-grey-01 px-4 py-5">
         <p className="max-w-md text-center text-metadata text-text">Where do you want to query data from?</p>
-        <div className="flex w-[132px] max-w-full items-center justify-start gap-2 overflow-visible">
-          <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
+        <div className="flex items-center gap-2 text-footnote text-grey-04">
+          <span>Entities</span>
+          <button
+            type="button"
+            disabled={!canEdit}
+            aria-label="Toggle relation query mode"
+            onClick={() => setRelationsMode(!isRelationsMode)}
+            className="disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Toggle checked={isRelationsMode} />
+          </button>
+          <span>Relations</span>
+        </div>
+        <div className="flex max-w-full flex-wrap items-center justify-center gap-2 overflow-visible">
+          {isRelationsMode ? (
+            <>
+              <div className="w-[220px]">
+                <SelectEntity
+                  spaceId={spaceId}
+                  placeholder="From entity"
+                  variant="fixed"
+                  width="full"
+                  selectedEntityId={relationSource?.value}
+                  onDone={entity => setSource({ type: 'RELATIONS', value: entity.id, name: entity.name })}
+                />
+              </div>
+              <div className="w-[220px]">
+                <SelectEntity
+                  spaceId={spaceId}
+                  placeholder="Relation property"
+                  variant="fixed"
+                  width="full"
+                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                  selectedEntityId={relationTypeFilter?.value}
+                  onDone={entity => setRelationType(entity)}
+                />
+              </div>
+            </>
+          ) : (
+            <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
+          )}
           <button
             type="button"
             onClick={handleConfirmQuerySetup}
-            disabled={!canEdit}
+            disabled={!canConfirmQuerySetup}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-grey-02 bg-white shadow-button transition hover:border-text focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04 disabled:pointer-events-none disabled:opacity-50"
             aria-label="Confirm query scope"
           >

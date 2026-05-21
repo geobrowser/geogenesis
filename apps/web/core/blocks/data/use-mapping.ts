@@ -1,5 +1,7 @@
-import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Cell, Entity, Relation, Row } from '~/core/types';
@@ -44,13 +46,21 @@ const initialData = {
 
 export function useMapping(
   blockRelationId: string,
-  shownPropertyRelationEntityIds: string[]
+  shownPropertyRelations: Relation[]
 ): {
   mapping: Mapping;
   isLoading: boolean;
   isFetched: boolean;
 } {
   const findMany = useQueryEntitiesAsync();
+  const shownPropertyRelationEntityIds = React.useMemo(
+    () => shownPropertyRelations.map(relation => relation.entityId),
+    [shownPropertyRelations]
+  );
+  const shownPropertyRelationIds = React.useMemo(
+    () => shownPropertyRelations.map(relation => relation.id),
+    [shownPropertyRelations]
+  );
 
   const {
     data: mapping,
@@ -58,25 +68,24 @@ export function useMapping(
     isFetched,
   } = useQuery({
     placeholderData: keepPreviousData,
-    enabled: shownPropertyRelationEntityIds.length > 0,
+    enabled: shownPropertyRelations.length > 0,
     initialData,
-    queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
+    queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationIds, shownPropertyRelationEntityIds],
     queryFn: async () => {
       const entities = await findMany({ where: { id: { in: shownPropertyRelationEntityIds } } });
+      const selectorEntityById = new Map(entities.map(entity => [entity.id, entity]));
 
-      const mapping = entities.reduce<Mapping>((acc, entity) => {
-        // @TODO(migration): This is broken in the new relations model. We no
-        // longer use GraphUri to represent relations
-        const key = entity.values.find(t => t.property.id === SystemIds.RELATION_TO_PROPERTY)?.value;
-        const selector = entity.values.find(t => t.property.id === SystemIds.SELECTOR_PROPERTY)?.value;
-        const decodedKey = key ? GraphUrl.toEntityId(key as GraphUri) : null;
+      const mapping = shownPropertyRelations.reduce<Mapping>((acc, relation) => {
+        const entity = selectorEntityById.get(relation.entityId);
+        const selector = entity?.values.find(t => t.property.id === SystemIds.SELECTOR_PROPERTY)?.value;
+        const key = relation.toEntity.id;
 
-        if (decodedKey && selector) {
-          acc[decodedKey] = selector;
+        if (selector) {
+          acc[key] = selector;
         }
 
-        if (decodedKey && !selector) {
-          acc[decodedKey] = null;
+        if (!selector) {
+          acc[key] = null;
         }
 
         return acc;
@@ -94,7 +103,7 @@ export function useMapping(
 
   return {
     isLoading,
-    isFetched: shownPropertyRelationEntityIds.length === 0 || isFetched,
+    isFetched: shownPropertyRelations.length === 0 || isFetched,
     mapping,
   };
 }

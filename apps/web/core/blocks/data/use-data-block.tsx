@@ -13,7 +13,7 @@ import { Cell, Property, Row } from '~/core/types';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
-import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
+import { mapSelectorLexiconToRelationEntities, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter, FilterMode } from './filters';
 import { Source } from './source';
 import { useCollection } from './use-collection';
@@ -85,7 +85,21 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // round-trip preserves columnName/valueName on the OTHER filters while the
   // new filter list is being re-resolved.
   const { source, setSource } = useSource({ filterState: dbResolvedFilterState, setFilterState });
-  const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
+  const {
+    relationBlockSourceRelations,
+    isLoading: isRelationsBlockLoading,
+    isFetched: isRelationsBlockFetched,
+    isPlaceholderData: isRelationsBlockPlaceholder,
+    endCursor: relationsEndCursor,
+    hasNextPage: relationsHasNextPage,
+  } = useRelationsBlock({
+    source,
+    filterState: dbFilterState,
+    first: PAGE_SIZE,
+    after: currentAfter,
+    offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
+    spaceId,
+  });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
   const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
@@ -221,6 +235,20 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     recordEndCursor,
   ]);
 
+  React.useEffect(() => {
+    if (source.type !== 'RELATIONS') return;
+    if (!isRelationsBlockFetched) return;
+    if (isRelationsBlockPlaceholder) return;
+    recordEndCursor(pageNumber, relationsEndCursor);
+  }, [
+    source.type,
+    isRelationsBlockFetched,
+    isRelationsBlockPlaceholder,
+    relationsEndCursor,
+    pageNumber,
+    recordEndCursor,
+  ]);
+
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
     if (source.type === 'SPACES') {
@@ -274,7 +302,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
                 for (const [propertyId, selector] of Object.entries(mapping)) {
                   const lexicon = parseSelectorIntoLexicon(selector);
-                  const entities = await mapSelectorLexiconToSourceEntity(lexicon, relation.id);
+                  const entities = await mapSelectorLexiconToRelationEntities(lexicon, relation);
                   cells.push(mappingToCell(entities, propertyId, lexicon));
                 }
 
@@ -384,7 +412,12 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }
 
   if (source.type === 'RELATIONS') {
-    isLoading = !isRelationDataFetched || isRelationDataLoading || isSharedDataLoading;
+    isLoading =
+      !isRelationsBlockFetched ||
+      isRelationsBlockLoading ||
+      !isRelationDataFetched ||
+      isRelationDataLoading ||
+      isSharedDataLoading;
   }
 
   if (source.type === 'GEO' || source.type === 'SPACES') {
@@ -395,7 +428,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   if (source.type === 'COLLECTION') {
     isFetched = isCollectionFetched && !isSharedDataLoading;
   } else if (source.type === 'RELATIONS') {
-    isFetched = isRelationDataFetched && !isSharedDataLoading;
+    isFetched = isRelationsBlockFetched && isRelationDataFetched && !isSharedDataLoading;
   } else if (source.type === 'GEO' || source.type === 'SPACES') {
     isFetched = isQueryEntitiesFetched && !isSharedDataLoading;
   }
@@ -413,7 +446,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
         : (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
       : source.type === 'GEO' || source.type === 'SPACES'
         ? queriedHasNextPage
-        : false;
+        : source.type === 'RELATIONS'
+          ? relationsHasNextPage
+          : false;
 
   const result = {
     entityId,
