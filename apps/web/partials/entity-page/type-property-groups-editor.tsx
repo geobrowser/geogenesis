@@ -232,6 +232,8 @@ export function TypePropertyGroupsEditor({ entityId, spaceId, isActive = true }:
       fromEntity: { id: entityId, name: null },
       toEntity: { id: groupEntityId, name: null, value: groupEntityId },
     });
+
+    setAutoFocusGroupEntityId(groupEntityId);
   };
 
   const onDeleteGroup = (groupRelation: Relation) => {
