@@ -132,11 +132,9 @@ function EntitySidePanelModeToggle() {
 
   const { canEdit: canEditSpace } = useAccessControl(panelCtx?.spaceId ?? '');
 
-  if (!panelCtx || !isLoggedIn) {
-    return null;
-  }
+  const onToggle = () => {
+    if (!panelCtx || !isLoggedIn) return;
 
-  const onToggle = React.useCallback(() => {
     if (!canEditSpace) {
       if (panelCtx.panelWantsEdit) {
         panelCtx.setPanelWantsEdit(false);
@@ -147,7 +145,11 @@ function EntitySidePanelModeToggle() {
     }
 
     panelCtx.setPanelWantsEdit(v => !v);
-  }, [panelCtx, canEditSpace, controls]);
+  };
+
+  if (!panelCtx || !isLoggedIn) {
+    return null;
+  }
 
   const editable = panelCtx.panelWantsEdit;
 
