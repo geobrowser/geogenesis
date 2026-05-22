@@ -408,7 +408,7 @@ export const ReviewChanges = () => {
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
   const { open: proposalNameTipOpen, dismiss: dismissProposalNameTip } = useProposalNameTip({
-    enabled: isReviewOpen && hasRemainingSpaces,
+    enabled: isReviewOpen && hasRemainingSpaces && statusBarState.reviewState === 'idle',
   });
   const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
 
@@ -460,6 +460,9 @@ export const ReviewChanges = () => {
   });
 
   const handleProposalNameChange = (name: string) => {
+    if (name.length > 0) {
+      dismissProposalNameTip();
+    }
     setProposals(prev => ({
       ...prev,
       [activeSpace]: { ...prev[activeSpace], name, description: prev[activeSpace]?.description ?? '' },
@@ -712,7 +715,7 @@ export const ReviewChanges = () => {
 
   return (
     <>
-    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
+    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen} deferEscapeClose={proposalNameTipOpen}>
       <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
         <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
           <div className="flex items-center gap-4">

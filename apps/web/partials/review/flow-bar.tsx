@@ -9,6 +9,7 @@ import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { useToast } from '~/core/hooks/use-toast';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
@@ -52,6 +53,7 @@ export const FlowBar = () => {
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const flowBarSurfaceRef = React.useRef<HTMLDivElement>(null);
   const reviewEditsButtonRef = React.useRef<HTMLButtonElement>(null);
   const { open: reviewEditsTipOpen, dismiss: dismissReviewEditsTip } = useReviewEditsTip({
     flowBarVisible: !hideFlowbar,
@@ -85,11 +87,12 @@ export const FlowBar = () => {
             transition={transition}
             custom={!isReviewOpen}
             className={cx(
-              'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
+              `pointer-events-none fixed inset-x-0 bottom-5 ${Z_LAYER_CLASS.flowBar} flex justify-center text-button`,
               RemoveScroll.classNames.fullWidth
             )}
           >
             <div
+              ref={flowBarSurfaceRef}
               className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
             >
               <div className="inline-flex h-full items-center justify-center">
@@ -108,6 +111,7 @@ export const FlowBar = () => {
               <button
                 ref={reviewEditsButtonRef}
                 onClick={() => {
+                  dismissReviewEditsTip();
                   bumpReviewVersion();
                   setIsReviewOpen(true);
                 }}
@@ -123,6 +127,7 @@ export const FlowBar = () => {
         open={reviewEditsTipOpen}
         dismiss={dismissReviewEditsTip}
         anchorRef={reviewEditsButtonRef}
+        spotlightRef={flowBarSurfaceRef}
       />
     </>
   );

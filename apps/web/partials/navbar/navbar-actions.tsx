@@ -240,6 +240,7 @@ function ModeToggle() {
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
     } else {
+      dismissEditModeTip();
       const nextEditable = !editable;
       setEditable(nextEditable);
       if (nextEditable) {
@@ -248,7 +249,17 @@ function ModeToggle() {
         browseModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
       }
     }
-  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId, isLoadingAccessControl, editModeTipActive]);
+  }, [
+    canUserEdit,
+    controls,
+    dismissEditModeTip,
+    editable,
+    setEditable,
+    attemptCount,
+    spaceId,
+    isLoadingAccessControl,
+    editModeTipActive,
+  ]);
 
   const memoizedShortcuts = React.useMemo(
     () => [

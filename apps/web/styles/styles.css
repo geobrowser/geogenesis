@@ -65,6 +65,11 @@
   --shadow-inner-lg-text: inset 0 0 0 2px #202020;
   --shadow-inner-lg-green: inset 0 0 0 2px #2ace9d;
 
+  /* Z-index stack — see ~/core/z-layers.ts */
+  --z-index-flow-bar: 1000;
+  --z-index-slide-up: 10000;
+  --z-index-status-bar: 10001;
+
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 

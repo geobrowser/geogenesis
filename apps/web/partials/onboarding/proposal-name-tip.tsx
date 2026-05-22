@@ -1,33 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { createPortal } from 'react-dom';
 
-import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
 import { proposalNameTipDismissedAtom } from '~/atoms/product-onboarding';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 
-const TIP_GAP_PX = 12;
-const TIP_WIDTH_PX = 180;
-const VIEWPORT_PADDING_PX = 16;
-const SCROLLBAR_GUTTER_PX = 20;
+import { SpotlightTip } from './spotlight-tip';
 
 const SLIDE_UP_SETTLE_MS = 600;
-
-const TIP_Z_BACKDROP = 10050;
-const TIP_Z = 10051;
-
-const SPOTLIGHT_PADDING_PX = 0;
-
-const backdropMotionProps = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-  transition: { duration: 0.2 },
-} as const;
 
 export function useProposalNameTip({ enabled }: { enabled: boolean }) {
   const hydrated = useHydrated();
@@ -53,194 +36,25 @@ export function useProposalNameTip({ enabled }: { enabled: boolean }) {
   return { open: shouldOffer && open, dismiss };
 }
 
-type TipPosition = {
-  top: number;
-  left: number;
-  arrowLeft: number;
-};
-
-type CutoutRect = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-  borderRadius: string;
-};
-
-function computeCutoutRect(anchor: HTMLElement): CutoutRect {
-  const rect = anchor.getBoundingClientRect();
-  const { borderRadius } = window.getComputedStyle(anchor);
-  return {
-    top: rect.top - SPOTLIGHT_PADDING_PX,
-    left: rect.left - SPOTLIGHT_PADDING_PX,
-    width: rect.width + SPOTLIGHT_PADDING_PX * 2,
-    height: rect.height + SPOTLIGHT_PADDING_PX * 2,
-    borderRadius,
-  };
-}
-
-function isAnchorVisibleInViewport(anchor: HTMLElement): boolean {
-  const rect = anchor.getBoundingClientRect();
-  return rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
-}
-
-function computeTipPosition(anchor: HTMLElement): TipPosition {
-  const rect = anchor.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const maxLeft = viewportWidth - TIP_WIDTH_PX - VIEWPORT_PADDING_PX - SCROLLBAR_GUTTER_PX;
-
-  const centerX = rect.left + rect.width / 2;
-
-  let left = centerX - TIP_WIDTH_PX / 2;
-  left = Math.max(VIEWPORT_PADDING_PX, Math.min(left, maxLeft));
-
-  const arrowLeft = Math.max(12, Math.min(centerX - left, TIP_WIDTH_PX - 12));
-
-  return {
-    top: rect.bottom + TIP_GAP_PX,
-    left,
-    arrowLeft,
-  };
-}
-
 type ProposalNameTipProps = {
   open: boolean;
   dismiss: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
 };
 
-/** Dim everything except the anchor — no overlay on the proposal name section itself. */
-function TipBackdrop({ cutoutRect }: { cutoutRect: CutoutRect }) {
-  const { top, left, width, height, borderRadius } = cutoutRect;
-
-  return (
-    <motion.div
-      key="proposal-name-tip-backdrop"
-      aria-hidden
-      className="pointer-events-none fixed bg-transparent"
-      style={{
-        zIndex: TIP_Z_BACKDROP,
-        top,
-        left,
-        width,
-        height,
-        borderRadius,
-        boxShadow: '0 0 0 9999px color-mix(in srgb, var(--color-text) 20%, transparent)',
-      }}
-      {...backdropMotionProps}
-    />
-  );
-}
-
 export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipProps) {
-  const [position, setPosition] = React.useState<TipPosition | null>(null);
-  const [cutoutRect, setCutoutRect] = React.useState<CutoutRect | null>(null);
-
-  const updatePosition = React.useCallback(() => {
-    const anchor = anchorRef.current;
-    if (!anchor || !isAnchorVisibleInViewport(anchor)) return;
-    setCutoutRect(computeCutoutRect(anchor));
-    setPosition(computeTipPosition(anchor));
-  }, [anchorRef]);
-
-  React.useLayoutEffect(() => {
-    if (!open) {
-      setPosition(null);
-      setCutoutRect(null);
-      return;
-    }
-
-    let cancelled = false;
-    let rafId = 0;
-    let retryCount = 0;
-    const maxRetries = 90;
-
-    let resizeObserver: ResizeObserver | undefined;
-
-    const measure = () => {
-      if (cancelled) return;
-      const anchor = anchorRef.current;
-      if (!anchor) return;
-      updatePosition();
-      if (!resizeObserver && typeof ResizeObserver !== 'undefined') {
-        resizeObserver = new ResizeObserver(() => {
-          if (!cancelled) updatePosition();
-        });
-        resizeObserver.observe(anchor);
-      }
-    };
-
-    const retryUntilAnchored = () => {
-      if (cancelled) return;
-      measure();
-      const anchor = anchorRef.current;
-      const isReady = anchor && isAnchorVisibleInViewport(anchor);
-      if (!isReady && retryCount < maxRetries) {
-        retryCount += 1;
-        rafId = requestAnimationFrame(retryUntilAnchored);
-      }
-    };
-
-    measure();
-    rafId = requestAnimationFrame(retryUntilAnchored);
-    const settleTimeout = window.setTimeout(measure, SLIDE_UP_SETTLE_MS);
-
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-      window.clearTimeout(settleTimeout);
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
-    };
-  }, [open, updatePosition, anchorRef]);
-
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  return createPortal(
-    <AnimatePresence>
-      {open && position && cutoutRect ? (
-        <>
-          <TipBackdrop cutoutRect={cutoutRect} />
-          <motion.div
-            key="proposal-name-tip"
-            role="dialog"
-            aria-labelledby="proposal-name-tip-title"
-            className="pointer-events-auto fixed"
-            style={{ zIndex: TIP_Z, top: position.top, left: position.left, width: TIP_WIDTH_PX }}
-            initial={{ opacity: 0, scale: 0.95, y: -8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -8 }}
-            transition={{ type: 'spring', duration: 0.2, bounce: 0 }}
-          >
-            <motion.div className="relative overflow-visible rounded-lg border border-grey-02 bg-white p-2 shadow-lg">
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -top-0.5 size-3 rotate-45 border-t border-l border-grey-02 bg-white"
-                style={{ left: position.arrowLeft, transform: 'translateX(-50%)' }}
-              />
-              <div className="rounded-lg bg-grey-01 px-3 pt-3 pb-4">
-                <p id="proposal-name-tip-title" className="text-center text-button font-medium text-text">
-                  Describe your edits before publishing
-                </p>
-                <button
-                  type="button"
-                  onClick={dismiss}
-                  className="mt-3 mx-auto block rounded border border-grey-02 bg-white px-5 py-1.5 text-button font-medium text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
-                >
-                  OK
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        </>
-      ) : null}
-    </AnimatePresence>,
-    document.body
+  return (
+    <SpotlightTip
+      open={open}
+      onDismiss={dismiss}
+      anchorRef={anchorRef}
+      placement="below"
+      width={180}
+      tipId="proposal-name-tip"
+      zLayer="review"
+      settleMs={SLIDE_UP_SETTLE_MS}
+    >
+      Describe your edits before publishing
+    </SpotlightTip>
   );
 }

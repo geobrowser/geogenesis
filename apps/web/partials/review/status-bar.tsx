@@ -11,6 +11,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
+import { Z_LAYER_CLASS, Z_LAYERS } from '~/core/z-layers';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
 
 import { Button } from '~/design-system/button';
@@ -32,7 +33,7 @@ import { Spinner } from '~/design-system/spinner';
  *   dismiss.
  *
  * Mounted independently in app/entry.tsx so it never collides with FlowBar
- * or the review panel. z-10001 keeps it above SlideUp's z-[10000].
+ * {@link Z_LAYERS.statusBar}
  */
 export const StatusBar = () => {
   const { state, dispatch } = useStatusBar();
@@ -91,7 +92,7 @@ export const StatusBar = () => {
       <div
         onClick={onDismiss}
         className={cx(
-          'fixed inset-0 z-10001 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xl',
+          `fixed inset-0 ${Z_LAYER_CLASS.statusBar} flex items-center justify-center bg-black/75 p-4 backdrop-blur-xl`,
           RemoveScroll.classNames.fullWidth
         )}
       >
@@ -165,7 +166,7 @@ export const StatusBar = () => {
   return (
     <div
       className={cx(
-        'pointer-events-none fixed inset-x-0 top-0 z-10001 flex flex-col items-center',
+        `pointer-events-none fixed inset-x-0 top-0 ${Z_LAYER_CLASS.statusBar} flex flex-col items-center`,
         RemoveScroll.classNames.fullWidth
       )}
     >

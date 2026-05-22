@@ -5,28 +5,34 @@ import * as React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { Z_LAYER_CLASS } from '~/core/z-layers';
+
 type SlideUpProps = {
   isOpen: boolean;
   setIsOpen: (value: boolean) => void | React.Dispatch<React.SetStateAction<boolean>>;
   children: React.ReactNode;
+  deferEscapeClose?: boolean;
 };
 
-export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
+export const SlideUp = ({ isOpen, setIsOpen, children, deferEscapeClose = false }: SlideUpProps) => {
   React.useEffect(() => {
+    if (!isOpen) return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key !== 'Escape' || deferEscapeClose) return;
+      setIsOpen(false);
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [setIsOpen]);
+  }, [isOpen, setIsOpen, deferEscapeClose]);
 
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           key="slide-up-root"
-          className="fixed inset-0 z-[10000]"
+          className={`fixed inset-0 ${Z_LAYER_CLASS.slideUp}`}
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
