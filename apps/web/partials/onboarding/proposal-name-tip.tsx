@@ -21,11 +21,16 @@ export function useProposalNameTip({ enabled }: { enabled: boolean }) {
   const shouldOffer = hydrated && enabled && !dismissed && !isOnboardingVisible;
 
   React.useEffect(() => {
-    if (shouldOffer) {
-      setOpen(true);
-    } else {
+    if (!shouldOffer) {
       setOpen(false);
+      return;
     }
+    // Wait for the review SlideUp panel to finish sliding into view before
+    // mounting the tip and cutout, so neither appears mid-animation (which
+    // would briefly render them at the panel's start position near the
+    // bottom of the screen).
+    const timeoutId = window.setTimeout(() => setOpen(true), SLIDE_UP_SETTLE_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [shouldOffer]);
 
   const dismiss = React.useCallback(() => {

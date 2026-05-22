@@ -11,6 +11,10 @@ import { useDiff } from '~/core/state/diff-store';
 
 import { SpotlightTip } from './spotlight-tip';
 
+// Wait for the flow bar's entry slide-up (~150ms spring) to settle before
+// showing the tip + cutout, so neither appears mid-animation.
+const FLOWBAR_ENTRY_DELAY_MS = 250;
+
 export function useReviewEditsTip({ flowBarVisible }: { flowBarVisible: boolean }) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
@@ -22,11 +26,15 @@ export function useReviewEditsTip({ flowBarVisible }: { flowBarVisible: boolean 
     hydrated && flowBarVisible && !dismissed && !isOnboardingVisible && !isReviewOpen;
 
   React.useEffect(() => {
-    if (shouldOffer) {
-      setOpen(true);
-    } else {
+    if (!shouldOffer) {
       setOpen(false);
+      return;
     }
+    // Wait for the flow bar's slide-up to finish before mounting the tip and
+    // cutout — otherwise both appear at the flow bar's start-of-animation
+    // position (near the bottom edge) and visibly drift up with it.
+    const timeoutId = window.setTimeout(() => setOpen(true), FLOWBAR_ENTRY_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [shouldOffer]);
 
   const dismiss = React.useCallback(() => {
