@@ -2,7 +2,7 @@
 
 import * as Popover from '@radix-ui/react-popover';
 
-import type { SyntheticListenerMap } from '@dnd-kit/core';
+import type { DraggableSyntheticListeners } from '@dnd-kit/core';
 
 import * as React from 'react';
 import { useState } from 'react';
@@ -78,7 +78,7 @@ type LinkableRelationChipProps = {
   small?: boolean;
   className?: string;
   disableLink?: boolean;
-  sortableDragHandleListeners?: SyntheticListenerMap;
+  sortableDragHandleListeners?: DraggableSyntheticListeners;
 
   truncateLabel?: boolean;
   children: React.ReactNode;
