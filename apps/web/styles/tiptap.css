@@ -158,6 +158,33 @@
   @apply not-first:mt-12;
 }
 
+/* Selected atomic blocks (data / image / video) — edit mode only */
+.not-editable .ProseMirror .data-node-selected {
+  box-shadow: none;
+}
+
+.ProseMirror .data-node-selected {
+  @apply rounded-lg;
+  box-shadow:
+    0 0px 10px rgba(57, 99, 254, 0.08),
+    0 12px 18px rgba(57, 99, 254, 0.04);
+    padding: 8;
+}
+
+.ProseMirror-gapcursor {
+  @apply border-l-2 border-ctaPrimary;
+}
+
+.ProseMirror-gapcursor::after {
+  @apply border-ctaPrimary;
+}
+
+/* Empty lines between stacked data blocks */
+.ProseMirror p.is-empty:has(+ .node-tableNode),
+.ProseMirror .node-tableNode + p.is-empty {
+  min-height: 1.5rem;
+}
+
 .ProseMirror ul {
   @apply contents;
 }

@@ -496,6 +496,7 @@ const DataBlockContext = React.createContext<{
   reset: () => void;
   canJumpTo: (target: number) => boolean;
   maxJumpPages: number;
+  onRemoveFromEditor?: () => void;
 } | null>(null);
 
 interface Props {
@@ -503,9 +504,10 @@ interface Props {
   children: React.ReactNode;
   entityId: string;
   relationId: string;
+  onRemoveFromEditor?: () => void;
 }
 
-export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
+export function DataBlockProvider({ spaceId, children, entityId, relationId, onRemoveFromEditor }: Props) {
   const { pageNumber, currentAfter, currentOffset, setPage, recordEndCursor, reset, canJumpTo, maxJumpPages } =
     usePagination(entityId);
 
@@ -522,6 +524,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
       reset,
       canJumpTo,
       maxJumpPages,
+      onRemoveFromEditor,
     };
   }, [
     spaceId,
@@ -535,6 +538,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
     reset,
     canJumpTo,
     maxJumpPages,
+    onRemoveFromEditor,
   ]);
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;

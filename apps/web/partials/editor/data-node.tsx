@@ -1,11 +1,14 @@
 import type { NodeViewProps } from '@tiptap/core';
 import { Node, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
+import { NodeSelection } from '@tiptap/pm/state';
 
+import cx from 'classnames';
 import * as React from 'react';
 
 import { ErrorBoundary } from 'react-error-boundary';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reportBoundaryError } from '~/core/telemetry/logger';
@@ -18,8 +21,35 @@ export const DataNode = Node.create({
   name: 'tableNode',
   group: 'block',
   atom: true,
-  allowGapCursor: false,
+  allowGapCursor: true,
   defining: true,
+
+  addKeyboardShortcuts() {
+    return {
+      ArrowUp: ({ editor }) => {
+        const { selection } = editor.state;
+        if (!(selection instanceof NodeSelection) || selection.node.type.name !== 'tableNode') {
+          return false;
+        }
+
+        const pos = selection.from;
+        if (pos <= 0) return false;
+
+        return editor.commands.setTextSelection(pos - 1);
+      },
+      ArrowDown: ({ editor }) => {
+        const { selection } = editor.state;
+        if (!(selection instanceof NodeSelection) || selection.node.type.name !== 'tableNode') {
+          return false;
+        }
+
+        const pos = selection.to;
+        if (pos >= editor.state.doc.content.size) return false;
+
+        return editor.commands.setTextSelection(pos);
+      },
+    };
+  },
 
   addAttributes() {
     return {
@@ -52,9 +82,11 @@ export const DataNode = Node.create({
   },
 });
 
-function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
+function DataNodeComponent({ node, updateAttributes, selected, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
+  const isEditing = useUserIsEditing(spaceId);
   const { id } = node.attrs;
+  const showSelected = selected && isEditing;
 
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
@@ -90,10 +122,19 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   };
 
   return (
-    <NodeViewWrapper>
-      <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
+    <NodeViewWrapper data-selected={showSelected ? 'true' : undefined}>
+      <div
+        contentEditable="false"
+        suppressContentEditableWarning={true}
+        className={cx('data-node', showSelected && 'data-node-selected')}
+      >
         <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
-          <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
+          <DataBlockProvider
+            spaceId={spaceId}
+            entityId={id}
+            relationId={relation?.entityId ?? ''}
+            onRemoveFromEditor={deleteNode}
+          >
             <TableBlock
               spaceId={spaceId}
               blockId={id}

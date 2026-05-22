@@ -1,6 +1,7 @@
 'use client';
 
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
+import { NodeSelection } from '@tiptap/pm/state';
 
 import * as React from 'react';
 
@@ -170,6 +171,10 @@ export function Editor({
     const wasEditable = prevEditableRef.current;
     prevEditableRef.current = editable;
 
+    if (editorRef.current && wasEditable !== editable) {
+      clearEditorBlockSelection(editorRef.current);
+    }
+
     if (wasEditable && !editable && editorRef.current) {
       const json = editorRef.current.getJSON();
       trackEditorDocument(json);
@@ -228,7 +233,17 @@ export function Editor({
         },
       },
       immediatelyRender: false,
+      onCreate: ({ editor }) => {
+        queueMicrotask(() => {
+          clearEditorBlockSelection(editor);
+        });
+      },
       onBlur: onBlur,
+      onSelectionUpdate: ({ editor }) => {
+        if (!editor.isEditable) {
+          clearEditorBlockSelection(editor);
+        }
+      },
       onUpdate: ({ editor }) => {
         if (editable) {
           const editorContent = editor.getJSON().content ?? [];
@@ -437,6 +452,14 @@ const useSuppressFlushSyncWarning = () => {
     };
   }, []);
 };
+
+function clearEditorBlockSelection(editor: TiptapEditor) {
+  if (editor.state.selection instanceof NodeSelection) {
+    editor.commands.setTextSelection(editor.state.doc.content.size);
+  }
+
+  editor.commands.blur();
+}
 
 function normalizeEditorContent(content: JSONContent): JSONContent {
   const normalizedAttrs = content.attrs
