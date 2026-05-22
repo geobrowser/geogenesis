@@ -40,6 +40,8 @@ import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
+import type { EntityDiff } from '~/core/utils/diff/types';
+
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
 import {
@@ -60,6 +62,31 @@ import {
 } from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+function orderVisibleEntitiesStable(
+  entities: EntityDiff[],
+  orderStateRef: React.MutableRefObject<{ spaceId: string; order: string[] }>,
+  activeSpace: string
+): EntityDiff[] {
+  const filtered = entities.filter(hasVisibleChanges);
+  if (!activeSpace) return filtered;
+
+  if (orderStateRef.current.spaceId !== activeSpace) {
+    orderStateRef.current = { spaceId: activeSpace, order: [] };
+  }
+
+  const visibleIds = new Set(filtered.map(e => e.entityId));
+  const nextOrder = orderStateRef.current.order.filter(id => visibleIds.has(id));
+  for (const entity of filtered) {
+    if (!nextOrder.includes(entity.entityId)) {
+      nextOrder.push(entity.entityId);
+    }
+  }
+  orderStateRef.current.order = nextOrder;
+
+  const byId = new Map(filtered.map(e => [e.entityId, e]));
+  return nextOrder.map(id => byId.get(id)).filter((e): e is EntityDiff => e != null);
+}
 
 function bountySpaceFallbackLabel(spaceId: string): string {
   const compact = spaceId.replace(/-/g, '');
@@ -401,7 +428,11 @@ export const ReviewChanges = () => {
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
-  const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
+  const stableEntityOrderRef = React.useRef<{ spaceId: string; order: string[] }>({ spaceId: '', order: [] });
+  const visibleEntities = React.useMemo(
+    () => orderVisibleEntitiesStable(entities, stableEntityOrderRef, activeSpace),
+    [entities, activeSpace]
+  );
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
@@ -850,7 +881,7 @@ export const ReviewChanges = () => {
                         const entity = visibleEntities[virtualRow.index];
                         return (
                           <div
-                            key={virtualRow.key}
+                            key={entity.entityId}
                             data-index={virtualRow.index}
                             ref={node => rowVirtualizer.measureElement(node)}
                             style={{
