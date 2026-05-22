@@ -200,6 +200,43 @@ function collectRects(chipNodes: Map<string, HTMLElement>, activeId: string): Ma
   return rects;
 }
 
+function measureChipNodes(chipNodes: Map<string, HTMLElement>, itemSizes: Record<string, OverlaySize>) {
+  chipNodes.forEach((node, relationId) => {
+    const { width, height } = node.getBoundingClientRect();
+    if (width > 0 && height > 0) {
+      itemSizes[relationId] = { width: Math.round(width), height: Math.round(height) };
+    }
+  });
+}
+
+function resolveOverlaySize(
+  relationId: string,
+  itemSizes: Record<string, OverlaySize>,
+  chipNodes: Map<string, HTMLElement>,
+  initialRect: ClientRect | null
+): OverlaySize | null {
+  const cached = itemSizes[relationId];
+  if (cached) return cached;
+
+  const node = chipNodes.get(relationId);
+  if (node) {
+    const { width, height } = node.getBoundingClientRect();
+    if (width > 0 && height > 0) {
+      const size = { width: Math.round(width), height: Math.round(height) };
+      itemSizes[relationId] = size;
+      return size;
+    }
+  }
+
+  if (initialRect && initialRect.width > 0 && initialRect.height > 0) {
+    const size = { width: Math.round(initialRect.width), height: Math.round(initialRect.height) };
+    itemSizes[relationId] = size;
+    return size;
+  }
+
+  return null;
+}
+
 /** Reading order: row (top→bottom), then column (left→right) — matches wrapped flex. */
 function computeInsertBeforeIndex(
   pointer: { x: number; y: number },
@@ -376,6 +413,10 @@ export function RelationChipsDndRoot({
   const containersRef = React.useRef<Map<string, ContainerRegistration>>(new Map());
   const relationIdToContainerIdRef = React.useRef<Map<string, string>>(new Map());
   const activeIdRef = React.useRef<string | null>(null);
+  const activeSourceContainerIdRef = React.useRef<string | null>(null);
+  const destinationContainerIdRef = React.useRef<string | null>(null);
+  const insertBeforeIndexRef = React.useRef<number | null>(null);
+  const overlaySizeRef = React.useRef<OverlaySize | null>(null);
   const itemSizesRef = React.useRef<Record<string, OverlaySize>>({});
   const lastOverIdRef = React.useRef<string | null>(null);
 
@@ -439,36 +480,55 @@ export function RelationChipsDndRoot({
   const updateDestinationFromPointer = React.useCallback(
     (pointer: { x: number; y: number } | null, activeRelationId: string, overId: string | null) => {
       const destinationId =
-        findContainerForOverId(overId, relationIdToContainerIdRef.current) ?? activeSourceContainerId;
+        findContainerForOverId(overId, relationIdToContainerIdRef.current) ??
+        activeSourceContainerIdRef.current;
       if (!destinationId) return;
 
       const registration = containersRef.current.get(destinationId);
       if (!registration || registration.relations.length <= 1) {
+        destinationContainerIdRef.current = destinationId;
+        insertBeforeIndexRef.current = null;
         setDestinationContainerId(destinationId);
         setInsertBeforeIndex(null);
         return;
       }
 
+      destinationContainerIdRef.current = destinationId;
       setDestinationContainerId(destinationId);
 
       if (!pointer) return;
 
       const sortedRelations = sortRelations(registration.relations);
       if (isRelationChipsContainerId(overId ?? '')) {
+        insertBeforeIndexRef.current = sortedRelations.length;
         setInsertBeforeIndex(sortedRelations.length);
         return;
       }
 
-      const rectById = collectRects(registration.chipNodesRef.current, activeRelationId);
-      setInsertBeforeIndex(
-        computeInsertBeforeIndex(pointer, sortedRelations, rectById, activeRelationId)
+      let rectById = collectRects(registration.chipNodesRef.current, activeRelationId);
+      if (rectById.size === 0) {
+        measureChipNodes(registration.chipNodesRef.current, itemSizesRef.current);
+        rectById = collectRects(registration.chipNodesRef.current, activeRelationId);
+      }
+
+      const nextInsertBefore = computeInsertBeforeIndex(
+        pointer,
+        sortedRelations,
+        rectById,
+        activeRelationId
       );
+      insertBeforeIndexRef.current = nextInsertBefore;
+      setInsertBeforeIndex(nextInsertBefore);
     },
-    [activeSourceContainerId]
+    []
   );
 
   const clearDragState = () => {
     activeIdRef.current = null;
+    activeSourceContainerIdRef.current = null;
+    destinationContainerIdRef.current = null;
+    insertBeforeIndexRef.current = null;
+    overlaySizeRef.current = null;
     setActiveId(null);
     setActiveSourceContainerId(null);
     setDestinationContainerId(null);
@@ -486,19 +546,24 @@ export function RelationChipsDndRoot({
 
     activeIdRef.current = id;
     setActiveId(id);
-    setActiveSourceContainerId(relationIdToContainerIdRef.current.get(id) ?? null);
 
-    const measured = itemSizesRef.current[id];
-    if (measured) {
-      setOverlaySize(measured);
-    } else {
-      const rect = event.active.rect.current.initial;
-      if (rect && rect.width > 0 && rect.height > 0) {
-        setOverlaySize({ width: Math.round(rect.width), height: Math.round(rect.height) });
-      } else {
-        setOverlaySize(null);
-      }
+    const sourceContainerId = relationIdToContainerIdRef.current.get(id) ?? null;
+    activeSourceContainerIdRef.current = sourceContainerId;
+    setActiveSourceContainerId(sourceContainerId);
+
+    const sourceRegistration = sourceContainerId ? containersRef.current.get(sourceContainerId) : null;
+    if (sourceRegistration) {
+      measureChipNodes(sourceRegistration.chipNodesRef.current, itemSizesRef.current);
     }
+
+    const nextOverlaySize = resolveOverlaySize(
+      id,
+      itemSizesRef.current,
+      sourceRegistration?.chipNodesRef.current ?? new Map(),
+      event.active.rect.current.initial
+    );
+    overlaySizeRef.current = nextOverlaySize;
+    setOverlaySize(nextOverlaySize);
 
     updateDestinationFromPointer(pointerFromDragEvent(event), id, null);
   };
@@ -526,7 +591,7 @@ export function RelationChipsDndRoot({
     }
 
     const overId = event.over ? String(event.over.id) : lastOverIdRef.current;
-    const sourceContainerId = activeSourceContainerId;
+    const sourceContainerId = activeSourceContainerIdRef.current;
     const destinationId =
       findContainerForOverId(overId, relationIdToContainerIdRef.current) ?? sourceContainerId;
 
@@ -543,7 +608,7 @@ export function RelationChipsDndRoot({
             const pointer = pointerFromDragEvent(event);
             const rectById = collectRects(sourceRegistration.chipNodesRef.current, activeRelationId);
             const insertBefore =
-              insertBeforeIndex ??
+              insertBeforeIndexRef.current ??
               (pointer
                 ? computeInsertBeforeIndex(pointer, sortedRelations, rectById, activeRelationId)
                 : oldIndex);
@@ -560,7 +625,7 @@ export function RelationChipsDndRoot({
           const pointer = pointerFromDragEvent(event);
           const rectById = collectRects(destinationRegistration.chipNodesRef.current, activeRelationId);
           const insertBefore =
-            insertBeforeIndex ??
+            insertBeforeIndexRef.current ??
             (isRelationChipsContainerId(overId ?? '')
               ? sortedDestination.length
               : pointer
@@ -583,14 +648,17 @@ export function RelationChipsDndRoot({
 
   const getInsertGapState = React.useCallback(
     (containerId: string, relations: Relation[]) => {
-      const gapContainerId = destinationContainerId ?? activeSourceContainerId;
-      const showInThisContainer = activeId != null && gapContainerId === containerId;
+      const draggingId = activeIdRef.current;
+      const gapContainerId = destinationContainerIdRef.current ?? activeSourceContainerIdRef.current;
+      const showInThisContainer = draggingId != null && gapContainerId === containerId;
       const useInsertGapDnD = relations.length > 1;
 
       return {
-        gapSize: showInThisContainer ? overlaySize ?? (activeId ? itemSizesRef.current[activeId] : null) : null,
-        insertBeforeIndex: showInThisContainer ? insertBeforeIndex : null,
-        useLayoutAnimateWhileDragging: useInsertGapDnD && activeId != null,
+        gapSize: showInThisContainer
+          ? overlaySizeRef.current ?? (draggingId ? itemSizesRef.current[draggingId] : null)
+          : null,
+        insertBeforeIndex: showInThisContainer ? insertBeforeIndexRef.current : null,
+        useLayoutAnimateWhileDragging: useInsertGapDnD && draggingId != null,
       };
     },
     [activeId, activeSourceContainerId, destinationContainerId, insertBeforeIndex, overlaySize]
@@ -601,10 +669,10 @@ export function RelationChipsDndRoot({
       spaceId,
       registerContainer,
       unregisterContainer,
-      activeId,
-      destinationContainerId,
-      insertBeforeIndex,
-      overlaySize,
+      activeId: activeIdRef.current ?? activeId,
+      destinationContainerId: destinationContainerIdRef.current ?? destinationContainerId,
+      insertBeforeIndex: insertBeforeIndexRef.current ?? insertBeforeIndex,
+      overlaySize: overlaySizeRef.current ?? overlaySize,
       registerChipNode,
       getInsertGapState,
     }),
@@ -621,7 +689,7 @@ export function RelationChipsDndRoot({
     ]
   );
 
-  const activeRelation = activeId
+  const activeRelation = (activeIdRef.current ?? activeId)
     ? [...containersRef.current.values()]
         .flatMap(registration => registration.relations)
         .find(relation => relation.id === activeId)
@@ -683,6 +751,12 @@ function ReorderableRelationChipsInRoot({
     });
     return () => root.unregisterContainer(containerId);
   }, [containerId, onUpdateRelation, relationListKey, relations, root]);
+
+  React.useLayoutEffect(() => {
+    chipNodesRef.current.forEach((node, relationId) => {
+      root.registerChipNode(containerId, relationId, node as HTMLDivElement);
+    });
+  }, [containerId, relationListKey, root]);
 
   const { gapSize, insertBeforeIndex, useLayoutAnimateWhileDragging } = root.getInsertGapState(
     containerId,
@@ -748,6 +822,7 @@ export default function ReorderableRelationChipsDnd({
   }
 
   const sortedRelations = sortRelations(relations);
+  const relationListKey = sortedRelations.map(relation => relation.id).join('\0');
   const layoutMode = chipListLayoutMode;
   const listLayoutRef = React.useRef<HTMLDivElement>(null);
   const chipNodesRef = React.useRef<Map<string, HTMLElement>>(new Map());
@@ -769,10 +844,11 @@ export default function ReorderableRelationChipsDnd({
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [overlaySize, setOverlaySize] = React.useState<OverlaySize | null>(null);
 
-  const activeRelation = activeId ? sortedRelations.find(r => r.id === activeId) : null;
+  const draggingId = activeIdRef.current ?? activeId;
+  const activeRelation = draggingId ? sortedRelations.find(r => r.id === draggingId) : null;
   const useInsertGapDnD = sortedRelations.length > 1;
-  const useLayoutAnimateWhileDragging = useInsertGapDnD && activeId != null;
-  const activeIndex = activeId ? sortedRelations.findIndex(r => r.id === activeId) : -1;
+  const useLayoutAnimateWhileDragging = useInsertGapDnD && draggingId != null;
+  const activeIndex = draggingId ? sortedRelations.findIndex(r => r.id === draggingId) : -1;
 
   const sortingStrategy: SortingStrategy = useInsertGapDnD
     ? inlineWrappedSortingStrategy
@@ -796,7 +872,11 @@ export default function ReorderableRelationChipsDnd({
   const updateInsertIndexFromPointer = React.useCallback(
     (pointer: { x: number; y: number } | null, active: string) => {
       if (!pointer || !useInsertGapDnD) return;
-      const rectById = collectRects(chipNodesRef.current, active);
+      let rectById = collectRects(chipNodesRef.current, active);
+      if (rectById.size === 0) {
+        measureChipNodes(chipNodesRef.current, itemSizesRef.current);
+        rectById = collectRects(chipNodesRef.current, active);
+      }
       const insertBefore = computeInsertBeforeIndex(pointer, sortedRelations, rectById, active);
       setInsertBeforeIndex(insertBefore);
     },
@@ -818,17 +898,14 @@ export default function ReorderableRelationChipsDnd({
     activeIdRef.current = id;
     setActiveId(id);
 
-    const measured = itemSizesRef.current[id];
-    if (measured) {
-      setOverlaySize(measured);
-    } else {
-      const rect = event.active.rect.current.initial;
-      if (rect && rect.width > 0 && rect.height > 0) {
-        setOverlaySize({ width: Math.round(rect.width), height: Math.round(rect.height) });
-      } else {
-        setOverlaySize(null);
-      }
-    }
+    measureChipNodes(chipNodesRef.current, itemSizesRef.current);
+    const nextOverlaySize = resolveOverlaySize(
+      id,
+      itemSizesRef.current,
+      chipNodesRef.current,
+      event.active.rect.current.initial
+    );
+    setOverlaySize(nextOverlaySize);
 
     updateInsertIndexFromPointer(pointerFromDragEvent(event), id);
   };
@@ -876,7 +953,13 @@ export default function ReorderableRelationChipsDnd({
     clearDragState();
   };
 
-  const gapSize = overlaySize ?? (activeId ? itemSizesRef.current[activeId] : null);
+  const gapSize = overlaySize ?? (draggingId ? itemSizesRef.current[draggingId] : null);
+
+  React.useLayoutEffect(() => {
+    chipNodesRef.current.forEach((node, relationId) => {
+      registerChipNode(relationId, node as HTMLDivElement);
+    });
+  }, [relationListKey, registerChipNode]);
 
   if (sortedRelations.length <= 1) {
     return (
@@ -911,7 +994,7 @@ export default function ReorderableRelationChipsDnd({
           layoutMode={layoutMode}
           afterChips={afterChips}
           listLayoutRef={listLayoutRef}
-          activeId={activeId}
+          activeId={draggingId}
           insertBeforeIndex={insertBeforeIndex}
           gapSize={gapSize}
           useInsertGapDnD={useInsertGapDnD}
@@ -925,7 +1008,7 @@ export default function ReorderableRelationChipsDnd({
         zIndex={10002}
         modifiers={useInsertGapDnD ? [snapCenterToCursor] : undefined}
       >
-        {activeId && activeRelation ? (
+        {draggingId && activeRelation ? (
           <RelationChipDragOverlay relation={activeRelation} spaceId={spaceId} size={overlaySize} />
         ) : null}
       </DragOverlay>
