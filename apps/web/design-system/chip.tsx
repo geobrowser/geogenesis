@@ -2,12 +2,19 @@
 
 import * as Popover from '@radix-ui/react-popover';
 
+import type { SyntheticListenerMap } from '@dnd-kit/core';
+
 import * as React from 'react';
 import { useState } from 'react';
 
+import cx from 'classnames';
+import { useSetAtom, useStore } from 'jotai';
 import { cva } from 'class-variance-authority';
 
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/substream-schema';
 import { NavUtils } from '~/core/utils/utils';
@@ -71,6 +78,7 @@ type LinkableRelationChipProps = {
   small?: boolean;
   className?: string;
   disableLink?: boolean;
+  sortableDragHandleListeners?: SyntheticListenerMap;
 
   truncateLabel?: boolean;
   children: React.ReactNode;
@@ -182,9 +190,15 @@ export function LinkableRelationChip({
   small = false,
   className = '',
   disableLink = false,
+  sortableDragHandleListeners,
   truncateLabel = false,
   children,
 }: LinkableRelationChipProps) {
+  const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
+  const jotaiStore = useStore();
+  const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
+  const { openSidePanel } = useEntitySidePanel();
+
   const [isDotsHovered, setIsDotsHovered] = useState<boolean>(false);
   const [isSpaceHovered, setIsSpaceHovered] = useState<boolean>(false);
   const [isRelationHovered, setIsRelationHovered] = useState<boolean>(false);
@@ -200,6 +214,40 @@ export function LinkableRelationChip({
   const labelInner = truncateLabel ? <span className="block truncate">{children}</span> : children;
 
   const { space } = useSpace(spaceId);
+
+  const targetSpaceId = spaceId ?? currentSpaceId;
+
+  const openInSidePanel = React.useCallback(
+    (targetEntityId: string, targetSpaceIdForNav: string) => {
+      if (!sidePanelCtx) return;
+      jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
+      if (sidePanelCtx.openedFromReviewEdits) {
+        bumpEditorContentVersion(v => v + 1);
+      }
+      openSidePanel(targetEntityId, targetSpaceIdForNav, sidePanelCtx.openedWithMainViewEditing, {
+        openedFromReviewEdits: sidePanelCtx.openedFromReviewEdits,
+      });
+    },
+    [bumpEditorContentVersion, jotaiStore, openSidePanel, sidePanelCtx]
+  );
+
+  const handleEntityLinkClick = React.useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!sidePanelCtx) return;
+      event.preventDefault();
+      openInSidePanel(entityId, targetSpaceId);
+    },
+    [entityId, openInSidePanel, sidePanelCtx, targetSpaceId]
+  );
+
+  const handleRelationEntityLinkClick = React.useCallback(
+    (event: React.MouseEvent<HTMLAnchorElement>) => {
+      if (!sidePanelCtx || !relationEntityId) return;
+      event.preventDefault();
+      openInSidePanel(relationEntityId, currentSpaceId);
+    },
+    [currentSpaceId, openInSidePanel, relationEntityId, sidePanelCtx]
+  );
 
   return (
     <div
@@ -222,9 +270,10 @@ export function LinkableRelationChip({
       ) : (
         <Link
           entityId={entityId}
-          spaceId={spaceId ?? currentSpaceId}
-          href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId)}
+          spaceId={targetSpaceId}
+          href={NavUtils.toEntity(targetSpaceId, entityId)}
           className={truncateLabel ? 'min-h-0 min-w-0 flex-1 overflow-hidden pr-0' : undefined}
+          onClick={handleEntityLinkClick}
         >
           {labelInner}
         </Link>
@@ -239,6 +288,7 @@ export function LinkableRelationChip({
           <button
             ref={triggerRef}
             type="button"
+            {...sortableDragHandleListeners}
             onMouseEnter={() => {
               setIsPopoverOpen(true);
               setIsDotsHovered(true);
@@ -251,11 +301,14 @@ export function LinkableRelationChip({
               }
               setIsPopoverOpen(false);
             }}
-            className={relationChipPopoverTriggerStyles({
-              isSpaceHovered,
-              isDeleteHovered,
-              isRelationHovered,
-            })}
+            className={cx(
+              relationChipPopoverTriggerStyles({
+                isSpaceHovered,
+                isDeleteHovered,
+                isRelationHovered,
+              }),
+              sortableDragHandleListeners && 'cursor-grab active:cursor-grabbing'
+            )}
           >
             <RelationDots color="current" />
           </button>
@@ -310,6 +363,7 @@ export function LinkableRelationChip({
                 entityId={relationEntityId}
                 spaceId={currentSpaceId}
                 href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
+                onClick={handleRelationEntityLinkClick}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}
                 className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}

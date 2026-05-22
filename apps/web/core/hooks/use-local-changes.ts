@@ -26,6 +26,20 @@ const localChangesStoreTick = createAtom(
   { compare: () => false }
 );
 
+export function getLocalUnpublishedChangesFingerprint(): string {
+  const valueIds = reactiveValues
+    .get()
+    .filter(v => v.isLocal === true && v.hasBeenPublished === false)
+    .map(v => v.id)
+    .sort();
+  const relationIds = reactiveRelations
+    .get()
+    .filter(r => r.isLocal === true && r.hasBeenPublished === false)
+    .map(r => r.id)
+    .sort();
+  return `${valueIds.join(',')}|${relationIds.join(',')}`;
+}
+
 export const useLocalChanges = (
   spaceId?: string,
   version = 0,

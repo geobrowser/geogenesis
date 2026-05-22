@@ -11,6 +11,8 @@ export type EntitySidePanelEditContextValue = {
   spaceId: string;
   panelWantsEdit: boolean;
   setPanelWantsEdit: React.Dispatch<React.SetStateAction<boolean>>;
+  openedWithMainViewEditing: boolean;
+  openedFromReviewEdits: boolean;
 };
 
 export const EntitySidePanelEditContext = React.createContext<EntitySidePanelEditContextValue | null>(null);
@@ -52,8 +54,10 @@ export function EntitySidePanelEditModeProvider({
       spaceId: entitySpaceId,
       panelWantsEdit,
       setPanelWantsEdit,
+      openedWithMainViewEditing,
+      openedFromReviewEdits,
     }),
-    [entitySpaceId, panelWantsEdit]
+    [entitySpaceId, panelWantsEdit, openedWithMainViewEditing, openedFromReviewEdits]
   );
 
   return <EntitySidePanelEditContext.Provider value={value}>{children}</EntitySidePanelEditContext.Provider>;

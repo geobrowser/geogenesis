@@ -5,18 +5,19 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { motion, useAnimation } from 'framer-motion';
 
-import { editorContentVersionAtom } from '~/atoms';
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
@@ -484,16 +485,37 @@ function EntitySidePanelSurface({
 
 export function EntitySidePanel() {
   const pathname = usePathname();
+  const jotaiStore = useStore();
   const { isReviewOpen, bumpReviewVersion } = useDiff();
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
   const pathnameWhenOpenedRef = React.useRef<string | null>(null);
+  const reviewEditsSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!sidePanelTarget) {
+      reviewEditsSnapshotRef.current = null;
+      return;
+    }
+    if (sidePanelTarget.openedFromReviewEdits && reviewEditsSnapshotRef.current === null) {
+      reviewEditsSnapshotRef.current = getLocalUnpublishedChangesFingerprint();
+    }
+  }, [sidePanelTarget]);
 
   const handleCloseSidePanel = React.useCallback(() => {
-    if (sidePanelTarget?.openedFromReviewEdits) {
-      bumpReviewVersion();
+    const openedFromReviewEdits = sidePanelTarget?.openedFromReviewEdits;
+
+    if (openedFromReviewEdits) {
+      jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
+      const snapshot = reviewEditsSnapshotRef.current;
+      const current = getLocalUnpublishedChangesFingerprint();
+      if (snapshot !== null && current !== snapshot) {
+        bumpReviewVersion();
+      }
+      reviewEditsSnapshotRef.current = null;
     }
+
     closeSidePanel();
-  }, [sidePanelTarget?.openedFromReviewEdits, bumpReviewVersion, closeSidePanel]);
+  }, [bumpReviewVersion, closeSidePanel, jotaiStore, sidePanelTarget?.openedFromReviewEdits]);
 
   React.useLayoutEffect(() => {
     if (sidePanelTarget) {
