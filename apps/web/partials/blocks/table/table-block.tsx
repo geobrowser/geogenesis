@@ -19,6 +19,7 @@ import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
@@ -957,9 +958,12 @@ const ConfiguredTableBlock = ({
 
   const singleSpaceTarget =
     source.type === 'SPACES' && source.value.length === 1 ? source.value[0] : null;
-  const canCreateInSingleSpace = useCanUserEdit(singleSpaceTarget ?? spaceId);
+  const { canCreateInSpace: canCreateInTargetSpace, isResolved: singleSpaceAccessResolved } =
+    useCreatableSpaceIds(singleSpaceTarget ? [singleSpaceTarget] : [], Boolean(singleSpaceTarget));
+  const canCreateInSingleSpace = singleSpaceTarget ? canCreateInTargetSpace(singleSpaceTarget) : true;
   const showCreateEntityPlus =
-    renderPlusButtonAsInline && (!singleSpaceTarget || canCreateInSingleSpace);
+    renderPlusButtonAsInline &&
+    (!singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace));
 
   const onAddPlaceholderClick = React.useCallback(() => {
     onAddPlaceholder(singleSpaceTarget ?? null);

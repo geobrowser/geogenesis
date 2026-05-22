@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { type Source } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import {
@@ -37,19 +38,33 @@ type DataBlockCreateEntitySpaceDropdownProps = {
   disabled?: boolean;
 };
 
-function SpaceDropdownRow({ row, onPick }: { row: QueryFromSpaceRow; onPick: () => void }) {
+function SpaceDropdownRow({
+  row,
+  disabled,
+  onPick,
+}: {
+  row: QueryFromSpaceRow;
+  disabled?: boolean;
+  onPick: () => void;
+}) {
   return (
     <Dropdown.Item
+      disabled={disabled}
       textValue={row.name}
       className={cx(
-        'group relative flex w-full cursor-pointer items-center px-3 py-[10px] text-button text-text outline-none select-none',
+        'group relative flex w-full items-center px-3 py-[10px] text-button outline-none select-none',
         listRowClassName,
-        'bg-white data-highlighted:bg-grey-01'
+        'bg-white',
+        disabled
+          ? 'pointer-events-none cursor-not-allowed text-grey-04 opacity-50'
+          : 'cursor-pointer text-text data-highlighted:bg-grey-01'
       )}
       onSelect={e => {
         e.preventDefault();
+        if (disabled) return;
         onPick();
       }}
+      onPointerDown={disabled ? e => e.preventDefault() : undefined}
     >
       <div className="flex w-full flex-col gap-0.5">
         <div className="flex w-full items-center justify-between gap-2">
@@ -61,7 +76,7 @@ function SpaceDropdownRow({ row, onPick }: { row: QueryFromSpaceRow; onPick: () 
                 <img src={PLACEHOLDER_SPACE_IMAGE} alt="" className="h-full w-full object-cover" />
               )}
             </div>
-            <span className="truncate text-button text-text">{row.name}</span>
+            <span className="truncate text-button">{row.name}</span>
           </div>
         </div>
         {row.pendingLabel ? (
@@ -83,13 +98,7 @@ function dedupeSpaceRows(rows: QueryFromSpaceRow[]): QueryFromSpaceRow[] {
 
 /**
  * Dropdown shown when the user clicks the "+" button on a query data block.
- * Lets the user pick which space the new entity will be created in.
- *
- * - SPACES source: lists the spaces from the block's filter.
- * - GEO source: searchable list of all spaces (defaults to editor / member / featured).
- *
- * For other source types this component should not be rendered — the caller
- * is expected to show the plain "+" button instead.
+ * All scoped spaces are listed; only spaces where the user is a member or editor are selectable.
  */
 export function DataBlockCreateEntitySpaceDropdown({
   source,
@@ -116,17 +125,15 @@ export function DataBlockCreateEntitySpaceDropdown({
   const sourceSpaceIds = source.type === 'SPACES' ? source.value : [];
   const { spacesById, isLoading: sourceSpacesLoading } = useSpacesByIds(sourceSpaceIds);
 
-  // GEO branch: pull the same sectioned list / search behavior used by the scope dropdown.
-  const enableScopeList = open && source.type === 'GEO';
-  const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(
+  const { data: scopeData, isLoading: scopeListLoading } = useQueryFromSpacesList(
     personalSpaceId ?? spaceId,
-    enableScopeList
+    open && source.type === 'GEO'
   );
   const sections = scopeData?.sections;
   const scopeOrdering = scopeData?.ordering;
 
   const { setQuery: setRemoteSearchQuery, spaces: remoteSearchSpaces, isLoading: remoteSearchLoading } = useSpacesQuery(
-    enableScopeList,
+    open && source.type === 'GEO',
     { matchLimit: 1000 }
   );
 
@@ -183,22 +190,46 @@ export function DataBlockCreateEntitySpaceDropdown({
     return dedupeSpaceRows(sortSpacesForDropdownSearch(mapped, scopeOrdering));
   }, [isGeoSource, searchMode, remoteSearchSpaces, scopeOrdering]);
 
-  /** Flat list: editors → members → top spaces (no section headers). */
   const orderedScopeRows = React.useMemo(() => {
     if (!sections) return [];
     return dedupeSpaceRows([...sections.editors, ...sections.members, ...sections.featured]);
   }, [sections]);
 
-  const listLoading = isGeoSource
-    ? searchMode
-      ? remoteSearchLoading
-      : initialListLoading
-    : sourceSpacesLoading;
+  const visibleRows = React.useMemo(() => {
+    if (isGeoSource) {
+      if (searchMode && filteredGeoSearchRows) return filteredGeoSearchRows;
+      return orderedScopeRows;
+    }
+    return filteredSourceRows;
+  }, [filteredGeoSearchRows, filteredSourceRows, isGeoSource, orderedScopeRows, searchMode]);
+
+  const { canCreateInSpace, isLoading: accessLoading, isResolved: accessResolved } = useCreatableSpaceIds(
+    visibleRows.map(row => row.id),
+    open
+  );
+
+  const listLoading =
+    !accessResolved &&
+    (isGeoSource
+      ? searchMode
+        ? remoteSearchLoading || accessLoading
+        : scopeListLoading || accessLoading
+      : sourceSpacesLoading || accessLoading);
 
   const handlePick = (id: string, name: string | null) => {
+    if (!canCreateInSpace(id)) return;
     onPick(id, name);
     setOpen(false);
   };
+
+  const renderRow = (row: QueryFromSpaceRow) => (
+    <SpaceDropdownRow
+      key={row.id}
+      row={row}
+      disabled={!canCreateInSpace(row.id)}
+      onPick={() => handlePick(row.id, row.name)}
+    />
+  );
 
   return (
     <Dropdown.Root open={open} onOpenChange={setOpen}>
@@ -246,11 +277,7 @@ export function DataBlockCreateEntitySpaceDropdown({
             )}
 
             {!listLoading && !isGeoSource && filteredSourceRows.length > 0 && (
-              <>
-                {filteredSourceRows.map(row => (
-                  <SpaceDropdownRow key={row.id} row={row} onPick={() => handlePick(row.id, row.name)} />
-                ))}
-              </>
+              <>{filteredSourceRows.map(renderRow)}</>
             )}
 
             {!listLoading && !isGeoSource && filteredSourceRows.length === 0 && (
@@ -259,9 +286,7 @@ export function DataBlockCreateEntitySpaceDropdown({
 
             {!listLoading && isGeoSource && searchMode && filteredGeoSearchRows && (
               <>
-                {filteredGeoSearchRows.map(row => (
-                  <SpaceDropdownRow key={row.id} row={row} onPick={() => handlePick(row.id, row.name)} />
-                ))}
+                {filteredGeoSearchRows.map(renderRow)}
                 {filteredGeoSearchRows.length === 0 && (
                   <div className="px-3 py-4 text-footnote text-grey-04">No spaces match your search.</div>
                 )}
@@ -269,11 +294,7 @@ export function DataBlockCreateEntitySpaceDropdown({
             )}
 
             {!listLoading && isGeoSource && !searchMode && sections && orderedScopeRows.length > 0 && (
-              <>
-                {orderedScopeRows.map(row => (
-                  <SpaceDropdownRow key={row.id} row={row} onPick={() => handlePick(row.id, row.name)} />
-                ))}
-              </>
+              <>{orderedScopeRows.map(renderRow)}</>
             )}
 
             {!listLoading && isGeoSource && !searchMode && sections && orderedScopeRows.length === 0 && (
