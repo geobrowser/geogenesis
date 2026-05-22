@@ -2,19 +2,25 @@
 
 import {
   type CollisionDetection,
-  closestCenter,
   DndContext,
   DragEndEvent,
-  DragOverlay,
   DragOverEvent,
+  DragOverlay,
   DragStartEvent,
   PointerSensor,
+  closestCenter,
   pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { SortableContext, arrayMove, rectSortingStrategy, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
@@ -24,18 +30,18 @@ import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } fro
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValue } from '~/core/sync/use-store';
+import { useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { Create } from '~/design-system/icons/create';
+import { LinkableRelationChip } from '~/design-system/chip';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Create } from '~/design-system/icons/create';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Trash } from '~/design-system/icons/trash';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import { Text } from '~/design-system/text';
-import { LinkableRelationChip } from '~/design-system/chip';
 
 import { InlinePropertyTypeIcon } from '~/partials/entity-page/inline-property-type-icon';
 
@@ -92,12 +98,15 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
   const [groupOverlayWidths, setGroupOverlayWidths] = React.useState<Record<string, number>>({});
+  const [focusGroupNameId, setFocusGroupNameId] = React.useState<string | null>(null);
   const lastOverIdRef = React.useRef<string | null>(null);
 
   const typePropertyRelations = sortRelations(
     useRelations({
       selector: relation =>
-        relation.fromEntity.id === entityId && relation.spaceId === spaceId && relation.type.id === SystemIds.PROPERTIES,
+        relation.fromEntity.id === entityId &&
+        relation.spaceId === spaceId &&
+        relation.type.id === SystemIds.PROPERTIES,
     })
   );
 
@@ -110,12 +119,19 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     })
   );
 
-  const groupIds = React.useMemo(() => new Set(propertyGroupRelations.map(relation => relation.toEntity.id)), [propertyGroupRelations]);
-  const allGroupPropertyRelations = useRelations({
-    selector: relation =>
-      relation.spaceId === spaceId &&
-      relation.type.id === SystemIds.PROPERTIES &&
-      groupIds.has(relation.fromEntity.id),
+  const groupIds = React.useMemo(
+    () => new Set(propertyGroupRelations.map(relation => relation.toEntity.id)),
+    [propertyGroupRelations]
+  );
+  const allGroupOutgoingRelations = useRelations({
+    selector: relation => relation.spaceId === spaceId && groupIds.has(relation.fromEntity.id),
+  });
+  const allGroupPropertyRelations = React.useMemo(
+    () => allGroupOutgoingRelations.filter(relation => relation.type.id === SystemIds.PROPERTIES),
+    [allGroupOutgoingRelations]
+  );
+  const allGroupValues = useValues({
+    selector: value => value.spaceId === spaceId && groupIds.has(value.entity.id),
   });
 
   const groupContainers: GroupContainer[] = React.useMemo(
@@ -163,9 +179,13 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     }
 
     // Keep any remaining current relations at the end in their current order.
-    const targetIds = [...desiredExistingIds, ...currentIds.filter(propertyId => !desiredExistingIds.includes(propertyId))];
+    const targetIds = [
+      ...desiredExistingIds,
+      ...currentIds.filter(propertyId => !desiredExistingIds.includes(propertyId)),
+    ];
     const sameOrder =
-      currentIds.length === targetIds.length && currentIds.every((propertyId, index) => propertyId === targetIds[index]);
+      currentIds.length === targetIds.length &&
+      currentIds.every((propertyId, index) => propertyId === targetIds[index]);
     if (sameOrder) return;
 
     targetIds.forEach((propertyId, index) => {
@@ -211,9 +231,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     // When dragging whole groups, only collide against other group rows.
     // Ignoring nested property droppables prevents jitter/glitchy snapping.
     if (draggedGroupRelationId) {
-      const groupOnlyContainers = args.droppableContainers.filter(container =>
-        parseGroupDragId(String(container.id))
-      );
+      const groupOnlyContainers = args.droppableContainers.filter(container => parseGroupDragId(String(container.id)));
       return closestCenter({
         ...args,
         droppableContainers: groupOnlyContainers,
@@ -301,14 +319,16 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
       fromEntity: { id: entityId, name: null },
       toEntity: { id: groupEntityId, name: null, value: groupEntityId },
     });
+    setFocusGroupNameId(groupEntityId);
   };
 
   const onDeleteGroup = (groupRelation: Relation) => {
     const groupId = groupRelation.toEntity.id;
-    const groupPropertyRelations = allGroupPropertyRelations.filter(relation => relation.fromEntity.id === groupId);
-    const groupedPropertyIds = new Set(groupPropertyRelations.map(relation => relation.toEntity.id));
-    const typeRelationsToDelete = typePropertyRelations.filter(relation => groupedPropertyIds.has(relation.toEntity.id));
-    storage.relations.deleteMany([...groupPropertyRelations, ...typeRelationsToDelete, groupRelation]);
+    const groupRelations = allGroupOutgoingRelations.filter(relation => relation.fromEntity.id === groupId);
+    const groupValues = allGroupValues.filter(value => value.entity.id === groupId);
+
+    storage.relations.deleteMany([...groupRelations, groupRelation]);
+    storage.values.deleteMany(groupValues);
   };
 
   const onAddPropertyToGroup = (groupId: string, property: { id: string; name: string | null }) => {
@@ -320,7 +340,9 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     );
     if (existing) return;
 
-    const groupRelations = sortRelations(allGroupPropertyRelations.filter(relation => relation.fromEntity.id === groupId));
+    const groupRelations = sortRelations(
+      allGroupPropertyRelations.filter(relation => relation.fromEntity.id === groupId)
+    );
     const lastPosition = groupRelations.at(-1)?.position ?? null;
     storage.relations.set({
       id: ID.createEntityId(),
@@ -409,10 +431,15 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
       : [];
     const destinationInsertIndex =
       overPropertyId && destinationGroupId
-        ? Math.max(0, destinationGroupRelations.findIndex(relation => relation.toEntity.id === overPropertyId))
+        ? Math.max(
+            0,
+            destinationGroupRelations.findIndex(relation => relation.toEntity.id === overPropertyId)
+          )
         : destinationGroupRelations.length;
     const destinationPrevPosition =
-      destinationGroupId && destinationInsertIndex > 0 ? destinationGroupRelations[destinationInsertIndex - 1]?.position : null;
+      destinationGroupId && destinationInsertIndex > 0
+        ? destinationGroupRelations[destinationInsertIndex - 1]?.position
+        : null;
     const destinationNextPosition =
       destinationGroupId && destinationInsertIndex < destinationGroupRelations.length
         ? destinationGroupRelations[destinationInsertIndex]?.position
@@ -510,9 +537,12 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     spaceId={spaceId}
                     groupRelation={container.groupRelation}
                     propertyRelations={container.propertyRelations}
+                    typePropertyRelations={typePropertyRelations}
                     onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
                     createProperty={createProperty}
+                    autoFocusName={focusGroupNameId === container.groupEntityId}
+                    onNameAutoFocused={() => setFocusGroupNameId(current => (current === container.groupEntityId ? null : current))}
                     onMeasureWidth={width =>
                       setGroupOverlayWidths(previous => {
                         if (previous[container.groupRelation.id] === width) return previous;
@@ -540,7 +570,9 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
               ) : activeGroupDragId ? (
                 <GroupDragOverlayPreview
                   groupRelation={propertyGroupRelations.find(relation => relation.id === activeGroupDragId) ?? null}
-                  groupContainer={groupContainers.find(container => container.groupRelation.id === activeGroupDragId) ?? null}
+                  groupContainer={
+                    groupContainers.find(container => container.groupRelation.id === activeGroupDragId) ?? null
+                  }
                   spaceId={spaceId}
                   width={activeGroupDragId ? groupOverlayWidths[activeGroupDragId] : undefined}
                 />
@@ -566,10 +598,12 @@ function GroupDragOverlayPreview({
 }) {
   const groupId = groupRelation?.toEntity.id ?? '';
   const nameValue = useValue({
-    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === SystemIds.NAME_PROPERTY,
+    selector: value =>
+      value.entity.id === groupId && value.spaceId === spaceId && value.property.id === SystemIds.NAME_PROPERTY,
   });
   const collapsedValue = useValue({
-    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === COLLAPSED_PROPERTY,
+    selector: value =>
+      value.entity.id === groupId && value.spaceId === spaceId && value.property.id === COLLAPSED_PROPERTY,
   });
 
   if (!groupRelation || !groupContainer) return null;
@@ -624,17 +658,23 @@ function TypePropertyGroupCard({
   spaceId,
   groupRelation,
   propertyRelations,
+  typePropertyRelations,
   onDeleteGroup,
   onAddProperty,
   createProperty,
+  autoFocusName,
+  onNameAutoFocused,
   onMeasureWidth,
 }: {
   spaceId: string;
   groupRelation: Relation;
   propertyRelations: Relation[];
+  typePropertyRelations: Relation[];
   onDeleteGroup: () => void;
   onAddProperty: (property: { id: string; name: string | null }) => void;
   createProperty: CreatePropertyFn;
+  autoFocusName: boolean;
+  onNameAutoFocused: () => void;
   onMeasureWidth: (width: number) => void;
 }) {
   const { storage } = useMutate();
@@ -647,10 +687,12 @@ function TypePropertyGroupCard({
 
   const groupId = groupRelation.toEntity.id;
   const nameValue = useValue({
-    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === SystemIds.NAME_PROPERTY,
+    selector: value =>
+      value.entity.id === groupId && value.spaceId === spaceId && value.property.id === SystemIds.NAME_PROPERTY,
   });
   const collapsedValue = useValue({
-    selector: value => value.entity.id === groupId && value.spaceId === spaceId && value.property.id === COLLAPSED_PROPERTY,
+    selector: value =>
+      value.entity.id === groupId && value.spaceId === spaceId && value.property.id === COLLAPSED_PROPERTY,
   });
 
   const drop = useDroppable({ id: containerIdForGroup(groupId) });
@@ -665,7 +707,11 @@ function TypePropertyGroupCard({
   );
 
   return (
-    <div ref={setMeasuredNodeRef} style={style} className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0">
+    <div
+      ref={setMeasuredNodeRef}
+      style={style}
+      className="group relative border-b border-grey-02 py-3 pr-4 pl-4 last:border-b-0"
+    >
       <button
         type="button"
         className="absolute top-4 -left-6 z-10 cursor-grab text-grey-04 opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
@@ -679,7 +725,9 @@ function TypePropertyGroupCard({
       <GroupHeader
         nameValue={nameValue?.value ?? ''}
         collapsedValue={collapsedValue?.value ?? '0'}
+        autoFocusName={autoFocusName}
         onChangeName={nextName => storage.entities.name.set(groupId, spaceId, nextName)}
+        onNameAutoFocused={onNameAutoFocused}
         onToggleCollapsed={() => {
           const currentlyCollapsed = getChecked(collapsedValue?.value ?? '0') === true;
           storage.values.set({
@@ -692,8 +740,11 @@ function TypePropertyGroupCard({
         onDeleteGroup={onDeleteGroup}
       />
 
-      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md pr-2 py-2`}>
-        <SortableContext items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md py-2 pr-2`}>
+        <SortableContext
+          items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))}
+          strategy={rectSortingStrategy}
+        >
           <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
             <div className="inline-flex items-center gap-2 pt-[3px]">
               <InlinePropertyTypeIcon dataType="RELATION" />
@@ -701,7 +752,32 @@ function TypePropertyGroupCard({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {propertyRelations.map(relation => (
-                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+                <SortablePropertyRow
+                  key={relation.id}
+                  relation={relation}
+                  spaceId={spaceId}
+                  onDelete={() => {
+                    const typeRelation = typePropertyRelations.find(
+                      typePropertyRelation => typePropertyRelation.toEntity.id === relation.toEntity.id
+                    );
+                    storage.relations.deleteMany(typeRelation ? [relation, typeRelation] : [relation]);
+                  }}
+                  onDone={result => {
+                    const typeRelation = typePropertyRelations.find(
+                      typePropertyRelation => typePropertyRelation.toEntity.id === relation.toEntity.id
+                    );
+                    storage.relations.update(relation, draft => {
+                      draft.toSpaceId = result.space;
+                      draft.verified = result.verified;
+                    });
+                    if (typeRelation) {
+                      storage.relations.update(typeRelation, draft => {
+                        draft.toSpaceId = result.space;
+                        draft.verified = result.verified;
+                      });
+                    }
+                  }}
+                />
               ))}
               <SelectEntityAsPopover
                 trigger={
@@ -739,16 +815,28 @@ function TypePropertyGroupCard({
 function GroupHeader({
   nameValue,
   collapsedValue,
+  autoFocusName,
   onChangeName,
+  onNameAutoFocused,
   onToggleCollapsed,
   onDeleteGroup,
 }: {
   nameValue: string;
   collapsedValue: string;
+  autoFocusName: boolean;
   onChangeName: (nextName: string) => void;
+  onNameAutoFocused: () => void;
   onToggleCollapsed: () => void;
   onDeleteGroup: () => void;
 }) {
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+
+  React.useEffect(() => {
+    if (!autoFocusName) return;
+    inputRef.current?.focus();
+    onNameAutoFocused();
+  }, [autoFocusName, onNameAutoFocused]);
+
   return (
     <div className="mb-2 grid grid-cols-[170px_minmax(0,1fr)] items-center gap-2">
       <div className="inline-flex items-center gap-2 text-tableCell font-medium text-text">
@@ -757,6 +845,7 @@ function GroupHeader({
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <input
+          ref={inputRef}
           value={nameValue}
           onChange={event => onChangeName(event.target.value)}
           placeholder="Add name..."
@@ -823,15 +912,18 @@ function UngroupedDropContainer({
   return (
     <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
       {hasGroupsAbove && (
-        <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+        <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
           Ungrouped properties
         </Text>
       )}
       <div
         ref={drop.setNodeRef}
-        className={`${hasGroupsAbove ? 'mt-2' : ''} rounded-md pr-2 py-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
+        className={`${hasGroupsAbove ? 'mt-2' : ''} rounded-md py-2 pr-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
       >
-        <SortableContext items={relations.map(relation => propertyDragId(relation.toEntity.id))} strategy={rectSortingStrategy}>
+        <SortableContext
+          items={relations.map(relation => propertyDragId(relation.toEntity.id))}
+          strategy={rectSortingStrategy}
+        >
           <div className="grid grid-cols-[170px_minmax(0,1fr)] items-start gap-2">
             <div className="inline-flex items-center gap-2 pt-[3px]">
               <InlinePropertyTypeIcon dataType="RELATION" />
@@ -839,7 +931,18 @@ function UngroupedDropContainer({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {relations.map(relation => (
-                <SortablePropertyRow key={relation.id} relation={relation} spaceId={spaceId} />
+                <SortablePropertyRow
+                  key={relation.id}
+                  relation={relation}
+                  spaceId={spaceId}
+                  onDelete={() => storage.relations.delete(relation)}
+                  onDone={result => {
+                    storage.relations.update(relation, draft => {
+                      draft.toSpaceId = result.space;
+                      draft.verified = result.verified;
+                    });
+                  }}
+                />
               ))}
               <SelectEntityAsPopover
                 trigger={
@@ -876,7 +979,17 @@ function UngroupedDropContainer({
   );
 }
 
-function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceId: string }) {
+function SortablePropertyRow({
+  relation,
+  spaceId,
+  onDelete,
+  onDone,
+}: {
+  relation: Relation;
+  spaceId: string;
+  onDelete: () => void;
+  onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+}) {
   const sortable = useSortable({ id: propertyDragId(relation.toEntity.id) });
   const style = {
     transform: CSS.Translate.toString(sortable.transform),
@@ -891,18 +1004,24 @@ function SortablePropertyRow({ relation, spaceId }: { relation: Relation; spaceI
       className="relative inline-block max-w-full min-w-0"
       aria-label="Drag property"
     >
-      <span className="inline-flex max-w-full min-w-0 items-center cursor-grab active:cursor-grabbing" {...sortable.attributes} {...sortable.listeners}>
+      <span
+        className="inline-flex max-w-full min-w-0 cursor-grab items-center active:cursor-grabbing"
+        {...sortable.attributes}
+        {...sortable.listeners}
+      >
         <LinkableRelationChip
-          isEditing={false}
+          isEditing
           small
           truncateLabel
-          className="max-w-[220px] cursor-grab! tracking-[-0.25px] hover:cursor-grab! focus:cursor-grab! active:cursor-grabbing! **:cursor-grab! [&>button]:cursor-pointer! [&>button_*]:cursor-pointer!"
+          className="max-w-[220px] cursor-grab! tracking-[-0.25px] **:cursor-grab! hover:cursor-grab! focus:cursor-grab! active:cursor-grabbing! [&>button]:cursor-pointer! [&>button_*]:cursor-pointer!"
           currentSpaceId={spaceId}
           entityId={relation.toEntity.id}
           relationId={relation.id}
           relationEntityId={relation.entityId}
           spaceId={relation.toSpaceId}
           verified={relation.verified}
+          onDelete={onDelete}
+          onDone={onDone}
         >
           {relation.toEntity.name ?? relation.toEntity.id}
         </LinkableRelationChip>

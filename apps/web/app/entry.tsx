@@ -17,6 +17,7 @@ import { ClientOnly } from '~/design-system/client-only';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
@@ -78,6 +79,7 @@ export function App({ children }: { children: React.ReactNode }) {
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <OnboardingDialog />
+        <CreateSpaceDialog />
         <Toast />
         <GovernanceReopenEditLoadingBar />
         <FlowBar />

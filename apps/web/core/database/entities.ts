@@ -86,6 +86,24 @@ function readBooleanEntityValue(entity: Entity, propertyId: string, preferredSpa
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
+function selectRelationsByType(
+  entity: Entity,
+  relationTypeId: string,
+  preferredSpaceId?: string
+): Relation[] {
+  const relationsOfType = entity.relations.filter(r => r.type.id === relationTypeId);
+  if (!preferredSpaceId) return relationsOfType;
+
+  const preferredSpaceRelations = relationsOfType.filter(r => r.spaceId === preferredSpaceId);
+  if (preferredSpaceRelations.length > 0) return preferredSpaceRelations;
+
+  const topSpaceId = entity.spaces[0];
+  if (!topSpaceId || topSpaceId === preferredSpaceId) return relationsOfType;
+
+  const topSpaceRelations = relationsOfType.filter(r => r.spaceId === topSpaceId);
+  return topSpaceRelations.length > 0 ? topSpaceRelations : relationsOfType;
+}
+
 export function useEntity(options: UseEntityOptions): EntityWithSchema & { isLoading: boolean } {
   const { spaceId, id } = options;
 
@@ -185,7 +203,8 @@ export const DEFAULT_ENTITY_SCHEMA: Property[] = [
  */
 async function fetchEntitiesWithRelations(
   ids: string[],
-  spaceByEntity: Map<string, string | undefined>
+  spaceByEntity: Map<string, string | undefined>,
+  options: { requiredRelationTypeId?: string } = {}
 ): Promise<Entity[]> {
   if (ids.length === 0) return [];
 
@@ -211,10 +230,13 @@ async function fetchEntitiesWithRelations(
     )
   ).flat();
 
-  // Re-fetch entities that have no relations and whose top-ranked space
-  // differs from the space we fetched with (cross-space type resolution).
+  // Re-fetch entities whose requested space did not include the relations we
+  // need and whose top-ranked space differs from the space we fetched with.
   const missingEntities = entities.filter(entity => {
-    if (entity.relations.length > 0) return false;
+    const hasRequiredRelations = options.requiredRelationTypeId
+      ? entity.relations.some(r => r.type.id === options.requiredRelationTypeId)
+      : entity.relations.length > 0;
+    if (hasRequiredRelations) return false;
     const fetchedSpace = spaceByEntity.get(entity.id);
     return entity.spaces.length > 0 && entity.spaces[0] !== fetchedSpace;
   });
@@ -378,20 +400,21 @@ export async function getSchemaFromTypeIdsAndRelations(
 
   if (isTypePropertyIds.size === 0) return baseSchema;
 
-  // Collect target entity IDs from matching IS_TYPE relations,
-  // preserving the relation's spaceId for per-target filtering
+  // Collect target entity IDs from matching IS_TYPE relations. A toSpaceId is
+  // an explicit target-space override; otherwise resolve via the target's own
+  // top-ranked space.
   const isTypeRelations = relations.filter(r => isTypePropertyIds.has(r.type.id));
   const targetIds = [...new Set(isTypeRelations.map(r => r.toEntity.id))];
-  const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId ?? r.spaceId]));
+  const spaceByTarget = new Map(isTypeRelations.map(r => [r.toEntity.id, r.toSpaceId]));
 
-  const targetEntities = await fetchEntitiesWithRelations(targetIds, spaceByTarget);
+  const targetEntities = await fetchEntitiesWithRelations(targetIds, spaceByTarget, {
+    requiredRelationTypeId: SystemIds.PROPERTIES,
+  });
   const targetEntitiesOrdered = orderEntitiesByIdList(targetIds, targetEntities);
 
   const additionalPropertyIds = targetEntitiesOrdered.flatMap(entity => {
     const targetSpaceId = spaceByTarget.get(entity.id) ?? entity.spaces[0];
-    const props = entity.relations.filter(
-      r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
-    );
+    const props = selectRelationsByType(entity, SystemIds.PROPERTIES, targetSpaceId);
     return sortRelations(props).map(r => r.toEntity.id);
   });
 
@@ -440,7 +463,8 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
   );
   const groupEntitiesById = new Map(groupEntities.map(entity => [entity.id, entity]));
 
-  const propertyGroups: SchemaPropertyGroup[] = [];
+  let propertyGroups: SchemaPropertyGroup[] = [];
+  const groupIdByPropertyId = new Map<string, string>();
   const globalSeenPropertyIds = new Set<string>();
   const ungroupedPropertyIds: string[] = [];
 
@@ -492,6 +516,12 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
         propertyIds: uniqueGroupPropertyIds,
         source: 'type',
       });
+
+      for (const propertyId of uniqueGroupPropertyIds) {
+        if (!groupIdByPropertyId.has(propertyId)) {
+          groupIdByPropertyId.set(propertyId, groupId);
+        }
+      }
     }
 
     for (const propertyId of typePropertyIds) {
@@ -509,64 +539,63 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
     const uniqueIsTypeRefs = dedupeWith(
       orderedIsTypeRelations.map(r => ({
         relationId: r.id,
+        triggerPropertyId: r.type.id,
         targetId: r.toEntity.id,
         targetName: r.toEntity.name,
-        spaceId: r.toSpaceId ?? r.spaceId,
+        spaceId: r.toSpaceId,
       })),
       (a, b) => a.targetId === b.targetId && a.spaceId === b.spaceId
     );
 
     const isTypeSpaceByTarget = new Map(uniqueIsTypeRefs.map(r => [r.targetId, r.spaceId]));
-    const isTypeEntities = await fetchEntitiesWithRelations(
-      uniqueIsTypeRefs.map(r => r.targetId),
-      isTypeSpaceByTarget
-    );
+    const isTypeEntities = await fetchEntitiesWithRelations(uniqueIsTypeRefs.map(r => r.targetId), isTypeSpaceByTarget, {
+      requiredRelationTypeId: SystemIds.PROPERTIES,
+    });
     const isTypeEntitiesById = new Map(isTypeEntities.map(entity => [entity.id, entity]));
+    const isTypeGroupsByParentGroupId = new Map<string, SchemaPropertyGroup[]>();
+    const ungroupedIsTypeGroups: SchemaPropertyGroup[] = [];
 
     for (const relation of uniqueIsTypeRefs) {
       const targetEntity = isTypeEntitiesById.get(relation.targetId);
       if (!targetEntity) continue;
 
       const targetSpaceId = relation.spaceId ?? targetEntity.spaces[0];
-      const targetPropertyRelations = targetEntity.relations.filter(
-        r => r.type.id === SystemIds.PROPERTIES && (targetSpaceId ? r.spaceId === targetSpaceId : true)
-      );
+      const targetPropertyRelations = selectRelationsByType(targetEntity, SystemIds.PROPERTIES, targetSpaceId);
       const targetPropertyIds = sortRelations(targetPropertyRelations).map(r => r.toEntity.id);
       const uniqueTargetPropertyIds = targetPropertyIds.filter(propertyId => {
         if (globalSeenPropertyIds.has(propertyId)) return false;
         globalSeenPropertyIds.add(propertyId);
         return true;
       });
+      if (uniqueTargetPropertyIds.length === 0) continue;
 
-      propertyGroups.push({
+      const isTypeGroup: SchemaPropertyGroup = {
         id: `is-type-${relation.relationId}`,
         name: relation.targetName ?? readEntityValue(targetEntity, SystemIds.NAME_PROPERTY, targetSpaceId),
         collapsed: false,
         propertyIds: uniqueTargetPropertyIds,
         source: 'isType',
-      });
+      };
+
+      const parentGroupId = groupIdByPropertyId.get(relation.triggerPropertyId);
+      if (parentGroupId) {
+        const groups = isTypeGroupsByParentGroupId.get(parentGroupId) ?? [];
+        groups.push(isTypeGroup);
+        isTypeGroupsByParentGroupId.set(parentGroupId, groups);
+      } else {
+        ungroupedIsTypeGroups.push(isTypeGroup);
+      }
+    }
+
+    if (isTypeGroupsByParentGroupId.size > 0 || ungroupedIsTypeGroups.length > 0) {
+      propertyGroups = [
+        ...propertyGroups.flatMap(group => [group, ...(isTypeGroupsByParentGroupId.get(group.id) ?? [])]),
+        ...ungroupedIsTypeGroups,
+      ];
     }
   }
 
-  // Synthetic isType groups are only meaningful as a layout hint when at least one
-  // real (user-defined) group exists. Otherwise, fold their properties into the
-  // ungrouped list so the entity panel renders flat.
-  const hasRealGroups = propertyGroups.some(group => group.source === 'type');
-  let effectivePropertyGroups = propertyGroups;
-  if (!hasRealGroups) {
-    const syntheticPropertyIds = propertyGroups
-      .filter(group => group.source === 'isType')
-      .flatMap(group => group.propertyIds);
-    const ungroupedSeen = new Set(ungroupedPropertyIds);
-    for (const propertyId of syntheticPropertyIds) {
-      if (ungroupedSeen.has(propertyId)) continue;
-      ungroupedSeen.add(propertyId);
-      ungroupedPropertyIds.push(propertyId);
-    }
-    effectivePropertyGroups = [];
-  }
-
-  const groupedPropertyIds = effectivePropertyGroups.flatMap(group => group.propertyIds);
+  const groupedPropertyIds = propertyGroups.flatMap(group => group.propertyIds);
   const groupedPropertyIdSet = new Set(groupedPropertyIds);
   const ungroupedSet = new Set(ungroupedPropertyIds);
 
@@ -603,8 +632,8 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
 
   return {
     schema: orderedSchema,
-    propertyGroups: effectivePropertyGroups,
+    propertyGroups,
     ungroupedPropertyIds,
-    hasPropertyGroups: effectivePropertyGroups.length > 0,
+    hasPropertyGroups: propertyGroups.length > 0,
   };
 }
