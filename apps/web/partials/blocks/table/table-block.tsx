@@ -12,6 +12,7 @@ import { produce } from 'immer';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
+import { useActivateDataBlock, useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -275,6 +276,7 @@ function useEntries(
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    hasPlaceholderRow,
   };
 }
 
@@ -354,6 +356,7 @@ const ConfiguredTableBlock = ({
   onConsumedInitialFiltersOpen,
 }: Props) => {
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
+  useDataBlockInteraction(isFilterOpen);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const { entityId, relationId } = useDataBlockInstance();
   const { setEditable } = useEditable();
@@ -454,7 +457,16 @@ const ConfiguredTableBlock = ({
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    hasPlaceholderRow,
   } = useEntries(rows, properties, spaceId, activeFilters, relations, source, canEdit, isFetched && !isLoading);
+
+  const activateDataBlock = useActivateDataBlock();
+  useDataBlockInteraction(hasPlaceholderRow);
+
+  const handleAddPlaceholder = React.useCallback(() => {
+    activateDataBlock();
+    onAddPlaceholder();
+  }, [activateDataBlock, onAddPlaceholder]);
 
   const collectionTypeFilters = React.useMemo(
     () =>
@@ -541,7 +553,7 @@ const ConfiguredTableBlock = ({
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
-      onAddPlaceholder={onAddPlaceholder}
+      onAddPlaceholder={handleAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       placeholderFocusKey={placeholderFocusKey}
       collectionTypeFilters={collectionTypeFilters}
@@ -673,7 +685,7 @@ const ConfiguredTableBlock = ({
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {renderPlusButtonAsInline && (
-            <button type="button" onClick={onAddPlaceholder}>
+            <button type="button" onClick={handleAddPlaceholder}>
               <Create />
             </button>
           )}

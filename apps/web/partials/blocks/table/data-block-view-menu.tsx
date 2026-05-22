@@ -6,6 +6,7 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import * as React from 'react';
 import { useCallback } from 'react';
 
+import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -31,6 +32,7 @@ type TableBlockViewMenuProps = {
 
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  useDataBlockInteraction(isMenuOpen);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,

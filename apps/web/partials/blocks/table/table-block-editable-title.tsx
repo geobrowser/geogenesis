@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -33,6 +34,9 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
   const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200, {
     shouldSkipFocus: isPersonalProfileSkillsRelationFocusRegionActive,
   });
+
+  const [titleFocused, setTitleFocused] = React.useState(false);
+  useDataBlockInteraction(titleFocused);
 
   return (
     <div className="table-block-editable-title flex grow items-center gap-2">
@@ -103,7 +107,11 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
           <input
             type="text"
             ref={inputRef}
-            onBlur={e => setName(e.currentTarget.value)}
+            onFocus={() => setTitleFocused(true)}
+            onBlur={e => {
+              setTitleFocused(false);
+              setName(e.currentTarget.value);
+            }}
             defaultValue={name ?? undefined}
             placeholder={titlePlaceholder}
             className="w-full shrink-0 grow appearance-none text-mediumTitle text-text outline-hidden placeholder:text-grey-03"

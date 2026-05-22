@@ -179,10 +179,14 @@
   @apply border-ctaPrimary;
 }
 
-/* Empty lines between stacked data blocks */
-.ProseMirror p.is-empty:has(+ .node-tableNode),
-.ProseMirror .node-tableNode + p.is-empty {
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty:is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video)) {
   min-height: 1.5rem;
+}
+
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty:not(.has-focus):is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video))::before {
+  content: none;
 }
 
 .ProseMirror ul {

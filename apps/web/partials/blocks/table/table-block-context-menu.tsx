@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
+import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
@@ -38,6 +39,7 @@ type TableBlockContextMenuProps = {
 
 export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  useDataBlockInteraction(isMenuOpen);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { spaceId, entityId, relationId, onRemoveFromEditor } = useDataBlockInstance();
   const isEditing = useUserIsEditing(spaceId);

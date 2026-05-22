@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { ID } from '~/core/id';
 import { Property } from '~/core/types';
 import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
@@ -55,6 +56,7 @@ export function DataBlockSortMenu({
 }: DataBlockSortMenuProps) {
   const triggerRef = React.useRef<Element | null>(null);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  useDataBlockInteraction(isMenuOpen);
   const [pickDirectionForColumnId, setPickDirectionForColumnId] = React.useState<string | null>(null);
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
