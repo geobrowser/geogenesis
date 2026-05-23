@@ -1,26 +1,22 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { getCreateDaoSpaceCalldata, personalSpace } from '@geoprotocol/geo-sdk';
+import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
 import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
-import { type Hex, createPublicClient, encodeAbiParameters, encodeFunctionData, http } from 'viem';
+import { type Hex, createPublicClient, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import {
-  DAO_SPACE_FACTORY_ADDRESS,
-  DEFAULT_VOTING_SETTINGS,
-  DaoSpaceFactoryAbi,
-  EMPTY_SPACE_ID,
-} from '~/core/utils/contracts/dao-space-factory';
+import { DAO_SPACE_FACTORY_ADDRESS, EMPTY_SPACE_ID } from '~/core/utils/contracts/dao-space-factory';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
-import { buildPersonalTopicDeclaredCalldata, encodeInitialTopicId } from '~/core/utils/contracts/space-topic';
+import { buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -179,7 +175,6 @@ async function createDaoSpace({
   }
 
   const userSpaceIdHex = `0x${personalSpaceId}` as Hex;
-  const initialEditsContentUri = encodeAbiParameters([{ type: 'string' }], [cid]);
 
   const publicClient = createPublicClient({
     chain: GEOGENESIS,
@@ -206,18 +201,19 @@ async function createDaoSpace({
     throw new Error('DAOSpaceFactory is not properly initialized: daoSpaceBeacon is zero address');
   }
 
-  const calldata = encodeFunctionData({
-    abi: DaoSpaceFactoryAbi,
-    functionName: 'createDAOSpaceProxy',
-    args: [
-      DEFAULT_VOTING_SETTINGS,
-      [userSpaceIdHex],
-      [userSpaceIdHex],
-      initialEditsContentUri,
-      '0x' as Hex,
-      encodeInitialTopicId(resolvedTopicId),
-      '0x' as Hex,
-    ],
+  // TODO(GEO-2120/2105): when SDK 0.20.x ships and testnet redeploys with the 6-arg ABI,
+  // rename to the 7-field VotingSettingsInput (partialPercentageSupportThreshold, etc.).
+  const calldata = getCreateDaoSpaceCalldata({
+    votingSettings: {
+      slowPathPercentageThreshold: 51,
+      fastPathFlatThreshold: 0,
+      quorum: 1,
+      durationInDays: 2,
+    },
+    initialEditorSpaceIds: [userSpaceIdHex],
+    initialMemberSpaceIds: [userSpaceIdHex],
+    initialEditsContentUri: cid,
+    initialTopicId: resolvedTopicId,
   });
 
   const txHash = await runWriteEffect(

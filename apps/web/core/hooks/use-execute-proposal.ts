@@ -5,18 +5,12 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeProposalExecutedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
-import {
-  EMPTY_SIGNATURE,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseExecuteProposalArgs {
@@ -58,29 +52,15 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       throw new Error('You need a registered personal space to execute proposals');
     }
 
-    const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
-    const normalizedProposalId = proposalId.replace(/-/g, '').toLowerCase();
-
-    const fromSpaceId = `0x${personalSpaceId}` as Hex;
-    const toSpaceId = `0x${normalizedSpaceId}` as Hex;
-    const proposalIdHex = `0x${normalizedProposalId}` as Hex;
-
-    // Encode the execute data: (proposalId)
-    const data = encodeProposalExecutedData(proposalIdHex);
-
-    // The topic is the proposal ID padded to bytes32
-    const topic = padBytes16ToBytes32(normalizedProposalId);
-
-    const callData = encodeFunctionData({
-      functionName: 'enter',
-      abi: SpaceRegistryAbi,
-      args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_EXECUTED, topic, data, EMPTY_SIGNATURE],
+    const { calldata: callData } = geo.daoSpaces.proposals.execute({
+      authorSpaceId: personalSpaceId,
+      spaceId,
+      proposalId,
     });
 
-    // Log before transaction for debugging
     console.log('Executing proposal', {
-      fromSpaceId,
-      toSpaceId,
+      authorSpaceId: personalSpaceId,
+      spaceId,
       proposalId,
       action: 'PROPOSAL_EXECUTED',
     });
@@ -97,14 +77,18 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
 
     if (Either.isLeft(result)) {
       const error = result.left;
-      console.error(`Execute failed: ${error.message}`, { fromSpaceId, toSpaceId, proposalId }, error);
+      console.error(
+        `Execute failed: ${error.message}`,
+        { authorSpaceId: personalSpaceId, spaceId, proposalId },
+        error
+      );
       throw error;
     }
 
     console.log('Execute successful', {
       txHash: result.right,
-      fromSpaceId,
-      toSpaceId,
+      authorSpaceId: personalSpaceId,
+      spaceId,
       proposalId,
     });
 
