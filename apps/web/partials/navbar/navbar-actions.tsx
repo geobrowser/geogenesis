@@ -52,7 +52,7 @@ function useResetOnboarding() {
     setTopicId('');
     setAvatar('');
     setSpaceId('');
-    setStep('start');
+    setStep('welcome');
   };
 
   return resetOnboarding;

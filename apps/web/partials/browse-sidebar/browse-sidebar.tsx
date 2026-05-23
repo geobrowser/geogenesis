@@ -1,18 +1,19 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
+import { personalSpaceViewed } from '~/core/analytics';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { GEO_APPS_SIDEBAR_LINKS } from '~/core/browse/geo-apps-sidebar-src';
 import { DOCUMENTATION_SPACE_ENTITY_ID, DOCUMENTATION_SPACE_ID } from '~/core/constants';
-import { personalSpaceViewed } from '~/core/analytics';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';

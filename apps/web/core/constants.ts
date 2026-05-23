@@ -95,6 +95,13 @@ export const DOCUMENTATION_SPACE_ID = '784bfddae3f3976118c561bf28195b44';
 /** Default page when opening Documentation (matches production `/space/{space}/{entity}`). */
 export const DOCUMENTATION_SPACE_ENTITY_ID = '46162f0614d448b2b00d8c3bbd7e5194';
 
+/** Geo roles (property/type)  */
+export const GEO_ROLES_PROPERTY = 'b709ab3889d14023835136abf45f1cce';
+export const GEO_ROLE_TYPE = '9e66ed0e2fd1412b8cb1787a000038a3';
+export const DOMAIN_EXPERT_ROLE = '29378251ee2a4cf295b008d966dce8e8';
+export const DEVELOPER_ROLE = 'aa1541a64373421ab6b8a1d228c4a929';
+export const CURIOUS_EXPLORER_ROLE = 'faa686e4cea6450ca0ccf4e2e8a5d2a2';
+
 export const GEO_LOCATION = '9cf5c1b015dc451cbfd297db64806aff';
 export const FORMAT_PROPERTY = '396f8c72dfd04b5791ea09c1b9321b2f';
 

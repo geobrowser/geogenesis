@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+import { GeoSmartAccount, IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
@@ -172,4 +172,75 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
     proposeAddMember: mutate,
     status,
   };
+}
+
+export async function proposeAddMemberDirect({
+  spaceId,
+  targetMemberSpaceId,
+  personalSpaceId,
+  space,
+  tx,
+  votingMode = 'fast',
+}: {
+  spaceId: string;
+  targetMemberSpaceId: string;
+  personalSpaceId: string;
+  space: { address: string };
+  tx: ReturnType<typeof useSmartAccountTransaction>;
+  votingMode?: 'fast' | 'slow';
+}) {
+  if (!validateSpaceId(spaceId)) {
+    const message = 'Invalid space ID format. Please try again.';
+    console.error('step =>=>  Invalid target space ID:', spaceId);
+    throw new Error(message);
+  }
+
+  if (!space?.address) {
+    const message = 'Space information is still loading. Please try again.';
+    console.error('step =>=>  No space address found');
+    throw new Error(message);
+  }
+
+  if (!validateSpaceId(targetMemberSpaceId)) {
+    const message = 'Invalid member ID format. Please try again.';
+    console.error(' step =>=> Invalid target member space ID:', targetMemberSpaceId);
+    throw new Error(message);
+  }
+
+  const spaceAddress = space.address as Hex;
+  const votingModeValue = votingMode === 'slow' ? VOTING_MODE.SLOW : VOTING_MODE.FAST;
+
+  const writeTxEffect = Effect.gen(function* () {
+    const proposalId = `0x${IdUtils.generate()}` as const;
+    const fromSpaceId = `0x${personalSpaceId}` as const;
+    const toSpaceId = `0x${spaceId}` as const;
+    const memberSpaceId = `0x${targetMemberSpaceId}` as const;
+
+    const addMemberCallData = encodeFunctionData({
+      functionName: 'addMember',
+      abi: DAOSpaceAbi,
+      args: [memberSpaceId],
+    });
+
+    const data = encodeProposalCreatedData(proposalId, votingModeValue, [
+      { to: spaceAddress, value: 0n, data: addMemberCallData },
+    ]);
+
+    const callData = encodeFunctionData({
+      functionName: 'enter',
+      abi: SpaceRegistryAbi,
+      args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
+    });
+
+    return yield* tx(callData);
+  });
+
+  const result = await runEffectEither(writeTxEffect);
+  Either.match(result, {
+    onLeft: error => {
+      console.log('step =>=>  Membership proposal failed:', error);
+      throw error;
+    },
+    onRight: hash => console.log('step =>=>  Membership proposal submitted:', hash),
+  });
 }
