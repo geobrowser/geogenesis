@@ -1,20 +1,57 @@
 'use client';
 
+import { Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
+import { GEO_ROLES_PROPERTY } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
+import { proposeAddMemberDirect } from '~/core/hooks/use-propose-add-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { ID } from '~/core/id';
+import { getSpace } from '~/core/io/queries';
 import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
+import { storage } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
-import { avatarAtom, nameAtom, spaceIdAtom } from './dialog';
+import { avatarAtom, nameAtom, selectedRoleIdsAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
+
+/** Links the new personal space entity to each Geo role the user picked during onboarding. */
+function createGeoRoleRelation(spaceId: string, fromEntityId: string, roleEntityId: string) {
+  storage.relations.set({
+    id: ID.createEntityId(),
+    entityId: spaceId,
+    spaceId,
+    renderableType: 'RELATION',
+    verified: false,
+    position: Position.generate(),
+
+    type: {
+      id: GEO_ROLES_PROPERTY,
+      name: 'Geo roles',
+    },
+
+    fromEntity: {
+      id: fromEntityId,
+      name: null,
+    },
+
+    toEntity: {
+      id: roleEntityId,
+      name: null,
+      value: roleEntityId,
+    },
+  });
+}
 
 /**
  * Runs the background `createPersonalSpace` chain for an optimistically
@@ -40,6 +77,17 @@ export function PendingPersonalSpaceRunner() {
   const { store } = useSyncEngine();
   const queryClient = useQueryClient();
   const reportError = useReportError();
+
+  const tx = useSmartAccountTransaction({ address: SPACE_REGISTRY_ADDRESS });
+
+  // The onboarding role/interest picks are applied once creation resolves. Read
+  // them through a ref so they don't re-trigger the creation effect.
+  const selectedRoleIds = useAtomValue(selectedRoleIdsAtom);
+  const selectedTopicIds = useAtomValue(selectedTopicIdsAtom);
+  const setSelectedRoleIds = useSetAtom(selectedRoleIdsAtom);
+  const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const onboardingPicksRef = React.useRef({ roleIds: selectedRoleIds, topicIds: selectedTopicIds });
+  onboardingPicksRef.current = { roleIds: selectedRoleIds, topicIds: selectedTopicIds };
 
   // Dedupe: never run two creation chains for the same topic at once (the
   // effect re-fires on every `pending`/atom change).
@@ -89,6 +137,45 @@ export function PendingPersonalSpaceRunner() {
 
         // Refresh the profile chip in the background — resolution shouldn't block on it.
         void queryClient.invalidateQueries({ queryKey: ['profile', address] });
+
+        // The onboarding role/interest picks need a real spaceId to attach to, so
+        // they're applied here rather than in the dialog. Failures are logged and
+        // swallowed: the account is already usable, and neither is worth blocking on.
+        const { roleIds, topicIds } = onboardingPicksRef.current;
+
+        if (roleIds.length > 0 || topicIds.length > 0) {
+          try {
+            const space = await Effect.runPromise(getSpace(spaceId));
+
+            if (space && roleIds.length > 0) {
+              for (const roleId of roleIds) {
+                createGeoRoleRelation(spaceId, space.entity.id, roleId);
+              }
+            }
+
+            for (const targetSpaceId of topicIds) {
+              try {
+                const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
+                if (!targetSpace?.address) continue;
+
+                await proposeAddMemberDirect({
+                  spaceId: targetSpaceId,
+                  targetMemberSpaceId: spaceId,
+                  personalSpaceId: spaceId,
+                  space: targetSpace,
+                  tx,
+                });
+              } catch (error) {
+                console.error('[PendingPersonalSpace] membership proposal failed for', targetSpaceId, error);
+              }
+            }
+          } catch (error) {
+            console.error('[PendingPersonalSpace] applying onboarding selections failed', error);
+          } finally {
+            setSelectedRoleIds([]);
+            setSelectedTopicIds([]);
+          }
+        }
       } catch (error) {
         console.error('[PendingPersonalSpace] creation failed', error);
         if (cancelled) return;
@@ -116,6 +203,9 @@ export function PendingPersonalSpaceRunner() {
     reportError,
     setPending,
     setResolvedSpaceId,
+    tx,
+    setSelectedRoleIds,
+    setSelectedTopicIds,
   ]);
 
   return null;

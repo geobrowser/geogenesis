@@ -49,7 +49,7 @@ export function GeoConnectButton() {
     setTopicId('');
     setAvatar('');
     setSpaceId('');
-    setStep('start');
+    setStep('welcome');
   };
 
   // Reset is done on the explicit sign-in click below. Doing it here too
