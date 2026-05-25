@@ -715,11 +715,31 @@ function getInitialState(source: Source): PromptState {
   };
 }
 
+function getEffectiveColumnDraft(state: PromptState, columnId: string): FilterColumnDraft {
+  const normalized = normalizePromptState(state);
+  if (columnId === normalized.selectedColumn) {
+    return snapshotColumnDraft(normalized);
+  }
+  return (
+    normalized.columnDrafts[columnId] ??
+    normalized.sessionBaseline[columnId] ??
+    emptyColumnDraft()
+  );
+}
+
+/** Merged drafts for all columns touched in this popover session (includes session baseline for untouched columns). */
 function mergeAllColumnDrafts(state: PromptState): Record<string, FilterColumnDraft> {
-  return {
-    ...state.columnDrafts,
-    [state.selectedColumn]: snapshotColumnDraft(state),
-  };
+  const normalized = normalizePromptState(state);
+  const columnIds = new Set<string>([
+    ...Object.keys(normalized.columnDrafts),
+    ...Object.keys(normalized.sessionBaseline),
+    normalized.selectedColumn,
+  ]);
+  const merged: Record<string, FilterColumnDraft> = {};
+  for (const columnId of columnIds) {
+    merged[columnId] = getEffectiveColumnDraft(normalized, columnId);
+  }
+  return merged;
 }
 
 function draftHasPending(
@@ -1166,8 +1186,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
 
     const onEntitiesDone = () => {
       const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
-      if (touchedColumnIds.length === 0) return;
-      onCreate(filters, touchedColumnIds);
+      if (touchedColumnIds.length > 0) {
+        onCreate(filters, touchedColumnIds);
+      }
       dispatch({ type: 'done' });
     };
 
@@ -1242,9 +1263,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       showPopoverHeaderActions &&
       (hasPendingFilterSelections(state, options) ||
         (!isChipAnchoredPopover && hasCommittedTableFilters));
-    const showPopoverDone =
-      showPopoverHeaderActions &&
-      (popoverHasSessionChanges || hasPendingFilterSelections(state, options));
+    const showPopoverDone = showPopoverHeaderActions && popoverHasSessionChanges;
 
     const onOpenChange = (open: boolean) => {
       if (open && !isEditing) return;
@@ -1316,7 +1335,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
                       {showPopoverDone ? (
                         <button
                           type="button"
-                          className="text-smallButton text-grey-04 transition-colors hover:text-text"
+                          className="text-smallButton font-medium text-ctaPrimary transition-colors hover:text-ctaHover"
                           onClick={onEntitiesDone}
                         >
                           Done
@@ -1349,8 +1368,10 @@ interface DynamicFiltersProps {
   onValueDropdownOpenChange: (open: boolean) => void;
 }
 
-const filterFooterActionButtonClass =
+const filterFooterClearAllButtonClass =
   'text-smallButton text-grey-04 transition-colors hover:text-text';
+const filterFooterDoneButtonClass =
+  'text-smallButton font-medium text-ctaPrimary transition-colors hover:text-ctaHover';
 
 function FilterValueDropdownFooter({
   edge,
@@ -1377,7 +1398,7 @@ function FilterValueDropdownFooter({
       {showClearAll ? (
         <button
           type="button"
-          className={filterFooterActionButtonClass}
+          className={filterFooterClearAllButtonClass}
           onPointerDown={e => e.preventDefault()}
           onClick={onClearAll}
         >
@@ -1389,7 +1410,7 @@ function FilterValueDropdownFooter({
       {showDone ? (
         <button
           type="button"
-          className={filterFooterActionButtonClass}
+          className={filterFooterDoneButtonClass}
           onPointerDown={e => e.preventDefault()}
           onClick={onDone}
         >
