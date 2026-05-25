@@ -1,13 +1,12 @@
 export type OnboardingStep =
-  | 'welcome'
+  | 'start'
   | 'existing-entity-match'
   | 'describe-you'
   | 'interested-in'
   | 'completed'
   | 'done'
   // Legacy values that may still be persisted in localStorage from an older
-  // version of the flow. They are normalized to 'welcome' (see effectiveStep).
-  | 'start'
+  // version of the flow. They are normalized to 'start' (see effectiveStep).
   | 'enter-profile'
   | 'create-space';
 

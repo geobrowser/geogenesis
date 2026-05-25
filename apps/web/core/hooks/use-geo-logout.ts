@@ -69,7 +69,7 @@ export function useGeoLogoutCleanup() {
         setTopicId('');
         setAvatar('');
         setSpaceId('');
-        setStep('welcome');
+        setStep('start');
         setDismissedHints([]);
         setPending(null);
         setSelectedRoleIds([]);
