@@ -66,7 +66,7 @@ export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
 type Step =
-  | 'welcome'
+  | 'start'
   | 'existing-entity-match'
   | 'describe-you'
   | 'interested-in'
@@ -75,7 +75,7 @@ type Step =
   | 'done';
 
 const stepOrder: Partial<Record<Step, number>> = {
-  welcome: 1,
+  start: 1,
   'describe-you': 2,
   'interested-in': 3,
 };
@@ -85,7 +85,7 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   Step
 >;
 
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'welcome');
+export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
@@ -149,7 +149,7 @@ export const OnboardingDialog = () => {
     // atomWithStorage sync, clobber the original tab's progress.
     if (!isOnboardingVisible) return;
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
-      setStep('welcome');
+      setStep('start');
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
@@ -336,7 +336,7 @@ export const OnboardingDialog = () => {
   // 'existing-entity-match' the candidates array would be empty — render
   // StepOnboarding during that window so we don't flash an empty match
   // step for a frame before the reset effect kicks in.
-  const effectiveStep = step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'welcome' : step;
+  const effectiveStep = step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'start' : step;
 
   return (
     <Root open={isOnboardingVisible}>
@@ -345,7 +345,7 @@ export const OnboardingDialog = () => {
         <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center p-6">
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
             <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
-            {effectiveStep === 'welcome' && <StepWelcome onProfileContinue={onProfileContinue} />}
+            {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
                 candidates={entityMatchCandidates}
@@ -408,7 +408,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
   );
 };
 
-const STEPS_WITH_HEADER = ['welcome', 'describe-you', 'interested-in', 'existing-entity-match'] as const;
+const STEPS_WITH_HEADER = ['start', 'describe-you', 'interested-in', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
 type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
@@ -455,10 +455,10 @@ const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void
   const handleBack = () => {
     if (step === 'existing-entity-match') {
       onClearEntityMatches();
-      setStep('welcome');
+      setStep('start');
       return;
     }
-    setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'welcome');
+    setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'start');
   };
 
   return (
