@@ -57,7 +57,10 @@ export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
 /**
- * Role/topic picks from the 'describe-you' and 'interested-in' steps.
+ * Role/topic picks from the 'describe-you' and 'interested-in' steps. Onboarding
+ * no longer blocks on space creation, so these are persisted for the background
+ * PendingPersonalSpaceRunner, which applies them (Geo roles relations, membership
+ * proposals) once a real spaceId exists, then clears them.
  */
 export const selectedRoleIdsAtom = atomWithStorage<string[]>('onboardingSelectedRoles', []);
 export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
@@ -65,7 +68,7 @@ export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelecte
 type Step = OnboardingStep;
 
 const stepOrder: Partial<Record<Step, number>> = {
-  welcome: 1,
+  start: 1,
   'describe-you': 2,
   'interested-in': 3,
 };
@@ -75,9 +78,9 @@ const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, ord
   Step
 >;
 
-// 'start', 'enter-profile' and 'create-space' linger in the type only to
-// normalize values persisted by an older version of the flow — see effectiveStep.
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'welcome');
+// 'enter-profile' and 'create-space' linger in the type only to normalize
+// values persisted by an older version of the flow — see effectiveStep.
+export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
@@ -139,7 +142,7 @@ export const OnboardingDialog = () => {
     // atomWithStorage sync, clobber the original tab's progress.
     if (!isOnboardingVisible) return;
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
-      setStep('welcome');
+      setStep('start');
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
@@ -235,11 +238,10 @@ export const OnboardingDialog = () => {
   // StepWelcome during that window so we don't flash an empty match
   // step for a frame before the reset effect kicks in.
   const effectiveStep: Step =
-    step === 'start' ||
     step === 'enter-profile' ||
     step === 'create-space' ||
     (step === 'existing-entity-match' && entityMatchCandidates.length === 0)
-      ? 'welcome'
+      ? 'start'
       : step;
 
   return (
@@ -260,7 +262,7 @@ export const OnboardingDialog = () => {
           <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card" effectiveStep={effectiveStep}>
             <StepHeader step={effectiveStep} onClearEntityMatches={() => setEntityMatchCandidates([])} />
-            {effectiveStep === 'welcome' && <StepWelcome onProfileContinue={onProfileContinue} />}
+            {effectiveStep === 'start' && <StepWelcome onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
                 candidates={entityMatchCandidates}
@@ -319,7 +321,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
   );
 };
 
-const STEPS_WITH_HEADER = ['welcome', 'describe-you', 'interested-in', 'existing-entity-match'] as const;
+const STEPS_WITH_HEADER = ['start', 'describe-you', 'interested-in', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
 type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
@@ -370,10 +372,10 @@ const StepHeader = ({ step, onClearEntityMatches }: { step: Step; onClearEntityM
   const handleBack = () => {
     if (step === 'existing-entity-match') {
       onClearEntityMatches();
-      setStep('welcome');
+      setStep('start');
       return;
     }
-    setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'welcome');
+    setStep(stepByOrder[(stepOrder[step] ?? 0) - 1] ?? 'start');
   };
 
   return (
