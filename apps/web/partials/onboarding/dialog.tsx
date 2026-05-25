@@ -414,7 +414,7 @@ type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
 
 const DOT_CONFIGS: Record<StepWithHeader, [DotConfig, DotConfig, DotConfig, DotConfig?]> = {
-  welcome: [
+  start: [
     { width: 'w-8', active: true },
     { width: 'w-4', active: false },
     { width: 'w-4', active: false },
