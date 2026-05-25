@@ -14,10 +14,6 @@ import {
   VOTING_MODE,
 } from './space-registry';
 
-export function encodeInitialTopicId(topicId: string): Hex {
-  return `0x${uuidToHex(topicId)}` as Hex;
-}
-
 export function buildPersonalTopicDeclaredCalldata({
   authorSpaceId,
   spaceId,
