@@ -12,6 +12,7 @@ import { produce } from 'immer';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { Source } from '~/core/blocks/data/source';
+import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -816,12 +817,10 @@ const ConfiguredTableBlock = ({
   );
 
   const orderedFilterColumnIds = React.useMemo(() => {
-    const relationPropertyId = (r: Relation) => {
-      const v = r.toEntity.value;
-      if (v && String(v).length > 0) return String(v);
-      return r.toEntity.id;
-    };
-    return [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(relationPropertyId)];
+    return [
+      SystemIds.NAME_PROPERTY,
+      ...orderedShownColumnRelations.map(columnPropertyIdFromRelation),
+    ];
   }, [orderedShownColumnRelations]);
 
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */

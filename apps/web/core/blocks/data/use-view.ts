@@ -18,6 +18,14 @@ import { getImagePath } from '~/core/utils/utils';
 
 import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
+import {
+  columnPropertyIdFromRelation,
+  dedupeRelationsByColumnProperty,
+  isShownColumnRelation,
+  relationsMatchingColumnProperty,
+} from './shown-column-relations';
+
+export { columnPropertyIdFromRelation } from './shown-column-relations';
 
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 type Column = {
@@ -58,9 +66,9 @@ export function useView() {
     [blockRelationRelations]
   );
 
-  const shownColumnRelations = blockRelationRelations.filter(
-    // We fall back to an old property used to render shown columns.
-    r => r.type.id === SystemIds.SHOWN_COLUMNS || r.type.id === SystemIds.PROPERTIES
+  const shownColumnRelations = React.useMemo(
+    () => dedupeRelationsByColumnProperty(blockRelationRelations.filter(isShownColumnRelation)),
+    [blockRelationRelations]
   );
 
   const orderedShownColumnRelations = React.useMemo(
@@ -68,12 +76,28 @@ export function useView() {
     [shownColumnRelations]
   );
 
-  const { mapping, isLoading, isFetched } = useMapping(
+  const { mapping: rawMapping, isLoading } = useMapping(
     entityId,
     orderedShownColumnRelations.map(r => r.id)
   );
 
-  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(r => r.toEntity.id)];
+  const allowedMappingPropertyIds = React.useMemo(
+    () => new Set([SystemIds.NAME_PROPERTY, ...shownColumnRelations.map(columnPropertyIdFromRelation)]),
+    [shownColumnRelations]
+  );
+
+  const mapping = React.useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(rawMapping).filter(([propertyId]) => allowedMappingPropertyIds.has(propertyId))
+      ),
+    [rawMapping, allowedMappingPropertyIds]
+  );
+
+  const shownColumnIds = [
+    SystemIds.NAME_PROPERTY,
+    ...orderedShownColumnRelations.map(columnPropertyIdFromRelation),
+  ];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -137,9 +161,19 @@ export function useView() {
     [blockRelationRelations, blocksRelationEntityId, spaceId, storage, view]
   );
 
+  const purgeColumnConfigRelations = (propertyId: string) => {
+    for (const rel of relationsMatchingColumnProperty(blockRelationRelations, propertyId)) {
+      storage.relations.delete(rel);
+    }
+  };
+
   const toggleProperty = (newColumn: Column, selector?: string) => {
-    const isShown = shownColumnRelations.map(relation => relation.toEntity.id).includes(EntityId(newColumn.id));
-    const shownColumnRelation = shownColumnRelations.find(relation => relation.toEntity.id === newColumn.id);
+    const propertyId = EntityId(newColumn.id);
+    const matchingShownRelations = relationsMatchingColumnProperty(blockRelationRelations, propertyId).filter(
+      r => !r.isDeleted
+    );
+    const isShown = matchingShownRelations.length > 0;
+    const shownColumnRelation = matchingShownRelations[0];
 
     const newId = selector ? ID.createEntityId() : undefined;
     const newRelationEntityId = IdUtils.generate();
@@ -197,6 +231,7 @@ export function useView() {
           value: selector,
         });
 
+        purgeColumnConfigRelations(propertyId);
         storage.relations.set({
           id: newId,
           entityId: newRelationEntityId,
@@ -208,7 +243,7 @@ export function useView() {
             name: 'Properties',
           },
           fromEntity: {
-            id: relationId,
+            id: blocksRelationEntityId,
             name: blockRelationName,
           },
           toEntity: {
@@ -219,14 +254,13 @@ export function useView() {
         });
       }
 
-      if (shownColumnRelation) {
-        storage.relations.delete(shownColumnRelation);
-      }
+      purgeColumnConfigRelations(propertyId);
 
       return;
     }
 
     if (!isShown) {
+      purgeColumnConfigRelations(propertyId);
       storage.relations.set({
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
@@ -248,17 +282,15 @@ export function useView() {
         },
       });
     } else {
-      if (shownColumnRelation) {
-        storage.relations.delete(shownColumnRelation);
-      }
+      purgeColumnConfigRelations(propertyId);
     }
   };
 
   const hideAllShownPropertyColumns = React.useCallback(() => {
-    for (const rel of [...shownColumnRelations]) {
+    for (const rel of blockRelationRelations.filter(isShownColumnRelation)) {
       storage.relations.delete(rel);
     }
-  }, [shownColumnRelations, storage]);
+  }, [blockRelationRelations, storage]);
 
   const reorderShownPropertyRelations = React.useCallback(
     (fromIndex: number, toIndex: number) => {

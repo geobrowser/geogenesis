@@ -16,12 +16,22 @@ import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
 import { getSpaceRank } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
+import { mergeRelations } from './orm';
 import { GeoEventStream } from './stream';
+import { merge } from '../utils/value/values';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
+function relationTargetKey(r: Relation): string {
+  if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
+    return columnPropertyIdFromRelation(r);
+  }
+  return r.toEntity.id;
+}
+
 function relationKey(r: Relation): string {
-  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+  return `${r.fromEntity.id}:${r.type.id}:${relationTargetKey(r)}:${r.spaceId ?? ''}`;
 }
 
 /**
@@ -312,15 +322,33 @@ export class GeoStore {
   }
 
   public hydrateWith(entities: Entity[]) {
-    for (const entity of entities) {
-      syncedEntities.set(entity.id, {
-        ...entity,
-        values: entity.values.filter(v => !v.isLocal),
-        relations: entity.relations.filter(r => !r.isLocal),
+    const mergedForReactive: Entity[] = [];
+
+    for (const remote of entities) {
+      const local = this.getEntity(remote.id, { includeDeleted: true });
+
+      syncedEntities.set(remote.id, {
+        ...remote,
+        values: remote.values.filter(v => !v.isLocal),
+        relations: remote.relations.filter(r => !r.isLocal),
+      });
+
+      if (!local) {
+        mergedForReactive.push(remote);
+        continue;
+      }
+
+      const mergedValues = merge(local.values, remote.values);
+      const mergedRelations = mergeRelations(local.relations, remote.relations);
+
+      mergedForReactive.push({
+        ...remote,
+        values: mergedValues,
+        relations: mergedRelations,
       });
     }
 
-    this.hydrateReactiveState(entities);
+    this.hydrateReactiveState(mergedForReactive);
   }
 
   private restoreSyncedBaselines(entityIds: Set<string>) {
@@ -339,7 +367,6 @@ export class GeoStore {
     if (newValues.length === 0 && newRelations.length === 0) return;
 
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
-    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     if (newValues.length > 0) {
       reactiveValues.set(prev => {
@@ -363,6 +390,7 @@ export class GeoStore {
             const local = prevById.get(r.id);
             return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
           });
+        const relationIdsToWrite = new Set(mergedIncoming.map(t => t.id));
         const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
         return [...unchangedRelations, ...mergedIncoming];
       });

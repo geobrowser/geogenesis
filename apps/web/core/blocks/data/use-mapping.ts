@@ -1,5 +1,5 @@
 import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Cell, Entity, Relation, Row } from '~/core/types';
@@ -57,7 +57,6 @@ export function useMapping(
     isLoading,
     isFetched,
   } = useQuery({
-    placeholderData: keepPreviousData,
     enabled: shownPropertyRelationEntityIds.length > 0,
     initialData,
     queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
