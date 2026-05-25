@@ -500,16 +500,21 @@
 }
 
 body[data-entity-side-panel-open] {
-  --elevated-popover-z: 10002;
+  --elevated-popover-z: 10003;
 }
 
 body[data-entity-side-panel-open] .elevated-popover {
-  z-index: 10002;
+  z-index: 10003;
   position: relative;
 }
 
 body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
-  z-index: 10002 !important;
+  z-index: 10003 !important;
+}
+
+[data-entity-side-panel] [data-radix-popper-content-wrapper] {
+  z-index: 60 !important;
+  pointer-events: auto !important;
 }
 
 /* https://github.com/radix-ui/primitives/issues/2908 */

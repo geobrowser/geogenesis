@@ -409,7 +409,7 @@ function useInterceptEditorLinks(spaceId: string) {
         return;
       }
 
-      if (target.closest('[data-entity-side-panel-opener]')) {
+      if (target.closest('[data-entity-side-panel-opener], [data-entity-side-panel]')) {
         return;
       }
 

@@ -5,7 +5,7 @@ import * as React from 'react';
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
 
-import { reactiveRelations, reactiveValues } from '../sync/store';
+import { reactiveRelations, reactiveValues, stableStringify } from '../sync/store';
 import type { Relation, Value } from '../types';
 import { Diff, type EntityDiff } from '../utils/diff';
 
@@ -17,27 +17,35 @@ type UseLocalChangesOptions = {
 const EMPTY_VALUES: Value[] = [];
 const EMPTY_RELATIONS: Relation[] = [];
 
-const localChangesStoreTick = createAtom(
-  () => {
-    reactiveValues.get();
-    reactiveRelations.get();
-    return 0;
-  },
-  { compare: () => false }
-);
+const localChangesStoreTick = createAtom(() => getLocalUnpublishedChangesFingerprint());
 
 export function getLocalUnpublishedChangesFingerprint(): string {
-  const valueIds = reactiveValues
+  // Intentionally omit `timestamp`: closing the review side panel persists the editor,
+  // which re-writes unchanged values and only bumps timestamps via setValue.
+  const values = reactiveValues
     .get()
     .filter(v => v.isLocal === true && v.hasBeenPublished === false)
-    .map(v => v.id)
-    .sort();
-  const relationIds = reactiveRelations
+    .map(v => ({
+      id: v.id,
+      value: v.value,
+      isDeleted: v.isDeleted,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const relations = reactiveRelations
     .get()
     .filter(r => r.isLocal === true && r.hasBeenPublished === false)
-    .map(r => r.id)
-    .sort();
-  return `${valueIds.join(',')}|${relationIds.join(',')}`;
+    .map(r => ({
+      id: r.id,
+      isDeleted: r.isDeleted,
+      position: r.position,
+      fromEntityId: r.fromEntity.id,
+      toEntityId: r.toEntity.id,
+      typeId: r.type.id,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return stableStringify({ values, relations });
 }
 
 export const useLocalChanges = (

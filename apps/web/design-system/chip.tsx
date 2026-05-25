@@ -14,7 +14,6 @@ import { cva } from 'class-variance-authority';
 import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
-import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/substream-schema';
 import { NavUtils } from '~/core/utils/utils';
@@ -194,10 +193,10 @@ export function LinkableRelationChip({
   truncateLabel = false,
   children,
 }: LinkableRelationChipProps) {
-  const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
   const jotaiStore = useStore();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
-  const { openSidePanel } = useEntitySidePanel();
+  const { sidePanelTarget, openSidePanel } = useEntitySidePanel();
+  const isSidePanelOpen = sidePanelTarget != null;
 
   const [isDotsHovered, setIsDotsHovered] = useState<boolean>(false);
   const [isSpaceHovered, setIsSpaceHovered] = useState<boolean>(false);
@@ -219,34 +218,36 @@ export function LinkableRelationChip({
 
   const openInSidePanel = React.useCallback(
     (targetEntityId: string, targetSpaceIdForNav: string) => {
-      if (!sidePanelCtx) return;
+      if (!sidePanelTarget) return;
       jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
-      if (sidePanelCtx.openedFromReviewEdits) {
+      if (sidePanelTarget.openedFromReviewEdits) {
         bumpEditorContentVersion(v => v + 1);
       }
-      openSidePanel(targetEntityId, targetSpaceIdForNav, sidePanelCtx.openedWithMainViewEditing, {
-        openedFromReviewEdits: sidePanelCtx.openedFromReviewEdits,
+      openSidePanel(targetEntityId, targetSpaceIdForNav, sidePanelTarget.openedWithMainViewEditing, {
+        openedFromReviewEdits: sidePanelTarget.openedFromReviewEdits,
       });
     },
-    [bumpEditorContentVersion, jotaiStore, openSidePanel, sidePanelCtx]
+    [bumpEditorContentVersion, jotaiStore, openSidePanel, sidePanelTarget]
   );
 
   const handleEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
-      if (!sidePanelCtx) return;
+      if (!isSidePanelOpen) return;
       event.preventDefault();
+      event.stopPropagation();
       openInSidePanel(entityId, targetSpaceId);
     },
-    [entityId, openInSidePanel, sidePanelCtx, targetSpaceId]
+    [entityId, isSidePanelOpen, openInSidePanel, targetSpaceId]
   );
 
   const handleRelationEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
-      if (!sidePanelCtx || !relationEntityId) return;
+      if (!isSidePanelOpen || !relationEntityId) return;
       event.preventDefault();
+      event.stopPropagation();
       openInSidePanel(relationEntityId, currentSpaceId);
     },
-    [currentSpaceId, openInSidePanel, relationEntityId, sidePanelCtx]
+    [currentSpaceId, isSidePanelOpen, openInSidePanel, relationEntityId]
   );
 
   return (
@@ -274,6 +275,7 @@ export function LinkableRelationChip({
           href={NavUtils.toEntity(targetSpaceId, entityId)}
           className={truncateLabel ? 'min-h-0 min-w-0 flex-1 overflow-hidden pr-0' : undefined}
           onClick={handleEntityLinkClick}
+          {...(isSidePanelOpen ? { 'data-entity-side-panel-opener': '' } : {})}
         >
           {labelInner}
         </Link>
@@ -364,6 +366,7 @@ export function LinkableRelationChip({
                 spaceId={currentSpaceId}
                 href={NavUtils.toEntity(currentSpaceId, relationEntityId)}
                 onClick={handleRelationEntityLinkClick}
+                {...(isSidePanelOpen ? { 'data-entity-side-panel-opener': '' } : {})}
                 onMouseEnter={() => setIsRelationHovered(true)}
                 onMouseLeave={() => setIsRelationHovered(false)}
                 className={relationChipRelationIconStyles({ isRelationHovered, isDeleteHovered })}

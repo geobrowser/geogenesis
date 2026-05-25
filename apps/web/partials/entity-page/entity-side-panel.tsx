@@ -23,6 +23,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntitySidePanelEditModeProvider, EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
+import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
 import type { Entity, TabEntity } from '~/core/types';
@@ -496,7 +497,7 @@ export function EntitySidePanel() {
       reviewEditsSnapshotRef.current = null;
       return;
     }
-    if (sidePanelTarget.openedFromReviewEdits && reviewEditsSnapshotRef.current === null) {
+    if (sidePanelTarget.openedFromReviewEdits) {
       reviewEditsSnapshotRef.current = getLocalUnpublishedChangesFingerprint();
     }
   }, [sidePanelTarget]);
@@ -505,10 +506,13 @@ export function EntitySidePanel() {
     const openedFromReviewEdits = sidePanelTarget?.openedFromReviewEdits;
 
     if (openedFromReviewEdits) {
-      jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
       const snapshot = reviewEditsSnapshotRef.current;
-      const current = getLocalUnpublishedChangesFingerprint();
-      if (snapshot !== null && current !== snapshot) {
+      const beforePersist = getLocalUnpublishedChangesFingerprint();
+      jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
+      const afterPersist = getLocalUnpublishedChangesFingerprint();
+      const hasSemanticChanges =
+        snapshot !== null && (beforePersist !== snapshot || afterPersist !== snapshot);
+      if (hasSemanticChanges) {
         bumpReviewVersion();
       }
       reviewEditsSnapshotRef.current = null;
@@ -564,14 +568,19 @@ export function EntitySidePanel() {
           className="absolute inset-0 bg-grey-03/40"
           onClick={handleCloseSidePanel}
         />
-        <aside className="absolute inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl">
-          <EntitySidePanelSurface
-            entityId={entityId}
-            requestedSpaceId={spaceId}
-            openedWithMainViewEditing={openedWithMainViewEditing}
-            openedFromReviewEdits={openedFromReviewEdits}
-            onClose={handleCloseSidePanel}
-          />
+        <aside
+          data-entity-side-panel
+          className="absolute inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl"
+        >
+          <EntitySidePanelPopoverPortalProvider>
+            <EntitySidePanelSurface
+              entityId={entityId}
+              requestedSpaceId={spaceId}
+              openedWithMainViewEditing={openedWithMainViewEditing}
+              openedFromReviewEdits={openedFromReviewEdits}
+              onClose={handleCloseSidePanel}
+            />
+          </EntitySidePanelPopoverPortalProvider>
         </aside>
       </div>
     </RemoveScroll>,
