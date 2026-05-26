@@ -7,12 +7,16 @@ import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
 
-const SLIDE_UP_SETTLE_MS = 600;
-
-export function useProposalNameTip({ enabled }: { enabled: boolean }) {
+export function useProposalNameTip({
+  enabled,
+  slideUpEnterSettled,
+}: {
+  enabled: boolean;
+  slideUpEnterSettled: boolean;
+}) {
   return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.proposalName, {
     gate: enabled,
-    settleMs: SLIDE_UP_SETTLE_MS,
+    enterSettled: slideUpEnterSettled,
   });
 }
 
@@ -20,9 +24,15 @@ type ProposalNameTipProps = {
   open: boolean;
   dismiss: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  slideUpEnterSettled: boolean;
 };
 
-export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipProps) {
+export function ProposalNameTip({
+  open,
+  dismiss,
+  anchorRef,
+  slideUpEnterSettled,
+}: ProposalNameTipProps) {
   return (
     <SpotlightTip
       open={open}
@@ -32,7 +42,7 @@ export function ProposalNameTip({ open, dismiss, anchorRef }: ProposalNameTipPro
       width={180}
       tipId="proposal-name-tip"
       zLayer="review"
-      settleMs={SLIDE_UP_SETTLE_MS}
+      layoutSettled={slideUpEnterSettled}
     >
       Describe your edits before publishing
     </SpotlightTip>

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type AnimationDefinition } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -12,9 +12,16 @@ type SlideUpProps = {
   setIsOpen: (value: boolean) => void | React.Dispatch<React.SetStateAction<boolean>>;
   children: React.ReactNode;
   deferEscapeClose?: boolean;
+  onEnterAnimationComplete?: (definition: AnimationDefinition) => void;
 };
 
-export const SlideUp = ({ isOpen, setIsOpen, children, deferEscapeClose = false }: SlideUpProps) => {
+export const SlideUp = ({
+  isOpen,
+  setIsOpen,
+  children,
+  deferEscapeClose = false,
+  onEnterAnimationComplete,
+}: SlideUpProps) => {
   React.useEffect(() => {
     if (!isOpen) return;
 
@@ -46,6 +53,7 @@ export const SlideUp = ({ isOpen, setIsOpen, children, deferEscapeClose = false 
             animate="visible"
             exit="hidden"
             transition={transition}
+            onAnimationComplete={onEnterAnimationComplete}
             className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
           >
             <RemoveScroll className="h-full w-full">

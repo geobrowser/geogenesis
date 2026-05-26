@@ -10,10 +10,13 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 
 type UseDismissibleHintOptions = {
   gate: boolean;
-  settleMs?: number;
+  enterSettled?: boolean;
 };
 
-export function useDismissibleHint(hintId: string, { gate, settleMs = 0 }: UseDismissibleHintOptions) {
+export function useDismissibleHint(
+  hintId: string,
+  { gate, enterSettled = true }: UseDismissibleHintOptions
+) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
   const [dismissedHints, setDismissedHints] = useAtom(dismissedProductOnboardingHintsAtom);
@@ -21,24 +24,20 @@ export function useDismissibleHint(hintId: string, { gate, settleMs = 0 }: UseDi
   const [open, setOpen] = React.useState(false);
 
   const shouldOffer = hydrated && gate && !dismissed && !isOnboardingVisible;
+  const readyToShow = shouldOffer && enterSettled;
 
   React.useEffect(() => {
-    if (!shouldOffer) {
+    if (!readyToShow) {
       setOpen(false);
       return;
     }
-    if (settleMs === 0) {
-      setOpen(true);
-      return;
-    }
-    const timeoutId = window.setTimeout(() => setOpen(true), settleMs);
-    return () => window.clearTimeout(timeoutId);
-  }, [shouldOffer, settleMs]);
+    setOpen(true);
+  }, [readyToShow]);
 
   const dismiss = React.useCallback(() => {
     setDismissedHints(prev => (prev.includes(hintId) ? prev : [...prev, hintId]));
     setOpen(false);
   }, [hintId, setDismissedHints]);
 
-  return { open: shouldOffer && open, dismiss, isActive: shouldOffer };
+  return { open: readyToShow && open, dismiss, isActive: shouldOffer };
 }

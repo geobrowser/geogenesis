@@ -13,6 +13,7 @@ import { useSetAtom, useStore } from 'jotai';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -407,8 +408,12 @@ export const ReviewChanges = () => {
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
+  const { settled: slideUpEnterSettled, onEnterAnimationComplete: onSlideUpEnterAnimationComplete } =
+    useEnterAnimationSettled(isReviewOpen);
+
   const { open: proposalNameTipOpen, dismiss: dismissProposalNameTip } = useProposalNameTip({
     enabled: isReviewOpen && hasRemainingSpaces && statusBarState.reviewState === 'idle',
+    slideUpEnterSettled,
   });
   const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
 
@@ -715,7 +720,12 @@ export const ReviewChanges = () => {
 
   return (
     <>
-    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen} deferEscapeClose={proposalNameTipOpen}>
+    <SlideUp
+      isOpen={isReviewOpen}
+      setIsOpen={setIsReviewOpen}
+      deferEscapeClose={proposalNameTipOpen}
+      onEnterAnimationComplete={onSlideUpEnterAnimationComplete}
+    >
       <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
         <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
           <div className="flex items-center gap-4">
@@ -889,6 +899,7 @@ export const ReviewChanges = () => {
       open={proposalNameTipOpen}
       dismiss={dismissProposalNameTip}
       anchorRef={proposalNameSectionRef}
+      slideUpEnterSettled={slideUpEnterSettled}
     />
     </>
   );

@@ -8,17 +8,19 @@ import { useDiff } from '~/core/state/diff-store';
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
 
-// Wait for the flow bar's entry slide-up (~150ms spring) to settle before
-// showing the tip + cutout, so neither appears mid-animation.
-const FLOWBAR_ENTRY_DELAY_MS = 250;
-
-export function useReviewEditsTip({ flowBarVisible }: { flowBarVisible: boolean }) {
+export function useReviewEditsTip({
+  flowBarVisible,
+  flowBarEnterSettled,
+}: {
+  flowBarVisible: boolean;
+  flowBarEnterSettled: boolean;
+}) {
   const { isReviewOpen } = useDiff();
   const gate = flowBarVisible && !isReviewOpen;
 
   return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.reviewEdits, {
     gate,
-    settleMs: FLOWBAR_ENTRY_DELAY_MS,
+    enterSettled: flowBarEnterSettled,
   });
 }
 

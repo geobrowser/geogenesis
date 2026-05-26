@@ -105,11 +105,7 @@ export type SpotlightTipProps = {
   children: React.ReactNode;
   nudgeRightPx?: number;
   arrowCentered?: boolean;
-  /**
-   * Re-measure after this delay when the anchor mounts inside an animating panel
-   * (e.g. proposal name inside SlideUp: 500ms delay + 500ms duration).
-   */
-  settleMs?: number;
+  layoutSettled?: boolean;
   shellPaddingClassName?: 'p-1' | 'p-2';
   innerPaddingClassName?: string;
 };
@@ -127,7 +123,7 @@ export function SpotlightTip({
   children,
   nudgeRightPx = 0,
   arrowCentered = false,
-  settleMs,
+  layoutSettled = true,
   shellPaddingClassName = 'p-2',
   innerPaddingClassName = 'px-3 pt-3 pb-4',
 }: SpotlightTipProps) {
@@ -168,7 +164,7 @@ export function SpotlightTip({
   }, [arrowCentered, arrowTargetRef, nudgeRightPx, placement, spotlightRect, spotlightRef, width]);
 
   React.useLayoutEffect(() => {
-    if (!open) {
+    if (!open || !layoutSettled) {
       setLayout(null);
       return;
     }
@@ -196,20 +192,16 @@ export function SpotlightTip({
 
     measure();
 
-    // SlideUp keeps the anchor at 0 height until its animation finishes — one delayed re-measure after settleMs is enough; no rAF poll needed alongside that.
-    const settleTimeout = settleMs ? window.setTimeout(measure, settleMs) : undefined;
-
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
 
     return () => {
       cancelled = true;
-      if (settleTimeout !== undefined) window.clearTimeout(settleTimeout);
       resizeObserver?.disconnect();
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
-  }, [open, updateLayout, settleMs, placement, spotlightRect, spotlightRef, arrowTargetRef]);
+  }, [open, layoutSettled, updateLayout, placement, spotlightRect, spotlightRef, arrowTargetRef]);
 
   if (typeof document === 'undefined') {
     return null;

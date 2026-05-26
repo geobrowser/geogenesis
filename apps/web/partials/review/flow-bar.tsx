@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 import { useDiff } from '~/core/state/diff-store';
@@ -53,10 +54,14 @@ export const FlowBar = () => {
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const flowBarVisible = !hideFlowbar;
+  const { settled: flowBarEnterSettled, onEnterAnimationComplete: onFlowBarEnterAnimationComplete } =
+    useEnterAnimationSettled(flowBarVisible);
   const flowBarSurfaceRef = React.useRef<HTMLDivElement>(null);
   const reviewEditsButtonRef = React.useRef<HTMLButtonElement>(null);
   const { open: reviewEditsTipOpen, dismiss: dismissReviewEditsTip } = useReviewEditsTip({
-    flowBarVisible: !hideFlowbar,
+    flowBarVisible,
+    flowBarEnterSettled,
   });
 
   // Publish the flow-bar's footprint as `--app-bottom-inset` while it's visible
@@ -85,6 +90,7 @@ export const FlowBar = () => {
             animate="visible"
             exit="hidden"
             transition={transition}
+            onAnimationComplete={onFlowBarEnterAnimationComplete}
             custom={!isReviewOpen}
             className={cx(
               `pointer-events-none fixed inset-x-0 bottom-5 ${Z_LAYER_CLASS.flowBar} flex justify-center text-button`,
