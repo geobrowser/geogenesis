@@ -30,11 +30,7 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import {
-  editModeToggleTipDismissedAtom,
-  proposalNameTipDismissedAtom,
-  reviewEditsTipDismissedAtom,
-} from '~/atoms/product-onboarding';
+import { dismissedProductOnboardingHintsAtom } from '~/atoms/product-onboarding';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
 import { EditModeToggleTip, useEditModeToggleTip } from '../onboarding/edit-mode-toggle-tip';
@@ -53,9 +49,7 @@ function useResetOnboarding() {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
-  const setEditModeTipDismissed = useSetAtom(editModeToggleTipDismissedAtom);
-  const setReviewEditsTipDismissed = useSetAtom(reviewEditsTipDismissedAtom);
-  const setProposalNameTipDismissed = useSetAtom(proposalNameTipDismissedAtom);
+  const setDismissedProductOnboardingHints = useSetAtom(dismissedProductOnboardingHintsAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -63,9 +57,7 @@ function useResetOnboarding() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
-    setEditModeTipDismissed(false);
-    setReviewEditsTipDismissed(false);
-    setProposalNameTipDismissed(false);
+    setDismissedProductOnboardingHints([]);
   };
 
   return resetOnboarding;
