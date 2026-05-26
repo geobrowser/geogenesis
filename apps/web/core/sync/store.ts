@@ -15,12 +15,16 @@ import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
 import { getSpaceRank } from '../utils/space/space-ranking';
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
 function relationKey(r: Relation): string {
+  if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
+    return `${r.fromEntity.id}:column:${columnPropertyIdFromRelation(r)}:${r.spaceId ?? ''}`;
+  }
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
 }
 
@@ -339,7 +343,6 @@ export class GeoStore {
     if (newValues.length === 0 && newRelations.length === 0) return;
 
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
-    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     if (newValues.length > 0) {
       reactiveValues.set(prev => {
@@ -363,6 +366,7 @@ export class GeoStore {
             const local = prevById.get(r.id);
             return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
           });
+        const relationIdsToWrite = new Set(mergedIncoming.map(t => t.id));
         const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
         return [...unchangedRelations, ...mergedIncoming];
       });

@@ -27,10 +27,14 @@ import { compareBySpaceRank } from '../utils/space/space-ranking';
 import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore } from './store';
 
 function relationKey(r: Relation): string {
+  if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
+    return `${r.fromEntity.id}:column:${columnPropertyIdFromRelation(r)}:${r.spaceId ?? ''}`;
+  }
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
 }
 
