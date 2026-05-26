@@ -187,14 +187,17 @@ export function Editor({
     }
   }, [editable, persistPendingEdits]);
 
+  const persistPendingEditsRef = React.useRef(persistPendingEdits);
+  persistPendingEditsRef.current = persistPendingEdits;
+
   React.useLayoutEffect(() => {
     if (!sidePanelCtx) return;
-    setSidePanelPersist(() => persistPendingEdits);
+    setSidePanelPersist(() => () => persistPendingEditsRef.current());
     return () => {
       setSidePanelPersist(null);
-      persistPendingEdits();
+      persistPendingEditsRef.current();
     };
-  }, [persistPendingEdits, setSidePanelPersist, sidePanelCtx]);
+  }, [setSidePanelPersist, sidePanelCtx]);
 
   const editor = useEditor(
     {

@@ -77,7 +77,8 @@ export const useLocalChanges = (
 
     let cancelled = false;
 
-    const storeValues = reactiveValues
+    const runDiff = () => {
+      const storeValues = reactiveValues
       .get()
       .filter(v => v.spaceId === spaceId && v.isLocal === true && !v.hasBeenPublished);
     const storeRelations = reactiveRelations
@@ -103,15 +104,20 @@ export const useLocalChanges = (
 
     const allRelationsForSpace = reactiveRelations.get().filter(r => r.spaceId === spaceId && !r.isDeleted);
 
-    Diff.fromLocal(spaceId, localValues, localRelations, allRelationsForSpace).then(result => {
-      if (!cancelled) {
-        setDiffs(result);
-        setIsLoading(false);
-      }
-    });
+      Diff.fromLocal(spaceId, localValues, localRelations, allRelationsForSpace).then(result => {
+        if (!cancelled) {
+          setDiffs(result);
+          setIsLoading(false);
+        }
+      });
+    };
+
+    const debounceMs = shouldShowLoading ? 0 : 200;
+    const timer = setTimeout(runDiff, debounceMs);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [spaceId, version, storeTick, mergeWithValues, mergeWithRelations]);
 

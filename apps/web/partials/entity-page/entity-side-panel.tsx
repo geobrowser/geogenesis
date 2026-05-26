@@ -22,6 +22,7 @@ import { useDiff } from '~/core/state/diff-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { EntitySidePanelActiveTabProvider } from '~/core/state/entity-side-panel-active-tab';
 import { EntitySidePanelEditModeProvider, EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -369,11 +370,7 @@ function EntitySidePanelBody({
     };
   }, [entity, blocks, initialTabs, loadingTabEntities, loadingNestedTabBlocks, entitySpaceId, findMany]);
 
-  const isPanelLoading =
-    isLoadingEntity ||
-    isBlocksLoading ||
-    (Boolean(entity && tabIds.length > 0) && loadingTabEntities) ||
-    (nestedTabBlockIds.length > 0 && loadingNestedTabBlocks);
+  const isPanelLoading = (isLoadingEntity && !entity) || isBlocksLoading;
 
   if (isPanelLoading) {
     return (
@@ -400,15 +397,15 @@ function EntitySidePanelBody({
 
   return (
     <EntityStoreProvider id={entityId} spaceId={entitySpaceId}>
-      <EditorProvider
-        id={entityId}
-        spaceId={entitySpaceId}
-        initialBlocks={blocks ?? []}
-        initialBlockRelations={blockRelations}
-        initialTabs={initialTabs}
-        initialCollectionItems={initialCollectionItems}
-      >
-        <div className="px-4 pt-6 pb-12 sm:px-5">
+        <EditorProvider
+          id={entityId}
+          spaceId={entitySpaceId}
+          initialBlocks={blocks ?? []}
+          initialBlockRelations={blockRelations}
+          initialTabs={initialTabs}
+          initialCollectionItems={initialCollectionItems}
+        >
+          <div className="px-4 pt-6 pb-12 sm:px-5">
           <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage />
           <EntityPageContentContainer>
             <div>
@@ -440,8 +437,8 @@ function EntitySidePanelBody({
               <CommentSection entityId={entityId} spaceId={entitySpaceId} />
             </div>
           </EntityPageContentContainer>
-        </div>
-      </EditorProvider>
+          </div>
+        </EditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -471,13 +468,15 @@ function EntitySidePanelSurface({
       <div className="flex min-h-0 flex-1 flex-col">
         <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <EntitySidePanelBody
-            key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
-            entityId={entityId}
-            entitySpaceId={effectiveSpaceId}
-            entity={entity}
-            isLoadingEntity={isLoading}
-          />
+          <EntitySidePanelActiveTabProvider entityId={entityId}>
+            <EntitySidePanelBody
+              key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
+              entityId={entityId}
+              entitySpaceId={effectiveSpaceId}
+              entity={entity}
+              isLoadingEntity={isLoading}
+            />
+          </EntitySidePanelActiveTabProvider>
         </div>
       </div>
     </EntitySidePanelEditModeProvider>

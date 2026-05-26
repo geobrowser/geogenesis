@@ -22,11 +22,31 @@ import cx from 'classnames';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { ID } from '~/core/id';
-import { useTabId } from '~/core/state/editor/use-editor';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, validateEntityId } from '~/core/utils/utils';
+
+function tabIdFromEntityTabHref(href: string): string | null {
+  const idx = href.indexOf('tabId=');
+  if (idx === -1) return null;
+  const raw = href.slice(idx + 6).split('&')[0];
+  return validateEntityId(raw) ? raw : null;
+}
+
+function isEntityTabHrefActive(
+  href: string,
+  activeTabId: string | null,
+  sidePanel: boolean,
+  fullPath: string
+): boolean {
+  if (!sidePanel) return href === fullPath;
+  const hrefTabId = tabIdFromEntityTabHref(href);
+  if (hrefTabId === null) return activeTabId === null;
+  return activeTabId === hrefTabId;
+}
 
 import { EditSmall } from '~/design-system/icons/edit-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
@@ -83,8 +103,9 @@ export function EditableTabGroup({
   const { storage } = useMutate();
   const router = useRouter();
   const path = usePathname();
-  const tabId = useTabId();
-  const fullPath = tabId ? `${path}?tabId=${tabId}` : path;
+  const activeTabId = useActiveTabIdForEditor();
+  const sidePanelTab = useEntitySidePanelActiveTab();
+  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : path;
 
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -180,8 +201,12 @@ export function EditableTabGroup({
     });
 
     // Navigate to the new tab so it becomes the active tab, and enter rename mode.
-    // `scroll: false` keeps the user's current scroll position.
-    router.replace(`${overviewHref}?tabId=${tabEntityId}`, { scroll: false });
+    if (sidePanelTab) {
+      sidePanelTab.setActiveTabId(tabEntityId);
+    } else {
+      // `scroll: false` keeps the user's current scroll position.
+      router.replace(`${overviewHref}?tabId=${tabEntityId}`, { scroll: false });
+    }
     setEditingTabId(tabEntityId);
   };
 
@@ -247,8 +272,12 @@ export function EditableTabGroup({
     storage.relations.deleteMany(allRelationsToDelete);
 
     // If the deleted tab is currently active, navigate to overview
-    if (tabId === tab.entityId) {
-      router.replace(overviewHref, { scroll: false });
+    if (activeTabId === tab.entityId) {
+      if (sidePanelTab) {
+        sidePanelTab.setActiveTabId(null);
+      } else {
+        router.replace(overviewHref, { scroll: false });
+      }
     }
   };
 
@@ -284,7 +313,17 @@ export function EditableTabGroup({
         >
           <div className="relative z-10 flex w-max items-center gap-6 pb-2">
             {systemTabsBefore.map(tab => (
-              <StaticTab key={tab.href} href={tab.href} label={tab.label} active={tab.href === fullPath} />
+              <StaticTab
+                key={tab.href}
+                href={tab.href}
+                label={tab.label}
+                active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
+                onSelect={
+                  sidePanelTab
+                    ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                    : undefined
+                }
+              />
             ))}
 
             <SortableContext items={sortableIds} strategy={horizontalListSortingStrategy}>
@@ -292,7 +331,7 @@ export function EditableTabGroup({
                 <SortableTab
                   key={tab.relation.id}
                   tab={tab}
-                  active={tab.href === fullPath}
+                  active={sidePanelTab ? activeTabId === tab.entityId : tab.href === fullPath}
                   isAnyDragging={isAnyDragging}
                   isEditing={editingTabId === tab.entityId}
                   onStartEditing={() => setEditingTabId(tab.entityId)}
@@ -300,12 +339,25 @@ export function EditableTabGroup({
                   onCancelEditing={() => setEditingTabId(null)}
                   onDelete={() => handleDeleteTab(tab)}
                   onOpen={() => router.push(NavUtils.toEntity(tab.relation.spaceId, tab.entityId))}
+                  onSelect={
+                    sidePanelTab ? () => sidePanelTab.setActiveTabId(tab.entityId) : undefined
+                  }
                 />
               ))}
             </SortableContext>
 
             {systemTabsAfter.map(tab => (
-              <StaticTab key={tab.href} href={tab.href} label={tab.label} active={tab.href === fullPath} />
+              <StaticTab
+                key={tab.href}
+                href={tab.href}
+                label={tab.label}
+                active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
+                onSelect={
+                  sidePanelTab
+                    ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
+                    : undefined
+                }
+              />
             ))}
 
             <button
@@ -335,7 +387,26 @@ export function EditableTabGroup({
   );
 }
 
-function StaticTab({ href, label, active }: { href: string; label: string; active: boolean }) {
+function StaticTab({
+  href,
+  label,
+  active,
+  onSelect,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  onSelect?: () => void;
+}) {
+  if (onSelect) {
+    return (
+      <button type="button" className={tabStyles({ active })} onClick={onSelect}>
+        {label}
+        {active && <div className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text" />}
+      </button>
+    );
+  }
+
   return (
     <Link className={tabStyles({ active })} href={href} prefetch>
       {label}
@@ -354,6 +425,7 @@ type SortableTabProps = {
   onCancelEditing: () => void;
   onDelete: () => void;
   onOpen: () => void;
+  onSelect?: () => void;
 };
 
 function SortableTab({
@@ -366,6 +438,7 @@ function SortableTab({
   onCancelEditing,
   onDelete,
   onOpen,
+  onSelect,
 }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.relation.id,
@@ -452,6 +525,11 @@ function SortableTab({
     if (justDragged) {
       e.preventDefault();
       e.stopPropagation();
+      return;
+    }
+    if (onSelect) {
+      e.preventDefault();
+      onSelect();
     }
   };
 
@@ -465,8 +543,8 @@ function SortableTab({
       ) : (
         <Link
           className={cx(tabStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
-          href={tab.href}
-          prefetch
+          href={onSelect ? '#' : tab.href}
+          prefetch={!onSelect}
           onClick={handleLinkClick}
           {...attributes}
           {...listeners}
