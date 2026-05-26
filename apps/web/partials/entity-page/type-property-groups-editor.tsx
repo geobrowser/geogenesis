@@ -121,7 +121,10 @@ export function TypePropertyGroupsEditor({ entityId, spaceId, isActive = true }:
     [allGroupPropertyRelations, propertyGroupRelations, spaceId]
   );
 
-  const groupedPropertyIds = new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id));
+  const groupedPropertyIds = React.useMemo(
+    () => new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id)),
+    [allGroupPropertyRelations]
+  );
   const ungroupedRelations = React.useMemo(
     () => typePropertyRelations.filter(relation => !groupedPropertyIds.has(relation.toEntity.id)),
     [groupedPropertyIds, typePropertyRelations]
@@ -416,6 +419,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId, isActive = true }:
       {!sectionCollapsed && (
         <div className="rounded-lg border border-grey-02 shadow-button">
           <RelationChipsDndRoot
+            key={dndSessionKey}
             spaceId={spaceId}
             collisionDetection={propertyGroupsCollisionDetection}
             onChipDragEnd={handleChipDragEnd}
@@ -665,17 +669,21 @@ function GroupPropertyChips({
   createProperty: CreatePropertyFn;
 }) {
   const { storage } = useMutate();
+  const onUpdateRelation = React.useCallback(
+    (relation: Relation, newPosition: string | null) => {
+      storage.relations.update(relation, draft => {
+        if (newPosition) draft.position = newPosition;
+      });
+    },
+    [storage.relations]
+  );
 
   return (
     <ReorderableRelationChipsDnd
       containerId={relationChipsContainerIdForGroup(groupEntityId)}
       relations={relations}
       spaceId={spaceId}
-      onUpdateRelation={(relation, newPosition) => {
-        storage.relations.update(relation, draft => {
-          if (newPosition) draft.position = newPosition;
-        });
-      }}
+      onUpdateRelation={onUpdateRelation}
       afterChips={
         <SelectEntityAsPopover
           trigger={
@@ -785,6 +793,14 @@ function UngroupedPropertiesSection({
   createProperty: CreatePropertyFn;
 }) {
   const { storage } = useMutate();
+  const onUpdateRelation = React.useCallback(
+    (relation: Relation, newPosition: string | null) => {
+      storage.relations.update(relation, draft => {
+        if (newPosition) draft.position = newPosition;
+      });
+    },
+    [storage.relations]
+  );
 
   const ensureOnTypeUngrouped = (property: { id: string; name: string | null }) => {
     if (allTypePropertyIds.includes(property.id)) return;
@@ -820,11 +836,7 @@ function UngroupedPropertiesSection({
             containerId={RELATION_CHIPS_UNGROUPED_CONTAINER_ID}
             relations={relations}
             spaceId={spaceId}
-            onUpdateRelation={(relation, newPosition) => {
-              storage.relations.update(relation, draft => {
-                if (newPosition) draft.position = newPosition;
-              });
-            }}
+            onUpdateRelation={onUpdateRelation}
             afterChips={
               <SelectEntityAsPopover
                 trigger={
