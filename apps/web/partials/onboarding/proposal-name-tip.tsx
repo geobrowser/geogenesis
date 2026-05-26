@@ -2,43 +2,18 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
-
-import { proposalNameTipDismissedAtom } from '~/atoms/product-onboarding';
-import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useOnboarding } from '~/core/hooks/use-onboarding';
+import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
 
 import { SpotlightTip } from './spotlight-tip';
+import { useDismissibleHint } from './use-dismissible-hint';
 
 const SLIDE_UP_SETTLE_MS = 600;
 
 export function useProposalNameTip({ enabled }: { enabled: boolean }) {
-  const hydrated = useHydrated();
-  const { isOnboardingVisible } = useOnboarding();
-  const [dismissed, setDismissed] = useAtom(proposalNameTipDismissedAtom);
-  const [open, setOpen] = React.useState(false);
-
-  const shouldOffer = hydrated && enabled && !dismissed && !isOnboardingVisible;
-
-  React.useEffect(() => {
-    if (!shouldOffer) {
-      setOpen(false);
-      return;
-    }
-    // Wait for the review SlideUp panel to finish sliding into view before
-    // mounting the tip and cutout, so neither appears mid-animation (which
-    // would briefly render them at the panel's start position near the
-    // bottom of the screen).
-    const timeoutId = window.setTimeout(() => setOpen(true), SLIDE_UP_SETTLE_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [shouldOffer]);
-
-  const dismiss = React.useCallback(() => {
-    setDismissed(true);
-    setOpen(false);
-  }, [setDismissed]);
-
-  return { open: shouldOffer && open, dismiss };
+  return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.proposalName, {
+    gate: enabled,
+    settleMs: SLIDE_UP_SETTLE_MS,
+  });
 }
 
 type ProposalNameTipProps = {

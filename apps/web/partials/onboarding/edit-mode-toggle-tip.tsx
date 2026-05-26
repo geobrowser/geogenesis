@@ -2,28 +2,21 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
-
-import { editModeToggleTipDismissedAtom } from '~/atoms/product-onboarding';
+import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 
 import { SpotlightTip } from './spotlight-tip';
+import { useDismissibleHint } from './use-dismissible-hint';
 
 const TIP_NUDGE_RIGHT_PX = 12;
 
 export function useEditModeToggleTip() {
-  const hydrated = useHydrated();
   const spaceId = useSpaceId();
   const { personalSpaceId, isFetched: isPersonalSpaceFetched } = usePersonalSpaceId();
   const { canEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
-  const { isOnboardingVisible } = useOnboarding();
-  const [dismissed, setDismissed] = useAtom(editModeToggleTipDismissedAtom);
-  const [open, setOpen] = React.useState(false);
 
   const isPersonalSpace = Boolean(
     spaceId &&
@@ -31,29 +24,9 @@ export function useEditModeToggleTip() {
       normalizeSpaceId(spaceId) === normalizeSpaceId(personalSpaceId)
   );
 
-  const shouldOffer =
-    hydrated &&
-    isPersonalSpace &&
-    isPersonalSpaceFetched &&
-    !dismissed &&
-    !isOnboardingVisible &&
-    canEdit &&
-    !isLoadingAccessControl;
+  const gate = isPersonalSpace && isPersonalSpaceFetched && canEdit && !isLoadingAccessControl;
 
-  React.useEffect(() => {
-    if (shouldOffer) {
-      setOpen(true);
-    } else {
-      setOpen(false);
-    }
-  }, [shouldOffer]);
-
-  const dismiss = React.useCallback(() => {
-    setDismissed(true);
-    setOpen(false);
-  }, [setDismissed]);
-
-  return { open: shouldOffer && open, dismiss, isActive: shouldOffer };
+  return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.editModeToggle, { gate });
 }
 
 type EditModeToggleTipProps = {
