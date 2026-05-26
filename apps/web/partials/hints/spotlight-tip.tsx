@@ -8,13 +8,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Z_LAYERS } from '~/core/z-layers';
 
 import {
+  HintSpotlightBackdrop,
+  hintTipA11yProps,
   isElementVisibleInViewport,
-  OnboardingSpotlightBackdrop,
-  onboardingTipA11yProps,
-  useOnboardingTipEscapeDismiss,
+  useHintEscapeDismiss,
   useSpotlightRect,
   type SpotlightRect,
-} from './onboarding-spotlight';
+} from './spotlight-primitives';
 
 const TIP_GAP_PX = 12;
 const VIEWPORT_PADDING_PX = 16;
@@ -135,7 +135,7 @@ export function SpotlightTip({
   const spotlightRect = useSpotlightRect(spotlightRef, open);
   const [layout, setLayout] = React.useState<TipLayout | null>(null);
 
-  useOnboardingTipEscapeDismiss(open, onDismiss);
+  useHintEscapeDismiss(open, onDismiss);
 
   const updateLayout = React.useCallback(() => {
     const arrowTarget = arrowTargetRef.current;
@@ -216,14 +216,14 @@ export function SpotlightTip({
     <AnimatePresence>
       {open && layout && spotlightRect ? (
         <>
-          <OnboardingSpotlightBackdrop
+          <HintSpotlightBackdrop
             spotlightRect={spotlightRect}
             zIndex={zIndexes.backdrop}
             motionKey={`${tipId}-backdrop`}
           />
           <motion.div
             key={tipId}
-            {...onboardingTipA11yProps(titleId)}
+            {...hintTipA11yProps(titleId)}
             className="pointer-events-auto fixed"
             style={{ zIndex: zIndexes.tip, ...layout.positionStyle }}
             initial={{ opacity: 0, scale: 0.95, y: layout.motionOffsetY }}

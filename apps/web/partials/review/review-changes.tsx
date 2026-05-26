@@ -42,7 +42,7 @@ import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 
-import { ProposalNameTip, useProposalNameTip } from '~/partials/onboarding/proposal-name-tip';
+import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';
 
 import {
   BountyLinkingPanel,

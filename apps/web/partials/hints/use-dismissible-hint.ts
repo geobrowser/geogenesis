@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { dismissedProductOnboardingHintsAtom } from '~/atoms/product-onboarding';
+import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 
@@ -13,13 +13,10 @@ type UseDismissibleHintOptions = {
   enterSettled?: boolean;
 };
 
-export function useDismissibleHint(
-  hintId: string,
-  { gate, enterSettled = true }: UseDismissibleHintOptions
-) {
+export function useDismissibleHint(hintId: string, { gate, enterSettled = true }: UseDismissibleHintOptions) {
   const hydrated = useHydrated();
   const { isOnboardingVisible } = useOnboarding();
-  const [dismissedHints, setDismissedHints] = useAtom(dismissedProductOnboardingHintsAtom);
+  const [dismissedHints, setDismissedHints] = useAtom(dismissedHintsAtom);
   const dismissed = dismissedHints.includes(hintId);
   const [open, setOpen] = React.useState(false);
 

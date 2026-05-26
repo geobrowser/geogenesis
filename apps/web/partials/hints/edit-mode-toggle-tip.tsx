@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -26,7 +26,7 @@ export function useEditModeToggleTip() {
 
   const gate = isPersonalSpace && isPersonalSpaceFetched && canEdit && !isLoadingAccessControl;
 
-  return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.editModeToggle, { gate });
+  return useDismissibleHint(HINT_IDS.editModeToggle, { gate });
 }
 
 type EditModeToggleTipProps = {

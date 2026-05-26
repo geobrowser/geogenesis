@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 import { useDiff } from '~/core/state/diff-store';
 
 import { SpotlightTip } from './spotlight-tip';
@@ -18,7 +18,7 @@ export function useReviewEditsTip({
   const { isReviewOpen } = useDiff();
   const gate = flowBarVisible && !isReviewOpen;
 
-  return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.reviewEdits, {
+  return useDismissibleHint(HINT_IDS.reviewEdits, {
     gate,
     enterSettled: flowBarEnterSettled,
   });

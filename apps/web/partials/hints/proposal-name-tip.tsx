@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { PRODUCT_ONBOARDING_HINT_IDS } from '~/atoms/product-onboarding';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
@@ -14,7 +14,7 @@ export function useProposalNameTip({
   enabled: boolean;
   slideUpEnterSettled: boolean;
 }) {
-  return useDismissibleHint(PRODUCT_ONBOARDING_HINT_IDS.proposalName, {
+  return useDismissibleHint(HINT_IDS.proposalName, {
     gate: enabled,
     enterSettled: slideUpEnterSettled,
   });

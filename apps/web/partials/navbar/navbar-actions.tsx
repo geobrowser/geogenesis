@@ -30,10 +30,10 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { dismissedProductOnboardingHintsAtom } from '~/atoms/product-onboarding';
+import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
+import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
-import { EditModeToggleTip, useEditModeToggleTip } from '../onboarding/edit-mode-toggle-tip';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -49,7 +49,7 @@ function useResetOnboarding() {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
-  const setDismissedProductOnboardingHints = useSetAtom(dismissedProductOnboardingHintsAtom);
+  const setDismissedHints = useSetAtom(dismissedHintsAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -57,7 +57,7 @@ function useResetOnboarding() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
-    setDismissedProductOnboardingHints([]);
+    setDismissedHints([]);
   };
 
   return resetOnboarding;

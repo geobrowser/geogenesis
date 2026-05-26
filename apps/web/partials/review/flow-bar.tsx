@@ -20,7 +20,7 @@ import { Relation, Value } from '~/core/types';
 
 import { Divider } from '~/design-system/divider';
 
-import { ReviewEditsTip, useReviewEditsTip } from '../onboarding/review-edits-tip';
+import { ReviewEditsTip, useReviewEditsTip } from '~/partials/hints/review-edits-tip';
 
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();

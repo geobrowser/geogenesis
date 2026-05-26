@@ -21,7 +21,7 @@ export function isElementVisibleInViewport(element: HTMLElement): boolean {
 }
 
 /** backdrop stays pointer-events-none. */
-export function onboardingTipA11yProps(labelledById: string) {
+export function hintTipA11yProps(labelledById: string) {
   return {
     role: 'status' as const,
     'aria-live': 'polite' as const,
@@ -31,7 +31,7 @@ export function onboardingTipA11yProps(labelledById: string) {
 }
 
 /** Dismiss the tip on Escape */
-export function useOnboardingTipEscapeDismiss(open: boolean, dismiss: () => void) {
+export function useHintEscapeDismiss(open: boolean, dismiss: () => void) {
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -40,7 +40,7 @@ export function useOnboardingTipEscapeDismiss(open: boolean, dismiss: () => void
       event.stopPropagation();
       dismiss();
     };
- 
+
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open, dismiss]);
@@ -66,7 +66,6 @@ function measureSpotlightRect(element: HTMLElement): SpotlightRect | null {
   };
 }
 
-/** Kept in sync through layout changes and motion. */
 export function useSpotlightRect(
   elementRef: React.RefObject<HTMLElement | null>,
   active: boolean
@@ -130,18 +129,13 @@ export function useSpotlightRect(
   return rect;
 }
 
-type OnboardingSpotlightBackdropProps = {
+type HintSpotlightBackdropProps = {
   spotlightRect: SpotlightRect;
   zIndex: number;
   motionKey: string;
 };
 
-/** Dim the page except a rounded cutout */
-export function OnboardingSpotlightBackdrop({
-  spotlightRect,
-  zIndex,
-  motionKey,
-}: OnboardingSpotlightBackdropProps) {
+export function HintSpotlightBackdrop({ spotlightRect, zIndex, motionKey }: HintSpotlightBackdropProps) {
   const { top, left, width, height, borderRadius } = spotlightRect;
 
   return (
