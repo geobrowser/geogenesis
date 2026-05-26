@@ -51,16 +51,26 @@ function parseGroupDragId(id: string): string | null {
 type EditorProps = {
   entityId: string;
   spaceId: string;
+  isActive?: boolean;
 };
 type CreatePropertyFn = ReturnType<typeof useCreateProperty>['createProperty'];
 
-export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
+export function TypePropertyGroupsEditor({ entityId, spaceId, isActive = true }: EditorProps) {
   const { storage } = useMutate();
   const { createProperty } = useCreateProperty(spaceId);
   const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
   const [groupOverlayWidths, setGroupOverlayWidths] = React.useState<Record<string, number>>({});
   const [autoFocusGroupEntityId, setAutoFocusGroupEntityId] = React.useState<string | null>(null);
+  const [dndSessionKey, setDndSessionKey] = React.useState(0);
+  const wasActiveRef = React.useRef(isActive);
+
+  React.useLayoutEffect(() => {
+    if (isActive && !wasActiveRef.current) {
+      setDndSessionKey(previous => previous + 1);
+    }
+    wasActiveRef.current = isActive;
+  }, [isActive]);
 
   const typePropertyRelations = sortRelations(
     useRelations({
@@ -109,7 +119,10 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     [allGroupPropertyRelations, propertyGroupRelations, spaceId]
   );
 
-  const groupedPropertyIds = new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id));
+  const groupedPropertyIds = React.useMemo(
+    () => new Set(allGroupPropertyRelations.map(relation => relation.toEntity.id)),
+    [allGroupPropertyRelations]
+  );
   const ungroupedRelations = React.useMemo(
     () => typePropertyRelations.filter(relation => !groupedPropertyIds.has(relation.toEntity.id)),
     [groupedPropertyIds, typePropertyRelations]
@@ -404,6 +417,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
       {!sectionCollapsed && (
         <div className="rounded-lg border border-grey-02 shadow-button">
           <RelationChipsDndRoot
+            key={dndSessionKey}
             spaceId={spaceId}
             collisionDetection={propertyGroupsCollisionDetection}
             onChipDragEnd={handleChipDragEnd}
@@ -653,17 +667,21 @@ function GroupPropertyChips({
   createProperty: CreatePropertyFn;
 }) {
   const { storage } = useMutate();
+  const onUpdateRelation = React.useCallback(
+    (relation: Relation, newPosition: string | null) => {
+      storage.relations.update(relation, draft => {
+        if (newPosition) draft.position = newPosition;
+      });
+    },
+    [storage.relations]
+  );
 
   return (
     <ReorderableRelationChipsDnd
       containerId={relationChipsContainerIdForGroup(groupEntityId)}
       relations={relations}
       spaceId={spaceId}
-      onUpdateRelation={(relation, newPosition) => {
-        storage.relations.update(relation, draft => {
-          if (newPosition) draft.position = newPosition;
-        });
-      }}
+      onUpdateRelation={onUpdateRelation}
       afterChips={
         <SelectEntityAsPopover
           trigger={
@@ -773,6 +791,14 @@ function UngroupedPropertiesSection({
   createProperty: CreatePropertyFn;
 }) {
   const { storage } = useMutate();
+  const onUpdateRelation = React.useCallback(
+    (relation: Relation, newPosition: string | null) => {
+      storage.relations.update(relation, draft => {
+        if (newPosition) draft.position = newPosition;
+      });
+    },
+    [storage.relations]
+  );
 
   const ensureOnTypeUngrouped = (property: { id: string; name: string | null }) => {
     if (allTypePropertyIds.includes(property.id)) return;
@@ -808,11 +834,7 @@ function UngroupedPropertiesSection({
             containerId={RELATION_CHIPS_UNGROUPED_CONTAINER_ID}
             relations={relations}
             spaceId={spaceId}
-            onUpdateRelation={(relation, newPosition) => {
-              storage.relations.update(relation, draft => {
-                if (newPosition) draft.position = newPosition;
-              });
-            }}
+            onUpdateRelation={onUpdateRelation}
             afterChips={
               <SelectEntityAsPopover
                 trigger={

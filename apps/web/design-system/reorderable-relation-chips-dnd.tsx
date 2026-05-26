@@ -740,23 +740,34 @@ function ReorderableRelationChipsInRoot({
   const chipNodesRef = React.useRef<Map<string, HTMLElement>>(new Map());
   const relationListKey = sortedRelations.map(relation => relation.id).join('\0');
   const drop = useDroppable({ id: containerId });
+  const onUpdateRelationRef = React.useRef(onUpdateRelation);
+  onUpdateRelationRef.current = onUpdateRelation;
 
-  React.useEffect(() => {
+  const syncChipNode = React.useCallback(
+    (relationId: string, node: HTMLDivElement | null) => {
+      if (node) {
+        chipNodesRef.current.set(relationId, node);
+      } else {
+        chipNodesRef.current.delete(relationId);
+      }
+      root.registerChipNode(containerId, relationId, node);
+    },
+    [containerId, root]
+  );
+
+  React.useLayoutEffect(() => {
     root.registerContainer({
       containerId,
       relations: sortRelations(relations),
-      onUpdateRelation,
+      onUpdateRelation: (relation, position) => onUpdateRelationRef.current(relation, position),
       chipNodesRef,
       listLayoutRef,
     });
-    return () => root.unregisterContainer(containerId);
-  }, [containerId, onUpdateRelation, relationListKey, relations, root]);
-
-  React.useLayoutEffect(() => {
     chipNodesRef.current.forEach((node, relationId) => {
       root.registerChipNode(containerId, relationId, node as HTMLDivElement);
     });
-  }, [containerId, relationListKey, root]);
+    return () => root.unregisterContainer(containerId);
+  }, [containerId, relationListKey, relations, root]);
 
   const { gapSize, insertBeforeIndex, useLayoutAnimateWhileDragging } = root.getInsertGapState(
     containerId,
@@ -789,7 +800,7 @@ function ReorderableRelationChipsInRoot({
           gapSize={gapSize}
           useInsertGapDnD={useInsertGapDnD}
           useLayoutAnimateWhileDragging={useLayoutAnimateWhileDragging}
-          registerChipNode={(relationId, node) => root.registerChipNode(containerId, relationId, node)}
+          registerChipNode={syncChipNode}
         />
       </SortableContext>
     </div>

@@ -24,13 +24,23 @@ export function TypeSchemaInline({ entityId, spaceId }: Props) {
   const types = useEntityTypes(entityId, spaceId);
   const isTypeEntity = types.some(type => type.id === SystemIds.SCHEMA_TYPE);
   const isEditing = useUserIsEditing(spaceId);
+  const [keepEditorMounted, setKeepEditorMounted] = React.useState(isEditing);
+
+  React.useEffect(() => {
+    if (isEditing) setKeepEditorMounted(true);
+  }, [isEditing]);
 
   if (!isTypeEntity) return null;
 
-  return isEditing ? (
-    <TypePropertyGroupsEditor entityId={entityId} spaceId={spaceId} />
-  ) : (
-    <TypeSchemaReadView entityId={entityId} spaceId={spaceId} />
+  return (
+    <>
+      {keepEditorMounted ? (
+        <div className={isEditing ? undefined : 'hidden'} aria-hidden={!isEditing}>
+          <TypePropertyGroupsEditor entityId={entityId} spaceId={spaceId} isActive={isEditing} />
+        </div>
+      ) : null}
+      {!isEditing ? <TypeSchemaReadView entityId={entityId} spaceId={spaceId} /> : null}
+    </>
   );
 }
 
