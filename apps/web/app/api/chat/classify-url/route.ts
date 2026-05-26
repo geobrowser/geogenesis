@@ -166,8 +166,12 @@ function matchesNewsHost(host: string): boolean {
 const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean; type: InjectType }> = [
   { match: host => host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com', type: 'tweet' },
   {
-    match: host =>
-      host === 'reddit.com' || host === 'www.reddit.com' || host === 'old.reddit.com' || host === 'redd.it',
+    // Apex + any reddit.com subdomain (mobile, old, np, sh, new, future…), plus
+    // the redd.it short-link host. Media CDNs i.redd.it / v.redd.it sit on a
+    // sibling domain and don't match endsWith('.reddit.com'), so they
+    // correctly fall through to the LLM/chat path — they aren't post
+    // permalinks. Mirrors `isRedditUrl` in news-worker's lib/reddit-fetch.ts.
+    match: host => host === 'reddit.com' || host.endsWith('.reddit.com') || host === 'redd.it',
     type: 'post',
   },
   { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
@@ -181,7 +185,7 @@ Return route="inject" when the URL points to:
 - A news article, current event, breaking story, exposé, or evolving topic from any publication.
 - A Wikipedia article (any kind — topic, person, organization, event).
 - A LinkedIn profile or personal/portfolio site.
-- A social post (X / Twitter / Reddit) you would expect to discuss a current happening.
+- A social post on X / Twitter / Reddit.
 
 Return route="chat" ONLY when the URL clearly points to:
 - Static documentation, manuals, or developer/API references.
