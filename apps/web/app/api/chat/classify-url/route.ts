@@ -163,11 +163,44 @@ function matchesNewsHost(host: string): boolean {
   return false;
 }
 
+const BLOG_HOSTS = new Set([
+  'substack.com',
+  'medium.com',
+  'mirror.xyz',
+  'paragraph.xyz',
+  'ghost.io',
+]);
+
+function matchesBlogHost(host: string): boolean {
+  for (const domain of BLOG_HOSTS) {
+    if (host === domain || host.endsWith(`.${domain}`)) return true;
+  }
+  return false;
+}
+
 const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean; type: InjectType }> = [
   { match: host => host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com', type: 'tweet' },
   {
     match: host =>
       host === 'reddit.com' || host === 'www.reddit.com' || host === 'old.reddit.com' || host === 'redd.it',
+    type: 'post',
+  },
+  // Blog platforms → Post (editorial, not news). Placed before the news-host
+  // check so a blog never gets mistaken for a news article.
+  { match: host => matchesBlogHost(host), type: 'post' },
+  // Specific company blogs (host + blog path → Post). Path-scoped on purpose
+  // so docs.* subdomains and product/landing pages are NOT routed to post —
+  // only the editorial blog/news/research sections are.
+  {
+    match: (host, path) =>
+      (host === 'anthropic.com' || host === 'www.anthropic.com') &&
+      /^\/(news|engineering|research)(\/|$)/.test(path),
+    type: 'post',
+  },
+  {
+    match: (host, path) =>
+      (host === 'openai.com' || host === 'www.openai.com') &&
+      /^\/(index|blog|research)(\/|$)/.test(path),
     type: 'post',
   },
   { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
@@ -179,6 +212,7 @@ const CLASSIFIER_SYSTEM_PROMPT = `You are routing a URL to one of two pipelines 
 
 Return route="inject" when the URL points to:
 - A news article, current event, breaking story, exposé, or evolving topic from any publication.
+- A blog post, company or engineering blog, personal essay, or newsletter post (e.g. Substack, Medium, Mirror, Ghost, or a company's /blog).
 - A Wikipedia article (any kind — topic, person, organization, event).
 - A LinkedIn profile or personal/portfolio site.
 - A social post (X / Twitter / Reddit) you would expect to discuss a current happening.
@@ -189,11 +223,13 @@ Return route="chat" ONLY when the URL clearly points to:
 - Encyclopedic definitions of static concepts with no time-sensitive component.
 
 When route="inject", also pick the most appropriate type:
-- "news-story-single" — any news article, current event, Wikipedia article, LinkedIn profile, or personal/portfolio site.
+- "news-story-single" — a journalistic news article or current-events story from a news publication, OR a Wikipedia article, OR a LinkedIn / personal profile.
+- "post" — a blog post, company/engineering blog, personal essay, or newsletter/Substack/Medium/Mirror post: editorial web content that is NOT from a journalistic news outlet. (Reddit URLs are also "post".)
 - "tweet" — X / Twitter URL.
-- "post" — Reddit URL.
 
-Bias toward route="inject": if the URL plausibly looks like a news article, current event, biography, or social post, choose inject. Only choose chat when the page is clearly static/reference/marketing content. When genuinely unsure, prefer route="inject" with type="news-story-single". Never invent a URL or visit it; decide from the URL itself.`;
+Decide "news-story-single" vs "post" by the SOURCE, not the topic: a news organization reporting an event → "news-story-single"; an individual's or a company's OWN blog/essay/newsletter → "post".
+
+Bias toward route="inject": if the URL plausibly looks like a news article, blog post, current event, biography, or social post, choose inject. Only choose chat when the page is clearly static/reference/marketing content. When genuinely unsure between the two inject types, prefer "news-story-single". Never invent a URL or visit it; decide from the URL itself.`;
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
