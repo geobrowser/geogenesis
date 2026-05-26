@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Z_LAYERS } from '~/core/z-layers';
 
 import {
-  HintSpotlightBackdrop,
+  HintDismissLayer,
   hintTipA11yProps,
   isElementVisibleInViewport,
   useHintEscapeDismiss,
@@ -216,16 +216,17 @@ export function SpotlightTip({
     <AnimatePresence>
       {open && layout && spotlightRect ? (
         <>
-          <HintSpotlightBackdrop
-            spotlightRect={spotlightRect}
+          <HintDismissLayer
             zIndex={zIndexes.backdrop}
-            motionKey={`${tipId}-backdrop`}
+            motionKey={`${tipId}-dismiss`}
+            onDismiss={onDismiss}
           />
           <motion.div
             key={tipId}
             {...hintTipA11yProps(titleId)}
             className="pointer-events-auto fixed"
             style={{ zIndex: zIndexes.tip, ...layout.positionStyle }}
+            onClick={(event) => event.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95, y: layout.motionOffsetY }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: layout.motionOffsetY }}

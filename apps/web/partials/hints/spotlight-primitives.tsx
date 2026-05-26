@@ -20,7 +20,6 @@ export function isElementVisibleInViewport(element: HTMLElement): boolean {
   return rect.height > 0 && rect.top < window.innerHeight && rect.bottom > 0;
 }
 
-/** backdrop stays pointer-events-none. */
 export function hintTipA11yProps(labelledById: string) {
   return {
     role: 'status' as const,
@@ -129,29 +128,20 @@ export function useSpotlightRect(
   return rect;
 }
 
-type HintSpotlightBackdropProps = {
-  spotlightRect: SpotlightRect;
+type HintDismissLayerProps = {
   zIndex: number;
   motionKey: string;
+  onDismiss: () => void;
 };
 
-export function HintSpotlightBackdrop({ spotlightRect, zIndex, motionKey }: HintSpotlightBackdropProps) {
-  const { top, left, width, height, borderRadius } = spotlightRect;
-
+export function HintDismissLayer({ zIndex, motionKey, onDismiss }: HintDismissLayerProps) {
   return (
     <motion.div
       key={motionKey}
       aria-hidden
-      className="pointer-events-none fixed bg-transparent"
-      style={{
-        zIndex,
-        top,
-        left,
-        width,
-        height,
-        borderRadius,
-        boxShadow: '0 0 0 9999px color-mix(in srgb, var(--color-text) 20%, transparent)',
-      }}
+      className="fixed inset-0 cursor-default"
+      style={{ zIndex }}
+      onClick={onDismiss}
       initial={backdropMotionProps.initial}
       animate={backdropMotionProps.animate}
       exit={backdropMotionProps.exit}
