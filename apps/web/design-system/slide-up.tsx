@@ -2,8 +2,11 @@
 
 import * as React from 'react';
 
+import { useAtomValue } from 'jotai';
 import { AnimatePresence, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
+
+import { entitySidePanelHostElementAtom } from '~/atoms';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -12,6 +15,12 @@ type SlideUpProps = {
 };
 
 export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
+  const entitySidePanelHost = useAtomValue(entitySidePanelHostElementAtom);
+  const removeScrollShards = React.useMemo(
+    () => (entitySidePanelHost ? [entitySidePanelHost] : []),
+    [entitySidePanelHost]
+  );
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setIsOpen(false);
@@ -42,8 +51,10 @@ export const SlideUp = ({ isOpen, setIsOpen, children }: SlideUpProps) => {
             transition={transition}
             className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
           >
-            <RemoveScroll className="h-full w-full">
-              <div className="h-full overflow-y-auto overscroll-contain bg-white">{children}</div>
+            <RemoveScroll className="h-full w-full" shards={removeScrollShards}>
+              <div data-app-scroll-surface className="h-full overflow-y-auto overscroll-contain bg-white">
+                {children}
+              </div>
             </RemoveScroll>
           </motion.div>
         </motion.div>

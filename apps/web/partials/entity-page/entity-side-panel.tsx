@@ -5,13 +5,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 
-import { useAtomValue, useStore } from 'jotai';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { motion, useAnimation } from 'framer-motion';
 
-import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
-import { RemoveScroll } from 'react-remove-scroll';
+import {
+  editorContentVersionAtom,
+  entitySidePanelHostElementAtom,
+  entitySidePanelPersistEditorAtom,
+} from '~/atoms';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -31,6 +34,7 @@ import type { Entity, TabEntity } from '~/core/types';
 import { useQueryEntities, useQueryEntitiesAsync, useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
+import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -486,8 +490,16 @@ function EntitySidePanelSurface({
 export function EntitySidePanel() {
   const pathname = usePathname();
   const jotaiStore = useStore();
+  const setSidePanelHostElement = useSetAtom(entitySidePanelHostElementAtom);
   const { isReviewOpen, bumpReviewVersion } = useDiff();
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
+
+  const panelHostRef = React.useCallback(
+    (node: HTMLElement | null) => {
+      setSidePanelHostElement(node);
+    },
+    [setSidePanelHostElement]
+  );
   const pathnameWhenOpenedRef = React.useRef<string | null>(null);
   const reviewEditsSnapshotRef = React.useRef<string | null>(null);
 
@@ -521,13 +533,28 @@ export function EntitySidePanel() {
   }, [bumpReviewVersion, closeSidePanel, jotaiStore, sidePanelTarget?.openedFromReviewEdits]);
 
   React.useLayoutEffect(() => {
-    if (sidePanelTarget) {
-      document.body.setAttribute('data-entity-side-panel-open', '');
-    } else {
-      document.body.removeAttribute('data-entity-side-panel-open');
+    const html = document.documentElement;
+    const body = document.body;
+
+    if (!sidePanelTarget) {
+      html.removeAttribute('data-entity-side-panel-open');
+      body.removeAttribute('data-entity-side-panel-open');
+      return;
     }
+
+    html.setAttribute('data-entity-side-panel-open', '');
+    body.setAttribute('data-entity-side-panel-open', '');
+    let restoreScrollbars = hideMainPageScrollbars();
+    const rafId = requestAnimationFrame(() => {
+      restoreScrollbars();
+      restoreScrollbars = hideMainPageScrollbars();
+    });
+
     return () => {
-      document.body.removeAttribute('data-entity-side-panel-open');
+      cancelAnimationFrame(rafId);
+      restoreScrollbars();
+      html.removeAttribute('data-entity-side-panel-open');
+      body.removeAttribute('data-entity-side-panel-open');
     };
   }, [sidePanelTarget]);
 
@@ -559,30 +586,23 @@ export function EntitySidePanel() {
   const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits } = sidePanelTarget;
 
   return createPortal(
-    <RemoveScroll noIsolation>
-      <div className={isReviewOpen ? 'fixed inset-0 z-[10001]' : 'fixed inset-0 z-[200]'}>
-        <button
-          type="button"
-          aria-label="Close side panel backdrop"
-          className="absolute inset-0 bg-grey-03/40"
-          onClick={handleCloseSidePanel}
+    <aside
+      ref={panelHostRef}
+      data-entity-side-panel
+      className={`fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl ${
+        isReviewOpen ? 'z-[10001]' : 'z-[200]'
+      }`}
+    >
+      <EntitySidePanelPopoverPortalProvider>
+        <EntitySidePanelSurface
+          entityId={entityId}
+          requestedSpaceId={spaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+          openedFromReviewEdits={openedFromReviewEdits}
+          onClose={handleCloseSidePanel}
         />
-        <aside
-          data-entity-side-panel
-          className="absolute inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl"
-        >
-          <EntitySidePanelPopoverPortalProvider>
-            <EntitySidePanelSurface
-              entityId={entityId}
-              requestedSpaceId={spaceId}
-              openedWithMainViewEditing={openedWithMainViewEditing}
-              openedFromReviewEdits={openedFromReviewEdits}
-              onClose={handleCloseSidePanel}
-            />
-          </EntitySidePanelPopoverPortalProvider>
-        </aside>
-      </div>
-    </RemoveScroll>,
+      </EntitySidePanelPopoverPortalProvider>
+    </aside>,
     document.body
   );
 }

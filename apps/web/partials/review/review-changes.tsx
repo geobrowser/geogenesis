@@ -842,6 +842,7 @@ export const ReviewChanges = () => {
               <div className="grow overflow-hidden px-2 pb-2">
                 <div
                   ref={scrollContainerRef}
+                  data-app-scroll-surface
                   className="h-full overflow-y-auto rounded-lg border border-grey-02 bg-white"
                 >
                   {isLoadingChanges ? (
