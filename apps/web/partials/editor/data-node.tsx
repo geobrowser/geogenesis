@@ -3,12 +3,12 @@ import { Node, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@
 import { NodeSelection } from '@tiptap/pm/state';
 
 import cx from 'classnames';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import * as React from 'react';
 
 import { ErrorBoundary } from 'react-error-boundary';
 
-import { activeDataBlockIdAtom } from '~/core/blocks/data/data-block-highlight';
+import { activeDataBlockIdAtom } from '~/atoms';
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -84,19 +84,12 @@ export const DataNode = Node.create({
   },
 });
 
-function DataNodeComponent({ node, updateAttributes, selected, deleteNode }: NodeViewProps) {
+function DataNodeComponent({ node, updateAttributes, deleteNode }: NodeViewProps) {
   const { spaceId } = useEditorInstance();
   const isEditing = useUserIsEditing(spaceId);
   const { id } = node.attrs;
   const activeDataBlockId = useAtomValue(activeDataBlockIdAtom);
-  const setActiveDataBlockId = useSetAtom(activeDataBlockIdAtom);
   const showSelected = isEditing && activeDataBlockId === id;
-
-  React.useEffect(() => {
-    if (selected) {
-      setActiveDataBlockId(id);
-    }
-  }, [selected, id, setActiveDataBlockId]);
 
   const { blockRelations } = useEditorStoreLite();
   const relation = blockRelations.find(b => b.block.id === id);
@@ -134,6 +127,7 @@ function DataNodeComponent({ node, updateAttributes, selected, deleteNode }: Nod
   return (
     <NodeViewWrapper data-selected={showSelected ? 'true' : undefined}>
       <div
+        data-block-id={id}
         contentEditable="false"
         suppressContentEditableWarning={true}
         className={cx('data-node', showSelected && 'data-node-selected')}

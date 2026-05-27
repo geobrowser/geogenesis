@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -170,7 +169,6 @@ export function DataBlockScopeDropdown({
   setSourceRef.current = setSource;
   const sourceKey = sourceStableKey(source);
   const [open, setOpen] = React.useState(false);
-  useDataBlockInteraction(open);
   // Cache of id → name for spaces the user has interacted with this session.
   // Lets the trigger label and the new SPACE_FILTER's valueName render with
   // the chosen name immediately, before useSpacesByIds /

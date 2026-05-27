@@ -25,7 +25,6 @@ import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 
-import { useDataBlockInteraction } from '~/core/blocks/data/data-block-highlight';
 import type { Source } from '~/core/blocks/data/source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { ID } from '~/core/id';
@@ -154,7 +153,6 @@ export function TableBlockPropertiesMenu({
   disabled,
 }: TableBlockPropertiesMenuProps) {
   const [open, setOpen] = React.useState(false);
-  useDataBlockInteraction(open);
   const [search, setSearch] = React.useState('');
   const setEditingProperties = useSetAtom(editingPropertiesAtom);
   const { store } = useSyncEngine();

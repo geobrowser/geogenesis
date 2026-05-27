@@ -155,7 +155,13 @@
 }
 
 .ProseMirror .node-tableNode {
-  @apply not-first:mt-12;
+  @apply not-first:mt-4;
+  margin-bottom: 8px;
+}
+
+.ProseMirror .node-tableNode[data-selected='true'] {
+  @apply not-first:mt-8;
+  margin-bottom: 16px;
 }
 
 /* Selected atomic blocks (data / image / video) — edit mode only */
@@ -181,6 +187,11 @@
 
 .ProseMirror :is(.node-tableNode, .node-image, .node-video)
   + .is-empty:is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video)) {
+  min-height: 0.375rem;
+}
+
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty.has-focus:is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video)) {
   min-height: 1.5rem;
 }
 

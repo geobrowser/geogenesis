@@ -9,6 +9,11 @@ import { LayoutGroup } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import {
+  clearActiveDataBlockId,
+  handleEditorSelectionHighlight,
+  useDataBlockHighlightSync,
+} from '~/core/blocks/data/data-block-highlight';
 import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
@@ -173,6 +178,7 @@ export function Editor({
 
     if (editorRef.current && wasEditable !== editable) {
       clearEditorBlockSelection(editorRef.current);
+      clearActiveDataBlockId();
     }
 
     if (wasEditable && !editable && editorRef.current) {
@@ -234,6 +240,7 @@ export function Editor({
       },
       immediatelyRender: false,
       onCreate: ({ editor }) => {
+        clearActiveDataBlockId();
         queueMicrotask(() => {
           clearEditorBlockSelection(editor);
         });
@@ -242,7 +249,11 @@ export function Editor({
       onSelectionUpdate: ({ editor }) => {
         if (!editor.isEditable) {
           clearEditorBlockSelection(editor);
+          clearActiveDataBlockId();
+          return;
         }
+
+        handleEditorSelectionHighlight(editor);
       },
       onUpdate: ({ editor }) => {
         if (editable) {
@@ -265,6 +276,8 @@ export function Editor({
 
   // Keep editorRef in sync so the edit→view transition effect can persist state
   editorRef.current = editor;
+
+  useDataBlockHighlightSync(editor, editable, activeEntityId);
 
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
