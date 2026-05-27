@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import type { UIMessage } from 'ai';
-import { isTextUIPart } from 'ai';
+import { isTextUIPart, isToolUIPart } from 'ai';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
@@ -12,6 +12,7 @@ import {
   EXPANDED_CHAT_SIZE,
   MIN_CHAT_HEIGHT,
   MIN_CHAT_WIDTH,
+  type PersistedChat,
   chatSizeAtom,
 } from '~/core/state/chat-store';
 
@@ -28,6 +29,7 @@ type Props = {
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   error?: Error;
   isBusy: boolean;
+  isCompacting: boolean;
   input: string;
   onInputChange: (value: string) => void;
   onSend: () => void;
@@ -37,6 +39,9 @@ type Props = {
   onClose: () => void;
   // A seeded first message is about to auto-send; don't flash the welcome screen.
   suppressWelcome?: boolean;
+  history: PersistedChat[];
+  onSwitchChat: (id: string) => void;
+  onClearHistory: () => void;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -46,6 +51,7 @@ export function ChatPanel({
   status,
   error,
   isBusy,
+  isCompacting,
   input,
   onInputChange,
   onSend,
@@ -54,9 +60,26 @@ export function ChatPanel({
   onNewChat,
   onClose,
   suppressWelcome,
+  history,
+  onSwitchChat,
+  onClearHistory,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [view, setView] = React.useState<'main' | 'history'>('main');
+
+  React.useEffect(() => {
+    if (!menuOpen) setView('main');
+  }, [menuOpen]);
+
+  const hasHistory = history.length > 0;
+
+  const handleClearHistory = () => {
+    setMenuOpen(false);
+    if (window.confirm("Clear all previous chats? This can't be undone.")) {
+      onClearHistory();
+    }
+  };
 
   const hasMessages = messages.length > 0;
   const isAtDefault = size.width === DEFAULT_CHAT_SIZE.width && size.height === DEFAULT_CHAT_SIZE.height;
@@ -150,7 +173,7 @@ export function ChatPanel({
           <Menu
             open={menuOpen}
             onOpenChange={setMenuOpen}
-            className="max-w-[180px]"
+            className={view === 'history' ? 'max-w-[260px]' : 'max-w-[180px]'}
             asChild
             trigger={
               <button
@@ -162,30 +185,54 @@ export function ChatPanel({
               </button>
             }
           >
-            <MenuItem
-              onClick={() => {
-                setMenuOpen(false);
-                onNewChat();
-              }}
-            >
-              New chat
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                setMenuOpen(false);
-                void handleCopyChat();
-              }}
-            >
-              Copy chat
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                setMenuOpen(false);
-                togglePreset();
-              }}
-            >
-              {isAtDefault ? 'Expand' : 'Collapse'}
-            </MenuItem>
+            {view === 'main' ? (
+              <>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void handleCopyChat();
+                  }}
+                >
+                  Copy chat
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onNewChat();
+                  }}
+                >
+                  New chat
+                </MenuItem>
+                {hasHistory ? <MenuItem onClick={() => setView('history')}>Previous chats</MenuItem> : null}
+                {hasHistory ? <MenuItem onClick={handleClearHistory}>Clear history</MenuItem> : null}
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    togglePreset();
+                  }}
+                >
+                  {isAtDefault ? 'Expand' : 'Collapse'}
+                </MenuItem>
+              </>
+            ) : (
+              <>
+                <MenuItem onClick={() => setView('main')}>← Back</MenuItem>
+                {history.map(entry => (
+                  <MenuItem
+                    key={entry.id}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onSwitchChat(entry.id);
+                    }}
+                  >
+                    <div className="flex min-w-0 flex-col items-start text-left">
+                      <span className="w-full truncate">{entry.title || 'Untitled chat'}</span>
+                      <span className="text-metadata text-grey-04">{formatRelativeTime(entry.updatedAt)}</span>
+                    </div>
+                  </MenuItem>
+                ))}
+              </>
+            )}
           </Menu>
           <button
             type="button"
@@ -204,12 +251,12 @@ export function ChatPanel({
           status={status}
           error={error}
           onSuggestion={text => onSuggestion(text, 'follow_up')}
-          disabled={isBusy}
+          disabled={isBusy || isCompacting}
         />
       ) : suppressWelcome ? (
         <div className="flex-1" />
       ) : (
-        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy} />
+        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
       )}
 
       <ChatInput
@@ -217,7 +264,7 @@ export function ChatPanel({
         onChange={onInputChange}
         onSubmit={onSend}
         onStop={onStop}
-        isBusy={isBusy}
+        isBusy={isBusy || isCompacting}
         placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
       />
     </motion.div>
@@ -228,17 +275,36 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(Math.max(n, min), max);
 }
 
+function formatRelativeTime(timestamp: number): string {
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 0) return 'just now';
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
+
 function formatTranscript(messages: UIMessage[]): string {
   const turns = messages
     .map(message => {
-      const text = message.parts
-        .filter(isTextUIPart)
-        .map(part => part.text)
-        .join('')
-        .trim();
-      if (!text) return null;
+      const segments: string[] = [];
+      for (const part of message.parts) {
+        if (isTextUIPart(part)) {
+          const text = part.text.trim();
+          if (text) segments.push(text);
+        } else if (isToolUIPart(part)) {
+          const name = part.type.startsWith('tool-') ? part.type.slice('tool-'.length) : part.type;
+          segments.push(`[${name}]`);
+        }
+      }
+      const joined = segments.join('\n').trim();
+      if (!joined) return null;
       const label = message.role === 'user' ? 'You' : 'Assistant';
-      return `**${label}:** ${text}`;
+      return `**${label}:** ${joined}`;
     })
     .filter((turn): turn is string => turn !== null);
   return turns.join('\n\n');

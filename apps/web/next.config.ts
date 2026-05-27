@@ -14,8 +14,6 @@ const turbopackOptimizations =
     ? {
         turbopackInferModuleSideEffects: false,
         turbopackInputSourceMaps: false,
-        turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
-        turbopackPluginRuntimeStrategy: 'workerThreads' as const,
         turbopackRemoveUnusedExports: false,
         turbopackRemoveUnusedImports: false,
         turbopackSourceMaps: false,
