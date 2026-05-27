@@ -190,19 +190,37 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
   { match: host => matchesBlogHost(host), type: 'post' },
   // Specific company blogs (host + blog path → Post). Path-scoped on purpose
   // so docs.* subdomains and product/landing pages are NOT routed to post —
-  // only the editorial blog/news/research sections are.
+  // only the editorial blog/research sections are. NOTE: /news is deliberately
+  // excluded here — a company's /news section is a newsroom, routed to News
+  // Story by the general /news rule below.
   {
     match: (host, path) =>
       (host === 'anthropic.com' || host === 'www.anthropic.com') &&
-      /^\/(news|engineering|research)(\/|$)/.test(path),
+      /^\/(engineering|research)(\/|$)/.test(path),
     type: 'post',
   },
+  // OpenAI publishes its articles under /index, and the newsroom landing
+  // (openai.com/news) surfaces those same /index posts as its cards — so
+  // /index IS OpenAI's newsroom → News Story.
   {
     match: (host, path) =>
       (host === 'openai.com' || host === 'www.openai.com') &&
-      /^\/(index|blog|research)(\/|$)/.test(path),
+      /^\/index(\/|$)/.test(path),
+    type: 'news-story-single',
+  },
+  // OpenAI's other editorial sections → Post (blog/research). Whether these
+  // should also be News is still TBD.
+  {
+    match: (host, path) =>
+      (host === 'openai.com' || host === 'www.openai.com') &&
+      /^\/(blog|research)(\/|$)/.test(path),
     type: 'post',
   },
+  // Any company's own /news section → News Story. A /news path is a newsroom /
+  // press section, so it's a news source even when the domain isn't a dedicated
+  // news outlet (covers anthropic.com/news, openai.com/news, and any company).
+  // Runs AFTER the blog-platform rule above, so Substack/Medium/etc. stay Post.
+  { match: (_host, path) => /^\/news(\/|$)/.test(path), type: 'news-story-single' },
   { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
   { match: host => host === 'linkedin.com' || host === 'www.linkedin.com', type: 'news-story-single' },
   { match: host => matchesNewsHost(host), type: 'news-story-single' },
