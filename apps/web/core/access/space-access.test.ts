@@ -34,7 +34,9 @@ describe('space-access', () => {
     queries.getIsMemberOfSpace.mockReturnValue(Effect.succeed(true));
     queries.getIsEditorOfSpace.mockReturnValue(Effect.succeed(false));
 
-    const access = await Effect.runPromise(getSpaceAccess({ id: 'dao-space-id', type: 'DAO' } as any, 'member-space-id'));
+    const access = await Effect.runPromise(
+      getSpaceAccess({ id: 'dao-space-id', type: 'DAO' } as any, 'member-space-id')
+    );
 
     expect(queries.getIsMemberOfSpace).toHaveBeenCalledWith('daospaceid', 'memberspaceid', undefined);
     expect(queries.getIsEditorOfSpace).toHaveBeenCalledWith('daospaceid', 'memberspaceid', undefined);

@@ -163,13 +163,7 @@ function matchesNewsHost(host: string): boolean {
   return false;
 }
 
-const BLOG_HOSTS = new Set([
-  'substack.com',
-  'medium.com',
-  'mirror.xyz',
-  'paragraph.xyz',
-  'ghost.io',
-]);
+const BLOG_HOSTS = new Set(['substack.com', 'medium.com', 'mirror.xyz', 'paragraph.xyz', 'ghost.io']);
 
 function matchesBlogHost(host: string): boolean {
   for (const domain of BLOG_HOSTS) {
@@ -195,25 +189,21 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
   // Story by the general /news rule below.
   {
     match: (host, path) =>
-      (host === 'anthropic.com' || host === 'www.anthropic.com') &&
-      /^\/(engineering|research)(\/|$)/.test(path),
+      (host === 'anthropic.com' || host === 'www.anthropic.com') && /^\/(engineering|research)(\/|$)/.test(path),
     type: 'post',
   },
   // OpenAI publishes its articles under /index, and the newsroom landing
   // (openai.com/news) surfaces those same /index posts as its cards — so
   // /index IS OpenAI's newsroom → News Story.
   {
-    match: (host, path) =>
-      (host === 'openai.com' || host === 'www.openai.com') &&
-      /^\/index(\/|$)/.test(path),
+    match: (host, path) => (host === 'openai.com' || host === 'www.openai.com') && /^\/index(\/|$)/.test(path),
     type: 'news-story-single',
   },
   // OpenAI's other editorial sections → Post (blog/research). Whether these
   // should also be News is still TBD.
   {
     match: (host, path) =>
-      (host === 'openai.com' || host === 'www.openai.com') &&
-      /^\/(blog|research)(\/|$)/.test(path),
+      (host === 'openai.com' || host === 'www.openai.com') && /^\/(blog|research)(\/|$)/.test(path),
     type: 'post',
   },
   // Any company's own /news section → News Story. A /news path is a newsroom /

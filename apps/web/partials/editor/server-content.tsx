@@ -1,5 +1,5 @@
-import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';

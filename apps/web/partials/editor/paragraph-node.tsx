@@ -1,10 +1,5 @@
 import Paragraph from '@tiptap/extension-paragraph';
-import {
-  NodeViewRendererProps,
-  NodeViewWrapper,
-  ReactNodeViewRenderer,
-  mergeAttributes,
-} from '@tiptap/react';
+import { NodeViewRendererProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
 import * as React from 'react';
 

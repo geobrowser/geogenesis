@@ -34,9 +34,9 @@ import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fiel
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Map as GeoMap } from '~/design-system/map';
 import { Text } from '~/design-system/text';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
@@ -191,7 +191,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                   }))
                 }
               >
-                <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+                <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                   {group.label}
                 </Text>
                 <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
@@ -207,10 +207,19 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                     const isRelation = property.dataType === 'RELATION';
 
                     if (isRelation) {
-                      return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+                      return (
+                        <RelationsGroup
+                          key={propertyId}
+                          entityId={entityId}
+                          spaceId={spaceId}
+                          propertyId={propertyId}
+                        />
+                      );
                     }
 
-                    return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+                    return (
+                      <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />
+                    );
                   })}
                 </div>
               )}
@@ -221,7 +230,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
       {groupedSections.ungrouped.length > 0 && (
         <div className="flex flex-col gap-2">
           {groupedSections.hasGroups && (
-            <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+            <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
               Ungrouped properties
             </Text>
           )}
@@ -232,7 +241,9 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
               const isRelation = property.dataType === 'RELATION';
 
               if (isRelation) {
-                return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
+                return (
+                  <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />
+                );
               }
 
               return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
@@ -263,15 +274,7 @@ const ReadableNumberField = ({ value, unitId, propertyId }: { value: string; uni
   return <Text as="p">{GeoNumber.format(value, format, currencySign)}</Text>;
 };
 
-function ValuesGroup({
-  entityId,
-  spaceId,
-  propertyId,
-}: {
-  entityId: string;
-  spaceId: string;
-  propertyId: string;
-}) {
+function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spaceId: string; propertyId: string }) {
   // @TODO: This should be prefetched with _all_ the properties
   const { property } = useQueryProperty({ id: propertyId });
 

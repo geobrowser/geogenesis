@@ -231,12 +231,7 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const {
-    isFetched,
-    isLoading,
-    isPlaceholderData,
-    data,
-  } = useQuery({
+  const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],

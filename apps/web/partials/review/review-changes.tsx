@@ -10,8 +10,8 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom, useStore } from 'jotai';
 
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -52,8 +52,8 @@ import {
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
 import {
-  editorContentVersionAtom,
   clearPersonalProfileSessionDismissStorage,
+  editorContentVersionAtom,
   personalProfileSuggestedDismissAtom,
   personalProfileSuggestedTasksAtom,
 } from '~/atoms';
