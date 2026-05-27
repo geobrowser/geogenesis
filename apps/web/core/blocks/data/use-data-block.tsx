@@ -367,9 +367,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   );
   const properties = React.useMemo(() => {
     if (!propertiesSchema) return [];
-    return shownColumnIds
-      .map(id => propertiesSchema[id])
-      .filter((p): p is Property => Boolean(p));
+    return shownColumnIds.map(id => propertiesSchema[id]).filter((p): p is Property => Boolean(p));
   }, [propertiesSchema, shownColumnIds]);
 
   const setName = (newName: string) => {

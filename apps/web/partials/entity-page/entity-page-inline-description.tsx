@@ -119,8 +119,7 @@ function TruncatedDescription({ text }: { text: string }) {
   const showToggle = isOverflowing;
   const clamp = !expanded;
 
-  const buttonFocus =
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+  const buttonFocus = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
   // Reserve room at the right of the last line so the auto line-clamp
   // ellipsis ("…") lands inline with the text and the More button sits in
@@ -138,11 +137,7 @@ function TruncatedDescription({ text }: { text: string }) {
   return (
     <div className="relative">
       <p
-        className={[
-          'text-body wrap-break-word text-text',
-          clamp ? CLAMP_CLASS : '',
-          reserveToggle ? togglePadding : '',
-        ]
+        className={['text-body wrap-break-word text-text', clamp ? CLAMP_CLASS : '', reserveToggle ? togglePadding : '']
           .filter(Boolean)
           .join(' ')}
       >
@@ -150,12 +145,7 @@ function TruncatedDescription({ text }: { text: string }) {
         {showToggle && expanded && (
           <>
             {' '}
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              aria-expanded={true}
-              className={buttonStyle}
-            >
+            <button type="button" onClick={() => setExpanded(false)} aria-expanded={true} className={buttonStyle}>
               Less
             </button>
           </>
@@ -166,7 +156,7 @@ function TruncatedDescription({ text }: { text: string }) {
           type="button"
           onClick={() => setExpanded(true)}
           aria-expanded={false}
-          className={`absolute bottom-0 right-0 ${buttonStyle}`}
+          className={`absolute right-0 bottom-0 ${buttonStyle}`}
         >
           More
         </button>

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -11,7 +12,6 @@ import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
-import { normalizeSpaceId } from '~/core/access/space-access';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';

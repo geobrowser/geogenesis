@@ -27,7 +27,7 @@ export function ReadablePostEntityPage({ id, spaceId }: Props) {
             </Text>
           </Accordion.Trigger>
           <Accordion.Content className="border-t border-grey-02 px-0 pt-0 [&>div]:pb-0">
-            <div className="flex flex-col gap-6 px-5 pb-5 pt-0">
+            <div className="flex flex-col gap-6 px-5 pt-0 pb-5">
               <ReadableEntityProperties id={id} spaceId={spaceId} />
             </div>
           </Accordion.Content>

@@ -210,7 +210,7 @@ export function TableBlockFilterGroupPill({
             }}
             className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-sm border border-grey-02 bg-grey-01 text-grey-04 transition hover:bg-grey-02 hover:text-text"
           >
-            <span className="inline-flex h-3 w-3 items-center justify-center [&_svg]:h-full [&_svg]:w-full [&_svg]:max-h-3 [&_svg]:max-w-3">
+            <span className="inline-flex h-3 w-3 items-center justify-center [&_svg]:h-full [&_svg]:max-h-3 [&_svg]:w-full [&_svg]:max-w-3">
               <Plus color="grey-04" />
             </span>
           </button>

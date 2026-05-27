@@ -4,9 +4,11 @@ import { ID } from '~/core/id';
 
 export const PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY = 'geoPersonalProfileBioStarterV1';
 export const PERSONAL_PROFILE_BIO_STARTER_MARKER = '// Delete this text below to create your own content.';
-export const PERSONAL_PROFILE_BIO_STARTER_SLASH_HELP = 'I can type / to add text, image blocks, video blocks, data blocks and more.';
+export const PERSONAL_PROFILE_BIO_STARTER_SLASH_HELP =
+  'I can type / to add text, image blocks, video blocks, data blocks and more.';
 
-export const PERSONAL_PROFILE_BIO_STARTER_FORMATTING_HELP = 'I can also format this text by highlighting it and making it bold, italic or underlined. I can also link to other parts of Geo.';
+export const PERSONAL_PROFILE_BIO_STARTER_FORMATTING_HELP =
+  'I can also format this text by highlighting it and making it bold, italic or underlined. I can also link to other parts of Geo.';
 
 const BLOCK_TYPES_WITH_ATTRS = new Set([
   'paragraph',
@@ -76,7 +78,12 @@ function buildPersonalProfileBioStarterBlocks(displayName: string): JSONContent[
         text(' or '),
         marked('underlined', [{ type: 'underline' }]),
         text('. I can also link to other parts of '),
-        marked('Geo', [{ type: 'link', attrs: { href: 'graph://6b9f649e38b64224927dd66171343730?s=a19c345ab9866679b001d7d2138d88a1' } }]),
+        marked('Geo', [
+          {
+            type: 'link',
+            attrs: { href: 'graph://6b9f649e38b64224927dd66171343730?s=a19c345ab9866679b001d7d2138d88a1' },
+          },
+        ]),
         text('.'),
       ],
     },

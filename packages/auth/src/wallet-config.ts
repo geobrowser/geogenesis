@@ -13,11 +13,7 @@ export type GeoWalletConfigParams = {
   walletConnectProjectId: string;
 };
 
-export const createGeoWalletConfig = ({
-  chain,
-  rpcUrl: rpc,
-  walletConnectProjectId,
-}: GeoWalletConfigParams): Config =>
+export const createGeoWalletConfig = ({ chain, rpcUrl: rpc, walletConnectProjectId }: GeoWalletConfigParams): Config =>
   createConfig({
     chains: [chain],
     // This enables us to use a single injected connector but handle multiple wallet

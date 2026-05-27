@@ -15,7 +15,6 @@ import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
 
-import { PageViewTracker } from '~/app/page-view-tracker';
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
@@ -24,6 +23,8 @@ import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
+
+import { PageViewTracker } from '~/app/page-view-tracker';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),

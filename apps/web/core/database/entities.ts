@@ -86,11 +86,7 @@ function readBooleanEntityValue(entity: Entity, propertyId: string, preferredSpa
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
-function selectRelationsByType(
-  entity: Entity,
-  relationTypeId: string,
-  preferredSpaceId?: string
-): Relation[] {
+function selectRelationsByType(entity: Entity, relationTypeId: string, preferredSpaceId?: string): Relation[] {
   const relationsOfType = entity.relations.filter(r => r.type.id === relationTypeId);
   if (!preferredSpaceId) return relationsOfType;
 
@@ -548,9 +544,13 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
     );
 
     const isTypeSpaceByTarget = new Map(uniqueIsTypeRefs.map(r => [r.targetId, r.spaceId]));
-    const isTypeEntities = await fetchEntitiesWithRelations(uniqueIsTypeRefs.map(r => r.targetId), isTypeSpaceByTarget, {
-      requiredRelationTypeId: SystemIds.PROPERTIES,
-    });
+    const isTypeEntities = await fetchEntitiesWithRelations(
+      uniqueIsTypeRefs.map(r => r.targetId),
+      isTypeSpaceByTarget,
+      {
+        requiredRelationTypeId: SystemIds.PROPERTIES,
+      }
+    );
     const isTypeEntitiesById = new Map(isTypeEntities.map(entity => [entity.id, entity]));
     const isTypeGroupsByParentGroupId = new Map<string, SchemaPropertyGroup[]>();
     const ungroupedIsTypeGroups: SchemaPropertyGroup[] = [];

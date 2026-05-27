@@ -6,9 +6,9 @@ import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';

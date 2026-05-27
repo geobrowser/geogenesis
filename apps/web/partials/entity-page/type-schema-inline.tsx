@@ -38,7 +38,9 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
   const typePropertyRelations = sortRelations(
     useRelations({
       selector: relation =>
-        relation.fromEntity.id === entityId && relation.spaceId === spaceId && relation.type.id === SystemIds.PROPERTIES,
+        relation.fromEntity.id === entityId &&
+        relation.spaceId === spaceId &&
+        relation.type.id === SystemIds.PROPERTIES,
     })
   );
   const typePropertyIds = React.useMemo(
@@ -108,7 +110,14 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
     const ungrouped = typePropertyIds.filter(propertyId => !consumed.has(propertyId));
 
     return { groups, ungrouped, propertyNameById };
-  }, [groupNameValues, groupPropertyRelations, groupRelations, typePropertyIdSet, typePropertyIds, typePropertyRelations]);
+  }, [
+    groupNameValues,
+    groupPropertyRelations,
+    groupRelations,
+    typePropertyIdSet,
+    typePropertyIds,
+    typePropertyRelations,
+  ]);
 
   if (sections.groups.length === 0 && sections.ungrouped.length === 0) {
     return null;
@@ -122,7 +131,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
       <div className="flex flex-col gap-4 rounded-lg border border-grey-02 p-4 shadow-button">
         {sections.groups.map(group => (
           <div key={group.id} className="flex flex-col gap-2">
-            <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+            <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
               {group.label}
             </Text>
             <div className="flex flex-wrap gap-2">
@@ -145,7 +154,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
         {sections.ungrouped.length > 0 && (
           <div className="flex flex-col gap-2">
             {sections.groups.length > 0 && (
-              <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+              <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                 Ungrouped properties
               </Text>
             )}

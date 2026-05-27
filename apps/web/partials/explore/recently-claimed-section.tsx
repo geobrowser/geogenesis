@@ -36,10 +36,7 @@ export function RecentlyClaimedSection({ spaces, pendingMembershipSpaceIds, memb
 
           return (
             <li key={space.spaceId} className="flex items-center justify-between gap-3">
-              <Link
-                href={NavUtils.toSpace(space.spaceId)}
-                className="flex min-w-0 flex-1 items-center gap-2"
-              >
+              <Link href={NavUtils.toSpace(space.spaceId)} className="flex min-w-0 flex-1 items-center gap-2">
                 <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-grey-01">
                   <FallbackImage value={space.image} sizes="32px" className="object-cover" />
                 </span>

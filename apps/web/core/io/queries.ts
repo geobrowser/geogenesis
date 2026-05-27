@@ -7,13 +7,13 @@ import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
   type EntitiesBatchForCommentsQuery,
-  type EntitySpacesBatchQuery,
   EntitiesOrderBy,
   EntityCommentReplyBacklinksPageDocument,
   type EntityCommentReplyBacklinksPageQuery,
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
+  type EntitySpacesBatchQuery,
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
@@ -21,21 +21,21 @@ import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
-import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
+import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
-  entitySpacesBatchQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
   entityQuery,
+  entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
   entityVoteCountQuery,
@@ -532,11 +532,7 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
 
 // Filter server-side: `membersList` is paginated to 100 by the API, so a
 // client-side `includes()` against `FullSpace` misses members past page 1.
-export function getIsMemberOfSpace(
-  spaceId: string,
-  memberSpaceId: string,
-  signal?: AbortController['signal']
-) {
+export function getIsMemberOfSpace(spaceId: string, memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: isMemberOfSpaceQuery,
     decoder: data => (data.space?.membersList?.length ?? 0) > 0,
@@ -545,11 +541,7 @@ export function getIsMemberOfSpace(
   });
 }
 
-export function getIsEditorOfSpace(
-  spaceId: string,
-  memberSpaceId: string,
-  signal?: AbortController['signal']
-) {
+export function getIsEditorOfSpace(spaceId: string, memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: isEditorOfSpaceQuery,
     decoder: data => (data.space?.editorsList?.length ?? 0) > 0,

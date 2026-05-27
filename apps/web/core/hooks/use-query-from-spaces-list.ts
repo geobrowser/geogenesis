@@ -1,16 +1,17 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { FEATURED_BROWSE_SPACES } from '~/core/browse/featured-spaces';
 import {
-  fetchBrowseSidebarData,
   type BrowseSidebarData,
   type BrowseSpaceRow,
+  fetchBrowseSidebarData,
 } from '~/core/browse/fetch-browse-sidebar-data';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';

@@ -133,14 +133,12 @@ async function fetchBrowseSidebarSources(memberSpaceId: string) {
     ),
   ]);
 
-  const pendingMemberIds =
-    Either.isRight(pendingResult)
-      ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
-      : [];
-  const pendingEditorIds =
-    Either.isRight(pendingResult)
-      ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
-      : [];
+  const pendingMemberIds = Either.isRight(pendingResult)
+    ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
+    : [];
+  const pendingEditorIds = Either.isRight(pendingResult)
+    ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
+    : [];
 
   return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
 }
@@ -227,10 +225,7 @@ type BrowseSidebarSources = {
 
 export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
   if (!memberSpaceId) {
-    const featuredOnly = await fetchSpaceRows([
-      ...FEATURED_BROWSE_SPACES.map(s => s.id),
-      DOCUMENTATION_SPACE_ID,
-    ]);
+    const featuredOnly = await fetchSpaceRows([...FEATURED_BROWSE_SPACES.map(s => s.id), DOCUMENTATION_SPACE_ID]);
     return {
       featured: sortSpaceListByRankNameId(
         FEATURED_BROWSE_SPACES.map(f => {

@@ -34,7 +34,6 @@ import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { sortRelations } from '~/core/utils/utils';
 
-import { propertyIsSkillsProperty } from '~/atoms/personal-profile-suggested';
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableMediaChip } from '~/design-system/chip';
@@ -49,6 +48,7 @@ import {
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
@@ -57,12 +57,13 @@ import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { createRelationEntityTypeRelation } from '~/partials/blocks/table/change-entry';
 import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
+
+import { propertyIsSkillsProperty } from '~/atoms/personal-profile-suggested';
 
 type EditableEntityPageProps = {
   id: string;
@@ -127,7 +128,9 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
       ]
     : visiblePropertySections.sections;
   const effectiveHasGroups = !isTypeEntity && visiblePropertySections.hasGroups;
-  const effectiveTotalProperties = isTypeEntity ? visibleFlatPropertiesEntries.length : visiblePropertySections.totalProperties;
+  const effectiveTotalProperties = isTypeEntity
+    ? visibleFlatPropertiesEntries.length
+    : visiblePropertySections.totalProperties;
   const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
@@ -180,11 +183,16 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               {effectiveSections.map(section => {
                 const collapsible = section.collapsible !== false;
                 const sectionCollapsed =
-                  collapsible && section.groupId ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed) : false;
+                  collapsible && section.groupId
+                    ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed)
+                    : false;
                 const isCollapsed = sectionCollapsed;
 
                 return (
-                  <div key={section.id} className={isTypeEntity ? 'flex flex-col gap-2 sm:gap-5' : 'flex flex-col gap-4 sm:gap-5'}>
+                  <div
+                    key={section.id}
+                    className={isTypeEntity ? 'flex flex-col gap-2 sm:gap-5' : 'flex flex-col gap-4 sm:gap-5'}
+                  >
                     {effectiveHasGroups && section.isGroup && collapsible && (
                       <button
                         type="button"
@@ -197,7 +205,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                           }))
                         }
                       >
-                        <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+                        <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                           {section.label}
                         </Text>
                         <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
@@ -206,7 +214,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                       </button>
                     )}
                     {effectiveHasGroups && section.isGroup && !collapsible && section.label && (
-                      <Text as="p" variant="metadata" className="text-grey-04 leading-[13px] tracking-[-0.35px]">
+                      <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                         {section.label}
                       </Text>
                     )}
@@ -214,7 +222,8 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                     {!isCollapsed &&
                       section.entries.map(([propertyId, property]) => {
                         const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
-                        const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
+                        const isVideo =
+                          property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
                         return (
                           <InlinePropertyRow
@@ -373,7 +382,10 @@ function useVisiblePropertiesEntries(
   return propertiesEntries.filter(([propertyId]) => {
     if (SYSTEM_PROPERTIES.includes(propertyId)) return false;
     if (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty) return false;
-    if (options?.hideTypeGroupingFields && (propertyId === SystemIds.PROPERTIES || propertyId === PROPERTY_GROUPS_PROPERTY)) {
+    if (
+      options?.hideTypeGroupingFields &&
+      (propertyId === SystemIds.PROPERTIES || propertyId === PROPERTY_GROUPS_PROPERTY)
+    ) {
       return false;
     }
     return true;
@@ -402,9 +414,7 @@ function RelationPropertyWithDelete({
   return (
     <div
       className="flex items-start justify-between gap-2"
-      {...(propertyIsSkillsProperty(property.id)
-        ? { 'data-personal-profile-focus': 'skills' as const }
-        : {})}
+      {...(propertyIsSkillsProperty(property.id) ? { 'data-personal-profile-focus': 'skills' as const } : {})}
     >
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
