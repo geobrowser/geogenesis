@@ -102,6 +102,47 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
   return { isFetched };
 }
 
+type HydrateEntitiesOptions = {
+  ids: string[];
+  enabled?: boolean;
+  spaceId?: string;
+};
+
+export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+  const stableKey = React.useMemo(() => [...new Set(ids)].sort().join('|'), [ids]);
+
+  const { isFetched } = useQuery({
+    enabled: enabled && ids.length > 0,
+    queryKey: ['store', 'entities', stableKey, spaceId ?? ''],
+    queryFn: async () => {
+      const uniqueIds = [...new Set(ids)].filter(Boolean);
+      if (uniqueIds.length === 0) return [];
+
+      const { merged, remote } = await E.syncMany({
+        store,
+        cache,
+        where: { id: { in: uniqueIds } },
+        first: uniqueIds.length,
+        spaceId,
+      });
+
+      if (merged.length > 0) {
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: merged,
+          remoteEntities: remote,
+        });
+      }
+
+      return merged;
+    },
+  });
+
+  return { isFetched };
+}
+
 /**
  * @TODO: We're basically inventing @tanstack/db. Right now it's
  * not stable (as of July 2025). Once it's stable we should just
