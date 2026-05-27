@@ -127,12 +127,15 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   // PROPERTIES relations (and NAME value) are available to the useRelations
   // / useValues selectors below. Without this, groups whose entities were
   // never independently loaded render with empty contents until something
-  // else (e.g. a search-result merge) syncs them in.
+  // else (e.g. a search-result merge) syncs them in. spaceId is required —
+  // the underlying GraphQL filters valuesList/relationsList by spaceId, so
+  // an unscoped fetch returns id-only stubs with no relations to populate.
   const groupIdsForQuery = React.useMemo(() => [...groupIds], [groupIds]);
   useQueryEntities({
     enabled: groupIdsForQuery.length > 0,
     where: { id: { in: groupIdsForQuery } },
     first: groupIdsForQuery.length || undefined,
+    spaceId,
   });
   const allGroupOutgoingRelations = useRelations({
     selector: relation => relation.spaceId === spaceId && groupIds.has(relation.fromEntity.id),

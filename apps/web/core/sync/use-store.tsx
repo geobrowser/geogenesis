@@ -175,6 +175,15 @@ type QueryEntitiesOptions = {
    * keep the offset out of the SQL slow zone).
    */
   offset?: number;
+  /**
+   * Scopes the remote fetch (and store hydration) to a single space. The
+   * underlying GraphQL query filters `valuesList`/`relationsList` by spaceId,
+   * so passing this is the only way to ensure the resulting entities carry
+   * their values + relations into the local store. Leave undefined to query
+   * across spaces only when the caller doesn't need the entity's full
+   * values/relations payload (e.g. id-only lookups).
+   */
+  spaceId?: string;
   placeholderData?: typeof keepPreviousData;
   /**
    * When true, returns an empty array until the initial fetch completes.
@@ -205,6 +214,7 @@ export function useQueryEntities({
   first = 9,
   after,
   offset,
+  spaceId,
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
@@ -239,7 +249,7 @@ export function useQueryEntities({
   } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, spaceId ?? null],
     queryFn: async () => {
       const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
         store,
@@ -248,6 +258,7 @@ export function useQueryEntities({
         first,
         after,
         offset,
+        spaceId,
         sort,
       });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
@@ -274,9 +285,9 @@ export function useQueryEntities({
     if (!prefetchEndCursor) return;
     const nextAfter = prefetchEndCursor;
     cache.prefetchQuery({
-      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null, spaceId ?? null],
       queryFn: async () => {
-        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, spaceId, sort });
         stream.emit({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: result.merged,
