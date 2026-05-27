@@ -94,6 +94,24 @@ describe('sanitizeModelMessages', () => {
     expect(droppedToolCallIds).toEqual(['tool-call#toolu_BAD-unparseable-input']);
   });
 
+  it('drops a tool-call whose id breaks Anthropic id pattern, plus its result', () => {
+    const input: ModelMessage[] = [
+      userText('hi'),
+      // Synthetic inject follow-ups id used a colon separator — Anthropic 400s on it.
+      assistantCall('inject-followups:abc-123', 'suggestFollowUps', { suggestions: ['a'] }),
+      toolResult('inject-followups:abc-123', 'suggestFollowUps', { type: 'json', value: { suggestions: ['a'] } }),
+      assistantCall('toolu_OK', 'searchGraph', { query: 'foo' }),
+      toolResult('toolu_OK', 'searchGraph', { type: 'json', value: { results: [] } }),
+    ];
+    const { messages, droppedToolCallIds } = sanitizeModelMessages(input);
+    expect(messages.map(m => m.role)).toEqual(['user', 'assistant', 'tool']);
+    expect((messages[1].content as Array<{ toolCallId: string }>)[0].toolCallId).toBe('toolu_OK');
+    expect(droppedToolCallIds).toEqual([
+      'tool-call#inject-followups:abc-123-invalid-id',
+      'tool-result#inject-followups:abc-123-orphan',
+    ]);
+  });
+
   it('omits an assistant message entirely when all of its content was filtered out', () => {
     const input: ModelMessage[] = [
       userText('hi'),
