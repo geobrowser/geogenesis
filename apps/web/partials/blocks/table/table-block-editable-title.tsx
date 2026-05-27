@@ -44,7 +44,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         />
       )}
       {source.type === 'SPACES' && (
-        <div className="group relative z-100 flex h-full">
+        <div className="group relative z-10 flex h-full">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spacesById.get(spaceId);
 
