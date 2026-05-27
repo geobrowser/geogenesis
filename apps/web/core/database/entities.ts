@@ -456,15 +456,7 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
   }
 
   const dedupedGroupRefs = dedupeWith(propertyGroupRefs, (a, b) => a.id === b.id);
-  // Fetch property-group entities unscoped by space. A type→group relation's
-  // space doesn't necessarily match the group entity's own space, and a
-  // space-scoped fetch returns the entity stub with empty valuesList/
-  // relationsList — which makes the group render without a name or properties
-  // until something else (e.g. a search-result merge) hydrates the entity
-  // into the local store.
-  const groupSpaceByEntity = new Map<string, string | undefined>(
-    dedupedGroupRefs.map(g => [g.id, undefined])
-  );
+  const groupSpaceByEntity = new Map(dedupedGroupRefs.map(g => [g.id, g.spaceId]));
   const groupEntities = await fetchEntitiesWithRelations(
     dedupedGroupRefs.map(g => g.id),
     groupSpaceByEntity
