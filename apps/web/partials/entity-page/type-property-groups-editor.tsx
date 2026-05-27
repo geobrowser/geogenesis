@@ -30,7 +30,7 @@ import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } fro
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { useQueryEntities, useRelations, useValue, useValues } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 import { sortRelations } from '~/core/utils/utils';
 
@@ -123,6 +123,17 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     () => new Set(propertyGroupRelations.map(relation => relation.toEntity.id)),
     [propertyGroupRelations]
   );
+  // Hydrate the property-group entities into the local store so their own
+  // PROPERTIES relations (and NAME value) are available to the useRelations
+  // / useValues selectors below. Without this, groups whose entities were
+  // never independently loaded render with empty contents until something
+  // else (e.g. a search-result merge) syncs them in.
+  const groupIdsForQuery = React.useMemo(() => [...groupIds], [groupIds]);
+  useQueryEntities({
+    enabled: groupIdsForQuery.length > 0,
+    where: { id: { in: groupIdsForQuery } },
+    first: groupIdsForQuery.length || undefined,
+  });
   const allGroupOutgoingRelations = useRelations({
     selector: relation => relation.spaceId === spaceId && groupIds.has(relation.fromEntity.id),
   });
