@@ -14,6 +14,15 @@ export const hasExternalTopic = (space: Space | null | undefined): space is Spac
   return Boolean(space?.topicId && space.topicId !== space.entity?.id);
 };
 
+/** Entity at the root of a space's subtopic tree (homepage, or external topic). */
+export function getSpaceSubtopicRootEntityId(space: Pick<Space, 'topicId' | 'entity'>): string {
+  if (hasExternalTopic(space)) {
+    return space.topicId;
+  }
+
+  return space.entity.id;
+}
+
 export const getValidSpaceIdForEntity = (entity: Entity) => {
   const validSpaces = entity?.spaces ?? [];
   return getTopRankedSpaceId(validSpaces);
