@@ -239,6 +239,13 @@ export function EditableSpaceHeading({
                       <p>Edit space config</p>
                     </MenuItem>
                   )}
+                  <MenuItem
+                    onClick={() => {
+                      dispatch({ type: 'OPEN_SUBTOPICS' });
+                    }}
+                  >
+                    <p>Subtopics</p>
+                  </MenuItem>
                   {isEditing && (
                     <>
                       <MenuItem
@@ -254,13 +261,6 @@ export function EditableSpaceHeading({
                         }}
                       >
                         <p>Space relationships</p>
-                      </MenuItem>
-                      <MenuItem
-                        onClick={() => {
-                          dispatch({ type: 'OPEN_SUBTOPICS' });
-                        }}
-                      >
-                        <p>Subtopics</p>
                       </MenuItem>
                     </>
                   )}
