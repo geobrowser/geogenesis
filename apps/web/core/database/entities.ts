@@ -595,7 +595,28 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
     }
   }
 
-  const groupedPropertyIds = propertyGroups.flatMap(group => group.propertyIds);
+  // Synthetic isType groups are only meaningful as a layout hint when at
+  // least one real type-defined group exists. Otherwise, keep the inherited
+  // properties in the normal flat section so entity pages do not get a
+  // type-named collapsible wrapper around their standard properties.
+  const hasRealGroups = propertyGroups.some(group => group.source === 'type');
+  let effectivePropertyGroups = propertyGroups;
+  if (!hasRealGroups) {
+    const syntheticPropertyIds = propertyGroups
+      .filter(group => group.source === 'isType')
+      .flatMap(group => group.propertyIds);
+
+    const ungroupedSeen = new Set(ungroupedPropertyIds);
+    for (const propertyId of syntheticPropertyIds) {
+      if (ungroupedSeen.has(propertyId)) continue;
+      ungroupedSeen.add(propertyId);
+      ungroupedPropertyIds.push(propertyId);
+    }
+
+    effectivePropertyGroups = [];
+  }
+
+  const groupedPropertyIds = effectivePropertyGroups.flatMap(group => group.propertyIds);
   const groupedPropertyIdSet = new Set(groupedPropertyIds);
   const ungroupedSet = new Set(ungroupedPropertyIds);
 
@@ -632,8 +653,8 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
 
   return {
     schema: orderedSchema,
-    propertyGroups,
+    propertyGroups: effectivePropertyGroups,
     ungroupedPropertyIds,
-    hasPropertyGroups: propertyGroups.length > 0,
+    hasPropertyGroups: effectivePropertyGroups.length > 0,
   };
 }
