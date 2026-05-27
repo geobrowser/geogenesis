@@ -16,6 +16,7 @@ import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { Relation } from '~/design-system/icons/relation';
+import { Trash } from '~/design-system/icons/trash';
 import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
@@ -38,7 +39,7 @@ type TableBlockContextMenuProps = {
 export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
-  const { spaceId, entityId, relationId } = useDataBlockInstance();
+  const { spaceId, entityId, relationId, onRemoveFromEditor } = useDataBlockInstance();
   const isEditing = useUserIsEditing(spaceId);
   const [isEditingProperties, setIsEditingProperties] = useAtom(editingPropertiesAtom);
 
@@ -56,6 +57,12 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
     } catch {
       console.error('Failed to copy table block entity ID for: ', entityId);
     }
+  };
+
+  const onRemoveBlock = () => {
+    setIsMenuOpen(false);
+    setIsEditingProperties(false);
+    onRemoveFromEditor?.();
   };
 
   const onOpenChange = (open: boolean) => {
@@ -122,6 +129,14 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
                     <Copy />
                   </div>
                 </MenuItem>
+                {isEditing && onRemoveFromEditor && (
+                  <MenuItem className={listRowClassName} onClick={onRemoveBlock}>
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span>Remove</span>
+                      <Trash color="grey-04" />
+                    </div>
+                  </MenuItem>
+                )}
               </>
             )}
           </div>

@@ -275,6 +275,7 @@ function useEntries(
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    hasPlaceholderRow,
   };
 }
 
@@ -454,7 +455,12 @@ const ConfiguredTableBlock = ({
     onUpdateRelation,
     shouldAutoFocusPlaceholder,
     placeholderFocusKey,
+    hasPlaceholderRow,
   } = useEntries(rows, properties, spaceId, activeFilters, relations, source, canEdit, isFetched && !isLoading);
+
+  const handleAddPlaceholder = React.useCallback(() => {
+    onAddPlaceholder();
+  }, [onAddPlaceholder]);
 
   const collectionTypeFilters = React.useMemo(
     () =>
@@ -541,7 +547,7 @@ const ConfiguredTableBlock = ({
       shownColumnIds={shownColumnIds}
       onChangeEntry={onChangeEntry}
       onLinkEntry={onLinkEntry}
-      onAddPlaceholder={onAddPlaceholder}
+      onAddPlaceholder={handleAddPlaceholder}
       shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
       placeholderFocusKey={placeholderFocusKey}
       collectionTypeFilters={collectionTypeFilters}
@@ -673,7 +679,7 @@ const ConfiguredTableBlock = ({
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {renderPlusButtonAsInline && (
-            <button type="button" onClick={onAddPlaceholder}>
+            <button type="button" onClick={handleAddPlaceholder}>
               <Create />
             </button>
           )}

@@ -103,7 +103,9 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
           <input
             type="text"
             ref={inputRef}
-            onBlur={e => setName(e.currentTarget.value)}
+            onBlur={e => {
+              setName(e.currentTarget.value);
+            }}
             defaultValue={name ?? undefined}
             placeholder={titlePlaceholder}
             className="w-full shrink-0 grow appearance-none text-mediumTitle text-text outline-hidden placeholder:text-grey-03"

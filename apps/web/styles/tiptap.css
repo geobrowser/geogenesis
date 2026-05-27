@@ -155,7 +155,49 @@
 }
 
 .ProseMirror .node-tableNode {
-  @apply not-first:mt-12;
+  @apply not-first:mt-4;
+  margin-bottom: 8px;
+}
+
+.ProseMirror .node-tableNode[data-selected='true'] {
+  @apply not-first:mt-8;
+  margin-bottom: 16px;
+}
+
+/* Selected atomic blocks (data / image / video) — edit mode only */
+.not-editable .ProseMirror .data-node-selected {
+  box-shadow: none;
+}
+
+.ProseMirror .data-node-selected {
+  @apply rounded-lg;
+  box-shadow:
+    0 0px 10px rgba(57, 99, 254, 0.08),
+    0 12px 18px rgba(57, 99, 254, 0.04);
+    padding: 8;
+}
+
+.ProseMirror-gapcursor {
+  @apply border-l-2 border-ctaPrimary;
+}
+
+.ProseMirror-gapcursor::after {
+  @apply border-ctaPrimary;
+}
+
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty:is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video)) {
+  min-height: 0.375rem;
+}
+
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty.has-focus:is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video)) {
+  min-height: 1.5rem;
+}
+
+.ProseMirror :is(.node-tableNode, .node-image, .node-video)
+  + .is-empty:not(.has-focus):is(:has(+ .node-tableNode), :has(+ .node-image), :has(+ .node-video))::before {
+  content: none;
 }
 
 .ProseMirror ul {

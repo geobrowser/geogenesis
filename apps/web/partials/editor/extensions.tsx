@@ -7,6 +7,7 @@ import Text from '@tiptap/extension-text';
 import Underline from '@tiptap/extension-underline';
 import { Focus, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 
+import { BlockSeparator } from './block-separator';
 import { CodeBlockNode } from './code-block-node';
 import { DataNode } from './data-node';
 import { FloatingToolbarExtension } from './floating-toolbar-extension';
@@ -45,6 +46,7 @@ export const tiptapExtensions = [
   HeadingNode,
   HardBreak,
   Gapcursor,
+  BlockSeparator,
   TrailingNode,
   BulletList,
   ListItem,
