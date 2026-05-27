@@ -23,11 +23,17 @@ type Props = {
 export function TypeSchemaInline({ entityId, spaceId }: Props) {
   const types = useEntityTypes(entityId, spaceId);
   const isTypeEntity = types.some(type => type.id === SystemIds.SCHEMA_TYPE);
+
+  if (!isTypeEntity) return null;
+
+  return <TypeSchemaInlineContent entityId={entityId} spaceId={spaceId} />;
+}
+
+function TypeSchemaInlineContent({ entityId, spaceId }: Props) {
   const isEditing = useUserIsEditing(spaceId);
 
   const propertyGroupRelations = useRelations({
     selector: relation =>
-      isTypeEntity &&
       relation.fromEntity.id === entityId &&
       relation.spaceId === spaceId &&
       relation.type.id === PROPERTY_GROUPS_PROPERTY,
@@ -36,9 +42,7 @@ export function TypeSchemaInline({ entityId, spaceId }: Props) {
     () => [...new Set(propertyGroupRelations.map(relation => relation.toEntity.id))],
     [propertyGroupRelations]
   );
-  useHydrateEntities({ ids: propertyGroupIds, enabled: isTypeEntity });
-
-  if (!isTypeEntity) return null;
+  useHydrateEntities({ ids: propertyGroupIds });
 
   return isEditing ? (
     <TypePropertyGroupsEditor entityId={entityId} spaceId={spaceId} />

@@ -111,20 +111,20 @@ type HydrateEntitiesOptions = {
 export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEntitiesOptions) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
-  const stableKey = React.useMemo(() => [...new Set(ids)].sort().join('|'), [ids]);
+  const normalizedIds = React.useMemo(() => [...new Set(ids)].filter(Boolean).sort(), [ids]);
+  const stableKey = normalizedIds.join('|');
 
   const { isFetched } = useQuery({
-    enabled: enabled && ids.length > 0,
+    enabled: enabled && normalizedIds.length > 0,
     queryKey: ['store', 'entities', stableKey, spaceId ?? ''],
     queryFn: async () => {
-      const uniqueIds = [...new Set(ids)].filter(Boolean);
-      if (uniqueIds.length === 0) return [];
+      if (normalizedIds.length === 0) return [];
 
       const { merged, remote } = await E.syncMany({
         store,
         cache,
-        where: { id: { in: uniqueIds } },
-        first: uniqueIds.length,
+        where: { id: { in: normalizedIds } },
+        first: normalizedIds.length,
         spaceId,
       });
 
