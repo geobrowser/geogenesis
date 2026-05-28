@@ -11,7 +11,7 @@ import type { ClassifyUrlResponse, InjectType } from '~/core/chat/inject-types';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { logCallCost } from '../cost';
-import { RESEARCH_MODEL } from '../models';
+import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const anthropic = createAnthropic({
@@ -361,13 +361,13 @@ export async function POST(req: Request) {
 
   try {
     const result = await generateObject({
-      model: anthropic(RESEARCH_MODEL),
+      model: anthropic(UTILITY_MODEL),
       system: CLASSIFIER_SYSTEM_PROMPT,
       prompt: `URL: ${rawUrl}`,
       schema,
       maxOutputTokens: 200,
     });
-    logCallCost('classify-url', RESEARCH_MODEL, result.usage);
+    logCallCost('classify-url', UTILITY_MODEL, result.usage);
 
     const object = result.object;
     if (object.route === 'inject') {

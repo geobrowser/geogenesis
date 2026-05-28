@@ -88,8 +88,10 @@ export function useInjectJob(opts: { jobId: string | null; enabled: boolean }): 
         });
       } catch (err) {
         if (cancelled || settled) return;
-        console.error('[useInjectJob] fetch failed', err);
-        // Transient network errors: keep polling.
+        // Transient network blip (e.g. a dev recompile) — we keep polling, so
+        // log at warn level. console.error would trip Next's dev error overlay
+        // for a failure we're already recovering from.
+        console.warn('[useInjectJob] fetch failed, will retry', err);
         return;
       }
 

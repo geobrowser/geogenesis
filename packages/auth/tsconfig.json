@@ -1,21 +1,6 @@
 {
   "compilerOptions": {
-    /* Basic Options */
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "target": "ES2022",
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true,
-    "moduleDetection": "force",
-    "isolatedModules": true,
-    "rootDir": "./",
-    /* Strictness Options */
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    /* Module resolution when transpiling with TypeScript */
-    "module": "NodeNext",
-    "outDir": "dist",
-    "sourceMap": true,
+    "jsx": "react-jsx",
     /*
       Module resolution when not transpiling with TypeScript.
       We're currently using esbuild so we use the following options.
@@ -25,16 +10,31 @@
     // "noEmit": true,
     /* Lib when not targeting the browser */
     "lib": ["ES2022"],
+    "moduleDetection": "force",
+    "target": "ES2022",
+    /* Module resolution when transpiling with TypeScript */
+    "module": "NodeNext",
+    "paths": {
+      "@geogenesis/*": ["../*"],
+      "~/*": ["./*"]
+    },
+    "resolveJsonModule": true,
+    "rootDir": "./",
     /* Lib when targeting the browser */
     // "lib": ["ES2022", "DOM", "DOM.Iterable"]
     /* When building a library */
     "declaration": true,
     /* When building a library in a monorepo */
     "declarationMap": true,
-    "jsx": "react-jsx",
-    "paths": {
-      "~/*": ["./*"],
-      "@geogenesis/*": ["../*"]
-    }
+    "outDir": "dist",
+    "sourceMap": true,
+    /* Basic Options */
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    /* Strictness Options */
+    "strict": true,
+    "skipLibCheck": true
   }
 }

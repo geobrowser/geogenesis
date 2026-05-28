@@ -17,7 +17,7 @@ import {
 import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
-import { ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
+import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import {
@@ -222,6 +222,70 @@ function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
         }
       },
     });
+}
+
+// The Haiku opener occasionally wraps its reasoning in <thinking>…</thinking>
+// before the one-line ack, which would otherwise stream straight to the client.
+// Strip those spans from the text stream. Tags can straddle delta boundaries, so
+// we hold back any trailing run that could be the start of a tag and re-check it
+// once more text arrives.
+function stripThinkingTags<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
+  const OPEN = '<thinking>';
+  const CLOSE = '</thinking>';
+  // Longest suffix of `s` that is a (proper) prefix of `tag`.
+  const partialSuffixLen = (s: string, tag: string): number => {
+    for (let n = Math.min(s.length, tag.length - 1); n > 0; n--) {
+      if (tag.startsWith(s.slice(s.length - n))) return n;
+    }
+    return 0;
+  };
+  return () => {
+    let pending = '';
+    let hidden = false;
+    let lastId: string | undefined;
+    return new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+      transform(chunk, controller) {
+        if (chunk.type !== 'text-delta') {
+          controller.enqueue(chunk);
+          return;
+        }
+        lastId = chunk.id;
+        pending += chunk.text;
+        let visible = '';
+        for (;;) {
+          if (!hidden) {
+            const i = pending.indexOf(OPEN);
+            if (i !== -1) {
+              visible += pending.slice(0, i);
+              pending = pending.slice(i + OPEN.length);
+              hidden = true;
+              continue;
+            }
+            const keep = partialSuffixLen(pending, OPEN);
+            visible += pending.slice(0, pending.length - keep);
+            pending = pending.slice(pending.length - keep);
+            break;
+          }
+          const j = pending.indexOf(CLOSE);
+          if (j !== -1) {
+            pending = pending.slice(j + CLOSE.length);
+            hidden = false;
+            continue;
+          }
+          // Drop hidden text, but retain a trailing partial closing tag.
+          pending = pending.slice(pending.length - partialSuffixLen(pending, CLOSE));
+          break;
+        }
+        if (visible.length > 0) controller.enqueue({ ...chunk, text: visible });
+      },
+      flush(controller) {
+        // Leftover text outside a thinking block is real output.
+        if (!hidden && pending.length > 0 && lastId !== undefined) {
+          controller.enqueue({ type: 'text-delta', id: lastId, text: pending } as TextStreamPart<TOOLS>);
+        }
+      },
+    });
+  };
 }
 
 const EDIT_TOOL_NAME_SET = new Set<string>(EDIT_TOOL_NAMES);
@@ -548,6 +612,7 @@ export async function POST(req: Request) {
           system: OPENER_SYSTEM_PROMPT,
           messages: converted,
           maxOutputTokens: 80,
+          experimental_transform: stripThinkingTags(),
           abortSignal: req.signal,
           onError: err => {
             if (!isAbortError(err)) console.error('[chat:srv] opener stream error', err);
@@ -565,7 +630,10 @@ export async function POST(req: Request) {
         await recordCost('opener', OPENER_MODEL, openerResult);
       }
 
-      // Stage B: executor (Sonnet).
+      // Stage B: executor (Sonnet). Track the peak per-step input token count —
+      // the last steps carry the full transcript + tool results, so the peak is
+      // the closest read on how full the context window is this turn.
+      let peakExecInputTokens = 0;
       const execResult = streamText({
         model: anthropic(MAIN_MODEL),
         messages,
@@ -590,17 +658,19 @@ export async function POST(req: Request) {
               debugLog('chunk', summary);
             }
           : undefined,
-        onStepFinish: debug
-          ? step => {
-              const tools =
-                step.toolCalls
-                  ?.map(tc => tc.toolName)
-                  .filter(Boolean)
-                  .join(', ') ?? '';
-              const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
-              console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
-            }
-          : undefined,
+        onStepFinish: step => {
+          const stepInput = step.usage?.inputTokens ?? 0;
+          if (stepInput > peakExecInputTokens) peakExecInputTokens = stepInput;
+          if (debug) {
+            const tools =
+              step.toolCalls
+                ?.map(tc => tc.toolName)
+                .filter(Boolean)
+                .join(', ') ?? '';
+            const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
+            console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
+          }
+        },
         onError: err => {
           if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
         },
@@ -616,6 +686,16 @@ export async function POST(req: Request) {
 
       const execMessages = (await execResult.response).messages;
       await recordCost('executor', MAIN_MODEL, execResult);
+
+      // Surface context occupancy so the widget can compact when we near the
+      // window. Transient: informs the client, never lands in message history.
+      if (peakExecInputTokens > 0) {
+        writer.write({
+          type: `data-${CONTEXT_USAGE_DATA_TYPE}`,
+          data: { inputTokens: peakExecInputTokens } satisfies ContextUsageData,
+          transient: true,
+        });
+      }
 
       const turnKind = classifyTurn([...messages, ...execMessages]);
       if (debug) {
