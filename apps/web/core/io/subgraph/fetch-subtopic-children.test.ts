@@ -36,9 +36,9 @@ describe('fetchSubtopicChildren', () => {
         entity: {
           subtopics: {
             nodes: [
-              { toEntity: { id: '00000000-0000-0000-0000-0000000000bb', name: 'Beta' } },
-              { toEntity: { id: '00000000-0000-0000-0000-0000000000aa', name: 'Alpha' } },
-              { toEntity: null },
+              { id: 'rel-bb', toEntity: { id: '00000000-0000-0000-0000-0000000000bb', name: 'Beta' } },
+              { id: 'rel-aa', toEntity: { id: '00000000-0000-0000-0000-0000000000aa', name: 'Alpha' } },
+              { id: 'rel-null', toEntity: null },
             ],
           },
         },
@@ -51,8 +51,8 @@ describe('fetchSubtopicChildren', () => {
     );
 
     expect(result).toEqual([
-      { id: '00000000-0000-0000-0000-0000000000aa', name: 'Alpha' },
-      { id: '00000000-0000-0000-0000-0000000000bb', name: 'Beta' },
+      { id: '00000000-0000-0000-0000-0000000000aa', name: 'Alpha', relationId: 'rel-aa' },
+      { id: '00000000-0000-0000-0000-0000000000bb', name: 'Beta', relationId: 'rel-bb' },
     ]);
   });
 

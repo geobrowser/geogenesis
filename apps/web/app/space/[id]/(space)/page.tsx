@@ -208,8 +208,7 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
     return null;
   }
 
-  const rootEntityId = Spaces.getSpaceSubtopicRootEntityId(space);
-  const subtopics = await fetchSubtopics(spaceId, rootEntityId);
+  const subtopics = await fetchSubtopics(spaceId);
 
   if (subtopics.length === 0) {
     return null;

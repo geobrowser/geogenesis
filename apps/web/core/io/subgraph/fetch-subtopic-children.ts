@@ -10,12 +10,16 @@ import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 export type SubtopicChild = {
   id: string;
   name: string;
+  relationId: string;
 };
 
 interface NetworkResult {
   entity: {
     subtopics: {
-      nodes: Array<{ toEntity: { id: string; name: string | null } | null }>;
+      nodes: Array<{
+        id: string;
+        toEntity: { id: string; name: string | null } | null;
+      }>;
     } | null;
   } | null;
 }
@@ -33,6 +37,7 @@ const buildQuery = (parentEntityId: string, spaceId: string) => `
         first: ${MAX_SUBTOPIC_CHILDREN}
       ) {
         nodes {
+          id
           toEntity {
             id
             name
@@ -86,11 +91,12 @@ export async function fetchSubtopicChildren(parentEntityId: string, spaceId: str
 
   for (const node of nodes) {
     const child = node.toEntity;
-    if (!child?.id) continue;
+    if (!child?.id || !node.id) continue;
 
     childrenById.set(child.id, {
       id: child.id,
       name: resolveName(child.name),
+      relationId: node.id,
     });
   }
 
