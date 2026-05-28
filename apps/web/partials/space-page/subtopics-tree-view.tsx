@@ -174,20 +174,26 @@ function SubtopicTreeNode({
 
   return (
     <div className="flex flex-col">
-      <div className="flex min-h-8 items-center gap-1" style={{ paddingLeft: depth * 16 }}>
+      <div
+        className={cx(
+          'flex min-h-8 items-center gap-1 transition-colors',
+          expanded ? 'text-text' : 'text-grey-04 hover:text-text'
+        )}
+        style={{ paddingLeft: depth * 16 }}
+      >
         <button
           type="button"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse subtopics' : 'Expand subtopics'}
           onClick={() => setExpanded(current => !current)}
-          className="flex size-6 shrink-0 items-center justify-center rounded text-grey-04 transition hover:text-text"
+          className="flex size-6 shrink-0 items-center justify-center rounded text-current"
         >
           <span className={cx('inline-flex transition-transform', expanded ? 'rotate-90' : '')}>
             <ChevronRight />
           </span>
         </button>
 
-        <span className="min-w-0 flex-1 truncate text-button text-text">{name}</span>
+        <span className="min-w-0 flex-1 truncate text-button text-current">{name}</span>
 
         {canEdit && (
           <Menu
