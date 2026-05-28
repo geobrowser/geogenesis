@@ -60,8 +60,8 @@ describe('fetchPendingSubtopicProposals', () => {
         proposals: [
           {
             proposalId: 'proposal-1',
-            spaceId: '00000000000000000000000000000999',
-            name: 'Add subtopic',
+            spaceId: '00000000-0000-0000-0000-000000000999',
+            name: 'Ignored proposal title',
             proposedBy: 'member-space',
             status: 'PROPOSED',
             votingMode: 'SLOW',
@@ -90,7 +90,7 @@ describe('fetchPendingSubtopicProposals', () => {
             {
               relationId: 'rel-1',
               typeId: SUBTOPIC_RELATION_TYPE_ID,
-              spaceId: '00000000000000000000000000000999',
+              spaceId: '00000000-0000-0000-0000-000000000999',
               changeType: 'ADD',
               before: null,
               after: {
@@ -130,7 +130,7 @@ describe('fetchPendingSubtopicProposals', () => {
       )
     ).resolves.toEqual([
       {
-        spaceId: '00000000000000000000000000000999',
+        spaceId: '00000000-0000-0000-0000-000000000999',
         proposalId: 'proposal-1',
         direction: 'add',
         parentEntityId: '00000000-0000-0000-0000-0000000000ff',

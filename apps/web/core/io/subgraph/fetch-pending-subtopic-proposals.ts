@@ -9,6 +9,7 @@ import {
   ApiProposalListResponseSchema,
   encodePathSegment,
   restFetch,
+  spaceIdToGraphqlUuid,
   validateSpaceId,
 } from '../rest';
 import { AbortError } from './errors';
@@ -82,6 +83,7 @@ export async function fetchPendingSubtopicProposals(
 
   const proposals = await fetchPublishProposals(validatedSpaceId);
   const pending: PendingSubtopicProposal[] = [];
+  const resolvedSpaceId = spaceIdToGraphqlUuid(validatedSpaceId);
 
   for (const proposal of proposals) {
     const diffResult = await fetchProposalDiffs(proposal.proposalId, validatedSpaceId);
@@ -92,13 +94,16 @@ export async function fetchPendingSubtopicProposals(
 
     for (const entityDiff of diffResult.entities) {
       for (const relation of entityDiff.relations) {
-        if (relation.typeId !== SUBTOPIC_RELATION_TYPE_ID || relation.spaceId !== validatedSpaceId) {
+        if (
+          relation.typeId !== SUBTOPIC_RELATION_TYPE_ID ||
+          validateSpaceId(relation.spaceId) !== validatedSpaceId
+        ) {
           continue;
         }
 
         if (relation.changeType === 'ADD' && relation.after?.toEntityId) {
           pending.push({
-            spaceId: validatedSpaceId,
+            spaceId: resolvedSpaceId,
             proposalId: proposal.proposalId,
             direction: 'add',
             parentEntityId: entityDiff.entityId,
@@ -115,7 +120,7 @@ export async function fetchPendingSubtopicProposals(
 
         if (relation.changeType === 'REMOVE' && relation.before?.toEntityId) {
           pending.push({
-            spaceId: validatedSpaceId,
+            spaceId: resolvedSpaceId,
             proposalId: proposal.proposalId,
             direction: 'remove',
             parentEntityId: entityDiff.entityId,
