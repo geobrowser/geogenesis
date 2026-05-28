@@ -10,7 +10,9 @@ export { getTopRankedSpaceId };
  * entity than the space's own page entity. Many spaces set their topic to
  * themselves (topicId === entity.id) which should be treated as no topic.
  */
-export const hasExternalTopic = (space: Space | null | undefined): space is Space & { topicId: string } => {
+export const hasExternalTopic = (
+  space: Pick<Space, 'topicId' | 'entity'> | null | undefined
+): space is Pick<Space, 'topicId' | 'entity'> & { topicId: string } => {
   return Boolean(space?.topicId && space.topicId !== space.entity?.id);
 };
 
