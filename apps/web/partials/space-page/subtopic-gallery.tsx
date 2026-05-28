@@ -31,7 +31,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
 
   return (
     <>
-      <h4 className="text-mediumTitle font-medium">Subtopics</h4>
+      <h4 className="text-mediumTitle font-medium">Subspaces</h4>
       <Spacer height={8} />
       <div className="grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2">
         {subtopics.map(subtopic => {
