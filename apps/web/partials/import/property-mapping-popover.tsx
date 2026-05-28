@@ -8,6 +8,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { useCreateProperty } from '~/core/hooks/use-create-property';
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSearchProperties } from '~/core/hooks/use-search-properties';
 import { useToast } from '~/core/hooks/use-toast';
@@ -280,11 +281,20 @@ function FindOrCreatePropertyView({
   const { createProperty } = useCreateProperty(spaceId);
   const [, setToast] = useToast();
 
-  // Pre-populate immediately (`enabled: true`) by hitting REST `/search` with
-  // `type_ids=PROPERTY`, then filter the candidate list down to properties
-  // matching the picked propertyType (dataType + renderableType). The wrapper
-  // auto-paginates if the filter shrinks a page below `MIN_FILTERED_RESULTS`.
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearchProperties({
+  // Pre-populate immediately (`enabled: true`). The hook builds an
+  // EntityFilter that narrows by dataType and renderableType server-side via
+  // `relations.some` / `relations.none`, so every row that lands already
+  // matches — no client-side filtering, no page pumping.
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearchProperties({
     dataType: baseDataType,
     renderableTypeId,
     enabled: true,
@@ -334,6 +344,9 @@ function FindOrCreatePropertyView({
         placeholder={`Find or create ${typeLabel.toLowerCase()} property...`}
         onSelect={handleSelectExisting}
         onCreate={handleCreate}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        isFetchingNextPage={isFetchingNextPage}
       />
     </div>
   );
@@ -354,7 +367,16 @@ function FindOrCreateToTypeView({
 }) {
   const { storage } = useMutate();
   const [, setToast] = useToast();
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearch({
     filterByTypes: [SystemIds.SCHEMA_TYPE],
     enabled: true,
   });
@@ -388,6 +410,9 @@ function FindOrCreateToTypeView({
         placeholder="Find or create a type..."
         onSelect={result => onSelect({ id: result.id, name: result.name })}
         onCreate={handleCreate}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        isFetchingNextPage={isFetchingNextPage}
       />
     </div>
   );
@@ -421,10 +446,20 @@ function FindOrCreateRelationPropertyView({
   const { createProperty } = useCreateProperty(spaceId);
   const [, setToast] = useToast();
 
-  // Pre-populate, then narrow to relation properties whose value type matches
-  // the chosen `toEntityType`. The wrapper pumps additional pages when this
-  // narrow filter strips the initial result set too aggressively.
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearchProperties({
+  // Narrow to relation properties whose value type matches the chosen
+  // `toEntityType` via a second `relations.some` clause in the EntityFilter
+  // (dataType=RELATION + relationValueType=toEntityType). Server-side filter,
+  // no client narrowing needed.
+  const {
+    query,
+    onQueryChange,
+    isLoading,
+    isEmpty,
+    results,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSearchProperties({
     dataType: 'RELATION',
     renderableTypeId: null,
     requiredRelationValueTypeIds: [toEntityType.id],
@@ -484,6 +519,9 @@ function FindOrCreateRelationPropertyView({
         placeholder={`Find or create relation to ${toTypeName}...`}
         onSelect={handleSelectExisting}
         onCreate={handleCreate}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        isFetchingNextPage={isFetchingNextPage}
       />
     </div>
   );
@@ -506,6 +544,9 @@ function SearchBlock({
   placeholder,
   onSelect,
   onCreate,
+  hasNextPage,
+  fetchNextPage,
+  isFetchingNextPage,
 }: {
   query: string;
   onQueryChange: (next: string) => void;
@@ -516,6 +557,9 @@ function SearchBlock({
   placeholder: string;
   onSelect: (result: SearchResult) => void;
   onCreate: (name: string) => void;
+  hasNextPage?: boolean;
+  fetchNextPage: () => unknown;
+  isFetchingNextPage?: boolean;
 }) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const itemRefs = React.useRef<Array<HTMLDivElement | null>>([]);
@@ -594,6 +638,9 @@ function SearchBlock({
         onHoverIndex={setSelectedIndex}
         itemRefs={itemRefs}
         onSelect={onSelect}
+        hasNextPage={hasNextPage}
+        fetchNextPage={fetchNextPage}
+        isFetchingNextPage={isFetchingNextPage}
       />
       <div className="flex items-center justify-center border-t border-grey-02 py-2.5">
         <button
@@ -624,6 +671,9 @@ function ResultsArea({
   onHoverIndex,
   itemRefs,
   onSelect,
+  hasNextPage,
+  fetchNextPage,
+  isFetchingNextPage,
 }: {
   isLoading: boolean;
   isEmpty: boolean;
@@ -633,7 +683,18 @@ function ResultsArea({
   onHoverIndex: (index: number) => void;
   itemRefs: React.MutableRefObject<Array<HTMLDivElement | null>>;
   onSelect: (result: SearchResult) => void;
+  hasNextPage?: boolean;
+  fetchNextPage: () => unknown;
+  isFetchingNextPage?: boolean;
 }) {
+  const scrollRef = React.useRef<HTMLUListElement | null>(null);
+  const onResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef,
+  });
+
   if (isLoading && results.length === 0) {
     return <div className="px-3 py-3 text-metadata text-grey-04">Loading…</div>;
   }
@@ -643,7 +704,7 @@ function ResultsArea({
   }
 
   return (
-    <ResultsList className="divide-y divide-divider">
+    <ResultsList ref={scrollRef} onScroll={onResultsScroll} className="divide-y divide-divider">
       {results.map((result, index) => (
         <div
           key={result.id}
@@ -661,6 +722,9 @@ function ResultsArea({
           />
         </div>
       ))}
+      {isFetchingNextPage && (
+        <div className="px-3 py-2 text-center text-metadata text-grey-04">Loading more…</div>
+      )}
     </ResultsList>
   );
 }

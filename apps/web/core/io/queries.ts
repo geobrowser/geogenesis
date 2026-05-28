@@ -19,6 +19,7 @@ import {
 } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -31,6 +32,7 @@ import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
+  entitiesPageQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -873,6 +875,66 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
   return Effect.map(getResultsPage(args, signal), page => page.results);
+}
+
+export type PropertiesSearchPage = {
+  results: SearchResult[];
+  offset: number;
+};
+
+/**
+ * Server-side property search backed by GraphQL `entities(filter, first, offset)`.
+ * The caller composes an `EntityFilter` with `relations.some` clauses so the
+ * dataType / renderableType / relationValueTypes narrowing happens server-side
+ * instead of by hydrating each result and filtering on the client. After the
+ * entity page lands we issue one batched `getSpaces` to attach the `SpaceEntity`
+ * objects `ResultContent` needs for the breadcrumb.
+ */
+export function searchPropertiesPage(
+  args: { filter: EntityFilter; limit: number; offset: number },
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const entities =
+      (yield* graphql({
+        query: entitiesPageQuery,
+        decoder: data => data.entities ?? [],
+        variables: { filter: args.filter, first: args.limit, offset: args.offset },
+        signal,
+      })) ?? [];
+
+    const uniqueSpaceIds = [
+      ...new Set(
+        entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
+      ),
+    ];
+
+    const spaces =
+      uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
+
+    const spaceEntityBySpaceId = new Map(spaces.map(s => [s.id, s.entity]));
+
+    const results: SearchResult[] = entities
+      .filter((e): e is NonNullable<typeof e> => Boolean(e))
+      .map(e => {
+        const sortedSpaceIds = sortSpaceIdsByRank(
+          (e.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
+        );
+        return {
+          id: e.id as string,
+          name: e.name ?? null,
+          description: e.description ?? null,
+          spaces: sortedSpaceIds
+            .map(id => spaceEntityBySpaceId.get(id))
+            .filter((s): s is NonNullable<typeof s> => s !== undefined),
+          types: (e.types ?? [])
+            .filter((t): t is NonNullable<typeof t> => Boolean(t?.id))
+            .map(t => ({ id: t.id as string, name: t.name ?? null })),
+        };
+      });
+
+    return { results, offset: args.offset };
+  });
 }
 
 export type NameValueMatch = {
