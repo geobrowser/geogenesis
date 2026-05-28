@@ -173,11 +173,7 @@ describe('removeSpaceIdsFromFilter', () => {
 
   it('keeps the and-wrap when more than one sibling remains after stripping', () => {
     const filter: EntityFilter = {
-      and: [
-        { spaceIds: { in: ['space-abc'] } },
-        { name: { isNull: false, isNot: '' } },
-        { id: { is: 'entity-123' } },
-      ],
+      and: [{ spaceIds: { in: ['space-abc'] } }, { name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
     };
     expect(removeSpaceIdsFromFilter(filter)).toEqual({
       and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],

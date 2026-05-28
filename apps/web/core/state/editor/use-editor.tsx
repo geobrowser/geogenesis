@@ -461,8 +461,7 @@ export function useEditorStore() {
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
 
-        const paragraphLooksLikePopulatedLine = (t: string) =>
-          !t.startsWith('/') || t.startsWith('//');
+        const paragraphLooksLikePopulatedLine = (t: string) => !t.startsWith('/') || t.startsWith('//');
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
@@ -596,10 +595,7 @@ export function useEditorStore() {
 
         const blockRel = getRelations({
           mergeWith: initialBlockEntityRelations,
-          selector: r =>
-            r.type.id === SystemIds.BLOCKS &&
-            ID.equals(r.toEntity.id, node.id) &&
-            r.spaceId === spaceId,
+          selector: r => r.type.id === SystemIds.BLOCKS && ID.equals(r.toEntity.id, node.id) && r.spaceId === spaceId,
         })[0];
 
         if (!blockRel?.entityId) continue;

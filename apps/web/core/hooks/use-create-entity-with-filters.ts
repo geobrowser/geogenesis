@@ -4,9 +4,10 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { writeValue } from '~/partials/blocks/table/change-entry';
+
 import { Filter } from '../blocks/data/filters';
 import { useMutate } from '../sync/use-mutate';
-import { writeValue } from '~/partials/blocks/table/change-entry';
 
 export function useCreateEntityWithFilters(spaceId: string) {
   const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());

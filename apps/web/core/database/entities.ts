@@ -86,11 +86,7 @@ function readBooleanEntityValue(entity: Entity, propertyId: string, preferredSpa
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
 }
 
-function selectRelationsByType(
-  entity: Entity,
-  relationTypeId: string,
-  preferredSpaceId?: string
-): Relation[] {
+function selectRelationsByType(entity: Entity, relationTypeId: string, preferredSpaceId?: string): Relation[] {
   const relationsOfType = entity.relations.filter(r => r.type.id === relationTypeId);
   if (!preferredSpaceId) return relationsOfType;
 
@@ -548,9 +544,13 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
     );
 
     const isTypeSpaceByTarget = new Map(uniqueIsTypeRefs.map(r => [r.targetId, r.spaceId]));
-    const isTypeEntities = await fetchEntitiesWithRelations(uniqueIsTypeRefs.map(r => r.targetId), isTypeSpaceByTarget, {
-      requiredRelationTypeId: SystemIds.PROPERTIES,
-    });
+    const isTypeEntities = await fetchEntitiesWithRelations(
+      uniqueIsTypeRefs.map(r => r.targetId),
+      isTypeSpaceByTarget,
+      {
+        requiredRelationTypeId: SystemIds.PROPERTIES,
+      }
+    );
     const isTypeEntitiesById = new Map(isTypeEntities.map(entity => [entity.id, entity]));
     const isTypeGroupsByParentGroupId = new Map<string, SchemaPropertyGroup[]>();
     const ungroupedIsTypeGroups: SchemaPropertyGroup[] = [];
@@ -567,6 +567,7 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
         globalSeenPropertyIds.add(propertyId);
         return true;
       });
+      if (uniqueTargetPropertyIds.length === 0) continue;
 
       const isTypeGroup: SchemaPropertyGroup = {
         id: `is-type-${relation.relationId}`,
@@ -594,7 +595,28 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
     }
   }
 
-  const groupedPropertyIds = propertyGroups.flatMap(group => group.propertyIds);
+  // Synthetic isType groups are only meaningful as a layout hint when at
+  // least one real type-defined group exists. Otherwise, keep the inherited
+  // properties in the normal flat section so entity pages do not get a
+  // type-named collapsible wrapper around their standard properties.
+  const hasRealGroups = propertyGroups.some(group => group.source === 'type');
+  let effectivePropertyGroups = propertyGroups;
+  if (!hasRealGroups) {
+    const syntheticPropertyIds = propertyGroups
+      .filter(group => group.source === 'isType')
+      .flatMap(group => group.propertyIds);
+
+    const ungroupedSeen = new Set(ungroupedPropertyIds);
+    for (const propertyId of syntheticPropertyIds) {
+      if (ungroupedSeen.has(propertyId)) continue;
+      ungroupedSeen.add(propertyId);
+      ungroupedPropertyIds.push(propertyId);
+    }
+
+    effectivePropertyGroups = [];
+  }
+
+  const groupedPropertyIds = effectivePropertyGroups.flatMap(group => group.propertyIds);
   const groupedPropertyIdSet = new Set(groupedPropertyIds);
   const ungroupedSet = new Set(ungroupedPropertyIds);
 
@@ -631,8 +653,8 @@ export async function getSchemaWithGroupsFromTypeIdsAndRelations(
 
   return {
     schema: orderedSchema,
-    propertyGroups,
+    propertyGroups: effectivePropertyGroups,
     ungroupedPropertyIds,
-    hasPropertyGroups: propertyGroups.length > 0,
+    hasPropertyGroups: effectivePropertyGroups.length > 0,
   };
 }

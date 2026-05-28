@@ -11,7 +11,7 @@ import type { ClassifyUrlResponse, InjectType } from '~/core/chat/inject-types';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { logCallCost } from '../cost';
-import { RESEARCH_MODEL } from '../models';
+import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const anthropic = createAnthropic({
@@ -163,6 +163,15 @@ function matchesNewsHost(host: string): boolean {
   return false;
 }
 
+const BLOG_HOSTS = new Set(['substack.com', 'medium.com', 'mirror.xyz', 'paragraph.xyz', 'ghost.io']);
+
+function matchesBlogHost(host: string): boolean {
+  for (const domain of BLOG_HOSTS) {
+    if (host === domain || host.endsWith(`.${domain}`)) return true;
+  }
+  return false;
+}
+
 const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean; type: InjectType }> = [
   { match: host => host === 'x.com' || host === 'twitter.com' || host === 'mobile.twitter.com', type: 'tweet' },
   {
@@ -170,6 +179,38 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
       host === 'reddit.com' || host === 'www.reddit.com' || host === 'old.reddit.com' || host === 'redd.it',
     type: 'post',
   },
+  // Blog platforms → Post (editorial, not news). Placed before the news-host
+  // check so a blog never gets mistaken for a news article.
+  { match: host => matchesBlogHost(host), type: 'post' },
+  // Specific company blogs (host + blog path → Post). Path-scoped on purpose
+  // so docs.* subdomains and product/landing pages are NOT routed to post —
+  // only the editorial blog/research sections are. NOTE: /news is deliberately
+  // excluded here — a company's /news section is a newsroom, routed to News
+  // Story by the general /news rule below.
+  {
+    match: (host, path) =>
+      (host === 'anthropic.com' || host === 'www.anthropic.com') && /^\/(engineering|research)(\/|$)/.test(path),
+    type: 'post',
+  },
+  // OpenAI publishes its articles under /index, and the newsroom landing
+  // (openai.com/news) surfaces those same /index posts as its cards — so
+  // /index IS OpenAI's newsroom → News Story.
+  {
+    match: (host, path) => (host === 'openai.com' || host === 'www.openai.com') && /^\/index(\/|$)/.test(path),
+    type: 'news-story-single',
+  },
+  // OpenAI's other editorial sections → Post (blog/research). Whether these
+  // should also be News is still TBD.
+  {
+    match: (host, path) =>
+      (host === 'openai.com' || host === 'www.openai.com') && /^\/(blog|research)(\/|$)/.test(path),
+    type: 'post',
+  },
+  // Any company's own /news section → News Story. A /news path is a newsroom /
+  // press section, so it's a news source even when the domain isn't a dedicated
+  // news outlet (covers anthropic.com/news, openai.com/news, and any company).
+  // Runs AFTER the blog-platform rule above, so Substack/Medium/etc. stay Post.
+  { match: (_host, path) => /^\/news(\/|$)/.test(path), type: 'news-story-single' },
   { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
   { match: host => host === 'linkedin.com' || host === 'www.linkedin.com', type: 'news-story-single' },
   { match: host => matchesNewsHost(host), type: 'news-story-single' },
@@ -179,6 +220,7 @@ const CLASSIFIER_SYSTEM_PROMPT = `You are routing a URL to one of two pipelines 
 
 Return route="inject" when the URL points to:
 - A news article, current event, breaking story, exposé, or evolving topic from any publication.
+- A blog post, company or engineering blog, personal essay, or newsletter post (e.g. Substack, Medium, Mirror, Ghost, or a company's /blog).
 - A Wikipedia article (any kind — topic, person, organization, event).
 - A LinkedIn profile or personal/portfolio site.
 - A social post (X / Twitter / Reddit) you would expect to discuss a current happening.
@@ -189,11 +231,13 @@ Return route="chat" ONLY when the URL clearly points to:
 - Encyclopedic definitions of static concepts with no time-sensitive component.
 
 When route="inject", also pick the most appropriate type:
-- "news-story-single" — any news article, current event, Wikipedia article, LinkedIn profile, or personal/portfolio site.
+- "news-story-single" — a journalistic news article or current-events story from a news publication, OR a Wikipedia article, OR a LinkedIn / personal profile.
+- "post" — a blog post, company/engineering blog, personal essay, or newsletter/Substack/Medium/Mirror post: editorial web content that is NOT from a journalistic news outlet. (Reddit URLs are also "post".)
 - "tweet" — X / Twitter URL.
-- "post" — Reddit URL.
 
-Bias toward route="inject": if the URL plausibly looks like a news article, current event, biography, or social post, choose inject. Only choose chat when the page is clearly static/reference/marketing content. When genuinely unsure, prefer route="inject" with type="news-story-single". Never invent a URL or visit it; decide from the URL itself.`;
+Decide "news-story-single" vs "post" by the SOURCE, not the topic: a news organization reporting an event → "news-story-single"; an individual's or a company's OWN blog/essay/newsletter → "post".
+
+Bias toward route="inject": if the URL plausibly looks like a news article, blog post, current event, biography, or social post, choose inject. Only choose chat when the page is clearly static/reference/marketing content. When genuinely unsure between the two inject types, prefer "news-story-single". Never invent a URL or visit it; decide from the URL itself.`;
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
@@ -317,13 +361,13 @@ export async function POST(req: Request) {
 
   try {
     const result = await generateObject({
-      model: anthropic(RESEARCH_MODEL),
+      model: anthropic(UTILITY_MODEL),
       system: CLASSIFIER_SYSTEM_PROMPT,
       prompt: `URL: ${rawUrl}`,
       schema,
       maxOutputTokens: 200,
     });
-    logCallCost('classify-url', RESEARCH_MODEL, result.usage);
+    logCallCost('classify-url', UTILITY_MODEL, result.usage);
 
     const object = result.object;
     if (object.route === 'inject') {

@@ -61,10 +61,7 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
 
     expect(result).toEqual({
-      and: [
-        { name: { startsWithInsensitive: 'foo' } },
-        { name: { isNull: false, isNot: '' } },
-      ],
+      and: [{ name: { startsWithInsensitive: 'foo' } }, { name: { isNull: false, isNot: '' } }],
     });
   });
 
@@ -74,19 +71,16 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
 
     expect(result).toEqual({
-      and: [
-        { typeIds: { anyEqualTo: 'type-123' } },
-        { name: { isNull: false, isNot: '' } },
-      ],
+      and: [{ typeIds: { anyEqualTo: 'type-123' } }, { name: { isNull: false, isNot: '' } }],
     });
   });
 
   it('skips the empty-name exclusion when includeEmptyNames is true', () => {
     expect(convertWhereConditionToEntityFilter({}, { includeEmptyNames: true })).toEqual({});
 
-    expect(
-      convertWhereConditionToEntityFilter({ name: { startsWith: 'foo' } }, { includeEmptyNames: true })
-    ).toEqual({ name: { startsWithInsensitive: 'foo' } });
+    expect(convertWhereConditionToEntityFilter({ name: { startsWith: 'foo' } }, { includeEmptyNames: true })).toEqual({
+      name: { startsWithInsensitive: 'foo' },
+    });
   });
 
   it('does not inject the empty-name exclusion into nested OR/AND/NOT branches', () => {
@@ -97,10 +91,7 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     expect(result).toEqual({
       and: [
         {
-          or: [
-            { name: { startsWithInsensitive: 'foo' } },
-            { name: { startsWithInsensitive: 'bar' } },
-          ],
+          or: [{ name: { startsWithInsensitive: 'foo' } }, { name: { startsWithInsensitive: 'bar' } }],
         },
         { name: { isNull: false, isNot: '' } },
       ],

@@ -13,8 +13,8 @@ export function buildGlobalSearchSpaceIds({
 }): string[] {
   return Array.from(
     new Set(
-      [rootSpaceId, currentSpaceId, personalSpaceId, ...memberAndEditorSpaceIds].filter(
-        (id): id is string => Boolean(id)
+      [rootSpaceId, currentSpaceId, personalSpaceId, ...memberAndEditorSpaceIds].filter((id): id is string =>
+        Boolean(id)
       )
     )
   ).slice(0, MAX_SEARCH_ADDITIONAL_SPACE_IDS);

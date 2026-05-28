@@ -151,23 +151,15 @@ export const SelectEntity = ({
       ? allowedTypes.map(r => r.id)
       : undefined;
 
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes,
-    filterBySpace,
-    initialQuery,
-    enabled: isSearchOpen,
-    waitForFilterTypes,
-    restrictToFilterTypes,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes,
+      filterBySpace,
+      initialQuery,
+      enabled: isSearchOpen,
+      waitForFilterTypes,
+      restrictToFilterTypes,
+    });
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -997,19 +989,11 @@ type TypeFilterInputProps = {
 
 const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
   const [focused, setFocused] = React.useState(false);
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes: [SystemIds.SCHEMA_TYPE],
-    enabled: focused,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: [SystemIds.SCHEMA_TYPE],
+      enabled: focused,
+    });
 
   const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({

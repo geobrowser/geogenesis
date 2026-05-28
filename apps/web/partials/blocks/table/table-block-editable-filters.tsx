@@ -12,8 +12,8 @@ import { useSource } from '~/core/blocks/data/use-source';
 
 import { SmallButton } from '~/design-system/button';
 import { CreateSmall } from '~/design-system/icons/create-small';
-import { Tooltip } from '~/design-system/tooltip';
 import { Toggle } from '~/design-system/toggle';
+import { Tooltip } from '~/design-system/tooltip';
 
 import {
   TableBlockFilterPrompt,
@@ -32,7 +32,10 @@ interface TableBlockEditableFiltersProps {
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
-  function TableBlockEditableFilters({ filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true, }, ref) {
+  function TableBlockEditableFilters(
+    { filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true },
+    ref
+  ) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
     const { source } = useSource({ filterState: dbFilterState, setFilterState: dbSetFilterState });
 

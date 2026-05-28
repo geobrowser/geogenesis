@@ -4,8 +4,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import equal from 'fast-deep-equal';
 import cx from 'classnames';
+import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
@@ -45,7 +45,6 @@ import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
-import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
@@ -56,6 +55,7 @@ import type { TableBlockFilterPromptHandle } from './table-block-filter-creation
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
+import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
