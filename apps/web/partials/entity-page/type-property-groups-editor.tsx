@@ -542,7 +542,9 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
                     onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
                     createProperty={createProperty}
                     autoFocusName={focusGroupNameId === container.groupEntityId}
-                    onNameAutoFocused={() => setFocusGroupNameId(current => (current === container.groupEntityId ? null : current))}
+                    onNameAutoFocused={() =>
+                      setFocusGroupNameId(current => (current === container.groupEntityId ? null : current))
+                    }
                     onMeasureWidth={width =>
                       setGroupOverlayWidths(previous => {
                         if (previous[container.groupRelation.id] === width) return previous;

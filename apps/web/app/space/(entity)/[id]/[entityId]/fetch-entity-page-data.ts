@@ -9,9 +9,8 @@ import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
-
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export type EntityPageData = {
   id: string;

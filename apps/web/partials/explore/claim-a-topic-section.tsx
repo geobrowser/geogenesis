@@ -1,8 +1,8 @@
 'use client';
 
-import * as React from 'react';
-
 import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
 
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';

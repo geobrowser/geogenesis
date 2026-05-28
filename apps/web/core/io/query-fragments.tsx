@@ -184,7 +184,6 @@ export const entitiesQuery = graphql(/* GraphQL */ `
   }
 `);
 
-
 export const entitiesBatchQuery = graphql(/* GraphQL */ `
   query EntitiesBatch($filter: EntityFilter, $spaceId: UUID) {
     entities(filter: $filter, spaceId: $spaceId) {

@@ -164,11 +164,7 @@ describe('removeTypeIdsFromFilter', () => {
 
   it('keeps the and-wrap when more than one sibling remains after stripping', () => {
     const filter: EntityFilter = {
-      and: [
-        { typeIds: { in: ['type-abc'] } },
-        { name: { isNull: false, isNot: '' } },
-        { id: { is: 'entity-123' } },
-      ],
+      and: [{ typeIds: { in: ['type-abc'] } }, { name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],
     };
     expect(removeTypeIdsFromFilter(filter)).toEqual({
       and: [{ name: { isNull: false, isNot: '' } }, { id: { is: 'entity-123' } }],

@@ -20,8 +20,6 @@ import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
-import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
-
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { FindEntity } from '~/design-system/find-entity';
@@ -36,6 +34,7 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
+import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
@@ -116,17 +115,7 @@ export function useOpenCreateSpaceDialog() {
       setCloneFromEntity(preset?.cloneFromEntity ?? null);
       setOpen(true);
     },
-    [
-      setName,
-      setImage,
-      setTopicId,
-      setGovernanceType,
-      setSpaceType,
-      setStep,
-      setOpen,
-      setAutoRun,
-      setCloneFromEntity,
-    ]
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setCloneFromEntity]
   );
 }
 

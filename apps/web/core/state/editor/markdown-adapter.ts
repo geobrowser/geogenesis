@@ -1,14 +1,14 @@
 import type { Extensions } from '@tiptap/core';
 import type { JSONContent } from '@tiptap/core';
+import { generateJSON } from '@tiptap/html';
+
+import katex from 'katex';
+import type Token from 'markdown-it/lib/token.mjs';
 
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
   PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
 } from '~/core/state/editor/profile-overview-tail-placeholder';
-import { generateJSON } from '@tiptap/html';
-
-import katex from 'katex';
-import type Token from 'markdown-it/lib/token.mjs';
 
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 

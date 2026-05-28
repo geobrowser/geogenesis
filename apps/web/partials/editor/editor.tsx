@@ -44,12 +44,7 @@ interface Props {
   spacePage?: boolean;
 }
 
-export function Editor({
-  shouldHandleOwnSpacing,
-  spaceId,
-  placeholder = null,
-  spacePage = false,
-}: Props) {
+export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();

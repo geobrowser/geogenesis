@@ -9,6 +9,11 @@ import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const INJECT_SPACE = 'world-affairs' as const;
 const VALID_TYPES: ReadonlySet<InjectType> = new Set(['news-story-single', 'post', 'tweet']);
+// Inject types whose pipeline gates claim extraction on the request body
+// (`InjectPostsOptions.extractClaims` defaults to false in news-worker).
+// `news-story-single` extracts claims unconditionally so we omit the flag
+// for it to keep the wire payload identical to today's behavior.
+const EXTRACT_CLAIMS_TYPES: ReadonlySet<InjectType> = new Set(['post', 'tweet']);
 const INJECT_FETCH_TIMEOUT_MS = 15_000;
 
 function isSameOrigin(req: Request): boolean {
@@ -133,7 +138,12 @@ export async function POST(req: Request) {
     return jsonError(503, 'Inject service not configured.');
   }
 
-  const payload = { space: INJECT_SPACE, url, type };
+  const payload = {
+    space: INJECT_SPACE,
+    url,
+    type,
+    ...(EXTRACT_CLAIMS_TYPES.has(type) ? { extract_claims: true } : {}),
+  };
 
   let res: Response;
   try {

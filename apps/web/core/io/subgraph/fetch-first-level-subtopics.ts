@@ -1,12 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect, Either } from 'effect';
 
-import {
-  CURATED_TOPIC_TAG_ID,
-  SUBTOPIC_RELATION_TYPE_ID,
-  TAG_PROPERTY_ID,
-  TOPIC_TYPE_ID,
-} from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';

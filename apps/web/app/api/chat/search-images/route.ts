@@ -12,7 +12,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 
-import { RESEARCH_MODEL } from '../models';
+import { UTILITY_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { safeFetch } from '../web-fetch/helpers';
 
@@ -325,7 +325,7 @@ async function verifyImages(query: string, candidates: ImageEntry[]): Promise<Ve
   let verdicts: VerificationVerdict[] = [];
   try {
     const result = await generateText({
-      model: anthropic(RESEARCH_MODEL),
+      model: anthropic(UTILITY_MODEL),
       system: VERIFIER_SYSTEM_PROMPT,
       messages: [
         {
@@ -430,7 +430,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await generateText({
-      model: anthropic(RESEARCH_MODEL),
+      model: anthropic(UTILITY_MODEL),
       system: SYSTEM_PROMPT,
       prompt: query,
       tools: {

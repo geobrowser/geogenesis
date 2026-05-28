@@ -1,12 +1,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect, Either } from 'effect';
 
-import {
-  CURATED_TOPIC_TAG_ID,
-  SUBTOPIC_RELATION_TYPE_ID,
-  TAG_PROPERTY_ID,
-  TOPIC_TYPE_ID,
-} from '~/core/constants';
+import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 
 import { graphql } from './graphql';
@@ -95,16 +91,18 @@ export async function fetchParentTopicOptions(): Promise<ParentTopicOption[]> {
 
   const nodes = resultOrError.right?.entitiesConnection?.nodes ?? [];
 
-  return nodes
-    // Hide parents that have no subtopics at all — selecting them would yield
-    // an empty chip list and is unhelpful as a filter. A parent whose subtopics
-    // are all claimed still surfaces here; the client handles that case with a
-    // "no unclaimed topics under this parent yet" message.
-    .filter(node => (node.subtopicProbe?.nodes ?? []).length > 0)
-    .map<ParentTopicOption>(node => ({
-      id: node.id,
-      name: node.name?.trim() ? node.name : PLACEHOLDER_TOPIC_NAME,
-      image: resolveSpaceImage(node.relationsList ?? []),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return (
+    nodes
+      // Hide parents that have no subtopics at all — selecting them would yield
+      // an empty chip list and is unhelpful as a filter. A parent whose subtopics
+      // are all claimed still surfaces here; the client handles that case with a
+      // "no unclaimed topics under this parent yet" message.
+      .filter(node => (node.subtopicProbe?.nodes ?? []).length > 0)
+      .map<ParentTopicOption>(node => ({
+        id: node.id,
+        name: node.name?.trim() ? node.name : PLACEHOLDER_TOPIC_NAME,
+        image: resolveSpaceImage(node.relationsList ?? []),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  );
 }

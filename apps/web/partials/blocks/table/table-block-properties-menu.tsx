@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import {
   DndContext,
   type DragEndEvent,
@@ -17,12 +16,13 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Effect, Either } from 'effect';
 
 import * as React from 'react';
 
+import { Effect, Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
@@ -31,7 +31,6 @@ import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { editingPropertiesAtom } from '~/atoms';
 import { Property, Relation } from '~/core/types';
 
 import { IconButton } from '~/design-system/button';
@@ -39,6 +38,8 @@ import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Input } from '~/design-system/input';
+
+import { editingPropertiesAtom } from '~/atoms';
 
 const panelClassName =
   'z-1001 flex w-[min(320px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-lg';
@@ -253,11 +254,7 @@ export function TableBlockPropertiesMenu({
   const nameRowMatchesSearch = !q || labelMatchesQuery('Name', SystemIds.NAME_PROPERTY, q);
 
   const schemaAndShownPropertyIds = React.useMemo(
-    () =>
-      new Set<string>([
-        ...shownColumnIds,
-        ...filterableProperties.map(p => p.id),
-      ]),
+    () => new Set<string>([...shownColumnIds, ...filterableProperties.map(p => p.id)]),
     [shownColumnIds, filterableProperties]
   );
 
@@ -290,9 +287,7 @@ export function TableBlockPropertiesMenu({
 
   const showAll = () => {
     const isShown = (propertyId: string) => shownColumnIds.some(sid => ID.equals(sid, propertyId));
-    const toAdd = filterableProperties.filter(
-      p => !ID.equals(p.id, SystemIds.NAME_PROPERTY) && !isShown(p.id)
-    );
+    const toAdd = filterableProperties.filter(p => !ID.equals(p.id, SystemIds.NAME_PROPERTY) && !isShown(p.id));
     cancelShowAllTimers();
     toAdd.forEach((col, i) => {
       const timerId = window.setTimeout(() => {
@@ -313,7 +308,12 @@ export function TableBlockPropertiesMenu({
         <IconButton icon={<Eye color="grey-04" />} color="grey-04" aria-label="Table properties" />
       </Dropdown.Trigger>
       <Dropdown.Portal>
-        <Dropdown.Content sideOffset={8} align="end" className={panelClassName} onCloseAutoFocus={e => e.preventDefault()}>
+        <Dropdown.Content
+          sideOffset={8}
+          align="end"
+          className={panelClassName}
+          onCloseAutoFocus={e => e.preventDefault()}
+        >
           <div className="shrink-0 border-b border-grey-02 bg-white p-2">
             <Input
               withSearchIcon
@@ -331,7 +331,7 @@ export function TableBlockPropertiesMenu({
               <button
                 type="button"
                 onClick={hideAllShownPropertyColumns}
-                className="text-footnoteMedium text-sky-400 hover:text-sky-300"
+                className="text-sky-400 hover:text-sky-300 text-footnoteMedium"
               >
                 Hide all
               </button>
@@ -366,16 +366,15 @@ export function TableBlockPropertiesMenu({
 
             <div className={sectionHeaderClass}>
               <span>Hidden in table</span>
-              <button
-                type="button"
-                onClick={showAll}
-                className="text-footnoteMedium text-sky-400 hover:text-sky-300"
-              >
+              <button type="button" onClick={showAll} className="text-sky-400 hover:text-sky-300 text-footnoteMedium">
                 Show all
               </button>
             </div>
             <div className="px-1 pb-2">
-              {q.length > 0 && isGeoPropertySearchFetching && hiddenProperties.length === 0 && extraGeoProperties.length === 0 ? (
+              {q.length > 0 &&
+              isGeoPropertySearchFetching &&
+              hiddenProperties.length === 0 &&
+              extraGeoProperties.length === 0 ? (
                 <p className="px-2 py-2 text-footnote text-grey-04">Searching…</p>
               ) : hiddenProperties.length === 0 && extraGeoProperties.length === 0 ? (
                 <p className="px-2 py-2 text-footnote text-grey-04">No matching properties.</p>

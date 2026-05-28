@@ -1,6 +1,8 @@
 'use client';
 
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
 
@@ -14,6 +16,8 @@ export function SpaceMembersPopoverMemberRequestButton({
   hasRequestedSpaceMembership,
 }: SpaceMembersPopoverMemberRequestButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
+  const { smartAccount } = useSmartAccount();
+  const { open: openSignInPrompt } = useSignInPrompt();
 
   return (
     <Pending isPending={status === 'pending'} position="end">
@@ -21,7 +25,13 @@ export function SpaceMembersPopoverMemberRequestButton({
         <button
           className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
           disabled={status !== 'idle'}
-          onClick={() => requestToBeMember()}
+          onClick={() => {
+            if (!smartAccount) {
+              openSignInPrompt('join');
+              return;
+            }
+            requestToBeMember();
+          }}
         >
           <RequestButtonText status={status} />
         </button>

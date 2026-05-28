@@ -5,6 +5,8 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
 
@@ -27,6 +29,8 @@ const locallyRequestedSpaceIdsAtom = atom<Set<string>>(new Set<string>());
 export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
+  const { smartAccount } = useSmartAccount();
+  const { open: openSignInPrompt } = useSignInPrompt();
 
   const normalizedId = normId(spaceId);
   const locallyRequestedThisSpace = locallyRequested.has(normalizedId);
@@ -52,7 +56,13 @@ export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }:
           type="button"
           className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
           disabled={status !== 'idle'}
-          onClick={() => requestToBeMember()}
+          onClick={() => {
+            if (!smartAccount) {
+              openSignInPrompt('join');
+              return;
+            }
+            requestToBeMember();
+          }}
         >
           Join space
         </button>

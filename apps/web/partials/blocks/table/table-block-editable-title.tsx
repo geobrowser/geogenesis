@@ -7,9 +7,9 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
-import { isPersonalProfileSkillsRelationFocusRegionActive } from '~/core/utils/personal-profile-skills-focus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { isPersonalProfileSkillsRelationFocusRegionActive } from '~/core/utils/personal-profile-skills-focus';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
@@ -44,7 +44,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         />
       )}
       {source.type === 'SPACES' && (
-        <div className="group relative z-100 flex h-full">
+        <div className="group relative z-10 flex h-full">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spacesById.get(spaceId);
 

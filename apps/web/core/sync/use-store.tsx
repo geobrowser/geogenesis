@@ -102,6 +102,47 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
   return { isFetched };
 }
 
+type HydrateEntitiesOptions = {
+  ids: string[];
+  enabled?: boolean;
+  spaceId?: string;
+};
+
+export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEntitiesOptions) {
+  const cache = useQueryClient();
+  const { store, stream } = useSyncEngine();
+  const normalizedIds = React.useMemo(() => [...new Set(ids)].filter(Boolean).sort(), [ids]);
+  const stableKey = normalizedIds.join('|');
+
+  const { isFetched } = useQuery({
+    enabled: enabled && normalizedIds.length > 0,
+    queryKey: ['store', 'entities', stableKey, spaceId ?? ''],
+    queryFn: async () => {
+      if (normalizedIds.length === 0) return [];
+
+      const { merged, remote } = await E.syncMany({
+        store,
+        cache,
+        where: { id: { in: normalizedIds } },
+        first: normalizedIds.length,
+        spaceId,
+      });
+
+      if (merged.length > 0) {
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: merged,
+          remoteEntities: remote,
+        });
+      }
+
+      return merged;
+    },
+  });
+
+  return { isFetched };
+}
+
 /**
  * @TODO: We're basically inventing @tanstack/db. Right now it's
  * not stable (as of July 2025). Once it's stable we should just
@@ -231,12 +272,7 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const {
-    isFetched,
-    isLoading,
-    isPlaceholderData,
-    data,
-  } = useQuery({
+  const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
