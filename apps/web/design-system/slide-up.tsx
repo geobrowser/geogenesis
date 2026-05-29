@@ -6,9 +6,9 @@ import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion
 import { useAtomValue } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
 
-import { entitySidePanelHostElementAtom } from '~/atoms';
-
 import { Z_LAYER_CLASS } from '~/core/z-layers';
+
+import { entitySidePanelHostElementAtom } from '~/atoms';
 
 type SlideUpProps = {
   isOpen: boolean;
