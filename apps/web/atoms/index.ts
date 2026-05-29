@@ -35,3 +35,4 @@ export const teamNoticeDismissedAtom = atomWithStorage<RepeatingNotice>('dismiss
 });
 
 export * from './personal-profile-suggested';
+export * from './dismissed-hints';

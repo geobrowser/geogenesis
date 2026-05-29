@@ -5,19 +5,13 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { SubstreamVote } from '~/core/io/substream-schema';
+import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { VoteOption, encodeProposalVotedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
-import {
-  EMPTY_SIGNATURE,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseVoteArgs {
@@ -58,35 +52,20 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         throw new Error('You need a registered personal space to vote');
       }
 
-      const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
-      const normalizedProposalId = proposalId.replace(/-/g, '').toLowerCase();
+      const vote = option === 'ACCEPT' ? 'YES' : option === 'REJECT' ? 'NO' : 'ABSTAIN';
 
-      const fromSpaceId = `0x${personalSpaceId}` as Hex;
-      const toSpaceId = `0x${normalizedSpaceId}` as Hex;
-      const proposalIdHex = `0x${normalizedProposalId}` as Hex;
-
-      // Map vote option to contract enum
-      const voteOption =
-        option === 'ACCEPT' ? VoteOption.Yes : option === 'REJECT' ? VoteOption.No : VoteOption.Abstain;
-
-      // Encode the vote data: (proposalId, voteOption)
-      const data = encodeProposalVotedData(proposalIdHex, voteOption);
-
-      // The topic is the proposal ID padded to bytes32
-      const topic = padBytes16ToBytes32(normalizedProposalId);
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_VOTED, topic, data, EMPTY_SIGNATURE],
+      const { calldata: callData } = geo.daoSpaces.proposals.vote({
+        authorSpaceId: personalSpaceId,
+        spaceId,
+        proposalId,
+        vote,
       });
 
-      // Log before transaction for debugging
       console.log('Submitting vote', {
-        fromSpaceId,
-        toSpaceId,
+        authorSpaceId: personalSpaceId,
+        spaceId,
         proposalId,
-        voteOption: option,
+        vote,
         action: 'PROPOSAL_VOTED',
       });
 
@@ -104,7 +83,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         const error = result.left;
         console.error(
           `Vote failed: ${error.message}`,
-          { fromSpaceId, toSpaceId, proposalId, voteOption: option },
+          { authorSpaceId: personalSpaceId, spaceId, proposalId, vote },
           error
         );
         throw error;
@@ -112,10 +91,10 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       console.log('Vote successful', {
         txHash: result.right,
-        fromSpaceId,
-        toSpaceId,
+        authorSpaceId: personalSpaceId,
+        spaceId,
         proposalId,
-        voteOption: option,
+        vote,
       });
 
       return result.right;
