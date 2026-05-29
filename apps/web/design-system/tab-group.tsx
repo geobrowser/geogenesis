@@ -8,7 +8,9 @@ import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useTabId } from '~/core/state/editor/use-editor';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -157,14 +159,26 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
+function tabIdFromEntityTabHref(href: string): string | null {
+  const idx = href.indexOf('tabId=');
+  if (idx === -1) return null;
+  const raw = href.slice(idx + 6).split('&')[0];
+  return validateEntityId(raw) ? raw : null;
+}
+
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
-  const tabId = useTabId();
+  const activeTabId = useActiveTabIdForEditor();
+  const sidePanelTab = useEntitySidePanelActiveTab();
 
-  const fullPath = tabId ? `${path}?tabId=${tabId}` : `${path}`;
-  const active = href === fullPath;
+  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
+  const active = sidePanelTab
+    ? tabIdFromEntityTabHref(href) === null
+      ? activeTabId === null
+      : activeTabId === tabIdFromEntityTabHref(href)
+    : href === fullPath;
 
   if (!editable && hidden) {
     return null;
@@ -176,6 +190,30 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
+    );
+  }
+
+  const hrefTabId = tabIdFromEntityTabHref(href);
+
+  if (sidePanelTab) {
+    return (
+      <button
+        type="button"
+        className={tabGroupTabLinkStyles({ active, disabled })}
+        onClick={() => sidePanelTab.setActiveTabId(hrefTabId)}
+      >
+        {label}
+        {badge && <Badge>{badge}</Badge>}
+        {active && (
+          <motion.div
+            layoutId="tab-group-active-border"
+            layout
+            initial={false}
+            transition={{ duration: 0.2 }}
+            className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+          />
+        )}
+      </button>
     );
   }
 

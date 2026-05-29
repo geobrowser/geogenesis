@@ -501,7 +501,67 @@
 
 /* Radix UI */
 .elevated-popover > [data-radix-popper-content-wrapper] {
-  z-index: 1001 !important;
+  z-index: var(--elevated-popover-z, 1001) !important;
+}
+
+body[data-entity-side-panel-open] {
+  --elevated-popover-z: 10003;
+  scrollbar-gutter: auto !important;
+}
+
+/* Hide main-page scrollbars when the panel keeps its own scrollbar. */
+html[data-entity-side-panel-open],
+html[data-entity-side-panel-open] body,
+body[data-entity-side-panel-open],
+body[data-entity-side-panel-open] [data-app-scroll-surface],
+body[data-entity-side-panel-open] [data-power-tools-scroll] {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html[data-entity-side-panel-open]::-webkit-scrollbar,
+html[data-entity-side-panel-open] body::-webkit-scrollbar,
+body[data-entity-side-panel-open]::-webkit-scrollbar,
+body[data-entity-side-panel-open] [data-app-scroll-surface]::-webkit-scrollbar,
+body[data-entity-side-panel-open] [data-power-tools-scroll]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+body[data-power-tools-panel-open] {
+  scrollbar-gutter: auto !important;
+}
+
+html[data-power-tools-panel-open],
+html[data-power-tools-panel-open] body,
+body[data-power-tools-panel-open],
+body[data-power-tools-panel-open] [data-power-tools-scroll] {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html[data-power-tools-panel-open]::-webkit-scrollbar,
+html[data-power-tools-panel-open] body::-webkit-scrollbar,
+body[data-power-tools-panel-open]::-webkit-scrollbar,
+body[data-power-tools-panel-open] [data-power-tools-scroll]::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+body[data-entity-side-panel-open] .elevated-popover {
+  z-index: 10003;
+  position: relative;
+}
+
+body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
+  z-index: 10003 !important;
+}
+
+[data-entity-side-panel] [data-radix-popper-content-wrapper] {
+  z-index: 60 !important;
+  pointer-events: auto !important;
 }
 
 /* https://github.com/radix-ui/primitives/issues/2908 */

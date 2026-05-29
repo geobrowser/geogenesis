@@ -14,6 +14,7 @@ import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -29,6 +30,7 @@ import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store'
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
+import type { EntityDiff } from '~/core/utils/diff/types';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -62,6 +64,31 @@ import {
 
 type Proposals = Record<string, { name: string; description: string }>;
 
+function orderVisibleEntitiesStable(
+  entities: EntityDiff[],
+  orderStateRef: React.MutableRefObject<{ spaceId: string; order: string[] }>,
+  activeSpace: string
+): EntityDiff[] {
+  const filtered = entities.filter(hasVisibleChanges);
+  if (!activeSpace) return filtered;
+
+  if (orderStateRef.current.spaceId !== activeSpace) {
+    orderStateRef.current = { spaceId: activeSpace, order: [] };
+  }
+
+  const visibleIds = new Set(filtered.map(e => e.entityId));
+  const nextOrder = orderStateRef.current.order.filter(id => visibleIds.has(id));
+  for (const entity of filtered) {
+    if (!nextOrder.includes(entity.entityId)) {
+      nextOrder.push(entity.entityId);
+    }
+  }
+  orderStateRef.current.order = nextOrder;
+
+  const byId = new Map(filtered.map(e => [e.entityId, e]));
+  return nextOrder.map(id => byId.get(id)).filter((e): e is EntityDiff => e != null);
+}
+
 function bountySpaceFallbackLabel(spaceId: string): string {
   const compact = spaceId.replace(/-/g, '');
   return compact.length > 14 ? `${compact.slice(0, 6)}…${compact.slice(-4)}` : spaceId;
@@ -82,6 +109,7 @@ export const ReviewChanges = () => {
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const resetSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
+  const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
@@ -402,7 +430,11 @@ export const ReviewChanges = () => {
   const proposalNameSectionRef = React.useRef<HTMLDivElement>(null);
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
-  const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
+  const stableEntityOrderRef = React.useRef<{ spaceId: string; order: string[] }>({ spaceId: '', order: [] });
+  const visibleEntities = React.useMemo(
+    () => orderVisibleEntitiesStable(entities, stableEntityOrderRef, activeSpace),
+    [entities, activeSpace]
+  );
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
@@ -462,6 +494,20 @@ export const ReviewChanges = () => {
     overscan: 3,
     gap: 8,
   });
+
+  React.useEffect(() => {
+    rowVirtualizer.measure();
+  }, [entities, visibleEntities.length]);
+
+  const handleOpenReviewEntity = React.useCallback(
+    (entityId: string) => {
+      if (!activeSpace) return;
+
+      bumpEditorContentVersion(v => v + 1);
+      openSidePanel(entityId, activeSpace, true, { openedFromReviewEdits: true });
+    },
+    [activeSpace, bumpEditorContentVersion, openSidePanel]
+  );
 
   const handleProposalNameChange = (name: string) => {
     if (name.length > 0) {
@@ -854,7 +900,7 @@ export const ReviewChanges = () => {
                           const entity = visibleEntities[virtualRow.index];
                           return (
                             <div
-                              key={virtualRow.key}
+                              key={entity.entityId}
                               data-index={virtualRow.index}
                               ref={node => rowVirtualizer.measureElement(node)}
                               style={{
@@ -867,7 +913,11 @@ export const ReviewChanges = () => {
                             >
                               <div className="px-6 py-4">
                                 <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                                  <ChangedEntity entity={entity} spaceId={activeSpace} />
+                                  <ChangedEntity
+                                    entity={entity}
+                                    spaceId={activeSpace}
+                                    onOpenEntity={handleOpenReviewEntity}
+                                  />
                                 </div>
                               </div>
                             </div>

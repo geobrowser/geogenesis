@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Array as A, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
@@ -22,10 +23,14 @@ import { Divider } from '~/design-system/divider';
 
 import { ReviewEditsTip, useReviewEditsTip } from '~/partials/hints/review-edits-tip';
 
+import { entitySidePanelWantsEditAtom } from '~/atoms';
+
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
   const [toast] = useToast();
   const { editable } = useEditable();
+  const sidePanelWantsEdit = useAtomValue(entitySidePanelWantsEditAtom);
+  const isEditing = editable || sidePanelWantsEdit;
   const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
 
   const allValues = useValues({

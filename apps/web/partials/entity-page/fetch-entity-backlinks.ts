@@ -4,18 +4,13 @@ import { Space } from '~/core/io/dto/spaces';
 import { getEntityBacklinks, getSpaces } from '~/core/io/queries';
 import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
-import { Backlinks } from '~/partials/entity-page/backlinks';
+import type { Backlink } from '~/partials/entity-page/backlinks';
 
-type BacklinksServerContainerProps = {
-  entityId: string;
-};
-
-export const BacklinksServerContainer = async ({ entityId }: BacklinksServerContainerProps) => {
+export async function fetchEntityBacklinksPayload(entityId: string): Promise<Backlink[]> {
   const backlinksData = await Effect.runPromise(getEntityBacklinks(entityId));
 
-  if (backlinksData.length === 0) return null;
+  if (backlinksData.length === 0) return [];
 
-  // Collect all backlink space IDs to fetch space data
   const allSpaceIds = Array.from(new Set(backlinksData.map(backlink => backlink.backlinkSpaceId)));
 
   const spacesData: Space[] =
@@ -36,8 +31,6 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
       },
     };
 
-    // Filter types to only show those from the backlink's space, then deduplicate by id
-    // const typesFromBacklinkSpace = backlink.types.filter(t => t.spaceIds?.includes(backlink.backlinkSpaceId));
     const uniqueTypes = Array.from(new Map(backlink.types.map(t => [t.id, t])).values());
 
     return [
@@ -51,9 +44,5 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
 
   backlinks.sort(compareBySpaceRank(b => b.primarySpace.id));
 
-  if (backlinks.length === 0) {
-    return null;
-  }
-
-  return <Backlinks backlinks={backlinks} />;
-};
+  return backlinks;
+}
