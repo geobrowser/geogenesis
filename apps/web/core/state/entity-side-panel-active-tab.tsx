@@ -9,9 +9,7 @@ export type EntitySidePanelActiveTabContextValue = {
   setActiveTabId: (tabId: string | null) => void;
 };
 
-export const EntitySidePanelActiveTabContext = React.createContext<EntitySidePanelActiveTabContextValue | null>(
-  null
-);
+export const EntitySidePanelActiveTabContext = React.createContext<EntitySidePanelActiveTabContextValue | null>(null);
 
 export function EntitySidePanelActiveTabProvider({
   entityId,

@@ -489,10 +489,7 @@ export function useEditorStore() {
       const currentBlockIds = getRelations({
         mergeWith: initialBlockEntityRelations,
         selector: r =>
-          r.fromEntity.id === activeEntityId &&
-          r.type.id === SystemIds.BLOCKS &&
-          r.spaceId === spaceId &&
-          !r.isDeleted,
+          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
       }).map(r => r.toEntity.id);
 
       // We also need to check the re-ordering of any blocks. If a block has been reordered then

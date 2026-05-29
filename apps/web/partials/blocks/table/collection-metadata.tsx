@@ -101,11 +101,7 @@ export const CollectionMetadata = ({
   };
 
   return (
-    <div
-      className="relative w-full min-w-0"
-      onMouseEnter={() => setIsRowHovered(true)}
-      onMouseLeave={leaveRow}
-    >
+    <div className="relative w-full min-w-0" onMouseEnter={() => setIsRowHovered(true)} onMouseLeave={leaveRow}>
       <div className={cx('min-w-0', reserveActionSpace && 'pr-14')}>{children}</div>
       {reserveActionSpace && (
         <div className="absolute top-0 right-0 flex flex-nowrap items-center gap-0.5">

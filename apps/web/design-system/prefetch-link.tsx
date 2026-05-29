@@ -19,11 +19,7 @@ export const PrefetchLink = React.forwardRef<HTMLAnchorElement, Props>(function 
 
   const prefetchOnHover = (event: React.MouseEvent<HTMLAnchorElement>) => {
     const prefetchTarget =
-      typeof href === 'string'
-        ? href
-        : entityId && spaceId
-          ? NavUtils.toEntity(spaceId, entityId)
-          : null;
+      typeof href === 'string' ? href : entityId && spaceId ? NavUtils.toEntity(spaceId, entityId) : null;
 
     if (prefetchTarget) {
       router.prefetch(prefetchTarget);

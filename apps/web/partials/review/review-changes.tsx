@@ -13,8 +13,8 @@ import { useSetAtom, useStore } from 'jotai';
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
@@ -30,6 +30,7 @@ import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store'
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
+import type { EntityDiff } from '~/core/utils/diff/types';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -40,8 +41,6 @@ import { Pending } from '~/design-system/pending';
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
-
-import type { EntityDiff } from '~/core/utils/diff/types';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
 import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';

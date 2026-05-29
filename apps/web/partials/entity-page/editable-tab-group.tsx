@@ -29,6 +29,12 @@ import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
+import { EditSmall } from '~/design-system/icons/edit-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
+import { Menu } from '~/design-system/icons/menu';
+import { Trash } from '~/design-system/icons/trash';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
 function tabIdFromEntityTabHref(href: string): string | null {
   const idx = href.indexOf('tabId=');
   if (idx === -1) return null;
@@ -47,12 +53,6 @@ function isEntityTabHrefActive(
   if (hrefTabId === null) return activeTabId === null;
   return activeTabId === hrefTabId;
 }
-
-import { EditSmall } from '~/design-system/icons/edit-small';
-import { ExpandSmall } from '~/design-system/icons/expand-small';
-import { Menu } from '~/design-system/icons/menu';
-import { Trash } from '~/design-system/icons/trash';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 export type SystemTab = {
   label: string;
@@ -319,9 +319,7 @@ export function EditableTabGroup({
                 label={tab.label}
                 active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
                 onSelect={
-                  sidePanelTab
-                    ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
-                    : undefined
+                  sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
                 }
               />
             ))}
@@ -339,9 +337,7 @@ export function EditableTabGroup({
                   onCancelEditing={() => setEditingTabId(null)}
                   onDelete={() => handleDeleteTab(tab)}
                   onOpen={() => router.push(NavUtils.toEntity(tab.relation.spaceId, tab.entityId))}
-                  onSelect={
-                    sidePanelTab ? () => sidePanelTab.setActiveTabId(tab.entityId) : undefined
-                  }
+                  onSelect={sidePanelTab ? () => sidePanelTab.setActiveTabId(tab.entityId) : undefined}
                 />
               ))}
             </SortableContext>
@@ -353,9 +349,7 @@ export function EditableTabGroup({
                 label={tab.label}
                 active={isEntityTabHrefActive(tab.href, activeTabId, Boolean(sidePanelTab), fullPath)}
                 onSelect={
-                  sidePanelTab
-                    ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href))
-                    : undefined
+                  sidePanelTab ? () => sidePanelTab.setActiveTabId(tabIdFromEntityTabHref(tab.href)) : undefined
                 }
               />
             ))}

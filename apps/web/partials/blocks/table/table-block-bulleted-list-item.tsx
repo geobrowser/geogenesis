@@ -18,8 +18,8 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 type Props = {
@@ -158,23 +158,23 @@ export function TableBlockBulletedListItem({
           </div>
         ) : (
           <CollectionMetadata
-              view="BULLETED_LIST"
-              isEditing={false}
-              name={name}
-              currentSpaceId={currentSpaceId}
-              entityId={rowEntityId}
-              spaceId={nameCell?.space}
-              collectionId={nameCell?.collectionId}
-              relationId={relationId}
-              verified={verified}
-              onLinkEntry={onLinkEntry}
-              showSidePanel={!isPlaceholder}
-              openedWithMainViewEditing={isEditing}
-            >
-              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="min-w-0 flex-1 text-body">
-                {name}
-              </Link>
-            </CollectionMetadata>
+            view="BULLETED_LIST"
+            isEditing={false}
+            name={name}
+            currentSpaceId={currentSpaceId}
+            entityId={rowEntityId}
+            spaceId={nameCell?.space}
+            collectionId={nameCell?.collectionId}
+            relationId={relationId}
+            verified={verified}
+            onLinkEntry={onLinkEntry}
+            showSidePanel={!isPlaceholder}
+            openedWithMainViewEditing={isEditing}
+          >
+            <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="min-w-0 flex-1 text-body">
+              {name}
+            </Link>
+          </CollectionMetadata>
         )}
       </div>
       <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />

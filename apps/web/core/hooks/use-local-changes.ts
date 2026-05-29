@@ -1,9 +1,9 @@
 'use client';
 
-import * as React from 'react';
-
 import { createAtom } from '@xstate/store';
 import { useSelector } from '@xstate/store/react';
+
+import * as React from 'react';
 
 import { reactiveRelations, reactiveValues, stableStringify } from '../sync/store';
 import type { Relation, Value } from '../types';
@@ -79,30 +79,30 @@ export const useLocalChanges = (
 
     const runDiff = () => {
       const storeValues = reactiveValues
-      .get()
-      .filter(v => v.spaceId === spaceId && v.isLocal === true && !v.hasBeenPublished);
-    const storeRelations = reactiveRelations
-      .get()
-      .filter(r => r.spaceId === spaceId && r.isLocal === true && !r.hasBeenPublished);
+        .get()
+        .filter(v => v.spaceId === spaceId && v.isLocal === true && !v.hasBeenPublished);
+      const storeRelations = reactiveRelations
+        .get()
+        .filter(r => r.spaceId === spaceId && r.isLocal === true && !r.hasBeenPublished);
 
-    const mergeValuesForSpace = mergeWithValues.filter(
-      v =>
-        v.spaceId === spaceId &&
-        v.isLocal === true &&
-        (v.hasBeenPublished === false || v.hasBeenPublished === undefined)
-    );
-    const mergeRelationsForSpace = mergeWithRelations.filter(
-      r =>
-        r.spaceId === spaceId &&
-        r.isLocal === true &&
-        (r.hasBeenPublished === false || r.hasBeenPublished === undefined)
-    );
+      const mergeValuesForSpace = mergeWithValues.filter(
+        v =>
+          v.spaceId === spaceId &&
+          v.isLocal === true &&
+          (v.hasBeenPublished === false || v.hasBeenPublished === undefined)
+      );
+      const mergeRelationsForSpace = mergeWithRelations.filter(
+        r =>
+          r.spaceId === spaceId &&
+          r.isLocal === true &&
+          (r.hasBeenPublished === false || r.hasBeenPublished === undefined)
+      );
 
-    const storeIds = new Set([...storeValues.map(v => v.id), ...storeRelations.map(r => r.id)]);
-    const localValues = [...storeValues, ...mergeValuesForSpace.filter(v => !storeIds.has(v.id))];
-    const localRelations = [...storeRelations, ...mergeRelationsForSpace.filter(r => !storeIds.has(r.id))];
+      const storeIds = new Set([...storeValues.map(v => v.id), ...storeRelations.map(r => r.id)]);
+      const localValues = [...storeValues, ...mergeValuesForSpace.filter(v => !storeIds.has(v.id))];
+      const localRelations = [...storeRelations, ...mergeRelationsForSpace.filter(r => !storeIds.has(r.id))];
 
-    const allRelationsForSpace = reactiveRelations.get().filter(r => r.spaceId === spaceId && !r.isDeleted);
+      const allRelationsForSpace = reactiveRelations.get().filter(r => r.spaceId === spaceId && !r.isDeleted);
 
       Diff.fromLocal(spaceId, localValues, localRelations, allRelationsForSpace).then(result => {
         if (!cancelled) {

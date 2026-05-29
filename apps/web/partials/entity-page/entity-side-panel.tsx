@@ -3,36 +3,32 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
-import { createPortal } from 'react-dom';
-
-import { useAtomValue, useSetAtom, useStore } from 'jotai';
-import { usePathname } from 'next/navigation';
 
 import { motion, useAnimation } from 'framer-motion';
-
-import {
-  editorContentVersionAtom,
-  entitySidePanelHostElementAtom,
-  entitySidePanelPersistEditorAtom,
-} from '~/atoms';
+import { useAtomValue, useSetAtom, useStore } from 'jotai';
+import { usePathname } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
-import { useDiff } from '~/core/state/diff-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
+import { useDiff } from '~/core/state/diff-store';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
-import { EntitySidePanelActiveTabProvider } from '~/core/state/entity-side-panel-active-tab';
-import { EntitySidePanelEditModeProvider, EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
-import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
-import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
-import type { Entity, TabEntity } from '~/core/types';
+import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { EntitySidePanelActiveTabProvider } from '~/core/state/entity-side-panel-active-tab';
+import {
+  EntitySidePanelEditContext,
+  EntitySidePanelEditModeProvider,
+} from '~/core/state/entity-side-panel-edit-context';
+import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { useQueryEntities, useQueryEntitiesAsync, useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
+import type { Entity, TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
@@ -60,6 +56,8 @@ import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-met
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
+import { editorContentVersionAtom, entitySidePanelHostElementAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
+
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
 
 /**
@@ -81,9 +79,7 @@ function useSidePanelEntityScope(entityId: string, requestedSpaceId: string) {
 
   const scopedHasContent = React.useMemo(() => {
     if (!requestedScoped) return false;
-    return (
-      requestedScoped.values.length > 0 || requestedScoped.relations.some(r => !r.isDeleted)
-    );
+    return requestedScoped.values.length > 0 || requestedScoped.relations.some(r => !r.isDeleted);
   }, [requestedScoped]);
 
   const derivedSpaceId = React.useMemo(() => {
@@ -218,7 +214,7 @@ function EntitySidePanelHeader({
       <Link
         href={NavUtils.toSpace(entitySpaceId)}
         spaceId={entitySpaceId}
-        className="flex min-w-0 max-w-[min(100%,14rem)] shrink items-center gap-1.5 rounded-sm px-1 py-1"
+        className="flex max-w-[min(100%,14rem)] min-w-0 shrink items-center gap-1.5 rounded-sm px-1 py-1"
       >
         <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
           <ThumbGeoImage
@@ -401,15 +397,15 @@ function EntitySidePanelBody({
 
   return (
     <EntityStoreProvider id={entityId} spaceId={entitySpaceId}>
-        <EditorProvider
-          id={entityId}
-          spaceId={entitySpaceId}
-          initialBlocks={blocks ?? []}
-          initialBlockRelations={blockRelations}
-          initialTabs={initialTabs}
-          initialCollectionItems={initialCollectionItems}
-        >
-          <div className="px-4 pt-6 pb-12 sm:px-5">
+      <EditorProvider
+        id={entityId}
+        spaceId={entitySpaceId}
+        initialBlocks={blocks ?? []}
+        initialBlockRelations={blockRelations}
+        initialTabs={initialTabs}
+        initialCollectionItems={initialCollectionItems}
+      >
+        <div className="px-4 pt-6 pb-12 sm:px-5">
           <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage />
           <EntityPageContentContainer>
             <div>
@@ -441,8 +437,8 @@ function EntitySidePanelBody({
               <CommentSection entityId={entityId} spaceId={entitySpaceId} />
             </div>
           </EntityPageContentContainer>
-          </div>
-        </EditorProvider>
+        </div>
+      </EditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -521,8 +517,7 @@ export function EntitySidePanel() {
       const beforePersist = getLocalUnpublishedChangesFingerprint();
       jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
       const afterPersist = getLocalUnpublishedChangesFingerprint();
-      const hasSemanticChanges =
-        snapshot !== null && (beforePersist !== snapshot || afterPersist !== snapshot);
+      const hasSemanticChanges = snapshot !== null && (beforePersist !== snapshot || afterPersist !== snapshot);
       if (hasSemanticChanges) {
         bumpReviewVersion();
       }
@@ -589,7 +584,7 @@ export function EntitySidePanel() {
     <aside
       ref={panelHostRef}
       data-entity-side-panel
-      className={`fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden rounded-l-2xl border-l border-grey-02 bg-white shadow-2xl ${
+      className={`rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white ${
         isReviewOpen ? 'z-[10001]' : 'z-[200]'
       }`}
     >

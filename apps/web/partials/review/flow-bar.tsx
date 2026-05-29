@@ -2,14 +2,13 @@
 
 import * as React from 'react';
 
-import { useAtomValue } from 'jotai';
 import cx from 'classnames';
 import { Array as A, pipe } from 'effect';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
-import { entitySidePanelWantsEditAtom } from '~/atoms';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
@@ -23,6 +22,8 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 import { Divider } from '~/design-system/divider';
 
 import { ReviewEditsTip, useReviewEditsTip } from '~/partials/hints/review-edits-tip';
+
+import { entitySidePanelWantsEditAtom } from '~/atoms';
 
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();

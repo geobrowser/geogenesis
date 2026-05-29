@@ -2,11 +2,13 @@
 
 import * as React from 'react';
 
-import { useAtomValue } from 'jotai';
 import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { entitySidePanelHostElementAtom } from '~/atoms';
+
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -28,7 +30,7 @@ export const SlideUp = ({
     () => (entitySidePanelHost ? [entitySidePanelHost] : []),
     [entitySidePanelHost]
   );
-  
+
   React.useEffect(() => {
     if (!isOpen) return;
 

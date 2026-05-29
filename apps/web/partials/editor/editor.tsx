@@ -11,8 +11,8 @@ import { useRouter } from 'next/navigation';
 import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
-import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { removeIdAttributes } from '~/core/state/editor/utils';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';

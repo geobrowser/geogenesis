@@ -5,11 +5,11 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
+import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
@@ -36,10 +36,7 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
    */
   const effectiveEditable = sidePanelEdit != null ? sidePanelEdit.panelWantsEdit : editable;
 
-  const initialTabRelationIds = React.useMemo(
-    () => new Set(initialTabRelations.map(r => r.id)),
-    [initialTabRelations]
-  );
+  const initialTabRelationIds = React.useMemo(() => new Set(initialTabRelations.map(r => r.id)), [initialTabRelations]);
 
   // Merge local tab relation changes with server data. Tab relations keep their relation `spaceId`;
   // it may differ from the entity URL scope — include merged rows by id so tabs don’t disappear

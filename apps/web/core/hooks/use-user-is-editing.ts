@@ -15,8 +15,7 @@ export function useUserIsEditing(spaceId: string) {
   const hydrated = useHydrated();
   const { canEdit, isLoading } = useAccessControl(spaceId);
 
-  const editableIntent =
-    panelCtx?.spaceId === spaceId ? panelCtx.panelWantsEdit : editable;
+  const editableIntent = panelCtx?.spaceId === spaceId ? panelCtx.panelWantsEdit : editable;
 
   // Before hydration, access control returns false to avoid SSR mismatches.
   // If the editable atom is already true (user was editing before navigation),

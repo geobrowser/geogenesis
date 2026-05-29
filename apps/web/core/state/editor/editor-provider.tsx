@@ -6,8 +6,8 @@ import * as React from 'react';
 
 import { useSearchParams } from 'next/navigation';
 
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { useRelations } from '~/core/sync/use-store';
+import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 
@@ -156,16 +156,10 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
 
   const liveTabRelations = useRelations({
     selector: r =>
-      r.fromEntity.id === entityId &&
-      r.type.id === SystemIds.TABS_PROPERTY &&
-      r.spaceId === spaceId &&
-      !r.isDeleted,
+      r.fromEntity.id === entityId && r.type.id === SystemIds.TABS_PROPERTY && r.spaceId === spaceId && !r.isDeleted,
   });
 
-  const liveTabEntityIds = React.useMemo(
-    () => new Set(liveTabRelations.map(r => r.toEntity.id)),
-    [liveTabRelations]
-  );
+  const liveTabEntityIds = React.useMemo(() => new Set(liveTabRelations.map(r => r.toEntity.id)), [liveTabRelations]);
 
   const tabId = React.useMemo(() => {
     if (sidePanelTabCtx) {

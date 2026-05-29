@@ -3,10 +3,10 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
-import { createPortal } from 'react-dom';
 
 import { cx } from 'class-variance-authority';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
@@ -23,8 +23,8 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
-import { mapPropertyType } from '~/core/utils/property/properties';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
+import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Checkbox } from '~/design-system/checkbox';

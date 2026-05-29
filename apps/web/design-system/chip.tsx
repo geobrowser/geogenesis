@@ -1,17 +1,15 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
-
 import type { DraggableSyntheticListeners } from '@dnd-kit/core';
+import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 import { useState } from 'react';
 
+import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { useSetAtom, useStore } from 'jotai';
-import { cva } from 'class-variance-authority';
 
-import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
@@ -30,6 +28,8 @@ import { VideoSmall as VideoSmallIcon } from '~/design-system/icons/video-small'
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import { ColorName, colors } from '~/design-system/theme/colors';
+
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
 type LinkableChipProps = {
   href: string;

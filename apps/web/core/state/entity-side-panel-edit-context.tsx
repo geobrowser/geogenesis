@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 
-import { entitySidePanelWantsEditAtom } from '~/atoms';
 import { useAccessControl } from '~/core/hooks/use-access-control';
+
+import { entitySidePanelWantsEditAtom } from '~/atoms';
 
 export type EntitySidePanelEditContextValue = {
   spaceId: string;
@@ -28,9 +29,7 @@ export function EntitySidePanelEditModeProvider({
   openedFromReviewEdits?: boolean;
   children: React.ReactNode;
 }) {
-  const [panelWantsEdit, setPanelWantsEdit] = React.useState(
-    openedFromReviewEdits ? true : openedWithMainViewEditing
-  );
+  const [panelWantsEdit, setPanelWantsEdit] = React.useState(openedFromReviewEdits ? true : openedWithMainViewEditing);
   const setGlobalPanelWantsEdit = useSetAtom(entitySidePanelWantsEditAtom);
   const { canEdit, isLoading } = useAccessControl(entitySpaceId);
 

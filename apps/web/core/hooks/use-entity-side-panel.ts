@@ -2,7 +2,7 @@
 
 import { useAtom } from 'jotai';
 
-import { entitySidePanelAtom, type EntitySidePanelTarget } from '~/atoms';
+import { type EntitySidePanelTarget, entitySidePanelAtom } from '~/atoms';
 
 export type OpenSidePanelOptions = Pick<EntitySidePanelTarget, 'openedFromReviewEdits'>;
 

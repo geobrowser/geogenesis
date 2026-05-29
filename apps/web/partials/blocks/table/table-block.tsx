@@ -23,8 +23,8 @@ import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editi
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { store } from '~/core/sync/use-sync-engine';
 import { getRelation } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 import { Cell, Relation, Row } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
@@ -234,8 +234,7 @@ function useEntries(
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
         const existing = store.getEntity(nextEntityId, { spaceId: actionSpaceId });
         const alreadyMaterialized =
-          (existing?.values.some(v => !v.isDeleted) ?? false) ||
-          (existing?.relations.some(r => !r.isDeleted) ?? false);
+          (existing?.values.some(v => !v.isDeleted) ?? false) || (existing?.relations.some(r => !r.isDeleted) ?? false);
 
         setPendingEntityId(entityId);
 

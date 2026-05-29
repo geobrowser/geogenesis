@@ -353,7 +353,7 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
 
   return (
     <SquareButton
-      className="!h-5 !w-5 box-border"
+      className="box-border !h-5 !w-5"
       icon={<RightArrowLongSmall />}
       onClick={handleClick}
       aria-label="Navigate to entity"
