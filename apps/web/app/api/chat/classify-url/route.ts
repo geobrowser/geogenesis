@@ -211,7 +211,9 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
   // news outlet (covers anthropic.com/news, openai.com/news, and any company).
   // Runs AFTER the blog-platform rule above, so Substack/Medium/etc. stay Post.
   { match: (_host, path) => /^\/news(\/|$)/.test(path), type: 'news-story-single' },
-  { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'news-story-single' },
+  // Wikipedia → Post: the article IS the content (an encyclopedic entry), not a
+  // news event to seed sibling-source discovery from.
+  { match: host => host.endsWith('.wikipedia.org') || host === 'wikipedia.org', type: 'post' },
   { match: host => host === 'linkedin.com' || host === 'www.linkedin.com', type: 'news-story-single' },
   { match: host => matchesNewsHost(host), type: 'news-story-single' },
 ];
@@ -231,8 +233,8 @@ Return route="chat" ONLY when the URL clearly points to:
 - Encyclopedic definitions of static concepts with no time-sensitive component.
 
 When route="inject", also pick the most appropriate type:
-- "news-story-single" — a journalistic news article or current-events story from a news publication, OR a Wikipedia article, OR a LinkedIn / personal profile.
-- "post" — a blog post, company/engineering blog, personal essay, or newsletter/Substack/Medium/Mirror post: editorial web content that is NOT from a journalistic news outlet. (Reddit URLs are also "post".)
+- "news-story-single" — a journalistic news article or current-events story from a news publication, OR a LinkedIn / personal profile.
+- "post" — a blog post, company/engineering blog, personal essay, newsletter/Substack/Medium/Mirror post, OR a Wikipedia article: editorial or encyclopedic web content that is NOT from a journalistic news outlet. (Reddit URLs are also "post".)
 - "tweet" — X / Twitter URL.
 
 Decide "news-story-single" vs "post" by the SOURCE, not the topic: a news organization reporting an event → "news-story-single"; an individual's or a company's OWN blog/essay/newsletter → "post".
