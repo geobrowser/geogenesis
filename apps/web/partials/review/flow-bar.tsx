@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 import { RemoveScroll } from 'react-remove-scroll';
 
+import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
@@ -15,8 +16,11 @@ import { useStatusBar } from '~/core/state/status-bar-store';
 import { syncedEntities } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { Relation, Value } from '~/core/types';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Divider } from '~/design-system/divider';
+
+import { ReviewEditsTip, useReviewEditsTip } from '~/partials/hints/review-edits-tip';
 
 export const FlowBar = () => {
   const { state: statusBarState } = useStatusBar();
@@ -50,6 +54,15 @@ export const FlowBar = () => {
   const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
 
   const hideFlowbar = opsCount === 0 || !editable || toast || statusBarState.reviewState !== 'idle';
+  const flowBarVisible = !hideFlowbar;
+  const { settled: flowBarEnterSettled, onEnterAnimationComplete: onFlowBarEnterAnimationComplete } =
+    useEnterAnimationSettled(flowBarVisible);
+  const flowBarSurfaceRef = React.useRef<HTMLDivElement>(null);
+  const reviewEditsButtonRef = React.useRef<HTMLButtonElement>(null);
+  const { open: reviewEditsTipOpen, dismiss: dismissReviewEditsTip } = useReviewEditsTip({
+    flowBarVisible,
+    flowBarEnterSettled,
+  });
 
   // Publish the flow-bar's footprint as `--app-bottom-inset` while it's visible
   // so dropdowns (placement hook, table-filter results, etc.) can avoid sliding
@@ -77,13 +90,17 @@ export const FlowBar = () => {
             animate="visible"
             exit="hidden"
             transition={transition}
+            onAnimationComplete={onFlowBarEnterAnimationComplete}
             custom={!isReviewOpen}
             className={cx(
-              'pointer-events-none fixed inset-x-0 bottom-5 z-1000 flex justify-center text-button',
+              `pointer-events-none fixed inset-x-0 bottom-5 ${Z_LAYER_CLASS.flowBar} flex justify-center text-button`,
               RemoveScroll.classNames.fullWidth
             )}
           >
-            <div className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg">
+            <div
+              ref={flowBarSurfaceRef}
+              className="pointer-events-auto inline-flex h-10 items-center overflow-hidden rounded-lg border border-divider bg-white shadow-lg"
+            >
               <div className="inline-flex h-full items-center justify-center">
                 <p className="inline-flex items-center px-3">
                   <span>{pluralize('edit', opsCount, true)}</span>
@@ -98,7 +115,9 @@ export const FlowBar = () => {
                 </p>
               </div>
               <button
+                ref={reviewEditsButtonRef}
                 onClick={() => {
+                  dismissReviewEditsTip();
                   bumpReviewVersion();
                   setIsReviewOpen(true);
                 }}
@@ -110,6 +129,12 @@ export const FlowBar = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      <ReviewEditsTip
+        open={reviewEditsTipOpen}
+        dismiss={dismissReviewEditsTip}
+        anchorRef={reviewEditsButtonRef}
+        spotlightRef={flowBarSurfaceRef}
+      />
     </>
   );
 };
