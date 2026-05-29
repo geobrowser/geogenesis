@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
-import { HINT_IDS } from '~/atoms/dismissed-hints';
 import { useDiff } from '~/core/state/diff-store';
 
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 
 export function useReviewEditsTip({
   flowBarVisible,

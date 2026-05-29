@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { HINT_IDS } from '~/atoms/dismissed-hints';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -10,6 +9,7 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 
 const TIP_NUDGE_RIGHT_PX = 12;
 
@@ -19,9 +19,7 @@ export function useEditModeToggleTip() {
   const { canEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
 
   const isPersonalSpace = Boolean(
-    spaceId &&
-      personalSpaceId &&
-      normalizeSpaceId(spaceId) === normalizeSpaceId(personalSpaceId)
+    spaceId && personalSpaceId && normalizeSpaceId(spaceId) === normalizeSpaceId(personalSpaceId)
   );
 
   const gate = isPersonalSpace && isPersonalSpaceFetched && canEdit && !isLoadingAccessControl;

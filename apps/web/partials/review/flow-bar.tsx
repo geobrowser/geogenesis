@@ -10,13 +10,13 @@ import { RemoveScroll } from 'react-remove-scroll';
 
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { syncedEntities } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { Relation, Value } from '~/core/types';
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Divider } from '~/design-system/divider';
 

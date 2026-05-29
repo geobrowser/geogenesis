@@ -41,7 +41,6 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
-
 import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';
 
 import {
@@ -720,187 +719,184 @@ export const ReviewChanges = () => {
 
   return (
     <>
-    <SlideUp
-      isOpen={isReviewOpen}
-      setIsOpen={setIsReviewOpen}
-      deferEscapeClose={proposalNameTipOpen}
-      onEnterAnimationComplete={onSlideUpEnterAnimationComplete}
-    >
-      <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
-        <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
-          <div className="flex items-center gap-4">
-            <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
-            <span className="text-metadataMedium leading-none">Review your edits in</span>
-            {dedupedSpacesWithActions.length > 1 ? (
-              <Dropdown
-                trigger={
-                  <div className="flex items-center gap-2">
-                    {activeSpaceMetadata?.entity.image && (
-                      <div className="h-5 w-5 overflow-hidden rounded">
-                        <NativeGeoImage
-                          value={activeSpaceMetadata.entity.image}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <span>{activeSpaceMetadata?.entity.name ?? activeSpace}</span>
-                  </div>
-                }
-                options={spaceOptions}
-              />
-            ) : (
+      <SlideUp
+        isOpen={isReviewOpen}
+        setIsOpen={setIsReviewOpen}
+        deferEscapeClose={proposalNameTipOpen}
+        onEnterAnimationComplete={onSlideUpEnterAnimationComplete}
+      >
+        <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
+          <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
+            <div className="flex items-center gap-4">
+              <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
+              <span className="text-metadataMedium leading-none">Review your edits in</span>
+              {dedupedSpacesWithActions.length > 1 ? (
+                <Dropdown
+                  trigger={
+                    <div className="flex items-center gap-2">
+                      {activeSpaceMetadata?.entity.image && (
+                        <div className="h-5 w-5 overflow-hidden rounded">
+                          <NativeGeoImage
+                            value={activeSpaceMetadata.entity.image}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <span>{activeSpaceMetadata?.entity.name ?? activeSpace}</span>
+                    </div>
+                  }
+                  options={spaceOptions}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  {activeSpaceMetadata?.entity.image && (
+                    <div className="h-5 w-5 overflow-hidden rounded">
+                      <NativeGeoImage
+                        value={activeSpaceMetadata.entity.image}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <span className="text-metadataMedium leading-none font-semibold">
+                    {activeSpaceMetadata?.entity.name ?? activeSpace}
+                  </span>
+                </div>
+              )}
+            </div>
+            {hasRemainingSpaces && (
               <div className="flex items-center gap-2">
-                {activeSpaceMetadata?.entity.image && (
-                  <div className="h-5 w-5 overflow-hidden rounded">
-                    <NativeGeoImage
-                      value={activeSpaceMetadata.entity.image}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+                {activeSpaceMetadata?.type !== 'PERSONAL' && (
+                  <button
+                    onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+                    className={cx(
+                      'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+                      'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <Gem color="purple" />
+                    {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
+                  </button>
                 )}
-                <span className="text-metadataMedium leading-none font-semibold">
-                  {activeSpaceMetadata?.entity.name ?? activeSpace}
-                </span>
+                <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+                  <Pending isPending={isPublishing}>
+                    {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
+                  </Pending>
+                </Button>
               </div>
             )}
           </div>
-          {hasRemainingSpaces && (
-            <div className="flex items-center gap-2">
-              {activeSpaceMetadata?.type !== 'PERSONAL' && (
-                <button
-                  onClick={() => setIsBountyLinkingOpen(prev => !prev)}
-                  className={cx(
-                    'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-                    'border-grey-02 bg-white text-text hover:border-text'
-                  )}
-                >
-                  <Gem color="purple" />
-                  {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
-                </button>
-              )}
-              <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-                <Pending isPending={isPublishing}>
-                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
-                </Pending>
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="flex grow overflow-hidden">
-          {hasRemainingSpaces ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-              <div className="px-2">
-                <div
-                  ref={proposalNameSectionRef}
-                  className="rounded-lg border border-grey-02 bg-white px-6 py-10"
-                >
-                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="text-body">Proposal name</div>
-                        <input
-                          ref={proposalNameRef}
-                          type="text"
-                          value={rawProposalName}
-                          onChange={e => handleProposalNameChange(e.target.value)}
-                          placeholder="Name your proposal..."
-                          className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 pt-2">
-                        <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+          <div className="flex grow overflow-hidden">
+            {hasRemainingSpaces ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+                <div className="px-2">
+                  <div ref={proposalNameSectionRef} className="rounded-lg border border-grey-02 bg-white px-6 py-10">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="text-body">Proposal name</div>
+                          <input
+                            ref={proposalNameRef}
+                            type="text"
+                            value={rawProposalName}
+                            onChange={e => handleProposalNameChange(e.target.value)}
+                            placeholder="Name your proposal..."
+                            className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-2">
+                          <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="grow overflow-hidden px-2 pb-2">
-                <div
-                  ref={scrollContainerRef}
-                  className="h-full overflow-y-auto rounded-lg border border-grey-02 bg-white"
-                >
-                  {isLoadingChanges ? (
-                    <div className="px-6 py-6">
-                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                        <div className="mb-4 flex items-center gap-3">
-                          <Skeleton className="h-8 w-8" />
-                          <Skeleton className="h-6 w-48" />
-                        </div>
-                        <div className="mb-4 grid grid-cols-2 gap-20">
-                          <Skeleton className="h-4 w-20" />
-                          <Skeleton className="h-4 w-28" />
-                        </div>
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-20">
-                            <Skeleton className="h-24 w-full" />
-                            <Skeleton className="h-24 w-full" />
+                <div className="grow overflow-hidden px-2 pb-2">
+                  <div
+                    ref={scrollContainerRef}
+                    className="h-full overflow-y-auto rounded-lg border border-grey-02 bg-white"
+                  >
+                    {isLoadingChanges ? (
+                      <div className="px-6 py-6">
+                        <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                          <div className="mb-4 flex items-center gap-3">
+                            <Skeleton className="h-8 w-8" />
+                            <Skeleton className="h-6 w-48" />
                           </div>
-                          <div className="grid grid-cols-2 gap-20">
-                            <Skeleton className="h-16 w-full" />
-                            <Skeleton className="h-16 w-full" />
+                          <div className="mb-4 grid grid-cols-2 gap-20">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-4 w-28" />
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : !hasVisibleEntities ? (
-                    <div className="px-6 py-6">
-                      <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                        <Text as="p" variant="body" className="text-grey-04">
-                          No changes to review. Make some edits to see them here.
-                        </Text>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
-                      {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                        const entity = visibleEntities[virtualRow.index];
-                        return (
-                          <div
-                            key={virtualRow.key}
-                            data-index={virtualRow.index}
-                            ref={node => rowVirtualizer.measureElement(node)}
-                            style={{
-                              position: 'absolute',
-                              top: 0,
-                              left: 0,
-                              width: '100%',
-                              transform: `translateY(${virtualRow.start}px)`,
-                            }}
-                          >
-                            <div className="px-6 py-4">
-                              <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                                <ChangedEntity entity={entity} spaceId={activeSpace} />
-                              </div>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-20">
+                              <Skeleton className="h-24 w-full" />
+                              <Skeleton className="h-24 w-full" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-20">
+                              <Skeleton className="h-16 w-full" />
+                              <Skeleton className="h-16 w-full" />
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        </div>
+                      </div>
+                    ) : !hasVisibleEntities ? (
+                      <div className="px-6 py-6">
+                        <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                          <Text as="p" variant="body" className="text-grey-04">
+                            No changes to review. Make some edits to see them here.
+                          </Text>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                        {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                          const entity = visibleEntities[virtualRow.index];
+                          return (
+                            <div
+                              key={virtualRow.key}
+                              data-index={virtualRow.index}
+                              ref={node => rowVirtualizer.measureElement(node)}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                            >
+                              <div className="px-6 py-4">
+                                <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                                  <ChangedEntity entity={entity} spaceId={activeSpace} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex min-w-0 flex-1" />
-          )}
-          <BountyLinkingPanel
-            isOpen={isBountyLinkingOpen}
-            setIsOpen={setIsBountyLinkingOpen}
-            selectedBountyIds={selectedBountyIds}
-            setSelectedBountyIds={setSelectedBountyIds}
-            bounties={bountiesWithSpaceLabels}
-          />
+            ) : (
+              <div className="flex min-w-0 flex-1" />
+            )}
+            <BountyLinkingPanel
+              isOpen={isBountyLinkingOpen}
+              setIsOpen={setIsBountyLinkingOpen}
+              selectedBountyIds={selectedBountyIds}
+              setSelectedBountyIds={setSelectedBountyIds}
+              bounties={bountiesWithSpaceLabels}
+            />
+          </div>
         </div>
-      </div>
-    </SlideUp>
-    <ProposalNameTip
-      open={proposalNameTipOpen}
-      dismiss={dismissProposalNameTip}
-      anchorRef={proposalNameSectionRef}
-      slideUpEnterSettled={slideUpEnterSettled}
-    />
+      </SlideUp>
+      <ProposalNameTip
+        open={proposalNameTipOpen}
+        dismiss={dismissProposalNameTip}
+        anchorRef={proposalNameSectionRef}
+        slideUpEnterSettled={slideUpEnterSettled}
+      />
     </>
   );
 };

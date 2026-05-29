@@ -30,10 +30,10 @@ import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
-
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
+import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -279,54 +279,54 @@ function ModeToggle() {
         data-testid="edit-toggle"
         className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
       >
-      <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && <AnimatedTogglePill controls={controls} />}
-        <motion.div
-          animate={controls}
-          variants={variants}
-          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
-        >
-          <EyeSmall />
-        </motion.div>
-      </div>
-      <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && <AnimatedTogglePill controls={controls} />}
-        <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-          <Popover.Anchor asChild>
-            <div
-              className={`z-10 transition-colors duration-300 ${
-                showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-              }`}
-            >
-              <BulkEdit />
-            </div>
-          </Popover.Anchor>
-          <Popover.Portal>
-            <AnimatePresence mode="popLayout">
-              {showEditAccessTooltip && (
-                <MotionPopoverContent
-                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
-                  side="bottom"
-                  align="end"
-                  alignOffset={-8}
-                  sideOffset={16}
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{
-                    type: 'spring',
-                    duration: 0.15,
-                    bounce: 0,
-                  }}
-                >
-                  <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
-                  <Popover.Arrow />
-                </MotionPopoverContent>
-              )}
-            </AnimatePresence>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
+        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
+          {!editable && <AnimatedTogglePill controls={controls} />}
+          <motion.div
+            animate={controls}
+            variants={variants}
+            className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
+          >
+            <EyeSmall />
+          </motion.div>
+        </div>
+        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
+          {editable && <AnimatedTogglePill controls={controls} />}
+          <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+            <Popover.Anchor asChild>
+              <div
+                className={`z-10 transition-colors duration-300 ${
+                  showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
+                }`}
+              >
+                <BulkEdit />
+              </div>
+            </Popover.Anchor>
+            <Popover.Portal>
+              <AnimatePresence mode="popLayout">
+                {showEditAccessTooltip && (
+                  <MotionPopoverContent
+                    className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
+                    side="bottom"
+                    align="end"
+                    alignOffset={-8}
+                    sideOffset={16}
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    transition={{
+                      type: 'spring',
+                      duration: 0.15,
+                      bounce: 0,
+                    }}
+                  >
+                    <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
+                    <Popover.Arrow />
+                  </MotionPopoverContent>
+                )}
+              </AnimatePresence>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
       </button>
       <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
     </>

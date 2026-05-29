@@ -1,19 +1,19 @@
 'use client';
 
 import * as React from 'react';
-import { createPortal } from 'react-dom';
 
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 import { Z_LAYERS } from '~/core/z-layers';
 
 import {
   HintDismissLayer,
+  type SpotlightRect,
   hintTipA11yProps,
   isElementVisibleInViewport,
   useHintEscapeDismiss,
   useSpotlightRect,
-  type SpotlightRect,
 } from './spotlight-primitives';
 
 const TIP_GAP_PX = 12;
@@ -216,17 +216,13 @@ export function SpotlightTip({
     <AnimatePresence>
       {open && layout && spotlightRect ? (
         <>
-          <HintDismissLayer
-            zIndex={zIndexes.backdrop}
-            motionKey={`${tipId}-dismiss`}
-            onDismiss={onDismiss}
-          />
+          <HintDismissLayer zIndex={zIndexes.backdrop} motionKey={`${tipId}-dismiss`} onDismiss={onDismiss} />
           <motion.div
             key={tipId}
             {...hintTipA11yProps(titleId)}
             className="pointer-events-auto fixed"
             style={{ zIndex: zIndexes.tip, ...layout.positionStyle }}
-            onClick={(event) => event.stopPropagation()}
+            onClick={event => event.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95, y: layout.motionOffsetY }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: layout.motionOffsetY }}
@@ -251,7 +247,7 @@ export function SpotlightTip({
                 <button
                   type="button"
                   onClick={onDismiss}
-                  className="mt-3 mx-auto block rounded border border-grey-02 bg-white px-5 py-1.5 text-button font-medium text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
+                  className="mx-auto mt-3 block rounded border border-grey-02 bg-white px-5 py-1.5 text-button font-medium text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
                 >
                   OK
                 </button>

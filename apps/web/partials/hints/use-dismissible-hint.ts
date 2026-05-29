@@ -4,9 +4,10 @@ import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
-import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
+
+import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
 type UseDismissibleHintOptions = {
   gate: boolean;

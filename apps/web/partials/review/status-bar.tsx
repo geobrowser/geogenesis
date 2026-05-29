@@ -11,8 +11,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import { Z_LAYER_CLASS, Z_LAYERS } from '~/core/z-layers';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
+import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Button } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';

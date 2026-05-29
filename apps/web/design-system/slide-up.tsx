@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { AnimatePresence, motion, type AnimationDefinition } from 'framer-motion';
+import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';

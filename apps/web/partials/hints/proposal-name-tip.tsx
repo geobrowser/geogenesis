@@ -2,10 +2,9 @@
 
 import * as React from 'react';
 
-import { HINT_IDS } from '~/atoms/dismissed-hints';
-
 import { SpotlightTip } from './spotlight-tip';
 import { useDismissibleHint } from './use-dismissible-hint';
+import { HINT_IDS } from '~/atoms/dismissed-hints';
 
 export function useProposalNameTip({
   enabled,
@@ -27,12 +26,7 @@ type ProposalNameTipProps = {
   slideUpEnterSettled: boolean;
 };
 
-export function ProposalNameTip({
-  open,
-  dismiss,
-  anchorRef,
-  slideUpEnterSettled,
-}: ProposalNameTipProps) {
+export function ProposalNameTip({ open, dismiss, anchorRef, slideUpEnterSettled }: ProposalNameTipProps) {
   return (
     <SpotlightTip
       open={open}
