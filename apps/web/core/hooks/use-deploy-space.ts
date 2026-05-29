@@ -12,7 +12,11 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { DAO_SPACE_FACTORY_ADDRESS, EMPTY_SPACE_ID } from '~/core/utils/contracts/dao-space-factory';
+import {
+  DAO_SPACE_FACTORY_ADDRESS,
+  EMPTY_SPACE_ID,
+  NEW_SPACE_VOTING_DURATION_DAYS,
+} from '~/core/utils/contracts/dao-space-factory';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
@@ -208,7 +212,7 @@ async function createDaoSpace({
       slowPathPercentageThreshold: 51,
       fastPathFlatThreshold: 0,
       quorum: 1,
-      durationInDays: 2,
+      durationInDays: NEW_SPACE_VOTING_DURATION_DAYS,
     },
     initialEditorSpaceIds: [userSpaceIdHex],
     initialMemberSpaceIds: [userSpaceIdHex],
