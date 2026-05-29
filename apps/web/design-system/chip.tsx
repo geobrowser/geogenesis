@@ -233,6 +233,9 @@ export function LinkableRelationChip({
   const handleEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (!isSidePanelOpen) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       openInSidePanel(entityId, targetSpaceId);
@@ -243,6 +246,9 @@ export function LinkableRelationChip({
   const handleRelationEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (!isSidePanelOpen || !relationEntityId) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1) {
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       openInSidePanel(relationEntityId, currentSpaceId);
