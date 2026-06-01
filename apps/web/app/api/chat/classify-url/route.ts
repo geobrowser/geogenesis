@@ -192,18 +192,12 @@ const HOSTNAME_RULES: Array<{ match: (host: string, pathname: string) => boolean
       (host === 'anthropic.com' || host === 'www.anthropic.com') && /^\/(engineering|research)(\/|$)/.test(path),
     type: 'post',
   },
-  // OpenAI publishes its articles under /index, and the newsroom landing
-  // (openai.com/news) surfaces those same /index posts as its cards — so
-  // /index IS OpenAI's newsroom → News Story.
-  {
-    match: (host, path) => (host === 'openai.com' || host === 'www.openai.com') && /^\/index(\/|$)/.test(path),
-    type: 'news-story-single',
-  },
-  // OpenAI's other editorial sections → Post (blog/research). Whether these
-  // should also be News is still TBD.
+  // OpenAI editorial sections (/index, /blog, /research) → Post. The newsroom
+  // landing at openai.com/news still routes to News Story via the general
+  // /news rule below.
   {
     match: (host, path) =>
-      (host === 'openai.com' || host === 'www.openai.com') && /^\/(blog|research)(\/|$)/.test(path),
+      (host === 'openai.com' || host === 'www.openai.com') && /^\/(index|blog|research)(\/|$)/.test(path),
     type: 'post',
   },
   // Any company's own /news section → News Story. A /news path is a newsroom /
