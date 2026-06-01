@@ -9,11 +9,13 @@ import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 
 const INJECT_SPACE = 'world-affairs' as const;
 const VALID_TYPES: ReadonlySet<InjectType> = new Set(['news-story-single', 'post', 'tweet']);
-// Inject types whose pipeline gates claim extraction on the request body
-// (`InjectPostsOptions.extractClaims` defaults to false in news-worker).
-// `news-story-single` extracts claims unconditionally so we omit the flag
-// for it to keep the wire payload identical to today's behavior.
-const EXTRACT_CLAIMS_TYPES: ReadonlySet<InjectType> = new Set(['post', 'tweet']);
+// Inject types that explicitly turn OFF claim extraction. Posts (Reddit + web)
+// and tweets publish a Text block of the full body + Description summary as
+// their primary content; Notable claims are noise on top of that. The pipeline
+// still runs Pass 3a/3b (topics + entities + Description) regardless — Notable
+// claims is the only thing the flag gates today. news-story-single isn't in
+// this set because news-worker runs full enrich on it unconditionally.
+const CLAIMS_OFF_TYPES: ReadonlySet<InjectType> = new Set(['post', 'tweet']);
 const INJECT_FETCH_TIMEOUT_MS = 15_000;
 
 function isSameOrigin(req: Request): boolean {
@@ -142,7 +144,7 @@ export async function POST(req: Request) {
     space: INJECT_SPACE,
     url,
     type,
-    ...(EXTRACT_CLAIMS_TYPES.has(type) ? { extract_claims: true } : {}),
+    ...(CLAIMS_OFF_TYPES.has(type) ? { extract_claims: false } : {}),
   };
 
   let res: Response;
