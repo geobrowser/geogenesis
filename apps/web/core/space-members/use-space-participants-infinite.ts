@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -10,10 +10,18 @@ import {
   type SpaceParticipantProfile,
   type SpaceParticipantsPage,
 } from './fetch-space-participants-page';
+import {
+  getCachedParticipantsPage,
+  spaceParticipantsQueryKey,
+  seedSpaceParticipantsCache,
+  type SpaceParticipantsInfiniteData,
+  writeParticipantsPageToCache,
+} from './space-participants-cache';
 
 export type { SpaceParticipantProfile, ParticipantKind } from './fetch-space-participants-page';
+export { spaceParticipantsQueryKey, seedSpaceParticipantsCache } from './space-participants-cache';
 
-async function fetchPage({
+async function fetchPageFromApi({
   spaceId,
   kind,
   offset,
@@ -45,6 +53,7 @@ type UseSpaceParticipantsInfiniteArgs = {
   kind: ParticipantKind;
   enabled?: boolean;
   pageSize?: number;
+  initialPage?: SpaceParticipantsPage;
 };
 
 export function useSpaceParticipantsInfinite({
@@ -52,14 +61,40 @@ export function useSpaceParticipantsInfinite({
   kind,
   enabled = true,
   pageSize = SPACE_PARTICIPANTS_PAGE_SIZE,
+  initialPage,
 }: UseSpaceParticipantsInfiniteArgs) {
+  const queryClient = useQueryClient();
+  const queryKey = spaceParticipantsQueryKey(spaceId, kind, pageSize);
+  const hasServerPage = Boolean(initialPage);
+
+  if (initialPage) {
+    seedSpaceParticipantsCache(queryClient, { spaceId, kind, page: initialPage, pageSize });
+  }
+
   const query = useInfiniteQuery({
     enabled,
-    queryKey: ['space-participants', spaceId, kind, pageSize],
-    queryFn: ({ pageParam, signal }) =>
-      fetchPage({ spaceId, kind, offset: pageParam as number, limit: pageSize, signal }),
+    queryKey,
+    queryFn: async ({ pageParam, signal }) => {
+      const offset = pageParam as number;
+
+      const cached = getCachedParticipantsPage(queryClient, spaceId, kind, offset, pageSize);
+      if (cached) {
+        return cached;
+      }
+
+      const page = await fetchPageFromApi({ spaceId, kind, offset, limit: pageSize, signal });
+      writeParticipantsPageToCache(queryClient, { spaceId, kind, page, offset, pageSize });
+      return page;
+    },
     initialPageParam: 0,
     getNextPageParam: last => last.nextOffset ?? undefined,
+    initialData: () =>
+      queryClient.getQueryData<SpaceParticipantsInfiniteData>(queryKey) ?? undefined,
+    staleTime: hasServerPage ? Number.POSITIVE_INFINITY : 0,
+    gcTime: 10 * 60 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: 2,
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 8000),
   });
@@ -70,14 +105,12 @@ export function useSpaceParticipantsInfinite({
     return flat;
   }, [query.data?.pages]);
 
-  // The chip and the popover/dialog footers all read this. It's authoritative
-  // because it comes from the GraphQL `totalCount`, not the loaded page length.
-  const totalCount = query.data?.pages[0]?.totalCount ?? 0;
+  const totalCount = query.data?.pages[0]?.totalCount ?? initialPage?.totalCount ?? 0;
 
   return {
     participants,
     totalCount,
-    isLoading: query.isLoading,
+    isLoading: query.isLoading && !query.data,
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: query.hasNextPage,
     fetchNextPage: query.fetchNextPage,
