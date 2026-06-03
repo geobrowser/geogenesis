@@ -4,13 +4,16 @@ import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
 
-import { entitySidePanelWantsEditAtom } from '~/atoms';
 import { useAccessControl } from '~/core/hooks/use-access-control';
+
+import { entitySidePanelWantsEditAtom } from '~/atoms';
 
 export type EntitySidePanelEditContextValue = {
   spaceId: string;
   panelWantsEdit: boolean;
   setPanelWantsEdit: React.Dispatch<React.SetStateAction<boolean>>;
+  openedWithMainViewEditing: boolean;
+  openedFromReviewEdits: boolean;
 };
 
 export const EntitySidePanelEditContext = React.createContext<EntitySidePanelEditContextValue | null>(null);
@@ -18,13 +21,15 @@ export const EntitySidePanelEditContext = React.createContext<EntitySidePanelEdi
 export function EntitySidePanelEditModeProvider({
   entitySpaceId,
   openedWithMainViewEditing,
+  openedFromReviewEdits = false,
   children,
 }: {
   entitySpaceId: string;
   openedWithMainViewEditing: boolean;
+  openedFromReviewEdits?: boolean;
   children: React.ReactNode;
 }) {
-  const [panelWantsEdit, setPanelWantsEdit] = React.useState(openedWithMainViewEditing);
+  const [panelWantsEdit, setPanelWantsEdit] = React.useState(openedFromReviewEdits ? true : openedWithMainViewEditing);
   const setGlobalPanelWantsEdit = useSetAtom(entitySidePanelWantsEditAtom);
   const { canEdit, isLoading } = useAccessControl(entitySpaceId);
 
@@ -34,8 +39,8 @@ export function EntitySidePanelEditModeProvider({
   }, [panelWantsEdit, setGlobalPanelWantsEdit]);
 
   React.useEffect(() => {
-    setPanelWantsEdit(openedWithMainViewEditing);
-  }, [entitySpaceId, openedWithMainViewEditing]);
+    setPanelWantsEdit(openedFromReviewEdits ? true : openedWithMainViewEditing);
+  }, [entitySpaceId, openedWithMainViewEditing, openedFromReviewEdits]);
 
   React.useEffect(() => {
     if (!isLoading && !canEdit) {
@@ -48,8 +53,10 @@ export function EntitySidePanelEditModeProvider({
       spaceId: entitySpaceId,
       panelWantsEdit,
       setPanelWantsEdit,
+      openedWithMainViewEditing,
+      openedFromReviewEdits,
     }),
-    [entitySpaceId, panelWantsEdit]
+    [entitySpaceId, panelWantsEdit, openedWithMainViewEditing, openedFromReviewEdits]
   );
 
   return <EntitySidePanelEditContext.Provider value={value}>{children}</EntitySidePanelEditContext.Provider>;

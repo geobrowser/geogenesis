@@ -17,13 +17,13 @@ import { ClientOnly } from '~/design-system/client-only';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
+import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
-import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
-import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
@@ -87,6 +87,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <React.Suspense fallback={null}>
         <PersonalProfileCreatePostSidePanelSync />
       </React.Suspense>
+      <EntitySidePanel />
       <EntitySidePanel />
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>

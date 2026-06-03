@@ -38,6 +38,7 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   source: Source;
   relationChipTruncateLabel?: boolean;
+  openedWithMainViewEditing?: boolean;
 };
 
 export const EntityTableCell = ({
@@ -54,8 +55,8 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
   relationChipTruncateLabel = false,
+  openedWithMainViewEditing = false,
 }: Props) => {
-  const openedWithMainViewEditing = useUserIsEditing(currentSpaceId);
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
   const isRelation = property.dataType === 'RELATION';
 
@@ -80,29 +81,30 @@ export const EntityTableCell = ({
             </div>
           </div>
         ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={false}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={spaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-            showSidePanel
-            openedWithMainViewEditing={openedWithMainViewEditing}
-          >
-            <Link
+          <div className="group/name-table-browse-coll w-full min-w-0">
+            <CollectionMetadata
+              view="TABLE"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
               entityId={entityId}
               spaceId={spaceId}
-              href={href}
-              className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+              collectionId={collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              openedWithMainViewEditing={openedWithMainViewEditing}
             >
-              {name || entityId}
-            </Link>
-          </CollectionMetadata>
+              <Link
+                entityId={entityId}
+                spaceId={spaceId}
+                href={href}
+                className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+              >
+                {name || entityId}
+              </Link>
+            </CollectionMetadata>
+          </div>
         )}
       </Fragment>
     );

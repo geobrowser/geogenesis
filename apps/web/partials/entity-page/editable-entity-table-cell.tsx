@@ -55,6 +55,7 @@ type Props = {
   autoFocus?: boolean;
   focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  openedWithMainViewEditing?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -76,9 +77,9 @@ export function EditableEntityTableCell({
   autoFocus = false,
   focusRequestKey,
   collectionTypeFilters,
+  openedWithMainViewEditing = false,
 }: Props) {
   const { storage } = useMutate();
-  const openedWithMainViewEditing = useUserIsEditing(currentSpaceId);
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
 
   if (isNameCell) {
@@ -137,32 +138,36 @@ export function EditableEntityTableCell({
             )}
           </div>
         ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={true}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={toSpaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-            showSidePanel={!isPlaceholderRow}
-            openedWithMainViewEditing={openedWithMainViewEditing}
-          >
-            <div className="pointer-events-auto">
-              <PageStringField
-                variant="tableCell"
-                placeholder="Entity name..."
-                value={name ?? ''}
-                onEnterKey={onAddPlaceholder}
-                onChange={value => {
-                  onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
-                }}
-              />
+          <div className="group/name-cell-collection-table flex w-full min-w-0 items-center gap-1">
+            <div className="relative min-w-0 flex-1">
+              <CollectionMetadata
+                view="TABLE"
+                isEditing={true}
+                name={name}
+                currentSpaceId={currentSpaceId}
+                entityId={entityId}
+                spaceId={toSpaceId}
+                collectionId={collectionId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                showSidePanel={!isPlaceholderRow}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              >
+                <div className="pointer-events-auto">
+                  <PageStringField
+                    variant="tableCell"
+                    placeholder="Entity name..."
+                    value={name ?? ''}
+                    onEnterKey={onAddPlaceholder}
+                    onChange={value => {
+                      onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                    }}
+                  />
+                </div>
+              </CollectionMetadata>
             </div>
-          </CollectionMetadata>
+          </div>
         )}
       </>
     );
