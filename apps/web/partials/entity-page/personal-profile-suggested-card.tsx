@@ -15,6 +15,7 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { useEditable } from '~/core/state/editable-store';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { createPostFlowComplete, createPostFlowStart } from '~/core/state/personal-profile/create-post-flow';
 import { ensureProfilePageTab, runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -28,7 +29,7 @@ import { PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY } from '~/partials/entity-page
 import {
   PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
   clearPersonalProfileSessionDismissStorage,
-  pendingCreatePostSidePanelAtom,
+  createPostFlowAtom,
   personalProfileBioStarterTriggerAtom,
   personalProfileSkillsRowIntentAtom,
   personalProfileSuggestedDismissAtom,
@@ -50,7 +51,6 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
-  const setSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const pathname = usePathname();
   const canEdit = useUserIsEditing(spaceId);
   const setSkillsRowIntent = useSetAtom(personalProfileSkillsRowIntentAtom);
@@ -85,7 +85,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const [mounted, setMounted] = React.useState(false);
   const [createPostPending, setCreatePostPending] = React.useState(false);
   const createPostLockedRef = React.useRef(false);
-  const setPendingCreatePostSidePanel = useSetAtom(pendingCreatePostSidePanelAtom);
+  const setCreatePostFlow = useSetAtom(createPostFlowAtom);
 
   const sessionDismissStorageKey = React.useMemo(() => {
     if (!address) return null;
@@ -236,16 +236,17 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         ? NavUtils.toSpace(spaceId)
         : NavUtils.toEntity(spaceId, entityId, false);
 
-      setPendingCreatePostSidePanel({
+      const flowPayload = {
         postEntityId,
         spaceId,
         profileEntityId: entityId,
         postsTabEntityId,
         profilePathname,
-      });
+      };
+
+      setCreatePostFlow(createPostFlowStart(flowPayload));
 
       const postsTabUrl = `${profilePathname}?tabId=${postsTabEntityId}`;
-      setEditable(true);
 
       try {
         const nav = router.push(postsTabUrl, { scroll: false }) as void | Promise<unknown>;
@@ -253,7 +254,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           void (nav as Promise<unknown>).catch(() => {});
         }
       } catch {
-        setPendingCreatePostSidePanel(null);
+        setCreatePostFlow(createPostFlowComplete({ phase: 'pending', payload: flowPayload }));
       }
     } catch (e) {
       console.error('[PersonalProfileSuggestedCard] create post failed', e);
@@ -261,15 +262,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
       createPostLockedRef.current = false;
       setCreatePostPending(false);
     }
-  }, [
-    displayName,
-    entityId,
-    isMyPersonalSpaceRoute,
-    router,
-    setEditable,
-    setPendingCreatePostSidePanel,
-    spaceId,
-  ]);
+  }, [displayName, entityId, isMyPersonalSpaceRoute, router, setEditable, setCreatePostFlow, spaceId]);
 
   if (!visible) {
     return null;

@@ -26,9 +26,12 @@ type EditorProviderProps = {
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;
   initialCollectionItems?: Record<string, Entity[]>;
-  ignoreRouteTabId?: boolean;
+  /** Explicit tab selection for this editor surface (URL tab, panel tab, or null for root entity). */
+  activeTabId: string | null;
   children: React.ReactNode;
 };
+
+export type EditorProviderInputProps = Omit<EditorProviderProps, 'activeTabId'>;
 
 export const EditorProvider = ({
   id,
@@ -37,7 +40,7 @@ export const EditorProvider = ({
   initialBlockRelations,
   initialTabs,
   initialCollectionItems,
-  ignoreRouteTabId = false,
+  activeTabId,
   children,
 }: EditorProviderProps) => {
   const { store } = useSyncEngine();
@@ -80,9 +83,9 @@ export const EditorProvider = ({
       initialBlocks,
       initialTabs,
       initialCollectionItems,
-      ignoreRouteTabId,
+      activeTabId,
     };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems, ignoreRouteTabId]);
+  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems, activeTabId]);
 
   return (
     <EditorContext.Provider value={value}>
@@ -90,6 +93,18 @@ export const EditorProvider = ({
     </EditorContext.Provider>
   );
 };
+
+/** Route surfaces: bind editor tab scope to `?tabId=` in the URL. */
+export function RouteEditorProvider(props: EditorProviderInputProps) {
+  const searchParamTabId = useTabIdFromSearchParams();
+  return <EditorProvider {...props} activeTabId={searchParamTabId} />;
+}
+
+/** Side panel: bind editor tab scope to panel tab state (never the host page URL). */
+export function SidePanelEditorProvider(props: EditorProviderInputProps) {
+  const tabCtx = React.useContext(EntitySidePanelActiveTabContext);
+  return <EditorProvider {...props} activeTabId={tabCtx?.activeTabId ?? null} />;
+}
 
 export function useEditorInstance() {
   const value = React.useContext(EditorContext);
@@ -122,24 +137,25 @@ function useTabIdFromSearchParams() {
  * main-page URL tab while a different entity is open in the side panel).
  */
 export function resolveEditorTabId(
-  urlTabId: string | null,
+  requestedTabId: string | null,
   initialTabs: Tabs | undefined,
   liveTabEntityIds?: ReadonlySet<string>
 ): string | null {
-  if (!urlTabId) return null;
-  if (initialTabs && Object.hasOwn(initialTabs, urlTabId)) return urlTabId;
-  if (liveTabEntityIds?.has(urlTabId)) return urlTabId;
+  if (!requestedTabId) return null;
+  if (initialTabs && Object.hasOwn(initialTabs, requestedTabId)) return requestedTabId;
+  if (liveTabEntityIds?.has(requestedTabId)) return requestedTabId;
   return null;
 }
 
 export function useActiveTabIdForEditor(): string | null {
   const resolved = React.useContext(EditorResolvedTabContext);
+  const urlTabId = useTabIdFromSearchParams();
+  const editor = React.useContext(EditorContext);
+
   if (resolved !== undefined) {
     return resolved;
   }
 
-  const urlTabId = useTabIdFromSearchParams();
-  const editor = React.useContext(EditorContext);
   if (!editor) return urlTabId;
   return resolveEditorTabId(urlTabId, editor.initialTabs);
 }
@@ -152,11 +168,8 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
     initialBlocks,
     initialTabs,
     initialCollectionItems: allCollectionItems,
-    ignoreRouteTabId,
+    activeTabId: requestedTabId,
   } = useEditorInstance();
-
-  const sidePanelTabCtx = React.useContext(EntitySidePanelActiveTabContext);
-  const urlTabId = ignoreRouteTabId ? null : useTabIdFromSearchParams();
 
   const liveTabRelations = useRelations({
     selector: r =>
@@ -166,13 +179,9 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
   const liveTabEntityIds = React.useMemo(() => new Set(liveTabRelations.map(r => r.toEntity.id)), [liveTabRelations]);
 
   const tabId = React.useMemo(() => {
-    if (sidePanelTabCtx) {
-      const requested = sidePanelTabCtx.activeTabId;
-      if (!requested) return null;
-      return resolveEditorTabId(requested, initialTabs, liveTabEntityIds) ?? requested;
-    }
-    return resolveEditorTabId(urlTabId, initialTabs, liveTabEntityIds);
-  }, [sidePanelTabCtx, urlTabId, initialTabs, liveTabEntityIds]);
+    if (!requestedTabId) return null;
+    return resolveEditorTabId(requestedTabId, initialTabs, liveTabEntityIds) ?? requestedTabId;
+  }, [requestedTabId, initialTabs, liveTabEntityIds]);
 
   const activeEntityId = tabId ?? entityId;
   const isTab =
@@ -180,7 +189,7 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
     tabId !== entityId &&
     ((initialTabs != null && Object.hasOwn(initialTabs, tabId)) ||
       liveTabEntityIds.has(tabId) ||
-      sidePanelTabCtx?.activeTabId === tabId);
+      requestedTabId === tabId);
   const tabSnapshot =
     isTab && tabId && initialTabs && Object.hasOwn(initialTabs, tabId) ? initialTabs[tabId] : undefined;
 

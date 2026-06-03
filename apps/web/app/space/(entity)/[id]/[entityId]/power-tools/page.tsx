@@ -97,6 +97,7 @@ export default function PowerToolsPage() {
         spaceId={spaceId}
         initialBlocks={blocks ?? []}
         initialBlockRelations={blockRelations}
+        activeTabId={null}
       >
         <DataBlockProvider spaceId={spaceId} entityId={dataBlockEntityId} relationId={relationId}>
           <PowerToolsScreen />

@@ -1,23 +1,10 @@
 import * as React from 'react';
 
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
-import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
-import { EmptyErrorComponent } from '~/design-system/empty-error-component';
-import { Spacer } from '~/design-system/spacer';
+import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 
-import { CommentSection } from '~/partials/comments/comments-section';
-import { Editor } from '~/partials/editor/editor';
-import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
-import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { EntityTabs } from '~/partials/entity-page/entity-tabs';
-import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
-
-import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
 import { SpaceRedirect } from './space-redirect';
 
@@ -41,8 +28,6 @@ export default async function DefaultEntityPage({
   notice = null,
   canClaimTopic = false,
 }: Props) {
-  const showSpacer = showCover || showHeading || showHeader;
-
   const isEditing = searchParams?.edit === 'true';
   const props = await fetchEntityPageData(params.id, params.entityId, { canClaimTopic });
 
@@ -55,7 +40,7 @@ export default async function DefaultEntityPage({
       preventRedirect={isEditing}
     >
       <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
-        <EditorProvider
+        <RouteEditorProvider
           id={props.id}
           spaceId={props.spaceId}
           initialBlocks={props.blocks}
@@ -63,49 +48,22 @@ export default async function DefaultEntityPage({
           initialTabs={props.tabs}
           initialCollectionItems={props.initialCollectionItems}
         >
-          {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-          <EntityPageContentContainer>
-            <EntityPageHeader
-              showHeading={showHeading}
-              showHeader={showHeader}
-              entityId={props.id}
-              spaceId={props.spaceId}
-              serverRelations={props.relationEntityRelations}
-              canClaimTopic={canClaimTopic}
-              coverUrl={props.serverCoverUrl}
-            />
-            <Spacer height={24} />
-            <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />
-            <Spacer height={16} />
-            <React.Suspense fallback={null}>
-              <EntityTabs
-                entityId={props.id}
-                spaceId={props.spaceId}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-              />
-            </React.Suspense>
-            {notice}
-            {(showSpacer || !!notice) && <Spacer height={40} />}
-
-            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <Spacer height={24} />
-            <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
-            <AutomaticModeToggle />
-            <Spacer height={40} />
-            {/*
-               Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-               boundary. We don't want to show any referenced by loading states but do want to
-               stream it in
-            */}
-            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-              <React.Suspense fallback={<div />}>
-                <BacklinksServerContainer entityId={params.entityId} />
-              </React.Suspense>
-            </TrackedErrorBoundary>
-            <CommentSection entityId={params.entityId} spaceId={props.spaceId} />
-          </EntityPageContentContainer>
-        </EditorProvider>
+          <EntityPageBody
+            variant="route"
+            entityId={props.id}
+            spaceId={props.spaceId}
+            initialTabRelations={props.tabRelations ?? []}
+            tabEntities={props.tabEntities}
+            avatarUrl={props.serverAvatarUrl}
+            coverUrl={props.serverCoverUrl}
+            showCover={showCover}
+            showHeading={showHeading}
+            showHeader={showHeader}
+            serverRelations={props.relationEntityRelations}
+            canClaimTopic={canClaimTopic}
+            notice={notice}
+          />
+        </RouteEditorProvider>
       </EntityStoreProvider>
     </SpaceRedirect>
   );

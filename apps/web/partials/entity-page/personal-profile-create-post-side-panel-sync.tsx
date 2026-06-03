@@ -1,16 +1,21 @@
 'use client';
 
+import * as React from 'react';
+
 import { useAtom } from 'jotai';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import * as React from 'react';
 
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEditable } from '~/core/state/editable-store';
-
 import {
-  pendingCreatePostSidePanelAtom,
-  personalProfileSuggestedTasksAtom,
-} from '~/atoms/personal-profile-suggested';
+  createPostFlowAdvanceToOpeningPanel,
+  createPostFlowPanelOpened,
+  createPostFlowPostsTabUrl,
+  isCreatePostNavigationReady,
+  isOnCreatePostProfileSurface,
+} from '~/core/state/personal-profile/create-post-flow';
+
+import { createPostFlowAtom, personalProfileSuggestedTasksAtom } from '~/atoms/personal-profile-suggested';
 
 /**
  * Completes the "Create post" flow after the getting-started card fires.
@@ -22,47 +27,46 @@ export function PersonalProfileCreatePostSidePanelSync() {
   const searchParams = useSearchParams();
   const { openSidePanel } = useEntitySidePanel();
   const { setEditable } = useEditable();
-  const [pending, setPending] = useAtom(pendingCreatePostSidePanelAtom);
+  const [flow, setFlow] = useAtom(createPostFlowAtom);
   const setSuggestedTasks = useAtom(personalProfileSuggestedTasksAtom)[1];
 
   React.useEffect(() => {
-    if (!pending) return;
+    if (flow.phase === 'idle') return;
 
-    const { postEntityId, spaceId, profilePathname, postsTabEntityId } = pending;
-    const postsTabUrl = `${profilePathname}?tabId=${postsTabEntityId}`;
+    const { payload } = flow;
+    const postsTabUrl = createPostFlowPostsTabUrl(payload);
+    const tabId = searchParams?.get('tabId');
 
-    const onProfileSurface = pathname === profilePathname || pathname === `${profilePathname}/`;
-    const tabMatches = searchParams?.get('tabId') === postsTabEntityId;
+    if (flow.phase === 'pending') {
+      if (!isOnCreatePostProfileSurface(pathname, payload)) {
+        void router.push(postsTabUrl, { scroll: false });
+        return;
+      }
 
-    if (!onProfileSurface) {
-      void router.push(postsTabUrl, { scroll: false });
+      if (!isCreatePostNavigationReady(pathname, tabId, payload)) {
+        void router.replace(postsTabUrl, { scroll: false });
+        return;
+      }
+
+      setFlow(createPostFlowAdvanceToOpeningPanel(flow));
       return;
     }
 
-    if (!tabMatches) {
-      void router.replace(postsTabUrl, { scroll: false });
-      return;
+    if (flow.phase === 'openingPanel') {
+      const frame = requestAnimationFrame(() => {
+        openSidePanel(payload.postEntityId, payload.spaceId, true);
+        setSuggestedTasks(t => ({ ...t, post: true }));
+        setFlow(createPostFlowPanelOpened(flow));
+      });
+
+      return () => cancelAnimationFrame(frame);
     }
+  }, [flow, openSidePanel, pathname, router, searchParams, setFlow, setSuggestedTasks]);
 
-    setEditable(true);
-
-    const frame = requestAnimationFrame(() => {
-      openSidePanel(postEntityId, spaceId, true);
-      setSuggestedTasks(t => ({ ...t, post: true }));
-      setPending(null);
-    });
-
-    return () => cancelAnimationFrame(frame);
-  }, [
-    openSidePanel,
-    pathname,
-    pending,
-    router,
-    searchParams,
-    setEditable,
-    setPending,
-    setSuggestedTasks,
-  ]);
+  React.useEffect(() => {
+    if (flow.phase !== 'panelOpen') return;
+    setEditable(false);
+  }, [flow.phase, setEditable]);
 
   return null;
 }
