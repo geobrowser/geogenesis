@@ -1,23 +1,6 @@
 import { type Hex, encodeAbiParameters } from 'viem';
 
 /**
- * Encodes the data payload for a MEMBERSHIP_REQUESTED action.
- *
- * @param proposalId - bytes16 proposal ID
- * @param newMemberSpaceId - bytes16 space ID of the user requesting membership
- * @returns Encoded bytes for use in SpaceRegistry.enter()
- */
-export function encodeMembershipRequestData(proposalId: Hex, newMemberSpaceId: Hex): Hex {
-  return encodeAbiParameters(
-    [
-      { name: 'proposalId', type: 'bytes16' },
-      { name: 'newMemberSpaceId', type: 'bytes16' },
-    ],
-    [proposalId, newMemberSpaceId]
-  );
-}
-
-/**
  * Represents a single action to be executed as part of a proposal.
  */
 export interface ProposalAction {

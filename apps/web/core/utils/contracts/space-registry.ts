@@ -1,17 +1,13 @@
 import { type Hex } from 'viem';
 
-export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
-
 /**
  * SpaceRegistry address (Geo Testnet)
  */
 export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
 
-export const ZERO_ADDRESS_HEX = ZERO_ADDRESS as Hex;
 export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
 
-export const EMPTY_TOPIC = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
-export const EMPTY_TOPIC_HEX = EMPTY_TOPIC as Hex;
+export const EMPTY_TOPIC_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
 
 export const EMPTY_SIGNATURE = '0x' as Hex;
 
@@ -115,8 +111,6 @@ export const DAOSpaceAbi = [
     type: 'function',
   },
 ] as const;
-
-export const ZERO_SPACE_ID = '0x00000000000000000000000000000000' as Hex;
 
 /**
  * Minimal SpaceRegistry ABI - only includes functions used by this app.
