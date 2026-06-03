@@ -10,6 +10,7 @@ import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
+import { propertyForSort } from '~/core/utils/column-sort';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
@@ -125,8 +126,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // (allows sorting by properties not currently visible in the table).
   const serverSort = React.useMemo(() => {
     if (!sortState) return undefined;
-    const property =
-      propertiesSchema?.[sortState.columnId] ?? filterableProperties.find(p => p.id === sortState.columnId);
+    const property = propertyForSort(sortState.columnId, [
+      ...(propertiesSchema ? Object.values(propertiesSchema) : []),
+      ...filterableProperties,
+    ]);
     return {
       propertyId: sortState.columnId,
       direction: sortState.direction,

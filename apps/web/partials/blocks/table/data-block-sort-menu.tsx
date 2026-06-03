@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 
 import * as React from 'react';
@@ -9,7 +8,13 @@ import cx from 'classnames';
 
 import { ID } from '~/core/id';
 import { Property } from '~/core/types';
-import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
+import {
+  ColumnSortState,
+  DEFAULT_TABLE_SORT_PROPERTIES,
+  SORTABLE_DATA_TYPES,
+  propertyForSort,
+  propertySortLabel,
+} from '~/core/utils/column-sort';
 
 import { SmallButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
@@ -34,14 +39,10 @@ type DataBlockSortMenuProps = {
   isEditing?: boolean;
 };
 
-function propertySortLabel(property: Property): string {
-  return property.id === SystemIds.NAME_PROPERTY ? 'Name' : (property.name ?? property.id);
-}
-
 function sortColumnDisplayLabel(sortState: NonNullable<ColumnSortState>, properties: Property[]): string {
-  const p = properties.find(prop => ID.equals(prop.id, sortState.columnId));
+  const p = propertyForSort(sortState.columnId, properties);
   if (p) return propertySortLabel(p);
-  return ID.equals(sortState.columnId, SystemIds.NAME_PROPERTY) ? 'Name' : sortState.columnId;
+  return sortState.columnId;
 }
 
 export function DataBlockSortMenu({
@@ -68,9 +69,25 @@ export function DataBlockSortMenu({
   }, []);
 
   const sortableProperties = React.useMemo(() => {
-    const propertyById = new Map(properties.map(p => [p.id, p]));
+    const propertyById = new Map<string, Property>();
+
+    for (const property of DEFAULT_TABLE_SORT_PROPERTIES) {
+      propertyById.set(property.id, property);
+    }
+    for (const property of properties) {
+      if (!propertyById.has(property.id)) {
+        propertyById.set(property.id, property);
+      }
+    }
+
     const ordered: Property[] = [];
     const seen = new Set<string>();
+
+    for (const property of DEFAULT_TABLE_SORT_PROPERTIES) {
+      if (seen.has(property.id)) continue;
+      seen.add(property.id);
+      ordered.push(propertyById.get(property.id) ?? property);
+    }
 
     for (const id of shownColumnIds) {
       const property = propertyById.get(id);
