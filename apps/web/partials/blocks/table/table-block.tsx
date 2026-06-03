@@ -11,21 +11,22 @@ import { produce } from 'immer';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
-import { Source } from '~/core/blocks/data/source';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
+import { Source } from '~/core/blocks/data/source';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
-import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
-import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
-import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
+import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 import { Cell, Relation, Row } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
 import { PagesPaginationPlaceholder } from '~/core/utils/utils';
@@ -48,9 +49,9 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
-import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
+import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -59,8 +60,8 @@ import type { TableBlockFilterPromptHandle } from './table-block-filter-creation
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
+import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
-import { QuerySetupTypesSelectEntityPopover, type QuerySetupTypePick } from './query-setup-types-select-entity-popover';
 
 interface Props {
   spaceId: string;
@@ -225,8 +226,7 @@ function useEntries(
   }, [blockEntityId, pendingEntities]);
 
   const { storage } = useMutate();
-  const { nextEntityId, onClick: createEntityWithTypes, rotateNextEntityId } =
-    useCreateEntityWithFilters(spaceId);
+  const { nextEntityId, onClick: createEntityWithTypes, rotateNextEntityId } = useCreateEntityWithFilters(spaceId);
   const committedPlaceholderIdsRef = React.useRef(new Set<string>());
 
   const entriesWithPosition = React.useMemo(() => {
@@ -256,16 +256,14 @@ function useEntries(
   const collectionEmptyEditable =
     source.type === 'COLLECTION' && entries.length === 0 && canEdit && collectionDataReady;
 
-  const showActivePlaceholder =
-    hasPlaceholderRow && !entries.some(e => e.entityId === nextEntityId);
+  const showActivePlaceholder = hasPlaceholderRow && !entries.some(e => e.entityId === nextEntityId);
 
   const pendingNotInQuery = React.useMemo(
     () => pendingEntities.filter(p => !entries.some(e => e.entityId === p.entityId)),
     [pendingEntities, entries]
   );
 
-  const activePlaceholderSpaceId =
-    placeholderTargetSpaceId ?? placeholderCreateSpaceRef.current ?? spaceId;
+  const activePlaceholderSpaceId = placeholderTargetSpaceId ?? placeholderCreateSpaceRef.current ?? spaceId;
 
   const renderedEntries = React.useMemo(() => {
     if (collectionEmptyEditable) {
@@ -277,15 +275,9 @@ function useEntries(
         ? makePlaceholderRow(nextEntityId, properties, activePlaceholderSpaceId)
         : null;
 
-    const optimisticRows = pendingNotInQuery.map(p =>
-      makeOptimisticRow(p.entityId, properties, p.spaceId)
-    );
+    const optimisticRows = pendingNotInQuery.map(p => makeOptimisticRow(p.entityId, properties, p.spaceId));
 
-    return [
-      ...(activePlaceholderRow ? [activePlaceholderRow] : []),
-      ...optimisticRows,
-      ...entriesWithPosition,
-    ];
+    return [...(activePlaceholderRow ? [activePlaceholderRow] : []), ...optimisticRows, ...entriesWithPosition];
   }, [
     activePlaceholderSpaceId,
     collectionEmptyEditable,
@@ -316,9 +308,7 @@ function useEntries(
     const effectiveSpaceId =
       pickerSpaceId ??
       pendingMeta?.spaceId ??
-      (entityId === nextEntityId
-        ? placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId
-        : undefined) ??
+      (entityId === nextEntityId ? (placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId) : undefined) ??
       actionSpaceId;
 
     // Step 1: Handle data writes
@@ -387,10 +377,7 @@ function useEntries(
       }
 
       // Find means the entity already exists — don't create a new one.
-      if (
-        action.type !== 'FIND_ENTITY' &&
-        !committedPlaceholderIdsRef.current.has(entityId)
-      ) {
+      if (action.type !== 'FIND_ENTITY' && !committedPlaceholderIdsRef.current.has(entityId)) {
         committedPlaceholderIdsRef.current.add(entityId);
 
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
@@ -451,8 +438,7 @@ function useEntries(
         !committedPlaceholderIdsRef.current.has(nextEntityId) &&
         !entries.some(e => e.entityId === nextEntityId)
       ) {
-        const priorSpaceId =
-          placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId ?? spaceId;
+        const priorSpaceId = placeholderCreateSpaceRef.current ?? placeholderTargetSpaceId ?? spaceId;
         const priorId = createEntityWithTypes({
           filters: filterState,
           spaceId: priorSpaceId,
@@ -817,10 +803,7 @@ const ConfiguredTableBlock = ({
   );
 
   const orderedFilterColumnIds = React.useMemo(() => {
-    return [
-      SystemIds.NAME_PROPERTY,
-      ...orderedShownColumnRelations.map(columnPropertyIdFromRelation),
-    ];
+    return [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(columnPropertyIdFromRelation)];
   }, [orderedShownColumnRelations]);
 
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
@@ -952,17 +935,16 @@ const ConfiguredTableBlock = ({
   // - SPACES with >1 spaces: dropdown of those spaces.
   // - GEO: dropdown with search across all spaces.
   // For a single-space SPACES query the dropdown is skipped (auto-pick that one).
-  const usesCreateEntitySpaceDropdown =
-    (source.type === 'SPACES' && source.value.length > 1) || source.type === 'GEO';
+  const usesCreateEntitySpaceDropdown = (source.type === 'SPACES' && source.value.length > 1) || source.type === 'GEO';
 
-  const singleSpaceTarget =
-    source.type === 'SPACES' && source.value.length === 1 ? source.value[0] : null;
-  const { canCreateInSpace: canCreateInTargetSpace, isResolved: singleSpaceAccessResolved } =
-    useCreatableSpaceIds(singleSpaceTarget ? [singleSpaceTarget] : [], Boolean(singleSpaceTarget));
+  const singleSpaceTarget = source.type === 'SPACES' && source.value.length === 1 ? source.value[0] : null;
+  const { canCreateInSpace: canCreateInTargetSpace, isResolved: singleSpaceAccessResolved } = useCreatableSpaceIds(
+    singleSpaceTarget ? [singleSpaceTarget] : [],
+    Boolean(singleSpaceTarget)
+  );
   const canCreateInSingleSpace = singleSpaceTarget ? canCreateInTargetSpace(singleSpaceTarget) : true;
   const showCreateEntityPlus =
-    renderPlusButtonAsInline &&
-    (!singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace));
+    renderPlusButtonAsInline && (!singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace));
 
   const onAddPlaceholderClick = React.useCallback(() => {
     onAddPlaceholder(singleSpaceTarget ?? null);
@@ -1009,7 +991,7 @@ const ConfiguredTableBlock = ({
             (usesCreateEntitySpaceDropdown ? (
               <DataBlockCreateEntitySpaceDropdown
                 source={source}
-                onPick={(targetSpaceId) => onAddPlaceholder(targetSpaceId)}
+                onPick={targetSpaceId => onAddPlaceholder(targetSpaceId)}
               />
             ) : (
               <button type="button" onClick={onAddPlaceholderClick}>

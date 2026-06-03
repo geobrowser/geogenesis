@@ -25,6 +25,10 @@ export type Backlink = {
 export const Backlinks = ({ backlinks }: BacklinksProps) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
+  if (backlinks.length === 0) {
+    return null;
+  }
+
   return (
     <div>
       <div className="text-mediumTitle">Referenced by</div>

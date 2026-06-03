@@ -23,5 +23,6 @@ declare module '@tanstack/react-table' {
     placeholderFocusKey?: number;
     focusRowEntityIdRef?: React.RefObject<string | null>;
     collectionTypeFilters?: { id: string; name: string | null }[];
+    openedWithMainViewEditing: boolean;
   }
 }

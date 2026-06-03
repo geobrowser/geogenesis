@@ -108,6 +108,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const focusRowEntityIdRef = table.options.meta!.focusRowEntityIdRef;
     const focusRowEntityId = focusRowEntityIdRef?.current ?? null;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
+    const openedWithMainViewEditing = table.options.meta!.openedWithMainViewEditing;
+
     const cellData = getValue<Cell | undefined>();
 
     // Currently relations (rollup) blocks aren't editable.
@@ -162,6 +164,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
             row.original.placeholder || focusRowEntityId === entityId ? placeholderFocusKey : undefined
           }
           collectionTypeFilters={collectionTypeFilters}
+          openedWithMainViewEditing={openedWithMainViewEditing}
         />
       );
     }
@@ -181,6 +184,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         verified={verified}
         onLinkEntry={onLinkEntry}
         source={source}
+        openedWithMainViewEditing={openedWithMainViewEditing}
       />
     );
   },
@@ -257,6 +261,7 @@ export const TableBlockTable = ({
       placeholderFocusKey,
       focusRowEntityIdRef,
       collectionTypeFilters,
+      openedWithMainViewEditing: isEditing,
     },
   });
 

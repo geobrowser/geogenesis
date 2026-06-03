@@ -32,6 +32,7 @@ import {
   writeValue,
 } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type Props = {
   entityId: string;
@@ -52,6 +53,7 @@ type Props = {
   autoFocus?: boolean;
   focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  openedWithMainViewEditing?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -73,6 +75,7 @@ export function EditableEntityTableCell({
   autoFocus = false,
   focusRequestKey,
   collectionTypeFilters,
+  openedWithMainViewEditing = false,
 }: Props) {
   const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
@@ -124,30 +127,36 @@ export function EditableEntityTableCell({
             </div>
           </div>
         ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={true}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={toSpaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
-            <div className="pointer-events-auto">
-              <PageStringField
-                variant="tableCell"
-                placeholder="Entity name..."
-                value={name ?? ''}
-                onEnterKey={onAddPlaceholder}
-                onChange={value => {
-                  onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
-                }}
-              />
+          <div className="group/name-cell-collection-table flex w-full min-w-0 items-center gap-1">
+            <div className="relative min-w-0 flex-1">
+              <CollectionMetadata
+                view="TABLE"
+                isEditing={true}
+                name={name}
+                currentSpaceId={currentSpaceId}
+                entityId={entityId}
+                spaceId={toSpaceId ?? currentSpaceId}
+                collectionId={collectionId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                showSidePanel={!isPlaceholderRow}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              >
+                <div className="pointer-events-auto">
+                  <PageStringField
+                    variant="tableCell"
+                    placeholder="Entity name..."
+                    value={name ?? ''}
+                    onEnterKey={onAddPlaceholder}
+                    onChange={value => {
+                      onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                    }}
+                  />
+                </div>
+              </CollectionMetadata>
             </div>
-          </CollectionMetadata>
+          </div>
         )}
       </>
     );
@@ -333,7 +342,17 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
-  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
+  return (
+    <SquareButton
+      className="box-border !h-5 !w-5"
+      icon={<RightArrowLongSmall />}
+      onClick={handleClick}
+      aria-label="Navigate to entity"
+      onMouseDown={e => {
+        e.stopPropagation();
+      }}
+    />
+  );
 }
 
 function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {

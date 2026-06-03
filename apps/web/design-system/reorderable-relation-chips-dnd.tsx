@@ -77,7 +77,6 @@ export default function ReorderableRelationChipsDnd({
     setActiveId(null);
   };
 
-  // Don't render reorder component if there's only one or no relations
   if (sortedRelations.length <= 1) {
     return (
       <>
@@ -189,26 +188,26 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
     <div
       ref={setNodeRef}
       style={style}
+      {...attributes}
       className="relative inline-block max-w-full min-w-0"
       onClick={handleClick}
       onClickCapture={handleClick}
     >
-      <div {...attributes} {...listeners} className="inline-flex max-w-full min-w-0 items-center">
-        <LinkableRelationChip
-          isEditing
-          small
-          truncateLabel
-          onDelete={() => storage.relations.delete(relation)}
-          currentSpaceId={spaceId}
-          entityId={relation.toEntity.id}
-          relationId={relation.id}
-          relationEntityId={relation.entityId}
-          spaceId={relation.toSpaceId}
-          verified={relation.verified}
-        >
-          {relation.toEntity.name}
-        </LinkableRelationChip>
-      </div>
+      <LinkableRelationChip
+        isEditing
+        small
+        truncateLabel
+        sortableDragHandleListeners={listeners}
+        onDelete={() => storage.relations.delete(relation)}
+        currentSpaceId={spaceId}
+        entityId={relation.toEntity.id}
+        relationId={relation.id}
+        relationEntityId={relation.entityId}
+        spaceId={relation.toSpaceId}
+        verified={relation.verified}
+      >
+        {relation.toEntity.name}
+      </LinkableRelationChip>
     </div>
   );
 }

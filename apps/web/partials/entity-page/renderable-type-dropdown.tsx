@@ -97,7 +97,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
           avoidCollisions={true}
           sticky="always"
           className={cx(
-            'z-9999 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+            'z-[var(--elevated-popover-z,9999)] w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
             options.length > 4 && 'max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth'
           )}
           onWheel={onTypeMenuWheel}

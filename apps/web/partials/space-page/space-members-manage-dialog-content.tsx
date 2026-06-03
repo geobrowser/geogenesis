@@ -17,9 +17,10 @@ import { MemberRow } from './space-member-row';
 
 interface Props {
   spaceId: string;
+  isEditor: boolean;
 }
 
-export function SpaceMembersManageDialogContent({ spaceId }: Props) {
+export function SpaceMembersManageDialogContent({ spaceId, isEditor }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useSpaceParticipantsInfinite({ spaceId, kind: 'members' });
 
@@ -49,7 +50,7 @@ export function SpaceMembersManageDialogContent({ spaceId }: Props) {
         ) : (
           <div className="divide-y divide-grey-02">
             {queriedMembers.map(m => (
-              <CurrentMember key={m.id} member={m} spaceId={spaceId} />
+              <CurrentMember key={m.id} member={m} spaceId={spaceId} isEditor={isEditor} />
             ))}
             {hasNextPage ? <div ref={sentinelRef} className="h-px" /> : null}
             {isFetchingNextPage ? <ManageDialogSkeletons count={3} /> : null}
@@ -63,9 +64,10 @@ export function SpaceMembersManageDialogContent({ spaceId }: Props) {
 interface CurrentMemberProps {
   member: SpaceParticipantProfile;
   spaceId: string;
+  isEditor: boolean;
 }
 
-function CurrentMember({ member, spaceId }: CurrentMemberProps) {
+function CurrentMember({ member, spaceId, isEditor }: CurrentMemberProps) {
   const { proposeRemoveMember, status } = useProposeRemoveMember({ spaceId });
 
   const buttonText = (() => {
@@ -81,6 +83,10 @@ function CurrentMember({ member, spaceId }: CurrentMemberProps) {
     }
   })();
 
+  // Fast-path proposals are editor-only on-chain; routing non-editor callers
+  // to slow-path avoids an InvalidFromSpace() revert from the DAOSpace contract.
+  const votingMode = isEditor ? 'fast' : 'slow';
+
   return (
     <div key={member.id} className="flex items-center justify-between transition-colors duration-150 hover:bg-divider">
       <MemberRow user={member} />
@@ -88,7 +94,7 @@ function CurrentMember({ member, spaceId }: CurrentMemberProps) {
         disabled={status === 'pending' || status === 'success'}
         onClick={event => {
           event.preventDefault();
-          proposeRemoveMember({ targetMemberSpaceId: member.spaceId });
+          proposeRemoveMember({ targetMemberSpaceId: member.spaceId, votingMode });
         }}
       >
         {buttonText}

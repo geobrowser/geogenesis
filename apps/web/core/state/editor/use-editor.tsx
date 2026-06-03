@@ -20,7 +20,7 @@ import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorBlocks, useEditorInstance } from './editor-provider';
+import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import { markdownToEditorJson } from './markdown-adapter';
 import {
@@ -249,7 +249,7 @@ export function useEditorStore() {
   const { id: entityId, spaceId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
-  const tabId = useTabId();
+  const tabId = useActiveTabIdForEditor();
   const activeEntityId = tabId ?? entityId;
 
   const { blockRelations, initialBlockEntities } = useEditorBlocks();
@@ -487,13 +487,19 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
+      const currentBlockIds = getRelations({
+        mergeWith: initialBlockEntityRelations,
+        selector: r =>
+          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
+      }).map(r => r.toEntity.id);
+
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.
       //
       // Q:
       // Does tiptap copy metadata about the block when you copy-paste it in the editor?
 
-      const { added, removed, moved } = getBlockPositionChanges(blockIds, newBlockIds);
+      const { added, removed, moved } = getBlockPositionChanges(currentBlockIds, newBlockIds);
 
       const addedBlocks = newBlocks.filter(b => added.includes(b.id));
       const movedBlocks = newBlocks.filter(b => moved.includes(b.id));
@@ -690,7 +696,7 @@ export function useEditorStore() {
         }
       }
     },
-    [blockIds, activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
+    [activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
   );
 
   return {
