@@ -7,9 +7,9 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { getSpaceAccess, normalizeSpaceId } from '~/core/access/space-access';
-import { getSpace } from '~/core/io/queries';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { getSpace } from '~/core/io/queries';
 
 export type CreatableSpaceIdsMap = Map<string, boolean>;
 
@@ -46,14 +46,13 @@ async function fetchCreatableSpaceIds(
  * Uses the same access path as `useAccessControl` (including personal-space ownership).
  */
 export function useCreatableSpaceIds(spaceIds: string[], enabled: boolean) {
+  // TODO: Each space id = getSpace + getSpaceAccess. Large GEO dropdowns = many parallel requests on open.
+  // staleTime only helps reopen. Needs a batch access API.
   const hydrated = useHydrated();
   const { personalSpaceId, isLoading: isLoadingPersonalSpaceId } = usePersonalSpaceId();
 
   const spaceIdsKey = React.useMemo(
-    () =>
-      [...new Set(spaceIds.map(id => normalizeSpaceId(id)))]
-        .sort()
-        .join(','),
+    () => [...new Set(spaceIds.map(id => normalizeSpaceId(id)))].sort().join(','),
     [spaceIds]
   );
 

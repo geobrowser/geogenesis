@@ -570,6 +570,12 @@ export function EntitySidePanel() {
     }
   }, [pathname, sidePanelTarget, handleCloseSidePanel]);
 
+  React.useEffect(() => {
+    if (isReviewOpen && sidePanelTarget && !sidePanelTarget.openedFromReviewEdits) {
+      closeSidePanel();
+    }
+  }, [closeSidePanel, isReviewOpen, sidePanelTarget]);
+
   if (!sidePanelTarget) {
     return null;
   }
@@ -585,7 +591,7 @@ export function EntitySidePanel() {
       ref={panelHostRef}
       data-entity-side-panel
       className={`rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white ${
-        isReviewOpen ? 'z-[10001]' : 'z-[200]'
+        isReviewOpen && openedFromReviewEdits ? 'z-[10001]' : 'z-[200]'
       }`}
     >
       <EntitySidePanelPopoverPortalProvider>

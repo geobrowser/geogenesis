@@ -190,6 +190,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
+    includeUnpublishedLocal: true,
     sort: serverSort,
   });
 

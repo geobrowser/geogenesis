@@ -47,7 +47,8 @@ type SpaceNoticesProps = {
 export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps) => {
   const { isEditor } = useAccessControl(spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { nextEntityId, onClick } = useCreateEntityWithFilters(spaceId);
+  const { peekNextEntityId, onClick } = useCreateEntityWithFilters(spaceId);
+  const reservedEntityId = peekNextEntityId();
   const authorName = useName(entityId, spaceId);
   const teamTabId = useTeamTabId();
   const currentTabId = useTabId();
@@ -90,7 +91,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
                     ],
                   })
                 }
-                href={NavUtils.toEntity(spaceId, nextEntityId, true)}
+                href={NavUtils.toEntity(spaceId, reservedEntityId, true)}
               >
                 Create post
               </SimpleButton>
@@ -172,7 +173,7 @@ export const SpaceNotices = ({ spaceType, spaceId, entityId }: SpaceNoticesProps
                       ],
                     })
                   }
-                  href={NavUtils.toEntity(spaceId, nextEntityId, true)}
+                  href={NavUtils.toEntity(spaceId, reservedEntityId, true)}
                 >
                   Create post
                 </SimpleButton>

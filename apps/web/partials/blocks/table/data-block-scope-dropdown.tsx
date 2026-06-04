@@ -6,8 +6,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import type { Filter } from '~/core/blocks/data/filters';
+import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
@@ -25,6 +25,7 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
+import { TextButton } from '~/design-system/text-button';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
@@ -199,8 +200,7 @@ export function DataBlockScopeDropdown({
       } else {
         setPendingSource(prev => {
           if (!isSetup && prev !== null && scopeDraftDirtyRef.current) {
-            const nextSource =
-              prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
+            const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
             setSourceRef.current(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
           }
           scopeDraftDirtyRef.current = false;
@@ -230,8 +230,7 @@ export function DataBlockScopeDropdown({
 
   const commitDraft = React.useCallback(() => {
     const next = pendingSource ?? sourceRef.current;
-    const finalized =
-      next.type === 'SPACES' && next.value.length === 0 ? { type: 'GEO' as const } : next;
+    const finalized = next.type === 'SPACES' && next.value.length === 0 ? { type: 'GEO' as const } : next;
     commitSource(finalized);
     setOpen(false);
   }, [commitSource, pendingSource]);
@@ -359,21 +358,13 @@ export function DataBlockScopeDropdown({
               <span className="text-resultTitle text-text">Query from</span>
               <div className="flex shrink-0 items-center gap-2">
                 {showClearAll ? (
-                  <button
-                    type="button"
-                    className="text-button text-text transition-colors hover:text-ctaPrimary"
-                    onClick={clearDraft}
-                  >
+                  <TextButton type="button" color="grey-04" onClick={clearDraft}>
                     Clear all
-                  </button>
+                  </TextButton>
                 ) : null}
-                <button
-                  type="button"
-                  className="text-button font-medium text-ctaPrimary transition-colors hover:text-ctaHover"
-                  onClick={commitDraft}
-                >
+                <TextButton type="button" color="ctaPrimary" onClick={commitDraft}>
                   Done
-                </button>
+                </TextButton>
               </div>
             </div>
           ) : (

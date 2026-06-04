@@ -155,7 +155,10 @@ export function useSearch({
 
         return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
       } catch (error) {
-        return emptySearchPage(pageParam as number);
+        // Plain try/catch: failures become an empty page (throwOnError: false). Effect.either was equivalent
+        // — the catch always coerced errors to AbortError, so the throw branch never ran.
+        console.error(error);
+        return emptySearchPage(pageParam);
       }
     },
     getNextPageParam: lastPage => {

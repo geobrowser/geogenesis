@@ -4,8 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
-import pluralize from 'pluralize';
+
 import cx from 'classnames';
+import pluralize from 'pluralize';
 
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
@@ -20,9 +21,10 @@ import { InfoSmall } from '~/design-system/icons/info-small';
 import { Search } from '~/design-system/icons/search';
 import { ResizableContainer } from '~/design-system/resizable-container';
 import { Tag } from '~/design-system/tag';
+import { TextButton } from '~/design-system/text-button';
 import { Tooltip } from '~/design-system/tooltip';
-import { Truncate } from '~/design-system/truncate';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
+import { Truncate } from '~/design-system/truncate';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
 export type QuerySetupTypePick = {
@@ -62,14 +64,12 @@ type QuerySetupTypesSelectEntityPopoverProps = {
 
 export function QuerySetupTypesSelectEntityPopover({
   trigger,
-  spaceId: _spaceId,
+  spaceId,
   selectedTypes,
   onChangeSelectedTypes,
   allowedTargetTypes,
   disabled,
 }: QuerySetupTypesSelectEntityPopoverProps) {
-  void _spaceId;
-
   const [open, setOpen] = React.useState(false);
   const [draft, setDraft] = React.useState<QuerySetupTypePick[]>([]);
   const [baseline, setBaseline] = React.useState<QuerySetupTypePick[]>([]);
@@ -81,19 +81,12 @@ export function QuerySetupTypesSelectEntityPopover({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetching,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes: [SystemIds.SCHEMA_TYPE],
-    enabled: open,
-  });
+  const { query, onQueryChange, isLoading, results, hasNextPage, fetchNextPage, isFetching, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: [SystemIds.SCHEMA_TYPE],
+      filterBySpace: spaceId,
+      enabled: open,
+    });
 
   const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
@@ -103,10 +96,7 @@ export function QuerySetupTypesSelectEntityPopover({
     scrollRef: resultsScrollRef,
   });
 
-  const allowedTypeIds = React.useMemo(
-    () => allowedTargetTypes?.map(t => t.id),
-    [allowedTargetTypes]
-  );
+  const allowedTypeIds = React.useMemo(() => allowedTargetTypes?.map(t => t.id), [allowedTargetTypes]);
 
   const isResultPickable = React.useCallback(
     (result: SearchResult) => {
@@ -190,8 +180,7 @@ export function QuerySetupTypesSelectEntityPopover({
 
   const showClearAll = draft.length > 0;
 
-  const showPopoverHeader =
-    draft.length > 0 || baseline.length > 0 || pendingSpacePick != null;
+  const showPopoverHeader = draft.length > 0 || baseline.length > 0 || pendingSpacePick != null;
 
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
     isOpen: open,
@@ -212,26 +201,13 @@ export function QuerySetupTypesSelectEntityPopover({
       <span className="text-resultTitle text-text">Select types</span>
       <div className="flex shrink-0 items-center gap-2">
         {showClearAll ? (
-          <button
-            type="button"
-            className="text-button text-text transition-colors hover:text-ctaPrimary"
-            onClick={clearDraft}
-          >
+          <TextButton type="button" color="grey-04" onClick={clearDraft}>
             Clear all
-          </button>
+          </TextButton>
         ) : null}
-        <button
-          type="button"
-          disabled={doneDisabled}
-          className={
-            doneDisabled
-              ? 'text-button text-grey-04'
-              : 'text-button font-medium text-ctaPrimary transition-colors hover:text-ctaHover'
-          }
-          onClick={commit}
-        >
+        <TextButton type="button" color="ctaPrimary" disabled={doneDisabled} onClick={commit}>
           Done
-        </button>
+        </TextButton>
       </div>
     </div>
   );
@@ -322,9 +298,7 @@ export function QuerySetupTypesSelectEntityPopover({
                       <div
                         className={cx(
                           'w-full max-w-full overflow-hidden border border-grey-02 bg-white shadow-lg',
-                          popoverSide === 'top'
-                            ? 'rounded-t-md rounded-b-none border-b-0'
-                            : 'rounded-b-md border-t-0'
+                          popoverSide === 'top' ? 'rounded-t-md rounded-b-none border-b-0' : 'rounded-b-md border-t-0'
                         )}
                       >
                         <ResizableContainer>
@@ -332,10 +306,8 @@ export function QuerySetupTypesSelectEntityPopover({
                             ref={resultsScrollRef}
                             className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                             style={{
-                              maxHeight:
-                                'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
-                              minHeight:
-                                pendingSpacePick || results.length > 0 ? '100px' : '2.5rem',
+                              maxHeight: 'min(50vh, calc(var(--radix-popper-available-height, 50vh) - 80px))',
+                              minHeight: pendingSpacePick || results.length > 0 ? '100px' : '2.5rem',
                             }}
                             onScroll={handleResultsScroll}
                             onWheel={e => trapWheelToElement(e.currentTarget, e)}
@@ -384,9 +356,7 @@ export function QuerySetupTypesSelectEntityPopover({
                                         onClick={() => commitDraftWithSpace(pendingSpacePick, space)}
                                         className={cx(
                                           'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors duration-150',
-                                          isSpaceRowSelected
-                                            ? 'bg-grey-01 hover:bg-grey-01'
-                                            : 'hover:bg-grey-01'
+                                          isSpaceRowSelected ? 'bg-grey-01 hover:bg-grey-01' : 'hover:bg-grey-01'
                                         )}
                                       >
                                         <div>

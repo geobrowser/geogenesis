@@ -44,6 +44,7 @@ import { Select } from '~/design-system/select';
 import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
+import { TextButton } from '~/design-system/text-button';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
@@ -720,11 +721,7 @@ function getEffectiveColumnDraft(state: PromptState, columnId: string): FilterCo
   if (columnId === normalized.selectedColumn) {
     return snapshotColumnDraft(normalized);
   }
-  return (
-    normalized.columnDrafts[columnId] ??
-    normalized.sessionBaseline[columnId] ??
-    emptyColumnDraft()
-  );
+  return normalized.columnDrafts[columnId] ?? normalized.sessionBaseline[columnId] ?? emptyColumnDraft();
 }
 
 /** Merged drafts for all columns touched in this popover session (includes session baseline for untouched columns). */
@@ -1099,39 +1096,43 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       if (!state.open) setValueDropdownOpen(false);
     }, [state.open]);
 
-    React.useImperativeHandle(ref, () => ({
-      openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
-        if (!isEditing) return;
-        const currentState = stateRef.current;
-        if (
-          currentState.open &&
-          currentState.selectedColumn === columnId &&
-          externalAnchorElRef.current === (anchorEl ?? null)
-        ) {
-          clearExternalAnchor();
-          dispatch({ type: 'close' });
-          return;
-        }
-        externalAnchorElRef.current = anchorEl ?? null;
-        if (anchorEl) {
-          const r = anchorEl.getBoundingClientRect();
-          setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
-        } else {
-          setExternalAnchorBox(null);
-        }
-        const s = stateRef.current;
-        const opts = optionsRef.current;
-        const fs = seedFilterStateRef.current;
-        const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
-        const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
-        const reuseStored =
-          draftHasPending(stored, columnId, opts) &&
-          columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
-        const seedDraft = reuseStored ? undefined : committedDraft;
-        const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
-        dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft, sessionBaseline } });
-      },
-    }), [isEditing, clearExternalAnchor]);
+    React.useImperativeHandle(
+      ref,
+      () => ({
+        openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
+          if (!isEditing) return;
+          const currentState = stateRef.current;
+          if (
+            currentState.open &&
+            currentState.selectedColumn === columnId &&
+            externalAnchorElRef.current === (anchorEl ?? null)
+          ) {
+            clearExternalAnchor();
+            dispatch({ type: 'close' });
+            return;
+          }
+          externalAnchorElRef.current = anchorEl ?? null;
+          if (anchorEl) {
+            const r = anchorEl.getBoundingClientRect();
+            setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
+          } else {
+            setExternalAnchorBox(null);
+          }
+          const s = stateRef.current;
+          const opts = optionsRef.current;
+          const fs = seedFilterStateRef.current;
+          const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
+          const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
+          const reuseStored =
+            draftHasPending(stored, columnId, opts) &&
+            columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
+          const seedDraft = reuseStored ? undefined : committedDraft;
+          const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
+          dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft, sessionBaseline } });
+        },
+      }),
+      [isEditing, clearExternalAnchor]
+    );
 
     const [from, setFrom] = React.useState<Source | null>({
       type: 'RELATIONS',
@@ -1233,27 +1234,26 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       dispatch({ type: 'selectColumn', payload: { columnId, seedDraft } });
     }, []);
 
-    const filters =
-      isRelationsMode ? (
-        <StaticRelationsFilters
-          from={from}
-          setFrom={setFrom}
-          relationType={relationType}
-          setRelationType={setRelationType}
-        />
-      ) : (
-        <DynamicFilters
-          options={options}
-          state={state}
-          dispatch={dispatch}
-          filterSuggestionSpaceId={filterSuggestionSpaceId}
-          filterMode={filterMode}
-          onFilterModeChange={setFilterMode}
-          onSelectColumnToFilter={onSelectColumnToFilter}
-          isEditing={isEditing}
-          onValueDropdownOpenChange={setValueDropdownOpen}
-        />
-      );
+    const filters = isRelationsMode ? (
+      <StaticRelationsFilters
+        from={from}
+        setFrom={setFrom}
+        relationType={relationType}
+        setRelationType={setRelationType}
+      />
+    ) : (
+      <DynamicFilters
+        options={options}
+        state={state}
+        dispatch={dispatch}
+        filterSuggestionSpaceId={filterSuggestionSpaceId}
+        filterMode={filterMode}
+        onFilterModeChange={setFilterMode}
+        onSelectColumnToFilter={onSelectColumnToFilter}
+        isEditing={isEditing}
+        onValueDropdownOpenChange={setValueDropdownOpen}
+      />
+    );
 
     const showPopoverHeaderActions = !isRelationsMode && !valueDropdownOpen;
     const popoverHasSessionChanges = popoverDraftsDifferFromSessionBaseline(state, options);
@@ -1261,8 +1261,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const hasCommittedTableFilters = seedFilterState.length > 0;
     const showPopoverClearAll =
       showPopoverHeaderActions &&
-      (hasPendingFilterSelections(state, options) ||
-        (!isChipAnchoredPopover && hasCommittedTableFilters));
+      (hasPendingFilterSelections(state, options) || (!isChipAnchoredPopover && hasCommittedTableFilters));
     const showPopoverDone = showPopoverHeaderActions && popoverHasSessionChanges;
 
     const onOpenChange = (open: boolean) => {
@@ -1324,22 +1323,14 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
                   {(showPopoverClearAll || showPopoverDone) && (
                     <div className="flex shrink-0 items-center gap-2">
                       {showPopoverClearAll ? (
-                        <button
-                          type="button"
-                          className="text-smallButton text-grey-04 transition-colors hover:text-text"
-                          onClick={onPopoverClearAll}
-                        >
+                        <TextButton type="button" color="grey-04" onClick={onPopoverClearAll}>
                           Clear all
-                        </button>
+                        </TextButton>
                       ) : null}
                       {showPopoverDone ? (
-                        <button
-                          type="button"
-                          className="text-smallButton font-medium text-ctaPrimary transition-colors hover:text-ctaHover"
-                          onClick={onEntitiesDone}
-                        >
+                        <TextButton type="button" color="ctaPrimary" onClick={onEntitiesDone}>
                           Done
-                        </button>
+                        </TextButton>
                       ) : null}
                     </div>
                   )}
@@ -1368,11 +1359,6 @@ interface DynamicFiltersProps {
   onValueDropdownOpenChange: (open: boolean) => void;
 }
 
-const filterFooterClearAllButtonClass =
-  'text-smallButton text-grey-04 transition-colors hover:text-text';
-const filterFooterDoneButtonClass =
-  'text-smallButton font-medium text-ctaPrimary transition-colors hover:text-ctaHover';
-
 function FilterValueDropdownFooter({
   edge,
   showClearAll,
@@ -1396,26 +1382,16 @@ function FilterValueDropdownFooter({
       )}
     >
       {showClearAll ? (
-        <button
-          type="button"
-          className={filterFooterClearAllButtonClass}
-          onPointerDown={e => e.preventDefault()}
-          onClick={onClearAll}
-        >
+        <TextButton type="button" color="grey-04" onPointerDown={e => e.preventDefault()} onClick={onClearAll}>
           Clear all
-        </button>
+        </TextButton>
       ) : (
         <span />
       )}
       {showDone ? (
-        <button
-          type="button"
-          className={filterFooterDoneButtonClass}
-          onPointerDown={e => e.preventDefault()}
-          onClick={onDone}
-        >
+        <TextButton type="button" color="ctaPrimary" onPointerDown={e => e.preventDefault()} onClick={onDone}>
           Done
-        </button>
+        </TextButton>
       ) : null}
     </div>
   );
@@ -1478,8 +1454,7 @@ function DynamicFilters({
   }, [state, options]);
   const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
 
-  const hasValueDropdown =
-    state.selectedColumn === SystemIds.SPACE_FILTER || selectedOption?.valueType === 'RELATION';
+  const hasValueDropdown = state.selectedColumn === SystemIds.SPACE_FILTER || selectedOption?.valueType === 'RELATION';
 
   React.useEffect(() => {
     if (!hasValueDropdown) onValueDropdownOpenChange(false);
@@ -1881,10 +1856,7 @@ function TableBlockEntityFilterInput({
 
   const multi = Boolean(onCommitEntitySelections);
   const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
-  const stagingEntityIds = React.useMemo(
-    () => new Set(stagingSelections.map(e => e.id)),
-    [stagingSelections]
-  );
+  const stagingEntityIds = React.useMemo(() => new Set(stagingSelections.map(e => e.id)), [stagingSelections]);
 
   const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
   const entityDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
@@ -1960,7 +1932,7 @@ function TableBlockEntityFilterInput({
       {showDropdown && (
         <div
           className={cx(
-            'absolute z-30 isolate flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
             entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
             entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
           )}
@@ -2097,10 +2069,7 @@ function TableBlockSpaceFilterInput({
 
   const multi = Boolean(onCommitSpaceSelections);
   const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
-  const stagingSpaceIds = React.useMemo(
-    () => new Set(stagingSelections.map(s => s.id)),
-    [stagingSelections]
-  );
+  const stagingSpaceIds = React.useMemo(() => new Set(stagingSelections.map(s => s.id)), [stagingSelections]);
 
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
   const showQueryPanel = focused && Boolean(query.trim());
@@ -2302,7 +2271,7 @@ function TableBlockSpaceFilterInput({
       {showScopedOnlyPanel && (
         <div
           className={cx(
-            'absolute z-30 isolate flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
             spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
             spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
           )}
@@ -2335,7 +2304,7 @@ function TableBlockSpaceFilterInput({
       {showQueryPanel && (
         <div
           className={cx(
-            'absolute z-30 isolate flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
             spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
             spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
           )}

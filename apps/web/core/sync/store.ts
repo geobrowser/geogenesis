@@ -4,6 +4,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
   FORMAT_PROPERTY,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
@@ -15,17 +16,37 @@ import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
 import { getSpaceRank } from '../utils/space/space-ranking';
-import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
-function relationKey(r: Relation): string {
+export function relationKey(r: Relation): string {
   if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
     return `${r.fromEntity.id}:column:${columnPropertyIdFromRelation(r)}:${r.spaceId ?? ''}`;
   }
+  if (r.type.id === SystemIds.VIEW_PROPERTY) {
+    return `${r.fromEntity.id}:view:${r.spaceId ?? ''}`;
+  }
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
+function preferRelation(existing: Relation, candidate: Relation): Relation {
+  if (candidate.isLocal && !existing.isLocal) return candidate;
+  if (!candidate.isLocal && existing.isLocal) return existing;
+  const existingTs = existing.timestamp ?? '';
+  const candidateTs = candidate.timestamp ?? '';
+  return candidateTs >= existingTs ? candidate : existing;
+}
+
+function dedupeRelationsByKey(relations: Relation[]): Relation[] {
+  const byKey = new Map<string, Relation>();
+  for (const relation of relations) {
+    const key = relationKey(relation);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? preferRelation(existing, relation) : relation);
+  }
+  return [...byKey.values()];
 }
 
 /**
@@ -368,7 +389,7 @@ export class GeoStore {
           });
         const relationIdsToWrite = new Set(mergedIncoming.map(t => t.id));
         const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
-        return [...unchangedRelations, ...mergedIncoming];
+        return dedupeRelationsByKey([...unchangedRelations, ...mergedIncoming]);
       });
     }
   }

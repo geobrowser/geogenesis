@@ -10,13 +10,15 @@ import { Filter } from '../blocks/data/filters';
 import { useMutate } from '../sync/use-mutate';
 
 export function useCreateEntityWithFilters(defaultSpaceId: string) {
-  const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
-  const nextEntityIdRef = React.useRef(nextEntityId);
-  nextEntityIdRef.current = nextEntityId;
+  const nextEntityIdRef = React.useRef(IdUtils.generate());
+  const [, bumpReservedEntityId] = React.useState(0);
   const { storage } = useMutate();
 
+  const peekNextEntityId = React.useCallback(() => nextEntityIdRef.current, []);
+
   const rotateNextEntityId = React.useCallback(() => {
-    setNextEntityId(IdUtils.generate());
+    nextEntityIdRef.current = IdUtils.generate();
+    bumpReservedEntityId(n => n + 1);
   }, []);
 
   const onClick = React.useCallback(
@@ -79,9 +81,8 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
         }
       }
 
-      const newId = IdUtils.generate();
-      nextEntityIdRef.current = newId;
-      setNextEntityId(newId);
+      nextEntityIdRef.current = IdUtils.generate();
+      bumpReservedEntityId(n => n + 1);
       return entityId;
     },
     [defaultSpaceId, storage]
@@ -89,7 +90,7 @@ export function useCreateEntityWithFilters(defaultSpaceId: string) {
 
   return {
     onClick,
-    nextEntityId,
+    peekNextEntityId,
     rotateNextEntityId,
   };
 }

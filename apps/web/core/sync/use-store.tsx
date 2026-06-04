@@ -94,16 +94,12 @@ function mergeUnpublishedLocalEntities(
   const localIds = getUnpublishedLocalEntityIds().filter(id => !serverIdSet.has(id));
   if (localIds.length === 0) return serverEntities;
 
-  const localEntities = localIds
-    .map(id => store.getEntity(id))
-    .filter((e): e is Entity => e !== null);
+  const localEntities = localIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
 
   if (localEntities.length === 0) return serverEntities;
 
   const matching =
-    where && Object.keys(where).length > 0
-      ? new EntityQuery(localEntities).where(where).execute()
-      : localEntities;
+    where && Object.keys(where).length > 0 ? new EntityQuery(localEntities).where(where).execute() : localEntities;
 
   if (matching.length === 0) return serverEntities;
 
@@ -284,6 +280,13 @@ type QueryEntitiesOptions = {
   deferUntilFetched?: boolean;
 
   /**
+   * When true, prepends unpublished local entities that match `where` to the
+   * first page of server-paginated results. Use for open-ended paginated queries
+   * (e.g. data blocks, power tools) so newly created entities appear before sync.
+   */
+  includeUnpublishedLocal?: boolean;
+
+  /**
    * By default we query the local store for the entity without
    * querying the remote server. This assumes that the entity
    * has already been hydrated elsewhere in the app, so there's
@@ -308,6 +311,7 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
+  includeUnpublishedLocal = false,
   sort,
 }: QueryEntitiesOptions & {
   sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
@@ -409,12 +413,10 @@ export function useQueryEntities({
       // from the server-returned ids; store.getEntity still picks up local
       // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
-        const serverEntities = data.ids
-          .map(id => store.getEntity(id))
-          .filter((e): e is Entity => e !== null);
+        const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
 
         const isFirstPage = offset === undefined || offset === 0;
-        if (!isFirstPage) {
+        if (!isFirstPage || !includeUnpublishedLocal) {
           return serverEntities;
         }
 
