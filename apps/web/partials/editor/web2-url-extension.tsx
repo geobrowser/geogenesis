@@ -128,8 +128,8 @@ export const Web2URLMark = Mark.create({
   renderHTML({ HTMLAttributes, mark }) {
     const cleanHTMLAttributes = stripInternalWeb2HTMLAttributes(HTMLAttributes);
 
-    // Mode-aware rendering
     if (!mark.attrs.editMode) {
+      // VIEW MODE: Render as clickable anchor
       return [
         'a',
         {
@@ -144,7 +144,7 @@ export const Web2URLMark = Mark.create({
         0,
       ];
     } else {
-      // VIEW MODE: Normal text
+      // EDIT MODE: Render as plain span to preserve markdown syntax visibility
       return [
         'span',
         {
@@ -593,7 +593,10 @@ export const Web2URLExtension = Extension.create({
                         // Early exit if no text content or no potential markdown/URL syntax
                         if (
                           !blockText ||
-                          (!blockText.includes('[') && !blockText.includes('http') && !blockText.includes('www.'))
+                          (!blockText.includes('[') &&
+                            !blockText.includes('http') &&
+                            !blockText.includes('www.') &&
+                            !blockText.includes('.'))
                         ) {
                           return;
                         }
