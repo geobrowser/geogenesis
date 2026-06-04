@@ -8,6 +8,7 @@ import { startTransition, useEffect, useState } from 'react';
 import pluralize from 'pluralize';
 
 import { ROOT_SPACE } from '~/core/constants';
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 import { SearchResult } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -36,6 +37,7 @@ export const FindEntity = ({
 }: FindEntityProps) => {
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
   const [hasDismissedPopover, setHasDismissedPopover] = useState<boolean>(false);
+  const [focused, setFocused] = useState<boolean>(false);
   const [result, setResult] = useState<SearchResult | null>(null);
 
   useEffect(() => {
@@ -48,9 +50,10 @@ export const FindEntity = ({
     };
   }, []);
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    filterByTypes: allowedTypes,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: allowedTypes,
+    });
 
   if (query === '' && result !== null) {
     startTransition(() => {
@@ -58,28 +61,30 @@ export const FindEntity = ({
     });
   }
 
-  const [hasStoppedTyping, setHasStoppedTyping] = useState<boolean>(false);
+  const showPopover =
+    focused && query.trim().length > 0 && !hasDismissedPopover && (results.length > 0 || isLoading || isEmpty);
 
-  React.useEffect(() => {
-    setHasStoppedTyping(false);
-    const timeoutId = setTimeout(() => {
-      setHasStoppedTyping(true);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [query]);
-
-  const showPopover = hasStoppedTyping && results.length > 0 && !hasDismissedPopover;
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   return (
     <div className="relative">
-      <Popover.Root open={!!query} onOpenChange={() => {}}>
+      <Popover.Root open={focused} onOpenChange={setFocused}>
         <Popover.Anchor asChild>
           <input
             value={query}
             onChange={event => {
               onQueryChange(event.target.value);
               onCreateEntity({ id: '', name: event.target.value });
+              setHasDismissedPopover(false);
+            }}
+            onFocus={() => {
+              setFocused(true);
               setHasDismissedPopover(false);
             }}
             placeholder={placeholder}
@@ -94,6 +99,7 @@ export const FindEntity = ({
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onInteractOutside={() => setFocused(false)}
               className="z-9999 w-(--radix-popper-anchor-width) pt-2"
               forceMount
             >
@@ -107,7 +113,9 @@ export const FindEntity = ({
                 </div>
                 <ResizableContainer>
                   <div
+                    ref={resultsScrollRef}
                     className="flex max-h-[210px] flex-col overflow-x-clip overflow-y-auto overscroll-contain border-t border-grey-02 bg-white"
+                    onScroll={handleResultsScroll}
                     onWheel={e => trapWheelToElement(e.currentTarget, e)}
                   >
                     {!results?.length && isLoading && (
@@ -133,6 +141,7 @@ export const FindEntity = ({
                                     name: result.name,
                                   });
                                   onQueryChange('');
+                                  setFocused(false);
                                   setHasDismissedPopover(true);
                                 }}
                                 onKeyDown={event => {
@@ -143,6 +152,7 @@ export const FindEntity = ({
                                       name: result.name,
                                     });
                                     onQueryChange('');
+                                    setFocused(false);
                                     setHasDismissedPopover(true);
                                   }
                                 }}
@@ -205,6 +215,11 @@ export const FindEntity = ({
                             </div>
                           </div>
                         ))}
+                        {isFetchingNextPage ? (
+                          <div className="w-full border-t border-divider bg-white px-3 py-2">
+                            <div className="truncate text-button text-text">Loading more...</div>
+                          </div>
+                        ) : null}
                       </div>
                     )}
                   </div>

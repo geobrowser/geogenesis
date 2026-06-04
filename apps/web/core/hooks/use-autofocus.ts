@@ -2,31 +2,42 @@
 
 import * as React from 'react';
 
+export type UseAutofocusOptions = {
+  shouldSkipFocus?: () => boolean;
+};
+
 /**
- * Autofocuses an element when `enabled` becomes true.
- *
- * @param enabled  - Whether the element should receive focus.
- * @param delayMs  - Optional delay in ms before focusing (e.g. to wait for an animation).
- * @returns A ref to attach to the focusable element.
+ * Autofocuses when `enabled` becomes true. Optional `shouldSkipFocus` runs immediately before `focus()`.
  */
 export function useAutofocus<T extends HTMLElement = HTMLElement>(
   enabled: boolean,
-  delayMs = 0
+  delayMs = 0,
+  options?: UseAutofocusOptions
 ): React.RefObject<T | null> {
   const ref = React.useRef<T>(null);
+  const shouldSkipRef = React.useRef(options?.shouldSkipFocus);
+  shouldSkipRef.current = options?.shouldSkipFocus;
 
   React.useEffect(() => {
     if (!enabled) return;
 
+    const applyFocus = () => {
+      try {
+        if (shouldSkipRef.current?.()) return;
+        ref.current?.focus();
+      } catch {
+        /* detached */
+      }
+    };
+
     if (delayMs <= 0) {
-      ref.current?.focus();
+      applyFocus();
       return;
     }
 
     const timer = setTimeout(() => {
-      ref.current?.focus();
+      window.requestAnimationFrame(applyFocus);
     }, delayMs);
-
     return () => clearTimeout(timer);
   }, [enabled, delayMs]);
 

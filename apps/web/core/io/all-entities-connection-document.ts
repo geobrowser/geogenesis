@@ -59,7 +59,19 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        # Lightweight cross-space view used to decide which spaces still hold
+        # real entity data. The main valuesList/relationsList below are scoped
+        # for display, so routing/search display needs this unscoped projection.
+        allValuesList: valuesList(first: 1000) {
+          spaceId
+          propertyId
+        }
+
+        allRelationsList: relationsList(first: 1000) {
+          spaceId
+        }
+
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             ...PropertyFragment
@@ -79,7 +91,7 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           schedule
         }
 
-        relationsList(filter: { spaceId: { is: $spaceId } }) {
+        relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           id
           spaceId
           position

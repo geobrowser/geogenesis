@@ -8,7 +8,11 @@ const VALID_SPACE_ID = '22222222222222222222222222222222';
 
 describe('markdown-render', () => {
   describe('hasMarkdownSyntax', () => {
-    it('detects inline math with normal parentheses', () => {
+    it('detects inline math with $$ delimiters', () => {
+      expect(hasMarkdownSyntax('Use $$f(x)$$ here')).toBe(true);
+    });
+
+    it('detects inline math with legacy bracket delimiters', () => {
       expect(hasMarkdownSyntax('Use \\(f(x)\\) here')).toBe(true);
     });
 
@@ -18,7 +22,12 @@ describe('markdown-render', () => {
   });
 
   describe('renderMarkdownInline', () => {
-    it('renders bracket math with inner parentheses', () => {
+    it('renders $$ math', () => {
+      const html = renderToStaticMarkup(<>{renderMarkdownInline('Use $$f(x)$$ here')}</>);
+      expect(html).toContain('katex');
+    });
+
+    it('renders legacy bracket math with inner parentheses', () => {
       const html = renderToStaticMarkup(<>{renderMarkdownInline('Use \\(f(x)\\) here')}</>);
       expect(html).toContain('katex');
     });

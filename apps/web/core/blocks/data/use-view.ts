@@ -1,5 +1,5 @@
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { arrayMove } from '@dnd-kit/sortable';
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
@@ -50,10 +50,7 @@ export function useView() {
   );
 
   const orderedShownColumnRelations = React.useMemo(
-    () =>
-      [...shownColumnRelations].sort((a, b) =>
-        Position.compare(a.position ?? null, b.position ?? null)
-      ),
+    () => [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null)),
     [shownColumnRelations]
   );
 
@@ -69,9 +66,7 @@ export function useView() {
 
   /** Append new shown columns after existing ones (avoid `Position.generate()` random order). */
   const nextPropertiesColumnPosition = React.useCallback((): string | undefined => {
-    const sorted = [...shownColumnRelations].sort((a, b) =>
-      Position.compare(a.position ?? null, b.position ?? null)
-    );
+    const sorted = [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
     const last = sorted[sorted.length - 1]?.position;
     const lastStr = typeof last === 'string' && last.length > 0 ? last : null;
     const generated = Position.generateBetween(lastStr, null);
@@ -264,9 +259,7 @@ export function useView() {
 
   const reorderShownPropertyRelations = React.useCallback(
     (fromIndex: number, toIndex: number) => {
-      const sorted = [...shownColumnRelations].sort((a, b) =>
-        Position.compare(a.position ?? null, b.position ?? null)
-      );
+      const sorted = [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
       if (fromIndex < 0 || fromIndex >= sorted.length) return;
       if (toIndex < 0 || toIndex >= sorted.length) return;
       const moved = arrayMove(sorted, fromIndex, toIndex);

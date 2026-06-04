@@ -10,6 +10,7 @@ import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
+  PROPERTY_GROUPS_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
   SCORE_SYSTEM_PROPERTY,
   VALUE_TYPE_PROPERTY,
@@ -20,20 +21,22 @@ import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import {
   useEntitySchema,
+  useEntitySchemaWithGroups,
   useEntityTypes,
   useName,
   useRelationEntityRelations,
 } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
-import { useQueryProperty, useRelations, useValue, useValues } from '~/core/sync/use-store';
+import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
+import { sortRelations } from '~/core/utils/utils';
 
 import { AddTypeButton, SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
-import { LinkableMediaChip, LinkableRelationChip } from '~/design-system/chip';
+import { LinkableMediaChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import {
   ImageZoom,
@@ -45,6 +48,7 @@ import {
 import { GeoLocationPointFields, GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
@@ -59,6 +63,8 @@ import { DataTypePill } from '~/partials/entity-page/data-type-pill';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 import { getEntityTemplate } from '~/partials/entity-page/utils/get-entity-template';
 
+import { propertyIsSkillsProperty } from '~/atoms/personal-profile-suggested';
+
 type EditableEntityPageProps = {
   id: string;
   spaceId: string;
@@ -66,120 +72,276 @@ type EditableEntityPageProps = {
 
 export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   const { createProperty, addPropertyToEntity } = useCreateProperty(spaceId);
+  const { storage } = useMutate();
 
   const name = useName(id, spaceId);
-  const shouldShowPanel = useShouldShowPropertiesPanel(id, spaceId);
-  const visiblePropertiesEntries = useVisiblePropertiesEntries(id, spaceId);
+  const entityTypes = useEntityTypes(id, spaceId);
+  const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
+  const typePropertyRelations = sortRelations(
+    useRelations({
+      selector: relation =>
+        relation.fromEntity.id === id && relation.spaceId === spaceId && relation.type.id === SystemIds.PROPERTIES,
+    })
+  );
+  const addPropertyToType = React.useCallback(
+    (property: { id: string; name: string | null }) => {
+      const alreadyExists = typePropertyRelations.some(relation => relation.toEntity.id === property.id);
+      if (alreadyExists) return;
 
-  const relationEntityRelations = useRelationEntityRelations(id, spaceId);
-  const isRelationPage = relationEntityRelations.length > 0;
+      const lastPosition = typePropertyRelations.at(-1)?.position ?? null;
+      storage.relations.set({
+        id: ID.createEntityId(),
+        entityId: ID.createEntityId(),
+        spaceId,
+        renderableType: 'RELATION',
+        verified: false,
+        position: Position.generateBetween(lastPosition, null),
+        type: {
+          id: SystemIds.PROPERTIES,
+          name: 'Properties',
+        },
+        fromEntity: {
+          id,
+          name: name ?? null,
+        },
+        toEntity: {
+          id: property.id,
+          name: property.name,
+          value: property.id,
+        },
+      });
+    },
+    [id, name, spaceId, storage.relations, typePropertyRelations]
+  );
+  const visiblePropertySections = useVisiblePropertySections(id, spaceId);
+  const visibleFlatPropertiesEntries = useVisiblePropertiesEntries(id, spaceId, {
+    hideTypeGroupingFields: isTypeEntity,
+  });
+  const effectiveSections = isTypeEntity
+    ? [
+        {
+          id: 'type-flat-properties',
+          isGroup: false,
+          defaultCollapsed: false,
+          entries: visibleFlatPropertiesEntries,
+        } satisfies VisiblePropertySection,
+      ]
+    : visiblePropertySections.sections;
+  const effectiveHasGroups = !isTypeEntity && visiblePropertySections.hasGroups;
+  const effectiveTotalProperties = isTypeEntity
+    ? visibleFlatPropertiesEntries.length
+    : visiblePropertySections.totalProperties;
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    const defaults: Record<string, boolean> = {};
+    for (const section of visiblePropertySections.sections) {
+      if (!section.groupId || !section.isGroup) continue;
+      defaults[section.groupId] = section.defaultCollapsed;
+    }
+
+    setCollapsedGroups(previous => {
+      const next: Record<string, boolean> = {};
+      for (const [groupId, defaultCollapsed] of Object.entries(defaults)) {
+        next[groupId] = previous[groupId] ?? defaultCollapsed;
+      }
+
+      const sameKeys = Object.keys(previous).length === Object.keys(next).length;
+      const sameValues = Object.entries(next).every(([groupId, value]) => previous[groupId] === value);
+      return sameKeys && sameValues ? previous : next;
+    });
+  }, [effectiveSections]);
 
   // Get schema properties from the entity's types - these are placeholders that can't be deleted
   const schemaProperties = useEntitySchema(id, spaceId);
   const schemaPropertyIds = React.useMemo(() => new Set(schemaProperties.map(p => p.id)), [schemaProperties]);
 
-  const showPanel = shouldShowPanel || isRelationPage;
+  const showPanel = true;
 
   return (
     <AnimatePresence initial={false}>
       {showPanel && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="relative rounded-lg border border-grey-02 shadow-button"
-        >
-          <div className="flex flex-col gap-6 p-5">
-            {visiblePropertiesEntries.length === 0 && (
-              <div className="flex flex-col items-center justify-center text-center">
-                <Text as="p" variant="body" color="grey-04">
-                  No properties added yet
-                </Text>
-                <Text as="p" variant="footnote" color="grey-03" className="mt-1">
-                  Click the + button below to add properties
-                </Text>
-              </div>
-            )}
-            {visiblePropertiesEntries.map(([propertyId, property]) => {
-              const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
-
-              const isVideo = property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
-
-              return (
-                <div key={`${id}-${propertyId}`} className="w-full max-w-full min-w-0 break-words">
-                  <RenderedProperty spaceId={spaceId} property={property} />
-
-                  {isRelation || isVideo ? (
-                    <RelationPropertyWithDelete
-                      key={propertyId}
-                      propertyId={propertyId}
-                      entityId={id}
-                      spaceId={spaceId}
-                      property={property}
-                      isSchemaProperty={schemaPropertyIds.has(propertyId)}
-                    />
-                  ) : (
-                    <RenderedValue
-                      key={propertyId}
-                      propertyId={propertyId}
-                      entityId={id}
-                      spaceId={spaceId}
-                      property={property}
-                    />
-                  )}
+        <div className="flex flex-col gap-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="relative rounded-lg border border-grey-02 shadow-button"
+          >
+            <div className={isTypeEntity ? 'flex flex-col gap-3 p-4' : 'flex flex-col gap-6 p-5'}>
+              {effectiveTotalProperties === 0 && (
+                <div className="flex flex-col items-center justify-center text-center">
+                  <Text as="p" variant="body" color="grey-04">
+                    No properties added yet
+                  </Text>
+                  <Text as="p" variant="footnote" color="grey-03" className="mt-1">
+                    Click the + button below to add properties
+                  </Text>
                 </div>
-              );
-            })}
-          </div>
-          <div className={visiblePropertiesEntries.length === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
-            <SelectEntityAsPopover
-              trigger={<SquareButton icon={<Create />} />}
-              spaceId={spaceId}
-              relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-              onCreateEntity={result => {
-                const renderableType = result.renderableType || 'TEXT';
+              )}
+              {effectiveSections.map(section => {
+                const collapsible = section.collapsible !== false;
+                const sectionCollapsed =
+                  collapsible && section.groupId
+                    ? (collapsedGroups[section.groupId] ?? section.defaultCollapsed)
+                    : false;
+                const isCollapsed = sectionCollapsed;
 
-                const createdPropertyId = createProperty({
-                  name: result.name || '',
-                  propertyType: renderableType,
-                  verified: result.verified,
-                  space: result.space,
-                });
+                return (
+                  <div
+                    key={section.id}
+                    className={isTypeEntity ? 'flex flex-col gap-2 sm:gap-5' : 'flex flex-col gap-4 sm:gap-5'}
+                  >
+                    {effectiveHasGroups && section.isGroup && collapsible && (
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between text-left"
+                        onClick={() =>
+                          section.groupId &&
+                          setCollapsedGroups(previous => ({
+                            ...previous,
+                            [section.groupId as string]: !sectionCollapsed,
+                          }))
+                        }
+                      >
+                        <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
+                          {section.label}
+                        </Text>
+                        <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                          <ChevronDownSmall color="grey-04" />
+                        </div>
+                      </button>
+                    )}
+                    {effectiveHasGroups && section.isGroup && !collapsible && section.label && (
+                      <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
+                        {section.label}
+                      </Text>
+                    )}
 
-                // Immediately add the property to the entity
-                addPropertyToEntity({
-                  entityId: id,
-                  propertyId: createdPropertyId,
-                  propertyName: result.name || '',
-                  entityName: name || undefined,
-                });
+                    {!isCollapsed &&
+                      section.entries.map(([propertyId, property]) => {
+                        const isRelation = property.dataType === 'RELATION' || property.renderableType === 'IMAGE';
+                        const isVideo =
+                          property.renderableType === 'VIDEO' || property.renderableTypeStrict === 'VIDEO';
 
-                return createdPropertyId;
-              }}
-              onDone={result => {
-                if (result) {
-                  addPropertyToEntity({
-                    entityId: id,
-                    propertyId: result.id,
-                    propertyName: result.name || '',
-                    entityName: name || undefined,
+                        return (
+                          <InlinePropertyRow
+                            key={`${id}-${propertyId}`}
+                            entityId={id}
+                            propertyId={propertyId}
+                            spaceId={spaceId}
+                            property={property}
+                            isSchemaProperty={schemaPropertyIds.has(propertyId)}
+                            isRelation={isRelation}
+                            isVideo={isVideo}
+                            hideActions={isTypeEntity}
+                          />
+                        );
+                      })}
+                  </div>
+                );
+              })}
+            </div>
+            <div className={effectiveTotalProperties === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
+              <SelectEntityAsPopover
+                trigger={<SquareButton icon={<Create />} />}
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                onCreateEntity={result => {
+                  const renderableType = result.renderableType || 'TEXT';
+
+                  const createdPropertyId = createProperty({
+                    name: result.name || '',
+                    propertyType: renderableType,
+                    verified: result.verified,
+                    space: result.space,
                   });
-                }
-              }}
-              placeholder="Find or create property..."
-              advanced={false}
-              showIDs={false}
-            />
-          </div>
-        </motion.div>
+
+                  if (isTypeEntity) {
+                    addPropertyToType({ id: createdPropertyId, name: result.name || '' });
+                  } else {
+                    // Immediately add the property to the entity
+                    addPropertyToEntity({
+                      entityId: id,
+                      propertyId: createdPropertyId,
+                      propertyName: result.name || '',
+                      entityName: name || undefined,
+                    });
+                  }
+
+                  return createdPropertyId;
+                }}
+                onDone={result => {
+                  if (result) {
+                    if (isTypeEntity) {
+                      addPropertyToType({ id: result.id, name: result.name });
+                    } else {
+                      addPropertyToEntity({
+                        entityId: id,
+                        propertyId: result.id,
+                        propertyName: result.name || '',
+                        entityName: name || undefined,
+                      });
+                    }
+                  }
+                }}
+                placeholder="Find or create property..."
+                advanced={false}
+                showIDs={false}
+              />
+            </div>
+          </motion.div>
+        </div>
       )}
     </AnimatePresence>
   );
 }
 
-function RenderedProperty({ property, spaceId }: { property: Property; spaceId: string }) {
-  return <PropertyNameLink property={property} spaceId={spaceId} />;
+export const EditableEntityProperties = EditableEntityPage;
+function InlinePropertyRow({
+  entityId,
+  propertyId,
+  spaceId,
+  property,
+  isSchemaProperty,
+  isRelation,
+  isVideo,
+  hideActions = false,
+}: {
+  entityId: string;
+  propertyId: string;
+  spaceId: string;
+  property: Property;
+  isSchemaProperty: boolean;
+  isRelation: boolean;
+  isVideo: boolean;
+  hideActions?: boolean;
+}) {
+  return (
+    <div className="w-full max-w-full min-w-0 break-words">
+      <PropertyNameLink property={property} spaceId={spaceId} showDescriptionTooltip={false} />
+
+      {isRelation || isVideo ? (
+        <RelationPropertyWithDelete
+          propertyId={propertyId}
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          isSchemaProperty={isSchemaProperty}
+          hideActions={hideActions}
+        />
+      ) : (
+        <RenderedValue
+          propertyId={propertyId}
+          entityId={entityId}
+          spaceId={spaceId}
+          property={property}
+          hideActions={hideActions}
+        />
+      )}
+    </div>
+  );
 }
 
 type RelationPropertyWithDeleteProps = {
@@ -188,7 +350,47 @@ type RelationPropertyWithDeleteProps = {
   spaceId: string;
   property: Property;
   isSchemaProperty: boolean;
+  hideActions?: boolean;
 };
+
+type VisiblePropertySection = {
+  id: string;
+  groupId?: string;
+  isGroup: boolean;
+  label?: string;
+  defaultCollapsed: boolean;
+  collapsible?: boolean;
+  entries: [string, Property][];
+};
+
+function useVisiblePropertiesEntries(
+  entityId: string,
+  spaceId: string,
+  options?: { hideTypeGroupingFields?: boolean }
+): [string, Property][] {
+  const renderedProperties = useEditableProperties(entityId, spaceId);
+  const propertiesEntries = Object.entries(renderedProperties);
+
+  const { property: propertyData } = useQueryProperty({
+    id: entityId,
+    spaceId,
+    enabled: true,
+  });
+
+  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+
+  return propertiesEntries.filter(([propertyId]) => {
+    if (SYSTEM_PROPERTIES.includes(propertyId)) return false;
+    if (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty) return false;
+    if (
+      options?.hideTypeGroupingFields &&
+      (propertyId === SystemIds.PROPERTIES || propertyId === PROPERTY_GROUPS_PROPERTY)
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
 
 function RelationPropertyWithDelete({
   propertyId,
@@ -196,6 +398,7 @@ function RelationPropertyWithDelete({
   spaceId,
   property,
   isSchemaProperty,
+  hideActions = false,
 }: RelationPropertyWithDeleteProps) {
   const { storage } = useMutate();
 
@@ -209,7 +412,10 @@ function RelationPropertyWithDelete({
   });
 
   return (
-    <div className="flex items-start justify-between gap-2">
+    <div
+      className="flex items-start justify-between gap-2"
+      {...(propertyIsSkillsProperty(property.id) ? { 'data-personal-profile-focus': 'skills' as const } : {})}
+    >
       <div className="min-w-0 flex-1">
         <RelationsGroup key={propertyId} propertyId={propertyId} id={entityId} spaceId={spaceId} />
       </div>
@@ -224,8 +430,7 @@ function RelationPropertyWithDelete({
           spaceId={spaceId}
           iconOnly={true}
         />
-        {/* Show delete button if: not a schema property, OR schema property with content to clear */}
-        {(!isSchemaProperty || propertyRelations.length > 0) && (
+        {!hideActions && (!isSchemaProperty || propertyRelations.length > 0) && (
           <SquareButton
             icon={<Trash />}
             onClick={() => {
@@ -833,11 +1038,13 @@ function RenderedValue({
   propertyId,
   spaceId,
   property: propProperty,
+  hideActions = false,
 }: {
   entityId: string;
   propertyId: string;
   spaceId: string;
   property: Property;
+  hideActions?: boolean;
 }) {
   const { storage } = useMutate();
   const { property: queriedProperty } = useQueryProperty({ id: propertyId });
@@ -1004,7 +1211,7 @@ function RenderedValue({
           spaceId={spaceId}
           iconOnly={true}
         />
-        {rawValue && <SquareButton icon={<Trash />} onClick={onDelete} />}
+        {!hideActions && rawValue && <SquareButton icon={<Trash />} onClick={onDelete} />}
       </div>
     </div>
   );
@@ -1054,40 +1261,80 @@ const SYSTEM_PROPERTIES = [
   SCORE_SYSTEM_PROPERTY,
 ];
 
-/**
- * Returns filtered property entries excluding system properties and
- * IS_TYPE_PROPERTY for non-relation properties.
- */
-function useVisiblePropertiesEntries(entityId: string, spaceId: string): [string, Property][] {
-  const renderedProperties = useEditableProperties(entityId, spaceId);
-  const propertiesEntries = Object.entries(renderedProperties);
+function useVisiblePropertySections(
+  entityId: string,
+  spaceId: string
+): { sections: VisiblePropertySection[]; hasGroups: boolean; totalProperties: number } {
+  const schemaWithGroups = useEntitySchemaWithGroups(entityId, spaceId);
+  const visibleEntries = useVisiblePropertiesEntries(entityId, spaceId);
 
-  const { property: propertyData } = useQueryProperty({
-    id: entityId,
-    spaceId,
-    enabled: true,
+  if (!schemaWithGroups.hasPropertyGroups) {
+    return {
+      hasGroups: false,
+      totalProperties: visibleEntries.length,
+      sections: [
+        {
+          id: 'ungrouped-flat',
+          isGroup: false,
+          defaultCollapsed: false,
+          entries: visibleEntries,
+        },
+      ],
+    };
+  }
+
+  const visibleById = new Map(visibleEntries);
+  const consumed = new Set<string>();
+
+  const groupedSections: VisiblePropertySection[] = schemaWithGroups.propertyGroups.map(group => {
+    const entries: [string, Property][] = [];
+    for (const propertyId of group.propertyIds) {
+      if (consumed.has(propertyId)) continue;
+      const property = visibleById.get(propertyId);
+      if (!property) continue;
+      consumed.add(propertyId);
+      entries.push([propertyId, property]);
+    }
+
+    return {
+      id: `group-${group.id}`,
+      groupId: group.id,
+      isGroup: true,
+      label: group.name?.trim() || 'Untitled group',
+      defaultCollapsed: group.collapsed,
+      entries,
+    };
   });
 
-  const isNonRelationProperty = propertyData && propertyData.dataType !== 'RELATION';
+  const ungroupedEntries: [string, Property][] = [];
+  for (const propertyId of schemaWithGroups.ungroupedPropertyIds) {
+    if (consumed.has(propertyId)) continue;
+    const property = visibleById.get(propertyId);
+    if (!property) continue;
+    consumed.add(propertyId);
+    ungroupedEntries.push([propertyId, property]);
+  }
 
-  const visibleEntries = propertiesEntries.filter(([propertyId]) => {
-    // Hide system properties and IS_TYPE_PROPERTY for non-relation properties
-    if (SYSTEM_PROPERTIES.includes(propertyId)) return false;
-    if (propertyId === IS_TYPE_PROPERTY && isNonRelationProperty) return false;
-    return true;
-  });
+  for (const [propertyId, property] of visibleEntries) {
+    if (consumed.has(propertyId)) continue;
+    consumed.add(propertyId);
+    ungroupedEntries.push([propertyId, property]);
+  }
 
-  return visibleEntries;
-}
-
-/**
- * Returns true if the properties panel should be visible.
- *
- * Always returns true — this function is only called from EditableEntityPage,
- * which only renders when the user is in edit mode. In edit mode, the panel
- * must always be visible so users can add properties to new (empty) entities
- * via the "+" button at the bottom of the panel.
- */
-function useShouldShowPropertiesPanel(_entityId: string, _spaceId: string): boolean {
-  return true;
+  return {
+    hasGroups: true,
+    totalProperties: visibleEntries.length,
+    sections: [
+      ...groupedSections,
+      {
+        id: 'ungrouped',
+        isGroup: true,
+        groupId: 'ungrouped',
+        label: 'Ungrouped properties',
+        defaultCollapsed: false,
+        collapsible: false,
+        entries: ungroupedEntries,
+      },
+    ],
+  };
 }

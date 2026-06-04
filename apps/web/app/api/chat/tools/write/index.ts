@@ -1,41 +1,58 @@
-import { buildCreateBlockTool, buildDeleteBlockTool, buildUpdateBlockTool } from './blocks';
+import { createBlock, deleteBlock, updateBlock } from './blocks';
+import { changePropertyDataType } from './change-property-data-type';
 import { WriteContext, buildWriteContext } from './context';
-import { buildCreateEntityTool } from './create-entity';
-import { buildCreatePropertyTool } from './create-property';
+import { createEntity } from './create-entity';
+import { createProperty } from './create-property';
 import {
-  buildAddCollectionItemTool,
-  buildRemoveCollectionItemTool,
-  buildSetDataBlockFiltersTool,
-  buildSetDataBlockViewTool,
+  addCollectionItem,
+  removeCollectionItem,
+  setDataBlockFilters,
+  setDataBlockShownColumns,
+  setDataBlockView,
 } from './data-block';
-import { buildMoveBlockTool, buildMoveRelationTool } from './reorder';
-import { buildDeleteEntityRelationTool, buildSetEntityRelationTool } from './set-entity-relation';
-import { buildAddPropertyToEntityTool, buildDeleteEntityValueTool, buildSetEntityValueTool } from './set-entity-value';
-import { buildToggleEditModeTool } from './toggle-edit-mode';
+import { deleteEntity } from './delete-entity';
+import { deleteProperty } from './delete-property';
+import { cloneEntityToSpace, moveEntityToSpace } from './move-entity-to-space';
+import { moveBlock, moveRelation } from './reorder';
+import { setEntityImage } from './set-entity-image';
+import { deleteEntityRelation, setEntityRelation } from './set-entity-relation';
+import { addPropertyToEntity, deleteEntityValue, setEntityValue } from './set-entity-value';
+import { createTab, renameTab } from './tabs';
+import { toggleEditMode } from './toggle-edit-mode';
 
 export { buildWriteContext };
 export type { WriteContext };
 
-export function buildWriteTools(context: WriteContext) {
-  return {
-    toggleEditMode: buildToggleEditModeTool(context),
-    setEntityValue: buildSetEntityValueTool(context),
-    deleteEntityValue: buildDeleteEntityValueTool(context),
-    addPropertyToEntity: buildAddPropertyToEntityTool(context),
-    createProperty: buildCreatePropertyTool(context),
-    setEntityRelation: buildSetEntityRelationTool(context),
-    deleteEntityRelation: buildDeleteEntityRelationTool(context),
-    createEntity: buildCreateEntityTool(context),
-    createBlock: buildCreateBlockTool(context),
-    updateBlock: buildUpdateBlockTool(context),
-    deleteBlock: buildDeleteBlockTool(context),
-    moveBlock: buildMoveBlockTool(context),
-    moveRelation: buildMoveRelationTool(context),
-    setDataBlockFilters: buildSetDataBlockFiltersTool(context),
-    setDataBlockView: buildSetDataBlockViewTool(context),
-    addCollectionItem: buildAddCollectionItemTool(context),
-    removeCollectionItem: buildRemoveCollectionItemTool(context),
-  };
-}
+// Schema-only tools. Authorization (member + edit rate limit) lives in
+// /api/chat/authorize-write; graph-state validation + intent generation runs
+// in the client dispatcher (core/chat/edit-dispatcher.ts via planWriteTool).
+export const writeTools = {
+  toggleEditMode,
+  setEntityValue,
+  deleteEntityValue,
+  addPropertyToEntity,
+  createProperty,
+  deleteProperty,
+  changePropertyDataType,
+  setEntityRelation,
+  deleteEntityRelation,
+  setEntityImage,
+  createEntity,
+  deleteEntity,
+  moveEntityToSpace,
+  cloneEntityToSpace,
+  createTab,
+  renameTab,
+  createBlock,
+  updateBlock,
+  deleteBlock,
+  moveBlock,
+  moveRelation,
+  setDataBlockFilters,
+  setDataBlockView,
+  setDataBlockShownColumns,
+  addCollectionItem,
+  removeCollectionItem,
+};
 
-export type WriteToolName = keyof ReturnType<typeof buildWriteTools>;
+export type WriteToolName = keyof typeof writeTools;

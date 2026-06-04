@@ -3,22 +3,26 @@
 import * as React from 'react';
 
 // Paces Anthropic's bursty SSE deltas into a steady reveal via rAF so the
-// final-text reply flows in instead of popping in chunks.
-export function useSmoothStream(target: string, isStreaming: boolean): string {
-  const [displayed, setDisplayed] = React.useState(target);
-  const displayedRef = React.useRef(target);
+// final-text reply flows in instead of popping in chunks. When `animate` is
+// true, displayed starts empty and drips up to target — used for the latest
+// assistant message so the closer's summary streams in smoothly. When false,
+// displayed tracks target without animating (older messages render statically
+// in full).
+export function useSmoothStream(target: string, animate: boolean): string {
+  const [displayed, setDisplayed] = React.useState(() => (animate ? '' : target));
+  const displayedRef = React.useRef<string>(animate ? '' : target);
   const targetRef = React.useRef(target);
   targetRef.current = target;
 
   React.useEffect(() => {
-    if (!isStreaming) {
-      displayedRef.current = target;
-      setDisplayed(target);
+    if (!animate) {
+      if (displayedRef.current !== target) {
+        displayedRef.current = target;
+        setDisplayed(target);
+      }
+      return;
     }
-  }, [isStreaming, target]);
 
-  React.useEffect(() => {
-    if (!isStreaming) return;
     if (displayedRef.current === target) return;
 
     let raf = 0;
@@ -42,7 +46,7 @@ export function useSmoothStream(target: string, isStreaming: boolean): string {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [isStreaming, target]);
+  }, [animate, target]);
 
   return displayed;
 }

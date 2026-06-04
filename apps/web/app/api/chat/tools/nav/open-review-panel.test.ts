@@ -10,7 +10,6 @@ function memberContext(): WriteContext {
     personalSpaceId: async () => null,
     isMember: async () => true,
     checkEditRateLimit: async () => ({ ok: true }),
-    mintedBlockIds: new Set<string>(),
   };
 }
 
@@ -21,13 +20,13 @@ function guestContext(): WriteContext {
     personalSpaceId: null,
     isMember: async () => false,
     checkEditRateLimit: async () => ({ ok: true }),
-    mintedBlockIds: new Set<string>(),
   };
 }
 
-async function runTool(tool: { execute?: (input: unknown, opts: unknown) => Promise<unknown> }, input: unknown) {
-  if (!tool.execute) throw new Error('tool.execute missing');
-  return tool.execute(input, {} as unknown);
+async function runTool(tool: unknown, input: unknown) {
+  const execute = (tool as { execute?: (input: unknown, opts: unknown) => Promise<unknown> }).execute;
+  if (!execute) throw new Error('tool.execute missing');
+  return execute(input, {});
 }
 
 describe('openReviewPanel', () => {

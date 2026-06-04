@@ -16,6 +16,7 @@ import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
+import { describeError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -56,7 +57,14 @@ export function usePublish() {
       onSuccess,
       onError,
     }: MakeProposalOptions) => {
-      if (!smartAccount) return;
+      if (!smartAccount) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: wallet is not connected. Please reconnect and try again.',
+        });
+        return;
+      }
       if (!personalSpaceId) {
         onError?.();
         dispatch({
@@ -65,13 +73,24 @@ export function usePublish() {
         });
         return;
       }
-      if (valuesToPublish.length === 0 && relations.length === 0) return;
-
-      const space = await Effect.runPromise(getSpace(spaceId));
-
-      if (!space) return;
+      if (valuesToPublish.length === 0 && relations.length === 0) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Nothing to publish: no changes were detected for this space.',
+        });
+        return;
+      }
 
       const publish = Effect.gen(function* () {
+        const space = yield* getSpace(spaceId);
+
+        if (!space) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(`Unable to publish: space ${spaceId} could not be loaded.`)
+          );
+        }
+
         const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
 
         if (ops.length === 0) {
@@ -80,7 +99,11 @@ export function usePublish() {
             relations,
             spaceId,
           });
-          return;
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(
+              'Nothing to publish: your changes resolved to an empty edit. Please add or modify content and try again.'
+            )
+          );
         }
 
         const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
@@ -120,7 +143,7 @@ export function usePublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: result.left.message });
+        dispatch({ type: 'ERROR', payload: describeError(result.left) });
         return;
       }
 
@@ -152,8 +175,22 @@ export function useBulkPublish() {
    */
   const makeBulkProposal = React.useCallback(
     async ({ values: triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (triples.length === 0) return;
-      if (!smartAccount) return;
+      if (triples.length === 0) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Nothing to publish: no changes were detected for this space.',
+        });
+        return;
+      }
+      if (!smartAccount) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: wallet is not connected. Please reconnect and try again.',
+        });
+        return;
+      }
       if (!personalSpaceId) {
         onError?.();
         dispatch({
@@ -163,14 +200,18 @@ export function useBulkPublish() {
         return;
       }
 
-      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
-      // All of our contract calls rely on knowing plugin metadata so this is probably
-      // something we need for all of them.
-      const space = await Effect.runPromise(getSpace(spaceId));
-
-      if (!space) return;
-
       const publish = Effect.gen(function* () {
+        // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
+        // All of our contract calls rely on knowing plugin metadata so this is probably
+        // something we need for all of them.
+        const space = yield* getSpace(spaceId);
+
+        if (!space) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(`Unable to publish: space ${spaceId} could not be loaded.`)
+          );
+        }
+
         const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
         const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
 
@@ -203,7 +244,7 @@ export function useBulkPublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: result.left.message });
+        dispatch({ type: 'ERROR', payload: describeError(result.left) });
         return;
       }
 

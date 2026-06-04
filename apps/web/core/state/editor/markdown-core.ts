@@ -3,9 +3,46 @@ import type StateInline from 'markdown-it/lib/rules_inline/state_inline.mjs';
 
 import { parseGraphLinkHref } from '~/core/utils/graph-link';
 
-export function bracketMathPlugin(md: MarkdownIt) {
-  // Inline rule for \(...\) bracket math — must run BEFORE 'escape' so \( isn't consumed as escaped paren
-  md.inline.ruler.before('escape', 'bracket_math', (state: StateInline, silent: boolean) => {
+import { isEscaped } from './math-delimiters';
+
+export function mathPlugin(md: MarkdownIt) {
+  // Primary inline rule: $$...$$ (Notion-style)
+  md.inline.ruler.before('escape', 'double_dollar_math', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x24 /* $ */) return false;
+    if (state.src.charCodeAt(state.pos + 1) !== 0x24 /* $ */) return false;
+
+    const start = state.pos + 2;
+    if (start >= state.posMax) return false;
+
+    let end = start;
+    while (end < state.posMax - 1) {
+      if (state.src.charCodeAt(end) === 0x24 /* $ */ && state.src.charCodeAt(end + 1) === 0x24 /* $ */) {
+        if (!isEscaped(state.src, end, start)) break; // real close
+        // Escaped $ — advance by 1 so the next iteration can find
+        // an overlapping closing $$ (e.g. $$cost\$$$)
+        end += 1;
+        continue;
+      }
+      end++;
+    }
+    if (end >= state.posMax - 1) return false;
+    if (end === start) return false; // reject empty $$$$
+
+    // Trim padding spaces added by the serializer to avoid delimiter ambiguity
+    const content = state.src.slice(start, end).trim();
+    if (content.length === 0) return false; // reject whitespace-only like $$ $$
+
+    if (!silent) {
+      const token = state.push('inline_math', 'math', 0);
+      token.content = content;
+    }
+
+    state.pos = end + 2;
+    return true;
+  });
+
+  // Legacy read support: \(...\) bracket math
+  md.inline.ruler.after('double_dollar_math', 'bracket_math', (state: StateInline, silent: boolean) => {
     if (state.src.charCodeAt(state.pos) !== 0x5c /* \ */) return false;
     if (state.src.charCodeAt(state.pos + 1) !== 0x28 /* ( */) return false;
 
@@ -68,9 +105,42 @@ export function bracketMathPlugin(md: MarkdownIt) {
   });
 }
 
+export function tiptapUnderlinePlusPlugin(md: MarkdownIt) {
+  md.inline.ruler.after('emphasis', 'tiptap_underline_plus', (state: StateInline, silent: boolean) => {
+    if (state.src.charCodeAt(state.pos) !== 0x2b /* + */) return false;
+    if (state.src.charCodeAt(state.pos + 1) !== 0x2b) return false;
+
+    const contentStart = state.pos + 2;
+    if (contentStart >= state.posMax) return false;
+
+    let i = contentStart;
+    while (i < state.posMax - 1) {
+      if (state.src.charCodeAt(i) === 0x0a /* \n */) return false;
+      if (state.src.charCodeAt(i) === 0x2b && state.src.charCodeAt(i + 1) === 0x2b) {
+        if (i === contentStart) return false;
+        if (!silent) {
+          const token = state.push('tiptap_underline_plus', '', 0);
+          token.content = state.src.slice(contentStart, i);
+          token.markup = '++';
+        }
+        state.pos = i + 2;
+        return true;
+      }
+      i++;
+    }
+    return false;
+  });
+
+  md.renderer.rules.tiptap_underline_plus = (tokens, idx) => {
+    const content = tokens[idx].content;
+    return `<u>${md.utils.escapeHtml(content)}</u>`;
+  };
+}
+
 export function createMarkdownIt(): MarkdownIt {
   const md = new MarkdownIt({ html: false });
-  md.use(bracketMathPlugin);
+  md.use(mathPlugin);
+  md.use(tiptapUnderlinePlusPlugin);
   return md;
 }
 

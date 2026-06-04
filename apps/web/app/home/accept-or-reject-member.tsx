@@ -9,6 +9,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
+import { useReportError } from '~/core/state/status-bar-store';
+import { describeError } from '~/core/utils/error-diagnostics';
 import {
   NavUtils,
   formatGovernanceOutcomeDate,
@@ -74,13 +76,13 @@ export function AcceptOrRejectMember({
   });
 
   const hasVoted = voteStatus === 'success';
-  const hasError = voteStatus === 'error';
   const isPendingApproval = selectedVote === 'ACCEPT' && voteStatus === 'pending';
   const isPendingRejection = selectedVote === 'REJECT' && voteStatus === 'pending';
 
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
+  const reportError = useReportError();
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
@@ -95,14 +97,17 @@ export function AcceptOrRejectMember({
     router.refresh();
   };
 
-  const onVoteError = () => {
-    removeOptimisticVote(proposalId);
-  };
-
   const castVote = (choice: 'ACCEPT' | 'REJECT') => {
     setSelectedVote(choice);
     addOptimisticVote(proposalId);
-    vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError });
+    vote(choice, {
+      onSuccess: onVoteSuccess,
+      onError: (error: unknown) => {
+        removeOptimisticVote(proposalId);
+        const message = describeError(error);
+        reportError(`Vote failed: ${message}`, () => castVote(choice));
+      },
+    });
   };
 
   const onApprove = () => castVote('ACCEPT');
@@ -157,19 +162,9 @@ export function AcceptOrRejectMember({
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">You rejected</div>;
     }
   } else if (!isProposalEnded && smartAccount) {
-    actions = hasError ? (
-      <div className="flex items-center gap-2">
-        <p className="text-smallButton text-red-01">Vote failed</p>
-        <SmallButton
-          variant="secondary"
-          onClick={() => {
-            if (selectedVote) castVote(selectedVote);
-          }}
-        >
-          Retry
-        </SmallButton>
-      </div>
-    ) : (
+    // Errors are surfaced via the global error modal (with copy + retry).
+    // After dismiss the user lands back on the regular Approve/Reject buttons.
+    actions = (
       <div className="relative">
         <div className={cx('flex items-center gap-2', hasVoted && 'invisible')}>
           <SmallButton variant="secondary" onClick={onReject} disabled={voteStatus !== 'idle'}>

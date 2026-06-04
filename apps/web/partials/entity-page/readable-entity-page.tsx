@@ -7,11 +7,13 @@ import * as React from 'react';
 import {
   ADDRESS_PROPERTY,
   DATA_TYPE_PROPERTY,
+  PROPERTY_GROUPS_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
   SCORE_SYSTEM_PROPERTY,
   VENUE_PROPERTY,
 } from '~/core/constants';
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
+import { useEntitySchemaWithGroups, useEntityTypes } from '~/core/state/entity-page-store/entity-store';
 import {
   useHydrateEntity,
   useQueryEntity,
@@ -32,7 +34,8 @@ import { ImageZoom, VideoThumbnailWithPlay } from '~/design-system/editable-fiel
 import { GeoLocationWrapper } from '~/design-system/editable-fields/geo-location-field';
 import { ScheduleField } from '~/design-system/editable-fields/schedule-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
-import { Map } from '~/design-system/map';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Map as GeoMap } from '~/design-system/map';
 import { Text } from '~/design-system/text';
 
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
@@ -54,36 +57,200 @@ const SKIPPED_PROPERTIES: string[] = [
   SCORE_SYSTEM_PROPERTY,
 ];
 
-function countRenderableProperty(renderedProperties: string[]): number {
+function useReadableSkippedPropertyIds(entityId: string, spaceId: string): Set<string> {
+  const entityTypes = useEntityTypes(entityId, spaceId);
+  const isTypeEntity = entityTypes.some(type => type.id === SystemIds.SCHEMA_TYPE);
+
+  return React.useMemo(() => {
+    const skipped = new Set(SKIPPED_PROPERTIES);
+    if (isTypeEntity) {
+      skipped.add(SystemIds.PROPERTIES);
+      skipped.add(PROPERTY_GROUPS_PROPERTY);
+    }
+    return skipped;
+  }, [isTypeEntity]);
+}
+
+function countRenderableProperty(renderedProperties: string[], skippedPropertyIds: Set<string>): number {
   let count = 0;
   renderedProperties.forEach(propertyId => {
-    if (!SKIPPED_PROPERTIES.includes(propertyId)) {
+    if (!skippedPropertyIds.has(propertyId)) {
       count++;
     }
   });
   return count;
 }
 
-export function ReadableEntityPage({ id: entityId, spaceId }: Props) {
+export function useReadableEntityHasContent(entityId: string, spaceId: string): boolean {
   const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
+  const skippedPropertyIds = useReadableSkippedPropertyIds(entityId, spaceId);
+  return countRenderableProperty(Object.keys(renderedProperties), skippedPropertyIds) > 0;
+}
 
-  if (countRenderableProperty(Object.keys(renderedProperties)) <= 0) {
+export function ReadableEntityPage({ id, spaceId }: Props) {
+  const hasContent = useReadableEntityHasContent(id, spaceId);
+
+  if (!hasContent) {
+    return null;
+  }
+
+  return <ReadableEntityProperties id={id} spaceId={spaceId} />;
+}
+
+export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
+  const renderedProperties = useRenderedPropertiesWithContent(entityId, spaceId);
+  const schemaWithGroups = useEntitySchemaWithGroups(entityId, spaceId);
+  const skippedPropertyIds = useReadableSkippedPropertyIds(entityId, spaceId);
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    const defaults: Record<string, boolean> = {};
+    for (const group of schemaWithGroups.propertyGroups) {
+      defaults[group.id] = group.collapsed;
+    }
+
+    setCollapsedGroups(previous => {
+      const next: Record<string, boolean> = {};
+      for (const [groupId, defaultCollapsed] of Object.entries(defaults)) {
+        next[groupId] = previous[groupId] ?? defaultCollapsed;
+      }
+
+      const sameKeys = Object.keys(previous).length === Object.keys(next).length;
+      const sameValues = Object.entries(next).every(([groupId, value]) => previous[groupId] === value);
+      return sameKeys && sameValues ? previous : next;
+    });
+  }, [schemaWithGroups.propertyGroups]);
+
+  const groupedSections = React.useMemo(() => {
+    const visiblePropertyIds = new Set(
+      Object.keys(renderedProperties).filter(propertyId => !skippedPropertyIds.has(propertyId))
+    );
+
+    if (!schemaWithGroups.hasPropertyGroups) {
+      return {
+        hasGroups: false,
+        groups: [] as { id: string; label: string; propertyIds: string[] }[],
+        ungrouped: [...visiblePropertyIds.values()],
+      };
+    }
+
+    const consumed = new Set<string>();
+    const groups = schemaWithGroups.propertyGroups
+      .map(group => {
+        const propertyIds = group.propertyIds.filter(propertyId => {
+          if (!visiblePropertyIds.has(propertyId) || consumed.has(propertyId)) return false;
+          consumed.add(propertyId);
+          return true;
+        });
+        return {
+          id: group.id,
+          label: group.name?.trim() || 'Untitled group',
+          propertyIds,
+        };
+      })
+      .filter(group => group.propertyIds.length > 0);
+
+    const orderedUngrouped: string[] = [];
+    for (const propertyId of schemaWithGroups.ungroupedPropertyIds) {
+      if (!visiblePropertyIds.has(propertyId) || consumed.has(propertyId)) continue;
+      consumed.add(propertyId);
+      orderedUngrouped.push(propertyId);
+    }
+
+    for (const propertyId of visiblePropertyIds) {
+      if (consumed.has(propertyId)) continue;
+      consumed.add(propertyId);
+      orderedUngrouped.push(propertyId);
+    }
+
+    return {
+      hasGroups: true,
+      groups,
+      ungrouped: orderedUngrouped,
+    };
+  }, [renderedProperties, schemaWithGroups, skippedPropertyIds]);
+
+  if (countRenderableProperty(Object.keys(renderedProperties), skippedPropertyIds) <= 0) {
     return null;
   }
 
   return (
     <div className="flex flex-col gap-6 rounded-lg border border-grey-02 p-5 shadow-button">
-      {Object.entries(renderedProperties)
-        .filter(([propertyId]) => !SKIPPED_PROPERTIES.includes(propertyId))
-        .map(([propertyId, property]) => {
-          const isRelation = property.dataType === 'RELATION';
+      {groupedSections.hasGroups &&
+        groupedSections.groups.map(group => {
+          const isCollapsed = collapsedGroups[group.id] ?? false;
+          return (
+            <div key={group.id} className="flex flex-col gap-2">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-left"
+                onClick={() =>
+                  setCollapsedGroups(previous => ({
+                    ...previous,
+                    [group.id]: !isCollapsed,
+                  }))
+                }
+              >
+                <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
+                  {group.label}
+                </Text>
+                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                  <ChevronDownSmall color="grey-04" />
+                </div>
+              </button>
 
-          if (isRelation) {
-            return <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />;
-          }
+              {!isCollapsed && (
+                <div className="flex flex-col gap-6">
+                  {group.propertyIds.map(propertyId => {
+                    const property = renderedProperties[propertyId];
+                    if (!property) return null;
+                    const isRelation = property.dataType === 'RELATION';
 
-          return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+                    if (isRelation) {
+                      return (
+                        <RelationsGroup
+                          key={propertyId}
+                          entityId={entityId}
+                          spaceId={spaceId}
+                          propertyId={propertyId}
+                        />
+                      );
+                    }
+
+                    return (
+                      <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
         })}
+
+      {groupedSections.ungrouped.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {groupedSections.hasGroups && (
+            <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
+              Ungrouped properties
+            </Text>
+          )}
+          <div className="flex flex-col gap-6">
+            {groupedSections.ungrouped.map(propertyId => {
+              const property = renderedProperties[propertyId];
+              if (!property) return null;
+              const isRelation = property.dataType === 'RELATION';
+
+              if (isRelation) {
+                return (
+                  <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />
+                );
+              }
+
+              return <ValuesGroup key={propertyId} entityId={entityId} propertyId={propertyId} spaceId={spaceId} />;
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,7 +539,7 @@ function RenderedValue({
       return (
         <div key={`string-${propertyId}-${value}`} className="flex w-full flex-col gap-2">
           <Text as="p">({value})</Text>
-          <Map latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
+          <GeoMap latitude={coordinates?.latitude} longitude={coordinates?.longitude} />
         </div>
       );
     }

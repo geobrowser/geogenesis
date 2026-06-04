@@ -21,6 +21,16 @@ export const HIDDEN_PROPERTIES: ReadonlySet<string> = new Set([SCORE_SYSTEM_PROP
 
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
+// Topic taxonomy
+/** Entity type for Topic — used to identify Topic entities via the standard TYPES_PROPERTY. */
+export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
+/** Property used to tag a Topic entity (e.g. with the curated-topic tag). */
+export const TAG_PROPERTY_ID = '257090341ba5406f94e4d4af90042fba';
+/** Entity that, when used as the value of TAG_PROPERTY_ID, marks a Topic as editorially curated. */
+export const CURATED_TOPIC_TAG_ID = '7f796eb5bfc5449c98649bf7d996a2ca';
+/** Relation type that links a parent Topic to its immediate subtopics. */
+export const SUBTOPIC_RELATION_TYPE_ID = '39e40cadb23d4f63ab2faea1596436c7';
+
 // Bounty linking - relation type used to link proposals to bounties
 export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
 export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';
@@ -76,6 +86,9 @@ export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
 };
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+export const PROPERTY_GROUPS_PROPERTY = '1bb88a7a6b29406496503992a3009e7a';
+export const PROPERTY_GROUP_TYPE = '3964d13c6e444b7d887fbd0812a3dd43';
+export const COLLAPSED_PROPERTY = 'c4e252d805144840b5bca58d89731e22';
 
 // Like RELATION_VALUE_RELATIONSHIP_TYPE but for the edge entity (relation.entityId)
 export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';

@@ -262,7 +262,9 @@ export class GeoStore {
     // Remove local relations for this space
     reactiveRelations.set(prev => prev.filter(r => !localRelationIds.has(r.id)));
 
-    // Re-hydrate affected entities to restore their server state
+    this.restoreSyncedBaselines(affectedEntityIds);
+
+    // Re-hydrate affected entities to refresh their server state
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -300,6 +302,8 @@ export class GeoStore {
     reactiveValues.set(prev => prev.filter(v => !(valueIdsSet.has(v.id) && v.isLocal === true)));
     reactiveRelations.set(prev => prev.filter(r => !(relationIdsSet.has(r.id) && r.isLocal === true)));
 
+    this.restoreSyncedBaselines(affectedEntityIds);
+
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -317,6 +321,15 @@ export class GeoStore {
     }
 
     this.hydrateReactiveState(entities);
+  }
+
+  private restoreSyncedBaselines(entityIds: Set<string>) {
+    if (entityIds.size === 0) return;
+
+    const baselines = [...entityIds]
+      .map(id => syncedEntities.get(id))
+      .filter((entity): entity is Entity => entity != null);
+    this.hydrateReactiveState(baselines);
   }
 
   private hydrateReactiveState(entities: Entity[]) {
@@ -507,6 +520,36 @@ export class GeoStore {
     }
 
     return relations;
+  }
+
+  /**
+   * Get all locally-tracked active values that use `propertyId`. Internal —
+   * used by the assistant's changePropertyDataType safety check (refuse-if-values).
+   * Linear scan; only fires on a destructive op so the cost is acceptable.
+   */
+  public getValuesByProperty(propertyId: string, includeDeleted = false): Value[] {
+    return reactiveValues.get().filter(v => {
+      if (v.property.id !== propertyId) return false;
+      if (!includeDeleted && v.isDeleted) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Get all relations whose toEntity points at `entityId` (i.e. backlinks).
+   * Optionally scope to a single space. Internal — used by deleteEntity's
+   * cascade so we can tombstone incoming references without exposing a
+   * backlinks read tool to the model. Linear scan over reactiveRelations;
+   * intentional, the cost is bounded by total local relation count and only
+   * fires during destructive ops.
+   */
+  public getRelationsToEntity(entityId: string, spaceId?: string, includeDeleted = false): Relation[] {
+    return reactiveRelations.get().filter(r => {
+      if (r.toEntity.id !== entityId) return false;
+      if (spaceId !== undefined && r.spaceId !== spaceId) return false;
+      if (!includeDeleted && r.isDeleted) return false;
+      return true;
+    });
   }
 
   /**

@@ -13,19 +13,21 @@ import {
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
+  type EntitySpacesBatchQuery,
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { Entity, SearchResult } from '~/core/types';
+import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
-import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
+import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
@@ -33,6 +35,7 @@ import {
   entityNamesQuery,
   entityPageQuery,
   entityQuery,
+  entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
   entityVoteCountQuery,
@@ -69,6 +72,27 @@ export function getBatchEntities(entityIds: string[], spaceId?: string, signal?:
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
+    signal,
+  });
+}
+
+export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
+  return graphql({
+    query: entitySpacesBatchQuery,
+    decoder: data =>
+      (data.entities ?? [])
+        .filter((entity): entity is NonNullable<NonNullable<EntitySpacesBatchQuery['entities']>[number]> =>
+          Boolean(entity?.id)
+        )
+        .map(entity => ({
+          id: entity.id as string,
+          spaces: spacesFromRoutingProjections({
+            spaceIds: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
+            values: entity.allValuesList,
+            relations: entity.allRelationsList,
+          }),
+        })),
+    variables: { filter: { id: { in: entityIds } } },
     signal,
   });
 }
@@ -508,11 +532,7 @@ export function getSpacesWhereMember(memberSpaceId: string, signal?: AbortContro
 
 // Filter server-side: `membersList` is paginated to 100 by the API, so a
 // client-side `includes()` against `FullSpace` misses members past page 1.
-export function getIsMemberOfSpace(
-  spaceId: string,
-  memberSpaceId: string,
-  signal?: AbortController['signal']
-) {
+export function getIsMemberOfSpace(spaceId: string, memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: isMemberOfSpaceQuery,
     decoder: data => (data.space?.membersList?.length ?? 0) > 0,
@@ -521,11 +541,7 @@ export function getIsMemberOfSpace(
   });
 }
 
-export function getIsEditorOfSpace(
-  spaceId: string,
-  memberSpaceId: string,
-  signal?: AbortController['signal']
-) {
+export function getIsEditorOfSpace(spaceId: string, memberSpaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: isEditorOfSpaceQuery,
     decoder: data => (data.space?.editorsList?.length ?? 0) > 0,
@@ -638,7 +654,7 @@ interface RestSearchResponse {
 }
 
 function stripHyphens(uuid: string): string {
-  return uuid.replace(/-/g, '');
+  return uuid.replace(/-/g, '').toLowerCase();
 }
 
 /**
@@ -699,12 +715,17 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
       if (existing.typesBySpace) {
         existing.typesBySpace[spaceId] = spaceTypes;
       }
+      existing.namesBySpace = {
+        ...(existing.namesBySpace ?? {}),
+        [spaceId]: r.name ?? null,
+      };
     } else {
       byEntity.set(entityId, {
         id: entityId,
         name: r.name ?? null,
         description: r.description ?? null,
         types: (r.types ?? []).map(type => ({ id: stripHyphens(type.id), name: type.name ?? null })),
+        namesBySpace: { [spaceId]: r.name ?? null },
         typesBySpace: { [spaceId]: spaceTypes },
         spaces: [
           {
@@ -934,6 +955,10 @@ const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {
 
 const EXCLUDED_BLOCK_TYPE_IDS = new Set(EXCLUDED_BLOCK_TYPES.map(typeId => typeId.replace(/-/g, '')));
 
+export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): boolean {
+  return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+}
+
 function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !(result.types ?? []).some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
+  return !hasDefaultSearchExcludedType(result.types ?? []);
 }

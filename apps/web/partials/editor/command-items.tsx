@@ -5,12 +5,12 @@ import { ReactRenderer } from '@tiptap/react';
 import * as React from 'react';
 
 import { EditorCode } from '~/design-system/icons/editor-code';
+import { EditorCollection } from '~/design-system/icons/editor-collection';
 import { EditorFormula } from '~/design-system/icons/editor-formula';
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
 import { EditorImage } from '~/design-system/icons/editor-image';
-import { EditorCollection } from '~/design-system/icons/editor-collection';
 import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorQuery } from '~/design-system/icons/editor-query';
 import { EditorText } from '~/design-system/icons/editor-text';

@@ -33,24 +33,35 @@ describe('EntityDtoLive', () => {
       allValuesList: [
         {
           spaceId: hiddenSpaceId,
-          property: {
-            id: SCORE_SYSTEM_PROPERTY,
-          },
+          propertyId: SCORE_SYSTEM_PROPERTY,
         },
         {
           spaceId: nullPropertySpaceId,
-          property: null,
+          propertyId: null,
         },
         {
           spaceId: nullPropertyIdSpaceId,
-          property: {
-            id: null,
-          },
+          propertyId: null,
         },
       ],
       allRelationsList: [],
     });
 
     expect(EntityDtoLive(remoteEntity).spaces).toEqual([nullPropertySpaceId, nullPropertyIdSpaceId]);
+  });
+
+  it('does not fall back to API spaceIds when every projected value is hidden', () => {
+    const remoteEntity = entity({
+      spaceIds: [hiddenSpaceId],
+      allValuesList: [
+        {
+          spaceId: hiddenSpaceId,
+          propertyId: SCORE_SYSTEM_PROPERTY,
+        },
+      ],
+      allRelationsList: [],
+    });
+
+    expect(EntityDtoLive(remoteEntity).spaces).toEqual([]);
   });
 });

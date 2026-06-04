@@ -4,7 +4,7 @@ import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -14,7 +14,10 @@ import { useRouter } from 'next/navigation';
 import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useReportError } from '~/core/state/status-bar-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
@@ -31,36 +34,144 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
+import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
-const spaceTypeAtom = atom<SpaceType | null>(null);
-const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
-const nameAtom = atom<string>('');
-const topicIdAtom = atom<string>('');
-const imageAtom = atom<string>('');
+export const spaceTypeAtom = atom<SpaceType | null>(null);
+export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
+export const nameAtom = atom<string>('');
+export const topicIdAtom = atom<string>('');
+export const imageAtom = atom<string>('');
 const spaceIdAtom = atom<string>('');
 
 type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
-const stepAtom = atom<Step>('select-type');
+export const stepAtom = atom<Step>('select-type');
+
+/** Externally controllable open state so non-trigger callers (e.g. the entity-page
+ * "Claim topic" button) can preset the atoms above and open the dialog. */
+export const createSpaceDialogOpenAtom = atom<boolean>(false);
+
+/** When true, the dialog auto-fires `createSpaces` as soon as it opens at
+ * step='create-space'. Used by the claim flow to skip the template-picker
+ * and profile-entry steps entirely. */
+const autoRunAtom = atom<boolean>(false);
+
+/** When set, the source entity's values + relations are copied into the new
+ * space after deploy succeeds. Mirrors the "Clone to new space" flow in
+ * partials/entity-page/entity-to-space-dialog.tsx. */
+const cloneFromEntityAtom = atom<{ entityId: string; sourceSpaceId: string } | null>(null);
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
+
+// Module-level guard for the auto-run effect. A component-scoped `useRef`
+// would reset on React StrictMode's intentional double-mount in dev, firing
+// the deploy twice. Module scope persists across mounts; reset when the
+// dialog transitions to closed.
+let autoRunFired = false;
+
+type OpenDialogPreset = {
+  name?: string;
+  image?: string;
+  topicId?: string;
+  governanceType?: SpaceGovernanceType | null;
+  spaceType?: SpaceType | null;
+  step?: Step;
+  /** Skip the template-picker / profile-entry steps and fire the deploy as
+   * soon as the dialog mounts. Requires `spaceType` to be set. */
+  autoRun?: boolean;
+  /** After deploy succeeds, copy this entity's content into the new space's
+   * home page entity. */
+  cloneFromEntity?: { entityId: string; sourceSpaceId: string };
+};
+
+/**
+ * Opens the (globally-mounted) CreateSpaceDialog with optional preset values.
+ * Without a preset, resets to the original "New space" entry — same behavior the
+ * navbar dropdown trigger had before this was hoisted to a global mount.
+ */
+export function useOpenCreateSpaceDialog() {
+  const setName = useSetAtom(nameAtom);
+  const setImage = useSetAtom(imageAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
+  const setGovernanceType = useSetAtom(governanceTypeAtom);
+  const setSpaceType = useSetAtom(spaceTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+  const setOpen = useSetAtom(createSpaceDialogOpenAtom);
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
+
+  return useCallback(
+    (preset?: OpenDialogPreset) => {
+      // Reset the auto-run latch so a second claim attempt on a different
+      // topic (without an intervening close) doesn't silently no-op.
+      autoRunFired = false;
+      setName(preset?.name ?? '');
+      setImage(preset?.image ?? '');
+      setTopicId(preset?.topicId ?? '');
+      setGovernanceType(preset?.governanceType ?? null);
+      setSpaceType(preset?.spaceType ?? null);
+      setStep(preset?.step ?? 'select-type');
+      setAutoRun(preset?.autoRun ?? false);
+      setCloneFromEntity(preset?.cloneFromEntity ?? null);
+      setOpen(true);
+    },
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setCloneFromEntity]
+  );
+}
 
 export function CreateSpaceDialog() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
-  const [open, onOpenChange] = useState(false);
+  const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
   const { deploy } = useDeploySpace();
+  const reportError = useReportError();
+  const { storage } = useMutate();
 
   const spaceType = useAtomValue(spaceTypeAtom);
-  const [name, setName] = useAtom(nameAtom);
-  const [topicId, setTopicId] = useAtom(topicIdAtom);
-  const [image, setImage] = useAtom(imageAtom);
+  const name = useAtomValue(nameAtom);
+  const topicId = useAtomValue(topicIdAtom);
+  const image = useAtomValue(imageAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
-  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
+  const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
+  const autoRun = useAtomValue(autoRunAtom);
+  const cloneFromEntity = useAtomValue(cloneFromEntityAtom);
 
-  // Show retry immediately if workflow already started before initial render
-  const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
+
+  // On close: clear the auto-run guard and the transient claim-flow atoms so
+  // a subsequent open from a non-claim caller (navbar "+") doesn't inherit
+  // stale values. The OpenDialogPreset always overwrites these on open, so
+  // this is hygiene more than correctness.
+  React.useEffect(() => {
+    if (!open) {
+      autoRunFired = false;
+      setAutoRun(false);
+      setCloneFromEntity(null);
+    }
+  }, [open, setAutoRun, setCloneFromEntity]);
+
+  // Auto-run path: when the dialog is opened directly at 'create-space' with
+  // autoRun, fire the deploy as soon as everything is in place. Guarded by a
+  // module-level flag so React StrictMode's dev double-mount, re-renders, and
+  // effect re-runs don't fire deploy twice. Declared above the early
+  // `return null` for !address so the hook count stays stable when the user
+  // signs in / out while the dialog is mounted.
+  //
+  // We require name + topicId to be non-empty before firing: the entity-page
+  // claim button sets name via the live entity store, which can be `''` on
+  // the first render before hydration completes. Without this check the
+  // deploy would go out with an empty space name.
+  React.useEffect(() => {
+    if (!open || !autoRun) return;
+    if (step !== 'create-space') return;
+    if (!spaceType || !address) return;
+    if (!name || !topicId) return;
+    if (autoRunFired) return;
+    autoRunFired = true;
+    createSpaces(spaceType);
+  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType, cloneFromEntity]);
 
   if (!address) return null;
 
@@ -80,18 +191,37 @@ export function CreateSpaceDialog() {
         throw new Error(`Creating space failed`);
       }
 
+      // Replicate the source entity's content into the new space's home page
+      // entity (same as "Clone to new space" — entity-to-space-dialog.tsx:156).
+      // Writes to the local sync store; the substream pushes to IPFS.
+      if (cloneFromEntity) {
+        cloneEntityIntoSpace(cloneFromEntity.entityId, cloneFromEntity.sourceSpaceId, spaceId, storage);
+      }
+
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
-      setShowRetry(true);
-      console.error(error);
+      const message = describeError(error);
+      if (autoRun) {
+        // Auto-run flow has no useful form state to recover to — close the
+        // dialog so the user can retry from the Claim button.
+        onOpenChange(false);
+        reportError(`Space creation failed: ${message}`);
+      } else {
+        // Drop back to the form step so the user has a recovery path even if
+        // they dismiss the global error toast — StepHeader hides the close
+        // button while step is 'create-space' or 'completed'.
+        setStep('enter-profile');
+        reportError(`Space creation failed: ${message}`, () => {
+          setStep('create-space');
+          createSpaces(spaceType);
+        });
+      }
     }
   }
 
   async function onRunOnboardingWorkflow() {
     if (!address || !smartAccount || !spaceType) return;
-
-    setShowRetry(false);
 
     switch (step) {
       case 'enter-profile':
@@ -107,20 +237,6 @@ export function CreateSpaceDialog() {
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger asChild>
-        <span
-          role="button"
-          onClick={() => {
-            setName('');
-            setImage('');
-            setTopicId('');
-            setGovernanceType(null);
-            setStep('select-type');
-          }}
-        >
-          New space
-        </span>
-      </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Content
           // Only allow closing the dialog by clicking the close button
@@ -150,13 +266,7 @@ export function CreateSpaceDialog() {
                   <StepHeader />
                   {step === 'select-type' && <StepSelectType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
-                  {workflowSteps.includes(step) && (
-                    <StepComplete
-                      onRetry={onRunOnboardingWorkflow}
-                      showRetry={showRetry}
-                      onDone={() => onOpenChange(false)}
-                    />
-                  )}
+                  {workflowSteps.includes(step) && <StepComplete onDone={() => onOpenChange(false)} />}
                 </ModalCard>
               </motion.div>
             </AnimatePresence>
@@ -474,12 +584,10 @@ const governanceLabel: Record<SpaceGovernanceType, string> = {
 };
 
 type StepCompleteProps = {
-  onRetry: () => void;
   onDone: () => void;
-  showRetry: boolean;
 };
 
-function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
+function StepComplete({ onDone }: StepCompleteProps) {
   const router = useRouter();
 
   const spaceId = useAtomValue(spaceIdAtom);
@@ -505,19 +613,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && (
-            <>
-              <Spacer height={32} />
-              {showRetry && (
-                <p className="mt-4 text-center text-smallButton">
-                  Space creation failed
-                  <button onClick={onRetry} className="text-ctaPrimary">
-                    Retry
-                  </button>
-                </p>
-              )}
-            </>
-          )}
+          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">

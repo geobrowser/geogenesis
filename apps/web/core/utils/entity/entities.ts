@@ -98,3 +98,35 @@ export function spaces(values?: Value[], relations?: Relation[]): string[] {
   // spaces so the entity is still navigable.
   return sortSpaceIdsByRank([...new Set(hiddenOnly)]);
 }
+
+export function spacesFromRoutingProjections({
+  spaceIds,
+  values,
+  relations,
+}: {
+  spaceIds: readonly string[];
+  values?: ReadonlyArray<{ spaceId: string; propertyId?: string | null; property?: { id?: string | null } | null }>;
+  relations?: ReadonlyArray<{ spaceId: string }>;
+}): string[] {
+  const spacesWithRealContent = new Set<string>();
+
+  for (const value of values ?? []) {
+    const propertyId = value.propertyId ?? value.property?.id;
+    if (!propertyId || !HIDDEN_PROPERTIES.has(propertyId)) {
+      spacesWithRealContent.add(value.spaceId);
+    }
+  }
+
+  for (const relation of relations ?? []) {
+    spacesWithRealContent.add(relation.spaceId);
+  }
+
+  return sortSpaceIdsByRank(spaceIds.filter(id => spacesWithRealContent.has(id)));
+}
+
+export function entityHasOnlyPostType(entity: { types?: readonly { id: string }[] } | null | undefined): boolean {
+  const types = entity?.types;
+  if (!types?.length) return false;
+  const typeIds = new Set(types.map(t => t.id));
+  return typeIds.size === 1 && typeIds.has(SystemIds.POST_TYPE);
+}

@@ -5,12 +5,14 @@ import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@
 import * as React from 'react';
 
 import { LayoutGroup } from 'framer-motion';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
@@ -22,7 +24,7 @@ import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
-import { editorContentVersionAtom } from '~/atoms';
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -49,6 +51,8 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
+  const setSidePanelPersist = useSetAtom(entitySidePanelPersistEditorAtom);
 
   // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
@@ -79,6 +83,57 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   // Ref keeps the blur handler fresh without requiring editor recreation.
   const upsertEditorStateRef = React.useRef(upsertEditorState);
   upsertEditorStateRef.current = upsertEditorState;
+  const knownDataBlockIdsRef = React.useRef<Set<string>>(new Set(blockIds));
+  const lastTrackedEditorSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    lastTrackedEditorSnapshotRef.current = JSON.stringify(normalizeEditorContent(editorJson));
+
+    for (const blockId of blockIds) {
+      knownDataBlockIdsRef.current.add(blockId);
+    }
+  }, [activeEntityId, blockIds, editorContentVersion, editorJson]);
+
+  const trackEditorDocument = React.useCallback(
+    (json: JSONContent) => {
+      const snapshot = JSON.stringify(normalizeEditorContent(json));
+
+      if (snapshot === lastTrackedEditorSnapshotRef.current) {
+        return;
+      }
+
+      lastTrackedEditorSnapshotRef.current = snapshot;
+
+      const editorContent = json.content ?? [];
+
+      capture('content_created', {
+        content_id: activeEntityId,
+        content_type: 'editor_content_edit',
+        edit_surface: 'editor',
+        entity_id: activeEntityId,
+        space_id: spaceId,
+        block_count: editorContent.length,
+      });
+
+      for (const node of editorContent) {
+        if (node.type !== 'tableNode') continue;
+        const blockId = typeof node.attrs?.id === 'string' ? node.attrs.id : null;
+        if (!blockId || knownDataBlockIdsRef.current.has(blockId)) continue;
+
+        knownDataBlockIdsRef.current.add(blockId);
+        capture('content_created', {
+          content_id: blockId,
+          content_type: 'data_block',
+          edit_action: 'block_created',
+          creation_surface: 'editor',
+          data_source_type: node.attrs?.initialDataSource === 'QUERY' ? 'QUERY' : 'COLLECTION',
+          entity_id: activeEntityId,
+          space_id: spaceId,
+        });
+      }
+    },
+    [activeEntityId, spaceId]
+  );
 
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
@@ -93,7 +148,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       // the editor is potentially destroyed (e.g. on edit → view mode switch).
       // The content sync effect's `if (editable) return` guard prevents this
       // store write from triggering a setContent call back into the editor.
-      upsertEditorStateRef.current(params.editor.getJSON());
+      const json = params.editor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
     }
   };
 
@@ -102,6 +159,15 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   // Track the previous editable state to detect transitions from edit → read mode
   const prevEditableRef = React.useRef(editable);
+
+  const persistPendingEdits = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
+    const isSuggestionActive = entityMentionPluginKey.getState(editorRef.current.state)?.active;
+    if (isSuggestionActive) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
 
   // When transitioning from edit → view mode, persist the editor content to the
   // store BEFORE useEditor destroys and recreates the editor. Without this,
@@ -112,9 +178,21 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     prevEditableRef.current = editable;
 
     if (wasEditable && !editable && editorRef.current) {
-      upsertEditorStateRef.current(editorRef.current.getJSON());
+      persistPendingEdits();
     }
-  }, [editable]);
+  }, [editable, persistPendingEdits]);
+
+  const persistPendingEditsRef = React.useRef(persistPendingEdits);
+  persistPendingEditsRef.current = persistPendingEdits;
+
+  React.useLayoutEffect(() => {
+    if (!sidePanelCtx) return;
+    setSidePanelPersist(() => () => persistPendingEditsRef.current());
+    return () => {
+      setSidePanelPersist(null);
+      persistPendingEditsRef.current();
+    };
+  }, [setSidePanelPersist, sidePanelCtx]);
 
   const editor = useEditor(
     {
@@ -170,12 +248,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
+          const editorContent = editor.getJSON().content ?? [];
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor
-              .getJSON()
-              .content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ??
-              false);
+            editorContent.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock');
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
@@ -328,6 +404,10 @@ function useInterceptEditorLinks(spaceId: string) {
     function handleClick(event: MouseEvent) {
       const target = event.target as Element | null;
       if (!target) {
+        return;
+      }
+
+      if (target.closest('[data-entity-side-panel-opener], [data-entity-side-panel]')) {
         return;
       }
 

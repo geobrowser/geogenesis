@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { QueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
@@ -10,12 +11,14 @@ import { readTypes } from '../database/entities';
 import {
   getAllEntities,
   getBatchEntities,
+  getBatchEntitySpaces,
   getEntitiesOrderedByPropertyConnection,
   getEntity,
   getEntityNames,
   getRelation,
   getResultsPage,
   getSpaces,
+  hasDefaultSearchExcludedType,
 } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
@@ -42,6 +45,66 @@ export function resolveSearchSpaces(
       return spacesById[spaceId] ?? (typeof space === 'string' ? null : space);
     })
     .filter((space): space is SpaceEntity => space !== null);
+}
+
+type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
+
+export function getSearchResultNameForTopSpace(
+  result: Pick<SearchResult, 'name' | 'namesBySpace'>,
+  spaces: SpaceEntity[]
+): string | null {
+  const topSpaceName = result.namesBySpace?.[spaces[0]?.spaceId ?? ''];
+  if (hasName(topSpaceName)) return topSpaceName ?? null;
+  return hasName(result.name) ? result.name : null;
+}
+
+export function applyKnownEntitySpaces(
+  result: SearchResult,
+  knownEntity: Pick<Entity, 'spaces'> | null | undefined
+): SearchResultWithResolvableSpaces {
+  if (!knownEntity) return result;
+
+  return {
+    ...result,
+    spaces: knownEntity.spaces,
+  };
+}
+
+export function isDisplayableSearchResult(result: Pick<SearchResult, 'name' | 'spaces'>): boolean {
+  return result.spaces.length > 0 && hasName(result.name);
+}
+
+export function isIncludedSearchResult(result: Pick<SearchResult, 'name' | 'spaces' | 'types'>): boolean {
+  return isDisplayableSearchResult(result) && !hasDefaultSearchExcludedType(result.types);
+}
+
+function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
+  return Entities.spaces(values, relations);
+}
+
+export function mergeResolvableSpaces(
+  remoteSpaces: Array<string | SpaceEntity>,
+  localSpaces: string[]
+): Array<string | SpaceEntity> {
+  const seen = new Set(remoteSpaces.map(space => (typeof space === 'string' ? space : space.spaceId)));
+  const merged = [...remoteSpaces];
+
+  for (const space of localSpaces) {
+    if (!seen.has(space)) {
+      seen.add(space);
+      merged.push(space);
+    }
+  }
+
+  return merged;
+}
+
+function getLocalNamesBySpace(values: Entity['values']): Record<string, string | null> {
+  return Object.fromEntries(
+    values
+      .filter(value => value.property.id === SystemIds.NAME_PROPERTY)
+      .map(value => [value.spaceId, hasName(value.value) ? value.value : null])
+  );
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -399,13 +462,26 @@ export class E {
     const remoteIdSet = new Set(dedupedRemoteIds);
     const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
     const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
-    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+    const remoteEntityDetails =
+      dedupedRemoteIds.length > 0
+        ? await cache.fetchQuery({
+            queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
+            queryFn: ({ signal: innerSignal }) =>
+              Effect.runPromise(getBatchEntitySpaces(dedupedRemoteIds, signal ?? innerSignal)),
+          })
+        : [];
+    const remoteEntityDetailsById = new Map(remoteEntityDetails.map(e => [e.id, e]));
+    const remoteById = new Map(
+      remoteEntities.map(e => [e.id as string, applyKnownEntitySpaces(e, remoteEntityDetailsById.get(e.id))])
+    );
 
     const maybeEntities = mergedIds.map(entityId => {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
-    const entities = maybeEntities.filter(e => e !== null);
+    const entities = maybeEntities
+      .filter(e => e !== null)
+      .filter(entity => !hasDefaultSearchExcludedType(entity.types));
 
     const spaceIds = [
       ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
@@ -445,6 +521,7 @@ export class E {
 
         return {
           ...e,
+          name: getSearchResultNameForTopSpace(e, resolvedSpaces),
           types: e.types.map(t => ({
             id: t.id,
             name: t.name ?? typeNamesById.get(t.id) ?? null,
@@ -453,7 +530,7 @@ export class E {
           spaces: resolvedSpaces,
         };
       })
-      .filter(e => e.spaces.length > 0);
+      .filter(isIncludedSearchResult);
 
     return { results, rawCount: page.rawCount, total: page.total };
   }
@@ -466,7 +543,7 @@ function mergeSearchResult({
 }: {
   id: string;
   store: GeoStore;
-  mergeWith?: SearchResult | null;
+  mergeWith?: SearchResultWithResolvableSpaces | null;
 }): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
@@ -497,13 +574,18 @@ function mergeSearchResult({
   const name = Entities.name(values) ?? remoteEntity.name;
   const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
+  const namesBySpace = {
+    ...remoteEntity.namesBySpace,
+    ...getLocalNamesBySpace(values),
+  };
 
   return {
     id: id,
     name,
     description,
     types,
+    namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
-    spaces: localEntity.spaces,
+    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
 }

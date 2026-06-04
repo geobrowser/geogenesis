@@ -14,6 +14,16 @@ export type RelationWithBlock = Relation & {
   };
 };
 
+export function relationWithBlockIsMarkdownTextBody(
+  r: RelationWithBlock,
+  blockEntity?: { types?: readonly { id: string }[] } | null
+): boolean {
+  if (blockEntity?.types?.length) {
+    return blockEntity.types.some(t => t.id === SystemIds.TEXT_BLOCK);
+  }
+  return r.block.type === 'TEXT';
+}
+
 export function useBlocks(fromEntityId: string, spaceId: string, initialBlockRelations?: Relation[]) {
   const blocks = useRelations({
     mergeWith: initialBlockRelations ?? [],

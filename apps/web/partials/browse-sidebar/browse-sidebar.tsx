@@ -1,11 +1,13 @@
 'use client';
 
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
+import { personalSpaceViewed } from '~/core/analytics';
 import { BROWSE_NAV_ICON } from '~/core/browse/browse-nav-icon-src';
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -138,7 +140,16 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         <span>Explore</span>
       </Link>
       {personalSpaceId && personalHref ? (
-        <Link href={personalHref} className={isPersonal ? navLinkActive : navLinkIdle}>
+        <Link
+          href={personalHref}
+          className={isPersonal ? navLinkActive : navLinkIdle}
+          onClick={() =>
+            personalSpaceViewed(personalSpaceId, {
+              navigation_source: 'browse_sidebar_primary',
+              page_path: pathname,
+            })
+          }
+        >
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
             {profile?.avatarUrl ? (
               <FallbackImage value={profile.avatarUrl} sizes="32px" className="object-cover" />

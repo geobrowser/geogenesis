@@ -98,9 +98,10 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
 type ChangedEntityProps = {
   entity: EntityDiff;
   spaceId: string;
+  onOpenEntity?: (entityId: string) => void;
 };
 
-export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId }: ChangedEntityProps) {
+export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId, onOpenEntity }: ChangedEntityProps) {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
@@ -144,15 +145,32 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
 
   const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
 
+  const entityHeader = (
+    <>
+      {resolvedAvatarUrl && (
+        <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
+          <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+      )}
+      <h2 className="text-xl font-semibold">{entity.name}</h2>
+    </>
+  );
+
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        {resolvedAvatarUrl && (
-          <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
-            <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
-          </div>
+        {onOpenEntity ? (
+          <button
+            type="button"
+            data-entity-side-panel-opener
+            className="flex min-w-0 items-center gap-3 rounded-md text-left transition-colors hover:text-ctaPrimary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ctaPrimary"
+            onClick={() => onOpenEntity(entity.entityId)}
+          >
+            {entityHeader}
+          </button>
+        ) : (
+          entityHeader
         )}
-        <h2 className="text-xl font-semibold">{entity.name}</h2>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-20">

@@ -10,8 +10,11 @@ import Link from '@tiptap/extension-link';
 import { BulletList, ListItem } from '@tiptap/extension-list';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
+import Underline from '@tiptap/extension-underline';
 
 import { describe, expect, it } from 'vitest';
+
+import { MATH_DELIMITERS } from '~/core/state/editor/math-delimiters';
 
 import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
@@ -28,13 +31,14 @@ const testExtensions = [
   Heading,
   Bold,
   Italic,
+  Underline,
   Code,
   CodeBlock,
   Link,
   HardBreak,
   BulletList,
   ListItem,
-  MathExtension.configure({ evaluation: false, delimiters: 'bracket', katexOptions: { throwOnError: false } }),
+  MathExtension.configure({ evaluation: false, delimiters: MATH_DELIMITERS, katexOptions: { throwOnError: false } }),
   Web2URLMark,
 ];
 
@@ -66,6 +70,11 @@ describe('markdown-adapter', () => {
       expect(roundTrip('*italic text*')).toBe('*italic text*');
     });
 
+    it('underline via ++ (TipTap underline markdown)', () => {
+      expect(roundTrip('++underlined++')).toBe('++underlined++');
+      expect(roundTrip('say ++Geo++ here')).toBe('say ++Geo++ here');
+    });
+
     it('inline code', () => {
       expect(roundTrip('Use `console.log` here')).toBe('Use `console.log` here');
     });
@@ -83,8 +92,8 @@ describe('markdown-adapter', () => {
       expect(roundTrip(md)).toBe(md);
     });
 
-    it('inline math with bracket delimiters round-trips', () => {
-      expect(roundTrip('The formula \\(x^2\\) is quadratic')).toBe('The formula \\(x^2\\) is quadratic');
+    it('inline math with $$ delimiters round-trips', () => {
+      expect(roundTrip('The formula $$x^2$$ is quadratic')).toBe('The formula $$x^2$$ is quadratic');
     });
 
     it('code block round-trips', () => {
@@ -98,7 +107,7 @@ describe('markdown-adapter', () => {
     });
 
     it('mixed paragraph with bold + italic + code + formula', () => {
-      const md = 'Text **bold** *italic* `code` \\(E=mc^2\\)';
+      const md = 'Text **bold** *italic* `code` $$E=mc^2$$';
       expect(roundTrip(md)).toBe(md);
     });
   });
@@ -107,6 +116,12 @@ describe('markdown-adapter', () => {
   // Safety tests
   // ---------------------------------------------------------------------------
   describe('safety', () => {
+    it('whitespace-only $$ $$ is not parsed as math', () => {
+      const json = markdownToEditorJson('Value is $$ $$ here', testExtensions);
+      const hasInlineMath = JSON.stringify(json).includes('"type":"inlineMath"');
+      expect(hasInlineMath).toBe(false);
+    });
+
     it('dollar amounts are not parsed as math', () => {
       const json = markdownToEditorJson('Price is $5 and $10 today', testExtensions);
       // Should produce a single paragraph with plain text (no inlineMath nodes)
@@ -124,12 +139,40 @@ describe('markdown-adapter', () => {
       expect(flat).toContain('"type":"inlineMath"');
     });
 
-    it('legacy $...$ saves as bracket delimiters', () => {
+    it('legacy $...$ saves as $$ delimiters', () => {
       const json = markdownToEditorJson('Formula $x^2$ here', testExtensions);
       const parts = (json.content ?? []).map(node => editorNodeToMarkdown(node));
       const result = parts.join('\n').trimEnd();
-      expect(result).toContain('\\(x^2\\)');
-      expect(result).not.toContain('$x^2$');
+      expect(result).toBe('Formula $$x^2$$ here');
+    });
+
+    it('legacy \\(...\\) saves as $$ delimiters', () => {
+      const json = markdownToEditorJson('Formula \\(x^2\\) here', testExtensions);
+      const parts = (json.content ?? []).map(node => editorNodeToMarkdown(node));
+      const result = parts.join('\n').trimEnd();
+      expect(result).toContain('$$x^2$$');
+    });
+
+    it('escaped dollar in LaTeX round-trips correctly', () => {
+      // LaTeX containing \$ gets space-padded to avoid delimiter ambiguity: $$ cost \$ $$
+      const input = 'Price $$ cost \\$ $$ rest';
+      const json = markdownToEditorJson(input, testExtensions);
+      const flat = JSON.stringify(json);
+      expect(flat).toContain('"type":"inlineMath"');
+      // The parser trims padding, so latex attr is "cost \$"
+      expect(flat).toContain('cost \\\\$');
+      const parts = (json.content ?? []).map(node => editorNodeToMarkdown(node));
+      const result = parts.join('\n').trimEnd();
+      // Re-serializes with padding since content ends with $
+      expect(result).toBe('Price $$ cost \\$ $$ rest');
+    });
+
+    it('escaped dollar without space padding parses via overlapping close', () => {
+      // $$cost\$$$ — the closing $$ overlaps with the escaped \$
+      const input = 'A $$cost\\$$$ B';
+      const json = markdownToEditorJson(input, testExtensions);
+      const flat = JSON.stringify(json);
+      expect(flat).toContain('"type":"inlineMath"');
     });
   });
 
@@ -163,7 +206,7 @@ describe('markdown-adapter', () => {
     });
 
     it('math renders as KaTeX HTML', () => {
-      const html = markdownToRenderedHtml('Formula \\(x^2\\)');
+      const html = markdownToRenderedHtml('Formula $$x^2$$');
       expect(html).toContain('katex');
     });
 
@@ -233,7 +276,7 @@ describe('markdown-adapter', () => {
       expect(editorNodeToMarkdown(node)).toBe('**bold**');
     });
 
-    it('serializes inline math as bracket delimiters', () => {
+    it('serializes inline math as $$ delimiters', () => {
       const node = {
         type: 'paragraph',
         content: [
@@ -241,7 +284,7 @@ describe('markdown-adapter', () => {
           { type: 'inlineMath', attrs: { latex: 'x^2' } },
         ],
       };
-      expect(editorNodeToMarkdown(node)).toBe('f(x) = \\(x^2\\)');
+      expect(editorNodeToMarkdown(node)).toBe('f(x) = $$x^2$$');
     });
 
     it('serializes code block with dynamic fence length', () => {

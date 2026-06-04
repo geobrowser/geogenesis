@@ -9,6 +9,8 @@ import { Relation, Value } from '~/core/types';
 import { Spacer } from '~/design-system/spacer';
 
 import { Editor } from '~/partials/editor/editor';
+import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
+import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 interface Props {
@@ -22,6 +24,7 @@ interface Props {
 export function ProfilePageComponent(props: Props) {
   return (
     <>
+      <PersonalProfileBioStarterMerge entityId={props.id} spaceId={props.spaceId} />
       <motion.div layout="position">
         <Editor
           spaceId={props.spaceId}
@@ -37,6 +40,7 @@ export function ProfilePageComponent(props: Props) {
       <motion.div layout="position">
         <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
       </motion.div>
+      <AutomaticModeToggle />
       <Spacer height={40} />
       {props.referencedByComponent}
     </>

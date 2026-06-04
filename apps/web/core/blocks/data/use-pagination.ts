@@ -78,7 +78,7 @@ export function usePagination(entityId: string) {
 
   const bestAnchor = findBestAnchor(anchors, pageNumber);
   const currentAfter = bestAnchor.cursor ?? undefined;
-  const currentOffset = (pageNumber - bestAnchor.pageNumber) > 0 ? (pageNumber - bestAnchor.pageNumber) : undefined;
+  const currentOffset = pageNumber - bestAnchor.pageNumber > 0 ? pageNumber - bestAnchor.pageNumber : undefined;
 
   const updateEntry = React.useCallback(
     (updater: (prev: PaginationEntry) => PaginationEntry) => {

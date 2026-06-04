@@ -9,6 +9,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { isPersonalProfileSkillsRelationFocusRegionActive } from '~/core/utils/personal-profile-skills-focus';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
@@ -29,8 +30,9 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         ? 'Query name...'
         : 'Enter a name for this table...';
 
-  // Auto focus newly created data blocks
-  const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200);
+  const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200, {
+    shouldSkipFocus: isPersonalProfileSkillsRelationFocusRegionActive,
+  });
 
   return (
     <div className="table-block-editable-title flex grow items-center gap-2">
@@ -42,7 +44,7 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         />
       )}
       {source.type === 'SPACES' && (
-        <div className="group relative z-100 flex h-full">
+        <div className="group relative z-10 flex h-full">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spacesById.get(spaceId);
 

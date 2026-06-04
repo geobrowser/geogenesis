@@ -21,9 +21,11 @@ import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { queryClient } from '~/core/query-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import { useReportError } from '~/core/state/status-bar-store';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -83,8 +85,7 @@ export const OnboardingDialog = () => {
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
 
-  // Show retry immediately if workflow already started before initial render
-  const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+  const reportError = useReportError();
 
   // Warm the router cache for the explore destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
@@ -157,15 +158,21 @@ export const OnboardingDialog = () => {
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
-      setShowRetry(true);
       console.error(error);
+      // Drop back to the form step so the user has a recovery path even if
+      // they dismiss the global error toast — there's no close affordance
+      // on the StepComplete ("Creating space...") screen.
+      setStep('enter-profile');
+      const message = describeError(error);
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('create-space');
+        createSpace(options);
+      });
     }
   }
 
   async function onProfileContinue(exactMatches: SearchResult[]) {
     if (!address || !smartAccount) return;
-
-    setShowRetry(false);
 
     if (exactMatches.length > 0) {
       setEntityMatchCandidates(exactMatches);
@@ -175,18 +182,6 @@ export const OnboardingDialog = () => {
       setStep('create-space');
       await sleep(100);
       createSpace({ topicIdForPublish: '' });
-    }
-  }
-
-  async function onRunOnboardingWorkflow() {
-    if (!address || !smartAccount) return;
-
-    setShowRetry(false);
-
-    switch (step) {
-      case 'create-space':
-        createSpace();
-        break;
     }
   }
 
@@ -224,9 +219,7 @@ export const OnboardingDialog = () => {
                 }}
               />
             )}
-            {workflowSteps.includes(effectiveStep) && (
-              <StepComplete onRetry={onRunOnboardingWorkflow} showRetry={showRetry} />
-            )}
+            {workflowSteps.includes(effectiveStep) && <StepComplete />}
           </ModalCard>
         </Content>
       </Portal>
@@ -630,21 +623,7 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
   );
 }
 
-type StepCompleteProps = {
-  onRetry: () => void;
-  showRetry: boolean;
-};
-
-const retryMessage: Record<Step, string> = {
-  start: '',
-  'enter-profile': '',
-  'existing-entity-match': '',
-  'create-space': 'Space creation failed',
-  completed: '',
-  done: '',
-};
-
-function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
+function StepComplete() {
   const step = useAtomValue(stepAtom);
 
   const hasCompleted = step === 'completed';
@@ -659,19 +638,7 @@ function StepComplete({ onRetry, showRetry }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && (
-            <>
-              <Spacer height={32} />
-              {showRetry && (
-                <p className="mt-4 text-center text-smallButton">
-                  {retryMessage[step]}{' '}
-                  <button onClick={onRetry} className="text-ctaPrimary">
-                    Retry
-                  </button>
-                </p>
-              )}
-            </>
-          )}
+          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">

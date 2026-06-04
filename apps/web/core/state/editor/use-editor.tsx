@@ -19,9 +19,13 @@ import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorBlocks, useEditorInstance } from './editor-provider';
+import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import { markdownToEditorJson } from './markdown-adapter';
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from './profile-overview-tail-placeholder';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock } from './use-blocks';
@@ -244,7 +248,7 @@ export function useEditorStore() {
   const { id: entityId, spaceId } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
-  const tabId = useTabId();
+  const tabId = useActiveTabIdForEditor();
   const activeEntityId = tabId ?? entityId;
 
   const { blockRelations, initialBlockEntities } = useEditorBlocks();
@@ -396,7 +400,16 @@ export function useEditorStore() {
           ];
         }
 
-        const markdownStr = markdownValueForBlockId?.value || '';
+        let markdownStr = markdownValueForBlockId?.value || '';
+        const mdTrimmed = markdownStr.trim();
+        let restoreTailPlaceholder = false;
+        if (mdTrimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        } else if (mdTrimmed === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        }
         sBlocks.push({ type: 'text', markdown: markdownStr });
 
         const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
@@ -411,6 +424,7 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
+                ...(restoreTailPlaceholder ? { tailPlaceholder: true } : {}),
               },
             },
           ];
@@ -446,13 +460,20 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        const paragraphLooksLikePopulatedLine = (t: string) => !t.startsWith('/') || t.startsWith('//');
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
+          node.content.some(
+            child => child.type !== 'text' || (child.text && paragraphLooksLikePopulatedLine(child.text))
+          );
+        const isTailPlaceholderParagraph =
+          node.type === 'paragraph' &&
+          Boolean(node.attrs && 'tailPlaceholder' in node.attrs && node.attrs.tailPlaceholder);
 
-        return isNonParagraph || isParagraphWithContent;
+        return isNonParagraph || isParagraphWithContent || isTailPlaceholderParagraph;
       });
 
       const newBlocks = populatedContent.map(node => {
@@ -465,13 +486,19 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
+      const currentBlockIds = getRelations({
+        mergeWith: initialBlockEntityRelations,
+        selector: r =>
+          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
+      }).map(r => r.toEntity.id);
+
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.
       //
       // Q:
       // Does tiptap copy metadata about the block when you copy-paste it in the editor?
 
-      const { added, removed, moved } = getBlockPositionChanges(blockIds, newBlockIds);
+      const { added, removed, moved } = getBlockPositionChanges(currentBlockIds, newBlockIds);
 
       const addedBlocks = newBlocks.filter(b => added.includes(b.id));
       const movedBlocks = newBlocks.filter(b => moved.includes(b.id));
@@ -565,10 +592,7 @@ export function useEditorStore() {
 
         const blockRel = getRelations({
           mergeWith: initialBlockEntityRelations,
-          selector: r =>
-            r.type.id === SystemIds.BLOCKS &&
-            ID.equals(r.toEntity.id, node.id) &&
-            r.spaceId === spaceId,
+          selector: r => r.type.id === SystemIds.BLOCKS && ID.equals(r.toEntity.id, node.id) && r.spaceId === spaceId,
         })[0];
 
         if (!blockRel?.entityId) continue;
@@ -641,7 +665,7 @@ export function useEditorStore() {
         }
       }
     },
-    [blockIds, activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
+    [activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
   );
 
   return {

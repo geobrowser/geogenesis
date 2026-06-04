@@ -106,6 +106,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
     const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
+    const openedWithMainViewEditing = table.options.meta!.openedWithMainViewEditing;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -124,7 +125,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
     const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
-    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
+    const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
@@ -156,6 +157,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           autoFocus={autofocus}
           focusRequestKey={row.original.placeholder ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
+          openedWithMainViewEditing={openedWithMainViewEditing}
         />
       );
     }
@@ -175,6 +177,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         verified={verified}
         onLinkEntry={onLinkEntry}
         source={source}
+        openedWithMainViewEditing={openedWithMainViewEditing}
       />
     );
   },
@@ -248,6 +251,7 @@ export const TableBlockTable = ({
       shouldAutoFocusPlaceholder,
       placeholderFocusKey,
       collectionTypeFilters,
+      openedWithMainViewEditing: isEditing,
     },
   });
 

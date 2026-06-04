@@ -7,6 +7,8 @@ import Text from '@tiptap/extension-text';
 import Underline from '@tiptap/extension-underline';
 import { Focus, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 
+import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/profile-overview-tail-placeholder';
+
 import { CodeBlockNode } from './code-block-node';
 import { DataNode } from './data-node';
 import { FloatingToolbarExtension } from './floating-toolbar-extension';
@@ -64,6 +66,9 @@ export const tiptapExtensions = [
       if (node.type.name === 'heading') return 'Heading...';
       if (node.type.name === 'bulletList') return '';
       if (node.type.name === 'codeBlock') return '';
+      if (node.type.name === 'paragraph' && node.attrs?.tailPlaceholder) {
+        return PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT;
+      }
       return 'Add content...';
     },
   }),

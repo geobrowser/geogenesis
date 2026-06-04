@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { cx } from 'class-variance-authority';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
@@ -22,6 +23,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
+import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -64,6 +66,7 @@ import { PowerToolsRow } from './types';
 
 const PANEL_ENTITY_ID_PARAM = 'panelEntityId';
 const PANEL_SPACE_ID_PARAM = 'panelSpaceId';
+const POWER_TOOLS_NAVBAR_OFFSET_PX = 60;
 
 function PowerToolsEntityPanel({
   entityId,
@@ -95,9 +98,38 @@ function PowerToolsEntityPanel({
 
   const isPanelLoading = isLoading || isBlocksLoading;
 
-  return (
-    <div className="absolute inset-y-0 right-0 z-20 flex w-[520px] max-w-[60vw] flex-col border-l border-grey-02 bg-white shadow-card">
-      <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
+  React.useLayoutEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    html.setAttribute('data-power-tools-panel-open', '');
+    body.setAttribute('data-power-tools-panel-open', '');
+    let restoreScrollbars = hideMainPageScrollbars();
+    const rafId = requestAnimationFrame(() => {
+      restoreScrollbars();
+      restoreScrollbars = hideMainPageScrollbars();
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      restoreScrollbars();
+      html.removeAttribute('data-power-tools-panel-open');
+      body.removeAttribute('data-power-tools-panel-open');
+    };
+  }, []);
+
+  if (typeof document === 'undefined' || !document.body) {
+    return null;
+  }
+
+  return createPortal(
+    <aside
+      data-power-tools-entity-panel
+      className="fixed right-0 bottom-0 z-[60] flex w-[min(520px,60vw)] flex-col border-l border-grey-02 bg-white shadow-card"
+      style={{ top: POWER_TOOLS_NAVBAR_OFFSET_PX }}
+      aria-label="Entity details"
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-grey-02 px-4 py-2">
         <Text variant="body">Entity</Text>
         <div className="flex items-center gap-1">
           <Link
@@ -118,7 +150,7 @@ function PowerToolsEntityPanel({
           </button>
         </div>
       </div>
-      <div className="h-full overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {isPanelLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="body" color="grey-04">
@@ -145,7 +177,8 @@ function PowerToolsEntityPanel({
           </EntityStoreProvider>
         )}
       </div>
-    </div>
+    </aside>,
+    document.body
   );
 }
 

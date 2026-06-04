@@ -11,6 +11,7 @@ import cx from 'classnames';
 import { useAtom } from 'jotai';
 import pluralize from 'pluralize';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
@@ -43,6 +44,7 @@ import { Spacer } from './spacer';
 import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from './use-elevated-popover-portal';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -76,6 +78,8 @@ type SelectEntityProps = {
   autoFocus?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
+  waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
   /** When set, the result with this ID gets a "Currently selected" indicator */
   selectedEntityId?: string;
   /** Increment (e.g. on "add row") to move focus into this input even when already mounted. */
@@ -102,6 +106,8 @@ export const SelectEntity = ({
   advanced = true,
   showIDs = true,
   initialQuery,
+  waitForFilterTypes,
+  restrictToFilterTypes,
   selectedEntityId,
   focusRequestKey,
 }: SelectEntityProps) => {
@@ -128,6 +134,8 @@ export const SelectEntity = ({
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType | undefined>('TEXT');
 
   const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
+  const [isSearchOpen, setIsSearchOpen] = useState(Boolean(autoFocus || initialQuery));
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
   // Mirror Radix's actual rendered `data-side` so the corner flip stays in lockstep
@@ -143,11 +151,15 @@ export const SelectEntity = ({
       ? allowedTypes.map(r => r.id)
       : undefined;
 
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    filterByTypes,
-    filterBySpace,
-    initialQuery,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes,
+      filterBySpace,
+      initialQuery,
+      enabled: isSearchOpen,
+      waitForFilterTypes,
+      restrictToFilterTypes,
+    });
 
   // Auto focus input when component mounts
   useEffect(() => {
@@ -205,13 +217,14 @@ export const SelectEntity = ({
     storage.entities.name.set(newEntityId, spaceId, query);
     onDone?.({ id: newEntityId, name: query, space: spaceId }, true);
     onQueryChange('');
+    setIsSearchOpen(false);
     setSelectedIndex(0);
     setToast(<EntityCreatedToast entityId={newEntityId} spaceId={spaceId} />);
   };
 
   const hasNoFilters = !typeFilter && !spaceFilter && allowedTypes.length === 0;
 
-  const hasResults = query && results.length > 0;
+  const hasResults = results.length > 0;
 
   useKey('Enter', () => {
     if (!hasResults) return;
@@ -226,6 +239,7 @@ export const SelectEntity = ({
         primarySpace: result.spaces?.[0]?.spaceId ? result.spaces[0].spaceId : undefined,
       });
       onQueryChange('');
+      setIsSearchOpen(false);
     }
   });
 
@@ -302,16 +316,24 @@ export const SelectEntity = ({
   }, [focusRequestKey]);
 
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
-    isOpen: Boolean(query),
+    isOpen: isSearchOpen,
     preferredHeight: advanced ? 520 : 300,
     gap: 12,
   });
 
-  const isQueried = query.length > 0;
+  const isQueried = isSearchOpen;
   // Use Radix's rendered `data-side` (mirrored into actualSide) so the corner flip
   // matches the visible position, even when Radix's collision middleware briefly
   // disagrees with our placement hook during scroll.
   const popoverAbove = actualSide === 'top';
+
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   return (
     <div
@@ -332,7 +354,7 @@ export const SelectEntity = ({
           <Search />
         </div>
       )}
-      <Popover.Root open={!!query}>
+      <Popover.Root open={isSearchOpen} modal={false}>
         <Popover.Anchor asChild>
           <input
             ref={inputCallbackRef}
@@ -340,15 +362,17 @@ export const SelectEntity = ({
             value={query}
             onChange={({ currentTarget: { value } }) => {
               onQueryChange(value);
+              setIsSearchOpen(true);
               setSelectedIndex(0);
             }}
+            onFocus={() => setIsSearchOpen(true)}
             placeholder={placeholder}
             className={inputStyles({ [variant]: true, withSearchIcon, className: inputClassName })}
             spellCheck={false}
           />
         </Popover.Anchor>
-        {query && (
-          <Popover.Portal>
+        {isSearchOpen && elevatedPopoverPortal && (
+          <Popover.Portal container={elevatedPopoverPortal}>
             <Popover.Content
               ref={node => {
                 setPopoverElement(node);
@@ -372,11 +396,12 @@ export const SelectEntity = ({
                   return;
                 }
                 onQueryChange('');
+                setIsSearchOpen(false);
                 setSelectedIndex(0);
                 setResult(null);
               }}
               className={cx(
-                'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                'z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
                 width === 'full' && 'max-w-[calc(100vw-24px)]'
               )}
               // Reserve space at the bottom of the viewport so the dropdown — including
@@ -528,6 +553,7 @@ export const SelectEntity = ({
                   {!result ? (
                     <ResizableContainer>
                       <div
+                        ref={resultsScrollRef}
                         className="no-scrollbar flex flex-col overflow-x-clip overflow-y-auto overscroll-contain bg-white"
                         style={{
                           // 80px accounts for Advanced toolbar (~32px) + Create new footer (~36px) + borders/padding
@@ -538,6 +564,7 @@ export const SelectEntity = ({
                           // the dropdown above the input.
                           minHeight: results.length > 0 ? '100px' : '2.5rem',
                         }}
+                        onScroll={handleResultsScroll}
                         onWheel={e => trapWheelToElement(e.currentTarget, e)}
                       >
                         {!results?.length && isLoading && (
@@ -565,6 +592,7 @@ export const SelectEntity = ({
                                           : undefined,
                                       });
                                       onQueryChange('');
+                                      setIsSearchOpen(false);
                                       setSelectedIndex(0);
                                     }}
                                     id={`select-entity-result-${index}`}
@@ -670,6 +698,11 @@ export const SelectEntity = ({
                                 )}
                               </div>
                             ))}
+                            {isFetchingNextPage ? (
+                              <div className="w-full bg-white px-3 py-2">
+                                <div className="truncate text-resultTitle text-text">Loading more...</div>
+                              </div>
+                            ) : null}
                           </div>
                         )}
                       </div>
@@ -718,6 +751,7 @@ export const SelectEntity = ({
                                 space: space.spaceId,
                               });
                               onQueryChange('');
+                              setIsSearchOpen(false);
                               setSelectedIndex(0);
                             }}
                             className="flex w-full items-center gap-3 px-3 py-2 hover:bg-grey-01"
@@ -752,7 +786,7 @@ export const SelectEntity = ({
                         )}
                       </div>
                       <button
-                        disabled={isCreatingProperty && !renderableType}
+                        disabled={query.trim() === '' || (isCreatingProperty && !renderableType)}
                         onClick={onCreateNewEntity}
                         className="text-resultLink text-ctaHover disabled:text-grey-03"
                       >
@@ -843,10 +877,28 @@ type SpaceFilterInputProps = {
 };
 
 const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
-  const { query, setQuery, spaces: results } = useSpacesQuery();
+  const [focused, setFocused] = React.useState(false);
+  const {
+    query,
+    setQuery,
+    spaces: results,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSpacesQuery(focused);
+
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   const onSelectSpace = (space: (typeof results)[number]) => {
     setQuery('');
+    setFocused(false);
 
     onSelect({
       id: space.id,
@@ -854,26 +906,46 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
     });
   };
 
+  const close = React.useCallback(() => {
+    setQuery('');
+    setFocused(false);
+  }, [setQuery]);
+
   return (
     <div className="relative z-100 w-full">
-      <Popover.Root open={!!query} onOpenChange={() => setQuery('')}>
+      <Popover.Root
+        open={focused}
+        onOpenChange={open => {
+          if (open) {
+            setFocused(true);
+            return;
+          }
+          close();
+        }}
+      >
         <Popover.Anchor asChild>
-          <Input value={query} onChange={e => setQuery(e.target.value)} />
+          <Input value={query} onChange={e => setQuery(e.target.value)} onFocus={() => setFocused(true)} />
         </Popover.Anchor>
-        {query && (
+        {focused && (
           <Popover.Portal>
             <Popover.Content
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onInteractOutside={close}
               className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               forceMount
             >
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList>
+                    <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
+                      {!results.length && isLoading && (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading...</div>
+                        </div>
+                      )}
                       {results.map(result => (
                         <ResultItem key={result.id} onClick={() => onSelectSpace(result)}>
                           <div className="flex w-full items-center justify-between leading-4">
@@ -894,6 +966,11 @@ const SpaceFilterInput = ({ onSelect }: SpaceFilterInputProps) => {
                           </div>
                         </ResultItem>
                       ))}
+                      {isFetchingNextPage ? (
+                        <div className="w-full border-b border-divider bg-white px-3 py-2">
+                          <div className="truncate text-button text-text">Loading more...</div>
+                        </div>
+                      ) : null}
                     </ResultsList>
                   </ResizableContainer>
                 </div>
@@ -911,30 +988,56 @@ type TypeFilterInputProps = {
 };
 
 const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
-  const { query, onQueryChange, isLoading, isEmpty, results } = useSearch({
-    filterByTypes: [SystemIds.SCHEMA_TYPE],
+  const [focused, setFocused] = React.useState(false);
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: [SystemIds.SCHEMA_TYPE],
+      enabled: focused,
+    });
+
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
   });
+
+  const close = React.useCallback(() => {
+    onQueryChange('');
+    setFocused(false);
+  }, [onQueryChange]);
 
   return (
     <div className="relative z-100 w-full">
-      <Popover.Root open={!!query} onOpenChange={() => onQueryChange('')}>
+      <Popover.Root
+        open={focused}
+        onOpenChange={open => {
+          if (open) {
+            setFocused(true);
+            return;
+          }
+          close();
+        }}
+      >
         <Popover.Anchor asChild>
-          <Input value={query} onChange={e => onQueryChange(e.target.value)} />
+          <Input value={query} onChange={e => onQueryChange(e.target.value)} onFocus={() => setFocused(true)} />
         </Popover.Anchor>
-        {query && (
+        {focused && (
           <Popover.Portal>
             <Popover.Content
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onInteractOutside={close}
               className="z-9999 w-(--radix-popper-anchor-width) leading-none"
               forceMount
             >
               <div className="pt-1">
                 <div className="flex max-h-[50vh] w-full flex-col overflow-hidden rounded border border-grey-02 bg-white">
                   <ResizableContainer>
-                    <ResultsList>
+                    <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                       {!results?.length && isLoading && (
                         <div className="w-full border-b border-divider bg-white px-3 py-2">
                           <div className="truncate text-button text-text">Loading...</div>
@@ -955,6 +1058,7 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                                     name: result.name,
                                   });
                                   onQueryChange('');
+                                  setFocused(false);
                                 }}
                                 className="relative z-10 flex w-full flex-col transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden"
                               >
@@ -1002,6 +1106,11 @@ const TypeFilterInput = ({ onSelect }: TypeFilterInputProps) => {
                               </button>
                             </ResultItem>
                           ))}
+                          {isFetchingNextPage ? (
+                            <div className="w-full border-b border-divider bg-white px-3 py-2">
+                              <div className="truncate text-button text-text">Loading more...</div>
+                            </div>
+                          ) : null}
                         </>
                       )}
                     </ResultsList>

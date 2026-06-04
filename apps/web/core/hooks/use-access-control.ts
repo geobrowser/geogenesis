@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { normalizeSpaceId, type SpaceAccess } from '~/core/access/space-access';
+import { type SpaceAccess, normalizeSpaceId } from '~/core/access/space-access';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 
 import { useHydrated } from './use-hydrated';
@@ -33,13 +33,15 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
 
   const { data: isMemberOfDao = false, isLoading: isLoadingMember } = useQuery({
     queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],
-    queryFn: ({ signal }) => Effect.runPromise(getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
+    queryFn: ({ signal }) =>
+      Effect.runPromise(getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
     enabled: shouldCheckDaoAccess,
   });
 
   const { data: isEditorOfDao = false, isLoading: isLoadingEditor } = useQuery({
     queryKey: ['space-access-control', 'editor', normalizedSpaceId, normalizedPersonalSpaceId],
-    queryFn: ({ signal }) => Effect.runPromise(getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
+    queryFn: ({ signal }) =>
+      Effect.runPromise(getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
     enabled: shouldCheckDaoAccess,
   });
 
