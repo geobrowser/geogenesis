@@ -19,6 +19,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -170,6 +171,8 @@ export function TableBlockGalleryItem({
                     name={name}
                     entityId={rowEntityId}
                     spaceId={currentSpaceId}
+                    entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -186,6 +189,8 @@ export function TableBlockGalleryItem({
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
+                    showSidePanel={!isPlaceholder}
+                    openedWithMainViewEditing={isEditing}
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -253,26 +258,41 @@ export function TableBlockGalleryItem({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 grow">
             {source.type !== 'COLLECTION' ? (
-              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-                <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-              </Link>
-            ) : (
-              <CollectionMetadata
-                view="GALLERY"
-                isEditing={false}
-                name={name}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                collectionId={nameCell?.collectionId}
-                relationId={relationId}
-                verified={verified}
-                onLinkEntry={onLinkEntry}
-              >
+              <div className="relative pr-10">
                 <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                   <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
                 </Link>
-              </CollectionMetadata>
+                {!isPlaceholder && (
+                  <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
+                    <DataBlockOpenSidePanelButton
+                      entityId={rowEntityId}
+                      entitySpaceId={nameCell?.space ?? currentSpaceId}
+                      openedWithMainViewEditing={isEditing}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative pr-10">
+                <CollectionMetadata
+                  view="GALLERY"
+                  isEditing={false}
+                  name={name}
+                  currentSpaceId={currentSpaceId}
+                  entityId={rowEntityId}
+                  spaceId={nameCell?.space}
+                  collectionId={nameCell?.collectionId}
+                  relationId={relationId}
+                  verified={verified}
+                  onLinkEntry={onLinkEntry}
+                  showSidePanel={!isPlaceholder}
+                  openedWithMainViewEditing={isEditing}
+                >
+                  <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
+                    <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+                  </Link>
+                </CollectionMetadata>
+              </div>
             )}
           </div>
           <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />

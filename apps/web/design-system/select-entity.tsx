@@ -44,6 +44,7 @@ import { Spacer } from './spacer';
 import { trapWheelToElement } from './trap-wheel-scroll';
 import { Truncate } from './truncate';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from './use-elevated-popover-portal';
 import { showingIdsAtom } from '~/atoms';
 
 type SelectEntityProps = {
@@ -134,6 +135,7 @@ export const SelectEntity = ({
 
   const [clipPath, setClipPath] = useState('inset(-0px -100px -100px -100px)');
   const [isSearchOpen, setIsSearchOpen] = useState(Boolean(autoFocus || initialQuery));
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   const [popoverElement, setPopoverElement] = useState<HTMLDivElement | null>(null);
   // Mirror Radix's actual rendered `data-side` so the corner flip stays in lockstep
@@ -352,7 +354,7 @@ export const SelectEntity = ({
           <Search />
         </div>
       )}
-      <Popover.Root open={isSearchOpen}>
+      <Popover.Root open={isSearchOpen} modal={false}>
         <Popover.Anchor asChild>
           <input
             ref={inputCallbackRef}
@@ -369,8 +371,8 @@ export const SelectEntity = ({
             spellCheck={false}
           />
         </Popover.Anchor>
-        {isSearchOpen && (
-          <Popover.Portal>
+        {isSearchOpen && elevatedPopoverPortal && (
+          <Popover.Portal container={elevatedPopoverPortal}>
             <Popover.Content
               ref={node => {
                 setPopoverElement(node);
@@ -399,7 +401,7 @@ export const SelectEntity = ({
                 setResult(null);
               }}
               className={cx(
-                'z-9999 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                'z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
                 width === 'full' && 'max-w-[calc(100vw-24px)]'
               )}
               // Reserve space at the bottom of the viewport so the dropdown — including
