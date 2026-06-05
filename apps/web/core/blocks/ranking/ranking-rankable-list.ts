@@ -20,7 +20,7 @@ export function getRowDisplayName(row: Row): string {
 
 export function getRowDescription(row: Row): string | null {
   const cell = row.columns[SystemIds.DESCRIPTION_PROPERTY];
-  const text = cell?.name?.trim() ?? cell?.value?.trim();
+  const text = cell?.name?.trim() ?? cell?.description?.trim();
   return text || null;
 }
 
