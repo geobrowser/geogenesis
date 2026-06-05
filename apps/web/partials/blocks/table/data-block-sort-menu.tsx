@@ -11,10 +11,10 @@ import { ID } from '~/core/id';
 import { Property } from '~/core/types';
 import { ColumnSortState, SORTABLE_DATA_TYPES } from '~/core/utils/column-sort';
 
+import { SmallButton } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
-import { SmallButton } from '~/design-system/button';
 import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
@@ -105,7 +105,9 @@ export function DataBlockSortMenu({
   );
 
   const pickedProperty =
-    pickDirectionForColumnId === null ? null : sortableProperties.find(p => p.id === pickDirectionForColumnId) ?? null;
+    pickDirectionForColumnId === null
+      ? null
+      : (sortableProperties.find(p => p.id === pickDirectionForColumnId) ?? null);
 
   React.useEffect(() => {
     if (pickDirectionForColumnId !== null && pickedProperty === null) {
@@ -124,8 +126,11 @@ export function DataBlockSortMenu({
         sortState === null ? (
           !isEditing ? (
             <Dropdown.Trigger asChild disabled>
-              <div ref={triggerRef as React.Ref<HTMLDivElement>} className={cx(readOnlySortSegmentClass, 'pointer-events-none cursor-default')}>
-                <span className="inline-flex shrink-0 tabular-nums text-text" aria-hidden>
+              <div
+                ref={triggerRef as React.Ref<HTMLDivElement>}
+                className={cx(readOnlySortSegmentClass, 'pointer-events-none cursor-default')}
+              >
+                <span className="inline-flex shrink-0 text-text tabular-nums" aria-hidden>
                   ↑↓
                 </span>
                 <span className="min-w-0 truncate">Sort</span>
@@ -136,7 +141,7 @@ export function DataBlockSortMenu({
               <SmallButton
                 ref={triggerRef as React.Ref<HTMLButtonElement>}
                 icon={
-                  <span className="inline-flex shrink-0 tabular-nums text-grey-04" aria-hidden>
+                  <span className="inline-flex shrink-0 text-grey-04 tabular-nums" aria-hidden>
                     ↑↓
                   </span>
                 }
@@ -154,22 +159,25 @@ export function DataBlockSortMenu({
                 ref={triggerRef as React.Ref<HTMLButtonElement>}
                 type="button"
                 className={cx(
-                  'flex min-w-0 flex-1 flex-row items-center gap-1.5 px-2 text-left outline-none transition select-none',
-                  isEditing && 'hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-grey-04 focus-visible:ring-offset-0',
+                  'flex min-w-0 flex-1 flex-row items-center gap-1.5 px-2 text-left transition outline-none select-none',
+                  isEditing &&
+                    'hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-grey-04 focus-visible:ring-offset-0',
                   segmentSortReadOnly && 'cursor-default'
                 )}
               >
-                <span className="shrink-0 tabular-nums text-text" aria-hidden>
+                <span className="shrink-0 text-text tabular-nums" aria-hidden>
                   {sortState.direction === 'asc' ? '↑' : '↓'}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-text">{sortColumnDisplayLabel(sortState, properties)}</span>
+                <span className="min-w-0 flex-1 truncate text-text">
+                  {sortColumnDisplayLabel(sortState, properties)}
+                </span>
               </button>
             </Dropdown.Trigger>
             {isEditing && (
               <button
                 type="button"
                 disabled={disabled}
-                className="inline-flex shrink-0 items-center justify-center border-l border-divider px-1.5 text-text transition hover:bg-black/[0.04] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-grey-04"
+                className="inline-flex shrink-0 items-center justify-center border-l border-divider px-1.5 text-text transition hover:bg-black/[0.04] focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04 focus-visible:ring-inset"
                 aria-label="Clear sort"
                 onPointerDown={e => {
                   e.preventDefault();
@@ -230,55 +238,55 @@ export function DataBlockSortMenu({
           className="z-1001 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <div className={listScrollClassName} onWheel={onListWheel}>
-          {pickDirectionForColumnId === null || pickedProperty === null ? (
-            <>
-              {sortableProperties.map(property => {
-                const isActive = sortState !== null && ID.equals(sortState.columnId, property.id);
-                const label = propertySortLabel(property);
+            {pickDirectionForColumnId === null || pickedProperty === null ? (
+              <>
+                {sortableProperties.map(property => {
+                  const isActive = sortState !== null && ID.equals(sortState.columnId, property.id);
+                  const label = propertySortLabel(property);
 
-                return (
-                  <MenuItem
-                    key={property.id}
-                    className={listRowClassName}
-                    onClick={() => setPickDirectionForColumnId(property.id)}
-                  >
-                    <div className="flex w-full items-center justify-between gap-2">
-                      <span className={cx('min-w-0 truncate text-left', isActive && 'font-medium')}>{label}</span>
-                      <span className="inline-flex shrink-0 text-grey-04 [&_svg]:h-3.5 [&_svg]:w-3.5">
-                        <ChevronRight color="grey-04" />
-                      </span>
-                    </div>
-                  </MenuItem>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              <MenuItem className={listRowClassName} onClick={() => setPickDirectionForColumnId(null)}>
-                <div className="flex w-full items-center gap-2">
-                  <ArrowLeft color="grey-04" />
-                  <span>Back</span>
-                </div>
-              </MenuItem>
-              <div className="shrink-0 border-t border-grey-02 snap-none" role="presentation" />
-              <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'asc')}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>Ascending</span>
-                  <span className="shrink-0 tabular-nums text-text" aria-hidden>
-                    <span>↑</span>
-                  </span>
-                </div>
-              </MenuItem>
-              <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'desc')}>
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span>Descending</span>
-                  <span className="shrink-0 tabular-nums text-text" aria-hidden>
-                    <span>↓</span>
-                  </span>
-                </div>
-              </MenuItem>
-            </>
-          )}
+                  return (
+                    <MenuItem
+                      key={property.id}
+                      className={listRowClassName}
+                      onClick={() => setPickDirectionForColumnId(property.id)}
+                    >
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className={cx('min-w-0 truncate text-left', isActive && 'font-medium')}>{label}</span>
+                        <span className="inline-flex shrink-0 text-grey-04 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                          <ChevronRight color="grey-04" />
+                        </span>
+                      </div>
+                    </MenuItem>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                <MenuItem className={listRowClassName} onClick={() => setPickDirectionForColumnId(null)}>
+                  <div className="flex w-full items-center gap-2">
+                    <ArrowLeft color="grey-04" />
+                    <span>Back</span>
+                  </div>
+                </MenuItem>
+                <div className="shrink-0 snap-none border-t border-grey-02" role="presentation" />
+                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'asc')}>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span>Ascending</span>
+                    <span className="shrink-0 text-text tabular-nums" aria-hidden>
+                      <span>↑</span>
+                    </span>
+                  </div>
+                </MenuItem>
+                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pickedProperty.id, 'desc')}>
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span>Descending</span>
+                    <span className="shrink-0 text-text tabular-nums" aria-hidden>
+                      <span>↓</span>
+                    </span>
+                  </div>
+                </MenuItem>
+              </>
+            )}
           </div>
         </Dropdown.Content>
       </Dropdown.Portal>

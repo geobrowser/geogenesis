@@ -15,7 +15,7 @@ import { Relation } from '~/core/types';
 
 import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { GeoImage } from '~/design-system/geo-image';
+import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
@@ -44,9 +44,11 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
 export const EditableCoverAvatarHeader = ({
   avatarUrl,
   coverUrl,
+  fitImage = false,
 }: {
   avatarUrl: string | null;
   coverUrl: string | null;
+  fitImage?: boolean;
 }) => {
   const { spaceId, id } = useEntityStoreInstance();
   const editable = useUserIsEditing(spaceId);
@@ -62,6 +64,21 @@ export const EditableCoverAvatarHeader = ({
   const hasCover = !!coverRenderable;
   const hasCoverImage = !!coverUrl;
   const hasAvatar = !!showAvatar;
+
+  if (fitImage) {
+    if (!hasCoverImage) return null;
+    return (
+      <div className="relative mx-auto mb-8 w-full">
+        <AvatarCoverInput
+          entityId={id}
+          typeOfId={SystemIds.COVER_PROPERTY}
+          inputId="cover-input"
+          imgUrl={coverUrl}
+          fitImage
+        />
+      </div>
+    );
+  }
 
   const layout = computeLayout(hasCover, hasCoverImage, hasAvatar);
   const coverHeight = hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT;
@@ -124,11 +141,13 @@ const AvatarCoverInput = ({
   inputId,
   entityId,
   imgUrl,
+  fitImage = false,
 }: {
   typeOfId: string;
   inputId: string;
   entityId: string;
   imgUrl?: string | null;
+  fitImage?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
   const [hoveredIcon, setHoveredIcon] = useState('');
@@ -207,18 +226,22 @@ const AvatarCoverInput = ({
         onClick={() => {
           if (!imgUrl && editable) openInput();
         }}
-        className={`relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
-          isCover
-            ? imgUrl
-              ? 'bg-transparent'
-              : ''
-            : imgUrl
-              ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
-              : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
-        }`}
+        className={
+          fitImage
+            ? `relative w-full rounded-lg ${imgUrl ? 'bg-transparent' : ''} ${!imgUrl && editable ? 'cursor-pointer' : ''}`
+            : `relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
+                isCover
+                  ? imgUrl
+                    ? 'bg-transparent'
+                    : ''
+                  : imgUrl
+                    ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
+                    : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
+              }`
+        }
       >
         {/* Cover placeholder — two layers crossfaded via opacity for smooth hover */}
-        {isCover && !imgUrl && (
+        {isCover && !imgUrl && !fitImage && (
           <>
             <div className="absolute inset-0 rounded-lg bg-cover-default bg-contain bg-center bg-no-repeat" />
             <div
@@ -227,15 +250,22 @@ const AvatarCoverInput = ({
             />
           </>
         )}
-        {imgUrl && (
-          <GeoImage
-            fill
-            value={imgUrl}
-            unoptimized={true}
-            alt=""
-            className="h-full w-full rounded-lg border border-white bg-white object-cover"
-          />
-        )}
+        {imgUrl &&
+          (fitImage ? (
+            <NativeGeoImage
+              value={imgUrl}
+              alt=""
+              className="block h-auto w-full rounded-lg border border-white bg-white"
+            />
+          ) : (
+            <GeoImage
+              fill
+              value={imgUrl}
+              unoptimized={true}
+              alt=""
+              className="h-full w-full rounded-lg border border-white bg-white object-cover"
+            />
+          ))}
         {editable && (
           <div
             className={`absolute ${imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}

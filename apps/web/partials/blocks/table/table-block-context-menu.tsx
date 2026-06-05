@@ -20,16 +20,14 @@ import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
-import { editingPropertiesAtom } from '~/atoms';
-
 import { TableBlockEditPropertiesPanel } from './table-block-edit-properties-panel';
+import { editingPropertiesAtom } from '~/atoms';
 
 const listScrollClassName =
   'max-h-[198px] min-h-0 overflow-y-auto overscroll-contain scroll-smooth snap-y snap-mandatory';
 const listRowClassName = 'snap-start min-h-[44px] shrink-0';
 
-const CONTEXT_MENU_SURFACE =
-  'z-1001 min-w-0 w-52 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg';
+const CONTEXT_MENU_SURFACE = 'z-1001 min-w-0 w-52 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg';
 
 type TableBlockContextMenuProps = {
   sourceType: Source['type'];

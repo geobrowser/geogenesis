@@ -31,6 +31,9 @@ const storage = {
       set: vi.fn(),
     },
   },
+  images: {
+    createAndLink: vi.fn(),
+  },
 };
 
 vi.mock('~/core/sync/use-mutate', () => ({ storage }));
@@ -246,6 +249,209 @@ describe('setRelation', () => {
   });
 });
 
+describe('setEntityImage', () => {
+  const IMAGE_ENTITY = 'imageEntity1';
+  const IMAGE_PROPERTY = 'imageProp1';
+
+  function mockProxyFetch(impl: (init?: RequestInit) => Promise<Response>) {
+    const fn = vi.fn(async (_url: string, init?: RequestInit) => impl(init));
+    globalThis.fetch = fn as unknown as typeof fetch;
+    return fn;
+  }
+
+  function makeBlob(type = 'image/jpeg', size = 16) {
+    return new Blob([new Uint8Array(size)], { type });
+  }
+
+  it('ipfs:// short-circuits: tombstones old relations and writes value + types + image relations without fetching', async () => {
+    const oldRelation = makeRelation({
+      fromEntity: { id: IMAGE_ENTITY, name: 'Movie' },
+      type: { id: IMAGE_PROPERTY, name: 'Cover' },
+      spaceId: 'space1',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [oldRelation] }));
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'ipfs://bafyimagecid',
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(storage.relations.delete).toHaveBeenCalledWith(oldRelation);
+    const valueWrites = storage.values.set.mock.calls.map(c => c[0]);
+    expect(valueWrites).toHaveLength(1);
+    expect(valueWrites[0]).toMatchObject({ value: 'ipfs://bafyimagecid' });
+    const relationWrites = storage.relations.set.mock.calls.map(c => c[0]);
+    expect(relationWrites).toHaveLength(2);
+    expect(relationWrites.some(r => r.renderableType === 'IMAGE' && r.fromEntity.id === IMAGE_ENTITY)).toBe(true);
+    expect(storage.images.createAndLink).not.toHaveBeenCalled();
+  });
+
+  it('http(s) URL: proxy-fetches then delegates to storage.images.createAndLink', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    const blob = makeBlob('image/png');
+    const proxyFetch = mockProxyFetch(async () => {
+      return {
+        ok: true,
+        status: 200,
+        blob: async () => blob,
+        json: async () => ({}),
+      } as Response;
+    });
+    storage.images.createAndLink.mockResolvedValueOnce(undefined);
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://cdn.example.com/poster.png',
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    expect(proxyFetch).toHaveBeenCalledTimes(1);
+    expect(proxyFetch.mock.calls[0][0]).toBe('/api/chat/proxy-image');
+    expect(storage.images.createAndLink).toHaveBeenCalledTimes(1);
+    const arg = storage.images.createAndLink.mock.calls[0][0];
+    expect(arg).toMatchObject({
+      fromEntityId: IMAGE_ENTITY,
+      fromEntityName: 'Movie',
+      relationPropertyId: IMAGE_PROPERTY,
+      relationPropertyName: 'Cover',
+      spaceId: 'space1',
+    });
+    expect(arg.file.name).toBe('image.png');
+  });
+
+  it('normalizes svg+xml MIME to a safe .svg extension', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => makeBlob('image/svg+xml'),
+          json: async () => ({}),
+        }) as Response
+    );
+    storage.images.createAndLink.mockResolvedValueOnce(undefined);
+
+    await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Brand',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Logo',
+        sourceUrl: 'https://example.com/logo.svg',
+      },
+      ctx
+    );
+
+    expect(storage.images.createAndLink.mock.calls[0][0].file.name).toBe('image.svg');
+  });
+
+  it('returns apply_failed with a model-readable reason when the proxy returns non-ok', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: false,
+          status: 502,
+          blob: async () => makeBlob(),
+          json: async () => ({ error: 'Upstream returned 404' }),
+        }) as Response
+    );
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://broken.example/missing.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('Upstream returned 404');
+    expect(storage.images.createAndLink).not.toHaveBeenCalled();
+  });
+
+  it('returns apply_failed when the proxy throws (network unreachable)', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://example.com/poster.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('proxy was unreachable');
+  });
+
+  it('returns apply_failed when storage.images.createAndLink rejects', async () => {
+    findOne.mockResolvedValueOnce(makeEntity({ id: IMAGE_ENTITY, relations: [] }));
+    mockProxyFetch(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          blob: async () => makeBlob(),
+          json: async () => ({}),
+        }) as Response
+    );
+    storage.images.createAndLink.mockRejectedValueOnce(new Error('IPFS pin failed'));
+
+    const result = await applyIntent(
+      {
+        kind: 'setEntityImage',
+        entityId: IMAGE_ENTITY,
+        entityName: 'Movie',
+        spaceId: 'space1',
+        propertyId: IMAGE_PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: 'https://example.com/poster.jpg',
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect((result as { message: string }).message).toContain('image upload failed');
+  });
+});
+
 describe('deleteRelation', () => {
   it('tombstones the matching relation from merged entity state', async () => {
     const match = makeRelation({
@@ -313,6 +519,101 @@ describe('createProperty', () => {
       dataType: 'TEXT',
       renderableTypeId: null,
     });
+  });
+});
+
+describe('createBlock — same-URL idempotency', () => {
+  // The chat orchestrator can land createBlock twice (retry on stream error, or
+  // a duplicate tool call after a verifier reset). We catch the second hit by
+  // scanning the parent's existing blocks for IMAGE_URL_PROPERTY === url before
+  // staging a new block — preventing two identical image blocks from stacking
+  // on the page.
+  const PARENT = 'parent1';
+  const EXISTING_BLOCK = 'existing-block-1';
+  const URL = 'https://example.com/cover.jpg';
+
+  function setupParentWithImageBlock(url: string) {
+    const blocksEdge = makeRelation({
+      id: 'r-existing-blocks',
+      fromEntity: { id: PARENT, name: null },
+      type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+      toEntity: { id: EXISTING_BLOCK, name: null, value: EXISTING_BLOCK },
+      spaceId: 'space1',
+    });
+    const parent = makeEntity({ id: PARENT, relations: [blocksEdge] });
+    const blockUrlValue = makeValue({
+      id: 'v-image-url',
+      entity: { id: EXISTING_BLOCK, name: null },
+      property: { id: SystemIds.IMAGE_URL_PROPERTY, name: 'IPFS URL', dataType: 'TEXT' },
+      value: url,
+    });
+    const existingBlock = makeEntity({ id: EXISTING_BLOCK, values: [blockUrlValue] });
+    findOne.mockImplementation(async ({ id }) => {
+      if (id === PARENT) return parent;
+      if (id === EXISTING_BLOCK) return existingBlock;
+      return null;
+    });
+  }
+
+  it('returns apply_failed when an image block with the same URL is already on the parent', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        content: { kind: 'image', url: URL, title: null },
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect(storage.values.set).not.toHaveBeenCalled();
+    expect(storage.relations.set).not.toHaveBeenCalled();
+  });
+
+  it('treats video blocks the same — same URL on the parent rejects', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        content: { kind: 'video', url: URL, title: null },
+      },
+      ctx
+    );
+
+    expect(result).toMatchObject({ ok: false, error: 'apply_failed' });
+    expect(storage.values.set).not.toHaveBeenCalled();
+    expect(storage.relations.set).not.toHaveBeenCalled();
+  });
+
+  it('does not flag a different-URL block on the same parent', async () => {
+    setupParentWithImageBlock(URL);
+
+    const result = await applyIntent(
+      {
+        kind: 'createBlock',
+        parentEntityId: PARENT,
+        spaceId: 'space1',
+        blockId: 'new-block-1',
+        // Video — skips the preflight branch that depends on a working <img>
+        // loader (jsdom does not fire onload/onerror), so the test exercises
+        // the no-duplicate path without hanging on the 8s preflight timeout.
+        content: { kind: 'video', url: 'https://example.com/different.mp4', title: null },
+      },
+      ctx
+    );
+
+    expect(result).toEqual({ ok: true });
+    // BLOCKS edge + type relation + value all written for the new block.
+    expect(storage.values.set).toHaveBeenCalled();
+    expect(storage.relations.set).toHaveBeenCalled();
   });
 });
 

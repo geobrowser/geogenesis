@@ -80,6 +80,10 @@ export type ListSpaceEntry = {
   id: string;
   name: string | null;
   description: string | null;
+  // The entity id of the space's home/topic entity. Use THIS (not `id`) when
+  // passing a space's "front page" as a relation target, collection item, or
+  // setEntityImage target. The two ids differ for most spaces.
+  homeEntityId: string | null;
 };
 
 export type ListSpacesOutput = { spaces: ListSpaceEntry[] } | { error: 'lookup_failed' };
@@ -95,4 +99,33 @@ export type ResearchSource = {
 
 export type ResearchOutput =
   | { summary: string; sources: ResearchSource[] }
+  | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
+
+export type WebFetchInput = {
+  url: string;
+};
+
+// Same shape as ResearchOutput so the UI source-pill row picks it up via the
+// same selector. `not_accessible` (page reachable but unextractable) is
+// separate from `lookup_failed` (generic) so the model can surface the right
+// reason to the user.
+export type WebFetchOutput =
+  | { summary: string; sources: ResearchSource[] }
+  | { error: 'not_signed_in' | 'rate_limited' | 'invalid_url' | 'not_accessible' | 'lookup_failed' };
+
+export type SearchImagesInput = {
+  query: string;
+};
+
+export type SearchImagesResult = {
+  // Direct image URL (http/https) — what gets uploaded to IPFS by setEntityImage.
+  url: string;
+  // Caption / alt-text for the image, when available.
+  title: string | null;
+  // The page the image was found on, for citation.
+  sourceUrl: string | null;
+};
+
+export type SearchImagesOutput =
+  | { images: SearchImagesResult[] }
   | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };

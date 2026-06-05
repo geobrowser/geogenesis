@@ -8,6 +8,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getHasRequestedSpaceMembership } from '~/partials/space-page/get-has-requested-space-membership';
 
+import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { getIsMemberForSpace } from './get-is-member-for-space';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersDialogServerContainer } from './space-members-dialog-server-container';
@@ -23,8 +24,9 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [isMember, space, hasRequestedSpaceMembership] = await Promise.all([
+  const [isMember, isEditor, space, hasRequestedSpaceMembership] = await Promise.all([
     getIsMemberForSpace(spaceId, connectedAddress),
+    getIsEditorForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
     getHasRequestedSpaceMembership(spaceId, connectedAddress),
   ]);
@@ -55,7 +57,7 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
         <SpaceMembersMenu
-          manageMembersComponent={<SpaceMembersDialogServerContainer spaceId={spaceId} />}
+          manageMembersComponent={<SpaceMembersDialogServerContainer spaceId={spaceId} isEditor={isEditor} />}
           trigger={<ChevronDownSmall color="grey-04" />}
         />
       </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildGlobalSearchSpaceIds, MAX_SEARCH_ADDITIONAL_SPACE_IDS } from './global-search-space-ids';
+import { MAX_SEARCH_ADDITIONAL_SPACE_IDS, buildGlobalSearchSpaceIds } from './global-search-space-ids';
 
 describe('buildGlobalSearchSpaceIds', () => {
   it('deduplicates ids and keeps required spaces before member/editor spaces', () => {

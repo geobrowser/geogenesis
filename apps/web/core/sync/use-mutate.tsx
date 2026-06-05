@@ -80,14 +80,15 @@ export interface Mutator {
     deleteMany: (relations: Relation[]) => void;
   };
   images: {
-    createAndLink: (params: {
-      file: File;
-      fromEntityId: string;
-      fromEntityName?: string | null;
-      relationPropertyId: string;
-      relationPropertyName: string | null;
-      spaceId: string;
-    }) => Promise<{ imageId: string; relationId: string }>;
+    createAndLink: (
+      params: {
+        fromEntityId: string;
+        fromEntityName?: string | null;
+        relationPropertyId: string;
+        relationPropertyName: string | null;
+        spaceId: string;
+      } & ({ file: File } | { url: string })
+    ) => Promise<{ imageId: string; relationId: string }>;
     createOnly: (params: { file: File; spaceId: string }) => Promise<{ imageId: string }>;
   };
   videos: {
@@ -316,20 +317,14 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     images: {
-      createAndLink: async ({
-        file,
-        fromEntityId,
-        fromEntityName,
-        relationPropertyId,
-        relationPropertyName,
-        spaceId,
-      }) => {
-        // Create the image entity using the Graph API
-        // Use TESTNET network to upload to Pinata via alternative gateway
-        const { id: imageId, ops: createImageOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
+      createAndLink: async params => {
+        const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
+        // Create the image entity using the Graph API. URL inputs are fetched
+        // and pinned to IPFS by the SDK; blob inputs upload directly. Use
+        // TESTNET network to upload to Pinata via alternative gateway.
+        const { id: imageId, ops: createImageOps } = await Graph.createImage(
+          'file' in params ? { blob: params.file, network: 'TESTNET' } : { url: params.url, network: 'TESTNET' }
+        );
 
         for (const op of createImageOps) {
           if (op.type === 'createRelation') {

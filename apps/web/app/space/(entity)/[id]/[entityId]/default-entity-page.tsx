@@ -28,6 +28,8 @@ interface Props {
   showHeading?: boolean;
   showHeader?: boolean;
   notice?: React.ReactNode;
+  /** Pre-computed by the parent route — avoids re-querying eligibility here. */
+  canClaimTopic?: boolean;
 }
 
 export default async function DefaultEntityPage({
@@ -37,11 +39,12 @@ export default async function DefaultEntityPage({
   showHeading = true,
   showHeader = true,
   notice = null,
+  canClaimTopic = false,
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
   const isEditing = searchParams?.edit === 'true';
-  const props = await fetchEntityPageData(params.id, params.entityId);
+  const props = await fetchEntityPageData(params.id, params.entityId, { canClaimTopic });
 
   return (
     <SpaceRedirect
@@ -68,6 +71,8 @@ export default async function DefaultEntityPage({
               entityId={props.id}
               spaceId={props.spaceId}
               serverRelations={props.relationEntityRelations}
+              canClaimTopic={canClaimTopic}
+              coverUrl={props.serverCoverUrl}
             />
             <Spacer height={24} />
             <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />

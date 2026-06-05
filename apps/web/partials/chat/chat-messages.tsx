@@ -4,19 +4,24 @@ import * as React from 'react';
 
 import type { UIMessage } from 'ai';
 import { isTextUIPart, isToolUIPart } from 'ai';
-import { motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 
 import { shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { buildEntityCacheFromMessages } from '~/core/chat/entity-cache';
 import type { EntityCache } from '~/core/chat/entity-cache';
+import { injectInlineAtom } from '~/core/state/chat-store';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
+import { Spinner } from '~/design-system/spinner';
 
 import { ChatMarkdown } from './chat-markdown';
 import { ChatSourceLink } from './chat-source-pill';
+import { InjectInlineProgress } from './inject-progress-bar';
 import { useSmoothStream } from './use-smooth-stream';
 
-const DEBUG = process.env.NODE_ENV !== 'production';
+// Off by default in dev — the per-state-flip transcript was unreadably noisy
+// during long agent turns. Set NEXT_PUBLIC_CHAT_VERBOSE=1 to opt back in.
+const DEBUG = process.env.NEXT_PUBLIC_CHAT_VERBOSE === '1';
 
 function userText(message: UIMessage): string {
   return message.parts
@@ -152,6 +157,60 @@ function computeIsThinking({
   return false;
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  'tool-searchGraph': 'Searching the graph',
+  'tool-getEntity': 'Looking up an entity',
+  'tool-listSpaces': 'Listing spaces',
+  'tool-getSpaceTypes': 'Checking space types',
+  'tool-research': 'Researching the web',
+  'tool-webFetch': 'Reading a page',
+  'tool-navigate': 'Navigating',
+  'tool-openReviewPanel': 'Opening the review panel',
+  'tool-createEntity': 'Creating an entity',
+  'tool-deleteEntity': 'Deleting an entity',
+  'tool-moveEntityToSpace': 'Moving an entity',
+  'tool-cloneEntityToSpace': 'Cloning an entity',
+  'tool-createProperty': 'Creating a property',
+  'tool-deleteProperty': 'Deleting a property',
+  'tool-changePropertyDataType': 'Updating a property',
+  'tool-setEntityValue': 'Updating values',
+  'tool-setEntityRelation': 'Updating relations',
+  'tool-createBlock': 'Adding a block',
+  'tool-updateBlock': 'Updating a block',
+  'tool-deleteBlock': 'Deleting a block',
+  'tool-moveBlock': 'Reordering blocks',
+  'tool-moveRelation': 'Reordering',
+  'tool-setDataBlockFilters': 'Updating filters',
+  'tool-setDataBlockView': 'Updating the view',
+  'tool-setDataBlockShownColumns': 'Updating columns',
+  'tool-addCollectionItem': 'Adding to a block',
+  'tool-createTab': 'Creating a tab',
+  'tool-renameTab': 'Renaming a tab',
+  'tool-toggleEditMode': 'Toggling edit mode',
+};
+
+type ThinkingLabel = { label: string; count: number };
+
+function thinkingLabel(message: UIMessage | undefined): ThinkingLabel {
+  if (!message) return { label: 'Thinking…', count: 0 };
+  let count = 0;
+  let inFlightType: string | null = null;
+  let lastType: string | null = null;
+  for (const part of message.parts) {
+    if (!isToolUIPart(part)) continue;
+    if (part.type === 'tool-suggestFollowUps') continue;
+    count += 1;
+    lastType = part.type;
+    if (part.state === 'input-streaming' || part.state === 'input-available') {
+      inFlightType = part.type;
+    }
+  }
+  if (count === 0) return { label: 'Thinking…', count: 0 };
+  const activeType = inFlightType ?? lastType;
+  const verb = (activeType && TOOL_LABELS[activeType]) || 'Working';
+  return { label: `${verb}…`, count };
+}
+
 // One-line digest of an assistant message's parts for the debug logger.
 function digestParts(message: UIMessage | undefined): string {
   if (!message) return '<no-assistant>';
@@ -261,7 +320,7 @@ function messageWebSources(message: UIMessage): WebSource[] {
   const sources: WebSource[] = [];
   for (const part of message.parts) {
     if (!isToolUIPart(part)) continue;
-    if (part.type !== 'tool-research') continue;
+    if (part.type !== 'tool-research' && part.type !== 'tool-webFetch') continue;
     if (part.state !== 'output-available') continue;
     const output = (part as { output?: unknown }).output;
     if (!output || typeof output !== 'object') continue;
@@ -304,14 +363,13 @@ type Props = {
   messages: UIMessage[];
   status: 'submitted' | 'streaming' | 'ready' | 'error';
   error?: Error;
-  isFull?: boolean;
-  onRetry: () => void;
   onSuggestion: (text: string) => void;
   disabled?: boolean;
 };
 
-export function ChatMessages({ messages, status, error, isFull, onRetry, onSuggestion, disabled }: Props) {
+export function ChatMessages({ messages, status, error, onSuggestion, disabled }: Props) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const injectInline = useAtomValue(injectInlineAtom);
 
   const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
   const lastAssistantId = lastAssistant?.id;
@@ -320,19 +378,30 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
   const willResubmit = shouldResubmitAfterClientExecution({ messages });
   const lastUserIdx = findLastUserIndex(messages);
   const isThinking = computeIsThinking({ messages, status, willResubmit, lastUserIdx });
+  const currentThinkingLabel = thinkingLabel(lastAssistant);
 
   useChatDebugLogger({ messages, status, willResubmit, isThinking, lastAssistant });
+
+  // Drip the latest assistant's text. Lifted here so showFollowUps can gate on
+  // "drip done" — otherwise pills land before the closer text finishes typing.
+  // Only animate while the turn is live; otherwise re-opening the panel would
+  // re-drip already-read content.
+  const latestRawText = lastAssistant ? visibleAssistantText(lastAssistant) : '';
+  const isTurnLive = status === 'submitted' || status === 'streaming';
+  const latestDisplayed = useSmoothStream(latestRawText, isTurnLive);
+  const isLatestDripping = lastAssistant !== undefined && latestDisplayed !== latestRawText;
 
   // Placeholder row while we've submitted but no assistant message exists yet.
   const lastAssistantIdx = lastAssistant ? messages.lastIndexOf(lastAssistant) : -1;
   const showStandaloneThinking = isThinking && (lastAssistantIdx === -1 || lastAssistantIdx < lastUserIdx);
 
-  // Gate on `ready` so prior pills aren't Tab+Enter-reachable mid-turn.
-  const showFollowUps = status === 'ready' && !error && followUps.length > 0;
+  // Gate on `ready` so prior pills aren't Tab+Enter-reachable mid-turn, and on
+  // `!isLatestDripping` so they don't pop in mid-stream.
+  const showFollowUps = status === 'ready' && !error && followUps.length > 0 && !isLatestDripping;
   // Skeleton bridges the gap between closer finish and follow-ups landing.
-  const hasVisibleAssistantText = lastAssistant !== undefined && visibleAssistantText(lastAssistant).length > 0;
+  const hasVisibleAssistantText = latestRawText.length > 0;
   const showSkeletonFollowUps =
-    !error && !showFollowUps && status === 'streaming' && !isThinking && hasVisibleAssistantText;
+    !error && !showFollowUps && !isThinking && hasVisibleAssistantText && (status === 'streaming' || isLatestDripping);
 
   const entityCache = React.useMemo(() => buildEntityCacheFromMessages(messages), [messages]);
 
@@ -427,9 +496,23 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
             );
           }
 
+          // Inject pending: swap the standard sparkle+text body for the
+          // dedicated inline progress UI (rotating phrase + thin bar).
+          if (injectInline && injectInline.assistantMessageId === message.id && injectInline.status === 'pending') {
+            return (
+              <div key={message.id} data-message-id={message.id}>
+                <InjectInlineProgress state={injectInline} />
+              </div>
+            );
+          }
+
           const text = visibleAssistantText(message);
           const isLatest = message.id === lastAssistantId;
-          const showInlineThinking = isLatest && isThinking;
+          // Inline thinking belongs on the *current-turn* assistant only —
+          // otherwise a follow-up user message double-fires (here + standalone).
+          const showInlineThinking = isLatest && isThinking && lastAssistantIdx > lastUserIdx;
+          // Only the latest message participates in the drip animation.
+          const displayed = isLatest ? latestDisplayed : text;
           if (!text && !showInlineThinking) return null;
 
           const sources = messageWebSources(message);
@@ -444,10 +527,9 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
               <AssistantMessage
                 messageId={message.id}
                 text={text}
-                // Stay streaming-driven so useSmoothStream isn't cut short
-                // when the closer's stream ends (otherwise the text pops).
-                isStreaming={isLatest}
+                displayed={displayed}
                 showThinking={showInlineThinking}
+                thinkingLabel={currentThinkingLabel}
                 entityCache={entityCache}
               />
               {showSources ? (
@@ -499,17 +581,6 @@ export function ChatMessages({ messages, status, error, isFull, onRetry, onSugge
             ))}
           </div>
         ) : null}
-
-        {error && !isFull && (
-          <div className="flex justify-start">
-            <div className="max-w-[90%] rounded-md border border-red-01 px-2 py-1.5 text-chat text-red-01">
-              Something went wrong.{' '}
-              <button type="button" onClick={onRetry} className="underline">
-                Try again
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -519,42 +590,46 @@ function ThinkingRow() {
   return (
     <div className="flex flex-col items-start gap-2">
       <AssistantSparkle />
-      <ThinkingShimmer />
+      <ThinkingIndicator />
     </div>
   );
 }
 
-function ThinkingShimmer() {
+function ThinkingIndicator({ label = 'Thinking…', count = 0 }: { label?: string; count?: number }) {
   return (
-    <motion.div
-      className="text-chat"
-      style={{
-        backgroundImage: 'linear-gradient(90deg, #B6B6B6 0%, #B6B6B6 35%, #202020 50%, #B6B6B6 65%, #B6B6B6 100%)',
-        backgroundSize: '200% 100%',
-        WebkitBackgroundClip: 'text',
-        backgroundClip: 'text',
-        color: 'transparent',
-      }}
-      animate={{ backgroundPosition: ['200% 0%', '-200% 0%'] }}
-      transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+    <div
+      className="flex items-center gap-1.5 text-chat text-text"
       aria-live="polite"
-      aria-label="Assistant thinking"
+      aria-label={count > 0 ? `${label} (${count})` : label}
     >
-      Thinking…
-    </motion.div>
+      <Spinner />
+      <span>{label}</span>
+      {count > 0 ? (
+        <span className="inline-flex items-center rounded-[4px] bg-grey-01 px-1 py-px text-footnote text-grey-04 tabular-nums">
+          {count}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
 type AssistantMessageProps = {
   messageId: string;
   text: string;
-  isStreaming: boolean;
+  displayed: string;
   showThinking: boolean;
+  thinkingLabel: ThinkingLabel;
   entityCache: EntityCache;
 };
 
-function AssistantMessage({ messageId, text, isStreaming, showThinking, entityCache }: AssistantMessageProps) {
-  const displayed = useSmoothStream(text, isStreaming);
+function AssistantMessage({
+  messageId,
+  text,
+  displayed,
+  showThinking,
+  thinkingLabel,
+  entityCache,
+}: AssistantMessageProps) {
   const isDripping = displayed !== text;
 
   return (
@@ -562,7 +637,7 @@ function AssistantMessage({ messageId, text, isStreaming, showThinking, entityCa
       <AssistantSparkle />
       {text ? (
         <div
-          className="prose-chat max-w-[90%] text-chat text-text"
+          className="prose-chat w-full text-chat text-text"
           style={
             isDripping
               ? {
@@ -575,7 +650,9 @@ function AssistantMessage({ messageId, text, isStreaming, showThinking, entityCa
           <ChatMarkdown text={displayed} cache={entityCache} />
         </div>
       ) : null}
-      {showThinking && !isDripping ? <ThinkingShimmer /> : null}
+      {showThinking && !isDripping ? (
+        <ThinkingIndicator label={thinkingLabel.label} count={thinkingLabel.count} />
+      ) : null}
     </div>
   );
 }

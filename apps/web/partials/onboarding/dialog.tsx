@@ -27,7 +27,6 @@ import {
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
-import { proposeAddMemberDirect } from '~/core/hooks/use-propose-add-member';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -223,14 +222,6 @@ export const OnboardingDialog = () => {
           try {
             const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
             if (!targetSpace?.address) continue;
-
-            await proposeAddMemberDirect({
-              spaceId: targetSpaceId,
-              targetMemberSpaceId: spaceId,
-              personalSpaceId: spaceId,
-              space: targetSpace,
-              tx,
-            });
           } catch (error) {
             console.error('Membership proposal failed for', targetSpaceId, error);
           }

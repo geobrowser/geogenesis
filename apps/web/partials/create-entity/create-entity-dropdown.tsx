@@ -12,12 +12,13 @@ import { NavUtils } from '~/core/utils/utils';
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 
-import { CreateSpaceDialog } from '../create-space/create-space-dialog';
+import { useOpenCreateSpaceDialog } from '../create-space/create-space-dialog';
 
 export function CreateEntityDropdown() {
   const router = useRouter();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const openCreateSpaceDialog = useOpenCreateSpaceDialog();
 
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
   const { isEditor, isMember } = useAccessControl(spaceId ?? '');
@@ -39,10 +40,8 @@ export function CreateEntityDropdown() {
       }
       className="max-w-[120px] bg-white"
     >
-      <MenuItem>
-        <p className="text-center text-button">
-          <CreateSpaceDialog />
-        </p>
+      <MenuItem onClick={() => openCreateSpaceDialog()}>
+        <p className="text-center text-button">New space</p>
       </MenuItem>
       {spaceId && (
         <>

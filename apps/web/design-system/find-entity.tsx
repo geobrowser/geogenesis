@@ -50,18 +50,10 @@ export const FindEntity = ({
     };
   }, []);
 
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes: allowedTypes,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: allowedTypes,
+    });
 
   if (query === '' && result !== null) {
     startTransition(() => {

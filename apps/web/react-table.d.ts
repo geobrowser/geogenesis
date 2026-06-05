@@ -20,5 +20,6 @@ declare module '@tanstack/react-table' {
     shouldAutoFocusPlaceholder?: boolean;
     placeholderFocusKey?: number;
     collectionTypeFilters?: { id: string; name: string | null }[];
+    openedWithMainViewEditing: boolean;
   }
 }

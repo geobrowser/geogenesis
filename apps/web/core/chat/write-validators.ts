@@ -12,7 +12,7 @@ import * as Effect from 'effect/Effect';
 
 import type { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { ID } from '~/core/id';
-import { getEntity, getProperty } from '~/core/io/queries';
+import { getEntity, getProperty, getSpace } from '~/core/io/queries';
 import { E } from '~/core/sync/orm';
 import { GeoStore } from '~/core/sync/store';
 import type { Entity, Property, SwitchableRenderableType } from '~/core/types';
@@ -253,6 +253,33 @@ export async function resolveCollectionBlock(
   return null;
 }
 
+// Detect the "model passed a space id where an entity id was expected" case.
+// Returns `notFound` with the correct home entity id in the message when the
+// supplied id resolves to a space whose home entity is a different id. Returns
+// null when the id is not a space, when no space is found, or when the space's
+// home entity id is the same id (legacy spaces).
+export async function checkSpaceIdMisuse(entityId: string, ctx: WriteCtx): Promise<EditToolFailure | null> {
+  try {
+    const space = await ctx.cache.fetchQuery({
+      queryKey: ['network', 'space', entityId],
+      queryFn: ({ signal }) => Effect.runPromise(getSpace(entityId, signal)),
+    });
+    if (!space) return null;
+    const homeRaw = space.topicId ?? space.entity.id ?? '';
+    const homeEntityId = homeRaw ? normalizeEntityId(homeRaw) : '';
+    if (!homeEntityId || homeEntityId === entityId) return null;
+    return notFound(
+      'entity',
+      entityId,
+      `${entityId} is a space id, not an entity id. The space's home entity id is ${homeEntityId} — pass that as the entity target instead. (For the current space, use currentEntityId from the system context.)`
+    );
+  } catch {
+    // Cache/network failure — fall through to the normal not_found path. We
+    // don't want a transient lookup to block an otherwise valid call.
+    return null;
+  }
+}
+
 export function checkRelationDedup(
   fromEntity: Entity,
   typeId: string,
@@ -308,6 +335,8 @@ async function planSetEntityValue(input: SetEntityValueInput, ctx: WriteCtx): Pr
 
   const entity = await resolveEntity(entityId, spaceId, ctx);
   if (isFailure(entity)) return entity;
+  const entityMisuse = await checkSpaceIdMisuse(entityId, ctx);
+  if (entityMisuse) return entityMisuse;
 
   return {
     ok: true,
@@ -420,6 +449,11 @@ async function planSetEntityRelation(input: SetEntityRelationInput, ctx: WriteCt
   // Cross-space lookup intentional: the target may live in a different space.
   const toEntity = await resolveEntity(toEntityId, undefined, ctx);
   if (isFailure(toEntity)) return toEntity;
+  // The model can confuse a `/space/<id>` URL with an entity id and pass the
+  // bare space id as the relation target. Catch that here with the correct
+  // home entity id in the error so the model can retry.
+  const targetMisuse = await checkSpaceIdMisuse(toEntityId, ctx);
+  if (targetMisuse) return targetMisuse;
 
   if (checkRelationDedup(fromEntity, typeId, toEntityId, spaceId) === 'duplicate') {
     return alreadyExists(`${fromEntity.name ?? fromEntityId} already has this relation`);
@@ -436,6 +470,67 @@ async function planSetEntityRelation(input: SetEntityRelationInput, ctx: WriteCt
       typeName: property.name,
       toEntityId,
       toEntityName: toEntity.name,
+    },
+  };
+}
+
+type SetEntityImageInput = {
+  entityId: string;
+  spaceId: string;
+  propertyId: string;
+  sourceUrl: string;
+};
+
+const IMAGE_SOURCE_URL_RE = /^(https?|ipfs):\/\//i;
+const MAX_IMAGE_URL_CHARS = 4_096;
+
+async function planSetEntityImage(input: SetEntityImageInput, ctx: WriteCtx): Promise<EditToolOutput> {
+  if (!isEntityId(input.entityId) || !isEntityId(input.spaceId) || !isEntityId(input.propertyId)) {
+    return invalid();
+  }
+  const sourceUrl = typeof input.sourceUrl === 'string' ? input.sourceUrl.trim() : '';
+  if (!sourceUrl) return invalid('sourceUrl is required');
+  if (sourceUrl.length > MAX_IMAGE_URL_CHARS) return invalid('sourceUrl too long');
+  if (!IMAGE_SOURCE_URL_RE.test(sourceUrl)) {
+    return invalid('sourceUrl must be http://, https://, or ipfs://');
+  }
+
+  const entityId = normalizeEntityId(input.entityId);
+  const spaceId = normalizeEntityId(input.spaceId);
+  const propertyId = normalizeEntityId(input.propertyId);
+
+  const property = await resolveProperty(propertyId, ctx);
+  if (isFailure(property)) return property;
+  if (property.dataType !== 'RELATION') {
+    return wrongType('propertyId must be a RELATION-typed property (e.g. Cover image, Avatar)');
+  }
+  // The renderable type is the strict guarantee that the property is meant to
+  // hold an Image entity. Some image-bearing relations may not have it set in
+  // older data, so don't hard-reject on absence — but if it IS set to something
+  // other than IMAGE, the model picked the wrong property.
+  if (property.renderableTypeStrict && property.renderableTypeStrict !== 'IMAGE') {
+    return wrongType(
+      `propertyId is rendered as ${property.renderableTypeStrict}; setEntityImage only works on IMAGE-typed relations`
+    );
+  }
+
+  const entity = await resolveEntity(entityId, spaceId, ctx);
+  if (isFailure(entity)) return entity;
+  // The home entity carries the cover/avatar, not the space metadata entity
+  // — catch the bare-space-id case the same way as relation tools.
+  const entityMisuse = await checkSpaceIdMisuse(entityId, ctx);
+  if (entityMisuse) return entityMisuse;
+
+  return {
+    ok: true,
+    intent: {
+      kind: 'setEntityImage',
+      entityId,
+      entityName: entity.name ?? null,
+      spaceId,
+      propertyId,
+      propertyName: property.name ?? null,
+      sourceUrl,
     },
   };
 }
@@ -1089,6 +1184,10 @@ async function planAddCollectionItem(input: CollectionItemInput, ctx: WriteCtx):
   // entities from other spaces.
   const target = await resolveEntity(entityId, undefined, ctx);
   if (isFailure(target)) return target;
+  // Same space-id-vs-entity-id guard as setEntityRelation: catch a bare space
+  // id used as a collection item target before it stages a broken relation.
+  const targetMisuse = await checkSpaceIdMisuse(entityId, ctx);
+  if (targetMisuse) return targetMisuse;
 
   return {
     ok: true,
@@ -1145,6 +1244,8 @@ export async function planWriteTool(toolName: string, input: WriteToolInput, ctx
       return planSetEntityRelation(input as unknown as SetEntityRelationInput, ctx);
     case 'deleteEntityRelation':
       return planDeleteEntityRelation(input as unknown as DeleteEntityRelationInput);
+    case 'setEntityImage':
+      return planSetEntityImage(input as unknown as SetEntityImageInput, ctx);
     case 'createEntity':
       return planCreateEntity(input as unknown as CreateEntityInput);
     case 'deleteEntity':

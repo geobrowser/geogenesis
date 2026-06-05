@@ -17,9 +17,11 @@ vi.mock('~/core/sync/orm', () => ({ E: { findOne } }));
 
 const getEntityMock = vi.fn();
 const getPropertyMock = vi.fn();
+const getSpaceMock = vi.fn();
 vi.mock('~/core/io/queries', () => ({
   getEntity: (...args: unknown[]) => getEntityMock(...args),
   getProperty: (...args: unknown[]) => getPropertyMock(...args),
+  getSpace: (...args: unknown[]) => getSpaceMock(...args),
 }));
 
 // Stub the cache: passes through to the queryFn so we can assert it ran when
@@ -82,6 +84,10 @@ beforeEach(() => {
   findOne.mockReset();
   getEntityMock.mockReset();
   getPropertyMock.mockReset();
+  getSpaceMock.mockReset();
+  // Default: the id under test is NOT a space id. Individual tests that
+  // exercise the space-id-vs-entity-id guard override this.
+  getSpaceMock.mockReturnValue(Effect.succeed(null));
   cache.fetchQuery.mockClear();
   localStore.getProperty.mockReset();
   localStore.getEntity.mockReset();
@@ -388,6 +394,204 @@ describe('planWriteTool: setEntityRelation', () => {
       ctx
     );
     expect(out).toMatchObject({ ok: true, intent: { kind: 'setRelation', typeName: 'Skills' } });
+  });
+
+  it('rejects with not_found when toEntityId is a space id whose home entity is different', async () => {
+    // Guards the bug where a `/space/<id>` URL was used as a relation target —
+    // the bare space id resolves as an "entity" (the space metadata record),
+    // but the actual content lives on the home/topic entity.
+    localStore.getProperty.mockReturnValue({ id: TYPE, name: 'Related Spaces', dataType: 'RELATION' });
+    findOne
+      .mockResolvedValueOnce(makeEntity({ id: ENTITY, name: 'Specter' }))
+      .mockResolvedValueOnce(makeEntity({ id: TARGET, name: 'Space record' }));
+    getSpaceMock.mockReturnValue(
+      Effect.succeed({
+        id: TARGET,
+        topicId: null,
+        // Home entity differs from the space id — this is the misuse case.
+        entity: { id: 'b68d8bdbe2054856a9b2575a236c1da3' },
+      })
+    );
+    const out = await planWriteTool(
+      'setEntityRelation',
+      { fromEntityId: ENTITY, spaceId: SPACE, typeId: TYPE, toEntityId: TARGET },
+      ctx
+    );
+    expect(out).toMatchObject({
+      ok: false,
+      error: 'not_found',
+      message: expect.stringContaining('b68d8bdbe2054856a9b2575a236c1da3'),
+    });
+  });
+
+  it('passes through when the space id IS the home entity id (legacy spaces)', async () => {
+    localStore.getProperty.mockReturnValue({ id: TYPE, name: 'Related Spaces', dataType: 'RELATION' });
+    findOne
+      .mockResolvedValueOnce(makeEntity({ id: ENTITY, name: 'Specter' }))
+      .mockResolvedValueOnce(makeEntity({ id: TARGET, name: 'Legacy Space' }));
+    getSpaceMock.mockReturnValue(
+      Effect.succeed({
+        id: TARGET,
+        topicId: null,
+        entity: { id: TARGET },
+      })
+    );
+    const out = await planWriteTool(
+      'setEntityRelation',
+      { fromEntityId: ENTITY, spaceId: SPACE, typeId: TYPE, toEntityId: TARGET },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: true });
+  });
+});
+
+describe('planWriteTool: setEntityImage', () => {
+  const VALID_URL = 'https://example.com/poster.jpg';
+
+  it('emits a setEntityImage intent for a valid RELATION+IMAGE property', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Matrix' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({
+      ok: true,
+      intent: {
+        kind: 'setEntityImage',
+        entityId: ENTITY,
+        entityName: 'Matrix',
+        spaceId: SPACE,
+        propertyId: PROPERTY,
+        propertyName: 'Cover',
+        sourceUrl: VALID_URL,
+      },
+    });
+  });
+
+  it('passes through when renderableTypeStrict is unset (legacy image properties)', async () => {
+    localStore.getProperty.mockReturnValue({ id: PROPERTY, name: 'Avatar', dataType: 'RELATION' });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'User' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: true, intent: { kind: 'setEntityImage' } });
+  });
+
+  it('rejects with invalid when sourceUrl is empty', async () => {
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: '   ' },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('rejects with invalid when sourceUrl is over 4096 chars', async () => {
+    const longUrl = `https://example.com/${'a'.repeat(4_100)}.jpg`;
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: longUrl },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+  });
+
+  it.each([
+    ['ftp://example.com/x.jpg'],
+    ['file:///etc/passwd'],
+    ['javascript:alert(1)'],
+    ['data:image/png;base64,abc'],
+  ])('rejects non-http/ipfs scheme: %s', async badUrl => {
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: badUrl },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
+  });
+
+  it('accepts ipfs:// URLs (already-pinned fast-path)', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Matrix' }));
+    const out = await planWriteTool(
+      'setEntityImage',
+      {
+        entityId: ENTITY,
+        spaceId: SPACE,
+        propertyId: PROPERTY,
+        sourceUrl: 'ipfs://bafybeigdyrztktx5jpr3evnpzqpkk4tlxbmnpzqtttttttttttttttttttttt',
+      },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: true, intent: { kind: 'setEntityImage' } });
+  });
+
+  it('rejects with wrong_type when propertyId is not a RELATION', async () => {
+    localStore.getProperty.mockReturnValue({ id: PROPERTY, name: 'Title', dataType: 'TEXT' });
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'wrong_type' });
+  });
+
+  it('rejects with wrong_type when renderableTypeStrict is set but not IMAGE', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Director',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'RELATION',
+    });
+    findOne.mockResolvedValueOnce(makeEntity());
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({ ok: false, error: 'wrong_type' });
+  });
+
+  it('rejects with not_found when entityId is a space id whose home entity differs', async () => {
+    localStore.getProperty.mockReturnValue({
+      id: PROPERTY,
+      name: 'Cover',
+      dataType: 'RELATION',
+      renderableTypeStrict: 'IMAGE',
+    });
+    findOne.mockResolvedValueOnce(makeEntity({ name: 'Space record' }));
+    getSpaceMock.mockReturnValue(
+      Effect.succeed({
+        id: ENTITY,
+        topicId: null,
+        entity: { id: 'b68d8bdbe2054856a9b2575a236c1da3' },
+      })
+    );
+    const out = await planWriteTool(
+      'setEntityImage',
+      { entityId: ENTITY, spaceId: SPACE, propertyId: PROPERTY, sourceUrl: VALID_URL },
+      ctx
+    );
+    expect(out).toMatchObject({
+      ok: false,
+      error: 'not_found',
+      message: expect.stringContaining('b68d8bdbe2054856a9b2575a236c1da3'),
+    });
   });
 });
 

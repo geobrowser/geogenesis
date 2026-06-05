@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { makeRelationForSourceType, type Source } from '~/core/blocks/data/source';
+import { type Source, makeRelationForSourceType } from '~/core/blocks/data/source';
 import { EntityId } from '~/core/io/substream-schema';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { Relation } from '~/core/types';
@@ -21,11 +21,7 @@ export function makeInitialDataEntityRelations(
   initialSourceType: InitialDataBlockSource = 'COLLECTION'
 ): [Relation, Relation] {
   const sourceForRelation: Source['type'] =
-    initialSourceType === 'COLLECTION'
-      ? 'COLLECTION'
-      : initialSourceType === 'GEO'
-        ? 'GEO'
-        : 'SPACES';
+    initialSourceType === 'COLLECTION' ? 'COLLECTION' : initialSourceType === 'GEO' ? 'GEO' : 'SPACES';
 
   return [
     makeRelationForSourceType(sourceForRelation, blockId, spaceId),

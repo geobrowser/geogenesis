@@ -9,9 +9,8 @@ import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
-
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from './cached-fetch-entity';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 export type EntityPageData = {
   id: string;
@@ -39,7 +38,11 @@ export type EntityPageData = {
  * in sync; consumers can derive any view-specific flags from the returned
  * data at the call site.
  */
-export async function fetchEntityPageData(spaceId: string, entityId: string): Promise<EntityPageData> {
+export async function fetchEntityPageData(
+  spaceId: string,
+  entityId: string,
+  options?: { canClaimTopic?: boolean }
+): Promise<EntityPageData> {
   const entityPage = await cachedFetchEntityPage(entityId, spaceId);
 
   const entity = entityPage?.entity;
@@ -50,8 +53,13 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
   /**
    * Only redirect to the space front page if this entity is the page
    * entity for the current space, not a SPACE_TYPE from another space.
+   *
+   * Skip the redirect when the entity is a claimable topic so the user lands
+   * on the topic entity page where the "Claim topic" button lives. Without
+   * this, claimed topics (which have SPACE_TYPE and a matching space) would
+   * bounce the user away before the button can render.
    */
-  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && deterministicSpaceId) {
+  if (!options?.canClaimTopic && entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && deterministicSpaceId) {
     const space = await cachedFetchSpace(deterministicSpaceId);
     if (space?.entity?.id === entityId && !Spaces.hasExternalTopic(space)) {
       redirect(NavUtils.toSpace(deterministicSpaceId));

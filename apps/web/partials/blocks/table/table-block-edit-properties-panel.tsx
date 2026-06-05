@@ -13,12 +13,12 @@ import Image from 'next/legacy/image';
 
 import { generateSelector, getIsSelected } from '~/core/blocks/data/data-selectors';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
-import { ID } from '~/core/id';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { ID } from '~/core/id';
 import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
 

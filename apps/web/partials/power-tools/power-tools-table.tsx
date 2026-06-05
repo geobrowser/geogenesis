@@ -177,6 +177,7 @@ function NameCell({
         relationId={row.relationId}
         verified={row.verified}
         onLinkEntry={onLinkEntry}
+        showSidePanel={false}
       >
         <Link
           entityId={row.entityId}
@@ -612,7 +613,7 @@ export function PowerToolsTable({
   }, [virtualRows, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div ref={tableRef} className="h-full w-full overflow-auto">
+    <div ref={tableRef} data-power-tools-scroll className="h-full w-full overflow-auto">
       <div className="shadow-sm sticky top-0 z-10 bg-white">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnReorder}>
           <SortableContext items={orderedPropertyIds} strategy={horizontalListSortingStrategy}>

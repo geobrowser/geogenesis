@@ -39,9 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
 
   try {
-    const result = await Effect.runPromise(
-      fetchSpaceParticipantsPage({ spaceId, kind, offset, limit })
-    );
+    const result = await Effect.runPromise(fetchSpaceParticipantsPage({ spaceId, kind, offset, limit }));
     return NextResponse.json(result);
   } catch (e) {
     console.error(`space participants ${kind}`, { spaceId, offset, limit, error: e });

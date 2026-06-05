@@ -21,6 +21,16 @@ export const HIDDEN_PROPERTIES: ReadonlySet<string> = new Set([SCORE_SYSTEM_PROP
 
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
+// Topic taxonomy
+/** Entity type for Topic — used to identify Topic entities via the standard TYPES_PROPERTY. */
+export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
+/** Property used to tag a Topic entity (e.g. with the curated-topic tag). */
+export const TAG_PROPERTY_ID = '257090341ba5406f94e4d4af90042fba';
+/** Entity that, when used as the value of TAG_PROPERTY_ID, marks a Topic as editorially curated. */
+export const CURATED_TOPIC_TAG_ID = '7f796eb5bfc5449c98649bf7d996a2ca';
+/** Relation type that links a parent Topic to its immediate subtopics. */
+export const SUBTOPIC_RELATION_TYPE_ID = '39e40cadb23d4f63ab2faea1596436c7';
+
 // Bounty linking - relation type used to link proposals to bounties
 export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
 export const BOUNTY_TYPE_ID = '808af0bad5884e3391f09dd4b25e18be';

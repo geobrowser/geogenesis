@@ -10,12 +10,12 @@ import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import {
+  type QueryFromSpaceRow,
   sortSpacesForDropdownSearch,
   useQueryFromSpacesList,
-  type QueryFromSpaceRow,
 } from '~/core/hooks/use-query-from-spaces-list';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 
@@ -108,9 +108,7 @@ function SpaceDropdownRow({
           </div>
           {selected && <Check />}
         </div>
-        {row.pendingLabel ? (
-          <p className="truncate pl-6 text-footnote text-grey-04">{row.pendingLabel}</p>
-        ) : null}
+        {row.pendingLabel ? <p className="truncate pl-6 text-footnote text-grey-04">{row.pendingLabel}</p> : null}
       </div>
     </Dropdown.Item>
   );
@@ -232,17 +230,15 @@ export function DataBlockScopeDropdown({
   const spaceIdsForLabel = labelSource.type === 'SPACES' ? labelSource.value : [];
   const { spacesById } = useSpacesByIds(spaceIdsForLabel);
 
-  const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(
-    personalSpaceId ?? spaceId,
-    open
-  );
+  const { data: scopeData, isLoading: initialListLoading } = useQueryFromSpacesList(personalSpaceId ?? spaceId, open);
   const sections = scopeData?.sections;
   const scopeOrdering = scopeData?.ordering;
 
-  const { setQuery: setRemoteSearchQuery, spaces: remoteSearchSpaces, isLoading: remoteSearchLoading } = useSpacesQuery(
-    open,
-    { matchLimit: 1000 }
-  );
+  const {
+    setQuery: setRemoteSearchQuery,
+    spaces: remoteSearchSpaces,
+    isLoading: remoteSearchLoading,
+  } = useSpacesQuery(open, { matchLimit: 1000 });
 
   const debouncedSearch = useDebouncedValue(search, 200);
 
@@ -361,10 +357,7 @@ export function DataBlockScopeDropdown({
             </Dropdown.Item>
           </div>
 
-          <div
-            className={cx('px-0.5 pb-1', listScrollClassName)}
-            onWheel={onListWheel}
-          >
+          <div className={cx('px-0.5 pb-1', listScrollClassName)} onWheel={onListWheel}>
             {listLoading && (
               <div className="flex h-14 items-center justify-center">
                 <Dots />

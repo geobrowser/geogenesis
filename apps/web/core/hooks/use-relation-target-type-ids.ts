@@ -56,10 +56,7 @@ export function useRelationTargetTypeIds({
     return relationValueTypes?.length ? relationValueTypes : undefined;
   }, [fromStore, fromNetwork, relationValueTypes]);
 
-  const typeIds = React.useMemo(
-    () => resolvedRelationValueTypes?.map(type => type.id),
-    [resolvedRelationValueTypes]
-  );
+  const typeIds = React.useMemo(() => resolvedRelationValueTypes?.map(type => type.id), [resolvedRelationValueTypes]);
 
   return {
     relationValueTypes: resolvedRelationValueTypes,
