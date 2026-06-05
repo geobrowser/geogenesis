@@ -7,7 +7,8 @@ import * as React from 'react';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { Dropdown } from '~/design-system/dropdown';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
@@ -54,6 +55,10 @@ type EntityFeedProps = {
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (New / Top). Defaults to false. */
   showSortFilter?: boolean;
+  /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
+  feedTopSpacingClassName?: string;
+  /** When true, renders a divider line between the filter row and the first feed card. */
+  dividerBeforeFeed?: boolean;
 };
 
 async function fetchFeedPage(
@@ -89,10 +94,15 @@ export function EntityFeed({
   initialSort = 'new',
   showTimeFilter = true,
   showSortFilter = false,
+  feedTopSpacingClassName,
+  dividerBeforeFeed = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
   const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
+  const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
+  const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
+  const [spaceMenuOpen, setSpaceMenuOpen] = React.useState(false);
   const spaceId = lockedSpaceId ?? selectedSpaceId;
 
   // Key the query on the smart-account address because that hook is what writes the
@@ -148,56 +158,125 @@ export function EntityFeed({
       {showSortFilter || showTimeFilter || lockedSpaceId == null ? (
         <div className="flex flex-wrap items-center gap-3">
           {showSortFilter ? (
-            <Dropdown
-              align="start"
-              trigger={<span>{sortLabel}</span>}
-              options={SORT_OPTIONS.map(o => ({
-                label: o.label,
-                value: o.value,
-                disabled: false,
-                onClick: () => setSort(o.value),
-              }))}
-            />
+            <Menu
+              asChild
+              open={sortMenuOpen}
+              onOpenChange={setSortMenuOpen}
+              sideOffset={8}
+              className="max-w-60 bg-white"
+              trigger={
+                <button
+                  type="button"
+                  className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
+                >
+                  <span>{sortLabel}</span>
+                  <span className={`inline-flex transition-transform duration-200 ${sortMenuOpen ? 'rotate-180' : ''}`}>
+                    <ChevronDownSmall color="grey-04" />
+                  </span>
+                </button>
+              }
+            >
+              {SORT_OPTIONS.map(o => (
+                <MenuItem
+                  key={o.value}
+                  active={o.value === sort}
+                  onClick={() => {
+                    setSort(o.value);
+                    setSortMenuOpen(false);
+                  }}
+                >
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Menu>
           ) : null}
           {showTimeFilter ? (
-            <Dropdown
-              align="start"
-              trigger={<span>{timeLabel}</span>}
-              options={TIME_OPTIONS.map(o => ({
-                label: o.label,
-                value: o.value,
-                disabled: false,
-                onClick: () => setTime(o.value),
-              }))}
-            />
+            <Menu
+              asChild
+              open={timeMenuOpen}
+              onOpenChange={setTimeMenuOpen}
+              sideOffset={8}
+              className="max-w-60 bg-white"
+              trigger={
+                <button
+                  type="button"
+                  className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
+                >
+                  <span>{timeLabel}</span>
+                  <span className={`inline-flex transition-transform duration-200 ${timeMenuOpen ? 'rotate-180' : ''}`}>
+                    <ChevronDownSmall color="grey-04" />
+                  </span>
+                </button>
+              }
+            >
+              {TIME_OPTIONS.map(o => (
+                <MenuItem
+                  key={o.value}
+                  active={o.value === time}
+                  onClick={() => {
+                    setTime(o.value);
+                    setTimeMenuOpen(false);
+                  }}
+                >
+                  {o.label}
+                </MenuItem>
+              ))}
+            </Menu>
           ) : null}
           {lockedSpaceId == null ? (
             <div className="ml-auto">
-              <Dropdown
-                align="end"
-                scrollableList
-                trigger={<span>{spaceLabel}</span>}
-                options={[
-                  {
-                    label: 'Any space',
-                    value: 'all',
-                    disabled: false,
-                    onClick: () => setSelectedSpaceId('all'),
-                  },
-                  ...initialSpaceOptions.map(o => ({
-                    label: o.label,
-                    value: o.value,
-                    disabled: false,
-                    onClick: () => setSelectedSpaceId(o.value),
-                  })),
-                ]}
-              />
+              <Menu
+                asChild
+                open={spaceMenuOpen}
+                onOpenChange={setSpaceMenuOpen}
+                sideOffset={8}
+                className="max-w-60 bg-white"
+                trigger={
+                  <button
+                    type="button"
+                    className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
+                  >
+                    <span>{spaceLabel}</span>
+                    <span className={`inline-flex transition-transform duration-200 ${spaceMenuOpen ? 'rotate-180' : ''}`}>
+                      <ChevronDownSmall color="grey-04" />
+                    </span>
+                  </button>
+                }
+              >
+                <MenuItem
+                  active={selectedSpaceId === 'all'}
+                  onClick={() => {
+                    setSelectedSpaceId('all');
+                    setSpaceMenuOpen(false);
+                  }}
+                >
+                  Any space
+                </MenuItem>
+                {initialSpaceOptions.map(o => (
+                  <MenuItem
+                    key={o.value}
+                    active={o.value === selectedSpaceId}
+                    onClick={() => {
+                      setSelectedSpaceId(o.value);
+                      setSpaceMenuOpen(false);
+                    }}
+                  >
+                    {o.label}
+                  </MenuItem>
+                ))}
+              </Menu>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <div className={showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1'}>
+      {dividerBeforeFeed ? <hr className="mt-5 border-t border-divider" /> : null}
+      <div
+        className={
+          feedTopSpacingClassName ??
+          (showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1')
+        }
+      >
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
         ) : isLoading ? (

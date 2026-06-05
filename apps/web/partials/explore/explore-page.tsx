@@ -26,15 +26,21 @@ export function ExplorePage({
   memberOrEditorSpaceIds,
 }: Props) {
   return (
-    <div className="mx-auto flex w-full max-w-[1320px] gap-10 px-6 lg:px-4">
-      <main className="min-w-0 flex-1">
+    <div className="mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
+      <main className="min-w-0 flex-1 pt-5">
         <EntityFeed
           apiEndpoint="/api/explore/feed"
           initialSpaceOptions={initialSpaceOptions}
           initialTime="month"
           showSortFilter
+          dividerBeforeFeed
+          feedTopSpacingClassName=""
         />
       </main>
+      <div
+        aria-hidden
+        className="sticky top-11 h-[calc(100dvh-2.75rem)] w-px shrink-0 self-start bg-divider lg:hidden"
+      />
       <ExploreSidePanel
         unclaimedTopics={unclaimedTopics}
         recentlyClaimedSpaces={recentlyClaimedSpaces}

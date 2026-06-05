@@ -13,6 +13,8 @@ import { Pending } from '~/design-system/pending';
 type ExploreJoinSpaceButtonProps = {
   spaceId: string;
   hasRequestedSpaceMembership: boolean;
+  /** Render style. 'text' (default) for inline article-card use; 'button' for the chip-styled button. */
+  variant?: 'text' | 'button';
 };
 
 function normId(id: string): string {
@@ -26,7 +28,7 @@ function normId(id: string): string {
  */
 const locallyRequestedSpaceIdsAtom = atom<Set<string>>(new Set<string>());
 
-export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }: ExploreJoinSpaceButtonProps) {
+export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership, variant = 'text' }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
   const { smartAccount } = useSmartAccount();
@@ -51,6 +53,15 @@ export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership }:
     <Pending isPending={status === 'pending'} position="end">
       {showPendingLabel ? (
         <span className="text-smallButton text-grey-04">Membership pending</span>
+      ) : variant === 'button' ? (
+        <button
+          type="button"
+          className="flex h-6 items-center rounded border border-grey-02 px-2 text-metadata text-grey-04 shadow-button transition-colors duration-150 hover:border-text focus-within:border-text"
+          disabled={status !== 'idle'}
+          onClick={() => requestToBeMember()}
+        >
+          Join space
+        </button>
       ) : (
         <button
           type="button"
