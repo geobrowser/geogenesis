@@ -41,6 +41,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { describeError } from '~/core/utils/error-diagnostics';
+import { requestToBeMemberDirect } from '~/core/utils/request-to-be-member';
 import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
@@ -222,6 +223,12 @@ export const OnboardingDialog = () => {
           try {
             const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
             if (!targetSpace?.address) continue;
+
+            await requestToBeMemberDirect({
+              spaceId: targetSpaceId,
+              personalSpaceId: spaceId,
+              tx,
+            });
           } catch (error) {
             console.error('Membership proposal failed for', targetSpaceId, error);
           }
@@ -816,7 +823,7 @@ function StepDescribeYou({
       emoji: '⌨️',
     },
     {
-      label: 'Domain expert',
+      label: 'Curious explorer',
       description: 'I just want to browse',
       id: CURIOUS_EXPLORER_ROLE,
       emoji: '👀',
