@@ -58,7 +58,13 @@ export function ExploreJoinSpaceButton({ spaceId, hasRequestedSpaceMembership, v
           type="button"
           className="flex h-6 items-center rounded border border-grey-02 px-2 text-metadata text-grey-04 shadow-button transition-colors duration-150 hover:border-text focus-within:border-text"
           disabled={status !== 'idle'}
-          onClick={() => requestToBeMember()}
+          onClick={() => {
+            if (!smartAccount) {
+              openSignInPrompt('join');
+              return;
+            }
+            requestToBeMember();
+          }}
         >
           Join space
         </button>
