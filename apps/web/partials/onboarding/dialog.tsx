@@ -767,7 +767,7 @@ function StepDescribeYou({
       emoji: '⌨️',
     },
     {
-      label: 'Domain expert',
+      label: 'Curious explorer',
       description: 'I just want to browse',
       id: CURIOUS_EXPLORER_ROLE,
       emoji: '👀',
