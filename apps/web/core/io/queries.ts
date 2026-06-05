@@ -17,6 +17,7 @@ import {
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -1061,6 +1062,7 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.IMAGE_TYPE,
   SystemIds.VIDEO_TYPE,
   SystemIds.VIDEO_BLOCK,
+  RANKING_BLOCK_TYPE_ID,
 ];
 
 const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {

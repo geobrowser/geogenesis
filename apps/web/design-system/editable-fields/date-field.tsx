@@ -263,7 +263,7 @@ function useSelectAllOnFocus(refs: React.RefObject<HTMLInputElement | null>[]) {
  * Only shows date fields (year, month, day)
  * Serializes to date-only ISO string (YYYY-MM-DDT00:00:00.000Z)
  */
-function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
   const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');

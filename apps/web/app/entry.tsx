@@ -69,7 +69,7 @@ export function App({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <div className="flex min-h-[100dvh] items-stretch">
+    <div className="flex min-h-[100dvh] items-stretch overflow-x-clip">
       <React.Suspense fallback={null}>
         <PageViewTracker />
       </React.Suspense>

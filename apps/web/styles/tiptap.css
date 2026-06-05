@@ -121,6 +121,11 @@
   @apply text-mediumTitle;
 }
 
+/* Data blocks (ranking, tables, etc.) manage their own section labels — not document headings. */
+.ProseMirror .data-node h2 {
+  @apply mt-0 mb-0 text-button font-medium;
+}
+
 .ProseMirror h3 {
   @apply text-smallTitle;
 }

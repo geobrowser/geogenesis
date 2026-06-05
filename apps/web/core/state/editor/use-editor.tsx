@@ -17,8 +17,11 @@ import type { ServerBlock } from '~/partials/editor/server-content';
 
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
+import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
+import { RANKING_END_DATE_PROPERTY_ID, RANKING_START_DATE_PROPERTY_ID } from '../../ranking-block-ids';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -367,6 +370,18 @@ export function useEditorStore() {
           })[0]?.toEntity.id;
           const isQuerySource =
             dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+          const isRankingSource = isRankingBlockEntity(
+            block.block.id,
+            getRelations({
+              mergeWith: initialBlockEntityRelations,
+              selector: r =>
+                r.fromEntity.id === block.block.id &&
+                r.type.id === SystemIds.TYPES_PROPERTY &&
+                r.spaceId === spaceId &&
+                !r.isDeleted,
+            }),
+            spaceId
+          );
           const configuredShownColumns = getRelations({
             mergeWith: initialBlockEntityRelations,
             selector: r =>
@@ -384,6 +399,41 @@ export function useEditorStore() {
               v.value.length > 0 &&
               !v.isDeleted,
           });
+          const rankingBlockEntity = initialBlockEntities.find(b => b.id === block.block.id);
+          const rankingSetupConfigured = isRankingSetupConfigured(
+            block.block.id,
+            rankingBlockEntity?.name,
+            configuredFilters,
+            spaceId
+          );
+          const rankingStartDate =
+            RANKING_START_DATE_PROPERTY_ID != null
+              ? (getValues({
+                  mergeWith: initialBlockValues,
+                  selector: v =>
+                    v.entity.id === block.block.id &&
+                    v.property.id === RANKING_START_DATE_PROPERTY_ID &&
+                    v.spaceId === spaceId &&
+                    !v.isDeleted,
+                })[0]?.value ?? null)
+              : null;
+          const rankingEndDate =
+            RANKING_END_DATE_PROPERTY_ID != null
+              ? (getValues({
+                  mergeWith: initialBlockValues,
+                  selector: v =>
+                    v.entity.id === block.block.id &&
+                    v.property.id === RANKING_END_DATE_PROPERTY_ID &&
+                    v.spaceId === spaceId &&
+                    !v.isDeleted,
+                })[0]?.value ?? null)
+              : null;
+
+          const initialDataSource = isRankingSource
+            ? ('RANKING' as const)
+            : isQuerySource
+              ? ('QUERY' as const)
+              : ('COLLECTION' as const);
 
           return [
             {
@@ -392,10 +442,13 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
-                initialDataSource: isQuerySource ? 'QUERY' : 'COLLECTION',
+                initialDataSource,
                 querySetupCompleted: isQuerySource
                   ? configuredShownColumns.length > 0 || configuredFilters.length > 0
                   : null,
+                rankingSetupCompleted: isRankingSource ? rankingSetupConfigured : null,
+                rankingStartDate,
+                rankingEndDate,
               },
             },
           ];
@@ -522,7 +575,7 @@ export function useEditorStore() {
         const blockType = (() => {
           switch (node.type) {
             case 'tableNode':
-              return SystemIds.DATA_BLOCK;
+              return node.attrs?.initialDataSource === 'RANKING' ? ('RANKING' as const) : SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
             case 'codeBlock':
@@ -555,6 +608,12 @@ export function useEditorStore() {
             // Create a Types relation to mark this entity as a Video type
             const relation = getRelationForBlockType(node.id, SystemIds.VIDEO_TYPE, spaceId);
             storage.relations.set(relation);
+            break;
+          }
+          case 'RANKING': {
+            for (const relation of makeInitialRankingBlockRelations(EntityId(node.id), spaceId, 'GEO')) {
+              storage.relations.set(relation);
+            }
             break;
           }
           case SystemIds.DATA_BLOCK: {
@@ -618,7 +677,7 @@ export function useEditorStore() {
       // New collection data blocks: persist Types + Description as shown columns (with Name)
       for (const node of addedBlocks) {
         if (node.type !== 'tableNode') continue;
-        if (node.attrs?.initialDataSource === 'QUERY') continue;
+        if (node.attrs?.initialDataSource === 'QUERY' || node.attrs?.initialDataSource === 'RANKING') continue;
 
         const blockRel = getRelations({
           mergeWith: initialBlockEntityRelations,
