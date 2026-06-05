@@ -66,6 +66,8 @@ import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pi
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
+import { TableBlockRanking } from './table-block-ranking';
+import { TableBlockRankingSetup } from './table-block-ranking-setup';
 import { TableBlockTable } from './table-block-table';
 
 interface Props {
@@ -74,6 +76,12 @@ interface Props {
   /** New Query blocks: choose scope before the main block chrome is interactive. */
   querySetupPending?: boolean;
   onCompleteQuerySetup?: () => void;
+  /** New Ranking blocks: setup form before the block is shown. */
+  rankingSetupPending?: boolean;
+  onCompleteRankingSetup?: (dates: { startDate: string; endDate: string }) => void;
+  rankingStartDate?: string;
+  rankingEndDate?: string;
+  isRankingBlock?: boolean;
   /** New Collection blocks: open the filters strip once on insert. */
   initialFiltersOpen?: boolean;
   onConsumedInitialFiltersOpen?: () => void;
@@ -397,6 +405,25 @@ function comparableFilterList(filters: Filter[]) {
 }
 
 export const TableBlock = (props: Props) => {
+  if (props.rankingSetupPending) {
+    return (
+      <TableBlockRankingSetup
+        spaceId={props.spaceId}
+        onCompleteRankingSetup={props.onCompleteRankingSetup ?? (() => {})}
+      />
+    );
+  }
+
+  if (props.isRankingBlock) {
+    return (
+      <TableBlockRanking
+        spaceId={props.spaceId}
+        rankingStartDate={props.rankingStartDate}
+        rankingEndDate={props.rankingEndDate}
+      />
+    );
+  }
+
   if (props.querySetupPending) {
     return <TableBlockQuerySetup {...props} />;
   }

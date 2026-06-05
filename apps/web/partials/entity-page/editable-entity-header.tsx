@@ -33,11 +33,14 @@ export function EditableHeading({
   spaceId,
   entityId,
   topRightSlot,
+  fallbackName,
 }: {
   spaceId: string;
   entityId: string;
   /** Optional action that stacks above the history/context-menu cluster on the right. */
   topRightSlot?: React.ReactNode;
+  /** Shown in browse mode when the scoped store has no name yet (e.g. ranking row preview). */
+  fallbackName?: string | null;
 }) {
   const { values } = useSyncEngine();
 
@@ -87,7 +90,7 @@ export function EditableHeading({
             <div className="flex min-w-0 items-center justify-between">
               <Truncate maxLines={3} shouldTruncate>
                 <Text as="h1" variant="mainPage">
-                  {name ?? ZERO_WIDTH_SPACE}
+                  {name ?? fallbackName ?? ZERO_WIDTH_SPACE}
                 </Text>
               </Truncate>
             </div>

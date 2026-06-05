@@ -1,0 +1,14 @@
+/**
+ * Ranking block ontology ids.
+ * Replace `RANKING_BLOCK_TYPE_ID` with `SystemIds.RANKING_BLOCK` when it ships in geo-sdk.
+ */
+export const RANKING_BLOCK_TYPE_ID = '150db6defe2344f0805afa57502e2c32';
+
+export const RANKING_BLOCK_TYPE_NAME = 'Ranking Block';
+
+export const RANKING_START_DATE_PROPERTY_ID = 'eed03a040acd4a9e81e08272ed70a817';
+export const RANKING_END_DATE_PROPERTY_ID = 'b08b8f63dc1e41568b0819946f2b011c';
+
+export const RANKING_AGGREGATION_RESTRICTION_PROPERTY_ID = '1e4caa2de3314efa8ac24e8d9d3e9fe9';
+export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_ID = '10a7b10390f94a728087935052ffaa69';
+export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_NAME = 'Members and editors';

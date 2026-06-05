@@ -13,6 +13,7 @@ import { EditorH3 } from '~/design-system/icons/editor-h3';
 import { EditorImage } from '~/design-system/icons/editor-image';
 import { EditorList } from '~/design-system/icons/editor-list';
 import { EditorQuery } from '~/design-system/icons/editor-query';
+import { EditorRanking } from '~/design-system/icons/editor-ranking';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
 import { Link } from '~/design-system/icons/link';
@@ -186,6 +187,28 @@ const queryDataBlockCommandItem: CommandSuggestionItem = {
   },
 };
 
+const rankingDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorRanking />,
+  title: 'Ranking',
+  command: ({ editor, range }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: range.from, to: range.to })
+      .insertContent({
+        type: 'tableNode',
+        attrs: {
+          initialDataSource: 'RANKING',
+          rankingSetupCompleted: false,
+        },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
 const textCommandItem: CommandSuggestionItem = {
   icon: <EditorText />,
   title: 'Text',
@@ -326,6 +349,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
   },
   collectionDataBlockCommandItem,
   queryDataBlockCommandItem,
+  rankingDataBlockCommandItem,
 ];
 
 // For backward compatibility if needed
