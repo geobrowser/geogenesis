@@ -10,7 +10,6 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { GEO_ROLES_PROPERTY } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
-import { proposeAddMemberDirect } from '~/core/hooks/use-propose-add-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { ID } from '~/core/id';
@@ -23,6 +22,7 @@ import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
+import { requestToBeMemberDirect } from '~/core/utils/request-to-be-member';
 
 import { avatarAtom, nameAtom, selectedRoleIdsAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
 
@@ -173,11 +173,9 @@ export function PendingPersonalSpaceRunner() {
                 const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
                 if (!targetSpace?.address) continue;
 
-                await proposeAddMemberDirect({
+                await requestToBeMemberDirect({
                   spaceId: targetSpaceId,
-                  targetMemberSpaceId: spaceId,
                   personalSpaceId: spaceId,
-                  space: targetSpace,
                   tx,
                 });
               } catch (error) {
