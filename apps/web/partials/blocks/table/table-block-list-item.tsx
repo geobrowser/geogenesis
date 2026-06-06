@@ -267,39 +267,26 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="relative w-full min-w-0 pr-9">
+        <div className="w-full min-w-0">
           {source.type !== 'COLLECTION' ? (
-            <>
-              <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-              {!isPlaceholder && (
-                <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
-                  <DataBlockOpenSidePanelButton
-                    entityId={rowEntityId}
-                    entitySpaceId={nameCell?.space ?? currentSpaceId}
-                    openedWithMainViewEditing={isEditing}
-                  />
-                </div>
-              )}
-            </>
+            <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
           ) : (
-            <>
-              <CollectionMetadata
-                view="LIST"
-                isEditing={false}
-                name={name}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                collectionId={nameCell?.collectionId}
-                relationId={relationId}
-                verified={verified}
-                onLinkEntry={onLinkEntry}
-                showSidePanel={!isPlaceholder}
-                openedWithMainViewEditing={isEditing}
-              >
-                <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-              </CollectionMetadata>
-            </>
+            <CollectionMetadata
+              view="LIST"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
+              entityId={rowEntityId}
+              spaceId={nameCell?.space}
+              collectionId={nameCell?.collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              showSidePanel={!isPlaceholder}
+              openedWithMainViewEditing={isEditing}
+            >
+              <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+            </CollectionMetadata>
           )}
           {description && (
             <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
@@ -332,7 +319,18 @@ export function TableBlockListItem({
           })}
         </div>
       </Link>
-      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      <div className="flex shrink-0 items-center gap-1">
+        {source.type !== 'COLLECTION' && !isPlaceholder && (
+          <div className="opacity-0 transition duration-200 group-hover:opacity-100">
+            <DataBlockOpenSidePanelButton
+              entityId={rowEntityId}
+              entitySpaceId={nameCell?.space ?? currentSpaceId}
+              openedWithMainViewEditing={isEditing}
+            />
+          </div>
+        )}
+        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      </div>
     </div>
   );
 }

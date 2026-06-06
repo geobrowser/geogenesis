@@ -258,44 +258,42 @@ export function TableBlockGalleryItem({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 grow">
             {source.type !== 'COLLECTION' ? (
-              <div className="relative pr-10">
+              <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
+                <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+              </Link>
+            ) : (
+              <CollectionMetadata
+                view="GALLERY"
+                isEditing={false}
+                name={name}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                collectionId={nameCell?.collectionId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                showSidePanel={!isPlaceholder}
+                openedWithMainViewEditing={isEditing}
+              >
                 <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                   <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
                 </Link>
-                {!isPlaceholder && (
-                  <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
-                    <DataBlockOpenSidePanelButton
-                      entityId={rowEntityId}
-                      entitySpaceId={nameCell?.space ?? currentSpaceId}
-                      openedWithMainViewEditing={isEditing}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="relative pr-10">
-                <CollectionMetadata
-                  view="GALLERY"
-                  isEditing={false}
-                  name={name}
-                  currentSpaceId={currentSpaceId}
-                  entityId={rowEntityId}
-                  spaceId={nameCell?.space}
-                  collectionId={nameCell?.collectionId}
-                  relationId={relationId}
-                  verified={verified}
-                  onLinkEntry={onLinkEntry}
-                  showSidePanel={!isPlaceholder}
-                  openedWithMainViewEditing={isEditing}
-                >
-                  <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-                    <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-                  </Link>
-                </CollectionMetadata>
-              </div>
+              </CollectionMetadata>
             )}
           </div>
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          <div className="flex shrink-0 items-center gap-1">
+            {source.type !== 'COLLECTION' && !isPlaceholder && (
+              <div className="opacity-0 transition duration-200 group-hover:opacity-100">
+                <DataBlockOpenSidePanelButton
+                  entityId={rowEntityId}
+                  entitySpaceId={nameCell?.space ?? currentSpaceId}
+                  openedWithMainViewEditing={isEditing}
+                />
+              </div>
+            )}
+            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          </div>
         </div>
         {description && propertyDataHasDescription && (
           <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
