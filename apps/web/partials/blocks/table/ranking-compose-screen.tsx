@@ -63,8 +63,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   React.useEffect(() => {
     if (accessStatus === 'ready') return;
     void ensureAccess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run when gate status changes, not when ensureAccess identity changes
-  }, [accessStatus]);
+  }, [accessStatus, ensureAccess]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
