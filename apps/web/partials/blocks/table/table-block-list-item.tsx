@@ -19,6 +19,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -282,7 +283,7 @@ export function TableBlockListItem({
               relationId={relationId}
               verified={verified}
               onLinkEntry={onLinkEntry}
-              showSidePanel={!isPlaceholder}
+              hideHoverActions
               openedWithMainViewEditing={isEditing}
             >
               <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
@@ -320,13 +321,26 @@ export function TableBlockListItem({
         </div>
       </Link>
       <div className="flex shrink-0 items-center gap-1">
-        {source.type !== 'COLLECTION' && !isPlaceholder && (
+        {!isPlaceholder && (
           <div className="opacity-0 transition duration-200 group-hover:opacity-100">
-            <DataBlockOpenSidePanelButton
-              entityId={rowEntityId}
-              entitySpaceId={nameCell?.space ?? currentSpaceId}
-              openedWithMainViewEditing={isEditing}
-            />
+            {source.type === 'COLLECTION' ? (
+              <CollectionRowActions
+                isEditing={false}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                openedWithMainViewEditing={isEditing}
+              />
+            ) : (
+              <DataBlockOpenSidePanelButton
+                entityId={rowEntityId}
+                entitySpaceId={nameCell?.space ?? currentSpaceId}
+                openedWithMainViewEditing={isEditing}
+              />
+            )}
           </div>
         )}
         <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
