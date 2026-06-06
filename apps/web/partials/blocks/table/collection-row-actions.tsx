@@ -46,8 +46,7 @@ export function CollectionRowActions({
   openedWithMainViewEditing = false,
 }: CollectionRowActionsProps) {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
-  // eslint-disable-next-line no-undef
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -127,7 +126,11 @@ export function CollectionRowActions({
                     onLinkEntry(relationId, result, verified);
                   }}
                   trigger={
-                    <button className="inline-flex items-center p-1" onMouseDown={e => e.preventDefault()}>
+                    <button
+                      type="button"
+                      className="inline-flex items-center p-1"
+                      onMouseDown={e => e.preventDefault()}
+                    >
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">
@@ -149,6 +152,7 @@ export function CollectionRowActions({
               </PrefetchLink>
               {isEditing && (
                 <button
+                  type="button"
                   onClick={onDeleteEntry}
                   onMouseDown={e => e.preventDefault()}
                   className="p-1 group-hover:text-grey-03 hover:text-text!"

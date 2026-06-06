@@ -322,7 +322,7 @@ export function TableBlockListItem({
       </Link>
       <div className="flex shrink-0 items-center gap-1">
         {!isPlaceholder && (
-          <div className="pointer-events-none opacity-0 transition duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
+          <div className="invisible opacity-0 transition duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}
