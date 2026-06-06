@@ -75,8 +75,19 @@ export function CollectionRowActions({
         <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
           <Popover.Trigger asChild>
             <button
-              onMouseEnter={() => setIsPopoverOpen(true)}
+              type="button"
+              aria-label="Show row actions"
+              onMouseEnter={() => {
+                if (closeTimeoutRef.current) {
+                  clearTimeout(closeTimeoutRef.current);
+                  closeTimeoutRef.current = null;
+                }
+                setIsPopoverOpen(true);
+              }}
               onMouseLeave={() => {
+                if (closeTimeoutRef.current) {
+                  clearTimeout(closeTimeoutRef.current);
+                }
                 closeTimeoutRef.current = setTimeout(() => {
                   setIsPopoverOpen(false);
                 }, 300);

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import cx from 'classnames';
 
@@ -53,24 +53,18 @@ export const CollectionMetadata = ({
   hideHoverActions = false,
 }: CollectionMetadataProps) => {
   const [isRowHovered, setIsRowHovered] = useState(false);
-  // eslint-disable-next-line no-undef
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
   const showHoverActions = isRowHovered;
   const reserveActionSpace = verified || hasHoverActions;
   const paddingClass = hasHoverActions ? 'pr-14' : verified ? 'pr-6' : '';
 
-  const leaveRow = () => {
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-    setIsRowHovered(false);
-  };
-
   return (
-    <div className="relative w-full min-w-0" onMouseEnter={() => setIsRowHovered(true)} onMouseLeave={leaveRow}>
+    <div
+      className="relative w-full min-w-0"
+      onMouseEnter={() => setIsRowHovered(true)}
+      onMouseLeave={() => setIsRowHovered(false)}
+    >
       <div className={cx('min-w-0', paddingClass)}>{children}</div>
       {reserveActionSpace && (
         <div className="absolute top-0 right-0 flex flex-nowrap items-center gap-0.5">
