@@ -43,9 +43,10 @@ export function personalSpaceIdsEqual(a: string | null | undefined, b: string | 
 type Props = {
   spaceId: string;
   entityId: string;
+  withBottomSpacing?: boolean;
 };
 
-export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
+export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpacing = true }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
@@ -244,7 +245,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   return (
     <div
-      className="relative mb-10 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
+      className={`${withBottomSpacing ? 'mb-10 ' : ''}relative min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat`}
       style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
       <div className="absolute top-6 right-6 z-20">
