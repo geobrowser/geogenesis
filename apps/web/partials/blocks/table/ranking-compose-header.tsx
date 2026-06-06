@@ -12,8 +12,6 @@ import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button } from '~/design-system/button';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
-import { Stars } from '~/design-system/icons/stars';
-import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
 export const COMPOSE_ICON_BUTTON_CLASS =

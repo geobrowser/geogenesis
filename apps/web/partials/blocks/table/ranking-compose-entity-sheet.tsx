@@ -52,7 +52,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
 
     body.setAttribute('data-ranking-compose-entity-sheet-open', '');
 
-    let restoreScrollbars = hideMainPageScrollbars();
+    const restoreScrollbars = hideMainPageScrollbars();
 
     return () => {
       restoreScrollbars();
