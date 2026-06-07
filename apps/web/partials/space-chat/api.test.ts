@@ -13,6 +13,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
+  window.history.replaceState(null, '', 'http://localhost:3000/root');
 });
 
 afterEach(() => {
@@ -21,9 +22,9 @@ afterEach(() => {
 });
 
 describe('space chat api client', () => {
-  it('defaults to the same-origin proxy and direct local websocket URL', () => {
-    expect(getGeoChatApiBaseUrl()).toBe('/api/geo-chat');
-    expect(getGeoChatWebSocketUrl()).toBe('ws://127.0.0.1:18080/gateway/ws');
+  it('defaults to the public chat API and websocket endpoint', () => {
+    expect(getGeoChatApiBaseUrl()).toBe('https://chat-api.geobrowser.io');
+    expect(getGeoChatWebSocketUrl()).toBe('wss://chat-api.geobrowser.io/gateway/ws');
   });
 
   it('trims configured API base URLs and derives the websocket URL', () => {
@@ -33,12 +34,25 @@ describe('space chat api client', () => {
     expect(getGeoChatWebSocketUrl()).toBe('wss://chat.example.test/gateway/ws');
   });
 
+  it('supports relative websocket URL overrides for explicit local proxies', () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_WS_URL', '/gateway/ws');
+    vi.stubGlobal('window', { location: { origin: 'https://192.168.5.240:3000' } });
+
+    expect(getGeoChatWebSocketUrl()).toBe('wss://192.168.5.240:3000/gateway/ws');
+  });
+
+  it('adds access tokens to websocket URLs for browser auth', () => {
+    expect(getGeoChatWebSocketUrl({ accessToken: 'app-token' })).toBe(
+      'wss://chat-api.geobrowser.io/gateway/ws?access_token=app-token'
+    );
+  });
+
   it('fetches space rooms with optional app-session auth', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ rooms: [] }));
 
     await listSpaceRooms('dao space', { accessToken: 'app-token' });
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/geo-chat/spaces/dao%20space/rooms', {
+    expect(fetchMock).toHaveBeenCalledWith('https://chat-api.geobrowser.io/spaces/dao%20space/rooms', {
       headers: {
         'Content-Type': 'application/json',
         Authorization: 'Bearer app-token',
@@ -57,7 +71,7 @@ describe('space chat api client', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/geo-chat/rooms/room-id/messages?limit=25&before_message_id=before-id',
+      'https://chat-api.geobrowser.io/rooms/room-id/messages?limit=25&before_message_id=before-id',
       {
         headers: {
           'Content-Type': 'application/json',
@@ -92,7 +106,7 @@ describe('space chat api client', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/geo-chat/rooms/room-id/messages',
+      'https://chat-api.geobrowser.io/rooms/room-id/messages',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({

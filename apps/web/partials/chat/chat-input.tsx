@@ -41,13 +41,7 @@ export function ChatInput({
   };
 
   return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-        if (canSend) onSubmit();
-      }}
-      className="flex items-end gap-2 border-t border-grey-02 p-3"
-    >
+    <div className="flex items-end gap-2 border-t border-grey-02 p-3">
       <Textarea
         ref={textareaRef}
         value={value}
@@ -73,7 +67,10 @@ export function ChatInput({
         </button>
       ) : (
         <button
-          type="submit"
+          type="button"
+          onClick={() => {
+            if (canSend) onSubmit();
+          }}
           disabled={!canSend}
           aria-label="Send message"
           className="shrink-0 text-grey-03 transition-colors enabled:text-ctaPrimary enabled:hover:text-ctaHover disabled:cursor-not-allowed"
@@ -86,6 +83,6 @@ export function ChatInput({
           </svg>
         </button>
       )}
-    </form>
+    </div>
   );
 }

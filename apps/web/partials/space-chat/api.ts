@@ -90,25 +90,25 @@ export class GeoChatApiError extends Error {
   }
 }
 
-const DEFAULT_GEO_CHAT_API_BASE_URL = '/api/geo-chat';
-const DEFAULT_GEO_CHAT_WEB_SOCKET_URL = 'ws://127.0.0.1:18080/gateway/ws';
+const DEFAULT_GEO_CHAT_API_BASE_URL = 'https://chat-api.geobrowser.io';
+const DEFAULT_GEO_CHAT_WEB_SOCKET_URL = 'wss://chat-api.geobrowser.io/gateway/ws';
 
 export function getGeoChatApiBaseUrl() {
   return trimTrailingSlash(process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL ?? DEFAULT_GEO_CHAT_API_BASE_URL);
 }
 
-export function getGeoChatWebSocketUrl() {
+export function getGeoChatWebSocketUrl({ accessToken }: { accessToken?: string | null } = {}) {
   const configuredUrl = process.env.NEXT_PUBLIC_GEO_CHAT_WS_URL;
-  if (configuredUrl) return configuredUrl;
+  if (configuredUrl) return withAccessToken(toWebSocketUrl(configuredUrl), accessToken);
 
   const baseUrl = getGeoChatApiBaseUrl();
-  if (baseUrl.startsWith('/')) return DEFAULT_GEO_CHAT_WEB_SOCKET_URL;
+  if (baseUrl.startsWith('/')) return withAccessToken(toWebSocketUrl(DEFAULT_GEO_CHAT_WEB_SOCKET_URL), accessToken);
 
   const url = new URL(baseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = '/gateway/ws';
   url.search = '';
-  return url.toString();
+  return withAccessToken(url.toString(), accessToken);
 }
 
 export async function listPublicDaoSpaces({ accessToken }: { accessToken?: string | null } = {}) {
@@ -245,4 +245,28 @@ async function toApiError(response: Response) {
 
 function trimTrailingSlash(value: string) {
   return value.replace(/\/+$/, '');
+}
+
+function toWebSocketUrl(value: string) {
+  if (value.startsWith('ws://') || value.startsWith('wss://')) return value;
+
+  const url = new URL(value, getBrowserHttpOrigin());
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+function getBrowserHttpOrigin() {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return 'http://localhost:3000';
+}
+
+function withAccessToken(url: string, accessToken: string | null | undefined) {
+  if (!accessToken) return url;
+
+  const parsed = new URL(url);
+  parsed.searchParams.set('access_token', accessToken);
+  return parsed.toString();
 }
