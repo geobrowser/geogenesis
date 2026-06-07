@@ -61,6 +61,8 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   // Build system tabs that appear after dynamic tabs
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
+  systemTabsAfter.push({ label: 'Chat', href: `/space/${spaceId}/chat` });
+
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
     systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
   }
@@ -104,18 +106,22 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     },
   ];
 
-  const SOME_SPACES_TABS = [
-    {
-      label: 'Governance',
-      href: `/space/${spaceId}/governance`,
-      priority: 2 as const,
-    },
-  ];
+  const CHAT_TAB = {
+    label: 'Chat',
+    href: `/space/${spaceId}/chat`,
+    priority: 2 as const,
+  };
+
+  const GOVERNANCE_TAB = {
+    label: 'Governance',
+    href: `/space/${spaceId}/governance`,
+    priority: 3 as const,
+  };
 
   const ACTIVITY_TAB = {
     label: 'Activity',
     href: `/space/${spaceId}/activity`,
-    priority: 3 as const,
+    priority: 4 as const,
   };
 
   // Order of how we add the tabs matters. We want to
@@ -128,8 +134,10 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
       tabs.push(...dynamicTabs);
     }
 
+    tabs.push(CHAT_TAB);
+
     if (!typeIds.includes(SystemIds.PERSON_TYPE)) {
-      tabs.push(...SOME_SPACES_TABS);
+      tabs.push(GOVERNANCE_TAB);
     }
   }
 

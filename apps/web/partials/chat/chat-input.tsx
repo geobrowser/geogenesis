@@ -11,16 +11,25 @@ type Props = {
   isBusy?: boolean;
   onStop?: () => void;
   placeholder?: string;
+  disabled?: boolean;
 };
 
-export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placeholder = 'Ask anything...' }: Props) {
+export function ChatInput({
+  value,
+  onChange,
+  onSubmit,
+  isBusy,
+  onStop,
+  placeholder = 'Ask anything...',
+  disabled = false,
+}: Props) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const canSend = !isBusy && value.trim().length > 0;
+  const canSend = !disabled && !isBusy && value.trim().length > 0;
   const showStop = isBusy && Boolean(onStop);
 
   React.useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+    if (!disabled) textareaRef.current?.focus();
+  }, [disabled]);
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -45,10 +54,11 @@ export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placehold
         onChange={event => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
+        disabled={disabled}
         minRows={2}
         // Height capped by the panel (which sets container-type: size) so
         // we never get an inner scrollbar at any panel size.
-        className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
+        className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden disabled:cursor-not-allowed disabled:text-grey-03"
       />
       {showStop ? (
         <button
