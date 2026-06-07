@@ -527,6 +527,19 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, jotaiStore, sidePanelTarget?.openedFromReviewEdits]);
 
+  React.useEffect(() => {
+    if (!sidePanelTarget) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+      event.preventDefault();
+      handleCloseSidePanel();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidePanelTarget, handleCloseSidePanel]);
+
   React.useLayoutEffect(() => {
     const html = document.documentElement;
     const body = document.body;
