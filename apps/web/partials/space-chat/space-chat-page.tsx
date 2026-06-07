@@ -11,10 +11,7 @@ import { DEFAULT_SPACE_CHAT_CHANNEL, DEFAULT_SPACE_CHAT_CHANNEL_ID } from './cha
 import { SpaceChatComposer } from './composer';
 import { SpaceChatMemberSidebar } from './member-sidebar';
 import { SpaceChatMessageList } from './message-list';
-import {
-  fallbackSpaceChatParticipants,
-  mergeSpaceChatParticipants,
-} from './space-chat-data';
+import { fallbackSpaceChatParticipants, mergeSpaceChatParticipants } from './space-chat-data';
 import type { SpaceChatParticipant } from './types';
 import { useSpaceChatMessages } from './use-space-chat-messages';
 
@@ -30,7 +27,7 @@ export function SpaceChatPage({ spaceId, spaceName, connectedAddress, canPost }:
   const membersQuery = useSpaceParticipantsInfinite({ spaceId, kind: 'members', pageSize: 24 });
 
   const [draft, setDraft] = React.useState('');
-  const chat = useSpaceChatMessages({ spaceId, channelId: DEFAULT_SPACE_CHAT_CHANNEL_ID });
+  const chat = useSpaceChatMessages({ spaceId, channelId: DEFAULT_SPACE_CHAT_CHANNEL_ID, connectedAddress, canPost });
   const messages = chat.messages;
 
   const participants = React.useMemo(
@@ -52,10 +49,10 @@ export function SpaceChatPage({ spaceId, spaceName, connectedAddress, canPost }:
 
   const sendMessage = React.useCallback(() => {
     const body = draft.trim();
-    if (!body || !canPost || !chat.isAvailable) return;
+    if (!body || !chat.canSend) return;
     void chat.sendMessage(body);
     setDraft('');
-  }, [canPost, chat, draft]);
+  }, [chat, draft]);
 
   return (
     <section
@@ -69,14 +66,20 @@ export function SpaceChatPage({ spaceId, spaceName, connectedAddress, canPost }:
             description={DEFAULT_SPACE_CHAT_CHANNEL.description}
             participantCount={editorsQuery.totalCount + membersQuery.totalCount || participants.length}
           />
-          <SpaceChatMessageList spaceName={spaceName} messages={messages} participantsById={participantsById} />
+          <SpaceChatMessageList
+            spaceName={spaceName}
+            messages={messages}
+            participantsById={participantsById}
+            isLoading={chat.isLoading}
+            error={chat.error}
+          />
           <SpaceChatComposer
             spaceName={spaceName}
             value={draft}
-            canPost={canPost && chat.isAvailable}
+            canPost={chat.canSend}
             isPosting={chat.isPosting}
             error={chat.postError?.message ?? null}
-            disabledPlaceholder={canPost ? 'Chat service coming soon' : 'Only space members and editors can chat'}
+            disabledPlaceholder={chat.disabledReason ?? 'Only space members and editors can chat'}
             onChange={setDraft}
             onSubmit={sendMessage}
           />
@@ -114,7 +117,9 @@ function ChatHeader({
         <h1 className="truncate text-smallTitle text-text">{title}</h1>
         <p className="truncate text-metadata text-grey-04">{description}</p>
       </div>
-      <div className="shrink-0 rounded border border-grey-02 px-2 py-1 text-footnoteMedium text-grey-04">{participantCount} people</div>
+      <div className="shrink-0 rounded border border-grey-02 px-2 py-1 text-footnoteMedium text-grey-04">
+        {participantCount} people
+      </div>
     </header>
   );
 }

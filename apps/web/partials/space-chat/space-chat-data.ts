@@ -11,8 +11,13 @@ function participantDisplayName(participant: SpaceChatParticipant): string {
   return participant.address;
 }
 
-function profileKey(profile: Pick<SpaceParticipantProfile, 'spaceId' | 'address'>) {
-  return profile.spaceId || profile.address.toLowerCase();
+function profileKey(profile: Pick<SpaceParticipantProfile, 'id' | 'spaceId' | 'address'>) {
+  return normalizePersonId(profile.id) || normalizePersonId(profile.spaceId) || profile.address.toLowerCase();
+}
+
+export function normalizePersonId(value: string | null | undefined) {
+  if (!value) return null;
+  return value.trim().toLowerCase().replace(/^0x/, '').replace(/-/g, '');
 }
 
 function toParticipant(
