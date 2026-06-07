@@ -19,9 +19,17 @@ type Props = {
   spaceName: string;
   messages: SpaceChatMessage[];
   participantsById: Map<string, SpaceChatParticipant>;
+  isLoading?: boolean;
+  error?: Error | null;
 };
 
-export function SpaceChatMessageList({ spaceName, messages, participantsById }: Props) {
+export function SpaceChatMessageList({
+  spaceName,
+  messages,
+  participantsById,
+  isLoading = false,
+  error = null,
+}: Props) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   React.useLayoutEffect(() => {
@@ -29,6 +37,22 @@ export function SpaceChatMessageList({ spaceName, messages, participantsById }: 
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [spaceName, messages.length]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-metadata text-grey-04">
+        Could not load chat. {error.message}
+      </div>
+    );
+  }
+
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center px-6 text-center text-metadata text-grey-04">
+        Loading messages...
+      </div>
+    );
+  }
 
   if (messages.length === 0) {
     return (
@@ -93,9 +117,14 @@ function MessageRow({ message, author }: { message: SpaceChatMessage; author: Sp
           </time>
           {message.pending ? <span className="text-footnote text-grey-04">Sending...</span> : null}
         </div>
-        <div className="prose-chat mt-1 text-chat text-text">
-          <ChatMarkdown text={message.body} cache={EMPTY_ENTITY_CACHE} />
-        </div>
+        {message.deletedAt ? (
+          <div className="mt-1 text-chat text-grey-04 italic">Message deleted</div>
+        ) : (
+          <div className="prose-chat mt-1 text-chat text-text">
+            <ChatMarkdown text={message.body} cache={EMPTY_ENTITY_CACHE} />
+          </div>
+        )}
+        {!message.deletedAt && message.editedAt ? <div className="mt-1 text-footnote text-grey-04">Edited</div> : null}
         {message.reactions && message.reactions.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1">
             {message.reactions.map(reaction => (

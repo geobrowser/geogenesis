@@ -30,10 +30,12 @@ export type SpaceChatMessage = {
   id: string;
   channelId: string;
   authorId: string;
+  clientNonce?: string;
   author?: SpaceChatParticipant;
   body: string;
   createdAt: string;
   editedAt?: string | null;
+  deletedAt?: string | null;
   reactions?: SpaceChatReaction[];
   pending?: boolean;
 };
