@@ -1,5 +1,7 @@
 import { withSentryConfig } from '@sentry/nextjs';
 
+import { networkInterfaces } from 'os';
+
 import type { NextConfig } from 'next';
 
 import { ServerEnvironment } from './app/api/environment';
@@ -23,10 +25,19 @@ const turbopackOptimizations =
 
 const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 
+function getLocalIpv4DevOrigins() {
+  return Object.values(networkInterfaces())
+    .flatMap(network => network ?? [])
+    .filter(address => address.family === 'IPv4' && !address.internal)
+    .map(address => address.address);
+}
+
+const allowedDevOrigins = ['localhost', '127.0.0.1', ...getLocalIpv4DevOrigins()];
+
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
-  allowedDevOrigins: ['localhost', '127.0.0.1'],
+  allowedDevOrigins,
   turbopack: isDev
     ? {
         resolveAlias: {

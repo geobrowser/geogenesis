@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev --turbopack",
+    "dev:mobile": "next dev --turbopack --hostname 0.0.0.0 --experimental-https",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

@@ -13,8 +13,10 @@ import {
   listRoomMessages,
   listSpaceRooms,
 } from './api';
+import { appendMessage, createMessagesQueryKey } from './gateway';
 import { resolveGeoChatAccessToken } from './session';
 import { normalizePersonId } from './space-chat-data';
+import { useSpaceChatGateway } from './use-space-chat-gateway';
 import type { SpaceChatMessage, SpaceChatParticipant } from './types';
 
 type UseSpaceChatMessagesArgs = {
@@ -29,6 +31,8 @@ type SendMessageArgs = {
   clientNonce: string;
 };
 
+const INACTIVE_CHAT_RECONCILE_INTERVAL_MS = 15_000;
+
 export function useSpaceChatMessages({ spaceId, channelId, connectedAddress, canPost }: UseSpaceChatMessagesArgs) {
   const { ready, authenticated } = usePrivy();
   const queryClient = useQueryClient();
@@ -40,14 +44,41 @@ export function useSpaceChatMessages({ spaceId, channelId, connectedAddress, can
     if (!ready || !authenticated) {
       setAccessToken(null);
       setSessionError(null);
+      return;
     }
-  }, [ready, authenticated]);
+
+    if (accessToken || sessionError) return;
+
+    let cancelled = false;
+
+    void resolveGeoChatAccessToken()
+      .then(token => {
+        if (cancelled) return;
+        setAccessToken(token);
+        setSessionError(null);
+        chatLog('session ready', { hasAccessToken: Boolean(token) });
+      })
+      .catch(error => {
+        if (cancelled) return;
+        const resolvedError = toError(error) ?? new Error('Unable to start chat session.');
+        setAccessToken(null);
+        setSessionError(resolvedError);
+        chatLog('session failed', { message: resolvedError.message });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, ready, authenticated, sessionError]);
 
   const authKey = accessToken ? 'authenticated' : 'anonymous';
+  const canLoadChatApi = ready && (!authenticated || Boolean(accessToken) || Boolean(sessionError));
 
   const roomsQuery = useQuery({
     queryKey: ['space-chat', 'rooms', spaceId, authKey],
+    enabled: canLoadChatApi,
     queryFn: () => listSpaceRooms(spaceId, { accessToken }),
+    refetchOnWindowFocus: false,
     retry: false,
   });
 
@@ -57,17 +88,125 @@ export function useSpaceChatMessages({ spaceId, channelId, connectedAddress, can
     setOptimisticMessages([]);
   }, [activeRoom?.id]);
 
-  const messagesKey = React.useMemo(
-    () => ['space-chat', 'messages', activeRoom?.id ?? 'none', authKey] as const,
-    [activeRoom?.id, authKey]
-  );
+  const messagesKey = React.useMemo(() => createMessagesQueryKey(activeRoom?.id), [activeRoom?.id]);
 
   const messagesQuery = useQuery({
     queryKey: messagesKey,
-    enabled: Boolean(activeRoom),
+    enabled: canLoadChatApi && Boolean(activeRoom),
     queryFn: () => listRoomMessages({ roomId: activeRoom!.id, accessToken, limit: 50 }),
+    refetchOnWindowFocus: false,
     retry: false,
   });
+
+  React.useEffect(() => {
+    chatLog('state', {
+      spaceId,
+      authKey,
+      ready,
+      authenticated,
+      roomsStatus: roomsQuery.status,
+      roomsFetchStatus: roomsQuery.fetchStatus,
+      roomsCount: roomsQuery.data?.rooms.length ?? 0,
+      activeRoomId: activeRoom?.id ?? null,
+      activeRoomKind: activeRoom?.kind ?? null,
+      messagesStatus: messagesQuery.status,
+      messagesFetchStatus: messagesQuery.fetchStatus,
+      messagesCount: messagesQuery.data?.messages.length ?? 0,
+    });
+  }, [
+    activeRoom?.id,
+    activeRoom?.kind,
+    authKey,
+    authenticated,
+    messagesQuery.data?.messages.length,
+    messagesQuery.fetchStatus,
+    messagesQuery.status,
+    ready,
+    roomsQuery.data?.rooms.length,
+    roomsQuery.fetchStatus,
+    roomsQuery.status,
+    spaceId,
+  ]);
+
+  useSpaceChatGateway({
+    spaceId,
+    room: activeRoom,
+    accessToken: activeRoom?.kind === 'editor' ? accessToken : null,
+    messagesKey,
+  });
+
+  React.useEffect(() => {
+    if (!activeRoom) return;
+
+    let interval: number | null = null;
+
+    const reconcileFromHttp = (reason: string) => {
+      chatLog('visibility reconcile refetch', {
+        reason,
+        roomId: activeRoom.id,
+        authKey,
+        hasFocus: document.hasFocus(),
+      });
+      void queryClient.invalidateQueries({ queryKey: messagesKey });
+    };
+
+    const clearInactiveInterval = () => {
+      if (interval) window.clearInterval(interval);
+      interval = null;
+    };
+
+    const shouldPollWhileInactive = () => document.visibilityState !== 'visible' || !document.hasFocus();
+
+    const syncInactivePolling = () => {
+      if (!shouldPollWhileInactive()) {
+        clearInactiveInterval();
+        return;
+      }
+
+      if (interval) return;
+
+      interval = window.setInterval(() => {
+        if (!shouldPollWhileInactive()) {
+          clearInactiveInterval();
+          return;
+        }
+        reconcileFromHttp('inactive_interval');
+      }, INACTIVE_CHAT_RECONCILE_INTERVAL_MS);
+    };
+
+    const refetchAfterFocus = () => {
+      reconcileFromHttp('focus');
+      syncInactivePolling();
+    };
+
+    const refetchAfterBlur = () => {
+      syncInactivePolling();
+    };
+
+    const refetchAfterVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        reconcileFromHttp('visibilitychange');
+      }
+      syncInactivePolling();
+    };
+
+    window.addEventListener('focus', refetchAfterFocus);
+    window.addEventListener('blur', refetchAfterBlur);
+    document.addEventListener('visibilitychange', refetchAfterVisibilityChange);
+    syncInactivePolling();
+
+    return () => {
+      window.removeEventListener('focus', refetchAfterFocus);
+      window.removeEventListener('blur', refetchAfterBlur);
+      document.removeEventListener('visibilitychange', refetchAfterVisibilityChange);
+      clearInactiveInterval();
+    };
+  }, [
+    activeRoom,
+    authKey,
+    messagesKey,
+    queryClient,
+  ]);
 
   const sendMutation = useMutation({
     mutationFn: async ({ body, clientNonce }: SendMessageArgs) => {
@@ -102,7 +241,19 @@ export function useSpaceChatMessages({ spaceId, channelId, connectedAddress, can
     },
     onSuccess: message => {
       setOptimisticMessages(current => current.filter(item => item.clientNonce !== message.client_nonce));
-      queryClient.setQueryData<ListMessagesResponse>(messagesKey, current => appendMessage(current, message));
+      queryClient.setQueryData<ListMessagesResponse>(messagesKey, current => {
+        const beforeCount = current?.messages.length ?? 0;
+        const next = appendMessage(current, message);
+        chatLog('send success cache update', {
+          roomId: message.room_id,
+          messageId: message.id,
+          clientNonce: message.client_nonce,
+          beforeCount,
+          afterCount: next.messages.length,
+          messagesKey,
+        });
+        return next;
+      });
     },
     onError: (_error, variables) => {
       setOptimisticMessages(current => current.filter(item => item.clientNonce !== variables.clientNonce));
@@ -164,23 +315,6 @@ export function useSpaceChatMessages({ spaceId, channelId, connectedAddress, can
 
 function selectDefaultRoom(rooms: SpaceRoom[]) {
   return rooms.find(room => room.kind === 'member') ?? rooms[0] ?? null;
-}
-
-function appendMessage(current: ListMessagesResponse | undefined, message: GeoChatMessage): ListMessagesResponse {
-  if (!current) {
-    return { messages: [message], next_before: null };
-  }
-
-  const messages = current.messages.some(item => item.id === message.id || item.client_nonce === message.client_nonce)
-    ? current.messages.map(item =>
-        item.id === message.id || item.client_nonce === message.client_nonce ? message : item
-      )
-    : [...current.messages, message];
-
-  return {
-    ...current,
-    messages,
-  };
 }
 
 function toSpaceChatMessage(message: GeoChatMessage, channelId: string): SpaceChatMessage {
@@ -310,4 +444,10 @@ function getDisabledReason({
   if (isLoading) return 'Loading chat';
   if (!hasRoom) return 'No chat room is available';
   return null;
+}
+
+function chatLog(message: string, details: Record<string, unknown>) {
+  if (process.env.NEXT_PUBLIC_GEO_CHAT_DEBUG === '1') {
+    console.log(`[geo-chat] ${message}`, details);
+  }
 }

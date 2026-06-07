@@ -27,8 +27,20 @@ export function SpaceChatPage({ spaceId, spaceName, connectedAddress, canPost }:
   const membersQuery = useSpaceParticipantsInfinite({ spaceId, kind: 'members', pageSize: 24 });
 
   const [draft, setDraft] = React.useState('');
+  const sectionRef = React.useRef<HTMLElement>(null);
   const chat = useSpaceChatMessages({ spaceId, channelId: DEFAULT_SPACE_CHAT_CHANNEL_ID, connectedAddress, canPost });
   const messages = chat.messages;
+
+  React.useEffect(() => {
+    if (window.location.hash) return;
+    if (window.innerWidth >= 1024) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   const participants = React.useMemo(
     () =>
@@ -56,7 +68,8 @@ export function SpaceChatPage({ spaceId, spaceName, connectedAddress, canPost }:
 
   return (
     <section
-      className="h-[min(76vh,760px)] min-h-[620px] overflow-hidden rounded-md border border-grey-02 bg-white shadow-light lg:h-auto lg:min-h-[680px]"
+      ref={sectionRef}
+      className="scroll-mt-4 h-[min(76vh,760px)] min-h-[620px] overflow-hidden rounded-md border border-grey-02 bg-white shadow-light lg:h-auto lg:min-h-[680px]"
       aria-label={`${spaceName} chat`}
     >
       <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_240px] lg:grid-cols-1">

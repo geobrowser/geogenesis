@@ -7,6 +7,7 @@ import cx from 'classnames';
 import type { EntityCache } from '~/core/chat/entity-cache';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ChatMarkdown } from '~/partials/chat/chat-markdown';
 
@@ -96,12 +97,10 @@ function DateDivider({ label }: { label: string }) {
 function MessageRow({ message, author }: { message: SpaceChatMessage; author: SpaceChatParticipant | undefined }) {
   return (
     <article className="group relative flex gap-3 px-4 py-2 transition-colors hover:bg-bg">
-      <div className="mt-0.5 size-9 shrink-0 overflow-hidden rounded-full">
-        <Avatar avatarUrl={author?.avatarUrl} value={author?.address ?? message.authorId} size={36} />
-      </div>
+      <AuthorAvatar author={author} authorId={message.authorId} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h2 className="truncate text-metadataMedium text-text">{formatParticipantName(author)}</h2>
+          <AuthorName author={author} />
           {author?.role ? (
             <span
               className={cx(
@@ -151,6 +150,47 @@ function MessageRow({ message, author }: { message: SpaceChatMessage; author: Sp
       </div>
     </article>
   );
+}
+
+function AuthorAvatar({ author, authorId }: { author: SpaceChatParticipant | undefined; authorId: string }) {
+  const content = (
+    <div className="size-9 overflow-hidden rounded-full">
+      <Avatar avatarUrl={author?.avatarUrl} value={author?.address ?? authorId} size={36} />
+    </div>
+  );
+
+  if (author?.profileLink) {
+    return (
+      <Link
+        href={author.profileLink}
+        className="mt-0.5 shrink-0 rounded-full transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-offset-2"
+        aria-label={`View ${formatParticipantName(author)}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="mt-0.5 shrink-0">{content}</div>;
+}
+
+function AuthorName({ author }: { author: SpaceChatParticipant | undefined }) {
+  const name = formatParticipantName(author);
+
+  if (author?.profileLink) {
+    return (
+      <h2 className="min-w-0 truncate text-metadataMedium text-text">
+        <Link
+          href={author.profileLink}
+          className="rounded-sm hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-offset-2"
+        >
+          {name}
+        </Link>
+      </h2>
+    );
+  }
+
+  return <h2 className="min-w-0 truncate text-metadataMedium text-text">{name}</h2>;
 }
 
 function formatDate(value: string): string {
