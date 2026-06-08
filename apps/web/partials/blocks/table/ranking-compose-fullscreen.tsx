@@ -1,17 +1,21 @@
 'use client';
 
-const RANKING_COMPOSE_NAVBAR_OFFSET_PX = 60;
+import type { CSSProperties } from 'react';
 
 type Props = {
   children: React.ReactNode;
+  style?: CSSProperties;
 };
 
 /** Fullscreen shell for ranking compose — fixed overlay like power tools. */
-export function RankingComposeFullscreen({ children }: Props) {
+export function RankingComposeFullscreen({ children, style }: Props) {
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col overflow-x-hidden bg-white"
-      style={{ top: RANKING_COMPOSE_NAVBAR_OFFSET_PX }}
+      className="fixed inset-0 z-50 bg-white"
+      style={{
+        top: '60px',
+        ...style,
+      }}
     >
       {children}
     </div>

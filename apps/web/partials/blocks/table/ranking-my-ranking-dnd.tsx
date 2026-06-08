@@ -16,8 +16,8 @@ import { CSS } from '@dnd-kit/utilities';
 
 import * as React from 'react';
 
-/** Long-press before reorder drag starts (matches mobile swipe gesture separation). */
-const LONG_PRESS_ACTIVATION = { delay: 250, tolerance: 6 };
+const POINTER_ACTIVATION = { distance: 8 };
+const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
 type Props = {
   entityIds: string[];
@@ -68,7 +68,7 @@ function RankingMyRankingSortableItem({ id, children }: { id: string; children: 
     <div
       ref={setNodeRef}
       style={style}
-      className="relative touch-manipulation"
+      className="relative cursor-grab touch-manipulation active:cursor-grabbing"
       {...attributes}
       {...listeners}
       onClick={suppressClickAfterDrag}
@@ -106,8 +106,8 @@ export function RankingMyRankingDndList({
   itemsRef.current = items;
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: LONG_PRESS_ACTIVATION }),
-    useSensor(TouchSensor, { activationConstraint: LONG_PRESS_ACTIVATION })
+    useSensor(PointerSensor, { activationConstraint: POINTER_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION })
   );
 
   const [activeId, setActiveId] = React.useState<string | null>(null);

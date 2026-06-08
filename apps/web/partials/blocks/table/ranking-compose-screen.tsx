@@ -253,7 +253,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   if (accessStatus !== 'ready') {
     return (
       <RankingComposeFullscreen>
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-button text-text">
             {accessStatus === 'needs-login' && 'Log in to create your ranking.'}
             {accessStatus === 'needs-onboarding' && 'Create your account to continue.'}
@@ -272,14 +272,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     <>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
-      <RankingComposeFullscreen>
-        <div
-          className={cx('mx-auto flex h-full min-h-0 w-full flex-col', isMobile ? 'px-4' : 'max-w-[1200px] px-6')}
-          style={{
-            display: 'grid',
-            gridTemplateRows: 'auto 1fr',
-          }}
-        >
+      <RankingComposeFullscreen
+        style={{
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+        }}
+      >
+        <div className={cx('border-b border-grey-02 px-4 py-2', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
           <RankingComposeHeader
             isMobile={isMobile}
             displayName={displayName}
@@ -288,7 +287,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             submissions={submissions}
             onBack={() => router.back()}
           />
+        </div>
 
+        <div className={cx('relative min-h-0 overflow-hidden px-4', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
           <RankingComposeLayout
             isMobile={isMobile}
             myRanking={

@@ -34,7 +34,6 @@ import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useSpaceParticipantsInfinite } from '~/core/space-members/use-space-participants-infinite';
-import { useEditorInstance } from '~/core/state/editor/editor-provider';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
@@ -151,7 +150,6 @@ function RankingSectionHeaderRow({ title, action }: { title: string; action?: Re
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
-  const { id: pageEntityId } = useEditorInstance();
   const { ensureAccess } = useRankingComposeAccess(spaceId);
 
   const { name, entityId, relationId, rows } = useDataBlock();
@@ -420,7 +418,6 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     router.push(
       rankingComposeHref({
         spaceId,
-        pageEntityId,
         blockEntityId: entityId,
         relationId,
         rankingStartDate,
@@ -510,7 +507,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
               <RankingEntryRow
                 rank={index + 1}
                 rankStyle="leading"
-                linkToEntity={!isMobile}
+                linkToEntity={false}
                 entry={entryDisplay}
                 spaceId={spaceId}
               />
