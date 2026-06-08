@@ -22,8 +22,7 @@ export default function RankingComposePage() {
   const searchParams = useSearchParams();
 
   const spaceId = params?.id as string;
-  const pageEntityId = params?.entityId as string;
-  const dataBlockEntityId = searchParams?.get('blockEntityId') ?? pageEntityId;
+  const dataBlockEntityId = params?.entityId as string;
   const relationId = searchParams?.get('relationId') ?? '';
   const rankingStartDate = searchParams?.get('rankingStartDate') ?? '';
   const rankingEndDate = searchParams?.get('rankingEndDate') ?? '';
@@ -33,8 +32,6 @@ export default function RankingComposePage() {
     dataBlockEntityId,
     relationId,
   });
-
-  const hostEntityId = parentEntityId ?? pageEntityId;
 
   if (!hasValidParams) {
     return <RankingComposeLoadingState message="Invalid parameters" />;
@@ -49,8 +46,13 @@ export default function RankingComposePage() {
   }
 
   return (
-    <EntityStoreProvider id={hostEntityId} spaceId={spaceId}>
-      <EditorProvider id={hostEntityId} spaceId={spaceId} initialBlocks={blocks} initialBlockRelations={blockRelations}>
+    <EntityStoreProvider id={parentEntityId} spaceId={spaceId}>
+      <EditorProvider
+        id={parentEntityId}
+        spaceId={spaceId}
+        initialBlocks={blocks}
+        initialBlockRelations={blockRelations}
+      >
         <DataBlockProvider spaceId={spaceId} entityId={dataBlockEntityId} relationId={relationId}>
           <RankingComposeScreen spaceId={spaceId} rankingStartDate={rankingStartDate} rankingEndDate={rankingEndDate} />
         </DataBlockProvider>

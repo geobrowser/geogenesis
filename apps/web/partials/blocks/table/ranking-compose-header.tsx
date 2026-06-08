@@ -57,7 +57,7 @@ type Props = {
 
 export function RankingComposeHeader({ isMobile, displayName, periodLabel, periodIcon, submissions, onBack }: Props) {
   return (
-    <div className="flex shrink-0 flex-col gap-3 border-b border-grey-02 pb-3">
+    <div className="flex shrink-0 flex-col gap-3">
       <Button
         type="button"
         variant="ghost"
