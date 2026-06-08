@@ -325,11 +325,7 @@ export function TableBlockListItem({
       </Link>
       <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
         {!isPlaceholder && (
-<<<<<<< Updated upstream
           <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
-=======
-          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
->>>>>>> Stashed changes
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}
