@@ -8,8 +8,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
-import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+const ROW_AVATAR_SIZE_PX = 64;
 
 type Props = {
   /** Omit or pass 0 to hide the rank indicator. */
@@ -43,16 +45,25 @@ export function RankingEntryRow({
   const showLeadingRank = showRank && rankStyle === 'leading';
 
   const avatar = (
-    <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-md bg-grey-02">
+    <div
+      className="relative shrink-0 overflow-clip rounded-md bg-grey-02"
+      style={{ width: ROW_AVATAR_SIZE_PX, height: ROW_AVATAR_SIZE_PX }}
+    >
       {showRank && rankStyle === 'avatar-badge' ? (
         <span className="absolute -top-1.5 -left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-medium text-white ring-2 ring-white">
           {rank}
         </span>
       ) : null}
       {imageUrl ? (
-        <GeoImage value={imageUrl} alt="" fill className="object-cover" />
+        <GeoImage value={imageUrl} alt="" fill sizes={`${ROW_AVATAR_SIZE_PX}px`} className="object-cover" />
       ) : (
-        <NextImage src={PLACEHOLDER_SPACE_IMAGE} alt="" fill sizes={DEFAULT_IMAGE_SIZES} className="object-cover" />
+        <NextImage
+          src={PLACEHOLDER_SPACE_IMAGE}
+          alt=""
+          fill
+          sizes={`${ROW_AVATAR_SIZE_PX}px`}
+          className="object-cover"
+        />
       )}
     </div>
   );
