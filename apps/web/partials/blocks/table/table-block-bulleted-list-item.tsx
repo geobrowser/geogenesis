@@ -142,12 +142,12 @@ export function TableBlockBulletedListItem({
               entityId={rowEntityId}
               spaceId={currentSpaceId}
               href={href}
-              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9')}
+              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9 md:pr-0')}
             >
               {name}
             </Link>
             {!isPlaceholder && isNameHovered && (
-              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center">
+              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={rowEntityId}
                   entitySpaceId={nameCell?.space ?? currentSpaceId}
