@@ -400,7 +400,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
                 updateDate();
               }}
               placeholder="YYYY"
-              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+              className={cx(dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid }), 'text-start')}
             />
           </div>
 
@@ -863,7 +863,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
                 updateDate(meridiem);
               }}
               placeholder="YYYY"
-              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+              className={cx(dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid }), 'text-start')}
             />
           </div>
 

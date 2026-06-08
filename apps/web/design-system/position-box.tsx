@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+import cx from 'classnames';
+
 import { OrderDots } from './icons/order-dots';
 
 export const PositionBox = ({
@@ -46,7 +48,7 @@ export const PositionBox = ({
   };
 
   return (
-    <div className={`absolute flex w-[152px] justify-end pr-3 ${className ? className : ''}`}>
+    <div className={cx('absolute flex w-[152px] justify-end pr-3', className)}>
       {openedDialog && (
         <div
           className="mr-3 flex h-[110px] w-full flex-col gap-1 rounded-md border border-grey-02 bg-white p-1"
@@ -76,7 +78,7 @@ export const PositionBox = ({
           </div>
         </div>
       )}
-      <button className={`${iconClassName ? iconClassName : ''}`} onClick={() => setOpenedDialog(!openedDialog)}>
+      <button className={cx(iconClassName)} onClick={() => setOpenedDialog(!openedDialog)}>
         <OrderDots color={openedDialog ? '#35363A' : '#B6B6B6'} />
       </button>
     </div>

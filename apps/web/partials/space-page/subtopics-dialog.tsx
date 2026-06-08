@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
@@ -648,9 +649,10 @@ function PendingSubtopicProposalRow({
                 {proposal.name}
               </Text>
               <span
-                className={`shrink-0 rounded-sm px-1 py-0.5 text-tag ${
+                className={cx(
+                  'shrink-0 rounded-sm px-1 py-0.5 text-tag',
                   proposal.direction === 'add' ? 'bg-green/10 text-green' : 'bg-red-01/10 text-red-01'
-                }`}
+                )}
               >
                 {directionLabel}
               </span>

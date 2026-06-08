@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import { NavUtils } from '~/core/utils/utils';
@@ -98,14 +100,18 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
                 className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
               >
                 <span>{selectedLabel}</span>
-                <span className={`inline-flex transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`}>
+                <span className={cx('inline-flex transition-transform duration-200', menuOpen && 'rotate-180')}>
                   <ChevronDownSmall color="grey-04" />
                 </span>
               </button>
             }
           >
             {menuOptions.map(option => (
-              <MenuItem key={option.value} active={option.value === selectedParentId} onClick={() => selectParent(option.value)}>
+              <MenuItem
+                key={option.value}
+                active={option.value === selectedParentId}
+                onClick={() => selectParent(option.value)}
+              >
                 {option.label}
               </MenuItem>
             ))}
@@ -131,7 +137,7 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
                 key={topic.id}
                 href={NavUtils.toEntity(linkSpaceId, topic.id)}
                 aria-label={topic.name}
-                className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pl-2 pr-2.5 text-[16px] leading-[18px] text-text transition-colors hover:border-text"
+                className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text"
               >
                 <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
                   <FallbackImage value={topic.image} sizes="16px" className="object-cover" />
@@ -146,7 +152,7 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
           <button
             type="button"
             onClick={() => setShowAll(prev => !prev)}
-            className="inline-flex items-center rounded-full border border-grey-02 py-1.5 pl-2 pr-2.5 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
+            className="inline-flex items-center rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
           >
             {showAll ? 'Show less' : 'Show more'}
           </button>

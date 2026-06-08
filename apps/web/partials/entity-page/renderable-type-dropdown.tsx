@@ -72,11 +72,14 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
           ref={triggerRef}
-          className={`flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
+          className={cx(
+            'flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4',
+            open ? 'border-text' : 'border-grey-02'
+          )}
         >
           <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}
-          <div className={`${open ? '-rotate-180' : ''} transition-transform duration-300 ease-in-out`}>
+          <div className={cx(open && '-rotate-180', 'transition-transform duration-300 ease-in-out')}>
             <ChevronDown />
           </div>
         </button>

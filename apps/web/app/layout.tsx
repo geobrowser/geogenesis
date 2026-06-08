@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import cx from 'classnames';
 import 'katex/dist/katex.min.css';
 import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
@@ -89,7 +90,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${calibre.variable}`} suppressHydrationWarning>
+    <html lang="en" className={cx(calibre.variable)} suppressHydrationWarning>
       <body>
         <div className="relative">
           <Providers>

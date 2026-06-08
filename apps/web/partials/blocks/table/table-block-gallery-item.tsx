@@ -2,6 +2,7 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -310,7 +311,7 @@ export function TableBlockGalleryItem({
           </div>
         </div>
         {description && propertyDataHasDescription && (
-          <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
+          <div className={cx('mt-1 line-clamp-4 md:line-clamp-3', LIST_GALLERY_BROWSE_BODY_CLASS)}>{description}</div>
         )}
 
         {orderCellsForBrowseFigma(

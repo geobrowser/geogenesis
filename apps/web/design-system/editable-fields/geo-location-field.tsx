@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useEffect, useRef } from 'react';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import Textarea from 'react-textarea-autosize';
 
 import { useGeoCoordinates } from '~/core/hooks/use-geo-coordinates';
@@ -104,7 +105,10 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
                 }}
                 value={pointValues.latitude}
                 maxRows={1}
-                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal`}
+                className={cx(
+                  textareaStyles({ variant: props.variant }),
+                  'max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal'
+                )}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -118,7 +122,10 @@ export function GeoLocationPointFields({ ...props }: PageGeoLocationFieldProps) 
                 }}
                 value={pointValues.longitude}
                 maxRows={1}
-                className={`${textareaStyles({ variant: props.variant })} max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal`}
+                className={cx(
+                  textareaStyles({ variant: props.variant }),
+                  'max-w-[190px] overflow-hidden font-normal text-ellipsis whitespace-nowrap placeholder:font-normal'
+                )}
               />
             </div>
           </div>
