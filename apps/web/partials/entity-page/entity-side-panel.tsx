@@ -570,6 +570,18 @@ export function EntitySidePanel() {
     }
   }, [pathname, sidePanelTarget, handleCloseSidePanel]);
 
+  React.useEffect(() => {
+    if (!sidePanelTarget) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      handleCloseSidePanel();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidePanelTarget, handleCloseSidePanel]);
+
   if (!sidePanelTarget) {
     return null;
   }
