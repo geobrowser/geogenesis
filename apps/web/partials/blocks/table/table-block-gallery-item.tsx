@@ -283,9 +283,9 @@ export function TableBlockGalleryItem({
               </CollectionMetadata>
             )}
           </div>
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="flex h-[1.3125rem] shrink-0 items-center gap-1">
             {!isPlaceholder && (
-              <div className="invisible opacity-0 transition duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+              <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={false}

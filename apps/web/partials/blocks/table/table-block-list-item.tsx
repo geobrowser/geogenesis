@@ -242,12 +242,12 @@ export function TableBlockListItem({
   }
 
   return (
-    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider">
+    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:relative md:block md:pr-1">
       <Link
         entityId={rowEntityId}
         spaceId={currentSpaceId}
         href={href}
-        className="flex min-w-0 flex-1 items-start gap-6 pr-2"
+        className="flex min-w-0 flex-1 items-start gap-6 pr-2 md:w-full md:pr-0"
       >
         <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
           {image ? (
@@ -269,26 +269,28 @@ export function TableBlockListItem({
           )}
         </div>
         <div className="w-full min-w-0">
-          {source.type !== 'COLLECTION' ? (
-            <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-          ) : (
-            <CollectionMetadata
-              view="LIST"
-              isEditing={false}
-              name={name}
-              currentSpaceId={currentSpaceId}
-              entityId={rowEntityId}
-              spaceId={nameCell?.space}
-              collectionId={nameCell?.collectionId}
-              relationId={relationId}
-              verified={verified}
-              onLinkEntry={onLinkEntry}
-              hideHoverActions
-              openedWithMainViewEditing={isEditing}
-            >
+          <div className="md:pr-16">
+            {source.type !== 'COLLECTION' ? (
               <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-            </CollectionMetadata>
-          )}
+            ) : (
+              <CollectionMetadata
+                view="LIST"
+                isEditing={false}
+                name={name}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                collectionId={nameCell?.collectionId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                hideHoverActions
+                openedWithMainViewEditing={isEditing}
+              >
+                <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+              </CollectionMetadata>
+            )}
+          </div>
           {description && (
             <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
           )}
@@ -320,9 +322,9 @@ export function TableBlockListItem({
           })}
         </div>
       </Link>
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
         {!isPlaceholder && (
-          <div className="invisible opacity-0 transition duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}

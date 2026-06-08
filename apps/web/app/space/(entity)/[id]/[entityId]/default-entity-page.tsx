@@ -74,19 +74,19 @@ export default async function DefaultEntityPage({
               canClaimTopic={canClaimTopic}
               coverUrl={props.serverCoverUrl}
             />
-            <Spacer height={24} />
-            <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />
-            <Spacer height={16} />
-            <React.Suspense fallback={null}>
-              <EntityTabs
-                entityId={props.id}
-                spaceId={props.spaceId}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-              />
-            </React.Suspense>
-            {notice}
-            {(showSpacer || !!notice) && <Spacer height={40} />}
+            <div className="mt-6 flex flex-col gap-4 empty:hidden">
+              <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />
+              <React.Suspense fallback={null}>
+                <EntityTabs
+                  entityId={props.id}
+                  spaceId={props.spaceId}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                />
+              </React.Suspense>
+              {notice}
+            </div>
+            {(showSpacer || !!notice) && <Spacer height={24} />}
 
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
             <Spacer height={24} />

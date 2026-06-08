@@ -1,5 +1,6 @@
 'use client';
 
+import { useGeoLogin } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 
@@ -7,18 +8,20 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
+import { useSetAtom } from 'jotai';
 
-import { downvoted, upvoted, voteCast } from '~/core/analytics';
+import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
 import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 type OptimisticVote = 0 | 1 | 'none' | null;
 
@@ -35,7 +38,15 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     objectType,
   });
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const setName = useSetAtom(nameAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
+  const setAvatar = useSetAtom(avatarAtom);
+  const setSpaceId = useSetAtom(spaceIdAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  const { login } = useGeoLogin({
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+  });
 
   const [optimisticVote, setOptimisticVote] = React.useState<OptimisticVote>(null);
   const [optimisticScore, setOptimisticScore] = React.useState<bigint | null>(null);
@@ -80,9 +91,18 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const netScore = upvotes - downvotes;
   const displayScore = optimisticScore !== null ? optimisticScore : netScore;
 
+  function openPrivySignIn() {
+    setName('');
+    setTopicId('');
+    setAvatar('');
+    setSpaceId('');
+    setStep('start');
+    login();
+  }
+
   function handleUpvote() {
     if (!smartAccount) {
-      openSignInPrompt('vote');
+      openPrivySignIn();
       return;
     }
     if (!isConnected) return;
@@ -118,7 +138,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
 
   function handleDownvote() {
     if (!smartAccount) {
-      openSignInPrompt('vote');
+      openPrivySignIn();
       return;
     }
     if (!isConnected) return;
@@ -184,7 +204,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
               : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
           !!smartAccount && !isConnected && 'cursor-default opacity-50'
         )}
       >
@@ -224,7 +244,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
               : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
           !!smartAccount && !isConnected && 'cursor-default opacity-50'
         )}
       >
