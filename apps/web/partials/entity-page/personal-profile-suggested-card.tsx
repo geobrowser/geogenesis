@@ -1,17 +1,19 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { Effect } from 'effect';
 import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
-import * as React from 'react';
 
-import { useEditable } from '~/core/state/editable-store';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
+import { useEditable } from '~/core/state/editable-store';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { runPersonalPostCreationFlow } from '~/core/utils/personal-post-flow';
 import { NavUtils } from '~/core/utils/utils';
@@ -21,33 +23,30 @@ import { Check } from '~/design-system/icons/check';
 import { CreateSmall } from '~/design-system/icons/create-small';
 import { Menu, MenuItem } from '~/design-system/menu';
 
+import { PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY } from '~/partials/entity-page/personal-profile-bio-starter';
+
 import {
+  PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
   clearPersonalProfileSessionDismissStorage,
   personalProfileBioStarterTriggerAtom,
-  PERSONAL_PROFILE_SESSION_DISMISS_STORAGE_KEY,
   personalProfileSkillsRowIntentAtom,
   personalProfileSuggestedDismissAtom,
   personalProfileSuggestedTasksAtom,
 } from '~/atoms/personal-profile-suggested';
-import { PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY } from '~/partials/entity-page/personal-profile-bio-starter';
 
 export function personalSpaceIdsEqual(a: string | null | undefined, b: string | null | undefined): boolean {
   if (!a || !b) return false;
-  const norm = (s: string) =>
-    s
-      .trim()
-      .replace(/^0x/i, '')
-      .replace(/-/g, '')
-      .toLowerCase();
+  const norm = (s: string) => s.trim().replace(/^0x/i, '').replace(/-/g, '').toLowerCase();
   return norm(a) === norm(b);
 }
 
 type Props = {
   spaceId: string;
   entityId: string;
+  withBottomSpacing?: boolean;
 };
 
-export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
+export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpacing = true }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
@@ -73,17 +72,11 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
   const isOwnPersonProfile = personalSpaceIdsEqual(resolvedPersonEntityId, entityId);
 
   const entityName = useName(entityId, spaceId);
-  const displayName =
-    entityName?.trim() ||
-    profileBySpaceQuery.data?.name?.trim() ||
-    profile?.name?.trim() ||
-    'there';
+  const displayName = entityName?.trim() || profileBySpaceQuery.data?.name?.trim() || profile?.name?.trim() || 'there';
 
   const identityReady =
     !address ||
-    (personalSpaceFetched &&
-      geoProfileFetched &&
-      (!isMyPersonalSpaceRoute || profileBySpaceQuery.isFetched));
+    (personalSpaceFetched && geoProfileFetched && (!isMyPersonalSpaceRoute || profileBySpaceQuery.isFetched));
 
   const [dismiss, setDismiss] = useAtom(personalProfileSuggestedDismissAtom);
   const [tasks] = useAtom(personalProfileSuggestedTasksAtom);
@@ -113,9 +106,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     setSessionDismissed(sessionStorage.getItem(key) === '1');
   }, [address, mounted]);
 
-  const isOwner = Boolean(
-    personalSpaceId && isMyPersonalSpaceRoute && resolvedPersonEntityId && isOwnPersonProfile
-  );
+  const isOwner = Boolean(personalSpaceId && isMyPersonalSpaceRoute && resolvedPersonEntityId && isOwnPersonProfile);
 
   const allTasksDone = tasks.bio && tasks.skills && tasks.post;
 
@@ -146,11 +137,9 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   const pillSizing = '!h-7 !px-2.5 !gap-1.5 !rounded-full';
 
-  const pillClass =
-    `${pillSizing} !border-transparent !bg-[#151515E6] !text-white [&:hover]:!bg-[#151515E6] [&:hover]:!text-white [&:hover]:!border-transparent focus-visible:!border-text [&]:shadow-none`;
+  const pillClass = `${pillSizing} !border-transparent !bg-[#151515E6] !text-white [&:hover]:!bg-[#151515E6] [&:hover]:!text-white [&:hover]:!border-transparent focus-visible:!border-text [&]:shadow-none`;
 
-  const donePillClass =
-    `${pillSizing} !border-transparent !bg-[#8A8A8A] !text-white hover:!bg-[#8A8A8A] hover:!text-white hover:!border-transparent active:!bg-[#8A8A8A] focus-visible:!border-transparent focus-visible:!bg-[#8A8A8A] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
+  const donePillClass = `${pillSizing} !border-transparent !bg-[#8A8A8A] !text-white hover:!bg-[#8A8A8A] hover:!text-white hover:!border-transparent active:!bg-[#8A8A8A] focus-visible:!border-transparent focus-visible:!bg-[#8A8A8A] focus-visible:!shadow-none [&]:shadow-none !cursor-default`;
 
   const onDismissSession = React.useCallback(() => {
     if (sessionDismissStorageKey) {
@@ -228,15 +217,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
     } catch {
       /* ignore */
     }
-  }, [
-    bumpBioStarterMerge,
-    displayName,
-    entityId,
-    onProfileOverviewSurface,
-    router,
-    setEditable,
-    spaceId,
-  ]);
+  }, [bumpBioStarterMerge, displayName, entityId, onProfileOverviewSurface, router, setEditable, spaceId]);
 
   const onCreatePost = React.useCallback(async () => {
     if (createPostLockedRef.current) return;
@@ -264,10 +245,10 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   return (
     <div
-      className="relative mb-10 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
+      className={`${withBottomSpacing ? 'mb-10 ' : ''}relative min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat`}
       style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
-      <div className="absolute right-6 top-6 z-20">
+      <div className="absolute top-6 right-6 z-20">
         <Menu
           open={menuOpen}
           onOpenChange={setMenuOpen}
@@ -286,10 +267,10 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
       <div className="relative z-10 flex h-full flex-col p-6">
         <div className="flex flex-col gap-2">
-          <h2 className="font-calibre text-[24px] font-semibold leading-[29px] tracking-[-0.75px] text-[#151515]">
+          <h2 className="font-calibre text-[24px] leading-[29px] font-semibold tracking-[-0.75px] text-[#151515]">
             Get started
           </h2>
-          <p className="font-calibre text-[16px] font-normal leading-[13px] tracking-[-0.25px] text-[#151515]">
+          <p className="font-calibre text-[16px] leading-[13px] font-normal tracking-[-0.25px] text-[#151515]">
             Kick things off with these quick setup actions.
           </p>
         </div>

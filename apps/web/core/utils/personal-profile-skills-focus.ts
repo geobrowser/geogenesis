@@ -10,9 +10,8 @@ export function getPersonalProfileSkillsRelationFocusRoot(): HTMLElement | null 
 export function getPersonalProfileSkillsRelationFindInput(): HTMLInputElement | null {
   const root = getPersonalProfileSkillsRelationFocusRoot();
   return (
-    root?.querySelector<HTMLInputElement>(
-      'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'
-    ) ?? null
+    root?.querySelector<HTMLInputElement>('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])') ??
+    null
   );
 }
 

@@ -1,4 +1,5 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
 import { parse } from 'graphql';
 
 /**

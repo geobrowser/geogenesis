@@ -124,9 +124,7 @@ export function spacesFromRoutingProjections({
   return sortSpaceIdsByRank(spaceIds.filter(id => spacesWithRealContent.has(id)));
 }
 
-export function entityHasOnlyPostType(
-  entity: { types?: readonly { id: string }[] } | null | undefined
-): boolean {
+export function entityHasOnlyPostType(entity: { types?: readonly { id: string }[] } | null | undefined): boolean {
   const types = entity?.types;
   if (!types?.length) return false;
   const typeIds = new Set(types.map(t => t.id));

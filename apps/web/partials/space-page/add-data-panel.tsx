@@ -12,13 +12,20 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
-// Mirrors webFetch's own validateUrl — only parseable http(s) URLs enable go.
-function isValidHttpUrl(value: string): boolean {
+// Normalizes a pasted URL to a parseable http(s) URL, defaulting a bare domain
+// (`example.com/article`) to https. Returns null if it can't be made into an
+// http(s) URL (e.g. a non-web scheme like ftp:). Returns the canonical string
+// so the inject / ingestion pipelines always receive a full URL.
+function normalizeHttpUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
   try {
-    const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    const url = new URL(withScheme);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return url.toString();
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -36,12 +43,12 @@ export function AddDataPanel({ spaceId }: Props) {
 
   if (!canEdit || !expanded) return null;
 
-  const trimmed = url.trim();
-  const canSubmit = isValidHttpUrl(trimmed) && !submitting;
+  const normalizedUrl = normalizeHttpUrl(url);
+  const canSubmit = normalizedUrl !== null && !submitting;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!isValidHttpUrl(trimmed) || submitting) return;
+    if (!normalizedUrl || submitting) return;
     setSubmitting(true);
 
     let classification: ClassifyUrlResponse = { route: 'chat' };
@@ -50,7 +57,7 @@ export function AddDataPanel({ spaceId }: Props) {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: trimmed }),
+        body: JSON.stringify({ url: normalizedUrl }),
       });
       if (res.ok) {
         classification = (await res.json()) as ClassifyUrlResponse;
@@ -67,12 +74,12 @@ export function AddDataPanel({ spaceId }: Props) {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: trimmed, type: classification.type }),
+          body: JSON.stringify({ url: normalizedUrl, type: classification.type }),
         });
         if (res.ok || res.status === 202) {
           const body = (await res.json()) as { jobId: string };
           if (body.jobId) {
-            setSeed({ mode: 'inject', url: trimmed, jobId: body.jobId, injectType: classification.type });
+            setSeed({ mode: 'inject', url: normalizedUrl, jobId: body.jobId, injectType: classification.type });
             setChatOpen(true);
             setExpanded(false);
             setUrl('');
@@ -87,7 +94,7 @@ export function AddDataPanel({ spaceId }: Props) {
       }
     }
 
-    setSeed({ mode: 'ingestion', url: trimmed });
+    setSeed({ mode: 'ingestion', url: normalizedUrl });
     setChatOpen(true);
     setExpanded(false);
     setUrl('');
@@ -95,7 +102,7 @@ export function AddDataPanel({ spaceId }: Props) {
   };
 
   return (
-    <div className="relative mt-5 h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
+    <div className="relative h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
       <img
         src="/images/add-data/sculpture.png"
         alt=""
@@ -116,8 +123,11 @@ export function AddDataPanel({ spaceId }: Props) {
         Add data and we&rsquo;ll extract and organize it for you
       </h2>
 
-      <div className="absolute top-[4.3125rem] left-[1.5rem] text-[1rem] font-medium tracking-[-0.32px] text-[#2A2B2E]">
-        Import from URL
+      <div className="absolute top-[4.3125rem] left-[1.5rem] flex items-center gap-4 text-[1rem] leading-[22px] font-medium tracking-[-0.32px]">
+        <span className="text-[#2A2B2E]">Import from URL</span>
+        <span aria-disabled="true" title="Coming soon" className="cursor-not-allowed text-[#606060]">
+          Upload files
+        </span>
       </div>
 
       <form
@@ -162,7 +172,7 @@ export function AddDataChip({ spaceId }: Props) {
         aria-hidden
         className="pointer-events-none absolute inset-0 size-full object-cover opacity-20"
       />
-      <span className="relative">Add data</span>
+      <span className="relative">Import</span>
       <span className="relative">
         <ChevronRight />
       </span>

@@ -1,14 +1,20 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { useAtom } from 'jotai';
+
 import * as React from 'react';
+
+import { useAtom } from 'jotai';
 
 import { useRenderedPropertiesWithContent } from '~/core/hooks/use-renderables';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useBlocks, relationWithBlockIsMarkdownTextBody } from '~/core/state/editor/use-blocks';
 import { useEditable } from '~/core/state/editable-store';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import {
+  profileOverviewTextBlockMarkdownForContentCheck,
+  stripProfileOverviewMarkdownNoise,
+} from '~/core/state/editor/profile-overview-tail-placeholder';
+import { relationWithBlockIsMarkdownTextBody, useBlocks } from '~/core/state/editor/use-blocks';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { getPersonalProfileSkillsRelationFocusRoot } from '~/core/utils/personal-profile-skills-focus';
 
@@ -18,10 +24,6 @@ import {
   personalProfileSuggestedTasksAtom,
   propertyIsSkillsProperty,
 } from '~/atoms/personal-profile-suggested';
-import {
-  profileOverviewTextBlockMarkdownForContentCheck,
-  stripProfileOverviewMarkdownNoise,
-} from '~/core/state/editor/profile-overview-tail-placeholder';
 
 export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const { id: pageEntityId, spaceId: editorSpaceId, initialBlockRelations, initialBlocks } = useEditorInstance();
@@ -77,17 +79,10 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
   });
 
   const relationsTargetingProfile = useRelations({
-    selector: r =>
-      r.spaceId === spaceId &&
-      !r.isDeleted &&
-      r.toEntity.id === entityId &&
-      r.fromEntity.id !== entityId,
+    selector: r => r.spaceId === spaceId && !r.isDeleted && r.toEntity.id === entityId && r.fromEntity.id !== entityId,
   });
 
-  const postEntityIds = React.useMemo(
-    () => new Set(postTypeRelations.map(r => r.fromEntity.id)),
-    [postTypeRelations]
-  );
+  const postEntityIds = React.useMemo(() => new Set(postTypeRelations.map(r => r.fromEntity.id)), [postTypeRelations]);
 
   const hasPostAuthoredByProfile = React.useMemo(
     () => relationsTargetingProfile.some(r => postEntityIds.has(r.fromEntity.id)),
@@ -217,7 +212,6 @@ export function PersonalProfileSuggestedTaskSync({ entityId, spaceId }: { entity
 
     return () => window.clearTimeout(timeoutId);
   }, [dismissForever, bioDone, skillsDone, hasPostAuthoredByProfile]);
-
 
   return null;
 }

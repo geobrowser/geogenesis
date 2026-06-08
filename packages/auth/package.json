@@ -2,11 +2,12 @@
   "name": "@geogenesis/auth",
   "version": "1.0.0",
   "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "Byron Guina",
+  "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "main": "./dist/index.js",
-  "ascMain": "./dist/index.js",
-  "type": "module",
   "exports": {
     "./package.json": "./package.json",
     ".": "./dist/index.js",
@@ -14,14 +15,12 @@
     "./wallet": "./dist/wallet.js",
     "./server": "./dist/src/server.js"
   },
+  "main": "./dist/index.js",
   "scripts": {
     "build": "tsc",
     "format": "npx prettier . --write",
     "test": "vitest"
   },
-  "keywords": [],
-  "author": "Byron Guina",
-  "license": "ISC",
   "dependencies": {
     "@privy-io/react-auth": "^3.21.0",
     "@privy-io/wagmi": "^4.0.4",
@@ -33,5 +32,6 @@
   "devDependencies": {
     "prettier": "^3.8.1",
     "typescript": "^6.0.2"
-  }
+  },
+  "ascMain": "./dist/index.js"
 }

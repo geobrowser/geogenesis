@@ -106,7 +106,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         {item.imageUrl ? (
           <Link
             href={NavUtils.toEntity(item.spaceId, item.entityId)}
-            className="relative h-[40px] w-[93px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
+            className="relative h-[40px] w-[93px] shrink-0 overflow-hidden rounded bg-grey-01"
           >
             <FallbackImage value={item.imageUrl} sizes="186px" className="object-cover" />
           </Link>

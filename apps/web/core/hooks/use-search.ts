@@ -262,8 +262,7 @@ export function useSearch({
   const shouldSuspend = isWaitingForFilterTypes || isQuerySyncing || isLoading;
 
   return {
-    isEmpty:
-      isArrayEmpty(results) && (Boolean(enabled) || !isStringEmpty(query)) && !shouldSuspend,
+    isEmpty: isArrayEmpty(results) && (Boolean(enabled) || !isStringEmpty(query)) && !shouldSuspend,
     isLoading: shouldSuspend,
     isFetching,
     isFetchingNextPage,

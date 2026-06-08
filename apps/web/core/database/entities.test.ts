@@ -112,7 +112,7 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
     expect(result.hasPropertyGroups).toBe(false);
   });
 
-  it('renders isType properties as a named group even without explicit property groups', async () => {
+  it('keeps isType properties flat when there are no explicit property groups', async () => {
     mocks.propertiesById.set(
       'is-type-property',
       property('is-type-property', 'Is type property', { dataType: 'RELATION', isType: true })
@@ -144,17 +144,10 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
       ]
     );
 
-    expect(result.propertyGroups).toEqual([
-      {
-        id: 'is-type-entity-is-type-relation',
-        name: 'Target type',
-        collapsed: false,
-        propertyIds: ['target-property'],
-        source: 'isType',
-      },
-    ]);
-    expect(result.ungroupedPropertyIds).toEqual(['is-type-property']);
-    expect(result.hasPropertyGroups).toBe(true);
+    expect(result.propertyGroups).toEqual([]);
+    expect(result.ungroupedPropertyIds).toEqual(['is-type-property', 'target-property']);
+    expect(result.hasPropertyGroups).toBe(false);
+    expect(result.schema.map(item => item.id)).toContain('target-property');
   });
 
   it('does not render an isType group when the target entity has no properties', async () => {
@@ -326,15 +319,9 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
       ]
     );
 
-    expect(result.propertyGroups).toEqual([
-      {
-        id: 'is-type-entity-role-relation',
-        name: 'Product lead',
-        collapsed: false,
-        propertyIds: ['related-projects'],
-        source: 'isType',
-      },
-    ]);
+    expect(result.propertyGroups).toEqual([]);
+    expect(result.ungroupedPropertyIds).toEqual(['roles-property', 'related-projects']);
+    expect(result.hasPropertyGroups).toBe(false);
     expect(result.schema.map(item => item.id)).toContain('related-projects');
   });
 });

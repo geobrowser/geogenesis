@@ -1,16 +1,19 @@
 'use client';
 
 import type { JSONContent } from '@tiptap/core';
-import { useAtomValue, useSetAtom } from 'jotai';
+
 import * as React from 'react';
+
+import { useAtomValue, useSetAtom } from 'jotai';
 
 import { useEditorStore } from '~/core/state/editor/use-editor';
 
-import { editorContentVersionAtom, personalProfileBioStarterTriggerAtom } from '~/atoms';
 import {
-  buildPersonalProfileBioStarterDocJson,
   PERSONAL_PROFILE_BIO_STARTER_SESSION_KEY,
+  buildPersonalProfileBioStarterDocJson,
 } from '~/partials/entity-page/personal-profile-bio-starter';
+
+import { editorContentVersionAtom, personalProfileBioStarterTriggerAtom } from '~/atoms';
 
 type StarterPayload = {
   kind: 'bio';

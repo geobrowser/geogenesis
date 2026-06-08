@@ -76,9 +76,7 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   const skip = pageNumber * pageSize;
 
   const entityIdsToFetch =
-    hasFilters || sort
-      ? allEntityIds
-      : orderedCollectionRelations.slice(skip, skip + pageSize).map(r => r.toEntity.id);
+    hasFilters || sort ? allEntityIds : orderedCollectionRelations.slice(skip, skip + pageSize).map(r => r.toEntity.id);
 
   const collectionItemsWhere: WhereCondition = {
     id: {

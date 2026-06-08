@@ -66,8 +66,7 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
   }, [id]);
 
   React.useEffect(() => {
-    const persisted =
-      node.attrs.querySetupCompleted === true || node.attrs.querySetupCompleted === 'true';
+    const persisted = node.attrs.querySetupCompleted === true || node.attrs.querySetupCompleted === 'true';
     if (persisted) {
       setQuerySetupCompletedOptimistic(false);
     }
@@ -99,9 +98,7 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
               blockId={id}
               querySetupPending={querySetupPending}
               onCompleteQuerySetup={onCompleteQuerySetup}
-              initialFiltersOpen={
-                node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'
-              }
+              initialFiltersOpen={node.attrs.filtersOpenOnCreate === true || node.attrs.filtersOpenOnCreate === 'true'}
               onConsumedInitialFiltersOpen={() => updateAttributes({ filtersOpenOnCreate: false })}
             />
           </DataBlockProvider>

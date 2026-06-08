@@ -12,7 +12,6 @@ import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { Filter, type FilterMode } from '~/core/blocks/data/filters';
-import { ID } from '~/core/id';
 import { Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -23,6 +22,7 @@ import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-id
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { ID } from '~/core/id';
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
@@ -843,7 +843,10 @@ function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): boolean {
 }
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
-  function TableBlockFilterPrompt({ trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true, }, ref) {
+  function TableBlockFilterPrompt(
+    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true },
+    ref
+  ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
@@ -888,39 +891,43 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       };
     }, [state.open, syncExternalAnchorBox]);
 
-    React.useImperativeHandle(ref, () => ({
-      openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
-        if (!isEditing) return;
-        const currentState = stateRef.current;
-        if (
-          currentState.open &&
-          currentState.selectedColumn === columnId &&
-          externalAnchorElRef.current === (anchorEl ?? null)
-        ) {
-          externalAnchorElRef.current = null;
-          setExternalAnchorBox(null);
-          dispatch({ type: 'close' });
-          return;
-        }
-        externalAnchorElRef.current = anchorEl ?? null;
-        if (anchorEl) {
-          const r = anchorEl.getBoundingClientRect();
-          setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
-        } else {
-          setExternalAnchorBox(null);
-        }
-        const s = stateRef.current;
-        const opts = optionsRef.current;
-        const fs = seedFilterStateRef.current;
-        const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
-        const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
-        const reuseStored =
-          draftHasPending(stored, columnId, opts) &&
-          columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
-        const seedDraft = reuseStored ? undefined : committedDraft;
-        dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
-      },
-    }), [isEditing]);
+    React.useImperativeHandle(
+      ref,
+      () => ({
+        openWithColumn: (columnId: string, anchorEl?: HTMLElement | null) => {
+          if (!isEditing) return;
+          const currentState = stateRef.current;
+          if (
+            currentState.open &&
+            currentState.selectedColumn === columnId &&
+            externalAnchorElRef.current === (anchorEl ?? null)
+          ) {
+            externalAnchorElRef.current = null;
+            setExternalAnchorBox(null);
+            dispatch({ type: 'close' });
+            return;
+          }
+          externalAnchorElRef.current = anchorEl ?? null;
+          if (anchorEl) {
+            const r = anchorEl.getBoundingClientRect();
+            setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
+          } else {
+            setExternalAnchorBox(null);
+          }
+          const s = stateRef.current;
+          const opts = optionsRef.current;
+          const fs = seedFilterStateRef.current;
+          const stored = s.columnDrafts[columnId] ?? emptyColumnDraft();
+          const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
+          const reuseStored =
+            draftHasPending(stored, columnId, opts) &&
+            columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
+          const seedDraft = reuseStored ? undefined : committedDraft;
+          dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
+        },
+      }),
+      [isEditing]
+    );
 
     const [from, setFrom] = React.useState<Source | null>({
       type: 'RELATIONS',
@@ -987,50 +994,49 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const stored = s.columnDrafts[columnId];
       const committedDraft = seedColumnDraftFromCommittedFilters(columnId, fs, opts);
       const seedDraft =
-        stored === undefined || (!draftHasPending(stored, columnId, opts) && draftHasPending(committedDraft, columnId, opts))
+        stored === undefined ||
+        (!draftHasPending(stored, columnId, opts) && draftHasPending(committedDraft, columnId, opts))
           ? committedDraft
           : undefined;
       dispatch({ type: 'selectColumn', payload: { columnId, seedDraft } });
     }, []);
 
-    const filters =
-      isRelationsMode ? (
-        <StaticRelationsFilters
-          from={from}
-          setFrom={setFrom}
-          relationType={relationType}
-          setRelationType={setRelationType}
-        />
-      ) : (
-        <DynamicFilters
-          options={options}
-          state={state}
-          dispatch={dispatch}
-          filterSuggestionSpaceId={filterSuggestionSpaceId}
-          filterMode={filterMode}
-          onFilterModeChange={setFilterMode}
-          onSelectColumnToFilter={onSelectColumnToFilter}
-          isEditing={isEditing}
-        />
-      );
+    const filters = isRelationsMode ? (
+      <StaticRelationsFilters
+        from={from}
+        setFrom={setFrom}
+        relationType={relationType}
+        setRelationType={setRelationType}
+      />
+    ) : (
+      <DynamicFilters
+        options={options}
+        state={state}
+        dispatch={dispatch}
+        filterSuggestionSpaceId={filterSuggestionSpaceId}
+        filterMode={filterMode}
+        onFilterModeChange={setFilterMode}
+        onSelectColumnToFilter={onSelectColumnToFilter}
+        isEditing={isEditing}
+      />
+    );
 
-    const done =
-      !isRelationsMode ? (
-        <AnimatePresence>
-          {hasPendingFilterSelections(state, options) && (
-            <motion.span
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.1 }}
-            >
-              <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
-                Done
-              </TextButton>
-            </motion.span>
-          )}
-        </AnimatePresence>
-      ) : null;
+    const done = !isRelationsMode ? (
+      <AnimatePresence>
+        {hasPendingFilterSelections(state, options) && (
+          <motion.span
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.1 }}
+          >
+            <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
+              Done
+            </TextButton>
+          </motion.span>
+        )}
+      </AnimatePresence>
+    ) : null;
 
     const onOpenChange = (open: boolean) => {
       if (open && !isEditing) return;
@@ -1113,15 +1119,7 @@ interface DynamicFiltersProps {
   isEditing: boolean;
 }
 
-function MultiSelectChip({
-  label,
-  onRemove,
-  removable,
-}: {
-  label: string;
-  onRemove: () => void;
-  removable: boolean;
-}) {
+function MultiSelectChip({ label, onRemove, removable }: { label: string; onRemove: () => void; removable: boolean }) {
   return (
     <span
       className={cx(
@@ -1238,10 +1236,7 @@ function DynamicFilters({
           <div className="flex flex-wrap items-center gap-1.5">
             {showFilterModeControl && (
               <>
-                <span
-                  className="flex h-6 shrink-0 items-center text-black [&_svg]:h-3 [&_svg]:w-3"
-                  aria-hidden
-                >
+                <span className="flex h-6 shrink-0 items-center text-black [&_svg]:h-3 [&_svg]:w-3" aria-hidden>
                   <FilterIcon />
                 </span>
                 {isEditing ? (
@@ -1253,7 +1248,7 @@ function DynamicFilters({
                       { value: 'OR', label: 'Or' },
                     ]}
                     position="popper"
-                    className="!inline-flex !h-6 !min-h-0 !w-auto !min-w-0 !max-w-[5.25rem] !flex-none shrink-0 items-center rounded-sm border border-grey-02 bg-grey-01 !px-1.5 !py-0 text-[0.8125rem] leading-tight text-text shadow-none [&>div]:min-h-0 [&>div]:gap-0.5"
+                    className="!inline-flex !h-6 !min-h-0 !w-auto !max-w-[5.25rem] !min-w-0 !flex-none shrink-0 items-center rounded-sm border border-grey-02 bg-grey-01 !px-1.5 !py-0 text-[0.8125rem] leading-tight text-text shadow-none [&>div]:min-h-0 [&>div]:gap-0.5"
                   />
                 ) : (
                   <span className="inline-flex h-6 shrink-0 items-center rounded-sm bg-grey-01 px-1.5 text-[0.8125rem] leading-tight text-text">
@@ -1263,8 +1258,7 @@ function DynamicFilters({
               </>
             )}
             {pendingFilterChips.map(item => {
-              const valueLabel =
-                item.kind === 'string' ? item.value : (item.name ?? item.id);
+              const valueLabel = item.kind === 'string' ? item.value : (item.name ?? item.id);
               return (
                 <MultiSelectChip
                   key={item.key}
@@ -1703,23 +1697,20 @@ function TableBlockSpaceFilterInput({
     staleTime: Duration.toMillis(Duration.seconds(60)),
     queryFn: ({ signal }) => Effect.runPromise(getSpacesWhereMember(memberSpaceId!, signal)),
   });
-  const defaultSpaceSuggestions = React.useMemo(
-    () => {
-      const seen = new Set<string>();
-      return memberSpaces.flatMap(s => {
-        if (seen.has(s.id)) return [];
-        seen.add(s.id);
-        return [
-          {
-            id: s.id,
-            name: s.entity.name ?? null,
-            image: s.entity.image ?? null,
-          },
-        ];
-      });
-    },
-    [memberSpaces]
-  );
+  const defaultSpaceSuggestions = React.useMemo(() => {
+    const seen = new Set<string>();
+    return memberSpaces.flatMap(s => {
+      if (seen.has(s.id)) return [];
+      seen.add(s.id);
+      return [
+        {
+          id: s.id,
+          name: s.entity.name ?? null,
+          image: s.entity.image ?? null,
+        },
+      ];
+    });
+  }, [memberSpaces]);
 
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
   const showQueryPanel = Boolean(query.trim());

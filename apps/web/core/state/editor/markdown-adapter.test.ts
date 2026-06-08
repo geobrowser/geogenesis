@@ -15,6 +15,7 @@ import Underline from '@tiptap/extension-underline';
 import { describe, expect, it } from 'vitest';
 
 import { MATH_DELIMITERS } from '~/core/state/editor/math-delimiters';
+
 import { Web2URLMark } from '~/partials/editor/web2-url-extension';
 
 import { editorNodeToMarkdown, markdownToEditorJson, markdownToRenderedHtml } from './markdown-adapter';

@@ -4,16 +4,25 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { writeValue } from '~/partials/blocks/table/change-entry';
+
 import { Filter } from '../blocks/data/filters';
 import { useMutate } from '../sync/use-mutate';
-import { writeValue } from '~/partials/blocks/table/change-entry';
 
 export function useCreateEntityWithFilters(spaceId: string) {
   const [nextEntityId, setNextEntityId] = React.useState(IdUtils.generate());
   const { storage } = useMutate();
 
   const onClick = React.useCallback(
-    ({ name, filters }: { name?: string | null; filters?: Filter[] }) => {
+    ({
+      name,
+      filters,
+      advanceNextId = true,
+    }: {
+      name?: string | null;
+      filters?: Filter[];
+      advanceNextId?: boolean;
+    }) => {
       if (name) {
         storage.entities.name.set(nextEntityId, spaceId, name);
       }
@@ -61,7 +70,9 @@ export function useCreateEntityWithFilters(spaceId: string) {
         }
       }
 
-      setNextEntityId(IdUtils.generate());
+      if (advanceNextId) {
+        setNextEntityId(IdUtils.generate());
+      }
     },
     [nextEntityId, spaceId, storage]
   );

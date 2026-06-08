@@ -5,13 +5,14 @@ import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@
 import * as React from 'react';
 
 import { LayoutGroup } from 'framer-motion';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
@@ -23,7 +24,7 @@ import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
 import { ServerContent } from './server-content';
-import { editorContentVersionAtom } from '~/atoms';
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -44,17 +45,14 @@ interface Props {
   spacePage?: boolean;
 }
 
-export function Editor({
-  shouldHandleOwnSpacing,
-  spaceId,
-  placeholder = null,
-  spacePage = false,
-}: Props) {
+export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
+  const setSidePanelPersist = useSetAtom(entitySidePanelPersistEditorAtom);
 
   // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
@@ -162,6 +160,15 @@ export function Editor({
   // Track the previous editable state to detect transitions from edit → read mode
   const prevEditableRef = React.useRef(editable);
 
+  const persistPendingEdits = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
+    const isSuggestionActive = entityMentionPluginKey.getState(editorRef.current.state)?.active;
+    if (isSuggestionActive) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
+
   // When transitioning from edit → view mode, persist the editor content to the
   // store BEFORE useEditor destroys and recreates the editor. Without this,
   // content changes (like @mention links) would be lost because onBlur may not
@@ -171,11 +178,21 @@ export function Editor({
     prevEditableRef.current = editable;
 
     if (wasEditable && !editable && editorRef.current) {
-      const json = editorRef.current.getJSON();
-      trackEditorDocument(json);
-      upsertEditorStateRef.current(json);
+      persistPendingEdits();
     }
-  }, [editable, trackEditorDocument]);
+  }, [editable, persistPendingEdits]);
+
+  const persistPendingEditsRef = React.useRef(persistPendingEdits);
+  persistPendingEditsRef.current = persistPendingEdits;
+
+  React.useLayoutEffect(() => {
+    if (!sidePanelCtx) return;
+    setSidePanelPersist(() => () => persistPendingEditsRef.current());
+    return () => {
+      setSidePanelPersist(null);
+      persistPendingEditsRef.current();
+    };
+  }, [setSidePanelPersist, sidePanelCtx]);
 
   const editor = useEditor(
     {
@@ -321,7 +338,7 @@ export function Editor({
       >
         {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
 
-        {shouldHandleOwnSpacing && <Spacer height={60} />}
+        {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
       </div>
     </LayoutGroup>
   );
@@ -387,6 +404,10 @@ function useInterceptEditorLinks(spaceId: string) {
     function handleClick(event: MouseEvent) {
       const target = event.target as Element | null;
       if (!target) {
+        return;
+      }
+
+      if (target.closest('[data-entity-side-panel-opener], [data-entity-side-panel]')) {
         return;
       }
 

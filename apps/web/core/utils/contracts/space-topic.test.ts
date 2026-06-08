@@ -2,17 +2,11 @@ import { decodeAbiParameters, decodeFunctionData } from 'viem';
 import { describe, expect, it } from 'vitest';
 
 import { DAOSpaceAbi, GOVERNANCE_ACTIONS, SpaceRegistryAbi, VOTING_MODE } from './space-registry';
-import { buildDaoTopicDeclaredCalldata, buildPersonalTopicDeclaredCalldata, encodeInitialTopicId } from './space-topic';
+import { buildDaoTopicDeclaredCalldata, buildPersonalTopicDeclaredCalldata } from './space-topic';
 
 const AUTHOR_SPACE_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TARGET_SPACE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TOPIC_ID = 'cccccccccccccccccccccccccccccccc';
-
-describe('encodeInitialTopicId', () => {
-  it('encodes a topic UUID as bytes16 hex with 0x prefix', () => {
-    expect(encodeInitialTopicId(TOPIC_ID)).toBe(`0x${TOPIC_ID}`);
-  });
-});
 
 describe('buildPersonalTopicDeclaredCalldata', () => {
   it('encodes a direct TOPIC_DECLARED call through SpaceRegistry.enter', () => {

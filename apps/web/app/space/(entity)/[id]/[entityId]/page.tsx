@@ -46,7 +46,5 @@ export default async function EntityTemplateStrategy(props: Props) {
 
   // Pass the already-computed canClaim through to avoid a duplicate eligibility
   // fetch inside DefaultEntityPage.
-  return (
-    <DefaultEntityPage params={params} searchParams={searchParams} canClaimTopic={claimEligibility.canClaim} />
-  );
+  return <DefaultEntityPage params={params} searchParams={searchParams} canClaimTopic={claimEligibility.canClaim} />;
 }

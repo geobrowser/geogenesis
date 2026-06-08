@@ -21,6 +21,7 @@ import { CellContent } from '~/design-system/table/cell-content';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type Props = {
   entityId: string;
@@ -36,6 +37,7 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   source: Source;
   relationChipTruncateLabel?: boolean;
+  openedWithMainViewEditing?: boolean;
 };
 
 export const EntityTableCell = ({
@@ -52,6 +54,7 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
   relationChipTruncateLabel = false,
+  openedWithMainViewEditing = false,
 }: Props) => {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
   const isRelation = property.dataType === 'RELATION';
@@ -60,35 +63,47 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <Link
-            entityId={entityId}
-            href={href}
-            className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
-          >
-            {name || entityId}
-          </Link>
-        ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={false}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={spaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
+          <div className="group/name-table-browse flex w-full min-w-0 items-center gap-2">
             <Link
               entityId={entityId}
-              spaceId={spaceId}
               href={href}
-              className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+              className="min-w-0 flex-1 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
             >
               {name || entityId}
             </Link>
-          </CollectionMetadata>
+            <div className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/name-table-browse:pointer-events-auto group-hover/name-table-browse:opacity-100 md:hidden">
+              <DataBlockOpenSidePanelButton
+                entityId={entityId}
+                entitySpaceId={spaceId}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="group/name-table-browse-coll w-full min-w-0">
+            <CollectionMetadata
+              view="TABLE"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
+              entityId={entityId}
+              spaceId={spaceId}
+              collectionId={collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              openedWithMainViewEditing={openedWithMainViewEditing}
+            >
+              <Link
+                entityId={entityId}
+                spaceId={spaceId}
+                href={href}
+                className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+              >
+                {name || entityId}
+              </Link>
+            </CollectionMetadata>
+          </div>
         )}
       </Fragment>
     );

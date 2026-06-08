@@ -5,10 +5,11 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
-import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
+import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
@@ -25,11 +26,29 @@ type EntityTabsProps = {
 export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities }: EntityTabsProps) {
   const { editable } = useEditable();
   const { entity } = useQueryEntity({ id: entityId, spaceId });
+  const sidePanelEdit = React.useContext(EntitySidePanelEditContext);
 
-  // Merge local tab relation changes with server data
+  /**
+   * Full entity page: same as before — only global edit toggle (`editable`).
+   * Side panel: only `panelWantsEdit` (how the panel was opened + toggle). Do **not** OR with
+   * global `editable`, or a leftover edit mode elsewhere forces EditableTabGroup and tabs show
+   * even when the panel is in view mode.
+   */
+  const effectiveEditable = sidePanelEdit != null ? sidePanelEdit.panelWantsEdit : editable;
+
+  const initialTabRelationIds = React.useMemo(() => new Set(initialTabRelations.map(r => r.id)), [initialTabRelations]);
+
+  // Merge local tab relation changes with server data. Tab relations keep their relation `spaceId`;
+  // it may differ from the entity URL scope — include merged rows by id so tabs don’t disappear
+  // (especially in the side panel).
   const mergedTabRelations = useRelations({
     mergeWith: initialTabRelations,
-    selector: r => r.fromEntity.id === entityId && r.type.id === SystemIds.TABS_PROPERTY && r.spaceId === spaceId,
+    selector: r => {
+      if (r.fromEntity.id !== entityId || r.type.id !== SystemIds.TABS_PROPERTY) return false;
+      if (Boolean(r.isDeleted)) return false;
+      if (r.spaceId === spaceId) return true;
+      return initialTabRelationIds.has(r.id);
+    },
   });
 
   // Sort by position to get correct order
@@ -63,7 +82,7 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
 
-  if (editable) {
+  if (effectiveEditable) {
     const editableTabs = sortedTabRelations.map((relation, i) => ({
       relation,
       entityId: sortedTabEntities[i].id,

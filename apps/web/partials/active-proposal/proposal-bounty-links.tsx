@@ -271,9 +271,7 @@ export function ProposalBountiesProvider({
     queryKey: ['proposal-linked-bounty-entities', effectiveLinkedIds.join(',')],
     enabled: isPanelOpen && n > 0,
     queryFn: async () => {
-      const { entities } = await Effect.runPromise(
-        getAllEntities({ filter: { id: { in: effectiveLinkedIds } } })
-      );
+      const { entities } = await Effect.runPromise(getAllEntities({ filter: { id: { in: effectiveLinkedIds } } }));
       return entities;
     },
   });

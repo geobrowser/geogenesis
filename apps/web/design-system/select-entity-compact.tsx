@@ -60,19 +60,11 @@ export function SelectEntityCompact({
   const [focused, setFocused] = React.useState(false);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
-  const {
-    query,
-    onQueryChange,
-    results,
-    isLoading,
-    isEmpty,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes,
-    enabled: focused,
-  });
+  const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes,
+      enabled: focused,
+    });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType>(renderableTypeValue);
   const hasResults = !isLoading && results.length > 0;

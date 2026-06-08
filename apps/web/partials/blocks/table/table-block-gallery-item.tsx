@@ -19,6 +19,8 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -170,6 +172,8 @@ export function TableBlockGalleryItem({
                     name={name}
                     entityId={rowEntityId}
                     spaceId={currentSpaceId}
+                    entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -186,6 +190,8 @@ export function TableBlockGalleryItem({
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
+                    showSidePanel={!isPlaceholder}
+                    openedWithMainViewEditing={isEditing}
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -268,6 +274,8 @@ export function TableBlockGalleryItem({
                 relationId={relationId}
                 verified={verified}
                 onLinkEntry={onLinkEntry}
+                hideHoverActions
+                openedWithMainViewEditing={isEditing}
               >
                 <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                   <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
@@ -275,7 +283,31 @@ export function TableBlockGalleryItem({
               </CollectionMetadata>
             )}
           </div>
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          <div className="flex h-[1.3125rem] shrink-0 items-center gap-1">
+            {!isPlaceholder && (
+              <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={false}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                )}
+              </div>
+            )}
+            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          </div>
         </div>
         {description && propertyDataHasDescription && (
           <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>

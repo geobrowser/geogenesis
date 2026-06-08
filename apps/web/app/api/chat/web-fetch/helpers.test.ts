@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type FxTweet, isPrivateHost, stripHtml, summarizeFxTweet, validateUrl } from './helpers';
+import { type FxTweet, MAX_SUMMARY_CHARS, isPrivateHost, stripHtml, summarizeFxTweet, validateUrl } from './helpers';
 
 describe('isPrivateHost', () => {
   it.each([
@@ -296,9 +296,9 @@ describe('summarizeFxTweet', () => {
   });
 
   it('clamps very long tweets to the summary cap', () => {
-    const huge = 'x'.repeat(5_000);
+    const huge = 'x'.repeat(MAX_SUMMARY_CHARS + 1_000);
     const result = summarizeFxTweet({ ...baseTweet, text: huge }, 'https://x.com/jack/status/20');
-    expect(result!.summary.length).toBeLessThanOrEqual(4_000);
+    expect(result!.summary.length).toBeLessThanOrEqual(MAX_SUMMARY_CHARS);
     expect(result!.summary.endsWith('…')).toBe(true);
   });
 });

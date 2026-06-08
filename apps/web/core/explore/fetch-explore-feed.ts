@@ -3,14 +3,13 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
-
-import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,

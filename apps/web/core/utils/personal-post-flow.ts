@@ -1,15 +1,15 @@
 import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { toGeoFilterState, type Filter } from '~/core/blocks/data/filters';
+import { type Filter, toGeoFilterState } from '~/core/blocks/data/filters';
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
+import { queryClient } from '~/core/query-client';
+import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { E } from '~/core/sync/orm';
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
-import { queryClient } from '~/core/query-client';
-import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import type { Property, Relation } from '~/core/types';
 import { sortRelations } from '~/core/utils/utils';
 
@@ -42,10 +42,7 @@ function pickAuthorsProperty(schema: Property[]): Property | null {
 function tabEntityName(tabEntityId: string, spaceId: string): string | null {
   const v = getValues({
     selector: r =>
-      r.entity.id === tabEntityId &&
-      r.spaceId === spaceId &&
-      r.property.id === SystemIds.NAME_PROPERTY &&
-      !r.isDeleted,
+      r.entity.id === tabEntityId && r.spaceId === spaceId && r.property.id === SystemIds.NAME_PROPERTY && !r.isDeleted,
   })[0];
   const fromValue = v?.value?.trim();
   if (fromValue) return fromValue;
@@ -59,10 +56,7 @@ function tabEntityName(tabEntityId: string, spaceId: string): string | null {
 function postsQueryBlockExists(tabEntityId: string, spaceId: string): boolean {
   const blocks = getRelations({
     selector: r =>
-      r.fromEntity.id === tabEntityId &&
-      r.type.id === SystemIds.BLOCKS &&
-      r.spaceId === spaceId &&
-      !r.isDeleted,
+      r.fromEntity.id === tabEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
   });
   for (const br of blocks) {
     const bid = br.toEntity.id;
@@ -168,7 +162,7 @@ export function ensureProfilePageTab(profileEntityId: string, spaceId: string, t
     }
   }
 
-  const lastTabPosition = tabRels.length > 0 ? tabRels[tabRels.length - 1]?.position ?? null : null;
+  const lastTabPosition = tabRels.length > 0 ? (tabRels[tabRels.length - 1]?.position ?? null) : null;
   return createProfilePageTabAtEnd(profileEntityId, spaceId, normalized, lastTabPosition);
 }
 
