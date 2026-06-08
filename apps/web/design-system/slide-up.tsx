@@ -3,9 +3,12 @@
 import * as React from 'react';
 
 import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { Z_LAYER_CLASS } from '~/core/z-layers';
+
+import { entitySidePanelHostElementAtom } from '~/atoms';
 
 type SlideUpProps = {
   isOpen: boolean;
@@ -22,6 +25,12 @@ export const SlideUp = ({
   deferEscapeClose = false,
   onEnterAnimationComplete,
 }: SlideUpProps) => {
+  const entitySidePanelHost = useAtomValue(entitySidePanelHostElementAtom);
+  const removeScrollShards = React.useMemo(
+    () => (entitySidePanelHost ? [entitySidePanelHost] : []),
+    [entitySidePanelHost]
+  );
+
   React.useEffect(() => {
     if (!isOpen) return;
 
@@ -56,8 +65,10 @@ export const SlideUp = ({
             onAnimationComplete={onEnterAnimationComplete}
             className="absolute inset-0 flex h-full w-full flex-col overflow-hidden"
           >
-            <RemoveScroll className="h-full w-full">
-              <div className="h-full overflow-y-auto overscroll-contain bg-white">{children}</div>
+            <RemoveScroll className="h-full w-full" shards={removeScrollShards}>
+              <div data-app-scroll-surface className="h-full overflow-y-auto overscroll-contain bg-white">
+                {children}
+              </div>
             </RemoveScroll>
           </motion.div>
         </motion.div>

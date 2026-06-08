@@ -13,6 +13,7 @@ import { EditableCoverAvatarHeader } from './editable-entity-cover-avatar-header
 type EntityPageCoverProps = {
   avatarUrl: string | null;
   coverUrl: string | null;
+  fitImage?: boolean;
 };
 
 /**
@@ -60,11 +61,15 @@ function useImageUrl(entityId: string, spaceId: string, propertyId: string, serv
   return serverUrl;
 }
 
-export const EntityPageCover = ({ avatarUrl: serverAvatarUrl, coverUrl: serverCoverUrl }: EntityPageCoverProps) => {
+export const EntityPageCover = ({
+  avatarUrl: serverAvatarUrl,
+  coverUrl: serverCoverUrl,
+  fitImage = false,
+}: EntityPageCoverProps) => {
   const { id, spaceId } = useEntityStoreInstance();
 
   const avatarUrl = useImageUrl(id, spaceId, ContentIds.AVATAR_PROPERTY, serverAvatarUrl);
   const coverUrl = useImageUrl(id, spaceId, SystemIds.COVER_PROPERTY, serverCoverUrl);
 
-  return <EditableCoverAvatarHeader avatarUrl={avatarUrl} coverUrl={coverUrl} />;
+  return <EditableCoverAvatarHeader avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage={fitImage} />;
 };

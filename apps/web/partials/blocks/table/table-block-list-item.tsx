@@ -19,6 +19,8 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
@@ -163,6 +165,8 @@ export function TableBlockListItem({
                     name={name}
                     entityId={rowEntityId}
                     spaceId={currentSpaceId}
+                    entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -179,6 +183,8 @@ export function TableBlockListItem({
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
+                    showSidePanel={!isPlaceholder}
+                    openedWithMainViewEditing={isEditing}
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -237,7 +243,12 @@ export function TableBlockListItem({
 
   return (
     <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider">
-      <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="flex grow items-start gap-6">
+      <Link
+        entityId={rowEntityId}
+        spaceId={currentSpaceId}
+        href={href}
+        className="flex min-w-0 flex-1 items-start gap-6 pr-2"
+      >
         <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
           {image ? (
             <GeoImage
@@ -272,6 +283,8 @@ export function TableBlockListItem({
               relationId={relationId}
               verified={verified}
               onLinkEntry={onLinkEntry}
+              hideHoverActions
+              openedWithMainViewEditing={isEditing}
             >
               <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
             </CollectionMetadata>
@@ -307,7 +320,31 @@ export function TableBlockListItem({
           })}
         </div>
       </Link>
-      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      <div className="flex shrink-0 items-center gap-1">
+        {!isPlaceholder && (
+          <div className="invisible opacity-0 transition duration-200 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+            {source.type === 'COLLECTION' ? (
+              <CollectionRowActions
+                isEditing={false}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                openedWithMainViewEditing={isEditing}
+              />
+            ) : (
+              <DataBlockOpenSidePanelButton
+                entityId={rowEntityId}
+                entitySpaceId={nameCell?.space ?? currentSpaceId}
+                openedWithMainViewEditing={isEditing}
+              />
+            )}
+          </div>
+        )}
+        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      </div>
     </div>
   );
 }

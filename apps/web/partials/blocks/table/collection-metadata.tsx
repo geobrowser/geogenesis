@@ -1,30 +1,16 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
-
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import cx from 'classnames';
 
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
-import { useSpace } from '~/core/hooks/use-space';
-import { EntityId } from '~/core/io/substream-schema';
-import { useMutate } from '~/core/sync/use-mutate';
-import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
 import { CheckCircle } from '~/design-system/icons/check-circle';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
-import { Menu } from '~/design-system/icons/menu';
-import { RelationSmall } from '~/design-system/icons/relation-small';
-import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
-import { TopRanked } from '~/design-system/icons/top-ranked';
-import { PrefetchLink } from '~/design-system/prefetch-link';
-import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 
 type CollectionMetadataProps = {
   view: DataBlockView;
@@ -39,13 +25,22 @@ type CollectionMetadataProps = {
   verified?: boolean;
   onLinkEntry: onLinkEntryFn;
   children: ReactNode;
+  /** When false, the open-in-side-panel control is hidden (e.g. placeholder rows, Power Tools). */
+  showSidePanel?: boolean;
+  openedWithMainViewEditing?: boolean;
+  /**
+   * When true, do not render the popover/side-panel/edit-chip hover actions inline next to the
+   * title. Caller is responsible for rendering them elsewhere (e.g. next to vote buttons).
+   * The verified checkmark is unaffected and still renders inline.
+   */
+  hideHoverActions?: boolean;
 };
 
 export const CollectionMetadata = ({
   view,
   isEditing,
-  name,
-  placeholder = 'Entity name...',
+  name: _name,
+  placeholder: _placeholder = 'Entity name...',
   currentSpaceId,
   entityId,
   spaceId,
@@ -53,186 +48,46 @@ export const CollectionMetadata = ({
   verified,
   onLinkEntry,
   children,
+  showSidePanel = true,
+  openedWithMainViewEditing = false,
+  hideHoverActions = false,
 }: CollectionMetadataProps) => {
-  const [isHovered, setIsHovered] = useState<boolean>(false);
-  const [isPopoverOpen, setIsPopoverOpen] = useState<boolean>(false);
-  const { storage } = useMutate();
+  const [isRowHovered, setIsRowHovered] = useState(false);
 
-  const { blockEntity } = useDataBlock();
-  const { space } = useSpace(spaceId ?? '');
-
-  // @TODO(migration): Should we be deleting the relation entity?
-  // const { entity: relationEntity } = useQueryEntity({
-  //   id: relationId,
-  //   spaceId,
-  // });
-
-  const onDeleteEntry = async () => {
-    if (blockEntity) {
-      const blockRelation = blockEntity.relations.find(r => r.toEntity.id === entityId);
-
-      if (blockRelation) {
-        storage.relations.delete(blockRelation);
-      }
-    }
-
-    // @TODO(migration): Should we be deleting the relation entity?
-    // if (relationEntity) {
-    //   relationEntity.values.forEach(t => remove(t, t.space));
-    //   relationEntity.relations.forEach(r => removeRelation({ relation: r, spaceId: currentSpaceId }));
-    // }
-  };
-
-  // Cleanup for autoclose popover 500ms after mouseleave mechanism
-  // eslint-disable-next-line no-undef
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  useEffect(() => {
-    return () => {
-      if (closeTimeoutRef.current) {
-        clearTimeout(closeTimeoutRef.current);
-      }
-    };
-  }, []);
+  const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
+  const showHoverActions = isRowHovered;
+  const reserveActionSpace = verified || hasHoverActions;
+  const paddingClass = hasHoverActions ? 'pr-14' : verified ? 'pr-6' : '';
 
   return (
     <div
-      className="relative w-full"
-      onMouseEnter={() => {
-        setIsHovered(true);
-      }}
-      onMouseLeave={() => {
-        if (!isPopoverOpen) {
-          setIsHovered(false);
-        }
-      }}
+      className="relative w-full min-w-0"
+      onMouseEnter={() => setIsRowHovered(true)}
+      onMouseLeave={() => setIsRowHovered(false)}
     >
-      <div className="absolute -inset-2 z-0" />
-      <div className="relative z-10">
-        <div className="relative z-20 w-full">{children}</div>
-        <div className="pointer-events-none absolute inset-0 z-30">
-          <span
-            className={cx(
-              'inline',
-              'opacity-0',
-              view === 'GALLERY' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
-              view === 'LIST' ? (isEditing ? 'text-body' : 'text-smallTitle font-medium') : null,
-              view === 'TABLE' ? (isEditing ? 'text-tableCell' : 'text-tableCell text-ctaHover') : null,
-              view === 'BULLETED_LIST' ? (isEditing ? 'text-body' : 'text-body') : null
-            )}
-          >
-            {name || placeholder}
-          </span>
+      <div className={cx('min-w-0', paddingClass)}>{children}</div>
+      {reserveActionSpace && (
+        <div className="absolute top-0 right-0 flex flex-nowrap items-center gap-0.5">
           {verified && (
-            <span className="inline-block pt-0.5 pl-2">
+            <span className="inline-flex shrink-0 pt-0.5">
               <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />
             </span>
           )}
-          {relationId && isHovered && (
-            <div className="pointer-events-auto inline-block pl-2">
-              <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-                <Popover.Trigger asChild>
-                  <button
-                    onMouseEnter={() => setIsPopoverOpen(true)}
-                    onMouseLeave={() => {
-                      closeTimeoutRef.current = setTimeout(() => {
-                        setIsPopoverOpen(false);
-                        setIsHovered(false);
-                      }, 300);
-                    }}
-                    onMouseDown={e => e.preventDefault()}
-                    className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
-                  >
-                    <Menu />
-                  </button>
-                </Popover.Trigger>
-                <Popover.Portal>
-                  <Popover.Content
-                    side="top"
-                    sideOffset={-4}
-                    className="group z-100 flex items-center rounded-[7px] border border-grey-04 bg-white hover:bg-divider"
-                    onOpenAutoFocus={event => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                    }}
-                    onMouseEnter={() => {
-                      if (closeTimeoutRef.current) {
-                        clearTimeout(closeTimeoutRef.current);
-                        closeTimeoutRef.current = null;
-                      }
-                    }}
-                    onMouseLeave={() => {
-                      setIsPopoverOpen(false);
-                    }}
-                  >
-                    {isEditing && (
-                      <SelectSpaceAsPopover
-                        entityId={EntityId(entityId)}
-                        spaceId={spaceId}
-                        verified={verified}
-                        onDone={result => {
-                          if (!relationId) return;
-
-                          onLinkEntry(relationId, result, verified);
-                        }}
-                        trigger={
-                          <button className="inline-flex items-center p-1" onMouseDown={e => e.preventDefault()}>
-                            <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
-                              {space ? (
-                                <div className="size-[8px] overflow-clip rounded-sm grayscale">
-                                  <GeoImage fill value={space.entity.image} alt="" />
-                                </div>
-                              ) : (
-                                <TopRanked />
-                              )}
-                            </span>
-                          </button>
-                        }
-                      />
-                    )}
-                    <PrefetchLink
-                      href={`/space/${currentSpaceId}/${relationId}`}
-                      className="p-1 group-hover:text-grey-03 hover:text-text!"
-                    >
-                      <RelationSmall />
-                    </PrefetchLink>
-                    {isEditing && (
-                      <button
-                        onClick={onDeleteEntry}
-                        onMouseDown={e => e.preventDefault()}
-                        className="p-1 group-hover:text-grey-03 hover:text-text!"
-                      >
-                        <CheckCloseSmall />
-                      </button>
-                    )}
-                  </Popover.Content>
-                </Popover.Portal>
-              </Popover.Root>
-            </div>
-          )}
-          {isHovered && isEditing && (
-            <span
-              className="pointer-events-auto ml-1 inline-flex items-center"
-              onMouseEnter={() => {
-                setIsPopoverOpen(false);
-                if (closeTimeoutRef.current) {
-                  clearTimeout(closeTimeoutRef.current);
-                  closeTimeoutRef.current = null;
-                }
-              }}
-            >
-              <PrefetchLink
-                href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
-                entityId={entityId}
-                spaceId={spaceId ?? currentSpaceId}
-                aria-label="Navigate to entity"
-                className="text-grey-03 transition duration-300 ease-in-out hover:text-text"
-              >
-                <RightArrowLongChip />
-              </PrefetchLink>
-            </span>
+          {hasHoverActions && showHoverActions && (
+            <CollectionRowActions
+              isEditing={isEditing}
+              currentSpaceId={currentSpaceId}
+              entityId={entityId}
+              spaceId={spaceId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              showSidePanel={showSidePanel}
+              openedWithMainViewEditing={openedWithMainViewEditing}
+            />
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

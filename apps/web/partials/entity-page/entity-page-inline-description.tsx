@@ -25,7 +25,15 @@ const LINE_CLAMP_CLASS: Record<number, string> = {
 
 const CLAMP_CLASS = LINE_CLAMP_CLASS[MAX_LINES];
 
-export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function EntityPageInlineDescription({
+  entityId,
+  spaceId,
+  truncate = true,
+}: {
+  entityId: string;
+  spaceId: string;
+  truncate?: boolean;
+}) {
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
 
@@ -79,6 +87,14 @@ export function EntityPageInlineDescription({ entityId, spaceId }: { entityId: s
 
   if (!description) {
     return null;
+  }
+
+  if (!truncate) {
+    return (
+      <div className="-mt-3 mb-5">
+        <p className="text-body wrap-break-word text-text">{description}</p>
+      </div>
+    );
   }
 
   return (
