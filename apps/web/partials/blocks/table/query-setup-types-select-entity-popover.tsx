@@ -55,7 +55,6 @@ const floatingInputClass =
 
 type QuerySetupTypesSelectEntityPopoverProps = {
   trigger: React.ReactNode;
-  spaceId: string;
   selectedTypes: QuerySetupTypePick[];
   onChangeSelectedTypes: (next: QuerySetupTypePick[]) => void;
   allowedTargetTypes: Property['relationValueTypes'] | undefined;
@@ -64,7 +63,6 @@ type QuerySetupTypesSelectEntityPopoverProps = {
 
 export function QuerySetupTypesSelectEntityPopover({
   trigger,
-  spaceId,
   selectedTypes,
   onChangeSelectedTypes,
   allowedTargetTypes,
@@ -81,10 +79,12 @@ export function QuerySetupTypesSelectEntityPopover({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
+  const allowedTypeIds = React.useMemo(() => allowedTargetTypes?.map(t => t.id), [allowedTargetTypes]);
+
   const { query, onQueryChange, isLoading, results, hasNextPage, fetchNextPage, isFetching, isFetchingNextPage } =
     useSearch({
-      filterByTypes: [SystemIds.SCHEMA_TYPE],
-      filterBySpace: spaceId,
+      filterByTypes: allowedTypeIds?.length ? allowedTypeIds : [SystemIds.SCHEMA_TYPE],
+      restrictToFilterTypes: Boolean(allowedTypeIds?.length),
       enabled: open,
     });
 
@@ -95,8 +95,6 @@ export function QuerySetupTypesSelectEntityPopover({
     fetchNextPage,
     scrollRef: resultsScrollRef,
   });
-
-  const allowedTypeIds = React.useMemo(() => allowedTargetTypes?.map(t => t.id), [allowedTargetTypes]);
 
   const isResultPickable = React.useCallback(
     (result: SearchResult) => {
