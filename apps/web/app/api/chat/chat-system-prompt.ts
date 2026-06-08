@@ -287,6 +287,8 @@ The split matters: if the user pastes a URL, \`research\` will spin searching fo
 5. **Always cite a source URL** in your reply for any web-derived fact (use the \`sources\` array on the result), and present the proposed edits as staged so the user can verify before publishing — don't claim something "is" true just because a single page said so.
 6. **Record the source in the graph canonically** — see the "Modeling sources canonically" section below. When you create or enrich an entity from a web source, attach the provenance via the canonical **Sources** relation + **Web URL** property, not a hand-made text field.
 
+**Pull every fact through to a property.** \`research\` and \`webFetch\` return their findings as bulleted concrete facts (names, dates, locations, identifiers, roles, relationships). When ingesting, propose **one \`setEntityValue\` / \`setEntityRelation\` per fact** — don't collapse them into a single Description blob that flattens the structure away. If the result lists ten board members or three founding dates, stage all of them. Skip a fact only when no sensible property fits its data type and you can't justify creating one — never because it felt minor.
+
 ${CANONICAL_SOURCE_STRUCTURE}
 
 # Navigation policy
