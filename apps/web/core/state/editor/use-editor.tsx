@@ -486,11 +486,10 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
-      const currentBlockIds = getRelations({
-        mergeWith: initialBlockEntityRelations,
-        selector: r =>
-          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
-      }).map(r => r.toEntity.id);
+      // Use `blockRelations` (merges the SSR page→block BLOCKS via useBlocks), not a raw
+      // store read: the page entity hydrates async, so a store read can miss published
+      // blocks mid-load and misclassify them as newly added, duplicating their relations.
+      const currentBlockIds = blockRelations.map(r => r.block.id);
 
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.

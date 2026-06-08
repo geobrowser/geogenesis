@@ -2,6 +2,7 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -292,7 +293,7 @@ export function TableBlockListItem({
             )}
           </div>
           {description && (
-            <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
+            <div className={cx('mt-1 line-clamp-4 md:line-clamp-3', LIST_GALLERY_BROWSE_BODY_CLASS)}>{description}</div>
           )}
 
           {orderCellsForBrowseFigma(otherPropertyData, properties).map(p => {
@@ -324,7 +325,11 @@ export function TableBlockListItem({
       </Link>
       <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
         {!isPlaceholder && (
+<<<<<<< Updated upstream
           <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
+=======
+          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+>>>>>>> Stashed changes
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}

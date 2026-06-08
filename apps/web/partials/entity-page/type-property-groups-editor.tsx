@@ -26,6 +26,8 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { ID } from '~/core/id';
@@ -499,7 +501,7 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
           onClick={() => setSectionCollapsed(previous => !previous)}
         >
           <span>Property groups</span>
-          <div className={`${sectionCollapsed ? '-rotate-90' : ''} scale-110 transition-transform`}>
+          <div className={cx(sectionCollapsed && '-rotate-90', 'scale-110 transition-transform')}>
             <ChevronDownSmall color="grey-04" />
           </div>
         </button>
@@ -742,7 +744,7 @@ function TypePropertyGroupCard({
         onDeleteGroup={onDeleteGroup}
       />
 
-      <div ref={drop.setNodeRef} className={`${drop.isOver ? 'bg-grey-01' : ''} rounded-md py-2 pr-2`}>
+      <div ref={drop.setNodeRef} className={cx(drop.isOver && 'bg-grey-01', 'rounded-md py-2 pr-2')}>
         <SortableContext
           items={propertyRelations.map(relation => propertyDragId(relation.toEntity.id))}
           strategy={rectSortingStrategy}
@@ -912,7 +914,7 @@ function UngroupedDropContainer({
   };
 
   return (
-    <div className={`${hasGroupsAbove ? 'border-t border-grey-02' : ''} px-4 py-3`}>
+    <div className={cx(hasGroupsAbove && 'border-t border-grey-02', 'px-4 py-3')}>
       {hasGroupsAbove && (
         <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
           Ungrouped properties
@@ -920,7 +922,7 @@ function UngroupedDropContainer({
       )}
       <div
         ref={drop.setNodeRef}
-        className={`${hasGroupsAbove ? 'mt-2' : ''} rounded-md py-2 pr-2 ${drop.isOver ? 'bg-grey-01' : ''}`}
+        className={cx(hasGroupsAbove && 'mt-2', 'rounded-md py-2 pr-2', drop.isOver && 'bg-grey-01')}
       >
         <SortableContext
           items={relations.map(relation => propertyDragId(relation.toEntity.id))}

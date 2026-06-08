@@ -4,6 +4,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import type { ActiveSubspace } from '~/core/io/subgraph/fetch-active-subspaces';
@@ -79,13 +80,14 @@ interface RelationTypeToggleProps {
 
 export function RelationTypeToggle({ value, onChange, disabled = false }: RelationTypeToggleProps) {
   return (
-    <div className={`relative flex overflow-hidden rounded-sm border border-grey-02 ${disabled ? 'opacity-50' : ''}`}>
+    <div className={cx('relative flex overflow-hidden rounded-sm border border-grey-02', disabled && 'opacity-50')}>
       <button
         type="button"
         disabled={disabled}
-        className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
+        className={cx(
+          'relative z-10 px-2 py-0.5 text-tag transition-colors',
           value === 'related' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
-        }`}
+        )}
         onClick={() => onChange('related')}
       >
         {value === 'related' && (
@@ -100,9 +102,10 @@ export function RelationTypeToggle({ value, onChange, disabled = false }: Relati
       <button
         type="button"
         disabled={disabled}
-        className={`relative z-10 px-2 py-0.5 text-tag transition-colors ${
+        className={cx(
+          'relative z-10 px-2 py-0.5 text-tag transition-colors',
           value === 'verified' ? 'text-white' : 'text-grey-04 hover:bg-grey-01'
-        }`}
+        )}
         onClick={() => onChange('verified')}
       >
         {value === 'verified' && (
@@ -236,7 +239,7 @@ export function ActiveSubspaceRow({ subspace, pendingState, variant, onAction }:
   return (
     <div>
       <div className="h-px w-full bg-divider" />
-      <div className={`flex flex-col gap-1 py-3 ${pendingState ? 'opacity-60' : ''}`}>
+      <div className={cx('flex flex-col gap-1 py-3', pendingState && 'opacity-60')}>
         <div className="flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
             <div className="size-[22px] shrink-0 overflow-clip rounded-sm">

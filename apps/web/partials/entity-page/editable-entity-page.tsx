@@ -4,6 +4,7 @@ import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/l
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import {
@@ -208,7 +209,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                         <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                           {section.label}
                         </Text>
-                        <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                        <div className={cx(sectionCollapsed && '-rotate-90', 'transition-transform')}>
                           <ChevronDownSmall color="grey-04" />
                         </div>
                       </button>

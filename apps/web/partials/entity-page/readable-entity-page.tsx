@@ -4,6 +4,8 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import {
   ADDRESS_PROPERTY,
   DATA_TYPE_PROPERTY,
@@ -194,7 +196,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                 <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                   {group.label}
                 </Text>
-                <div className={`${isCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                <div className={cx(isCollapsed && '-rotate-90', 'transition-transform')}>
                   <ChevronDownSmall color="grey-04" />
                 </div>
               </button>
@@ -407,7 +409,7 @@ export function RelationsGroup({
             return (
               <div
                 key={`relation-${relationId}-${linkedEntityId}`}
-                className={`max-w-full min-w-0 ${isMetadataHeader ? '' : 'mt-1'}`}
+                className={cx('max-w-full min-w-0', !isMetadataHeader && 'mt-1')}
               >
                 <LinkableRelationChip
                   isEditing={false}

@@ -4,6 +4,8 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
@@ -170,7 +172,7 @@ export function EntityFeed({
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{sortLabel}</span>
-                  <span className={`inline-flex transition-transform duration-200 ${sortMenuOpen ? 'rotate-180' : ''}`}>
+                  <span className={cx('inline-flex transition-transform duration-200', sortMenuOpen && 'rotate-180')}>
                     <ChevronDownSmall color="grey-04" />
                   </span>
                 </button>
@@ -203,7 +205,7 @@ export function EntityFeed({
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{timeLabel}</span>
-                  <span className={`inline-flex transition-transform duration-200 ${timeMenuOpen ? 'rotate-180' : ''}`}>
+                  <span className={cx('inline-flex transition-transform duration-200', timeMenuOpen && 'rotate-180')}>
                     <ChevronDownSmall color="grey-04" />
                   </span>
                 </button>
@@ -237,7 +239,9 @@ export function EntityFeed({
                     className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                   >
                     <span>{spaceLabel}</span>
-                    <span className={`inline-flex transition-transform duration-200 ${spaceMenuOpen ? 'rotate-180' : ''}`}>
+                    <span
+                      className={cx('inline-flex transition-transform duration-200', spaceMenuOpen && 'rotate-180')}
+                    >
                       <ChevronDownSmall color="grey-04" />
                     </span>
                   </button>
@@ -273,8 +277,7 @@ export function EntityFeed({
       {dividerBeforeFeed ? <hr className="mt-5 border-t border-divider" /> : null}
       <div
         className={
-          feedTopSpacingClassName ??
-          (showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1')
+          feedTopSpacingClassName ?? (showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1')
         }
       >
         {error ? (

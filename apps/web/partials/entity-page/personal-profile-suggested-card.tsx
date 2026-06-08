@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Effect } from 'effect';
 import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
@@ -277,7 +278,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
         <div className="mt-12 flex flex-wrap gap-2">
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.bio ? donePillClass : pillClass)}
             icon={tasks.bio ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.bio}
             onClick={tasks.bio ? undefined : onAddBio}
@@ -286,7 +287,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
           </SmallButton>
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.skills ? donePillClass : pillClass)}
             icon={tasks.skills ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.skills}
             onClick={tasks.skills ? undefined : onAddSkills}
@@ -295,7 +296,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
           </SmallButton>
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.post ? donePillClass : pillClass)}
             icon={tasks.post ? <Check color="white" /> : <CreateSmall />}
             aria-busy={createPostPending && !tasks.post}
             disabled={tasks.post}

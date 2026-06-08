@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useActiveSubspaces } from '~/core/hooks/use-active-subspaces';
 import { usePendingSubspaceProposals } from '~/core/hooks/use-pending-subspace-proposals';
@@ -227,9 +229,10 @@ function PendingProposalRow({ proposal, onOpenChange }: PendingProposalRowProps)
             </Text>
             <span className="rounded-sm bg-grey-01 px-1 py-0.5 text-tag text-grey-04">{relationLabel}</span>
             <span
-              className={`rounded-sm px-1 py-0.5 text-tag ${
+              className={cx(
+                'rounded-sm px-1 py-0.5 text-tag',
                 proposal.direction === 'add' ? 'bg-green/10 text-green' : 'bg-red-01/10 text-red-01'
-              }`}
+              )}
             >
               {directionLabel}
             </span>

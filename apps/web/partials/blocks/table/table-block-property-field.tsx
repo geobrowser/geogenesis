@@ -340,7 +340,7 @@ function EditableValueGroup({
         />
       );
     }
-    return <p className={`${LIST_GALLERY_BROWSE_BODY_CLASS} wrap-break-word whitespace-pre-wrap`}>{value}</p>;
+    return <p className={cx(LIST_GALLERY_BROWSE_BODY_CLASS, 'wrap-break-word whitespace-pre-wrap')}>{value}</p>;
   }
 
   switch (renderableType) {
