@@ -68,6 +68,14 @@ export function CollectionRowActions({
     }
   };
 
+  // A relation has two IDs: `id` (its own identifier, used for update/delete) and
+  // `entityId` (the entity that represents the relation, used for navigation —
+  // same pattern as LinkableRelationChip). Look up the collection-item relation by
+  // its id and navigate to its entityId so the link lands on the relation entity
+  // page, not on a non-existent entity at /space/.../$relation.id.
+  const collectionItemRelation = blockEntity?.relations.find(r => r.id === relationId);
+  const relationEntityId = collectionItemRelation?.entityId ?? relationId;
+
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
       {relationId && (
@@ -145,7 +153,7 @@ export function CollectionRowActions({
                 />
               )}
               <PrefetchLink
-                href={`/space/${currentSpaceId}/${relationId}`}
+                href={`/space/${currentSpaceId}/${relationEntityId}`}
                 className="p-1 group-hover:text-grey-03 hover:text-text!"
               >
                 <RelationSmall />
