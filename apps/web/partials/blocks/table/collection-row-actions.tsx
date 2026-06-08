@@ -79,7 +79,14 @@ export function CollectionRowActions({
   // same pattern as LinkableRelationChip). Look up the collection-item relation by
   // its id and navigate to its entityId so the link lands on the relation entity
   // page, not on a non-existent entity at /space/.../$relation.id.
-  const collectionItemRelation = blockEntity?.relations.find(r => r.id === relationId);
+  //
+  // Gate the scan on `isPopoverOpen`: in list/gallery views `CollectionRowActions`
+  // is mounted per row (CSS-hidden until hover), so scanning every render would be
+  // O(rows × relations). Radix only mounts `Popover.Content` (where the link
+  // lives) while open, so the lookup only needs to be correct for the open row.
+  const collectionItemRelation = isPopoverOpen
+    ? blockEntity?.relations.find(r => r.id === relationId)
+    : undefined;
   const relationEntityId = collectionItemRelation?.entityId ?? relationId;
 
   return (
