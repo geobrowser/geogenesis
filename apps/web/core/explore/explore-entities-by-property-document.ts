@@ -43,6 +43,8 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
     $propertyId: UUID!
     $dataType: String!
     $sortDirection: SortOrder!
+    $spaceIds: [UUID!]!
+    $typeIds: [UUID!]
     $spaceIdsForLists: [UUID!]!
   ) {
     entitiesOrderedByPropertyConnection(
@@ -52,6 +54,8 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
       propertyId: $propertyId
       dataType: $dataType
       sortDirection: $sortDirection
+      spaceIds: $spaceIds
+      typeIds: $typeIds
     ) {
       pageInfo {
         endCursor
