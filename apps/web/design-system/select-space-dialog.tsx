@@ -10,11 +10,22 @@ type SelectEntityAsPopoverProps = {
   spaceId?: string;
   verified?: boolean;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
+  /** Optional controlled open state. Leave undefined for uncontrolled. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function SelectSpaceAsPopover({ trigger, onDone, entityId, spaceId, verified }: SelectEntityAsPopoverProps) {
+export function SelectSpaceAsPopover({
+  trigger,
+  onDone,
+  entityId,
+  spaceId,
+  verified,
+  open,
+  onOpenChange,
+}: SelectEntityAsPopoverProps) {
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>

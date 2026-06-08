@@ -46,6 +46,12 @@ export function CollectionRowActions({
   openedWithMainViewEditing = false,
 }: CollectionRowActionsProps) {
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  // The space-selector is a nested popover. Its content is portaled outside this
+  // popover's DOM, so opening it would normally fire `onFocusOutside` /
+  // `onInteractOutside` on the outer popover and immediately unmount the nested
+  // popover along with us. Track its open state and suppress the outer's
+  // dismiss handlers while it's active.
+  const [isSpacePopoverOpen, setIsSpacePopoverOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
@@ -114,6 +120,12 @@ export function CollectionRowActions({
                 event.preventDefault();
                 event.stopPropagation();
               }}
+              onFocusOutside={event => {
+                if (isSpacePopoverOpen) event.preventDefault();
+              }}
+              onInteractOutside={event => {
+                if (isSpacePopoverOpen) event.preventDefault();
+              }}
               onMouseEnter={() => {
                 if (closeTimeoutRef.current) {
                   clearTimeout(closeTimeoutRef.current);
@@ -121,6 +133,7 @@ export function CollectionRowActions({
                 }
               }}
               onMouseLeave={() => {
+                if (isSpacePopoverOpen) return;
                 setIsPopoverOpen(false);
               }}
             >
@@ -129,15 +142,17 @@ export function CollectionRowActions({
                   entityId={EntityId(entityId)}
                   spaceId={spaceId}
                   verified={verified}
+                  open={isSpacePopoverOpen}
+                  onOpenChange={setIsSpacePopoverOpen}
                   onDone={result => {
                     if (!relationId) return;
                     onLinkEntry(relationId, result, verified);
+                    setIsSpacePopoverOpen(false);
                   }}
                   trigger={
                     <button
                       type="button"
                       className="inline-flex items-center p-1"
-                      onMouseDown={e => e.preventDefault()}
                     >
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
