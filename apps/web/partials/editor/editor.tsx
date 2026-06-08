@@ -345,7 +345,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       >
         {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
 
-        {shouldHandleOwnSpacing && <Spacer height={60} />}
+        {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
       </div>
     </LayoutGroup>
   );

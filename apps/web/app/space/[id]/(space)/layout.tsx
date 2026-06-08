@@ -81,29 +81,27 @@ export default async function Layout(props0: LayoutProps) {
             />
           </div>
 
-          <AddDataPanel spaceId={spaceId} />
+          <div className="mt-6 flex flex-col gap-6">
+            <AddDataPanel spaceId={spaceId} />
 
-          <Spacer height={40} />
-
-          {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-            <>
-              <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
-              <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-              <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} />
-            </>
-          ) : null}
-          <Spacer height={24} />
-          <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-          <Spacer height={16} />
-          <React.Suspense fallback={null}>
-            <SpaceTabs
-              spaceId={spaceId}
-              entityId={props.id}
-              initialTabRelations={props.tabRelations ?? []}
-              tabEntities={props.tabEntities}
-              typeIds={typeIds}
-            />
-          </React.Suspense>
+            {typeIds.includes(SystemIds.PERSON_TYPE) ? (
+              <>
+                <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
+                <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+                <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+              </>
+            ) : null}
+            <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+            <React.Suspense fallback={null}>
+              <SpaceTabs
+                spaceId={spaceId}
+                entityId={props.id}
+                initialTabRelations={props.tabRelations ?? []}
+                tabEntities={props.tabEntities}
+                typeIds={typeIds}
+              />
+            </React.Suspense>
+          </div>
           <Spacer height={20} />
           {children}
         </EntityPageContentContainer>
