@@ -4,16 +4,19 @@ import * as React from 'react';
 
 import { SelectSpace } from './select-space';
 
-type SelectEntityAsPopoverProps = {
+type SelectEntityAsPopoverBaseProps = {
   trigger: React.ReactNode;
   entityId: string;
   spaceId?: string;
   verified?: boolean;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
-  /** Optional controlled open state. Leave undefined for uncontrolled. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 };
+
+// Either both `open` and `onOpenChange` are provided (controlled) or neither is
+// (uncontrolled). Passing `open` without `onOpenChange` would leave Radix unable
+// to dismiss the popover.
+type SelectEntityAsPopoverProps = SelectEntityAsPopoverBaseProps &
+  ({ open?: undefined; onOpenChange?: undefined } | { open: boolean; onOpenChange: (open: boolean) => void });
 
 export function SelectSpaceAsPopover({
   trigger,
