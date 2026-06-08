@@ -57,7 +57,7 @@ export const CollectionMetadata = ({
   const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
   const showHoverActions = isRowHovered;
   const reserveActionSpace = verified || hasHoverActions;
-  const paddingClass = hasHoverActions ? 'pr-14' : verified ? 'pr-6' : '';
+  const paddingClass = hasHoverActions ? (verified ? 'pr-14 md:pr-6' : 'pr-14 md:pr-0') : verified ? 'pr-6' : '';
 
   return (
     <div
@@ -74,17 +74,19 @@ export const CollectionMetadata = ({
             </span>
           )}
           {hasHoverActions && showHoverActions && (
-            <CollectionRowActions
-              isEditing={isEditing}
-              currentSpaceId={currentSpaceId}
-              entityId={entityId}
-              spaceId={spaceId}
-              relationId={relationId}
-              verified={verified}
-              onLinkEntry={onLinkEntry}
-              showSidePanel={showSidePanel}
-              openedWithMainViewEditing={openedWithMainViewEditing}
-            />
+            <div className="md:hidden">
+              <CollectionRowActions
+                isEditing={isEditing}
+                currentSpaceId={currentSpaceId}
+                entityId={entityId}
+                spaceId={spaceId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                showSidePanel={showSidePanel}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            </div>
           )}
         </div>
       )}

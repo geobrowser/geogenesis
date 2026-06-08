@@ -125,7 +125,7 @@ export function EditableEntityTableCell({
               />
             </div>
             {!isPlaceholderRow && (
-              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100">
+              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100 md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={spaceId}
