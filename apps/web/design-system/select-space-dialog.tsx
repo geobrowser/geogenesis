@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { SelectSpace } from './select-space';
 
-type SelectEntityAsPopoverProps = {
+type SelectEntityAsPopoverBaseProps = {
   trigger: React.ReactNode;
   entityId: string;
   spaceId?: string;
@@ -12,9 +12,23 @@ type SelectEntityAsPopoverProps = {
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
 };
 
-export function SelectSpaceAsPopover({ trigger, onDone, entityId, spaceId, verified }: SelectEntityAsPopoverProps) {
+// Either both `open` and `onOpenChange` are provided (controlled) or neither is
+// (uncontrolled). Passing `open` without `onOpenChange` would leave Radix unable
+// to dismiss the popover.
+type SelectEntityAsPopoverProps = SelectEntityAsPopoverBaseProps &
+  ({ open?: undefined; onOpenChange?: undefined } | { open: boolean; onOpenChange: (open: boolean) => void });
+
+export function SelectSpaceAsPopover({
+  trigger,
+  onDone,
+  entityId,
+  spaceId,
+  verified,
+  open,
+  onOpenChange,
+}: SelectEntityAsPopoverProps) {
   return (
-    <Popover.Root>
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
       <Popover.Portal>
