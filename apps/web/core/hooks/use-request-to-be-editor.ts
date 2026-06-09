@@ -7,10 +7,11 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace } from '~/core/io/queries';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -26,7 +27,6 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { isEditor } = useAccessControl(spaceId ?? '');
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -35,12 +35,6 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
   const handleRequestToBeEditor = useCallback(async () => {
     if (!smartAccount) {
       throw new Error('No smart account available');
-    }
-
-    // Existing editors already belong to the space; a duplicate editor request errors on vote.
-    if (isEditor) {
-      dispatch({ type: 'ERROR', payload: 'You are already an editor of this space' });
-      throw new Error('User is already an editor of the space');
     }
 
     if (!personalSpaceId || !isRegistered) {
@@ -53,6 +47,17 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
     if (!validateSpaceId(spaceId)) {
       throw new Error('Invalid target space ID');
+    }
+
+    // Existing editors already belong to the space; a duplicate editor request errors on vote.
+    // Check at submit time rather than via reactive access-control state, which reads false
+    // while still hydrating and would let a fast click through. Fail open if the check errors.
+    const access = await runEffectEither(
+      getIsEditorOfSpace(normalizeSpaceId(spaceId), normalizeSpaceId(personalSpaceId))
+    );
+    if (Either.isRight(access) && access.right) {
+      dispatch({ type: 'ERROR', payload: 'You are already an editor of this space' });
+      throw new Error('User is already an editor of the space');
     }
 
     console.log('Requesting to be editor', {
@@ -90,7 +95,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       },
       onRight: hash => console.log('Successfully requested to be editor. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx, isEditor]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeEditor,

@@ -7,10 +7,11 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -26,7 +27,6 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { isMember, isEditor } = useAccessControl(spaceId ?? '');
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -35,12 +35,6 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
   const handleRequestToBeMember = useCallback(async () => {
     if (!smartAccount) {
       throw new Error('No smart account available');
-    }
-
-    // Members/editors already belong to the space; a duplicate join request errors on vote.
-    if (isMember || isEditor) {
-      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
-      throw new Error('User is already a member or editor of the space');
     }
 
     if (!personalSpaceId || !isRegistered) {
@@ -53,6 +47,22 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
     if (!validateSpaceId(spaceId)) {
       throw new Error('Invalid target space ID');
+    }
+
+    // Members/editors already belong to the space; a duplicate join request errors on vote.
+    // Check at submit time rather than via reactive access-control state, which reads false
+    // while still hydrating and would let a fast click through. Fail open if the check errors.
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+    const access = await runEffectEither(
+      Effect.all([
+        getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+        getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+      ])
+    );
+    if (Either.isRight(access) && (access.right[0] || access.right[1])) {
+      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
+      throw new Error('User is already a member or editor of the space');
     }
 
     console.log('Requesting to be member', {
@@ -85,7 +95,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       },
       onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx, isMember, isEditor]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeMember,
