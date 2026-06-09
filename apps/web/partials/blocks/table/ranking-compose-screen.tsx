@@ -31,8 +31,6 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 
 import { Button } from '~/design-system/button';
-import { Stars } from '~/design-system/icons/stars';
-import { Time } from '~/design-system/icons/time';
 
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
@@ -79,7 +77,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     displayName
   );
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingCount } = useRankingBlockRelations();
+  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingEntityIds, aggregatedRankingCount } =
+    useRankingBlockRelations();
 
   const globalOrderedIds = globalRankingEntityIds;
 
@@ -243,7 +242,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     router.back();
   };
 
-  const periodIcon = periodState === 'not-started' ? <Stars color="grey-04" /> : <Time color="grey-04" />;
+  const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const hasPopulatedMyRanking = displayMyEntityIds.length > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
@@ -275,15 +274,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           gridTemplateRows: 'auto minmax(0, 1fr)',
         }}
       >
-        <div className={cx('border-b border-grey-02 px-4 py-2', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
+        <div className={cx('px-4 py-2', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
           <RankingComposeHeader
             isMobile={isMobile}
             displayName={displayName}
+            periodState={periodState}
             periodLabel={periodLabel}
-            periodIcon={periodIcon}
+            hasRankedByOthers={hasRankedByOthers}
             submissions={submissions}
-            aggregatedRankingCount={aggregatedRankingCount}
+            aggregatedRankingEntityIds={aggregatedRankingEntityIds}
             onBack={() => router.back()}
+            showPublishButton={!isEntityPreviewOpen}
+            canPublish={canPublish}
+            isSaving={isSaving}
+            onPublish={() => void handlePublish()}
           />
         </div>
 

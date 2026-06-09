@@ -1,6 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -16,13 +16,27 @@ type Args = {
   spaceId: string;
   dataBlockEntityId: string;
   relationId: string;
+  /** Parent page entity id from the child-route query string (required for unpublished blocks). */
+  parentEntityIdParam?: string;
 };
+
+function isBlocksRelationToEntity(relation: Relation, entityId: string, spaceId: string) {
+  return (
+    relation.type.id === SystemIds.BLOCKS &&
+    relation.toEntity.id === entityId &&
+    relation.spaceId === spaceId &&
+    !relation.isDeleted
+  );
+}
 
 /**
  * Loads parent entity + block relations for fullscreen data-block child routes
  * (power-tools, ranking-compose, etc.).
  */
-export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId }: Args) {
+export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId, parentEntityIdParam = '' }: Args) {
+  const parentEntityIdFromUrl =
+    parentEntityIdParam && IdUtils.isValid(parentEntityIdParam) ? parentEntityIdParam : null;
+
   const { isLoading: isRelationLoading } = useQueryRelation({
     id: relationId,
     spaceId,
@@ -39,8 +53,12 @@ export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId }
     selector: r => r.id === relationId || r.entityId === relationId,
   });
 
-  const blockRelation = relationFromStore ?? relationEntityRelations?.[0] ?? null;
-  const parentEntityId = blockRelation?.fromEntity.id ?? null;
+  const relationFromBlockEntity = useRelation({
+    selector: r => isBlocksRelationToEntity(r, dataBlockEntityId, spaceId),
+  });
+
+  const blockRelation = relationFromStore ?? relationFromBlockEntity ?? relationEntityRelations?.[0] ?? null;
+  const parentEntityId = blockRelation?.fromEntity.id ?? parentEntityIdFromUrl;
 
   const { entity: parentEntity, isLoading: isParentLoading } = useQueryEntity({
     spaceId,
@@ -48,19 +66,27 @@ export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId }
     enabled: Boolean(spaceId && parentEntityId),
   });
 
-  const blockRelations = React.useMemo(
-    () => parentEntity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [],
-    [parentEntity]
-  );
+  const blockRelations = React.useMemo(() => {
+    const fromParent = parentEntity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+    if (!relationFromBlockEntity) return fromParent;
+    if (fromParent.some(r => r.toEntity.id === dataBlockEntityId)) return fromParent;
+    return [...fromParent, relationFromBlockEntity];
+  }, [parentEntity, relationFromBlockEntity, dataBlockEntityId]);
 
-  const blockIds = React.useMemo(() => blockRelations.map(r => r.toEntity.id), [blockRelations]);
+  const blockIds = React.useMemo(() => {
+    const ids = blockRelations.map(r => r.toEntity.id);
+    if (!ids.includes(dataBlockEntityId)) ids.push(dataBlockEntityId);
+    return ids;
+  }, [blockRelations, dataBlockEntityId]);
 
   const { entities: blocks, isLoading: isBlocksLoading } = useQueryEntities({
     where: { id: { in: blockIds } },
     enabled: blockIds.length > 0,
   });
 
-  const isLoading = isRelationLoading || isRelationEntityLoading || isParentLoading || isBlocksLoading;
+  const isResolvingRelation = Boolean(relationId) && (isRelationLoading || isRelationEntityLoading);
+  const isLoading =
+    isResolvingRelation || (Boolean(parentEntityId) && isParentLoading) || (blockIds.length > 0 && isBlocksLoading);
   const hasValidParams = Boolean(spaceId && dataBlockEntityId && relationId);
 
   return {

@@ -1,5 +1,6 @@
 'use client';
 
+import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
@@ -12,6 +13,10 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 const ROW_AVATAR_SIZE_PX = 64;
+
+const ROW_NAME_CLASS =
+  'block break-words tracking-[-0.17px] text-text text-[17px] font-bold leading-[19px] lg:!text-[19px] lg:!font-bold';
+const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
 type Props = {
   /** Omit or pass 0 to hide the rank indicator. */
@@ -43,12 +48,11 @@ export function RankingEntryRow({
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;
   const showLeadingRank = showRank && rankStyle === 'leading';
+  const hasDescription = Boolean(entry.description);
+  const nameLineClamp = hasDescription ? 'line-clamp-2' : 'line-clamp-3';
 
   const avatar = (
-    <div
-      className="relative shrink-0 overflow-clip rounded-md bg-grey-02"
-      style={{ width: ROW_AVATAR_SIZE_PX, height: ROW_AVATAR_SIZE_PX }}
-    >
+    <div className="relative h-16 min-h-16 w-16 min-w-16 shrink-0 overflow-clip rounded-md bg-grey-02">
       {showRank && rankStyle === 'avatar-badge' ? (
         <span className="absolute -top-1.5 -left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-medium text-white ring-2 ring-white">
           {rank}
@@ -69,27 +73,30 @@ export function RankingEntryRow({
   );
 
   return (
-    <div className="flex items-start gap-4">
+    <div className="flex items-center gap-4">
       {showLeadingRank ? (
-        <span className="mt-4 w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+        <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
       ) : null}
       {avatar}
-      <div className="min-w-0 flex-1">
+      <div className="flex h-16 min-w-0 flex-1 flex-col justify-center gap-1 overflow-hidden">
         {linkToEntity ? (
-          <Link
-            href={href}
-            className="text-[17px] leading-[19px] font-medium tracking-[-0.17px] text-text hover:underline"
-          >
+          <Link href={href} className={cx(ROW_NAME_CLASS, nameLineClamp, 'hover:underline')} title={entry.name}>
             {entry.name}
           </Link>
         ) : (
-          <span className="text-[17px] leading-[19px] font-medium tracking-[-0.17px] text-text">{entry.name}</span>
+          <span className={cx(ROW_NAME_CLASS, nameLineClamp)} title={entry.name}>
+            {entry.name}
+          </span>
         )}
         {/* TODO(competition-points): Enable via RANKING_POINTS_UI_ENABLED when root competition points at this block. */}
         {RANKING_POINTS_UI_ENABLED && score != null ? (
-          <p className="mt-0.5 text-[12px] leading-[16px] text-grey-04">{score} points</p>
+          <p className="text-[12px] leading-[16px] text-grey-04">{score} points</p>
         ) : null}
-        {entry.description ? <div className="mt-1 text-[14px] text-grey-04">{entry.description}</div> : null}
+        {entry.description ? (
+          <div className={cx(ROW_DESCRIPTION_CLASS, 'line-clamp-2')} title={entry.description}>
+            {entry.description}
+          </div>
+        ) : null}
       </div>
     </div>
   );

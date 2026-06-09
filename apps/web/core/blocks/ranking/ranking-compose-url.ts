@@ -1,3 +1,5 @@
+export type RankingComposeMode = 'view' | 'edit';
+
 export function rankingComposeHref({
   spaceId,
   blockEntityId,
@@ -5,6 +7,7 @@ export function rankingComposeHref({
   parentEntityId,
   rankingStartDate = '',
   rankingEndDate = '',
+  mode = 'edit',
 }: {
   spaceId: string;
   blockEntityId: string;
@@ -12,12 +15,14 @@ export function rankingComposeHref({
   parentEntityId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  mode?: RankingComposeMode;
 }): string {
   const params = new URLSearchParams();
   params.set('relationId', relationId);
   params.set('parentEntityId', parentEntityId);
   if (rankingStartDate) params.set('rankingStartDate', rankingStartDate);
   if (rankingEndDate) params.set('rankingEndDate', rankingEndDate);
+  if (mode === 'view') params.set('mode', 'view');
   return `/space/${spaceId}/${blockEntityId}/ranking-compose?${params.toString()}`;
 }
 
