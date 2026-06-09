@@ -17,14 +17,10 @@ import {
   type RankingPeriodState,
   formatRankingPeriodLabel,
   getRankingPeriodState,
-  rankingSubmissionsOpen,
 } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
-import {
-  getSampleGlobalRankingEntityIds,
-  getSampleMyRankingEntityIds,
-} from '~/core/blocks/ranking/ranking-sample-global';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
+import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -33,12 +29,12 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
-import { useSpaceParticipantsInfinite } from '~/core/space-members/use-space-participants-infinite';
+import { useEditorInstance } from '~/core/state/editor/editor-provider';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button, IconButton } from '~/design-system/button';
-import { FallbackImage } from '~/design-system/fallback-image';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Fullscreen } from '~/design-system/icons/full-screen';
@@ -153,6 +149,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const { ensureAccess } = useRankingComposeAccess(spaceId);
 
   const { name, entityId, relationId, rows } = useDataBlock();
+  const { id: parentEntityId } = useEditorInstance();
+  const { blockRelations } = useEditorStoreLite();
 
   const canEdit = useCanUserEdit(spaceId);
 
@@ -168,8 +166,14 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
 
   const displayName = name?.trim() || 'Untitled ranking';
 
-  const { hasMySubmission, mySubmission, leaderboard, saveMySubmission, isSaving, personalSpaceId } =
-    useRankingSubmissions(entityId, spaceId, displayName);
+  const { hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } = useRankingSubmissions(
+    entityId,
+    spaceId,
+    displayName
+  );
+
+  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingEntityIds, aggregatedRankingCount } =
+    useRankingBlockRelations();
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
@@ -201,62 +205,34 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     [periodState, startDate, endDate]
   );
 
-  const submissionsOpen = rankingSubmissionsOpen(periodState);
+  const showAggregatedRankingsOnGlobalTab = aggregatedRankingCount > 0;
+  const visibleAggregatedRankingIds = aggregatedRankingEntityIds.slice(0, 3);
+  const extraAggregatedRankingCount = Math.max(aggregatedRankingCount - visibleAggregatedRankingIds.length, 0);
 
-  const { participants: personalSpaceMembers, totalCount: personalSpaceMemberCount } = useSpaceParticipantsInfinite({
-    spaceId: personalSpaceId ?? '',
-    kind: 'members',
-    enabled: Boolean(personalSpaceId),
-    pageSize: 3,
-  });
+  const globalDisplayEntityIds = globalRankingEntityIds;
 
-  const showPersonalSpaceMembersOnGlobalTab = personalSpaceMemberCount > 0;
-  const visiblePersonalSpaceMembers = personalSpaceMembers.slice(0, 3);
-  const extraPersonalSpaceMemberCount = Math.max(personalSpaceMemberCount - visiblePersonalSpaceMembers.length, 0);
-
-  const sampleGlobalEntityIds = React.useMemo(() => getSampleGlobalRankingEntityIds(rows), [rows]);
-
-  const globalDisplayEntityIds = React.useMemo(
-    () => (leaderboard.length > 0 ? leaderboard.map(e => e.entityId) : sampleGlobalEntityIds),
-    [leaderboard, sampleGlobalEntityIds]
+  const globalRankByEntityId = React.useMemo(
+    () => new Map(globalLeaderboard.map(e => [e.entityId, e.rank])),
+    [globalLeaderboard]
   );
 
-  const globalRankByEntityId = React.useMemo(() => {
-    if (leaderboard.length > 0) {
-      return new Map(leaderboard.map(e => [e.entityId, e.rank]));
-    }
-    return new Map(sampleGlobalEntityIds.map((id, index) => [id, index + 1]));
-  }, [leaderboard, sampleGlobalEntityIds]);
+  const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
-  const myEntityIds = React.useMemo(() => mySubmission?.orderedEntityIds ?? [], [mySubmission]);
-  const sampleMyEntityIds = React.useMemo(() => getSampleMyRankingEntityIds(rows), [rows]);
-  const defaultMyEntityIds = React.useMemo(
-    () => (hasMySubmission ? myEntityIds : sampleMyEntityIds),
-    [hasMySubmission, myEntityIds, sampleMyEntityIds]
-  );
-
-  const [myOrderIds, setMyOrderIds] = React.useState<string[] | null>(null);
+  const [myOrderIds, setMyOrderIds] = React.useState<string[]>([]);
   const [hasSavedDraft, setHasSavedDraft] = React.useState(false);
-  const blockHydrationKeyRef = React.useRef<string | null>(null);
-
-  React.useLayoutEffect(() => {
-    const blockKey = `${spaceId}:${entityId}`;
-    if (blockHydrationKeyRef.current === blockKey) return;
-
-    blockHydrationKeyRef.current = blockKey;
-    const draft = loadLocalMyRankingDraft(spaceId, entityId);
-    setHasSavedDraft(draft !== null);
-    setMyOrderIds(draft ?? (defaultMyEntityIds.length > 0 ? defaultMyEntityIds : null));
-  }, [spaceId, entityId, defaultMyEntityIds]);
 
   React.useEffect(() => {
-    if (hasSavedDraft) return;
-    if (myOrderIds !== null && myOrderIds.length > 0) return;
-    if (defaultMyEntityIds.length === 0) return;
-    setMyOrderIds(defaultMyEntityIds);
-  }, [defaultMyEntityIds, hasSavedDraft, myOrderIds]);
+    const draft = loadLocalMyRankingDraft(spaceId, entityId);
+    if (draft !== null) {
+      setHasSavedDraft(true);
+      setMyOrderIds(draft);
+      return;
+    }
+    setHasSavedDraft(false);
+    setMyOrderIds(mySubmission?.orderedEntityIds ?? []);
+  }, [entityId, mySubmissionIdsKey, mySubmission, spaceId]);
 
-  const draftHydrated = myOrderIds !== null || defaultMyEntityIds.length > 0;
+  const draftHydrated = true;
 
   const persistMyOrder = React.useCallback(
     (nextIds: string[]) => {
@@ -274,13 +250,12 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
 
   const myDisplayEntityIds = React.useMemo(() => {
-    if (myOrderIds === null) return defaultMyEntityIds;
     if (myOrderIds.length > 0) return myOrderIds;
     if (hasSavedDraft) return myOrderIds;
-    return defaultMyEntityIds;
-  }, [defaultMyEntityIds, hasSavedDraft, myOrderIds]);
+    return mySubmission?.orderedEntityIds ?? [];
+  }, [hasSavedDraft, myOrderIds, mySubmission]);
 
-  const showMyRankingSection = hasMySubmission || myDisplayEntityIds.length > 0;
+  const showMyRankingSection = showMyRankingTab;
 
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
@@ -412,14 +387,25 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     );
   };
 
+  const resolveBlockRelationId = React.useCallback(() => {
+    if (relationId) return relationId;
+    const blockRelation = blockRelations.find(r => r.block.id === entityId);
+    return blockRelation?.relationId ?? blockRelation?.id ?? blockRelation?.entityId ?? '';
+  }, [blockRelations, entityId, relationId]);
+
   const openRankingCompose = async () => {
     const allowed = await ensureAccess();
     if (!allowed) return;
+
+    const effectiveRelationId = resolveBlockRelationId();
+    if (!effectiveRelationId) return;
+
     router.push(
       rankingComposeHref({
         spaceId,
         blockEntityId: entityId,
-        relationId,
+        relationId: effectiveRelationId,
+        parentEntityId,
         rankingStartDate,
         rankingEndDate,
       })
@@ -433,7 +419,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       variant="secondary"
       small
       className="shrink-0 !rounded-full !border-text !bg-white !px-3 whitespace-nowrap !text-text"
-      disabled={!submissionsOpen || isSaving}
+      disabled={isSaving}
       onClick={() => void openRankingCompose()}
     >
       Edit
@@ -444,7 +430,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       small
       className="shrink-0 !rounded-full !px-3 whitespace-nowrap"
       icon={<RankingChart color="white" />}
-      disabled={!submissionsOpen || isSaving}
+      disabled={isSaving}
       onClick={() => void openRankingCompose()}
     >
       Add my ranking
@@ -600,26 +586,22 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                 <div className="relative flex min-w-0 flex-1 items-center gap-6 overflow-hidden pb-2">
                   <RankingTabButton
                     active={activeTab === 'global'}
-                    label={showPersonalSpaceMembersOnGlobalTab ? '' : 'Global ranking'}
-                    ariaLabel={showPersonalSpaceMembersOnGlobalTab ? 'Global ranking' : undefined}
+                    label={showAggregatedRankingsOnGlobalTab ? '' : 'Global ranking'}
+                    ariaLabel={showAggregatedRankingsOnGlobalTab ? 'Global ranking' : undefined}
                     layoutId="ranking-block-tab-underline"
                     onClick={() => setActiveTab('global')}
                   >
-                    {showPersonalSpaceMembersOnGlobalTab ? (
+                    {showAggregatedRankingsOnGlobalTab ? (
                       <div className="flex items-center gap-2">
                         <AvatarGroup>
-                          {visiblePersonalSpaceMembers.map(member => (
-                            <AvatarGroup.Item key={member.id}>
-                              {member.avatarUrl ? (
-                                <FallbackImage value={member.avatarUrl} sizes="24px" className="object-cover" />
-                              ) : (
-                                <Avatar size={24} value={member.address} />
-                              )}
+                          {visibleAggregatedRankingIds.map(rankingEntityId => (
+                            <AvatarGroup.Item key={rankingEntityId}>
+                              <Avatar size={24} value={rankingEntityId} />
                             </AvatarGroup.Item>
                           ))}
                         </AvatarGroup>
-                        {extraPersonalSpaceMemberCount > 0 ? (
-                          <span className="text-metadata text-grey-04">+{extraPersonalSpaceMemberCount}</span>
+                        {extraAggregatedRankingCount > 0 ? (
+                          <span className="text-metadata text-grey-04">+{extraAggregatedRankingCount}</span>
                         ) : null}
                       </div>
                     ) : null}
@@ -639,7 +621,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                   ) : null}
                 </div>
 
-                {activeTab === 'my' ? (
+                {showMyRankingTab ? (
                   <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
                 ) : null}
               </div>

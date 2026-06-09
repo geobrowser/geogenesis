@@ -3,69 +3,110 @@
 import * as React from 'react';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row } from '~/core/types';
 
-function mergeRows(previous: Row[], pageRows: Row[]): Row[] {
-  const byId = new Map(previous.map(row => [row.entityId, row]));
-  for (const row of pageRows) {
-    byId.set(row.entityId, row);
-  }
-  return [...byId.values()];
-}
+export type RowPage = { page: number; rows: Row[] };
 
 function rowEntityIdsSignature(rows: Row[]): string {
   return rows.map(row => row.entityId).join('|');
 }
 
-/**
- * Accumulates paginated data-block rows for infinite scroll in ranking compose.
- * Paginated rows from the block source query (`entitiesConnection` + block filters).
- * Permanent data path — not replaced by fetchRankableEntities. Merged with aggregated rankings
- * in `splitRankableEntityIds`.
- */
+export function upsertRowPage(pages: RowPage[], page: number, rows: Row[]): RowPage[] {
+  const signature = rowEntityIdsSignature(rows);
+  const existing = pages.find(p => p.page === page);
+  if (existing && rowEntityIdsSignature(existing.rows) === signature) {
+    return pages;
+  }
+  const without = pages.filter(p => p.page !== page);
+  const next = [...without, { page, rows }];
+  next.sort((a, b) => a.page - b.page);
+  return next;
+}
+
+export function flattenRowPages(pages: RowPage[]): Row[] {
+  const ordered: Row[] = [];
+  const seen = new Set<string>();
+
+  for (const page of pages) {
+    for (const row of page.rows) {
+      if (!row.entityId || seen.has(row.entityId)) continue;
+      seen.add(row.entityId);
+      ordered.push(row);
+    }
+  }
+
+  return ordered;
+}
+
 export function useRankingAccumulatedRows() {
-  const { rows, pageNumber, hasNextPage, setPage, isLoading, isFetched } = useDataBlock();
-  const [accumulatedRows, setAccumulatedRows] = React.useState<Row[]>([]);
+  const {
+    rows,
+    pageNumber,
+    hasNextPage,
+    setPage,
+    isLoading,
+    isFetched,
+    isPagePlaceholder,
+    isPageFetching,
+    entityId,
+    source,
+    filterState,
+  } = useDataBlock();
+
+  const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
+  const [isFetchingNextPage, setIsFetchingNextPage] = React.useState(false);
+
+  const resetKey = React.useMemo(
+    () =>
+      JSON.stringify({
+        entityId,
+        sourceType: source.type,
+        sourceValue: 'value' in source ? source.value : null,
+        filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
+      }),
+    [entityId, filterState, source]
+  );
+
+  React.useEffect(() => {
+    setRowPages([]);
+    setIsFetchingNextPage(false);
+  }, [resetKey]);
+
+  React.useEffect(() => {
+    if (!hasNextPage) {
+      setIsFetchingNextPage(false);
+    }
+  }, [hasNextPage]);
 
   const rowsSignature = rowEntityIdsSignature(rows);
 
   React.useEffect(() => {
-    setAccumulatedRows(prev => {
-      if (pageNumber === 0) {
-        if (rowEntityIdsSignature(prev) === rowsSignature) return prev;
-        return rows;
-      }
-      const merged = mergeRows(prev, rows);
-      if (rowEntityIdsSignature(merged) === rowEntityIdsSignature(prev)) return prev;
-      return merged;
-    });
-    // rowsSignature tracks content; `rows` is read from the closure when the signature changes.
-  }, [rowsSignature, pageNumber]);
+    if (pageNumber > 0 && isPagePlaceholder) return;
+    setRowPages(prev => upsertRowPage(prev, pageNumber, rows));
+  }, [pageNumber, rowsSignature, isPagePlaceholder]);
 
-  const [isFetchingNextPage, setIsFetchingNextPage] = React.useState(false);
+  const accumulatedRows = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const fetchNextPage = React.useCallback(() => {
-    if (!hasNextPage || isLoading || isFetchingNextPage) return;
+    if (!hasNextPage || isPagePlaceholder || isPageFetching || isFetchingNextPage) return;
     setIsFetchingNextPage(true);
     setPage('next');
-  }, [hasNextPage, isLoading, isFetchingNextPage, setPage]);
+  }, [hasNextPage, isPagePlaceholder, isPageFetching, isFetchingNextPage, setPage]);
 
   React.useEffect(() => {
-    if (!isLoading) setIsFetchingNextPage(false);
-  }, [isLoading]);
+    if (!isFetchingNextPage || !hasNextPage) return;
+    if (!isPagePlaceholder && !isPageFetching) {
+      setIsFetchingNextPage(false);
+    }
+  }, [isFetchingNextPage, hasNextPage, isPagePlaceholder, isPageFetching]);
 
-  const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage,
-    isFetchingNextPage,
-    fetchNextPage,
-  });
+  const isLoadingMore = hasNextPage && isFetchingNextPage;
 
   return {
     rows: accumulatedRows,
     isLoading: isLoading && !isFetched,
     hasNextPage,
-    isFetchingNextPage,
-    sentinelRef,
+    isFetchingNextPage: isLoadingMore,
+    fetchNextPage,
   };
 }

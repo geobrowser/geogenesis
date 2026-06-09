@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row } from '~/core/types';
 
 import { Button } from '~/design-system/button';
@@ -16,6 +17,7 @@ import { Search } from '~/design-system/icons/search';
 import { Stars } from '~/design-system/icons/stars';
 
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
+import { useRankingComposeScrollRoot } from './ranking-compose-layout';
 import { RankingEntryRow } from './ranking-entry-row';
 
 function RankingComposePointsBanner() {
@@ -122,8 +124,9 @@ type Props = {
   hasPopulatedMyRanking: boolean;
   isLoadingRows: boolean;
   isFetchingNextPage: boolean;
+  hasNextPage: boolean;
   hasAnyRankableEntityIds: boolean;
-  sentinelRef: React.RefObject<HTMLDivElement | null>;
+  onFetchNextPage: () => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   isSearchOpen: boolean;
@@ -147,8 +150,9 @@ export function RankingComposeGlobalRanking({
   hasPopulatedMyRanking,
   isLoadingRows,
   isFetchingNextPage,
+  hasNextPage,
   hasAnyRankableEntityIds,
-  sentinelRef,
+  onFetchNextPage,
   searchQuery,
   onSearchQueryChange,
   isSearchOpen,
@@ -158,6 +162,42 @@ export function RankingComposeGlobalRanking({
   onCreateNew,
 }: Props) {
   const isDesktop = !isMobile;
+  const mobileScrollRoot = useRankingComposeScrollRoot();
+  const [listScrollRoot, setListScrollRoot] = React.useState<Element | null>(null);
+  const listScrollRootRef = React.useCallback((node: HTMLDivElement | null) => {
+    setListScrollRoot(node);
+  }, []);
+  const scrollRoot = isDesktop ? listScrollRoot : mobileScrollRoot;
+
+  const canLoadMore = hasNextPage;
+
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: canLoadMore,
+    isFetchingNextPage,
+    fetchNextPage: onFetchNextPage,
+    root: scrollRoot,
+  });
+
+  // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
+  React.useEffect(() => {
+    if (!scrollRoot || !canLoadMore || isFetchingNextPage) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const sentinelRect = sentinel.getBoundingClientRect();
+    if (sentinelRect.top <= rootRect.bottom + 200) {
+      onFetchNextPage();
+    }
+  }, [
+    scrollRoot,
+    canLoadMore,
+    isFetchingNextPage,
+    onFetchNextPage,
+    filteredRankedIds.length,
+    filteredUnrankedIds.length,
+    sentinelRef,
+  ]);
 
   React.useEffect(() => {
     if (isSearchOpen) {
@@ -190,7 +230,7 @@ export function RankingComposeGlobalRanking({
   };
 
   return (
-    <>
+    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}>
       <div
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
@@ -236,7 +276,10 @@ export function RankingComposeGlobalRanking({
           ) : null}
         </div>
       ) : null}
-      <div className={cx(isDesktop && 'min-h-0 flex-1 overflow-y-auto')}>
+      <div
+        ref={isDesktop ? listScrollRootRef : undefined}
+        className={cx(isDesktop && 'min-h-0 flex-1 overflow-y-auto')}
+      >
         {isLoadingRows && !hasAnyRankableEntityIds ? (
           <p className="py-6 text-metadata text-grey-03">Loading entities…</p>
         ) : !hasVisibleRankableEntities ? null : (
@@ -244,12 +287,14 @@ export function RankingComposeGlobalRanking({
             {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
             {showRankedUnrankedDivider ? <div className="my-3 border-t border-grey-02" role="separator" /> : null}
             {filteredUnrankedIds.map(id => renderPickEntity(id))}
-            <div ref={sentinelRef} className="h-px" />
-            {isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+            {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+            {canLoadMore && isFetchingNextPage ? (
+              <p className="py-3 text-metadata text-grey-03">Loading more…</p>
+            ) : null}
             <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
           </>
         )}
       </div>
-    </>
+    </div>
   );
 }

@@ -13,8 +13,6 @@ export type RankingSubmissionRecord = {
   orderedEntityIds: string[];
   createdAt: string;
   author: RankingSubmissionAuthor;
-  isPublishing?: boolean;
-  isPendingPublish?: boolean;
 };
 
 export type RankingSubmissionSlot = {

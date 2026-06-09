@@ -6,10 +6,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { useSetAtom } from 'jotai';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
+import { rankingComposeReturnHref } from '~/core/blocks/ranking/ranking-compose-url';
 import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
@@ -20,12 +21,9 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
-import {
-  getSampleGlobalRankingEntityIds,
-  getSampleMyRankingEntityIds,
-} from '~/core/blocks/ranking/ranking-sample-global';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
+import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -54,10 +52,12 @@ type Props = {
 export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const parentEntityId = searchParams?.get('parentEntityId') ?? '';
   const { name, entityId, rows: _rows, filterState, source } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
-  const { nextEntityId, onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
+  const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
 
   React.useEffect(() => {
@@ -73,36 +73,35 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const submissionsOpen = rankingSubmissionsOpen(periodState);
 
-  const { submissions, leaderboard, mySubmission, saveMySubmission, isSaving, personalSpaceId } = useRankingSubmissions(
+  const { submissions, mySubmission, saveMySubmission, isSaving, personalSpaceId } = useRankingSubmissions(
     entityId,
     spaceId,
     displayName
   );
 
-  const sampleGlobalEntityIds = React.useMemo(() => getSampleGlobalRankingEntityIds(_rows), [_rows]);
-  const globalOrderedIds = React.useMemo(
-    () => (leaderboard.length > 0 ? leaderboard.map(e => e.entityId) : sampleGlobalEntityIds),
-    [leaderboard, sampleGlobalEntityIds]
-  );
+  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingCount } = useRankingBlockRelations();
 
-  const globalRankByEntityId = React.useMemo(() => {
-    if (leaderboard.length > 0) {
-      return new Map(leaderboard.map(e => [e.entityId, e.rank]));
-    }
-    return new Map(sampleGlobalEntityIds.map((id, index) => [id, index + 1]));
-  }, [leaderboard, sampleGlobalEntityIds]);
+  const globalOrderedIds = globalRankingEntityIds;
+
+  const globalRankByEntityId = React.useMemo(
+    () => new Map(globalLeaderboard.map(e => [e.entityId, e.rank])),
+    [globalLeaderboard]
+  );
 
   const {
     rows: accumulatedRows,
     isLoading: isLoadingRows,
     isFetchingNextPage,
-    sentinelRef,
+    hasNextPage,
+    fetchNextPage,
   } = useRankingAccumulatedRows();
 
   const { rankedEntityIds, unrankedEntityIds } = React.useMemo(
     () => splitRankableEntityIds(globalOrderedIds, accumulatedRows),
     [globalOrderedIds, accumulatedRows]
   );
+
+  const hasRankedGlobalEntities = rankedEntityIds.length > 0;
 
   const rowsByEntityId = React.useMemo(() => new Map(accumulatedRows.map(r => [r.entityId, r])), [accumulatedRows]);
 
@@ -168,8 +167,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
   }, [mySubmissionIdsKey]);
 
-  const sampleMyEntityIds = React.useMemo(() => getSampleMyRankingEntityIds(accumulatedRows), [accumulatedRows]);
-  const displayMyEntityIds = orderedIds.length > 0 ? orderedIds : sampleMyEntityIds;
+  const displayMyEntityIds = orderedIds;
 
   const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
@@ -180,10 +178,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const removeFromMyRanking = (entityId: string) => {
     setActiveSwipeRowKey(null);
-    setOrderedIds(prev => {
-      const current = prev.length > 0 ? prev : sampleMyEntityIds;
-      return current.filter(id => id !== entityId);
-    });
+    setOrderedIds(prev => prev.filter(id => id !== entityId));
   };
 
   const reorderMyRanking = (nextIds: string[]) => {
@@ -210,15 +205,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   };
 
   const handleCreateNew = () => {
-    const newEntityId = nextEntityId;
     const publishSpaceIds = getRankingPublishSpaceIds(source, filterState, spaceId);
     const publishSpaceId = publishSpaceIds[0] ?? spaceId;
     const draftName = searchQuery.trim();
 
-    createEntityWithFilters({
+    const newEntityId = createEntityWithFilters({
       filters: filterState,
       spaceId: publishSpaceId,
-      advanceNextId: true,
       name: draftName || undefined,
     });
 
@@ -232,7 +225,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const canPublish = orderedIds.length > 0 && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
 
   const handlePublish = async () => {
-    // TODO(ranking-api): createRank / updateRank via SDK instead of local saveMySubmission
+    // Interim: persist to local storage until createRank / updateRank ship.
     const slots = orderedIds.map(id => {
       const row = rowsByEntityId.get(id);
       const entry = rankableEntriesById.get(id);
@@ -243,6 +236,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       };
     });
     await saveMySubmission(slots);
+    if (parentEntityId) {
+      router.push(rankingComposeReturnHref(spaceId, parentEntityId));
+      return;
+    }
     router.back();
   };
 
@@ -275,7 +272,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       <RankingComposeFullscreen
         style={{
           display: 'grid',
-          gridTemplateRows: 'auto 1fr',
+          gridTemplateRows: 'auto minmax(0, 1fr)',
         }}
       >
         <div className={cx('border-b border-grey-02 px-4 py-2', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
@@ -285,11 +282,17 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             periodLabel={periodLabel}
             periodIcon={periodIcon}
             submissions={submissions}
+            aggregatedRankingCount={aggregatedRankingCount}
             onBack={() => router.back()}
           />
         </div>
 
-        <div className={cx('relative min-h-0 overflow-hidden px-4', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
+        <div
+          className={cx(
+            'relative flex h-full min-h-0 flex-col overflow-hidden px-4',
+            isMobile ? '' : 'mx-auto w-full max-w-[1200px]'
+          )}
+        >
           <RankingComposeLayout
             isMobile={isMobile}
             myRanking={
@@ -324,10 +327,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 showRankedUnrankedDivider={showRankedUnrankedDivider}
                 hasVisibleRankableEntities={hasVisibleRankableEntities}
                 hasPopulatedMyRanking={hasPopulatedMyRanking}
-                isLoadingRows={isLoadingRows}
+                isLoadingRows={isLoadingRows && !hasRankedGlobalEntities}
                 isFetchingNextPage={isFetchingNextPage}
-                hasAnyRankableEntityIds={allRankableEntityIds.length > 0}
-                sentinelRef={sentinelRef}
+                hasNextPage={hasNextPage}
+                hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
+                onFetchNextPage={fetchNextPage}
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 isSearchOpen={isSearchOpen}

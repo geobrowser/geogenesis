@@ -11,7 +11,7 @@ type Props = {
 export function RankingComposeFullscreen({ children, style }: Props) {
   return (
     <div
-      className="fixed inset-0 z-50 bg-white"
+      className="fixed inset-0 z-50 overflow-hidden bg-white"
       style={{
         top: '60px',
         ...style,

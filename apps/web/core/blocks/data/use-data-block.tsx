@@ -399,6 +399,20 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isFetched = isQueryEntitiesFetched && !isSharedDataLoading;
   }
 
+  const isPagePlaceholder =
+    source.type === 'COLLECTION'
+      ? isCollectionPlaceholder
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? isQueryEntitiesPlaceholder
+        : false;
+
+  const isPageFetching =
+    source.type === 'COLLECTION'
+      ? isCollectionLoading
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? isQueryEntitiesLoading
+        : false;
+
   // @TODO: Returned data type should be a FSM depending on the source.type
   // For COLLECTION with a server-side sort, the response is a single page so
   // count math is misleading (totalCount caps at pageSize when filter+sort
@@ -434,6 +448,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     isLoading,
     isFetched,
+    isPagePlaceholder,
+    isPageFetching,
 
     name: entity?.name ?? null,
     setName,

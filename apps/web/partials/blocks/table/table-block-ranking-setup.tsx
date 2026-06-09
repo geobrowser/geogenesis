@@ -16,6 +16,7 @@ import { ensureRankingBlockTypeRelation } from '~/core/blocks/ranking/ensure-ran
 import { ensureRankingShownColumns } from '~/core/blocks/ranking/ensure-ranking-shown-columns';
 import { persistRankingBlockDateValues } from '~/core/blocks/ranking/persist-ranking-block-values';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
@@ -23,9 +24,10 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 
 import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
-import { DataBlockTypeFilterSelect } from './data-block-type-filter-select';
+import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 
 type Props = {
   spaceId: string;
@@ -54,32 +56,23 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
 
   const [name, setNameDraft] = React.useState('');
   const nameInputRef = useAutofocus<HTMLInputElement>(true);
-  const [selectedType, setSelectedType] = React.useState<{ id: string; name: string | null } | null>(null);
+  const [setupTypePicks, setSetupTypePicks] = React.useState<QuerySetupTypePick[]>([]);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
 
-  const typeFilter = filterState.find(f => f.columnId === SystemIds.TYPES_PROPERTY);
+  const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
+    propertyId: SystemIds.TYPES_PROPERTY,
+    spaceId,
+    relationValueTypes: undefined,
+  });
+  const canPickTypes = !waitForFilterTypes && Boolean(allowedTargetTypes?.length);
+  const selectedTypeCount = setupTypePicks.length;
+  const typeTriggerLabel =
+    selectedTypeCount > 0
+      ? `${selectedTypeCount} ${selectedTypeCount === 1 ? 'type' : 'types'} selected`
+      : 'Select type...';
 
-  React.useEffect(() => {
-    if (typeFilter) {
-      setSelectedType({ id: typeFilter.value, name: typeFilter.valueName });
-    }
-  }, [typeFilter?.value, typeFilter?.valueName]);
-
-  const handleSelectType = (type: { id: string; name: string | null }) => {
-    setSelectedType(type);
-    const withoutTypes = filterState.filter(f => f.columnId !== SystemIds.TYPES_PROPERTY);
-    const nextTypeFilter: Filter = {
-      columnId: SystemIds.TYPES_PROPERTY,
-      columnName: 'Types',
-      valueType: 'RELATION',
-      value: type.id,
-      valueName: type.name,
-    };
-    setFilterState([...withoutTypes, nextTypeFilter]);
-  };
-
-  const hasTypeSelected = Boolean(selectedType?.id ?? typeFilter?.value);
+  const hasTypeSelected = setupTypePicks.length > 0;
 
   const handleCreate = React.useCallback(() => {
     const trimmed = name.trim();
@@ -104,7 +97,18 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
       spaceId,
       relations: blockRelationRelations,
     });
-    setSource(source);
+
+    const withoutTypes = filterState.filter(f => f.columnId !== SystemIds.TYPES_PROPERTY);
+    const typeFilters: Filter[] = setupTypePicks.map(t => ({
+      columnId: SystemIds.TYPES_PROPERTY,
+      columnName: 'Types',
+      valueType: 'RELATION',
+      value: t.id,
+      valueName: [t.name, t.spaceName].filter((x): x is string => Boolean(x)).join(' · ') || t.name,
+      ...(t.spaceId ? { typesRelationSpaceId: t.spaceId } : {}),
+    }));
+    const mergedFilters = [...withoutTypes, ...typeFilters];
+    setSource(source, { filterStateOverride: mergedFilters });
     persistRankingBlockDateValues({
       storage,
       entityId,
@@ -123,12 +127,14 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     relationId,
     existingValues,
     canEditSpace,
+    filterState,
     hasTypeSelected,
     onCompleteRankingSetup,
     name,
     setEditable,
     persistBlockName,
     setSource,
+    setupTypePicks,
     source,
     spaceId,
     startDate,
@@ -171,12 +177,34 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
 
           <div className="flex w-full flex-col items-center gap-3">
             <p className="text-center text-button font-medium text-text">Filter entities to be ranked</p>
-            <div className="flex w-full flex-wrap items-center justify-center gap-2">
-              <DataBlockTypeFilterSelect
-                selectedType={selectedType}
-                onSelectType={handleSelectType}
-                disabled={!canEditSpace}
-                variant="setup"
+            <div
+              className="flex w-full flex-wrap items-center justify-center gap-2"
+              onMouseDown={e => e.stopPropagation()}
+              onPointerDown={e => e.stopPropagation()}
+            >
+              <QuerySetupTypesSelectEntityPopover
+                disabled={!canEditSpace || !canPickTypes}
+                selectedTypes={setupTypePicks}
+                onChangeSelectedTypes={setSetupTypePicks}
+                allowedTargetTypes={allowedTargetTypes}
+                trigger={
+                  <button
+                    type="button"
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    className="inline-flex h-6 max-w-[min(100%,280px)] min-w-0 shrink-0 items-center justify-start gap-1.5 rounded border border-grey-02 bg-white px-1.5 text-metadata leading-none text-text shadow-button transition hover:border-text hover:bg-bg focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+                    aria-label={
+                      selectedTypeCount > 0
+                        ? `${selectedTypeCount} ${selectedTypeCount === 1 ? 'type' : 'types'} selected`
+                        : 'Select type'
+                    }
+                  >
+                    <span className="min-w-0 flex-1 truncate text-left">{typeTriggerLabel}</span>
+                    <span className="inline-flex shrink-0">
+                      <ChevronDownSmall color="grey-04" />
+                    </span>
+                  </button>
+                }
               />
               <DataBlockScopeDropdown
                 source={source}
@@ -186,6 +214,11 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
                 variant="setup"
               />
             </div>
+            {waitForFilterTypes ? (
+              <p className="text-center text-footnote text-grey-04">Loading types…</p>
+            ) : !allowedTargetTypes?.length ? (
+              <p className="text-center text-footnote text-grey-04">No types available for this block.</p>
+            ) : null}
           </div>
 
           <div className="flex w-full flex-wrap items-start justify-center gap-8">
