@@ -717,7 +717,6 @@ function ResultsArea({
             result={result}
             active={index === selectedIndex}
             alreadySelected={selectedEntityId === result.id}
-            withDescription={false}
             onClick={() => onSelect(result)}
           />
         </div>
