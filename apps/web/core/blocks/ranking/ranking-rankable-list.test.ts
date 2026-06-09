@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Row } from '~/core/types';
 
-import { buildRankableEntityOrder, splitRankableEntityIds } from './ranking-rankable-list';
+import { splitRankableEntityIds } from './ranking-rankable-list';
 
 function row(entityId: string, name: string): Row {
   return {
@@ -37,6 +37,28 @@ describe('splitRankableEntityIds', () => {
     });
   });
 
+  it('treats dashed and undashed ids as the same entity', () => {
+    const global = ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'];
+    const rows = [
+      row('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'Alpha'),
+      row('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'Bravo'),
+    ];
+
+    expect(splitRankableEntityIds(global, rows)).toEqual({
+      rankedEntityIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      unrankedEntityIds: ['bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+    });
+  });
+
+  it('dedupes repeated filter rows in the unranked section', () => {
+    const rows = [row('a', 'Alpha'), row('a', 'Alpha duplicate'), row('b', 'Bravo')];
+
+    expect(splitRankableEntityIds([], rows)).toEqual({
+      rankedEntityIds: [],
+      unrankedEntityIds: ['a', 'b'],
+    });
+  });
+
   it('skips placeholders', () => {
     const rows = [{ entityId: 'x', placeholder: true, columns: {} } as Row, row('y', 'Yankee')];
 
@@ -44,14 +66,5 @@ describe('splitRankableEntityIds', () => {
       rankedEntityIds: [],
       unrankedEntityIds: ['y'],
     });
-  });
-});
-
-describe('buildRankableEntityOrder', () => {
-  it('concatenates ranked and unranked sections', () => {
-    const global = ['z'];
-    const rows = [row('a', 'Alpha'), row('z', 'Zulu')];
-
-    expect(buildRankableEntityOrder(global, rows)).toEqual(['z', 'a']);
   });
 });

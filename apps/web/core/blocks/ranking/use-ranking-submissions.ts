@@ -7,10 +7,15 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
-import { loadLocalRankingSubmissions, saveLocalMyRanking } from './local-ranking-submissions';
+import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
+import {
+  RANKING_LOCAL_SUBMISSION_SAVED_EVENT,
+  loadLocalRankingSubmissions,
+  saveLocalMyRanking,
+} from './local-ranking-submissions';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
-import { aggregateLeaderboardFromSubmissions } from './ranking-submissions';
+import { useMyRanking } from './use-my-ranking';
 
 /** One ballot per author — avoids double-counting duplicate ballots per author. */
 export function dedupeSubmissionsByAuthor(submissions: RankingSubmissionRecord[]): RankingSubmissionRecord[] {
@@ -24,39 +29,119 @@ export function dedupeSubmissionsByAuthor(submissions: RankingSubmissionRecord[]
   return [...byAuthor.values()];
 }
 
+function enrichSubmissionAuthor(
+  submission: RankingSubmissionRecord,
+  profile: { address?: string; name?: string | null; avatarUrl?: string | null } | null | undefined,
+  walletAddress: string | undefined,
+  myAvatarUrl: string | null
+): RankingSubmissionRecord {
+  return {
+    ...submission,
+    author: {
+      ...submission.author,
+      address: profile?.address ?? walletAddress ?? submission.author.address,
+      name: profile?.name ?? submission.author.name,
+      avatarUrl: myAvatarUrl ?? submission.author.avatarUrl,
+    },
+  };
+}
+
 export function useRankingSubmissions(blockId: string, spaceId: string, _blockName: string) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
   const { profile } = useGeoProfile(walletAddress);
 
+  const {
+    myRankEntity,
+    orderedEntityIds: apiRankingEntityIds,
+    isLoading: isLoadingMyRanking,
+    refetchMyRanking,
+  } = useMyRanking(blockId);
+
   const [submissions, setSubmissions] = React.useState<RankingSubmissionRecord[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
+  const [isLoadingSubmissions, setIsLoadingSubmissions] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
 
-  React.useEffect(() => {
-    // TODO(ranking-api): fetchAggregatedRankings(blockId); my ballot via createRank/updateRank (not fetchIndividualRanking)
+  const reloadLocalSubmissions = React.useCallback(() => {
     setSubmissions(loadLocalRankingSubmissions(spaceId, blockId));
-    setIsLoading(false);
-  }, [spaceId, blockId]);
+  }, [blockId, spaceId]);
+
+  React.useEffect(() => {
+    reloadLocalSubmissions();
+    setIsLoadingSubmissions(false);
+  }, [reloadLocalSubmissions]);
+
+  React.useEffect(() => {
+    const onSaved = (event: Event) => {
+      const detail = (event as CustomEvent<{ spaceId: string; blockId: string }>).detail;
+      if (detail?.spaceId === spaceId && detail?.blockId === blockId) {
+        reloadLocalSubmissions();
+      }
+    };
+    const onPageShow = () => reloadLocalSubmissions();
+
+    window.addEventListener(RANKING_LOCAL_SUBMISSION_SAVED_EVENT, onSaved);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener(RANKING_LOCAL_SUBMISSION_SAVED_EVENT, onSaved);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [blockId, reloadLocalSubmissions, spaceId]);
 
   const uniqueSubmissions = React.useMemo(() => dedupeSubmissionsByAuthor(submissions), [submissions]);
 
-  const mySubmission = React.useMemo(
-    () => (personalSpaceId ? uniqueSubmissions.find(s => s.authorSpaceId === personalSpaceId) : null),
+  const localMySubmission = React.useMemo(
+    () => (personalSpaceId ? (uniqueSubmissions.find(s => s.authorSpaceId === personalSpaceId) ?? null) : null),
     [personalSpaceId, uniqueSubmissions]
   );
 
-  const hasMySubmission = Boolean(mySubmission?.orderedEntityIds.length);
-  const participantIds = React.useMemo(() => uniqueSubmissions.map(s => s.authorSpaceId), [uniqueSubmissions]);
+  const apiMySubmission = React.useMemo((): RankingSubmissionRecord | null => {
+    if (!personalSpaceId || !myRankEntity) return null;
 
-  // TODO(ranking-api): Replace client aggregate with fetchAggregatedRankings(blockId)
-  const leaderboard = React.useMemo(() => aggregateLeaderboardFromSubmissions(uniqueSubmissions), [uniqueSubmissions]);
-  const submissionCount = uniqueSubmissions.length;
+    const myAvatarUrl = profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+    return {
+      id: myRankEntity.id,
+      authorSpaceId: personalSpaceId,
+      targetBlockId: blockId,
+      targetBlockSpaceId: spaceId,
+      orderedEntityIds: apiRankingEntityIds,
+      createdAt: String(myRankEntity.updatedAt ?? ''),
+      author: {
+        spaceId: personalSpaceId,
+        address: profile?.address ?? walletAddress ?? personalSpaceId,
+        name: profile?.name ?? null,
+        avatarUrl: myAvatarUrl,
+      },
+    };
+  }, [
+    apiRankingEntityIds,
+    blockId,
+    myRankEntity,
+    personalSpaceId,
+    profile?.address,
+    profile?.avatarUrl,
+    profile?.name,
+    spaceId,
+    walletAddress,
+  ]);
+
+  const mySubmission = React.useMemo((): RankingSubmissionRecord | null => {
+    const myAvatarUrl = profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+    if (localMySubmission) {
+      return enrichSubmissionAuthor(localMySubmission, profile, walletAddress, myAvatarUrl);
+    }
+
+    return apiMySubmission;
+  }, [apiMySubmission, localMySubmission, profile, walletAddress]);
+
+  const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
     async (slots: RankingSubmissionSlot[]) => {
-      if (!personalSpaceId || !walletAddress) return;
+      if (!personalSpaceId) return;
 
       setIsSaving(true);
       try {
@@ -70,39 +155,34 @@ export function useRankingSubmissions(blockId: string, spaceId: string, _blockNa
           slots,
           author: {
             spaceId: personalSpaceId,
-            address: profile?.address ?? walletAddress,
+            address: profile?.address ?? walletAddress ?? personalSpaceId,
             name: profile?.name ?? null,
             avatarUrl: myAvatarUrl,
           },
         });
+
+        clearLocalMyRankingDraft(spaceId, blockId);
 
         // TODO(ranking-api): createRank(blockId, slots) or updateRank(existingRankId, slots)
         setSubmissions(prev => {
           const without = prev.filter(s => s.authorSpaceId !== personalSpaceId);
           return [...without, record];
         });
+        await refetchMyRanking();
       } finally {
         setIsSaving(false);
       }
     },
-    [blockId, personalSpaceId, profile, spaceId, walletAddress]
+    [blockId, personalSpaceId, profile, refetchMyRanking, spaceId, walletAddress]
   );
-
-  const refetch = React.useCallback(async () => {
-    setSubmissions(loadLocalRankingSubmissions(spaceId, blockId));
-  }, [spaceId, blockId]);
 
   return {
     submissions: uniqueSubmissions,
     mySubmission,
     hasMySubmission,
-    participantIds,
-    leaderboard,
-    submissionCount,
     saveMySubmission,
-    isLoading,
+    isLoading: isLoadingSubmissions || isLoadingMyRanking,
     isSaving,
     personalSpaceId,
-    refetch,
   };
 }

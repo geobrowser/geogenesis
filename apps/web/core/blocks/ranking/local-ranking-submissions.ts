@@ -7,9 +7,15 @@ import {
 } from './ranking-submissions';
 
 /**
- * Interim persistence until `createRank` / `updateRank` ship.
- * TODO(ranking-api): Replace local storage with SDK publish; load aggregate via fetchAggregatedRankings.
+ * It will be replaced with createRank/updateRank
  */
+
+export const RANKING_LOCAL_SUBMISSION_SAVED_EVENT = 'geogenesis:ranking-local-submission-saved';
+
+export function notifyRankingLocalSubmissionSaved(spaceId: string, blockId: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(RANKING_LOCAL_SUBMISSION_SAVED_EVENT, { detail: { spaceId, blockId } }));
+}
 
 export function loadLocalRankingSubmissions(spaceId: string, blockId: string): RankingSubmissionRecord[] {
   if (typeof window === 'undefined') return [];
@@ -50,6 +56,7 @@ export function saveLocalMyRanking({
   const next = upsertSubmission(blob, personalSpaceId, orderedEntityIds);
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(key, serializeSubmissionsBlob(next));
+    notifyRankingLocalSubmissionSaved(spaceId, blockId);
   }
   return {
     id: `local-rank-${personalSpaceId}`,

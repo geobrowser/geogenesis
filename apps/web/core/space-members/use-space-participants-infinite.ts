@@ -90,11 +90,14 @@ export function useInfiniteScrollSentinel({
   isFetchingNextPage,
   fetchNextPage,
   rootMargin = '200px',
+  root = null,
 }: {
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => unknown;
   rootMargin?: string;
+  /** Scroll container for nested overflow lists; defaults to the viewport when omitted. */
+  root?: Element | null;
 }) {
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -107,11 +110,11 @@ export function useInfiniteScrollSentinel({
           void fetchNextPage();
         }
       },
-      { rootMargin }
+      { root, rootMargin }
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, rootMargin]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, root, rootMargin]);
 
   return sentinelRef;
 }

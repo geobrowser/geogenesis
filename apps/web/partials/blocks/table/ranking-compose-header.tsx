@@ -17,6 +17,14 @@ import { Text } from '~/design-system/text';
 export const COMPOSE_ICON_BUTTON_CLASS =
   'shrink-0 !gap-0 !rounded-sm !border-0 !p-0 !shadow-none min-w-0 hover:!shadow-none';
 
+function RankingComposeAggregatedCount({ count }: { count: number }) {
+  return (
+    <span className="text-grey-04">
+      {count} {count === 1 ? 'ranking' : 'rankings'} submitted
+    </span>
+  );
+}
+
 function RankingComposeRankedBy({ submissions }: { submissions: RankingSubmissionRecord[] }) {
   const visible = submissions.slice(0, 3);
   const extraCount = Math.max(submissions.length - visible.length, 0);
@@ -52,10 +60,19 @@ type Props = {
   periodLabel: string | null;
   periodIcon: React.ReactNode;
   submissions: RankingSubmissionRecord[];
+  aggregatedRankingCount: number;
   onBack: () => void;
 };
 
-export function RankingComposeHeader({ isMobile, displayName, periodLabel, periodIcon, submissions, onBack }: Props) {
+export function RankingComposeHeader({
+  isMobile,
+  displayName,
+  periodLabel,
+  periodIcon,
+  submissions,
+  aggregatedRankingCount,
+  onBack,
+}: Props) {
   return (
     <div className="flex shrink-0 flex-col gap-3">
       <Button
@@ -69,9 +86,13 @@ export function RankingComposeHeader({ isMobile, displayName, periodLabel, perio
       <Text variant="largeTitle" ellipsize={!isMobile} aria-label={displayName}>
         {displayName}
       </Text>
-      {isMobile && (periodLabel || submissions.length > 0) ? (
+      {isMobile && (periodLabel || submissions.length > 0 || aggregatedRankingCount > 0) ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-metadata text-grey-04">
-          <RankingComposeRankedBy submissions={submissions} />
+          {submissions.length > 0 ? (
+            <RankingComposeRankedBy submissions={submissions} />
+          ) : aggregatedRankingCount > 0 ? (
+            <RankingComposeAggregatedCount count={aggregatedRankingCount} />
+          ) : null}
           {periodLabel ? (
             <span className="flex items-center gap-1.5">
               {periodIcon}

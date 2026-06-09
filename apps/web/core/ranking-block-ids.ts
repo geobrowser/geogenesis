@@ -1,6 +1,5 @@
 /**
  * Ranking block ontology ids.
- * Replace `RANKING_BLOCK_TYPE_ID` with `SystemIds.RANKING_BLOCK` when it ships in geo-sdk.
  */
 export const RANKING_BLOCK_TYPE_ID = '150db6defe2344f0805afa57502e2c32';
 
@@ -12,3 +11,12 @@ export const RANKING_END_DATE_PROPERTY_ID = 'b08b8f63dc1e41568b0819946f2b011c';
 export const RANKING_AGGREGATION_RESTRICTION_PROPERTY_ID = '1e4caa2de3314efa8ac24e8d9d3e9fe9';
 export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_ID = '10a7b10390f94a728087935052ffaa69';
 export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_NAME = 'Members and editors';
+
+export const RANK_POSITION_PROPERTY_ID = '890deffb384349fa826974000e3dcef6';
+export const RANK_POSITION_PROPERTY_NAME = 'Rank position';
+
+export const AGGREGATED_RANKINGS_PROPERTY_ID = '67651da611a942469ff4039aafbe9e43';
+export const AGGREGATED_RANKINGS_PROPERTY_NAME = 'Aggregated rankings';
+
+export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
+export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';

@@ -52,7 +52,7 @@ export function RankingComposeMyRanking({
   const isDesktop = !isMobile;
 
   return (
-    <>
+    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}>
       <div
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
@@ -61,7 +61,12 @@ export function RankingComposeMyRanking({
       >
         <h2 className="m-0 min-w-0 truncate text-smallTitle font-medium text-text">My ranking</h2>
         {!hidePublishButton ? (
-          <Button variant="primary" small className="justify-self-end" disabled={!canPublish} onClick={onPublish}>
+          <Button
+            variant="primary"
+            className="h-8 justify-self-end !rounded-full px-3 whitespace-nowrap"
+            disabled={!canPublish}
+            onClick={onPublish}
+          >
             {isSaving ? 'Publishing…' : 'Publish ranking'}
           </Button>
         ) : null}
@@ -118,6 +123,6 @@ export function RankingComposeMyRanking({
           />
         )}
       </div>
-    </>
+    </div>
   );
 }
