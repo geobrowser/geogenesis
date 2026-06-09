@@ -46,6 +46,22 @@ export type QueryFromSpacesListData = {
   ordering: SpaceDropdownOrderingMeta;
 };
 
+export function canCreateEntityInSpace(
+  spaceId: string,
+  ordering: SpaceDropdownOrderingMeta | undefined
+): boolean {
+  if (!ordering) return false;
+  return ordering.editorIds.has(spaceId) || ordering.memberIds.has(spaceId);
+}
+
+export function filterCreatableSpaceRows(
+  rows: QueryFromSpaceRow[],
+  ordering: SpaceDropdownOrderingMeta | undefined
+): QueryFromSpaceRow[] {
+  if (!ordering) return [];
+  return rows.filter(row => !row.pendingLabel && canCreateEntityInSpace(row.id, ordering));
+}
+
 function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpaceRow {
   return {
     id: row.id,

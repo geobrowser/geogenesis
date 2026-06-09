@@ -5,10 +5,7 @@ import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { Duration } from 'effect';
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
 
-import { Subgraph } from '~/core/io';
 import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -79,7 +76,8 @@ export function useSearch({
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
 
-  const additionalSpaceIds = useGlobalSearchSpaceIds();
+  const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
+  const additionalSpaceIds = filterBySpace ? undefined : globalAdditionalSpaceIds;
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
@@ -92,7 +90,7 @@ export function useSearch({
 
   const {
     data: resultPages,
-    isLoading,
+    isPending: isSearchQueryPending,
     isFetching,
     isFetchingNextPage,
     hasNextPage,
@@ -111,104 +109,58 @@ export function useSearch({
     ],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
-      const isValidEntityId = validateEntityId(maybeEntityId);
+      try {
+        const isValidEntityId = validateEntityId(maybeEntityId);
 
-      if (isValidEntityId) {
-        if (pageParam > 0) return emptySearchPage(pageParam);
+        if (isValidEntityId) {
+          if (pageParam > 0) return emptySearchPage(pageParam);
 
-        const id = maybeEntityId;
-
-        const fetchResultEffect = Effect.either(
-          Effect.tryPromise({
-            try: async () =>
-              await mergeSearchResult({
-                id,
-                store,
-              }),
-            catch: error => {
-              console.error('error', error);
-              return new Subgraph.Errors.AbortError();
-            },
-          })
-        );
-
-        const resultOrError = await Effect.runPromise(fetchResultEffect);
-
-        if (Either.isLeft(resultOrError)) {
-          const error = resultOrError.left;
-
-          switch (error._tag) {
-            case 'AbortError':
-              console.log(`abort error`);
-              return emptySearchPage(pageParam);
-            default:
-              console.error('useSearch error:', String(error));
-              throw error;
-          }
-        }
-
-        const merged = resultOrError.right;
-        if (!merged) return emptySearchPage(pageParam);
-        if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
-          return emptySearchPage(pageParam);
-        }
-        return { rows: [merged], offset: pageParam, rawCount: 1, total: 1 };
-      }
-
-      const fetchResultsEffect = Effect.either(
-        Effect.tryPromise({
-          try: async () =>
-            await E.findFuzzyPage({
-              store,
-              cache,
-              where: {
-                name: {
-                  fuzzy: debouncedQuery,
-                },
-                ...(filterByTypes?.length
-                  ? {
-                      types: filterByTypes.map(t => ({
-                        id: {
-                          equals: t,
-                        },
-                      })),
-                    }
-                  : {}),
-                ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
-              },
-              first: pageSize,
-              skip: pageParam,
-              signal,
-              additionalSpaceIds,
-            }),
-          catch: error => {
-            console.error('error', error);
-            return new Subgraph.Errors.AbortError();
-          },
-        })
-      );
-
-      const resultOrError = await Effect.runPromise(fetchResultsEffect);
-
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
-
-        switch (error._tag) {
-          case 'AbortError':
-            console.log(`abort error`);
+          const merged = await mergeSearchResult({
+            id: maybeEntityId,
+            store,
+          });
+          if (!merged) return emptySearchPage(pageParam);
+          if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
-          default:
-            console.error('useSearch error:', String(error));
-            throw error;
+          }
+          return { rows: [merged], offset: pageParam, rawCount: 1, total: 1 };
         }
+
+        const page = await E.findFuzzyPage({
+          store,
+          cache,
+          where: {
+            name: {
+              fuzzy: debouncedQuery,
+            },
+            ...(filterByTypes?.length
+              ? {
+                  types: filterByTypes.map(t => ({
+                    id: {
+                      equals: t,
+                    },
+                  })),
+                }
+              : {}),
+            ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
+          },
+          first: pageSize,
+          skip: pageParam,
+          signal,
+          additionalSpaceIds,
+        });
+
+        const rows = !filterByTypes?.length
+          ? page.results
+          : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
+
+        return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
+      } catch (error) {
+        // Plain try/catch: failures become an empty page (throwOnError: false). Effect.either was equivalent
+        // — the catch always coerced errors to AbortError, so the throw branch never ran.
+        console.error(error);
+        return emptySearchPage(pageParam);
       }
-
-      const page = resultOrError.right;
-      const rows = !filterByTypes?.length
-        ? page.results
-        : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
-
-      return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
     },
     getNextPageParam: lastPage => {
       const nextOffset = lastPage.offset + pageSize;
@@ -222,6 +174,7 @@ export function useSearch({
      * shift or confusing results.
      */
     gcTime: Duration.toMillis(Duration.seconds(15)),
+    throwOnError: false,
   });
 
   const emptyPagePumpCountRef = React.useRef(0);
@@ -259,7 +212,8 @@ export function useSearch({
 
   const isQuerySyncing = query !== debouncedQuery;
   const isWaitingForFilterTypes = shouldSearch === false && searchBlocked && (enabled ?? debouncedQuery !== '');
-  const shouldSuspend = isWaitingForFilterTypes || isQuerySyncing || isLoading;
+  /** Pending = no usable data yet (RQ v5); avoids treating the pre-fetch tick as “loaded empty”. */
+  const shouldSuspend = isWaitingForFilterTypes || isQuerySyncing || isSearchQueryPending;
 
   return {
     isEmpty: isArrayEmpty(results) && (Boolean(enabled) || !isStringEmpty(query)) && !shouldSuspend,

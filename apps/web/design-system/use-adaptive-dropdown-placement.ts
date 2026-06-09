@@ -9,6 +9,8 @@ interface UseAdaptiveDropdownPlacementOptions {
   isOpen: boolean;
   preferredHeight?: number;
   gap?: number;
+  /** Re-run anchor measurement when these change (e.g. conditional chrome above/below the anchor). */
+  recomputeDeps?: ReadonlyArray<unknown>;
 }
 
 interface AdaptiveDropdownPlacement {
@@ -34,7 +36,12 @@ function readBottomInset(): number {
 
 export function useAdaptiveDropdownPlacement(
   anchorRef: React.RefObject<Element | null>,
-  { isOpen, preferredHeight = DEFAULT_DROPDOWN_HEIGHT, gap = DEFAULT_GAP }: UseAdaptiveDropdownPlacementOptions
+  {
+    isOpen,
+    preferredHeight = DEFAULT_DROPDOWN_HEIGHT,
+    gap = DEFAULT_GAP,
+    recomputeDeps = [],
+  }: UseAdaptiveDropdownPlacementOptions
 ): AdaptiveDropdownPlacement {
   const [placement, setPlacement] = React.useState<AdaptiveDropdownPlacement>({
     align: 'start',
@@ -95,7 +102,7 @@ export function useAdaptiveDropdownPlacement(
       window.removeEventListener('resize', scheduleRecompute);
       window.removeEventListener('scroll', scheduleRecompute, true);
     };
-  }, [isOpen, recomputePlacement]);
+  }, [isOpen, recomputePlacement, ...recomputeDeps]);
 
   return placement;
 }

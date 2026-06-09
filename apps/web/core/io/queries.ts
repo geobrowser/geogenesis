@@ -843,7 +843,7 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length) {
+  if (args.additionalSpaceIds?.length && !args.spaceId) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 

@@ -69,10 +69,14 @@ export default async function Layout(props0: LayoutProps) {
             <SpacePageMetadataHeader
               spaceId={spaceId}
               membersComponent={
-                <React.Suspense fallback={<MembersSkeleton />}>
-                  <SpaceEditors spaceId={spaceId} />
-                  <SpaceMembers spaceId={spaceId} />
-                </React.Suspense>
+                <div className="flex items-center gap-2">
+                  <React.Suspense fallback={<MembersSkeleton />}>
+                    <SpaceEditors spaceId={spaceId} />
+                  </React.Suspense>
+                  <React.Suspense fallback={null}>
+                    <SpaceMembers spaceId={spaceId} />
+                  </React.Suspense>
+                </div>
               }
             />
           </div>

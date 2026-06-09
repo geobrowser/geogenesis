@@ -18,6 +18,7 @@ export type Filter = {
   valueName: string | null;
   isBacklink?: boolean;
   relationValueTypes?: { id: string; name: string | null }[];
+  typesRelationSpaceId?: string | null;
 };
 
 export type FilterMode = 'AND' | 'OR';
@@ -55,9 +56,10 @@ const FilterString = Schema.Struct({
     Schema.Record({
       key: Schema.String,
       value: Schema.Union(
-        // Property filter (single value)
+        // Property filter (single value; optional `space` for Types-in-space)
         Schema.Struct({
           is: Schema.String,
+          space: Schema.optional(Schema.String),
         }),
         // Property filter (multiple values for OR)
         Schema.Struct({
@@ -91,6 +93,7 @@ const FilterMap = Schema.mutable(
     value: Schema.Union(
       Schema.Struct({
         is: Schema.String,
+        space: Schema.optional(Schema.String),
       }),
       Schema.Struct({
         in: Schema.mutable(Schema.Array(Schema.String)),
@@ -135,6 +138,8 @@ export function toGeoFilterState(filters: OmitStrict<Filter, 'valueName'>[], mod
         } else if (existing && 'in' in existing) {
           // Append to existing multi-value
           existing.in.push(f.value);
+        } else if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY) && f.typesRelationSpaceId) {
+          filterMap[f.columnId] = { is: f.value, space: f.typesRelationSpaceId };
         } else {
           filterMap[f.columnId] = { is: f.value };
         }
@@ -233,12 +238,16 @@ export function parseFiltersSync(filterString: string | null): FilterStateResult
               });
             }
           } else if ('is' in filterValue) {
+            const typed = filterValue as { is: string; space?: string };
             filters.push({
               columnId: key,
               columnName: null,
               valueType: 'RELATION',
-              value: filterValue.is,
+              value: typed.is,
               valueName: null,
+              ...(ID.equals(key, SystemIds.TYPES_PROPERTY) && typed.space
+                ? { typesRelationSpaceId: typed.space }
+                : {}),
             });
           }
         }

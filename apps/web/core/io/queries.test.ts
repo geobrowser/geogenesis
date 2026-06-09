@@ -39,7 +39,7 @@ describe('buildSearchPath', () => {
     expect(path).toContain('additional_space_ids=a19c345a-b986-6679-b001-d7d2138d88a1');
   });
 
-  it('combines additional_space_ids with single-space scope and type_ids', () => {
+  it('omits additional_space_ids when space_id is set (SPACE_SINGLE scope)', () => {
     const path = buildSearchPath({
       query: 'q',
       spaceId: ROOT,
@@ -52,8 +52,7 @@ describe('buildSearchPath', () => {
     expect(path).toBe(
       '/search?query=q&limit=25&offset=50' +
         '&scope=SPACE_SINGLE&space_id=a19c345a-b986-6679-b001-d7d2138d88a1' +
-        '&type_ids=c9f267dc-b0d2-7071-8c2a-3c45a64afd32' +
-        '&additional_space_ids=f3dab79c-b5a3-d9d1-7596-56dd5361d1c6'
+        '&type_ids=c9f267dc-b0d2-7071-8c2a-3c45a64afd32'
     );
   });
 });

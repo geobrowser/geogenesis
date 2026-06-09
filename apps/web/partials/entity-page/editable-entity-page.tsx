@@ -17,6 +17,11 @@ import {
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
 import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
+import {
+  columnPropertyIdFromRelation,
+  dedupeRelationsByColumnProperty,
+  isBlockConfigRelationType,
+} from '~/core/blocks/data/shown-column-relations';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -465,9 +470,45 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
   // it should already be queried in useEditableProperties
   const { property } = useQueryProperty({ id: propertyId });
 
-  const relations = useRelations({
+  const relationsRaw = useRelations({
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
   });
+
+  const legacyShownColumnRelations = useRelations({
+    selector: r =>
+      ID.equals(propertyId, SystemIds.PROPERTIES) &&
+      r.fromEntity.id === id &&
+      r.spaceId === spaceId &&
+      r.type.id === SystemIds.SHOWN_COLUMNS,
+  });
+
+  const relations = React.useMemo(() => {
+    if (!isBlockConfigRelationType(propertyId)) {
+      return relationsRaw;
+    }
+    return dedupeRelationsByColumnProperty(relationsRaw);
+  }, [propertyId, relationsRaw]);
+
+  React.useEffect(() => {
+    if (!ID.equals(propertyId, SystemIds.PROPERTIES)) return;
+
+    const candidates = [...relationsRaw, ...legacyShownColumnRelations];
+    const byTarget = new Map<string, Relation[]>();
+    for (const relation of candidates) {
+      if (relation.isDeleted) continue;
+      const key = columnPropertyIdFromRelation(relation);
+      const group = byTarget.get(key) ?? [];
+      group.push(relation);
+      byTarget.set(key, group);
+    }
+
+    for (const group of byTarget.values()) {
+      if (group.length <= 1) continue;
+      for (let i = 1; i < group.length; i++) {
+        storage.relations.delete(group[i]);
+      }
+    }
+  }, [propertyId, relationsRaw, legacyShownColumnRelations, storage]);
 
   // For IMAGE properties, get the image URL from related image entities
   const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
