@@ -18,6 +18,7 @@ interface Props {
   spaceId: string;
   isPublicSpace: boolean;
   isMember: boolean;
+  isEditor: boolean;
   hasRequestedSpaceMembership: boolean;
   connectedAddress: string | null;
 }
@@ -26,6 +27,7 @@ export function SpaceMembersContent({
   spaceId,
   isPublicSpace,
   isMember,
+  isEditor,
   hasRequestedSpaceMembership,
   connectedAddress,
 }: Props) {
@@ -59,7 +61,7 @@ export function SpaceMembersContent({
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
                 {connectedAddress ? 'Leave space' : 'Sign in to join'}
               </button>
-            ) : connectedAddress ? (
+            ) : isEditor ? null : connectedAddress ? (
               <SpaceMembersPopoverMemberRequestButton
                 spaceId={spaceId}
                 hasRequestedSpaceMembership={hasRequestedSpaceMembership}

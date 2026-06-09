@@ -7,9 +7,11 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace } from '~/core/io/queries';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -45,6 +47,17 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
     if (!validateSpaceId(spaceId)) {
       throw new Error('Invalid target space ID');
+    }
+
+    // Existing editors already belong to the space; a duplicate editor request errors on vote.
+    // Check at submit time rather than via reactive access-control state, which reads false
+    // while still hydrating and would let a fast click through. Fail open if the check errors.
+    const access = await runEffectEither(
+      getIsEditorOfSpace(normalizeSpaceId(spaceId), normalizeSpaceId(personalSpaceId))
+    );
+    if (Either.isRight(access) && access.right) {
+      dispatch({ type: 'ERROR', payload: 'You are already an editor of this space' });
+      throw new Error('User is already an editor of the space');
     }
 
     console.log('Requesting to be editor', {
