@@ -1,15 +1,17 @@
 'use client';
 
-import { daoSpace } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { type Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useSpace } from '~/core/hooks/use-space';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -36,6 +38,7 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { space } = useSpace(spaceId ?? undefined);
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -71,15 +74,24 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
         throw new Error(message);
       }
 
+      // The proposal's removeEditor action must call the DAO space contract directly.
+      if (!space?.address) {
+        const message = 'No space address found. Please try again.';
+        console.error('No space address found for space:', spaceId);
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
       console.log('Proposing to remove editor', {
         authorSpaceId: personalSpaceId,
         spaceId,
         targetEditorSpaceId,
       });
 
-      const { calldata: callData } = daoSpace.proposeRemoveEditor({
+      const { calldata: callData } = geo.daoSpaces.proposeRemoveEditor({
         authorSpaceId: personalSpaceId,
         spaceId,
+        daoSpaceAddress: space.address as Hex,
         editorToRemoveSpaceId: targetEditorSpaceId,
         votingMode: 'SLOW',
       });
@@ -111,7 +123,7 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
         onRight: hash => console.log('Successfully proposed to remove editor. Transaction hash:', hash),
       });
     },
-    [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]
+    [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]
   );
 
   const { mutate, status } = useMutation({

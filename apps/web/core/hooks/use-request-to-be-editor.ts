@@ -1,17 +1,19 @@
 'use client';
 
-import { daoSpace } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { type Hex } from 'viem';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useSpace } from '~/core/hooks/use-space';
 import { getIsEditorOfSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -27,6 +29,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { space } = useSpace(spaceId ?? undefined);
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -49,6 +52,11 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       throw new Error('Invalid target space ID');
     }
 
+    // The proposal's addEditor action must call the DAO space contract directly.
+    if (!space?.address) {
+      throw new Error('No space address found');
+    }
+
     // Existing editors already belong to the space; a duplicate editor request errors on vote.
     // Check at submit time rather than via reactive access-control state, which reads false
     // while still hydrating and would let a fast click through. Fail open if the check errors.
@@ -66,9 +74,10 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
     });
 
     // Caller proposes themselves as a new editor. Editor proposals are slow-path only.
-    const { calldata: callData } = daoSpace.proposeAddEditor({
+    const { calldata: callData } = geo.daoSpaces.proposeAddEditor({
       authorSpaceId: personalSpaceId,
       spaceId,
+      daoSpaceAddress: space.address as Hex,
       newEditorSpaceId: personalSpaceId,
       votingMode: 'SLOW',
     });
@@ -95,7 +104,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       },
       onRight: hash => console.log('Successfully requested to be editor. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeEditor,
