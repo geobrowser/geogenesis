@@ -247,7 +247,8 @@ export function PowerToolsScreen() {
     });
   }, [propertyIds]);
 
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const { peekNextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const reservedEntityId = peekNextEntityId();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
@@ -257,10 +258,10 @@ export function PowerToolsScreen() {
 
   const shouldShowPlaceholder =
     isEditing &&
-    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === nextEntityId)) ||
+    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === reservedEntityId)) ||
       (pendingEntityId && !data.rows.find(r => r.entityId === pendingEntityId)));
 
-  const placeholderEntityId = pendingEntityId || nextEntityId;
+  const placeholderEntityId = pendingEntityId || reservedEntityId;
   const sourceValue = 'value' in source ? source.value : null;
   const panelEntityId = searchParams?.get(PANEL_ENTITY_ID_PARAM) ?? null;
   const panelSpaceId = searchParams?.get(PANEL_SPACE_ID_PARAM) ?? spaceId;
@@ -735,7 +736,7 @@ export function PowerToolsScreen() {
           action.type === 'FIND_ENTITY'
             ? action.entity
             : action.type === 'CREATE_ENTITY'
-              ? { id: nextEntityId, name: action.name }
+              ? { id: entityId, name: action.name }
               : { id: entityId, name: null, space: actionSpaceId, verified: false };
 
         upsertCollectionItemRelation({
@@ -751,7 +752,7 @@ export function PowerToolsScreen() {
       }
     }
 
-    if (entityId === nextEntityId) {
+    if (entityId === reservedEntityId) {
       setHasPlaceholderRow(false);
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;

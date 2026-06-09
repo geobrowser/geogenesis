@@ -67,7 +67,7 @@ interface TableBlockFilterPromptProps {
   filterSuggestionSpaceId?: string;
   /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
   filterStateForSeed?: Filter[];
-  onCreate: (filters: TableBlockNewFilterRow[]) => void;
+  onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => void;
   /** When false, pending filter chips and value inputs use read-only (grey, no remove) styling. */
   isEditing?: boolean;
 }
@@ -263,6 +263,30 @@ function emptyColumnDraft(): FilterColumnDraft {
   };
 }
 
+function cloneColumnDraft(draft: FilterColumnDraft): FilterColumnDraft {
+  return {
+    multiEntitySelections: draft.multiEntitySelections.map(e => ({ ...e })),
+    multiSpaceSelections: draft.multiSpaceSelections.map(s => ({ ...s })),
+    multiStringSelections: [...draft.multiStringSelections],
+    textInput: draft.textInput,
+  };
+}
+
+function cloneColumnDraftsRecord(drafts: Record<string, FilterColumnDraft>): Record<string, FilterColumnDraft> {
+  return Object.fromEntries(Object.entries(drafts).map(([columnId, draft]) => [columnId, cloneColumnDraft(draft)]));
+}
+
+function buildSessionBaselineFromCommittedFilters(
+  options: (Filter & { columnName: string })[],
+  filters: Filter[]
+): Record<string, FilterColumnDraft> {
+  const baseline: Record<string, FilterColumnDraft> = {};
+  for (const o of options) {
+    baseline[o.columnId] = seedColumnDraftFromCommittedFilters(o.columnId, filters, options);
+  }
+  return cloneColumnDraftsRecord(baseline);
+}
+
 function snapshotColumnDraft(state: PromptState): FilterColumnDraft {
   return {
     multiEntitySelections: state.multiEntitySelections.map(e => ({ ...e })),
@@ -303,6 +327,8 @@ type PromptState = {
   multiSpaceSelections: { id: string; name: string | null }[];
   multiStringSelections: string[];
   columnDrafts: Record<string, FilterColumnDraft>;
+  /** Snapshot of table filters when the popover opened; header Clear all restores this. */
+  sessionBaseline: Record<string, FilterColumnDraft>;
   open: boolean;
 };
 
@@ -313,7 +339,10 @@ type PromptAction =
   | { type: 'close' }
   | { type: 'onOpenChange'; payload: { open: boolean } }
   | { type: 'selectColumn'; payload: { columnId: string; seedDraft?: FilterColumnDraft } }
-  | { type: 'openWithColumn'; payload: { columnId: string; seedDraft?: FilterColumnDraft } }
+  | {
+      type: 'openWithColumn';
+      payload: { columnId: string; seedDraft?: FilterColumnDraft; sessionBaseline?: Record<string, FilterColumnDraft> };
+    }
   | {
       type: 'selectEntityValue' | 'selectSpaceValue';
       payload: { id: string; name: string | null };
@@ -336,12 +365,28 @@ type PromptAction =
       payload: { columnId: string; id: string; name: string | null };
     }
   | { type: 'removeStringFromColumnDraft'; payload: { columnId: string; value: string } }
+  | { type: 'clearCurrentColumnSelections' }
+  | { type: 'clearAllColumnDrafts' }
+  | { type: 'restorePopoverSessionBaseline' }
+  | {
+      type: 'commitEntitySelections';
+      payload: { selections: { id: string; name: string | null }[] };
+    }
+  | {
+      type: 'commitSpaceSelections';
+      payload: { selections: { id: string; name: string | null }[] };
+    }
   | {
       type: 'done';
     }
   | {
       type: 'reset';
-      payload?: { source?: Source; open?: boolean; seedDraft?: FilterColumnDraft };
+      payload?: {
+        source?: Source;
+        open?: boolean;
+        seedDraft?: FilterColumnDraft;
+        sessionBaseline?: Record<string, FilterColumnDraft>;
+      };
     };
 
 const emptyMulti = {
@@ -356,6 +401,7 @@ function normalizePromptState(s: PromptState): PromptState {
   return {
     ...s,
     columnDrafts: s.columnDrafts ?? emptyDrafts(),
+    sessionBaseline: s.sessionBaseline ?? emptyDrafts(),
     multiEntitySelections: s.multiEntitySelections ?? [],
     multiSpaceSelections: s.multiSpaceSelections ?? [],
     multiStringSelections: s.multiStringSelections ?? [],
@@ -404,6 +450,10 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
       const savedPrev = snapshotColumnDraft(state);
       const stored = state.columnDrafts[nextCol] ?? emptyColumnDraft();
       const loaded = action.payload.seedDraft ?? stored;
+      const sessionBaseline =
+        action.payload.sessionBaseline != null
+          ? cloneColumnDraftsRecord(action.payload.sessionBaseline)
+          : state.sessionBaseline;
       return {
         ...state,
         open: true,
@@ -414,6 +464,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
           [prevCol]: savedPrev,
           [nextCol]: loaded,
         },
+        sessionBaseline,
       };
     }
     case 'selectEntityValue':
@@ -542,6 +593,68 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
         },
       };
     }
+    case 'clearCurrentColumnSelections': {
+      const columnId = state.selectedColumn;
+      const empty = emptyColumnDraft();
+      return {
+        ...state,
+        ...applyColumnDraft(empty),
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: empty,
+        },
+      };
+    }
+    case 'clearAllColumnDrafts': {
+      const empty = emptyColumnDraft();
+      return {
+        ...state,
+        ...applyColumnDraft(empty),
+        columnDrafts: emptyDrafts(),
+      };
+    }
+    case 'restorePopoverSessionBaseline': {
+      const baseline = cloneColumnDraftsRecord(state.sessionBaseline);
+      const columnId = state.selectedColumn;
+      const loaded = baseline[columnId] ?? emptyColumnDraft();
+      return {
+        ...state,
+        ...applyColumnDraft(loaded),
+        columnDrafts: baseline,
+      };
+    }
+    case 'commitEntitySelections': {
+      const columnId = state.selectedColumn;
+      const selections = action.payload.selections.map(e => ({ ...e }));
+      const draft = {
+        ...(state.columnDrafts[columnId] ?? emptyColumnDraft()),
+        multiEntitySelections: selections,
+      };
+      return {
+        ...state,
+        multiEntitySelections: selections,
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: draft,
+        },
+      };
+    }
+    case 'commitSpaceSelections': {
+      const columnId = state.selectedColumn;
+      const selections = action.payload.selections.map(s => ({ ...s }));
+      const draft = {
+        ...(state.columnDrafts[columnId] ?? emptyColumnDraft()),
+        multiSpaceSelections: selections,
+      };
+      return {
+        ...state,
+        multiSpaceSelections: selections,
+        columnDrafts: {
+          ...state.columnDrafts,
+          [columnId]: draft,
+        },
+      };
+    }
     case 'done':
       return {
         open: false,
@@ -552,10 +665,14 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
         },
         ...emptyMulti,
         columnDrafts: emptyDrafts(),
+        sessionBaseline: emptyDrafts(),
       };
     case 'reset': {
       const next = getInitialState(action.payload?.source ?? { type: 'GEO' });
       const loaded = action.payload?.seedDraft ?? snapshotColumnDraft(next);
+      const sessionBaseline = action.payload?.sessionBaseline
+        ? cloneColumnDraftsRecord(action.payload.sessionBaseline)
+        : next.sessionBaseline;
       return {
         ...next,
         ...applyColumnDraft(loaded),
@@ -563,6 +680,7 @@ const reducer = (rawState: PromptState, action: PromptAction): PromptState => {
           ...next.columnDrafts,
           [next.selectedColumn]: loaded,
         },
+        sessionBaseline,
         open: action.payload?.open ?? state.open,
       };
     }
@@ -580,6 +698,7 @@ function getInitialState(source: Source): PromptState {
       },
       ...emptyMulti,
       columnDrafts: emptyDrafts(),
+      sessionBaseline: emptyDrafts(),
       open: false,
     };
   }
@@ -592,15 +711,32 @@ function getInitialState(source: Source): PromptState {
     },
     ...emptyMulti,
     columnDrafts: emptyDrafts(),
+    sessionBaseline: emptyDrafts(),
     open: false,
   };
 }
 
+function getEffectiveColumnDraft(state: PromptState, columnId: string): FilterColumnDraft {
+  const normalized = normalizePromptState(state);
+  if (columnId === normalized.selectedColumn) {
+    return snapshotColumnDraft(normalized);
+  }
+  return normalized.columnDrafts[columnId] ?? normalized.sessionBaseline[columnId] ?? emptyColumnDraft();
+}
+
+/** Merged drafts for all columns touched in this popover session (includes session baseline for untouched columns). */
 function mergeAllColumnDrafts(state: PromptState): Record<string, FilterColumnDraft> {
-  return {
-    ...state.columnDrafts,
-    [state.selectedColumn]: snapshotColumnDraft(state),
-  };
+  const normalized = normalizePromptState(state);
+  const columnIds = new Set<string>([
+    ...Object.keys(normalized.columnDrafts),
+    ...Object.keys(normalized.sessionBaseline),
+    normalized.selectedColumn,
+  ]);
+  const merged: Record<string, FilterColumnDraft> = {};
+  for (const columnId of columnIds) {
+    merged[columnId] = getEffectiveColumnDraft(normalized, columnId);
+  }
+  return merged;
 }
 
 function draftHasPending(
@@ -660,6 +796,40 @@ function hasPendingFilterSelections(state: PromptState, options: (Filter & { col
   });
 }
 
+function hasAnyFilterDraftSelections(state: PromptState): boolean {
+  const normalized = normalizePromptState(state);
+  if (
+    normalized.multiEntitySelections.length > 0 ||
+    normalized.multiSpaceSelections.length > 0 ||
+    normalized.multiStringSelections.length > 0
+  ) {
+    return true;
+  }
+  return Object.values(normalized.columnDrafts).some(
+    draft =>
+      draft.multiEntitySelections.length > 0 ||
+      draft.multiSpaceSelections.length > 0 ||
+      draft.multiStringSelections.length > 0
+  );
+}
+
+function popoverDraftsDifferFromSessionBaseline(
+  state: PromptState,
+  options: (Filter & { columnName: string })[]
+): boolean {
+  const normalized = normalizePromptState(state);
+  const merged = mergeAllColumnDrafts(normalized);
+  for (const o of options) {
+    const columnId = o.columnId;
+    const draft = merged[columnId] ?? emptyColumnDraft();
+    const baseline = normalized.sessionBaseline[columnId] ?? emptyColumnDraft();
+    if (!columnDraftMatchesCommitted(draft, baseline, columnId, options)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** When local column drafts are empty (e.g. after Done), rebuild chips from committed table filters. */
 function seedColumnDraftFromCommittedFilters(
   columnId: string,
@@ -692,56 +862,74 @@ function seedColumnDraftFromCommittedFilters(
   return draft;
 }
 
-function collectAllPendingFilters(
-  state: PromptState,
+function rowsFromColumnDraft(
+  columnId: string,
+  draft: FilterColumnDraft,
   options: (Filter & { columnName: string })[]
 ): TableBlockNewFilterRow[] {
-  const merged = mergeAllColumnDrafts(normalizePromptState(state));
+  const selectedOption = options.find(o => ID.equals(o.columnId, columnId));
+  const columnName = selectedOption?.columnName ?? '';
   const rows: TableBlockNewFilterRow[] = [];
 
-  for (const [columnId, draft] of Object.entries(merged)) {
-    if (!draftHasPending(draft, columnId, options)) continue;
-
-    const selectedOption = options.find(o => o.columnId === columnId);
-    const columnName = selectedOption?.columnName ?? '';
-
-    if (selectedOption?.valueType === 'RELATION') {
-      for (const e of draft.multiEntitySelections) {
-        rows.push({
-          columnId,
-          value: e.id,
-          valueName: e.name,
-          valueType: 'RELATION',
-          columnName,
-        });
-      }
-    } else if (columnId === SystemIds.SPACE_FILTER) {
-      for (const s of draft.multiSpaceSelections) {
-        rows.push({
-          columnId,
-          value: s.id,
-          valueName: s.name,
-          valueType: 'RELATION',
-          columnName: columnName || 'Space',
-        });
-      }
-    } else if (selectedOption?.valueType === 'TEXT') {
-      const typed = draft.textInput.trim();
-      const mergedVals = new Set(draft.multiStringSelections);
-      if (typed) mergedVals.add(typed);
-      for (const v of mergedVals) {
-        rows.push({
-          columnId,
-          value: v,
-          valueName: v,
-          valueType: 'TEXT',
-          columnName,
-        });
-      }
+  if (selectedOption?.valueType === 'RELATION') {
+    for (const e of draft.multiEntitySelections) {
+      rows.push({
+        columnId,
+        value: e.id,
+        valueName: e.name,
+        valueType: 'RELATION',
+        columnName,
+      });
+    }
+  } else if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
+    for (const s of draft.multiSpaceSelections) {
+      rows.push({
+        columnId,
+        value: s.id,
+        valueName: s.name,
+        valueType: 'RELATION',
+        columnName: columnName || 'Space',
+      });
+    }
+  } else if (selectedOption?.valueType === 'TEXT') {
+    const typed = draft.textInput.trim();
+    const mergedVals = new Set(draft.multiStringSelections);
+    if (typed) mergedVals.add(typed);
+    for (const v of mergedVals) {
+      rows.push({
+        columnId,
+        value: v,
+        valueName: v,
+        valueType: 'TEXT',
+        columnName,
+      });
     }
   }
 
   return rows;
+}
+
+/** Applies all columns whose drafts differ from the session baseline (including cleared columns). */
+function collectFiltersToApply(
+  state: PromptState,
+  options: (Filter & { columnName: string })[]
+): { filters: TableBlockNewFilterRow[]; touchedColumnIds: string[] } {
+  const normalized = normalizePromptState(state);
+  const merged = mergeAllColumnDrafts(normalized);
+  const filters: TableBlockNewFilterRow[] = [];
+  const touchedColumnIds: string[] = [];
+
+  for (const o of options) {
+    const columnId = o.columnId;
+    const draft = merged[columnId] ?? emptyColumnDraft();
+    const baseline = normalized.sessionBaseline[columnId] ?? emptyColumnDraft();
+    if (columnDraftMatchesCommitted(draft, baseline, columnId, options)) continue;
+
+    touchedColumnIds.push(columnId);
+    filters.push(...rowsFromColumnDraft(columnId, draft, options));
+  }
+
+  return { filters, touchedColumnIds };
 }
 
 type PendingFilterChipItem =
@@ -866,6 +1054,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     seedFilterStateRef.current = seedFilterState;
 
     const externalAnchorElRef = React.useRef<HTMLElement | null>(null);
+    const [valueDropdownOpen, setValueDropdownOpen] = React.useState(false);
     const [externalAnchorBox, setExternalAnchorBox] = React.useState<{
       left: number;
       top: number;
@@ -873,12 +1062,24 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       height: number;
     } | null>(null);
 
+    const clearExternalAnchor = React.useCallback(() => {
+      externalAnchorElRef.current = null;
+      setExternalAnchorBox(null);
+    }, []);
+
     const syncExternalAnchorBox = React.useCallback(() => {
       const el = externalAnchorElRef.current;
-      if (!el) return;
+      if (!el || !el.isConnected) {
+        clearExternalAnchor();
+        return;
+      }
       const r = el.getBoundingClientRect();
       setExternalAnchorBox({ left: r.left, top: r.top, width: r.width, height: r.height });
-    }, []);
+    }, [clearExternalAnchor]);
+
+    React.useEffect(() => {
+      if (!state.open) clearExternalAnchor();
+    }, [state.open, clearExternalAnchor]);
 
     React.useLayoutEffect(() => {
       if (!state.open || !externalAnchorElRef.current) return;
@@ -891,6 +1092,10 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       };
     }, [state.open, syncExternalAnchorBox]);
 
+    React.useEffect(() => {
+      if (!state.open) setValueDropdownOpen(false);
+    }, [state.open]);
+
     React.useImperativeHandle(
       ref,
       () => ({
@@ -902,8 +1107,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
             currentState.selectedColumn === columnId &&
             externalAnchorElRef.current === (anchorEl ?? null)
           ) {
-            externalAnchorElRef.current = null;
-            setExternalAnchorBox(null);
+            clearExternalAnchor();
             dispatch({ type: 'close' });
             return;
           }
@@ -923,10 +1127,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
             draftHasPending(stored, columnId, opts) &&
             columnDraftMatchesCommitted(stored, committedDraft, columnId, opts);
           const seedDraft = reuseStored ? undefined : committedDraft;
-          dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft } });
+          const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
+          dispatch({ type: 'openWithColumn', payload: { columnId, seedDraft, sessionBaseline } });
         },
       }),
-      [isEditing]
+      [isEditing, clearExternalAnchor]
     );
 
     const [from, setFrom] = React.useState<Source | null>({
@@ -981,9 +1186,37 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     }, [relationTypeKey]);
 
     const onEntitiesDone = () => {
-      const filters = collectAllPendingFilters(state, options);
-      if (filters.length === 0) return;
-      onCreate(filters);
+      const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
+      if (touchedColumnIds.length > 0) {
+        onCreate(filters, touchedColumnIds);
+      }
+      dispatch({ type: 'done' });
+    };
+
+    const onPopoverClearAll = () => {
+      const columnId = stateRef.current.selectedColumn;
+
+      // Opened from a filter chip "+" — clear only this column's values, not every filter.
+      if (externalAnchorElRef.current) {
+        dispatch({ type: 'clearCurrentColumnSelections' });
+        onCreate([], [columnId]);
+        dispatch({ type: 'done' });
+        return;
+      }
+
+      const touched = new Set(seedFilterStateRef.current.map(f => f.columnId));
+      const merged = mergeAllColumnDrafts(stateRef.current);
+      const opts = optionsRef.current;
+      for (const o of opts) {
+        const draft = merged[o.columnId] ?? emptyColumnDraft();
+        if (draftHasPending(draft, o.columnId, opts)) {
+          touched.add(o.columnId);
+        }
+      }
+      const touchedColumnIds = [...touched];
+      if (touchedColumnIds.length === 0) return;
+      dispatch({ type: 'clearAllColumnDrafts' });
+      onCreate([], touchedColumnIds);
       dispatch({ type: 'done' });
     };
 
@@ -1018,42 +1251,35 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         onFilterModeChange={setFilterMode}
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
+        onValueDropdownOpenChange={setValueDropdownOpen}
       />
     );
 
-    const done = !isRelationsMode ? (
-      <AnimatePresence>
-        {hasPendingFilterSelections(state, options) && (
-          <motion.span
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.1 }}
-          >
-            <TextButton color="ctaPrimary" onClick={onEntitiesDone}>
-              Done
-            </TextButton>
-          </motion.span>
-        )}
-      </AnimatePresence>
-    ) : null;
+    const showPopoverHeaderActions = !isRelationsMode && !valueDropdownOpen;
+    const popoverHasSessionChanges = popoverDraftsDifferFromSessionBaseline(state, options);
+    const isChipAnchoredPopover = externalAnchorBox != null;
+    const hasCommittedTableFilters = seedFilterState.length > 0;
+    const showPopoverClearAll =
+      showPopoverHeaderActions &&
+      (hasPendingFilterSelections(state, options) || (!isChipAnchoredPopover && hasCommittedTableFilters));
+    const showPopoverDone = showPopoverHeaderActions && popoverHasSessionChanges;
 
     const onOpenChange = (open: boolean) => {
       if (open && !isEditing) return;
       if (!open) {
-        externalAnchorElRef.current = null;
-        setExternalAnchorBox(null);
+        clearExternalAnchor();
         dispatch({ type: 'onOpenChange', payload: { open } });
         return;
       }
 
+      clearExternalAnchor();
+
       const initialColumn = getInitialState(source).selectedColumn;
-      const seedDraft = seedColumnDraftFromCommittedFilters(
-        initialColumn,
-        seedFilterStateRef.current,
-        optionsRef.current
-      );
-      dispatch({ type: 'reset', payload: { source, open: true, seedDraft } });
+      const opts = optionsRef.current;
+      const fs = seedFilterStateRef.current;
+      const seedDraft = seedColumnDraftFromCommittedFilters(initialColumn, fs, opts);
+      const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
+      dispatch({ type: 'reset', payload: { source, open: true, seedDraft, sessionBaseline } });
     };
 
     return (
@@ -1094,7 +1320,20 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
               >
                 <div className="flex items-center justify-between px-2 pb-2 text-smallButton text-grey-04">
                   <p>New filter</p>
-                  {done}
+                  {(showPopoverClearAll || showPopoverDone) && (
+                    <div className="flex shrink-0 items-center gap-2">
+                      {showPopoverClearAll ? (
+                        <TextButton type="button" color="grey-04" onClick={onPopoverClearAll}>
+                          Clear all
+                        </TextButton>
+                      ) : null}
+                      {showPopoverDone ? (
+                        <TextButton type="button" color="ctaPrimary" onClick={onEntitiesDone}>
+                          Done
+                        </TextButton>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
                 <Divider type="horizontal" className="bg-grey-04" />
                 <Spacer height={12} />
@@ -1117,6 +1356,45 @@ interface DynamicFiltersProps {
   onFilterModeChange: (mode: FilterMode) => void;
   onSelectColumnToFilter: (columnId: string) => void;
   isEditing: boolean;
+  onValueDropdownOpenChange: (open: boolean) => void;
+}
+
+function FilterValueDropdownFooter({
+  edge,
+  showClearAll,
+  onClearAll,
+  showDone,
+  onDone,
+}: {
+  edge: 'top' | 'bottom';
+  showClearAll: boolean;
+  onClearAll: () => void;
+  showDone: boolean;
+  onDone: () => void;
+}) {
+  if (!showClearAll && !showDone) return null;
+
+  return (
+    <div
+      className={cx(
+        'flex shrink-0 items-center justify-between gap-2 bg-white px-3 py-2',
+        edge === 'top' ? 'border-b border-grey-02' : 'border-t border-grey-02'
+      )}
+    >
+      {showClearAll ? (
+        <TextButton type="button" color="grey-04" onPointerDown={e => e.preventDefault()} onClick={onClearAll}>
+          Clear all
+        </TextButton>
+      ) : (
+        <span />
+      )}
+      {showDone ? (
+        <TextButton type="button" color="ctaPrimary" onPointerDown={e => e.preventDefault()} onClick={onDone}>
+          Done
+        </TextButton>
+      ) : null}
+    </div>
+  );
 }
 
 function MultiSelectChip({ label, onRemove, removable }: { label: string; onRemove: () => void; removable: boolean }) {
@@ -1154,16 +1432,8 @@ function DynamicFilters({
   onFilterModeChange,
   onSelectColumnToFilter,
   isEditing,
+  onValueDropdownOpenChange,
 }: DynamicFiltersProps) {
-  const selectedEntityIds = React.useMemo(
-    () => new Set(state.multiEntitySelections.map(e => e.id)),
-    [state.multiEntitySelections]
-  );
-  const selectedSpaceIds = React.useMemo(
-    () => new Set(state.multiSpaceSelections.map(s => s.id)),
-    [state.multiSpaceSelections]
-  );
-
   const selectedOption = options.find(o => o.columnId === state.selectedColumn);
 
   const isRelationPropertyColumn =
@@ -1183,6 +1453,12 @@ function DynamicFilters({
     return all.filter(item => ID.equals(item.columnId, state.selectedColumn));
   }, [state, options]);
   const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
+
+  const hasValueDropdown = state.selectedColumn === SystemIds.SPACE_FILTER || selectedOption?.valueType === 'RELATION';
+
+  React.useEffect(() => {
+    if (!hasValueDropdown) onValueDropdownOpenChange(false);
+  }, [hasValueDropdown, onValueDropdownOpenChange]);
 
   return (
     <div className="flex w-full flex-col gap-3 px-2">
@@ -1205,9 +1481,12 @@ function DynamicFilters({
           {state.selectedColumn === SystemIds.SPACE_FILTER ? (
             <TableBlockSpaceFilterInput
               selectedValue=""
-              selectedSpaceIds={selectedSpaceIds}
+              committedSpaceSelections={state.multiSpaceSelections}
               memberSpaceId={filterSuggestionSpaceId}
-              onToggleSpace={s => dispatch({ type: 'toggleSpaceSelection', payload: { id: s.id, name: s.name } })}
+              onCommitSpaceSelections={selections =>
+                dispatch({ type: 'commitSpaceSelections', payload: { selections } })
+              }
+              onValueDropdownOpenChange={onValueDropdownOpenChange}
             />
           ) : selectedOption?.valueType === 'RELATION' ? (
             <TableBlockEntityFilterInput
@@ -1215,8 +1494,11 @@ function DynamicFilters({
               waitForFilterTypes={waitForRelationTargetTypes}
               restrictSearchToTypes={Boolean(relationTargetTypeIds?.length)}
               selectedValue=""
-              selectedEntityIds={selectedEntityIds}
-              onToggleEntity={e => dispatch({ type: 'toggleEntitySelection', payload: { id: e.id, name: e.name } })}
+              committedEntitySelections={state.multiEntitySelections}
+              onCommitEntitySelections={selections =>
+                dispatch({ type: 'commitEntitySelections', payload: { selections } })
+              }
+              onValueDropdownOpenChange={onValueDropdownOpenChange}
             />
           ) : (
             <TableBlockTextFilterInput
@@ -1361,15 +1643,22 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
   );
 }
 
+type FilterValueDropdownFooterConfig = {
+  showClearAll: boolean;
+  onClearAll: () => void;
+  showDone: boolean;
+};
+
 interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
   filterByTypes?: string[];
   waitForFilterTypes?: boolean;
   restrictSearchToTypes?: boolean;
-  selectedEntityIds?: Set<string>;
-  onToggleEntity?: (result: { id: string; name: string | null }) => void;
+  committedEntitySelections?: { id: string; name: string | null }[];
+  onCommitEntitySelections?: (selections: { id: string; name: string | null }[]) => void;
   multiSelectPlaceholder?: string;
+  onValueDropdownOpenChange?: (open: boolean) => void;
 }
 
 function TableBlockEntityFilterInput({
@@ -1378,9 +1667,10 @@ function TableBlockEntityFilterInput({
   filterByTypes,
   waitForFilterTypes = false,
   restrictSearchToTypes = false,
-  selectedEntityIds,
-  onToggleEntity,
+  committedEntitySelections = [],
+  onCommitEntitySelections,
   multiSelectPlaceholder,
+  onValueDropdownOpenChange,
 }: TableBlockEntityFilterInputProps) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -1503,7 +1793,7 @@ function TableBlockEntityFilterInput({
 
   const showEmptyHint = !searchBlocked && searchResults.length === 0 && !isSearchFetching && !isSearchPending;
 
-  const showDropdown = focused && (rowsToRender.length > 0 || isSearchPending || isSearchFetching || showEmptyHint);
+  const showDropdown = focused && !searchBlocked;
 
   React.useLayoutEffect(() => {
     if (!showDropdown) return;
@@ -1564,7 +1854,10 @@ function TableBlockEntityFilterInput({
     fetchNextSearchPage,
   ]);
 
-  const multi = Boolean(onToggleEntity);
+  const multi = Boolean(onCommitEntitySelections);
+  const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
+  const stagingEntityIds = React.useMemo(() => new Set(stagingSelections.map(e => e.id)), [stagingSelections]);
+
   const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
   const entityDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
     isOpen: showDropdown,
@@ -1578,14 +1871,54 @@ function TableBlockEntityFilterInput({
 
   const handleEntityPick = (result: { id: string; name: string | null }) => {
     clearBlurTimeout();
-    if (multi) {
-      onToggleEntity?.(result);
-    } else {
+    if (!multi) {
       setRawQuery('');
       onSelect?.(result);
       setFocused(false);
+      return;
     }
+    setStagingSelections(prev => {
+      const exists = prev.some(e => e.id === result.id);
+      if (exists) return prev.filter(e => e.id !== result.id);
+      return [...prev, { id: result.id, name: result.name }];
+    });
   };
+
+  const closeDropdown = React.useCallback(() => {
+    clearBlurTimeout();
+    setFocused(false);
+    setRawQuery('');
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
+      active.blur();
+    }
+  }, [clearBlurTimeout]);
+
+  const handleInputFocus = React.useCallback(() => {
+    if (multi) {
+      setStagingSelections(committedEntitySelections.map(e => ({ ...e })));
+      setRawQuery('');
+    }
+    onFocus();
+  }, [committedEntitySelections, multi, onFocus]);
+
+  React.useEffect(() => {
+    if (!multi) return;
+    onValueDropdownOpenChange?.(focused);
+  }, [multi, focused, onValueDropdownOpenChange]);
+
+  const showDropdownFooter = multi && focused && !searchBlocked;
+
+  const handleDropdownClearAll = React.useCallback(() => {
+    setStagingSelections([]);
+    onCommitEntitySelections?.([]);
+    closeDropdown();
+  }, [closeDropdown, onCommitEntitySelections]);
+
+  const handleDropdownDone = React.useCallback(() => {
+    onCommitEntitySelections?.(stagingSelections.map(e => ({ ...e })));
+    closeDropdown();
+  }, [closeDropdown, onCommitEntitySelections, stagingSelections]);
 
   return (
     <div ref={interactionRootRef} className="relative w-full">
@@ -1593,7 +1926,7 @@ function TableBlockEntityFilterInput({
         placeholder={multi ? multiSelectPlaceholder : undefined}
         value={inputValue}
         onChange={e => setRawQuery(e.target.value)}
-        onFocus={onFocus}
+        onFocus={multi ? handleInputFocus : onFocus}
         onBlur={onBlur}
       />
       {showDropdown && (
@@ -1607,7 +1940,16 @@ function TableBlockEntityFilterInput({
           onWheel={onEntityDropdownWheel}
           style={entityDropdownMaxHeight ? { maxHeight: entityDropdownMaxHeight } : undefined}
         >
-          <ResizableContainer duration={0.125}>
+          {showDropdownFooter && entityDropdownPlacement.side === 'top' ? (
+            <FilterValueDropdownFooter
+              edge="top"
+              showClearAll={stagingSelections.length > 0}
+              onClearAll={handleDropdownClearAll}
+              showDone={stagingSelections.length > 0}
+              onDone={handleDropdownDone}
+            />
+          ) : null}
+          <ResizableContainer duration={0.125} className="min-h-0 flex-1">
             <ResultsList
               ref={entityResultsListRef}
               onScroll={handleEntityResultsScroll}
@@ -1636,7 +1978,7 @@ function TableBlockEntityFilterInput({
                 >
                   <ResultContent
                     onClick={() => handleEntityPick(row.result)}
-                    active={Boolean(multi && selectedEntityIds?.has(row.result.id))}
+                    active={stagingEntityIds.has(row.result.id)}
                     alreadySelected={false}
                     result={row.result}
                   />
@@ -1666,6 +2008,15 @@ function TableBlockEntityFilterInput({
               ) : null}
             </ResultsList>
           </ResizableContainer>
+          {showDropdownFooter && entityDropdownPlacement.side !== 'top' ? (
+            <FilterValueDropdownFooter
+              edge="bottom"
+              showClearAll={stagingSelections.length > 0}
+              onClearAll={handleDropdownClearAll}
+              showDone={stagingSelections.length > 0}
+              onDone={handleDropdownDone}
+            />
+          ) : null}
         </div>
       )}
     </div>
@@ -1675,17 +2026,19 @@ function TableBlockEntityFilterInput({
 interface TableBlockSpaceFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;
   selectedValue: string;
-  selectedSpaceIds?: Set<string>;
+  committedSpaceSelections?: { id: string; name: string | null }[];
+  onCommitSpaceSelections?: (selections: { id: string; name: string | null }[]) => void;
   memberSpaceId?: string;
-  onToggleSpace?: (result: { id: string; name: string | null }) => void;
+  onValueDropdownOpenChange?: (open: boolean) => void;
 }
 
 function TableBlockSpaceFilterInput({
   onSelect,
   selectedValue,
-  selectedSpaceIds,
+  committedSpaceSelections = [],
+  onCommitSpaceSelections,
   memberSpaceId,
-  onToggleSpace,
+  onValueDropdownOpenChange,
 }: TableBlockSpaceFilterInputProps) {
   const interactionRootRef = React.useRef<HTMLDivElement>(null);
   const { focused, setFocused, onFocus, onBlur, clearBlurTimeout } = useFilterValueInputFocus(interactionRootRef);
@@ -1714,9 +2067,12 @@ function TableBlockSpaceFilterInput({
     });
   }, [memberSpaces]);
 
+  const multi = Boolean(onCommitSpaceSelections);
+  const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
+  const stagingSpaceIds = React.useMemo(() => new Set(stagingSelections.map(s => s.id)), [stagingSelections]);
+
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
-  const showQueryPanel = Boolean(query.trim());
-  const multi = Boolean(onToggleSpace);
+  const showQueryPanel = focused && Boolean(query.trim());
 
   const spaceFullRowCount = showScopedOnlyPanel ? defaultSpaceSuggestions.length : results.length;
 
@@ -1838,6 +2194,71 @@ function TableBlockSpaceFilterInput({
     },
     [showQueryPanel, showScopedOnlyPanel]
   );
+  const toggleStagingSpace = React.useCallback((result: { id: string; name: string | null }) => {
+    setStagingSelections(prev => {
+      const exists = prev.some(s => s.id === result.id);
+      if (exists) return prev.filter(s => s.id !== result.id);
+      return [...prev, { id: result.id, name: result.name }];
+    });
+  }, []);
+
+  const closeDropdown = React.useCallback(() => {
+    clearBlurTimeout();
+    setFocused(false);
+    setQuery('');
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && interactionRootRef.current?.contains(active)) {
+      active.blur();
+    }
+  }, [clearBlurTimeout]);
+
+  const handleInputFocus = React.useCallback(() => {
+    if (multi) {
+      setStagingSelections(committedSpaceSelections.map(s => ({ ...s })));
+      setQuery('');
+    }
+    onFocus();
+  }, [committedSpaceSelections, multi, onFocus]);
+
+  React.useEffect(() => {
+    if (!multi) return;
+    onValueDropdownOpenChange?.(focused);
+  }, [multi, focused, onValueDropdownOpenChange]);
+
+  const showDropdownFooter = multi && focused && (showScopedOnlyPanel || showQueryPanel);
+
+  const handleDropdownClearAll = React.useCallback(() => {
+    setStagingSelections([]);
+    onCommitSpaceSelections?.([]);
+    closeDropdown();
+  }, [closeDropdown, onCommitSpaceSelections]);
+
+  const handleDropdownDone = React.useCallback(() => {
+    onCommitSpaceSelections?.(stagingSelections.map(s => ({ ...s })));
+    closeDropdown();
+  }, [closeDropdown, onCommitSpaceSelections, stagingSelections]);
+
+  const spaceDropdownFooterTop =
+    showDropdownFooter && spaceDropdownPlacement.side === 'top' ? (
+      <FilterValueDropdownFooter
+        edge="top"
+        showClearAll={stagingSelections.length > 0}
+        onClearAll={handleDropdownClearAll}
+        showDone={stagingSelections.length > 0}
+        onDone={handleDropdownDone}
+      />
+    ) : null;
+  const spaceDropdownFooterBottom =
+    showDropdownFooter && spaceDropdownPlacement.side !== 'top' ? (
+      <FilterValueDropdownFooter
+        edge="bottom"
+        showClearAll={stagingSelections.length > 0}
+        onClearAll={handleDropdownClearAll}
+        showDone={stagingSelections.length > 0}
+        onDone={handleDropdownDone}
+      />
+    ) : null;
+
   const spaceDropdownClassName = cx(
     'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
     spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
@@ -1850,7 +2271,7 @@ function TableBlockSpaceFilterInput({
         placeholder={multi ? 'Search…' : undefined}
         value={inputDisplay}
         onChange={e => setQuery(e.target.value)}
-        onFocus={onFocus}
+        onFocus={multi ? handleInputFocus : onFocus}
         onBlur={onBlur}
       />
       {showScopedOnlyPanel && (
@@ -1860,7 +2281,8 @@ function TableBlockSpaceFilterInput({
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
-          <ResizableContainer duration={0.125}>
+          {spaceDropdownFooterTop}
+          <ResizableContainer duration={0.125} className="min-h-0 flex-1">
             <ResultsList
               ref={spaceScopedListRef}
               onScroll={handleSpaceResultsScroll}
@@ -1871,13 +2293,14 @@ function TableBlockSpaceFilterInput({
                   s.id,
                   s.name,
                   s.image ?? PLACEHOLDER_SPACE_IMAGE,
-                  () => (multi ? onToggleSpace?.(s) : onSelect?.(s)),
+                  () => (multi ? toggleStagingSpace(s) : onSelect?.(s)),
                   i,
-                  Boolean(selectedSpaceIds?.has(s.id))
+                  stagingSpaceIds.has(s.id)
                 )
               )}
             </ResultsList>
           </ResizableContainer>
+          {spaceDropdownFooterBottom}
         </div>
       )}
       {showQueryPanel && (
@@ -1887,7 +2310,8 @@ function TableBlockSpaceFilterInput({
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
         >
-          <ResizableContainer duration={0.125}>
+          {spaceDropdownFooterTop}
+          <ResizableContainer duration={0.125} className="min-h-0 flex-1">
             <ResultsList
               ref={spaceQueryListRef}
               onScroll={handleSpaceResultsScroll}
@@ -1901,14 +2325,15 @@ function TableBlockSpaceFilterInput({
                   image ?? PLACEHOLDER_SPACE_IMAGE,
                   () =>
                     multi
-                      ? onToggleSpace?.({ id: result.id, name: result.name })
+                      ? toggleStagingSpace({ id: result.id, name: result.name })
                       : onSelect?.({ id: result.id, name: result.name }),
                   i,
-                  Boolean(selectedSpaceIds?.has(result.id))
+                  stagingSpaceIds.has(result.id)
                 );
               })}
             </ResultsList>
           </ResizableContainer>
+          {spaceDropdownFooterBottom}
         </div>
       )}
     </div>

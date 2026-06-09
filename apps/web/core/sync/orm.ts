@@ -28,11 +28,7 @@ import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { GeoStore } from './store';
-
-function relationKey(r: Relation): string {
-  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
-}
+import { GeoStore, relationKey } from './store';
 
 export function resolveSearchSpaces(
   spaces: Array<string | SpaceEntity>,

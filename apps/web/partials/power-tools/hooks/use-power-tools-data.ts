@@ -212,6 +212,7 @@ export function usePowerToolsData(options?: {
     after: pageCursors[page],
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
+    includeUnpublishedLocal: true,
     sort,
   });
 
