@@ -363,6 +363,46 @@ describe('GeoStore', () => {
       expect(relations[0].id).toBe('local-view');
     });
 
+    it('should preserve locally-deleted relations alongside a same-key replacement', () => {
+      const publishedBlockRelation: Relation = {
+        ...mockRelation1,
+        id: 'relation-old',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      // Moving a block deletes its old BLOCKS relation and creates a same-key
+      // replacement. The deleted relation carries the pending delete op and must
+      // survive hydration, or the publish never deletes the old relation.
+      const deletedOld: Relation = {
+        ...publishedBlockRelation,
+        isDeleted: true,
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const replacement: Relation = {
+        ...publishedBlockRelation,
+        id: 'relation-new',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+
+      reactiveRelations.set([deletedOld, replacement]);
+
+      // A sync delivers the server copy of the old relation.
+      store.hydrateWith([
+        {
+          ...mockEntity1,
+          relations: [publishedBlockRelation],
+        },
+      ]);
+
+      const relations = reactiveRelations.get();
+      expect(relations.map(r => r.id).sort()).toEqual(['relation-new', 'relation-old']);
+      expect(relations.find(r => r.id === 'relation-old')?.isDeleted).toBe(true);
+    });
+
     it('should replace existing values and relations with same ID', () => {
       // Set initial data
       reactiveValues.set([mockValue1]);

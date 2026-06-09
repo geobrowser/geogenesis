@@ -28,7 +28,7 @@ import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { GeoStore, relationKey } from './store';
+import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
 export function resolveSearchSpaces(
   spaces: Array<string | SpaceEntity>,
@@ -123,7 +123,10 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
     }
   }
 
-  return [...localRelations, ...remotes];
+  // Collapse semantic duplicates (same from/type/to/space) like the store does
+  // on hydrate, so duplicate relations in the published graph don't render the
+  // same block multiple times through `mergeWith` reads.
+  return dedupeRelationsByKey([...localRelations, ...remotes]);
 }
 
 /**

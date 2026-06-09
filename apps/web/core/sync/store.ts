@@ -39,14 +39,22 @@ function preferRelation(existing: Relation, candidate: Relation): Relation {
   return candidateTs >= existingTs ? candidate : existing;
 }
 
-function dedupeRelationsByKey(relations: Relation[]): Relation[] {
+export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   const byKey = new Map<string, Relation>();
+  const deleted: Relation[] = [];
   for (const relation of relations) {
+    // Locally-deleted relations never render and carry pending delete ops;
+    // collapsing one into a same-key replacement (e.g. a moved block's
+    // recreated BLOCKS relation) would drop the delete op from the publish.
+    if (relation.isDeleted) {
+      deleted.push(relation);
+      continue;
+    }
     const key = relationKey(relation);
     const existing = byKey.get(key);
     byKey.set(key, existing ? preferRelation(existing, relation) : relation);
   }
-  return [...byKey.values()];
+  return [...byKey.values(), ...deleted];
 }
 
 /**
