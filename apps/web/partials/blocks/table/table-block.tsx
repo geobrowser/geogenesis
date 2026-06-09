@@ -479,7 +479,6 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
         >
           <DataBlockScopeDropdown source={source} setSource={setSource} disabled={!canEdit} variant="setup" />
           <QuerySetupTypesSelectEntityPopover
-            spaceId={spaceId}
             disabled={!canEdit || !canPickTypes}
             selectedTypes={setupTypePicks}
             onChangeSelectedTypes={setSetupTypePicks}

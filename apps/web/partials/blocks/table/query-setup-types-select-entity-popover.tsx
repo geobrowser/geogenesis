@@ -41,19 +41,6 @@ function spaceLabelForResult(result: SearchResult, space: SpaceEntity): string |
   return space.name ?? null;
 }
 
-function primarySpaceFields(
-  result: SearchResult,
-  preferredSpaceId?: string
-): Pick<QuerySetupTypePick, 'spaceId' | 'spaceName'> {
-  const spaces = result.spaces ?? [];
-  const preferred = preferredSpaceId
-    ? spaces.find(space => ID.equals(space.spaceId ?? space.id, preferredSpaceId))
-    : undefined;
-  const top = preferred ?? spaces[0];
-  if (!top?.spaceId) return {};
-  return { spaceId: top.spaceId, spaceName: spaceLabelForResult(result, top) };
-}
-
 const floatingShellClass =
   'relative w-[400px] max-w-[min(400px,calc(100vw-24px))] rounded-md border border-grey-02 bg-white shadow-lg';
 
@@ -62,7 +49,6 @@ const floatingInputClass =
 
 type QuerySetupTypesSelectEntityPopoverProps = {
   trigger: React.ReactNode;
-  spaceId: string;
   selectedTypes: QuerySetupTypePick[];
   onChangeSelectedTypes: (next: QuerySetupTypePick[]) => void;
   allowedTargetTypes: Property['relationValueTypes'] | undefined;
@@ -71,7 +57,6 @@ type QuerySetupTypesSelectEntityPopoverProps = {
 
 export function QuerySetupTypesSelectEntityPopover({
   trigger,
-  spaceId,
   selectedTypes,
   onChangeSelectedTypes,
   allowedTargetTypes,
@@ -153,9 +138,9 @@ export function QuerySetupTypesSelectEntityPopover({
         setDraft(prev => prev.filter(p => !ID.equals(p.id, id)));
         return;
       }
-      setDraft(prev => [...prev, { id, name, ...primarySpaceFields(result, spaceId) }]);
+      setDraft(prev => [...prev, { id, name }]);
     },
-    [isResultPickable, spaceId]
+    [isResultPickable]
   );
 
   const commitDraftWithSpace = React.useCallback(
