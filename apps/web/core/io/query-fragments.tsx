@@ -851,6 +851,31 @@ export const resultsQuery = graphql(/* GraphQL */ `
 `);
 
 /**
+ * Paginated `entities(filter)` returning the minimal SearchResult shape.
+ * Used by the property-mapping popover, which builds an `EntityFilter` with
+ * `relations.some` clauses so dataType / renderableType / relationValueTypes
+ * narrowing happens server-side (REST `/search` doesn't expose those).
+ *
+ * `entities()` is used instead of `search()` because GraphQL `search` returns
+ * an empty set on an empty query, but we need the popover to pre-populate
+ * before the user has typed anything.
+ */
+export const entitiesPageQuery = graphql(/* GraphQL */ `
+  query EntitiesPage($filter: EntityFilter, $first: Int!, $offset: Int!) {
+    entities(filter: $filter, first: $first, offset: $offset) {
+      id
+      name
+      description
+      spaceIds
+      types {
+        id
+        name
+      }
+    }
+  }
+`);
+
+/**
  * Batch name resolution via the `values` endpoint.
  * Matches multiple names in one request using `text: { inInsensitive }`.
  * Returns entity metadata + connection counts for second-order ranking.
