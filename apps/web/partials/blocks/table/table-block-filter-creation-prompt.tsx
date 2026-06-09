@@ -1932,7 +1932,7 @@ function TableBlockEntityFilterInput({
       {showDropdown && (
         <div
           className={cx(
-            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
+            'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
             entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
             entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
           )}
@@ -2259,6 +2259,12 @@ function TableBlockSpaceFilterInput({
       />
     ) : null;
 
+  const spaceDropdownClassName = cx(
+    'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
+    spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
+    spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
+  );
+
   return (
     <div ref={interactionRootRef} className="relative w-full">
       <Input
@@ -2270,11 +2276,7 @@ function TableBlockSpaceFilterInput({
       />
       {showScopedOnlyPanel && (
         <div
-          className={cx(
-            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
-            spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
-            spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
-          )}
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}
@@ -2303,11 +2305,7 @@ function TableBlockSpaceFilterInput({
       )}
       {showQueryPanel && (
         <div
-          className={cx(
-            'absolute isolate z-30 flex w-[254px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg',
-            spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
-            spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
-          )}
+          className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
           onWheel={onSpaceDropdownWheel}
           style={spaceDropdownMaxHeight ? { maxHeight: spaceDropdownMaxHeight } : undefined}

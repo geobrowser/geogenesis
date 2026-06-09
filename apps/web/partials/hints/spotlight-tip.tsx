@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -229,7 +230,11 @@ export function SpotlightTip({
             transition={TIP_MOTION}
           >
             <motion.div
-              className={`relative overflow-visible rounded-lg border border-grey-02 bg-white ${shellPaddingClassName} shadow-lg`}
+              className={cx(
+                'relative overflow-visible rounded-lg border border-grey-02 bg-white',
+                shellPaddingClassName,
+                'shadow-lg'
+              )}
             >
               <div
                 aria-hidden
@@ -240,7 +245,7 @@ export function SpotlightTip({
                     : { left: layout.arrowLeft }
                 }
               />
-              <div className={`rounded-lg bg-grey-01 ${innerPaddingClassName}`}>
+              <div className={cx('rounded-lg bg-grey-01', innerPaddingClassName)}>
                 <p id={titleId} className="text-center text-button font-medium text-text">
                   {children}
                 </p>

@@ -243,6 +243,8 @@ type GetEntitiesOrderedByPropertyOptions = {
   sortDirection: SortOrder;
   dataType?: string;
   spaceId?: string;
+  spaceIds?: string[];
+  typeIds?: string[];
   limit?: number;
   after?: string;
   /** Bounded forward skip relative to `after`. See `GetAllEntitiesOptions.offset`. */
@@ -250,10 +252,60 @@ type GetEntitiesOrderedByPropertyOptions = {
   filter?: EntityFilter;
 };
 
+function nonEmptyIds(ids?: readonly (string | null | undefined)[]): string[] | undefined {
+  const normalized = ids?.filter((id): id is string => typeof id === 'string' && id.length > 0) ?? [];
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function idsFromUuidFilter(filter?: UuidFilter): string[] | undefined {
+  if (!filter) return undefined;
+
+  if (Array.isArray(filter.in)) {
+    return nonEmptyIds(filter.in);
+  }
+
+  if (typeof filter.is === 'string') {
+    return [filter.is];
+  }
+
+  return undefined;
+}
+
 export function getEntitiesOrderedByPropertyConnection(
-  { propertyId, sortDirection, dataType, spaceId, limit, after, offset, filter }: GetEntitiesOrderedByPropertyOptions,
+  {
+    propertyId,
+    sortDirection,
+    dataType,
+    spaceId,
+    spaceIds,
+    typeIds,
+    limit,
+    after,
+    offset,
+    filter,
+  }: GetEntitiesOrderedByPropertyOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+  const extractedTypeId = extractSingleTypeIdFromFilter(filter);
+  const extractedTypeIds = extractTypeIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds =
+    nonEmptyIds(spaceIds) ?? idsFromUuidFilter(extractedSpaceIds) ?? (topLevelSpaceId ? [topLevelSpaceId] : undefined);
+
+  const topLevelTypeIds =
+    nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
+
+  let normalizedFilter = filter;
+  if (topLevelSpaceId || topLevelSpaceIds) {
+    normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
+  }
+  if (topLevelTypeIds) {
+    normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
+  }
+
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
     decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
@@ -262,11 +314,13 @@ export function getEntitiesOrderedByPropertyConnection(
       propertyId,
       sortDirection,
       dataType,
-      spaceId,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeIds: topLevelTypeIds,
       limit,
       after,
       offset,
-      filter,
+      filter: normalizedFilter,
     },
     signal,
   });

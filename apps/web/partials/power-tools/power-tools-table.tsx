@@ -22,6 +22,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
@@ -755,7 +757,8 @@ export function PowerToolsTable({
                     }
                   : undefined
               }
-              className={`absolute top-0 left-0 border-b border-grey-02 ${
+              className={cx(
+                'absolute top-0 left-0 border-b border-grey-02',
                 row.placeholder
                   ? 'bg-grey-01'
                   : selection && selection.selectedEntityIds.has(row.entityId)
@@ -763,7 +766,7 @@ export function PowerToolsTable({
                     : !isEditing
                       ? 'bg-grey-01/50'
                       : 'cursor-pointer hover:bg-grey-01'
-              }`}
+              )}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 width: '100%',

@@ -393,7 +393,10 @@ export function useQueryEntities({
         return [];
       }
 
-      if (deferUntilFetched && !isFetched) {
+      // Defer only on the initial load. During a keepPreviousData refetch (e.g. a sort,
+      // which is in the query key) the new key is !isFetched but `data` still holds the
+      // previous page — without this guard we'd flash the loading placeholder every sort.
+      if (deferUntilFetched && !isFetched && !isPlaceholderData) {
         return [];
       }
 
@@ -436,7 +439,9 @@ export function useQueryEntities({
   return {
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
-    isFetched: isFetched && enabled,
+    // Serving keepPreviousData means we have rows to show, so report fetched —
+    // otherwise consumers render the loading placeholder over valid data.
+    isFetched: (isFetched || isPlaceholderData) && enabled,
     /**
      * True while React Query is serving the previous page's data because
      * `placeholderData: keepPreviousData` is in effect and the current key

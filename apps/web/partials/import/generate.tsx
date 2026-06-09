@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import cx from 'classnames';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
@@ -439,9 +440,10 @@ export const Generate = ({ spaceId }: GenerateProps) => {
             onDrop={handleDrop}
             onClick={handleFileInputClick}
             onKeyDown={e => e.key === 'Enter' && handleFileInputClick()}
-            className={`flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors ${
+            className={cx(
+              'flex min-h-[200px] flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors',
               dragActive ? 'border-purple bg-ctaTertiary' : 'border-grey-02 bg-white'
-            }`}
+            )}
           >
             <p className="text-button font-semibold text-text">Drag & drop or select a file</p>
             <p className="text-metadata text-grey-04">Max {MAX_FILE_SIZE_MB}mb - CSV</p>

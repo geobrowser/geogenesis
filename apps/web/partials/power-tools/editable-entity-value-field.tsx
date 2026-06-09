@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
+import cx from 'classnames';
+
 import { IMAGE_ACCEPT } from '~/core/constants';
 import { useQueryProperty } from '~/core/sync/use-store';
 import type { Property, Relation } from '~/core/types';
@@ -215,7 +217,7 @@ export function EditableEntityValueField({
   if (renderableType === 'IMAGE' && entityId != null) {
     const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>
+      <div className={cx(valueFieldBorderClass, 'flex min-h-[2.25rem] items-center px-2 py-1.5')}>
         <TableImageField
           imageRelation={imageRelation}
           spaceId={spaceId}
@@ -231,7 +233,7 @@ export function EditableEntityValueField({
   if (renderableType === 'IMAGE' && onImageFileSelect) {
     const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div className={`${valueFieldBorderClass} flex flex-col`}>
+      <div className={cx(valueFieldBorderClass, 'flex flex-col')}>
         <ImageFileSelectButton
           onSelect={onImageFileSelect}
           onBeforeFileDialogOpen={onBeforeImageFileDialogOpen}
@@ -245,7 +247,7 @@ export function EditableEntityValueField({
   if (renderableType === 'IMAGE' && onSelectEntity && onUploadImage) {
     const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] flex-col gap-2 px-2 py-1.5`}>
+      <div className={cx(valueFieldBorderClass, 'flex min-h-[2.25rem] flex-col gap-2 px-2 py-1.5')}>
         <ImageUploadButton
           onUpload={async (file: File) => {
             const result = await onUploadImage(file);
@@ -270,7 +272,7 @@ export function EditableEntityValueField({
   if (renderableType === 'IMAGE' && onSelectEntity) {
     const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
-      <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>
+      <div className={cx(valueFieldBorderClass, 'flex min-h-[2.25rem] items-center px-2 py-1.5')}>
         <SelectEntityCompact
           spaceId={spaceId}
           selected={selectedEntities}
@@ -286,7 +288,10 @@ export function EditableEntityValueField({
     const valueFieldBorderClass = 'w-full rounded-md border border-grey-02 bg-white shadow-inner shadow-grey-02';
     return (
       <div
-        className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5 text-[0.8125rem] text-grey-04`}
+        className={cx(
+          valueFieldBorderClass,
+          'flex min-h-[2.25rem] items-center px-2 py-1.5 text-[0.8125rem] text-grey-04'
+        )}
       >
         Images can be set per row after adding the property.
       </div>
@@ -352,5 +357,5 @@ export function EditableEntityValueField({
       content = <TableStringField placeholder="Add value..." value={value} onChange={handleChange} />;
   }
 
-  return <div className={`${valueFieldBorderClass} flex min-h-[2.25rem] items-center px-2 py-1.5`}>{content}</div>;
+  return <div className={cx(valueFieldBorderClass, 'flex min-h-[2.25rem] items-center px-2 py-1.5')}>{content}</div>;
 }

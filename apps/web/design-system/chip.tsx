@@ -258,15 +258,18 @@ export function LinkableRelationChip({
 
   return (
     <div
-      className={`${linkableRelationChipStyles({
-        truncateLabel,
-        shouldClamp,
-        isDotsHovered,
-        isSpaceHovered,
-        isRelationHovered,
-        isDeleteHovered,
-        small,
-      })} ${className}`.trim()}
+      className={cx(
+        linkableRelationChipStyles({
+          truncateLabel,
+          shouldClamp,
+          isDotsHovered,
+          isSpaceHovered,
+          isRelationHovered,
+          isDeleteHovered,
+          small,
+        }),
+        className
+      )}
     >
       {disableLink ? (
         truncateLabel ? (
@@ -287,7 +290,7 @@ export function LinkableRelationChip({
         </Link>
       )}
       {verified && (
-        <span className={`inline-block shrink-0 pl-1.5${truncateLabel ? 'py-1' : ''}`}>
+        <span className={cx('inline-block shrink-0 pl-1.5', truncateLabel && 'py-1')}>
           <CheckCircle color="current" />
         </span>
       )}

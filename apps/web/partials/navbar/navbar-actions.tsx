@@ -6,6 +6,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
@@ -284,7 +285,7 @@ function ModeToggle() {
           <motion.div
             animate={controls}
             variants={variants}
-            className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
+            className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
           >
             <EyeSmall />
           </motion.div>
@@ -294,9 +295,10 @@ function ModeToggle() {
           <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
             <Popover.Anchor asChild>
               <div
-                className={`z-10 transition-colors duration-300 ${
+                className={cx(
+                  'z-10 transition-colors duration-300',
                   showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-                }`}
+                )}
               >
                 <BulkEdit />
               </div>

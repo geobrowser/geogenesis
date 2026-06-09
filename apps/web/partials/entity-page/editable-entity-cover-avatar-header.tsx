@@ -4,6 +4,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ChangeEvent, useRef, useState } from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { useEditableProperties } from '~/core/hooks/use-renderables';
@@ -236,16 +237,16 @@ const AvatarCoverInput = ({
         }}
         className={
           fitImage
-            ? `relative w-full rounded-lg ${imgUrl ? 'bg-transparent' : ''} ${!imgUrl && editable ? 'cursor-pointer' : ''}`
-            : `relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
+            ? cx('relative w-full rounded-lg', imgUrl && 'bg-transparent', !imgUrl && editable && 'cursor-pointer')
+            : cx(
+                'relative h-full w-full rounded-lg',
+                !imgUrl && editable && 'cursor-pointer',
                 isCover
-                  ? imgUrl
-                    ? 'bg-transparent'
-                    : ''
+                  ? imgUrl && 'bg-transparent'
                   : imgUrl
                     ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
                     : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
-              }`
+              )
         }
       >
         {/* Cover placeholder — two layers crossfaded via opacity for smooth hover */}
@@ -276,7 +277,10 @@ const AvatarCoverInput = ({
           ))}
         {editable && (
           <div
-            className={`absolute ${imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
+            className={cx(
+              'absolute flex transform items-center gap-[6px]',
+              imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
+            )}
           >
             {isUploading ? (
               <SquareButton disabled className="pointer-events-none border-none bg-white/85">
