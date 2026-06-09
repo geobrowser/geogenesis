@@ -54,7 +54,10 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
     // The proposal's addEditor action must call the DAO space contract directly.
     if (!space?.address) {
-      throw new Error('No space address found');
+      const message = 'No space address found. Please try again.';
+      console.error('No space address found for space:', spaceId);
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
     }
 
     // Existing editors already belong to the space; a duplicate editor request errors on vote.
