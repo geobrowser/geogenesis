@@ -30,7 +30,7 @@ export function RankingComposeLayout({ isMobile, globalRanking, myRanking }: Pro
         ref={isMobile ? mobileScrollRootRef : undefined}
         className={cx(
           'h-full min-h-0 flex-1',
-          isMobile && 'pt-4',
+          isMobile && 'pt-8',
           isDesktop ? 'grid grid-cols-2 items-stretch gap-6 overflow-hidden' : 'overflow-x-hidden overflow-y-auto'
         )}
       >
@@ -38,7 +38,7 @@ export function RankingComposeLayout({ isMobile, globalRanking, myRanking }: Pro
           {myRanking}
         </section>
 
-        {isMobile ? <div className="my-6 h-px shrink-0 bg-grey-02" role="separator" aria-hidden /> : null}
+        {isMobile ? <div className="my-8 h-px shrink-0 bg-grey-02" role="separator" aria-hidden /> : null}
 
         <section className={cx('flex min-h-0 flex-col overflow-hidden', isDesktop && 'order-1')}>
           {globalRanking}

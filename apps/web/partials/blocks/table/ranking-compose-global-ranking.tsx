@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
@@ -14,27 +13,11 @@ import type { Row } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Search } from '~/design-system/icons/search';
-import { Stars } from '~/design-system/icons/stars';
 
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot } from './ranking-compose-layout';
+import { RankingContributePointsBanner } from './ranking-contribute-points-banner';
 import { RankingEntryRow } from './ranking-entry-row';
-
-function RankingComposePointsBanner() {
-  if (!RANKING_POINTS_UI_ENABLED) {
-    return null;
-  }
-
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-purple/10 px-3 py-2.5 text-metadata text-purple">
-      <Stars color="purple" />
-      <span className="flex-1">Earn up to 10 points by contributing</span>
-      <span className="text-purple" aria-hidden>
-        ?
-      </span>
-    </div>
-  );
-}
 
 function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
   return (
@@ -85,27 +68,22 @@ function RankingComposePickRow({
       }}
       onKeyDown={handleKeyDown}
       className={cx(
-        'flex w-full items-start gap-3 py-3 text-left transition',
+        'flex w-full items-center py-3 text-left transition',
         isInMyRanking ? 'cursor-default' : 'cursor-pointer hover:bg-grey-01'
       )}
     >
-      {rank != null && rank > 0 ? (
-        <span className="mt-4 w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
-      ) : (
-        <span className="w-5 shrink-0" aria-hidden />
-      )}
-      <div className="min-w-0 flex-1">
-        <RankingEntryRow
-          linkToEntity={false}
-          entry={{
-            entityId,
-            name,
-            description,
-            image: imageUrl,
-          }}
-          spaceId={spaceId}
-        />
-      </div>
+      <RankingEntryRow
+        rank={rank}
+        rankStyle="leading"
+        linkToEntity={false}
+        entry={{
+          entityId,
+          name,
+          description,
+          image: imageUrl,
+        }}
+        spaceId={spaceId}
+      />
     </div>
   );
 }
@@ -211,6 +189,8 @@ export function RankingComposeGlobalRanking({
     }
   }, [searchQuery, onSearchOpenChange]);
 
+  const isSearchingWithNoResults = searchQuery.trim().length > 0 && !hasVisibleRankableEntities && !isLoadingRows;
+
   const renderPickEntity = (id: string, globalRank?: number) => {
     const entry = rankableEntriesById.get(id);
     const row = rowsByEntityId.get(id);
@@ -234,10 +214,12 @@ export function RankingComposeGlobalRanking({
       <div
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-          isDesktop && 'h-10 border-b border-grey-02'
+          isDesktop && 'border-b border-grey-02 pb-4'
         )}
       >
-        <h2 className="m-0 min-w-0 truncate text-smallTitle font-medium text-text">Global ranking</h2>
+        <h2 className={cx('m-0 min-w-0 truncate font-bold text-text', isMobile ? 'text-[22px]' : 'text-[17px]')}>
+          Global ranking
+        </h2>
         <div className="flex items-center justify-self-end">
           <Button
             type="button"
@@ -254,46 +236,46 @@ export function RankingComposeGlobalRanking({
           />
         </div>
       </div>
-      {isMobile && !hasPopulatedMyRanking ? <RankingComposePointsBanner /> : null}
-      {isSearchOpen ? (
-        <div className="shrink-0 py-2">
-          <div className="relative flex items-center">
-            <span className="pointer-events-none absolute left-2 flex">
-              <Search color="grey-04" />
-            </span>
-            <input
-              ref={searchInputRef}
-              type="search"
-              value={searchQuery}
-              onChange={e => onSearchQueryChange(e.target.value)}
-              placeholder="Search"
-              aria-label="Search rankable entities"
-              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-            />
+      <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
+        {isMobile && !hasPopulatedMyRanking ? <RankingContributePointsBanner /> : null}
+        {isSearchOpen ? (
+          <div className="shrink-0 py-2">
+            <div className="relative flex items-center">
+              <span className="pointer-events-none absolute left-2 flex">
+                <Search color="grey-04" />
+              </span>
+              <input
+                ref={searchInputRef}
+                type="search"
+                value={searchQuery}
+                onChange={e => onSearchQueryChange(e.target.value)}
+                placeholder="Search"
+                aria-label="Search rankable entities"
+                className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
+              />
+            </div>
           </div>
-          {isSearchOpen && !hasVisibleRankableEntities && !isLoadingRows ? (
+        ) : null}
+        <div
+          ref={isDesktop ? listScrollRootRef : undefined}
+          className={cx(isDesktop && 'min-h-0 flex-1 overflow-y-auto')}
+        >
+          {isLoadingRows && !hasAnyRankableEntityIds ? (
+            <p className="py-6 text-metadata text-grey-03">Loading entities…</p>
+          ) : isSearchingWithNoResults ? (
             <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
-          ) : null}
+          ) : !hasVisibleRankableEntities ? null : (
+            <>
+              {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+              {showRankedUnrankedDivider ? <div className="my-3 border-t border-grey-02" role="separator" /> : null}
+              {filteredUnrankedIds.map(id => renderPickEntity(id))}
+              {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+              {canLoadMore && isFetchingNextPage ? (
+                <p className="py-3 text-metadata text-grey-03">Loading more…</p>
+              ) : null}
+            </>
+          )}
         </div>
-      ) : null}
-      <div
-        ref={isDesktop ? listScrollRootRef : undefined}
-        className={cx(isDesktop && 'min-h-0 flex-1 overflow-y-auto')}
-      >
-        {isLoadingRows && !hasAnyRankableEntityIds ? (
-          <p className="py-6 text-metadata text-grey-03">Loading entities…</p>
-        ) : !hasVisibleRankableEntities ? null : (
-          <>
-            {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-            {showRankedUnrankedDivider ? <div className="my-3 border-t border-grey-02" role="separator" /> : null}
-            {filteredUnrankedIds.map(id => renderPickEntity(id))}
-            {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-            {canLoadMore && isFetchingNextPage ? (
-              <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-            ) : null}
-            <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
-          </>
-        )}
       </div>
     </div>
   );

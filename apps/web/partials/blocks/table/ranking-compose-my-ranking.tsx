@@ -10,6 +10,7 @@ import type { Row } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
+import { RANKING_COMPOSE_PUBLISH_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
@@ -52,18 +53,20 @@ export function RankingComposeMyRanking({
   const isDesktop = !isMobile;
 
   return (
-    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}>
+    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1', isMobile && 'border-t border-grey-02 pt-8')}>
       <div
         className={cx(
           'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-          isDesktop && 'h-10 border-b border-grey-02'
+          isDesktop && 'border-b border-grey-02 pb-4'
         )}
       >
-        <h2 className="m-0 min-w-0 truncate text-smallTitle font-medium text-text">My ranking</h2>
-        {!hidePublishButton ? (
+        <h2 className={cx('m-0 min-w-0 truncate font-bold text-text', isMobile ? 'text-[22px]' : 'text-[17px]')}>
+          My ranking
+        </h2>
+        {isDesktop && !hidePublishButton ? (
           <Button
             variant="primary"
-            className="h-8 justify-self-end !rounded-full px-3 whitespace-nowrap"
+            className={cx(RANKING_COMPOSE_PUBLISH_BUTTON_CLASS, 'justify-self-end')}
             disabled={!canPublish}
             onClick={onPublish}
           >
@@ -71,17 +74,17 @@ export function RankingComposeMyRanking({
           </Button>
         ) : null}
       </div>
-      <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto')}>
+      <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}>
         {isLoading ? (
           <p className="text-metadata text-grey-03">Loading your ranking…</p>
         ) : displayEntityIds.length === 0 ? (
-          <p className="text-metadata text-grey-04">Select entries from Global ranking to build your list.</p>
+          <p className="text-metadata text-grey-04">Add or search from movies in global ranking to get started</p>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
             onReorder={onReorder}
             onDragStart={() => onActiveSwipeRowKeyChange(null)}
-            className="flex flex-col gap-3"
+            className="flex flex-col"
             renderItem={(entityId, index) => {
               const entry = entriesById.get(entityId);
               const row = rowsByEntityId.get(entityId);
@@ -102,11 +105,9 @@ export function RankingComposeMyRanking({
                 />
               );
 
-              if (!isMobile) {
-                return entryRow;
-              }
-
-              return (
+              const rowContent = !isMobile ? (
+                entryRow
+              ) : (
                 <RankingComposeSwipeableRow
                   rowKey={`my:${entityId}`}
                   activeRowKey={activeSwipeRowKey}
@@ -119,6 +120,8 @@ export function RankingComposeMyRanking({
                   {entryRow}
                 </RankingComposeSwipeableRow>
               );
+
+              return <div className="w-full py-3">{rowContent}</div>;
             }}
           />
         )}
