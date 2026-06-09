@@ -14,6 +14,7 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { TYPE_ICONS, TypeIconComponent } from './type-icons';
 
@@ -26,6 +27,7 @@ interface Props {
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   // Show all available renderable types
   const availableOptions = React.useMemo(() => {
@@ -85,13 +87,15 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
         </button>
       </DropdownPrimitive.Trigger>
       {/*
-        Portal so the menu can escape ancestor `overflow-hidden` + `transform`
-        clipping (e.g. when this dropdown lives inside SelectEntity's popover
-        shell — without the portal, the menu opens but is invisible because
-        Radix's transform-positioned `Content` is clipped by the parent's
-        rounded overflow).
+        Portal into the shared `.elevated-popover` container (same as
+        SelectEntity's own popover) so the menu (1) escapes ancestor
+        `overflow-hidden` + `transform` clipping when nested inside
+        SelectEntity's popover shell, and (2) inherits the elevated z-index
+        instead of being capped at z-60 by the global
+        `[data-radix-popper-content-wrapper]` rule — which would otherwise
+        render it BEHIND the "Find property…" dropdown.
       */}
-      <DropdownPrimitive.Portal>
+      <DropdownPrimitive.Portal container={elevatedPopoverPortal ?? undefined}>
         <DropdownPrimitive.Content
           align={align}
           side={side}
