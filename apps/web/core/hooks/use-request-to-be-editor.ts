@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -25,6 +26,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { isEditor } = useAccessControl(spaceId ?? '');
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -33,6 +35,12 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
   const handleRequestToBeEditor = useCallback(async () => {
     if (!smartAccount) {
       throw new Error('No smart account available');
+    }
+
+    // Existing editors already belong to the space; a duplicate editor request errors on vote.
+    if (isEditor) {
+      dispatch({ type: 'ERROR', payload: 'You are already an editor of this space' });
+      throw new Error('User is already an editor of the space');
     }
 
     if (!personalSpaceId || !isRegistered) {
@@ -82,7 +90,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       },
       onRight: hash => console.log('Successfully requested to be editor. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx, isEditor]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeEditor,
