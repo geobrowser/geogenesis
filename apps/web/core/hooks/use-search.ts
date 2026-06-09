@@ -76,7 +76,8 @@ export function useSearch({
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
 
-  const additionalSpaceIds = useGlobalSearchSpaceIds();
+  const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
+  const additionalSpaceIds = filterBySpace ? undefined : globalAdditionalSpaceIds;
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
