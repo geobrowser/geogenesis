@@ -52,7 +52,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const router = useRouter();
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
-  const { name, entityId, rows: _rows, filterState, source } = useDataBlock();
+  const { name, entityId, rows: _rows, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
@@ -204,7 +204,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   };
 
   const handleCreateNew = () => {
-    const publishSpaceIds = getRankingPublishSpaceIds(source, filterState, spaceId);
+    const publishSpaceIds = getRankingPublishSpaceIds(filterState, spaceId);
     const publishSpaceId = publishSpaceIds[0] ?? spaceId;
     const draftName = searchQuery.trim();
 

@@ -66,6 +66,7 @@ type GetSourceArgs = {
   dataEntityRelations: Relation[];
   currentSpaceId: string;
   filterState: Filter[];
+  scopeFromFiltersOnly?: boolean;
 };
 
 function sourceTypeRelations(blockId: string, dataEntityRelations: Relation[] = []): Relation[] {
@@ -113,7 +114,38 @@ function currentSourceTypeRelation(blockId: string, dataEntityRelations: Relatio
  * for the type of source as a {@link Source}. If no source is found, returns
  * the full Geo graph.
  */
-export function getSource({ blockId, dataEntityRelations, filterState }: GetSourceArgs): Source {
+export function getScopeFromFilters(filterState: Filter[]): Source {
+  const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
+
+  if (maybeEntityFilter) {
+    return {
+      type: 'RELATIONS',
+      value: maybeEntityFilter.value,
+      name: maybeEntityFilter.valueName,
+    };
+  }
+
+  const spaceIdsFromFilters = uniqueSpaceFilterIds(filterState);
+  if (spaceIdsFromFilters.length > 0) {
+    return {
+      type: 'SPACES',
+      value: spaceIdsFromFilters,
+    };
+  }
+
+  return { type: 'GEO' };
+}
+
+export function getSource({
+  blockId,
+  dataEntityRelations,
+  filterState,
+  scopeFromFiltersOnly = false,
+}: GetSourceArgs): Source {
+  if (scopeFromFiltersOnly) {
+    return getScopeFromFilters(filterState);
+  }
+
   const sourceType = currentSourceTypeRelation(blockId, dataEntityRelations)?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);

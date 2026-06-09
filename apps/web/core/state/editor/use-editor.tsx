@@ -629,7 +629,7 @@ export function useEditorStore() {
             break;
           }
           case 'RANKING': {
-            for (const relation of makeInitialRankingBlockRelations(EntityId(node.id), spaceId, 'GEO')) {
+            for (const relation of makeInitialRankingBlockRelations(EntityId(node.id), spaceId)) {
               storage.relations.set(relation);
             }
             break;
