@@ -2,9 +2,11 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, type PanInfo, motion, useDragControls } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
@@ -28,11 +30,11 @@ type Props = {
   onClose: () => void;
 };
 
-/** Fixed top offset so the sheet position does not shift while entity data loads. */
-
 const ENTITY_SHEET_TOP_OFFSET_PX = 200;
 
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
+  const isMobile = useIsMobileLayout();
+
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
   const dragControls = useDragControls();
@@ -94,27 +96,34 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           <motion.div
             role="dialog"
             aria-modal="true"
-            drag="y"
+            drag={isMobile ? 'y' : false}
             dragControls={dragControls}
             dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.12}
             onDragEnd={handleDragEnd}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
+            initial={isMobile ? { y: '100%' } : { x: '100%' }}
+            animate={isMobile ? { y: 0 } : { x: 0 }}
+            exit={isMobile ? { y: '100%' } : { x: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
-            style={{ top: ENTITY_SHEET_TOP_OFFSET_PX }}
+            className={cx(
+              'shadow-2xl absolute z-1 flex flex-col overflow-hidden bg-white',
+              isMobile
+                ? 'rounded-t-2xl inset-x-0 bottom-0'
+                : 'rounded-l-2xl inset-y-0 right-0 w-[min(600px,100vw)] border-l border-grey-02'
+            )}
+            style={isMobile ? { top: ENTITY_SHEET_TOP_OFFSET_PX } : undefined}
             onClick={event => event.stopPropagation()}
           >
-            <div
-              className="flex shrink-0 cursor-grab justify-center pt-2 pb-1 active:cursor-grabbing"
-              aria-hidden
-              onPointerDown={event => dragControls.start(event)}
-            >
-              <div className="h-1 w-10 rounded-full bg-grey-02" />
-            </div>
+            {isMobile ? (
+              <div
+                className="flex shrink-0 cursor-grab justify-center pt-2 pb-1 active:cursor-grabbing"
+                aria-hidden
+                onPointerDown={event => dragControls.start(event)}
+              >
+                <div className="h-1 w-10 rounded-full bg-grey-02" />
+              </div>
+            ) : null}
 
             <EntitySidePanelPopoverPortalProvider>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

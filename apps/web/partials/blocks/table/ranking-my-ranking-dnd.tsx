@@ -25,7 +25,8 @@ type Props = {
   onDragStart?: () => void;
   onDragEnd?: () => void;
   className?: string;
-  renderItem: (entityId: string, index: number) => React.ReactNode;
+  /** `isDragActive` is true while any row in the list is being dragged (incl. the drag overlay). */
+  renderItem: (entityId: string, index: number, isDragActive?: boolean) => React.ReactNode;
 };
 
 function RankingMyRankingSortableItem({ id, children }: { id: string; children: React.ReactNode }) {
@@ -176,7 +177,7 @@ export function RankingMyRankingDndList({
         <div className={className}>
           {items.map((entityId, index) => (
             <RankingMyRankingSortableItem key={entityId} id={entityId}>
-              {renderItem(entityId, index)}
+              {renderItem(entityId, index, activeId !== null)}
             </RankingMyRankingSortableItem>
           ))}
         </div>
@@ -188,7 +189,7 @@ export function RankingMyRankingDndList({
             className="cursor-grabbing rounded-lg bg-white shadow-lg ring-1 ring-grey-02"
             style={{ width: activeWidth ?? undefined }}
           >
-            {renderItemRef.current(activeId, activeIndex)}
+            {renderItemRef.current(activeId, activeIndex, true)}
           </div>
         ) : null}
       </DragOverlay>

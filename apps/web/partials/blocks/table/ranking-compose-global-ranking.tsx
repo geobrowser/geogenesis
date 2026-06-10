@@ -16,6 +16,7 @@ import { Search } from '~/design-system/icons/search';
 
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot } from './ranking-compose-layout';
+import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingContributePointsBanner } from './ranking-contribute-points-banner';
 import { RankingEntryRow } from './ranking-entry-row';
 
@@ -112,6 +113,9 @@ type Props = {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
+  activeSwipeRowKey: string | null;
+  onActiveSwipeRowKeyChange: (key: string | null) => void;
+  onViewEntity: (entityId: string) => void;
 };
 
 export function RankingComposeGlobalRanking({
@@ -138,6 +142,9 @@ export function RankingComposeGlobalRanking({
   searchInputRef,
   onAddToMyRanking,
   onCreateNew,
+  activeSwipeRowKey,
+  onActiveSwipeRowKeyChange,
+  onViewEntity,
 }: Props) {
   const isDesktop = !isMobile;
   const mobileScrollRoot = useRankingComposeScrollRoot();
@@ -191,12 +198,15 @@ export function RankingComposeGlobalRanking({
 
   const isSearchingWithNoResults = searchQuery.trim().length > 0 && !hasVisibleRankableEntities && !isLoadingRows;
 
+  const hasGlobalRankedData = globalRankByEntityId.size > 0;
+  const showContributePointsBanner = !hasPopulatedMyRanking && hasGlobalRankedData;
+
   const renderPickEntity = (id: string, globalRank?: number) => {
     const entry = rankableEntriesById.get(id);
     const row = rowsByEntityId.get(id);
-    return (
+    const isInMyRanking = orderedIds.includes(id);
+    const pickRow = (
       <RankingComposePickRow
-        key={id}
         entityId={id}
         spaceId={spaceId}
         rank={globalRank}
@@ -204,8 +214,26 @@ export function RankingComposeGlobalRanking({
         description={entry?.description ?? (row ? getRowDescription(row) : null)}
         imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
-        isInMyRanking={orderedIds.includes(id)}
+        isInMyRanking={isInMyRanking}
       />
+    );
+
+    if (!isMobile) {
+      return <React.Fragment key={id}>{pickRow}</React.Fragment>;
+    }
+
+    return (
+      <RankingComposeSwipeableRow
+        key={id}
+        rowKey={`global:${id}`}
+        activeRowKey={activeSwipeRowKey}
+        onActiveRowKeyChange={onActiveSwipeRowKeyChange}
+        onView={() => onViewEntity(id)}
+        onPrimaryClick={() => onAddToMyRanking(id)}
+        primaryDisabled={isInMyRanking}
+      >
+        {pickRow}
+      </RankingComposeSwipeableRow>
     );
   };
 
@@ -237,7 +265,11 @@ export function RankingComposeGlobalRanking({
         </div>
       </div>
       <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
-        {isMobile && !hasPopulatedMyRanking ? <RankingContributePointsBanner /> : null}
+        {showContributePointsBanner ? (
+          <div className={cx(isDesktop && 'mb-4 shrink-0')}>
+            <RankingContributePointsBanner />
+          </div>
+        ) : null}
         {isSearchOpen ? (
           <div className="shrink-0 py-2">
             <div className="relative flex items-center">
