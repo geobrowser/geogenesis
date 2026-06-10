@@ -16,7 +16,7 @@ export function useRankingComposeAccess(spaceId: string) {
   const { open: openSignInPrompt } = useSignInPrompt();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
-  const { isMember, isLoading: isLoadingAccess } = useAccessControl(spaceId);
+  const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const { requestToBeMember, status: membershipRequestStatus } = useRequestToBeMember({ spaceId });
   const membershipRequestedRef = useRef(false);
 
@@ -26,7 +26,7 @@ export function useRankingComposeAccess(spaceId: string) {
     if (isLoading || !isFetched) return 'loading';
     if (!smartAccount) return 'needs-login';
     if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
-    if (space?.type === 'DAO' && !isMember) return 'needs-membership';
+    if (space?.type === 'DAO' && !canEdit) return 'needs-membership';
     return 'ready';
   })();
 
@@ -40,7 +40,7 @@ export function useRankingComposeAccess(spaceId: string) {
       return false;
     }
 
-    if (space?.type === 'DAO' && !isMember) {
+    if (space?.type === 'DAO' && !canEdit) {
       if (!membershipRequestedRef.current && membershipRequestStatus !== 'pending') {
         membershipRequestedRef.current = true;
         requestToBeMember();
@@ -55,7 +55,7 @@ export function useRankingComposeAccess(spaceId: string) {
     isRegistered,
     personalSpaceId,
     space?.type,
-    isMember,
+    canEdit,
     membershipRequestStatus,
     requestToBeMember,
   ]);

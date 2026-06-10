@@ -20,6 +20,7 @@ import { describeError } from '~/core/utils/error-diagnostics';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
+import { linearVoteWeight } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
 
 /** One ballot per author — avoids double-counting duplicate ballots per author. */
@@ -103,12 +104,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         return false;
       }
 
-      const votes = slots
-        .filter(slot => Boolean(slot.id))
-        .map(slot => ({
-          entityId: slot.id,
-          spaceId: slot.spaceId ?? spaceId,
-        }));
+      const filteredSlots = slots.filter(slot => Boolean(slot.id));
+      const votes = filteredSlots.map((slot, index) => ({
+        entityId: slot.id,
+        spaceId: slot.spaceId ?? spaceId,
+        value: linearVoteWeight(index, filteredSlots.length),
+      }));
 
       if (votes.length === 0) return false;
 
@@ -122,12 +123,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const result = myRankEntity
             ? await geo.ranks.update({
                 rankId: myRankEntity.id,
-                rankType: 'ORDINAL',
+                rankType: 'WEIGHTED',
                 votes,
               })
             : Ops.ranks.create({
                 name: rankName,
-                rankType: 'ORDINAL',
+                rankType: 'WEIGHTED',
                 blockId,
                 votes,
               });

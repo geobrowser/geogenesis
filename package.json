@@ -34,9 +34,6 @@
   "overrides": {
     "permissionless": "^0.3.4"
   },
-  "patchedDependencies": {
-    "@geoprotocol/geo-sdk@0.19.3": "patches/@geoprotocol%2Fgeo-sdk@0.19.3.patch"
-  },
   "private": true,
   "workspaces": [
     "packages/*",
