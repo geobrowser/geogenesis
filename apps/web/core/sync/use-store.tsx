@@ -418,7 +418,9 @@ export function useQueryEntities({
       if (data?.ids) {
         const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
 
-        const isFirstPage = offset === undefined || offset === 0;
+        // Cursor-anchored fetches of later pages arrive as (after, offset:
+        // undefined), so a missing offset alone does not mean page one.
+        const isFirstPage = after === undefined && (offset === undefined || offset === 0);
         if (!isFirstPage || !includeUnpublishedLocal) {
           return serverEntities;
         }
@@ -601,14 +603,31 @@ interface FindManyParameters {
   after?: string;
   offset?: number;
   where: WhereCondition;
+  /**
+   * When true, prepends unpublished local entities that match `where` to the
+   * result. Use for fetch-all flows (e.g. power tools "apply to all") so they
+   * cover the same unpublished entities the paginated views display.
+   */
+  includeUnpublishedLocal?: boolean;
 }
 
 export function useQueryEntitiesAsync() {
   const cache = useQueryClient();
   const { store } = useSyncEngine();
 
-  return ({ where, first = 9, after, offset }: FindManyParameters) =>
-    E.findMany({ store, cache, where, first, after, offset });
+  return async ({ where, first = 9, after, offset, includeUnpublishedLocal = false }: FindManyParameters) => {
+    const entities = await E.findMany({ store, cache, where, first, after, offset });
+    // Match useQueryEntities: only merge unpublished locals on the first page,
+    // otherwise paginating callers would re-prepend them on every page.
+    const isFirstPage = after === undefined && (offset === undefined || offset === 0);
+    if (!includeUnpublishedLocal || !isFirstPage) return entities;
+    return mergeUnpublishedLocalEntities(
+      store,
+      where,
+      entities,
+      entities.map(e => e.id)
+    );
+  };
 }
 
 export function useQueryEntityAsync() {
