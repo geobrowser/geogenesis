@@ -64,7 +64,7 @@ function buildVoteOps(rankId: string, votes: RankVote[]): { ops: Op[]; voteIds: 
   votes.forEach(vote => {
     const voteEntityId = IdUtils.generate();
     const relationId = IdUtils.generate();
-    const position = Position.generate({ after: previousPosition });
+    const position = Position.generateBetween(previousPosition, null);
     previousPosition = position;
 
     voteIds.push(voteEntityId);
