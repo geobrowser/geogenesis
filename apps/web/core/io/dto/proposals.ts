@@ -49,6 +49,8 @@ export type Proposal = {
   };
   subspaceDetails?: SubspaceProposalDetails;
   spaceTopicDetails?: SpaceTopicProposalDetails;
+  /** The person being added/removed, for membership proposals. */
+  targetProfile?: Profile;
 };
 
 export function ProposalDto(
