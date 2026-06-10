@@ -1,5 +1,7 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -20,6 +22,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
     enabled: stableIds.length > 0,
     where: { id: { in: stableIds } },
     first: stableIds.length || undefined,
+    placeholderData: keepPreviousData,
   });
 
   const byId = React.useMemo(() => new Map(entities.map(e => [e.id, e])), [entities]);

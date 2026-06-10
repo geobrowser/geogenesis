@@ -10,6 +10,7 @@ import type { Row } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
+import { RankingMyRankingDesktopRow } from './ranking-block-ui';
 import { RANKING_COMPOSE_PUBLISH_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
@@ -85,7 +86,7 @@ export function RankingComposeMyRanking({
             onReorder={onReorder}
             onDragStart={() => onActiveSwipeRowKeyChange(null)}
             className="flex flex-col"
-            renderItem={(entityId, index) => {
+            renderItem={(entityId, index, isDragActive) => {
               const entry = entriesById.get(entityId);
               const row = rowsByEntityId.get(entityId);
               if (!entry && !row) return null;
@@ -106,7 +107,14 @@ export function RankingComposeMyRanking({
               );
 
               const rowContent = !isMobile ? (
-                entryRow
+                <RankingMyRankingDesktopRow
+                  entityName={entryDisplay.name}
+                  onRemove={() => onRemove(entityId)}
+                  onOpenSidePanel={() => onView(entityId)}
+                  hideActions={isDragActive}
+                >
+                  {entryRow}
+                </RankingMyRankingDesktopRow>
               ) : (
                 <RankingComposeSwipeableRow
                   rowKey={`my:${entityId}`}

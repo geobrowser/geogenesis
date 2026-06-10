@@ -192,7 +192,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const openEntitySheet = (entityId: string) => {
     setCreateEntityFlow(null);
-    const entry = myEntriesById.get(entityId);
+    const entry = myEntriesById.get(entityId) ?? rankableEntriesById.get(entityId);
     const row = rowsByEntityId.get(entityId);
     setEntitySheetTarget({
       entityId,
@@ -343,6 +343,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 searchInputRef={searchInputRef}
                 onAddToMyRanking={addToMyRanking}
                 onCreateNew={handleCreateNew}
+                activeSwipeRowKey={activeSwipeRowKey}
+                onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
+                onViewEntity={openEntitySheet}
               />
             }
           />

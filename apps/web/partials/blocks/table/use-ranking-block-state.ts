@@ -208,7 +208,7 @@ export function useRankingBlockState({
 
   const openEntitySheet = React.useCallback(
     (targetEntityId: string) => {
-      const entry = myRankingEntryByEntityId.get(targetEntityId);
+      const entry = myRankingEntryByEntityId.get(targetEntityId) ?? globalEntriesById.get(targetEntityId);
       const row = rowsByEntityId.get(targetEntityId);
       setEntitySheetTarget({
         entityId: targetEntityId,
@@ -218,7 +218,7 @@ export function useRankingBlockState({
         previewDescription: entry?.description ?? (row ? getRowDescription(row) : null),
       });
     },
-    [myRankingEntryByEntityId, resolveEntitySpaceId, rowsByEntityId]
+    [globalEntriesById, myRankingEntryByEntityId, resolveEntitySpaceId, rowsByEntityId]
   );
 
   const buildSubmissionSlots = React.useCallback(

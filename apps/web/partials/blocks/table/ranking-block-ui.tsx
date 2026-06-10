@@ -5,9 +5,63 @@ import * as React from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 
+import { SidePanel } from '~/design-system/icons/side-panel';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
 import { RankingEmptyStateArt } from './ranking-empty-state-art';
+
+export function RankingMyRankingDesktopRow({
+  entityName,
+  onRemove,
+  onOpenSidePanel,
+  hideActions = false,
+  children,
+}: {
+  entityName: string;
+  onRemove: () => void;
+  onOpenSidePanel: () => void;
+  /** Hides the side panel icon entirely, e.g. while a drag-to-reorder is active. */
+  hideActions?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="group/myrank flex w-full items-center gap-2">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Remove ${entityName} from my ranking`}
+        className="min-w-0 flex-1 cursor-pointer"
+        onClick={onRemove}
+        onKeyDown={event => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onRemove();
+          }
+        }}
+      >
+        {children}
+      </div>
+      <button
+        type="button"
+        aria-label="Open entity in side panel"
+        className={cx(
+          'invisible inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-grey-01 p-1.5 text-grey-03 opacity-0 transition duration-200 hover:bg-grey-02 hover:text-text focus:outline-hidden',
+          !hideActions &&
+            'group-focus-within/myrank:visible group-focus-within/myrank:opacity-100 group-hover/myrank:visible group-hover/myrank:opacity-100'
+        )}
+        onPointerDown={event => event.stopPropagation()}
+        onMouseDown={event => event.stopPropagation()}
+        onClick={event => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenSidePanel();
+        }}
+      >
+        <SidePanel />
+      </button>
+    </div>
+  );
+}
 
 export function RankingTabButton({
   active,
