@@ -119,7 +119,6 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         let ops;
         let rankId: string;
         try {
-          console.log('votes==============', blockId, spaceId, votes);
           const result = myRankEntity
             ? await geo.ranks.update({
                 rankId: myRankEntity.id,
