@@ -16,6 +16,7 @@ import { checkEntityExists } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
+import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
@@ -107,11 +108,24 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       const votes = filteredSlots.map((slot, index) => ({
         entityId: slot.id,
-        spaceId: slot.spaceId ?? spaceId,
+        spaceId: validateSpaceId(slot.spaceId) ? slot.spaceId : spaceId,
         value: linearVoteWeight(index, filteredSlots.length),
       }));
 
       if (votes.length === 0) return false;
+
+      const invalidVote = votes.find(vote => !validateEntityId(vote.entityId));
+      if (invalidVote) {
+        console.error('[useRankingSubmissions] Invalid vote entity id:', invalidVote.entityId);
+        reportError(`Failed to publish ranking: invalid entity id "${invalidVote.entityId}"`);
+        return false;
+      }
+
+      if (myRankEntity && !validateEntityId(myRankEntity.id)) {
+        console.error('[useRankingSubmissions] Invalid rank entity id:', myRankEntity.id);
+        reportError(`Failed to publish ranking: invalid rank id "${myRankEntity.id}"`);
+        return false;
+      }
 
       setIsSaving(true);
       try {
