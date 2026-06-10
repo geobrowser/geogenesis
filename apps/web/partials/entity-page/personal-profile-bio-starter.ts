@@ -19,6 +19,7 @@ const BLOCK_TYPES_WITH_ATTRS = new Set([
   'image',
   'video',
   'tableNode',
+  'rankingNode',
 ]);
 
 function assignBlockIds(node: JSONContent, spaceId: string): JSONContent {

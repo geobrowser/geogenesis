@@ -36,7 +36,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     periodLabel,
     hasRankedByOthers,
     submissions,
-    aggregatedRankingEntityIds,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
     openRankingCompose,
   } = state;
 
@@ -52,7 +53,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
               periodLabel={periodLabel}
               hasRankedByOthers={hasRankedByOthers}
               submissions={submissions}
-              aggregatedRankingEntityIds={aggregatedRankingEntityIds}
+              aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+              aggregatedRankingCount={aggregatedRankingCount}
             />
           ) : null}
         </div>

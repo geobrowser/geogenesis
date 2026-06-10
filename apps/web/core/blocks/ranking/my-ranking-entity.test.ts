@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { RANK_POSITION_PROPERTY_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
 import {
@@ -53,7 +53,7 @@ describe('pickMostRecentlyUpdatedRankingEntity', () => {
 });
 
 describe('getMyRankingOrderedEntityIds', () => {
-  it('reads ordered Rank position relations from the rank entity', () => {
+  it('reads ordered rank vote relations from the rank entity', () => {
     const entity = rankEntity({
       id: 'rank-1',
       relations: [
@@ -61,7 +61,7 @@ describe('getMyRankingOrderedEntityIds', () => {
           id: 'rel-b',
           entityId: 'rank-1',
           isDeleted: false,
-          type: { id: RANK_POSITION_PROPERTY_ID, name: null },
+          type: { id: RANK_VOTES_RELATION_TYPE_ID, name: null },
           fromEntity: { id: 'rank-1', name: null },
           toEntity: { id: 'b', name: null, value: 'b' },
           renderableType: 'RELATION',
@@ -72,7 +72,7 @@ describe('getMyRankingOrderedEntityIds', () => {
           id: 'rel-a',
           entityId: 'rank-1',
           isDeleted: false,
-          type: { id: RANK_POSITION_PROPERTY_ID, name: null },
+          type: { id: RANK_VOTES_RELATION_TYPE_ID, name: null },
           fromEntity: { id: 'rank-1', name: null },
           toEntity: { id: 'a', name: null, value: 'a' },
           renderableType: 'RELATION',

@@ -1,6 +1,6 @@
 export type Content =
   | {
-      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode' | 'codeBlock';
+      type: 'paragraph' | 'bulletList' | 'orderedList' | 'listItem' | 'tableNode' | 'rankingNode' | 'codeBlock';
       content: Content[];
       attrs: {
         id: string;

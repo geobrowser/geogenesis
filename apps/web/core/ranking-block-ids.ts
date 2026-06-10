@@ -19,4 +19,6 @@ export const AGGREGATED_RANKINGS_PROPERTY_ID = '67651da611a942469ff4039aafbe9e43
 export const AGGREGATED_RANKINGS_PROPERTY_NAME = 'Aggregated rankings';
 
 export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
+export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
+
 export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';

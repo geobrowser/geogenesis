@@ -65,7 +65,7 @@ export function useRankingBlockState({
   const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
     useRankingSubmissions(entityId, spaceId, displayName);
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingEntityIds, aggregatedRankingCount } =
+  const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
     useRankingBlockRelations();
 
   const { smartAccount } = useSmartAccount();
@@ -103,8 +103,7 @@ export function useRankingBlockState({
 
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
   const showAggregatedRankingsOnGlobalTab = aggregatedRankingCount > 0;
-  const visibleAggregatedRankingIds = aggregatedRankingEntityIds.slice(0, 3);
-  const extraAggregatedRankingCount = Math.max(aggregatedRankingCount - visibleAggregatedRankingIds.length, 0);
+  const visibleAggregatedSubmitterSpaceIds = aggregatedSubmitterSpaceIds.slice(0, 3);
 
   const globalRankByEntityId = React.useMemo(
     () => new Map(globalLeaderboard.map(e => [e.entityId, e.rank])),
@@ -117,6 +116,13 @@ export function useRankingBlockState({
   const [hasSavedDraft, setHasSavedDraft] = React.useState(false);
 
   React.useEffect(() => {
+    const apiIds = mySubmission?.orderedEntityIds ?? [];
+    if (apiIds.length > 0) {
+      setHasSavedDraft(false);
+      setMyOrderIds(apiIds);
+      return;
+    }
+
     const draft = loadLocalMyRankingDraft(spaceId, entityId);
     if (draft !== null) {
       setHasSavedDraft(true);
@@ -124,7 +130,7 @@ export function useRankingBlockState({
       return;
     }
     setHasSavedDraft(false);
-    setMyOrderIds(mySubmission?.orderedEntityIds ?? []);
+    setMyOrderIds([]);
   }, [entityId, mySubmissionIdsKey, mySubmission, spaceId]);
 
   const draftHydrated = true;
@@ -318,7 +324,7 @@ export function useRankingBlockState({
     periodState,
     periodLabel,
     hasRankedByOthers,
-    aggregatedRankingEntityIds,
+    aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     globalDisplayEntityIds,
     globalRankByEntityId,
@@ -333,8 +339,7 @@ export function useRankingBlockState({
     showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
     showAggregatedRankingsOnGlobalTab,
-    visibleAggregatedRankingIds,
-    extraAggregatedRankingCount,
+    visibleAggregatedSubmitterSpaceIds,
     showFirstRankingPrompt,
     showEditRankingButton,
     isSaving,

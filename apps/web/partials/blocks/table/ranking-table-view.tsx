@@ -20,7 +20,15 @@ type Props = {
 export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const isMobile = useIsMobileLayout();
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate });
-  const { displayName, periodState, periodLabel, hasRankedByOthers, submissions, aggregatedRankingEntityIds } = state;
+  const {
+    displayName,
+    periodState,
+    periodLabel,
+    hasRankedByOthers,
+    submissions,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
+  } = state;
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden overflow-y-auto">
@@ -40,7 +48,8 @@ export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDat
             periodLabel={periodLabel}
             hasRankedByOthers={hasRankedByOthers}
             submissions={submissions}
-            aggregatedRankingEntityIds={aggregatedRankingEntityIds}
+            aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+            aggregatedRankingCount={aggregatedRankingCount}
           />
         ) : null}
       </div>

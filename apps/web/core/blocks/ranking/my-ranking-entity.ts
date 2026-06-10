@@ -1,5 +1,5 @@
 import type { EntityFilter } from '~/core/gql/graphql';
-import { RANK_POSITION_PROPERTY_ID, RANK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
@@ -45,7 +45,7 @@ export function getMyRankingOrderedEntityIds(rankEntity: Entity, personalSpaceId
   return getOrderedRelationTargetIds(
     rankEntity.relations ?? [],
     rankEntity.id,
-    RANK_POSITION_PROPERTY_ID,
+    RANK_VOTES_RELATION_TYPE_ID,
     personalSpaceId
   );
 }

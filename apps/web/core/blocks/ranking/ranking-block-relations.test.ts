@@ -3,20 +3,29 @@ import { describe, expect, it } from 'vitest';
 import { AGGREGATED_RANKINGS_PROPERTY_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Relation } from '~/core/types';
 
-import { buildLeaderboardFromOrderedEntityIds, getOrderedRelationTargetIds } from './ranking-block-relations';
+import {
+  buildLeaderboardFromOrderedEntityIds,
+  getAggregatedRankingSubmissionCount,
+  getAggregatedRankingSubmitterSpaceIds,
+  getOrderedRelationTargetIds,
+} from './ranking-block-relations';
 
 function relation({
   blockId,
   propertyId,
   toEntityId,
+  toSpaceId,
   position,
   isDeleted = false,
+  spaceId = 'space-1',
 }: {
   blockId: string;
   propertyId: string;
   toEntityId: string;
+  toSpaceId?: string;
   position?: string;
   isDeleted?: boolean;
+  spaceId?: string;
 }): Relation {
   return {
     id: `rel-${toEntityId}`,
@@ -26,7 +35,8 @@ function relation({
     fromEntity: { id: blockId, name: null },
     toEntity: { id: toEntityId, name: null, value: toEntityId },
     renderableType: 'RELATION',
-    spaceId: 'space-1',
+    spaceId,
+    toSpaceId,
     position,
   } as Relation;
 }
@@ -120,5 +130,65 @@ describe('buildLeaderboardFromOrderedEntityIds', () => {
       { entityId: 'b', rank: 1 },
       { entityId: 'a', rank: 2 },
     ]);
+  });
+});
+
+describe('aggregated rankings submissions', () => {
+  const blockId = 'block-1';
+
+  it('counts all Aggregated rankings relations in the block space', () => {
+    const relations = [
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-1',
+        toSpaceId: 'personal-a',
+        position: '00000000000000000000000000000000',
+      }),
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-2',
+        toSpaceId: 'personal-b',
+        position: '00000000000000000000000000000001',
+      }),
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-3',
+        toSpaceId: 'personal-a',
+        position: '00000000000000000000000000000002',
+        isDeleted: true,
+      }),
+    ];
+
+    expect(getAggregatedRankingSubmissionCount(relations, blockId, 'space-1')).toBe(2);
+  });
+
+  it('returns submitter personal spaces from to_space in relation order', () => {
+    const relations = [
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-2',
+        toSpaceId: 'personal-b',
+        position: '00000000000000000000000000000001',
+      }),
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-1',
+        toSpaceId: 'personal-a',
+        position: '00000000000000000000000000000000',
+      }),
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-3',
+        position: '00000000000000000000000000000002',
+      }),
+    ];
+
+    expect(getAggregatedRankingSubmitterSpaceIds(relations, blockId, 'space-1')).toEqual(['personal-a', 'personal-b']);
   });
 });

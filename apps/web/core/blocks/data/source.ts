@@ -66,7 +66,6 @@ type GetSourceArgs = {
   dataEntityRelations: Relation[];
   currentSpaceId: string;
   filterState: Filter[];
-  scopeFromFiltersOnly?: boolean;
 };
 
 function sourceTypeRelations(blockId: string, dataEntityRelations: Relation[] = []): Relation[] {
@@ -136,16 +135,7 @@ export function getScopeFromFilters(filterState: Filter[]): Source {
   return { type: 'GEO' };
 }
 
-export function getSource({
-  blockId,
-  dataEntityRelations,
-  filterState,
-  scopeFromFiltersOnly = false,
-}: GetSourceArgs): Source {
-  if (scopeFromFiltersOnly) {
-    return getScopeFromFilters(filterState);
-  }
-
+export function getSource({ blockId, dataEntityRelations, filterState }: GetSourceArgs): Source {
   const sourceType = currentSourceTypeRelation(blockId, dataEntityRelations)?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);

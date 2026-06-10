@@ -2,12 +2,17 @@
 
 import * as React from 'react';
 
-import { AGGREGATED_RANKINGS_PROPERTY_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { useDataBlockInstance } from '../data/use-data-block';
-import { buildLeaderboardFromOrderedEntityIds, getOrderedRelationTargetIds } from './ranking-block-relations';
+import {
+  buildLeaderboardFromOrderedEntityIds,
+  getAggregatedRankingSubmissionCount,
+  getAggregatedRankingSubmitterSpaceIds,
+  getOrderedRelationTargetIds,
+} from './ranking-block-relations';
 
 type Options = {
   blockId?: string;
@@ -34,8 +39,13 @@ export function useRankingBlockRelations(options: Options = {}) {
     [blockId, blockRelations, spaceId]
   );
 
-  const aggregatedRankingEntityIds = React.useMemo(
-    () => getOrderedRelationTargetIds(blockRelations, blockId, AGGREGATED_RANKINGS_PROPERTY_ID, spaceId),
+  const aggregatedSubmitterSpaceIds = React.useMemo(
+    () => getAggregatedRankingSubmitterSpaceIds(blockRelations, blockId, spaceId),
+    [blockId, blockRelations, spaceId]
+  );
+
+  const aggregatedRankingCount = React.useMemo(
+    () => getAggregatedRankingSubmissionCount(blockRelations, blockId, spaceId),
     [blockId, blockRelations, spaceId]
   );
 
@@ -47,7 +57,7 @@ export function useRankingBlockRelations(options: Options = {}) {
   return {
     globalRankingEntityIds,
     globalLeaderboard,
-    aggregatedRankingEntityIds,
-    aggregatedRankingCount: aggregatedRankingEntityIds.length,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
   };
 }

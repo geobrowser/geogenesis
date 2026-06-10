@@ -499,10 +499,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   return result;
 }
 
+export type DataBlockSourceMode = 'data-source-type' | 'filter-only';
+
 const DataBlockContext = React.createContext<{
   entityId: string;
   spaceId: string;
   relationId: string;
+  sourceMode: DataBlockSourceMode;
   pageNumber: number;
   currentAfter: string | undefined;
   currentOffset: number | undefined;
@@ -518,9 +521,16 @@ interface Props {
   children: React.ReactNode;
   entityId: string;
   relationId: string;
+  sourceMode?: DataBlockSourceMode;
 }
 
-export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
+export function DataBlockProvider({
+  spaceId,
+  children,
+  entityId,
+  relationId,
+  sourceMode = 'data-source-type',
+}: Props) {
   const { pageNumber, currentAfter, currentOffset, setPage, recordEndCursor, reset, canJumpTo, maxJumpPages } =
     usePagination(entityId);
 
@@ -529,6 +539,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
       spaceId,
       entityId,
       relationId,
+      sourceMode,
       pageNumber,
       currentAfter,
       currentOffset,
@@ -542,6 +553,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
     spaceId,
     entityId,
     relationId,
+    sourceMode,
     pageNumber,
     currentAfter,
     currentOffset,

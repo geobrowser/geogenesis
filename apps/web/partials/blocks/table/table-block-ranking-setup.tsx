@@ -40,9 +40,10 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const { storage } = useMutate();
   const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
+  const blocksRelationEntityId = relationId;
   const { entity: blockEntity } = useQueryEntity({ spaceId, id: entityId });
-  const { entity: blockRelationEntity } = useQueryEntity({ spaceId, id: relationId });
-  const blockRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
+  const { entity: blockRelationEntity } = useQueryEntity({ spaceId, id: blocksRelationEntityId });
+  const blockEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
   const blockRelationRelations = blockRelationEntity?.relations ?? [];
   const existingValues = useValues({ selector: v => v.entity.id === entityId && v.spaceId === spaceId });
   const canEditSpace = useCanUserEdit(spaceId);
@@ -82,18 +83,18 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
       storage,
       blockId: entityId,
       spaceId,
-      relations: blockRelations,
+      relations: blockEntityRelations,
     });
     ensureRankingAggregationRestriction({
       storage,
       blockId: entityId,
       spaceId,
-      relations: blockRelations,
+      relations: blockEntityRelations,
     });
     persistBlockName(trimmed);
     ensureRankingShownColumns({
       storage,
-      blockRelationId: relationId,
+      blockRelationId: blocksRelationEntityId,
       spaceId,
       relations: blockRelationRelations,
     });
@@ -120,11 +121,11 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     setEditable(true);
     onCompleteRankingSetup({ startDate, endDate });
   }, [
+    blockEntityRelations,
     blockRelationRelations,
-    blockRelations,
+    blocksRelationEntityId,
     endDate,
     entityId,
-    relationId,
     existingValues,
     canEditSpace,
     filterState,
