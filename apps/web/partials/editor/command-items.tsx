@@ -196,9 +196,8 @@ const rankingDataBlockCommandItem: CommandSuggestionItem = {
       .focus()
       .deleteRange({ from: range.from, to: range.to })
       .insertContent({
-        type: 'tableNode',
+        type: 'rankingNode',
         attrs: {
-          initialDataSource: 'RANKING',
           rankingSetupCompleted: false,
         },
       })

@@ -1,5 +1,5 @@
 /**
- * My-ranking ballots stay local / `createRank` until indexer APIs ship; individual fetch is TBD.
+ * My-ranking ballots are published via `createRank` / `updateRank` in the user's personal space.
  */
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 

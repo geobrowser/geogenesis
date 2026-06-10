@@ -104,6 +104,7 @@ function makeNewBlockRelation({
       case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
+      case 'rankingNode':
         return 'DATA';
       case 'image':
         return 'IMAGE';
@@ -366,39 +367,18 @@ export function useEditorStore() {
           ];
         }
 
-        if (toEntity?.type === 'DATA') {
+        const blockTypeRelations = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            r.fromEntity.id === block.block.id &&
+            r.type.id === SystemIds.TYPES_PROPERTY &&
+            r.spaceId === spaceId &&
+            !r.isDeleted,
+        });
+
+        if (isRankingBlockEntity(block.block.id, blockTypeRelations, spaceId)) {
           sBlocks.push({ type: 'data' });
 
-          const dataSourceType = getRelations({
-            mergeWith: initialBlockEntityRelations,
-            selector: r =>
-              r.fromEntity.id === block.block.id &&
-              r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
-              r.spaceId === spaceId &&
-              !r.isDeleted,
-          })[0]?.toEntity.id;
-          const isQuerySource =
-            dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
-          const isRankingSource = isRankingBlockEntity(
-            block.block.id,
-            getRelations({
-              mergeWith: initialBlockEntityRelations,
-              selector: r =>
-                r.fromEntity.id === block.block.id &&
-                r.type.id === SystemIds.TYPES_PROPERTY &&
-                r.spaceId === spaceId &&
-                !r.isDeleted,
-            }),
-            spaceId
-          );
-          const configuredShownColumns = getRelations({
-            mergeWith: initialBlockEntityRelations,
-            selector: r =>
-              r.fromEntity.id === block.entityId &&
-              (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
-              r.spaceId === spaceId &&
-              !r.isDeleted,
-          });
           const configuredFilters = getValues({
             mergeWith: initialBlockValues,
             selector: v =>
@@ -439,11 +419,53 @@ export function useEditorStore() {
                 })[0]?.value ?? null)
               : null;
 
-          const initialDataSource = isRankingSource
-            ? ('RANKING' as const)
-            : isQuerySource
-              ? ('QUERY' as const)
-              : ('COLLECTION' as const);
+          return [
+            {
+              type: 'rankingNode',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+                rankingSetupCompleted: rankingSetupConfigured,
+                rankingStartDate,
+                rankingEndDate,
+              },
+            },
+          ];
+        }
+
+        if (toEntity?.type === 'DATA') {
+          sBlocks.push({ type: 'data' });
+
+          const dataSourceType = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.block.id &&
+              r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          })[0]?.toEntity.id;
+          const isQuerySource =
+            dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+          const configuredShownColumns = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+          const configuredFilters = getValues({
+            mergeWith: initialBlockValues,
+            selector: v =>
+              v.entity.id === block.block.id &&
+              v.property.id === SystemIds.FILTER &&
+              v.spaceId === spaceId &&
+              v.value.length > 0 &&
+              !v.isDeleted,
+          });
+
+          const initialDataSource = isQuerySource ? ('QUERY' as const) : ('COLLECTION' as const);
 
           return [
             {
@@ -456,9 +478,6 @@ export function useEditorStore() {
                 querySetupCompleted: isQuerySource
                   ? configuredShownColumns.length > 0 || configuredFilters.length > 0
                   : null,
-                rankingSetupCompleted: isRankingSource ? rankingSetupConfigured : null,
-                rankingStartDate,
-                rankingEndDate,
               },
             },
           ];
@@ -592,8 +611,10 @@ export function useEditorStore() {
       for (const node of addedBlocks) {
         const blockType = (() => {
           switch (node.type) {
+            case 'rankingNode':
+              return 'RANKING' as const;
             case 'tableNode':
-              return node.attrs?.initialDataSource === 'RANKING' ? ('RANKING' as const) : SystemIds.DATA_BLOCK;
+              return SystemIds.DATA_BLOCK;
             case 'bulletList':
             case 'paragraph':
             case 'codeBlock':
@@ -695,7 +716,7 @@ export function useEditorStore() {
       // New collection data blocks: persist Types + Description as shown columns (with Name)
       for (const node of addedBlocks) {
         if (node.type !== 'tableNode') continue;
-        if (node.attrs?.initialDataSource === 'QUERY' || node.attrs?.initialDataSource === 'RANKING') continue;
+        if (node.attrs?.initialDataSource === 'QUERY') continue;
 
         const blockRel = getRelations({
           mergeWith: initialBlockEntityRelations,
@@ -749,6 +770,8 @@ export function useEditorStore() {
         switch (node.type) {
           case 'tableNode':
             // createTableBlockMetadata(node);
+            break;
+          case 'rankingNode':
             break;
           case 'bulletList':
           case 'heading':

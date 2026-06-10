@@ -77,7 +77,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     displayName
   );
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedRankingEntityIds, aggregatedRankingCount } =
+  const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
     useRankingBlockRelations();
 
   const globalOrderedIds = globalRankingEntityIds;
@@ -224,7 +224,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const canPublish = orderedIds.length > 0 && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
 
   const handlePublish = async () => {
-    // Interim: persist to local storage until createRank / updateRank ship.
     const slots = orderedIds.map(id => {
       const row = rowsByEntityId.get(id);
       const entry = rankableEntriesById.get(id);
@@ -282,7 +281,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             periodLabel={periodLabel}
             hasRankedByOthers={hasRankedByOthers}
             submissions={submissions}
-            aggregatedRankingEntityIds={aggregatedRankingEntityIds}
+            aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+            aggregatedRankingCount={aggregatedRankingCount}
             onBack={() => router.back()}
             showPublishButton={!isEntityPreviewOpen}
             canPublish={canPublish}

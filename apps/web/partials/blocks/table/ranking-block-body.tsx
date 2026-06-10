@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
-import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 
@@ -14,6 +13,7 @@ import {
   RankingSectionHeaderRow,
   RankingTabButton,
 } from './ranking-block-ui';
+import { RankingAggregatedSubmitterAvatars } from './ranking-period-metadata';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingContributePointsBanner } from './ranking-contribute-points-banner';
@@ -62,8 +62,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
     showAggregatedRankingsOnGlobalTab,
-    visibleAggregatedRankingIds,
-    extraAggregatedRankingCount,
+    visibleAggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
     myAvatarUrl,
     myAvatarSeed,
     activeTab,
@@ -245,16 +245,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       >
                         {showAggregatedRankingsOnGlobalTab ? (
                           <div className="flex items-center gap-2">
-                            <AvatarGroup>
-                              {visibleAggregatedRankingIds.map(rankingEntityId => (
-                                <AvatarGroup.Item key={rankingEntityId}>
-                                  <Avatar size={24} value={rankingEntityId} />
-                                </AvatarGroup.Item>
-                              ))}
-                            </AvatarGroup>
-                            {extraAggregatedRankingCount > 0 ? (
-                              <span className="text-metadata text-grey-04">+{extraAggregatedRankingCount}</span>
-                            ) : null}
+                            <RankingAggregatedSubmitterAvatars
+                              submitterSpaceIds={visibleAggregatedSubmitterSpaceIds}
+                              totalCount={aggregatedRankingCount}
+                              maxVisible={3}
+                            />
                           </div>
                         ) : null}
                       </RankingTabButton>

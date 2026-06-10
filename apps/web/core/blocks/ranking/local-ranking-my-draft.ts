@@ -1,7 +1,4 @@
-/**
- * Interim local draft order for My ranking in the embedded block (until ranking APIs ship).
- * TODO(ranking-api): Replace with createRank / updateRank persistence (not fetchIndividualRanking).
- */
+/** Local draft order for My ranking in the embedded block before the first publish. */
 
 export function myRankingDraftStorageKey(spaceId: string, blockId: string): string {
   return `geogenesis.ranking-my-draft.v1:${spaceId}:${blockId}`;

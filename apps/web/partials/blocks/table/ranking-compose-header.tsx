@@ -27,7 +27,8 @@ type Props = {
   periodLabel: string | null;
   hasRankedByOthers: boolean;
   submissions: RankingSubmissionRecord[];
-  aggregatedRankingEntityIds: string[];
+  aggregatedSubmitterSpaceIds: string[];
+  aggregatedRankingCount: number;
   onBack: () => void;
   showPublishButton?: boolean;
   canPublish?: boolean;
@@ -42,7 +43,8 @@ export function RankingComposeHeader({
   periodLabel,
   hasRankedByOthers,
   submissions,
-  aggregatedRankingEntityIds,
+  aggregatedSubmitterSpaceIds,
+  aggregatedRankingCount,
   onBack,
   showPublishButton = false,
   canPublish = false,
@@ -93,7 +95,8 @@ export function RankingComposeHeader({
           periodLabel={periodLabel}
           hasRankedByOthers={hasRankedByOthers}
           submissions={submissions}
-          aggregatedRankingEntityIds={aggregatedRankingEntityIds}
+          aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+          aggregatedRankingCount={aggregatedRankingCount}
           trailing={
             !isMobile && RANKING_POINTS_UI_ENABLED ? <span className="text-purple">Earn 10 points</span> : undefined
           }
