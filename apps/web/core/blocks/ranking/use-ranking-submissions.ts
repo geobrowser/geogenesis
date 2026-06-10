@@ -96,11 +96,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]) => {
-      if (!personalSpaceId) return;
+    async (slots: RankingSubmissionSlot[]): Promise<boolean> => {
+      if (!personalSpaceId) return false;
       if (!smartAccount) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
-        return;
+        return false;
       }
 
       const votes = slots
@@ -110,7 +110,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           spaceId: slot.spaceId ?? spaceId,
         }));
 
-      if (votes.length === 0) return;
+      if (votes.length === 0) return false;
 
       setIsSaving(true);
       try {
@@ -119,7 +119,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         let ops;
         let rankId: string;
         try {
-          console.log("votes==============", blockId, spaceId, votes);
+          console.log('votes==============', blockId, spaceId, votes);
           const result = myRankEntity
             ? await geo.ranks.update({
                 rankId: myRankEntity.id,
@@ -137,7 +137,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           reportError(`Failed to publish ranking: ${describeError(error)}`);
-          return;
+          return false;
         }
 
         const publish = Effect.gen(function* () {
@@ -184,11 +184,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         if (Either.isLeft(result)) {
           const err = result.left;
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return;
+            return false;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
           reportError(`Failed to publish ranking: ${describeError(err)}`);
-          return;
+          return false;
         }
 
         clearLocalMyRankingDraft(spaceId, blockId);
@@ -210,6 +210,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         }
 
         await refetchMyRanking();
+        return true;
       } finally {
         setIsSaving(false);
       }

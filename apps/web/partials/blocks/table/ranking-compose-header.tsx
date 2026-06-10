@@ -18,7 +18,7 @@ export const COMPOSE_ICON_BUTTON_CLASS =
   'shrink-0 !gap-0 !rounded-sm !border-0 !p-0 !shadow-none min-w-0 hover:!shadow-none';
 
 export const RANKING_COMPOSE_PUBLISH_BUTTON_CLASS =
-  'h-8 !rounded-full border-grey-02 bg-text px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text';
+  'h-8 !rounded-full border-grey-02 bg-text px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text disabled:!cursor-not-allowed disabled:!bg-divider disabled:!text-grey-03 disabled:hover:!bg-divider';
 
 type Props = {
   isMobile: boolean;

@@ -17,7 +17,7 @@ function row(entityId: string, name: string): Row {
 }
 
 describe('splitRankableEntityIds', () => {
-  it('lists globally ranked ids first, then unranked filter matches by name', () => {
+  it('lists globally ranked ids first, then unranked filter matches in row order', () => {
     const global = ['b', 'a'];
     const rows = [row('a', 'Alpha'), row('c', 'Charlie'), row('b', 'Bravo'), row('d', 'Delta')];
 

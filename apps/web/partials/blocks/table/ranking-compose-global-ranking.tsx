@@ -14,6 +14,7 @@ import type { Row } from '~/core/types';
 import { Button } from '~/design-system/button';
 import { Search } from '~/design-system/icons/search';
 
+import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
@@ -70,7 +71,7 @@ function RankingComposePickRow({
       onKeyDown={handleKeyDown}
       className={cx(
         'flex w-full items-center py-3 text-left transition',
-        isInMyRanking ? 'cursor-default' : 'cursor-pointer hover:bg-grey-01'
+        isInMyRanking ? 'cursor-default' : 'cursor-pointer'
       )}
     >
       <RankingEntryRow
@@ -219,7 +220,11 @@ export function RankingComposeGlobalRanking({
     );
 
     if (!isMobile) {
-      return <React.Fragment key={id}>{pickRow}</React.Fragment>;
+      return (
+        <RankingGlobalDesktopRow key={id} onOpenSidePanel={() => onViewEntity(id)}>
+          {pickRow}
+        </RankingGlobalDesktopRow>
+      );
     }
 
     return (

@@ -37,7 +37,7 @@ export function splitRankableEntityIds(globalOrderedIds: string[], filterRows: R
     rankedEntityIds.push(id);
   }
 
-  const unrankedCandidates: { entityId: string; name: string }[] = [];
+  const unrankedEntityIds: string[] = [];
   const unrankedSeen = new Set<string>();
 
   for (const row of filterRows) {
@@ -45,12 +45,8 @@ export function splitRankableEntityIds(globalOrderedIds: string[], filterRows: R
     const key = normalizedEntityId(row.entityId);
     if (seen.has(key) || unrankedSeen.has(key)) continue;
     unrankedSeen.add(key);
-    unrankedCandidates.push({ entityId: row.entityId, name: getRowDisplayName(row) });
+    unrankedEntityIds.push(row.entityId);
   }
-
-  const unrankedEntityIds = unrankedCandidates
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-    .map(({ entityId }) => entityId);
 
   return { rankedEntityIds, unrankedEntityIds };
 }

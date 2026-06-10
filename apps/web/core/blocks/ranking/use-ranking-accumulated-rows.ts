@@ -1,8 +1,14 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { PAGE_SIZE, filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
+import { mappingToRows } from '~/core/blocks/data/use-mapping';
+import { useView } from '~/core/blocks/data/use-view';
+import { EntitiesOrderBy } from '~/core/gql/graphql';
+import { useQueryEntities } from '~/core/sync/use-store';
 import type { Row } from '~/core/types';
 
 export type RowPage = { page: number; rows: Row[] };
@@ -39,11 +45,31 @@ export function flattenRowPages(pages: RowPage[]): Row[] {
 }
 
 export function useRankingAccumulatedRows() {
-  const { rows, pageNumber, hasNextPage, setPage, isLoading, isFetched, entityId, source, filterState } =
-    useDataBlock();
+  const { entityId, source, filterState, filterMode } = useDataBlock();
+  const { shownColumnIds } = useView();
+
+  const enabled = source.type === 'SPACES' || source.type === 'GEO';
+
+  const where = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
+
+  const [afterChain, setAfterChain] = React.useState<string[]>([]);
+  const pageIndex = afterChain.length;
+  const after = afterChain.length > 0 ? afterChain[afterChain.length - 1] : undefined;
+
+  const { entities, isLoading, isFetched, isPlaceholderData, endCursor, hasNextPage } = useQueryEntities({
+    where,
+    enabled,
+    first: PAGE_SIZE,
+    after,
+    placeholderData: keepPreviousData,
+    deferUntilFetched: true,
+    includeUnpublishedLocal: true,
+    orderBy: [EntitiesOrderBy.CreatedAtDesc],
+  });
+
+  const pageRows = React.useMemo(() => mappingToRows(entities ?? [], shownColumnIds, []), [entities, shownColumnIds]);
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
-  const [isFetchingNextPage, setIsFetchingNextPage] = React.useState(false);
 
   const resetKey = React.useMemo(
     () =>
@@ -58,57 +84,32 @@ export function useRankingAccumulatedRows() {
 
   React.useEffect(() => {
     setRowPages([]);
-    setIsFetchingNextPage(false);
+    setAfterChain([]);
   }, [resetKey]);
 
-  React.useEffect(() => {
-    if (!hasNextPage) {
-      setIsFetchingNextPage(false);
-    }
-  }, [hasNextPage]);
-
-  const rowsSignature = rowEntityIdsSignature(rows);
+  const rowsSignature = rowEntityIdsSignature(pageRows);
 
   React.useEffect(() => {
-    setRowPages(prev => {
-      // While the next page is in flight, the query layer serves the previous
-      // page's rows as placeholder data — don't record them under the new
-      // page number.
-      if (pageNumber > 0) {
-        const previousPage = prev.find(p => p.page === pageNumber - 1);
-        if (previousPage && rowEntityIdsSignature(previousPage.rows) === rowsSignature) {
-          return prev;
-        }
-      }
-      return upsertRowPage(prev, pageNumber, rows);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pageNumber, rowsSignature]);
+    if (!isFetched || isPlaceholderData) return;
+    setRowPages(prev => upsertRowPage(prev, pageIndex, pageRows));
+  }, [pageIndex, rowsSignature, isFetched, isPlaceholderData]);
 
-  const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageNumber), [rowPages, pageNumber]);
+  const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageIndex), [rowPages, pageIndex]);
 
   const accumulatedRows = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const fetchNextPage = React.useCallback(() => {
-    if (!hasNextPage || isFetchingNextPage || !hasCurrentPage) return;
-    setIsFetchingNextPage(true);
-    setPage('next');
-  }, [hasNextPage, isFetchingNextPage, hasCurrentPage, setPage]);
+    if (!hasNextPage || !hasCurrentPage || isPlaceholderData || !endCursor) return;
+    setAfterChain(prev => (prev[prev.length - 1] === endCursor ? prev : [...prev, endCursor]));
+  }, [hasNextPage, hasCurrentPage, isPlaceholderData, endCursor]);
 
-  React.useEffect(() => {
-    if (!isFetchingNextPage) return;
-    if (hasCurrentPage) {
-      setIsFetchingNextPage(false);
-    }
-  }, [isFetchingNextPage, hasCurrentPage]);
-
-  const isLoadingMore = hasNextPage && isFetchingNextPage;
+  const isFetchingNextPage = pageIndex > 0 && !hasCurrentPage;
 
   return {
     rows: accumulatedRows,
     isLoading: isLoading && !isFetched,
     hasNextPage,
-    isFetchingNextPage: isLoadingMore,
+    isFetchingNextPage,
     fetchNextPage,
   };
 }

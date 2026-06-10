@@ -10,6 +10,7 @@ import {
   RankingFirstSubmissionCta,
   RankingFirstSubmissionPrompt,
   RankingFullscreenSectionHeaderRow,
+  RankingGlobalDesktopRow,
   RankingMyRankingDesktopRow,
   RankingSectionHeaderRow,
   RankingTabButton,
@@ -169,12 +170,18 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             );
             return (
               <div key={entityId} className="w-full">
-                {wrapMobileSwipeRow({
-                  rowKey: `global:${entityId}`,
-                  onView: () => openEntitySheet(entityId),
-                  onPrimaryClick: () => openEntitySheet(entityId),
-                  children: rowContent,
-                })}
+                {isMobile ? (
+                  wrapMobileSwipeRow({
+                    rowKey: `global:${entityId}`,
+                    onView: () => openEntitySheet(entityId),
+                    onPrimaryClick: () => openEntitySheet(entityId),
+                    children: rowContent,
+                  })
+                ) : (
+                  <RankingGlobalDesktopRow onOpenSidePanel={() => openEntitySheet(entityId)}>
+                    {rowContent}
+                  </RankingGlobalDesktopRow>
+                )}
               </div>
             );
           })}
