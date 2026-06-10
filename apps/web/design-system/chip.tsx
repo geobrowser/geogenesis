@@ -34,6 +34,7 @@ import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/at
 type LinkableChipProps = {
   href: string;
   children: React.ReactNode;
+  disableLink?: boolean;
 };
 
 const linkableChipStyles = cva(
@@ -51,12 +52,19 @@ const linkableChipStyles = cva(
   }
 );
 
-export function LinkableChip({ href, children }: LinkableChipProps) {
+export function LinkableChip({ href, children, disableLink = false }: LinkableChipProps) {
+  const className = linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 });
+
+  if (disableLink) {
+    return (
+      <span className={className}>
+        <span>{children}</span>
+      </span>
+    );
+  }
+
   return (
-    <Link
-      href={href}
-      className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
-    >
+    <Link href={href} className={className}>
       <span>{children}</span>
     </Link>
   );
