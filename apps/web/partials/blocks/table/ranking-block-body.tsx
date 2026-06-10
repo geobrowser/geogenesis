@@ -91,8 +91,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     myDisplayEntityIds,
     myRankingEntryByEntityId,
     draftHydrated,
+    hasMySubmission,
     reorderMyRanking,
-    removeFromMyRanking,
     openEntitySheet,
     activeSwipeRowKey,
     setActiveSwipeRowKey,
@@ -197,6 +197,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
         <RankingMyRankingDndList
           entityIds={myDisplayEntityIds}
           onReorder={reorderMyRanking}
+          disabled={hasMySubmission}
           onDragStart={() => {
             setActiveSwipeRowKey(null);
             setIsMyRankingDragging(true);
@@ -224,16 +225,13 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 {isMobile ? (
                   wrapMobileSwipeRow({
                     rowKey: `my:${entityId}`,
-                    showRemove: true,
                     onView: () => openEntitySheet(entityId),
-                    onRemove: () => removeFromMyRanking(entityId),
                     primaryDisabled: true,
                     children: rowContent,
                   })
                 ) : (
                   <RankingMyRankingDesktopRow
                     entityName={entryDisplay.name}
-                    onRemove={() => removeFromMyRanking(entityId)}
                     onOpenSidePanel={() => openEntitySheet(entityId)}
                     hideActions={isDragActive}
                   >

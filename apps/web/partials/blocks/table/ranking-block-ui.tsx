@@ -18,29 +18,32 @@ export function RankingMyRankingDesktopRow({
   children,
 }: {
   entityName: string;
-  onRemove: () => void;
+  onRemove?: () => void;
   onOpenSidePanel: () => void;
-  /** Hides the side panel icon entirely, e.g. while a drag-to-reorder is active. */
   hideActions?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <div className="group/myrank flex w-full items-center gap-2">
-      <div
-        role="button"
-        tabIndex={0}
-        aria-label={`Remove ${entityName} from my ranking`}
-        className="min-w-0 flex-1 cursor-pointer"
-        onClick={onRemove}
-        onKeyDown={event => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onRemove();
-          }
-        }}
-      >
-        {children}
-      </div>
+      {onRemove ? (
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Remove ${entityName} from my ranking`}
+          className="min-w-0 flex-1 cursor-pointer"
+          onClick={onRemove}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              onRemove();
+            }
+          }}
+        >
+          {children}
+        </div>
+      ) : (
+        <div className="min-w-0 flex-1">{children}</div>
+      )}
       <button
         type="button"
         aria-label="Open entity in side panel"

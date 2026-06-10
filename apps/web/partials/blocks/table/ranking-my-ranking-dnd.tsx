@@ -25,7 +25,7 @@ type Props = {
   onDragStart?: () => void;
   onDragEnd?: () => void;
   className?: string;
-  /** `isDragActive` is true while any row in the list is being dragged (incl. the drag overlay). */
+  disabled?: boolean;
   renderItem: (entityId: string, index: number, isDragActive?: boolean) => React.ReactNode;
 };
 
@@ -91,6 +91,7 @@ export function RankingMyRankingDndList({
   onDragStart,
   onDragEnd,
   className,
+  disabled = false,
   renderItem,
 }: Props) {
   const [activeDragOrder, setActiveDragOrder] = React.useState<string[] | null>(null);
@@ -153,7 +154,7 @@ export function RankingMyRankingDndList({
     finishDrag();
   };
 
-  if (items.length < 2) {
+  if (disabled || items.length < 2) {
     return (
       <div className={className}>
         {items.map((entityId, index) => (

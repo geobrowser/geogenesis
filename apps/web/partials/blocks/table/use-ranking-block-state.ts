@@ -353,6 +353,7 @@ export function useRankingBlockState({
     entitySheetTarget,
     setEntitySheetTarget,
     draftHydrated,
+    hasMySubmission,
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
