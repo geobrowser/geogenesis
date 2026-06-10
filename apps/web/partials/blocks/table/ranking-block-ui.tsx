@@ -10,6 +10,29 @@ import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
 import { RankingEmptyStateArt } from './ranking-empty-state-art';
 
+function RankingRowSidePanelButton({ onClick, hidden = false }: { onClick: () => void; hidden?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label="Open entity in side panel"
+      className={cx(
+        'invisible inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-grey-01 p-1.5 text-grey-03 opacity-0 transition duration-200 hover:bg-grey-02 hover:text-text focus:outline-hidden',
+        !hidden &&
+          'group-focus-within/rankrow:visible group-focus-within/rankrow:opacity-100 group-hover/rankrow:visible group-hover/rankrow:opacity-100'
+      )}
+      onPointerDown={event => event.stopPropagation()}
+      onMouseDown={event => event.stopPropagation()}
+      onClick={event => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      <SidePanel />
+    </button>
+  );
+}
+
 export function RankingMyRankingDesktopRow({
   entityName,
   onRemove,
@@ -24,7 +47,7 @@ export function RankingMyRankingDesktopRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="group/myrank flex w-full items-center gap-2">
+    <div className="group/rankrow flex w-full items-center gap-2">
       {onRemove ? (
         <div
           role="button"
@@ -44,24 +67,22 @@ export function RankingMyRankingDesktopRow({
       ) : (
         <div className="min-w-0 flex-1">{children}</div>
       )}
-      <button
-        type="button"
-        aria-label="Open entity in side panel"
-        className={cx(
-          'invisible inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full border-none bg-grey-01 p-1.5 text-grey-03 opacity-0 transition duration-200 hover:bg-grey-02 hover:text-text focus:outline-hidden',
-          !hideActions &&
-            'group-focus-within/myrank:visible group-focus-within/myrank:opacity-100 group-hover/myrank:visible group-hover/myrank:opacity-100'
-        )}
-        onPointerDown={event => event.stopPropagation()}
-        onMouseDown={event => event.stopPropagation()}
-        onClick={event => {
-          event.preventDefault();
-          event.stopPropagation();
-          onOpenSidePanel();
-        }}
-      >
-        <SidePanel />
-      </button>
+      <RankingRowSidePanelButton onClick={onOpenSidePanel} hidden={hideActions} />
+    </div>
+  );
+}
+
+export function RankingGlobalDesktopRow({
+  onOpenSidePanel,
+  children,
+}: {
+  onOpenSidePanel: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="group/rankrow flex w-full items-center gap-2">
+      <div className="min-w-0 flex-1">{children}</div>
+      <RankingRowSidePanelButton onClick={onOpenSidePanel} />
     </div>
   );
 }
@@ -85,7 +106,7 @@ export function RankingTabButton({
     <button
       type="button"
       onClick={onClick}
-      className={cx(tabGroupTabLinkStyles({ active }), 'gap-2 !text-smallTitle', active && 'font-medium')}
+      className={cx(tabGroupTabLinkStyles({ active }), 'h-6 gap-2 !text-smallTitle', active && 'font-medium')}
       aria-selected={active}
       aria-label={ariaLabel}
     >

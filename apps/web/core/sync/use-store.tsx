@@ -9,6 +9,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
 
+import type { EntitiesOrderBy } from '../gql/graphql';
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Property, Relation, Value } from '../types';
@@ -313,8 +314,11 @@ export function useQueryEntities({
   deferUntilFetched = false,
   includeUnpublishedLocal = false,
   sort,
+  orderBy,
 }: QueryEntitiesOptions & {
   sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
+  orderBy?: EntitiesOrderBy[];
 }) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -338,7 +342,7 @@ export function useQueryEntities({
   const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
     queryFn: async () => {
       const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
         store,
@@ -348,6 +352,7 @@ export function useQueryEntities({
         after,
         offset,
         sort,
+        orderBy,
       });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
       return { ids: merged.map(e => e.id), endCursor, hasNextPage };
@@ -365,17 +370,17 @@ export function useQueryEntities({
   // inline each render) so the effect only re-runs when the semantic key
   // changes, not on every render.
   const prefetchKeyTail = React.useMemo(
-    () => stableStringify({ where, first, sort: sort ?? null }),
-    [where, first, sort]
+    () => stableStringify({ where, first, sort: sort ?? null, orderBy: orderBy ?? null }),
+    [where, first, sort, orderBy]
   );
   React.useEffect(() => {
     if (!enabled) return;
     if (!prefetchEndCursor) return;
     const nextAfter = prefetchEndCursor;
     cache.prefetchQuery({
-      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null, orderBy ?? null],
       queryFn: async () => {
-        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort, orderBy });
         stream.emit({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: result.merged,

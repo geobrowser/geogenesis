@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
-import { rankingComposeReturnHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
@@ -29,6 +29,7 @@ import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submiss
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
+import { ID } from '~/core/id';
 
 import { Button } from '~/design-system/button';
 
@@ -52,6 +53,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const router = useRouter();
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
+  const relationId = searchParams?.get('relationId') ?? '';
   const { name, entityId, rows: _rows, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
@@ -140,14 +142,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     [searchQuery, rankableEntriesById, rowsByEntityId]
   );
 
+  const myRankingIdSet = React.useMemo(() => new Set(orderedIds.map(id => ID.uuidToHex(id))), [orderedIds]);
+
   const filteredRankedIds = React.useMemo(
-    () => rankedEntityIds.filter(matchesSearch),
-    [rankedEntityIds, matchesSearch]
+    () => rankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id)) && matchesSearch(id)),
+    [rankedEntityIds, myRankingIdSet, matchesSearch]
   );
 
   const filteredUnrankedIds = React.useMemo(
-    () => unrankedEntityIds.filter(matchesSearch),
-    [unrankedEntityIds, matchesSearch]
+    () => unrankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id)) && matchesSearch(id)),
+    [unrankedEntityIds, myRankingIdSet, matchesSearch]
   );
 
   const showRankedUnrankedDivider = filteredRankedIds.length > 0 && filteredUnrankedIds.length > 0;
@@ -221,7 +225,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
   };
 
-  const canPublish = orderedIds.length > 0 && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
+  const publishedIdsKey = (mySubmission?.orderedEntityIds ?? []).map(id => ID.uuidToHex(id)).join('|');
+  const draftIdsKey = orderedIds.map(id => ID.uuidToHex(id)).join('|');
+  const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
+
+  const canPublish =
+    orderedIds.length > 0 && hasUnpublishedChanges && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
 
   const handlePublish = async () => {
     const slots = orderedIds.map(id => {
@@ -233,12 +242,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? spaceId,
       };
     });
-    await saveMySubmission(slots);
-    if (parentEntityId) {
-      router.push(rankingComposeReturnHref(spaceId, parentEntityId));
-      return;
-    }
-    router.back();
+    const published = await saveMySubmission(slots);
+    if (!published) return;
+    // After publishing, land on the fullscreen ranking view instead of the parent space page.
+    router.replace(
+      rankingComposeHref({
+        spaceId,
+        blockEntityId: entityId,
+        relationId,
+        parentEntityId,
+        rankingStartDate,
+        rankingEndDate,
+        mode: 'view',
+      })
+    );
   };
 
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
