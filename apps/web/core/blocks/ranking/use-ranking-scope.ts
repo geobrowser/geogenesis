@@ -6,20 +6,32 @@ import * as React from 'react';
 
 import { produce } from 'immer';
 
-import { EntityId, SpaceId } from '~/core/io/substream-schema';
+import type { Filter } from '~/core/blocks/data/filters';
+import { type Source, removeSourceType, sourceStableKey } from '~/core/blocks/data/source';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
 
-import { Filter } from './filters';
-import { Source, getSource, sourceStableKey, upsertSourceType } from './source';
-import { useDataBlockInstance } from './use-data-block';
+import { getScopeFromFilters } from './ranking-scope';
 
-type UseSourceOptions = {
+type UseRankingScopeOptions = {
   filterState: Filter[];
   setFilterState: (filters: Filter[]) => void;
 };
 
-export function useSource({ filterState, setFilterState }: UseSourceOptions) {
+function hasDataSourceTypeRelation(
+  entityId: string,
+  relations: { fromEntity: { id: string }; type: { id: string }; isDeleted?: boolean }[]
+) {
+  return relations.some(
+    r => r.fromEntity.id === entityId && r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE && !r.isDeleted
+  );
+}
+
+/**
+ * Ranking counterpart of the data block's `useSource`.
+ */
+export function useRankingScope({ filterState, setFilterState }: UseRankingScopeOptions) {
   const { entityId, spaceId } = useDataBlockInstance();
 
   const { initialBlockEntities } = useEditorStoreLite();
@@ -30,14 +42,9 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     id: entityId,
   });
 
-  const dataEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
+  const blockEntityRelations = blockEntity?.relations ?? initialBlockEntity?.relations ?? [];
 
-  const derivedSource: Source = getSource({
-    blockId: EntityId(entityId),
-    dataEntityRelations,
-    currentSpaceId: SpaceId(spaceId),
-    filterState,
-  });
+  const derivedSource: Source = getScopeFromFilters(filterState);
   const derivedSourceKey = sourceStableKey(derivedSource);
   const [optimisticSource, setOptimisticSource] = React.useState<Source | null>(null);
   const source: Source = optimisticSource ?? derivedSource;
@@ -50,25 +57,19 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
     setOptimisticSource(null);
   }, [entityId, spaceId]);
 
+  // A ranking block should never carry a data-source-type relation (e.g. left
+  // over from a block that was previously treated as a data block) — remove it
+  // so the filter-derived scope stays authoritative.
+  React.useEffect(() => {
+    if (!hasDataSourceTypeRelation(entityId, blockEntityRelations)) return;
+    removeSourceType({ blockId: entityId, dataEntityRelations: blockEntityRelations });
+  }, [blockEntityRelations, entityId]);
+
   const setSource = React.useCallback(
     (newSource: Source, options?: { filterStateOverride?: Filter[] }) => {
       const baseFilters = options?.filterStateOverride ?? filterState;
 
       setOptimisticSource(newSource);
-      upsertSourceType({
-        source: newSource,
-        blockId: EntityId(entityId),
-        spaceId: SpaceId(spaceId),
-        dataEntityRelations,
-      });
-
-      if (newSource.type === 'COLLECTION') {
-        setFilterState(
-          produce(baseFilters, draft =>
-            draft.filter(f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY)
-          )
-        );
-      }
 
       if (newSource.type === 'RELATIONS') {
         setFilterState(
@@ -94,13 +95,13 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
             const next = draft.filter(
               f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY
             );
-            for (const spaceId of [...new Set(newSource.value)]) {
+            for (const space of [...new Set(newSource.value)]) {
               next.push({
                 columnId: SystemIds.SPACE_FILTER,
                 columnName: 'Space',
                 valueType: 'RELATION',
-                value: spaceId,
-                valueName: newSource.nameById?.[spaceId] ?? null,
+                value: space,
+                valueName: newSource.nameById?.[space] ?? null,
               });
             }
             return next;
@@ -108,7 +109,7 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
         );
       }
 
-      if (newSource.type === 'GEO') {
+      if (newSource.type === 'GEO' || newSource.type === 'COLLECTION') {
         setFilterState(
           produce(baseFilters, draft =>
             draft.filter(f => f.columnId !== SystemIds.SPACE_FILTER && f.columnId !== SystemIds.RELATION_FROM_PROPERTY)
@@ -116,7 +117,7 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
         );
       }
     },
-    [entityId, spaceId, dataEntityRelations, filterState, setFilterState]
+    [filterState, setFilterState]
   );
 
   return {

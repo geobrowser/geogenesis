@@ -113,28 +113,6 @@ function currentSourceTypeRelation(blockId: string, dataEntityRelations: Relatio
  * for the type of source as a {@link Source}. If no source is found, returns
  * the full Geo graph.
  */
-export function getScopeFromFilters(filterState: Filter[]): Source {
-  const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
-
-  if (maybeEntityFilter) {
-    return {
-      type: 'RELATIONS',
-      value: maybeEntityFilter.value,
-      name: maybeEntityFilter.valueName,
-    };
-  }
-
-  const spaceIdsFromFilters = uniqueSpaceFilterIds(filterState);
-  if (spaceIdsFromFilters.length > 0) {
-    return {
-      type: 'SPACES',
-      value: spaceIdsFromFilters,
-    };
-  }
-
-  return { type: 'GEO' };
-}
-
 export function getSource({ blockId, dataEntityRelations, filterState }: GetSourceArgs): Source {
   const sourceType = currentSourceTypeRelation(blockId, dataEntityRelations)?.toEntity.id;
 

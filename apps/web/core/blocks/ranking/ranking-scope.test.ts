@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { describe, expect, it } from 'vitest';
 
 import type { Filter } from '~/core/blocks/data/filters';
-import { getScopeFromFilters } from '~/core/blocks/data/source';
+import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 
 describe('getScopeFromFilters', () => {
   it('returns GEO when no scope filters are set', () => {

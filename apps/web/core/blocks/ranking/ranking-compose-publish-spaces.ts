@@ -1,5 +1,6 @@
 import type { Filter } from '~/core/blocks/data/filters';
-import { getScopeFromFilters } from '~/core/blocks/data/source';
+
+import { getScopeFromFilters } from './ranking-scope';
 
 /**
  * Spaces from the ranking block's filter scope.

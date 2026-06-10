@@ -20,7 +20,7 @@
     "clean-node-modules": "rimraf --glob \"**/node_modules\""
   },
   "dependencies": {
-    "@geoprotocol/geo-sdk": "^0.19.1"
+    "@geoprotocol/geo-sdk": "0.19.3"
   },
   "devDependencies": {
     "@graphql-codegen/client-preset": "^5.2.4",
@@ -33,6 +33,9 @@
   },
   "overrides": {
     "permissionless": "^0.3.4"
+  },
+  "patchedDependencies": {
+    "@geoprotocol/geo-sdk@0.19.3": "patches/@geoprotocol%2Fgeo-sdk@0.19.3.patch"
   },
   "private": true,
   "workspaces": [

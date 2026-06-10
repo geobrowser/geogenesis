@@ -14,9 +14,8 @@ import type { Entity } from '~/core/types';
 
 type Args = {
   spaceId: string;
-  dataBlockEntityId: string;
+  blockEntityId: string;
   relationId: string;
-  /** Parent page entity id from the child-route query string (required for unpublished blocks). */
   parentEntityIdParam?: string;
 };
 
@@ -29,11 +28,7 @@ function isBlocksRelationToEntity(relation: Relation, entityId: string, spaceId:
   );
 }
 
-/**
- * Loads parent entity + block relations for fullscreen data-block child routes
- * (power-tools, ranking-compose, etc.).
- */
-export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId, parentEntityIdParam = '' }: Args) {
+export function useRankingComposePage({ spaceId, blockEntityId, relationId, parentEntityIdParam = '' }: Args) {
   const parentEntityIdFromUrl =
     parentEntityIdParam && IdUtils.isValid(parentEntityIdParam) ? parentEntityIdParam : null;
 
@@ -54,7 +49,7 @@ export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId, 
   });
 
   const relationFromBlockEntity = useRelation({
-    selector: r => isBlocksRelationToEntity(r, dataBlockEntityId, spaceId),
+    selector: r => isBlocksRelationToEntity(r, blockEntityId, spaceId),
   });
 
   const blockRelation = relationFromStore ?? relationFromBlockEntity ?? relationEntityRelations?.[0] ?? null;
@@ -69,15 +64,15 @@ export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId, 
   const blockRelations = React.useMemo(() => {
     const fromParent = parentEntity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
     if (!relationFromBlockEntity) return fromParent;
-    if (fromParent.some(r => r.toEntity.id === dataBlockEntityId)) return fromParent;
+    if (fromParent.some(r => r.toEntity.id === blockEntityId)) return fromParent;
     return [...fromParent, relationFromBlockEntity];
-  }, [parentEntity, relationFromBlockEntity, dataBlockEntityId]);
+  }, [parentEntity, relationFromBlockEntity, blockEntityId]);
 
   const blockIds = React.useMemo(() => {
     const ids = blockRelations.map(r => r.toEntity.id);
-    if (!ids.includes(dataBlockEntityId)) ids.push(dataBlockEntityId);
+    if (!ids.includes(blockEntityId)) ids.push(blockEntityId);
     return ids;
-  }, [blockRelations, dataBlockEntityId]);
+  }, [blockRelations, blockEntityId]);
 
   const { entities: blocks, isLoading: isBlocksLoading } = useQueryEntities({
     where: { id: { in: blockIds } },
@@ -87,7 +82,7 @@ export function useDataBlockChildPage({ spaceId, dataBlockEntityId, relationId, 
   const isResolvingRelation = Boolean(relationId) && (isRelationLoading || isRelationEntityLoading);
   const isLoading =
     isResolvingRelation || (Boolean(parentEntityId) && isParentLoading) || (blockIds.length > 0 && isBlocksLoading);
-  const hasValidParams = Boolean(spaceId && dataBlockEntityId && relationId);
+  const hasValidParams = Boolean(spaceId && blockEntityId && relationId);
 
   return {
     hasValidParams,

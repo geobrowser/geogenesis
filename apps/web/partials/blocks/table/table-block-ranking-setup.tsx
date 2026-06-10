@@ -10,11 +10,11 @@ import { Filter } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
-import { useSource } from '~/core/blocks/data/use-source';
 import { ensureRankingAggregationRestriction } from '~/core/blocks/ranking/ensure-ranking-aggregation-restriction';
 import { ensureRankingBlockTypeRelation } from '~/core/blocks/ranking/ensure-ranking-block-type';
 import { ensureRankingShownColumns } from '~/core/blocks/ranking/ensure-ranking-shown-columns';
 import { persistRankingBlockDateValues } from '~/core/blocks/ranking/persist-ranking-block-values';
+import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
@@ -53,7 +53,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   React.useEffect(() => {
     setEditable(true);
   }, [setEditable]);
-  const { source, setSource } = useSource({ filterState, setFilterState });
+  const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const [name, setNameDraft] = React.useState('');
   const nameInputRef = useAutofocus<HTMLInputElement>(true);
