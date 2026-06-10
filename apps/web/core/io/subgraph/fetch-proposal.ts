@@ -12,7 +12,6 @@ import {
   findMembershipAction,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
-  mapActionTypeToProposalType,
   mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
@@ -86,9 +85,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     membershipAction?.targetId ? Effect.runPromise(fetchProfileBySpaceId(membershipAction.targetId)) : undefined,
   ]);
 
-  const proposalType = membershipAction
-    ? mapActionTypeToProposalType(membershipAction.actionType)
-    : mapApiActionsToProposalType(apiProposal.actions);
+  const proposalType = mapApiActionsToProposalType(apiProposal.actions);
   const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
   const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
 

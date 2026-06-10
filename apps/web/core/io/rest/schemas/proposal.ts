@@ -313,16 +313,20 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
 }
 
 /**
- * Map REST `actions` to a single {@link ProposalType}. Any `PUBLISH` action means a content edit
- * proposal (`ADD_EDIT`) — action order from the API is not guaranteed, so the first action alone
- * can mis-classify multi-action proposals.
+ * Map REST `actions` to a single {@link ProposalType}. Action order from the API is not
+ * guaranteed, so the first action alone can mis-classify multi-action proposals: any
+ * `PUBLISH` action means a content edit proposal (`ADD_EDIT`), then a membership action
+ * anywhere in the list wins over whatever happens to be first.
  */
-export function mapApiActionsToProposalType(actions: readonly { actionType: string }[]): ProposalType {
+export function mapApiActionsToProposalType(actions: readonly ApiAction[]): ProposalType {
   if (actions.some(a => a.actionType === 'PUBLISH')) {
     return 'ADD_EDIT';
   }
-  const first = actions[0]?.actionType ?? 'UNKNOWN';
-  return mapActionTypeToProposalType(first);
+  const membershipAction = findMembershipAction(actions);
+  if (membershipAction) {
+    return mapActionTypeToProposalType(membershipAction.actionType);
+  }
+  return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
 }
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
