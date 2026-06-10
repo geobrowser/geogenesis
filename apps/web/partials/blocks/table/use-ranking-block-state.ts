@@ -160,7 +160,10 @@ export function useRankingBlockState({
   const hasGlobalRankingData = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
   const showMyRankingSection = showMyRankingTab && hasMyRankingData;
   const showContributePointsBanner = showMyRankingTab && !hasMyRankingData && hasGlobalRankingData;
-  const showAddMyRankingInGlobalHeader = showMyRankingTab && !hasMyRankingData;
+  // Logged-out users still see "Add my ranking" — clicking it opens the sign-in
+  // prompt via ensureAccess instead of hiding the entry point entirely.
+  const isLoggedIn = Boolean(smartAccount);
+  const showAddMyRankingInGlobalHeader = (showMyRankingTab || !isLoggedIn) && !hasMyRankingData;
 
   React.useEffect(() => {
     if (!showMyRankingSection && activeTab === 'my') {
@@ -275,8 +278,12 @@ export function useRankingBlockState({
 
   const openRankingCompose = React.useCallback(
     async (mode: RankingComposeMode = 'edit') => {
-      const allowed = await ensureAccess();
-      if (!allowed) return;
+      // Browsing the fullscreen view doesn't require auth — only composing does.
+      // Logged-out users get the sign-in prompt when they try to add a ranking.
+      if (mode !== 'view') {
+        const allowed = await ensureAccess();
+        if (!allowed) return;
+      }
 
       const effectiveRelationId = resolveBlockRelationId();
       if (!effectiveRelationId) return;

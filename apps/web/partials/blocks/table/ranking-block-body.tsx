@@ -337,7 +337,10 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               </>
             ) : (
               <section className="mb-4 flex w-full min-w-0 flex-col gap-3">
-                <SectionHeader title="Global ranking" />
+                <SectionHeader
+                  title="Global ranking"
+                  action={showAddMyRankingInGlobalHeader ? myRankingActionButton : null}
+                />
                 {globalRankingBody}
               </section>
             )}

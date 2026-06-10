@@ -2,12 +2,16 @@
 
 import { useCallback, useRef } from 'react';
 
+import { Either } from 'effect';
+
+import { getSpaceAccessById } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 export type RankingComposeAccessStatus = 'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'ready';
 
@@ -41,6 +45,11 @@ export function useRankingComposeAccess(spaceId: string) {
     }
 
     if (space?.type === 'DAO' && !canEdit) {
+      const access = await runEffectEither(getSpaceAccessById(spaceId, personalSpaceId));
+      if (Either.isRight(access) && access.right.canEdit) {
+        return true;
+      }
+
       if (!membershipRequestedRef.current && membershipRequestStatus !== 'pending') {
         membershipRequestedRef.current = true;
         requestToBeMember();
@@ -56,6 +65,7 @@ export function useRankingComposeAccess(spaceId: string) {
     personalSpaceId,
     space?.type,
     canEdit,
+    spaceId,
     membershipRequestStatus,
     requestToBeMember,
   ]);

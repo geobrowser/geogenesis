@@ -123,7 +123,8 @@ export function RankingComposeMyRanking({
                   showRemove
                   onView={() => onView(entityId)}
                   onRemove={() => onRemove(entityId)}
-                  primaryDisabled
+                  onPrimaryClick={() => onRemove(entityId)}
+                  primaryDisabled={isDragActive}
                 >
                   {entryRow}
                 </RankingComposeSwipeableRow>
