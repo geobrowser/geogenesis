@@ -39,19 +39,8 @@ export function flattenRowPages(pages: RowPage[]): Row[] {
 }
 
 export function useRankingAccumulatedRows() {
-  const {
-    rows,
-    pageNumber,
-    hasNextPage,
-    setPage,
-    isLoading,
-    isFetched,
-    isPagePlaceholder,
-    isPageFetching,
-    entityId,
-    source,
-    filterState,
-  } = useDataBlock();
+  const { rows, pageNumber, hasNextPage, setPage, isLoading, isFetched, entityId, source, filterState } =
+    useDataBlock();
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
   const [isFetchingNextPage, setIsFetchingNextPage] = React.useState(false);
@@ -81,24 +70,37 @@ export function useRankingAccumulatedRows() {
   const rowsSignature = rowEntityIdsSignature(rows);
 
   React.useEffect(() => {
-    if (pageNumber > 0 && isPagePlaceholder) return;
-    setRowPages(prev => upsertRowPage(prev, pageNumber, rows));
-  }, [pageNumber, rowsSignature, isPagePlaceholder]);
+    setRowPages(prev => {
+      // While the next page is in flight, the query layer serves the previous
+      // page's rows as placeholder data — don't record them under the new
+      // page number.
+      if (pageNumber > 0) {
+        const previousPage = prev.find(p => p.page === pageNumber - 1);
+        if (previousPage && rowEntityIdsSignature(previousPage.rows) === rowsSignature) {
+          return prev;
+        }
+      }
+      return upsertRowPage(prev, pageNumber, rows);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageNumber, rowsSignature]);
+
+  const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageNumber), [rowPages, pageNumber]);
 
   const accumulatedRows = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const fetchNextPage = React.useCallback(() => {
-    if (!hasNextPage || isPagePlaceholder || isPageFetching || isFetchingNextPage) return;
+    if (!hasNextPage || isFetchingNextPage || !hasCurrentPage) return;
     setIsFetchingNextPage(true);
     setPage('next');
-  }, [hasNextPage, isPagePlaceholder, isPageFetching, isFetchingNextPage, setPage]);
+  }, [hasNextPage, isFetchingNextPage, hasCurrentPage, setPage]);
 
   React.useEffect(() => {
-    if (!isFetchingNextPage || !hasNextPage) return;
-    if (!isPagePlaceholder && !isPageFetching) {
+    if (!isFetchingNextPage) return;
+    if (hasCurrentPage) {
       setIsFetchingNextPage(false);
     }
-  }, [isFetchingNextPage, hasNextPage, isPagePlaceholder, isPageFetching]);
+  }, [isFetchingNextPage, hasCurrentPage]);
 
   const isLoadingMore = hasNextPage && isFetchingNextPage;
 

@@ -3,8 +3,8 @@
 import { useParams, useSearchParams } from 'next/navigation';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
-import { useDataBlockChildPage } from '~/core/blocks/data/use-data-block-child-page';
 import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
+import { useRankingComposePage } from '~/core/blocks/ranking/use-ranking-compose-page';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
@@ -31,9 +31,9 @@ export default function RankingComposePage() {
   const rankingEndDate = searchParams?.get('rankingEndDate') ?? '';
   const mode: RankingComposeMode = searchParams?.get('mode') === 'view' ? 'view' : 'edit';
 
-  const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useDataBlockChildPage({
+  const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
     spaceId,
-    dataBlockEntityId,
+    blockEntityId: dataBlockEntityId,
     relationId,
     parentEntityIdParam,
   });

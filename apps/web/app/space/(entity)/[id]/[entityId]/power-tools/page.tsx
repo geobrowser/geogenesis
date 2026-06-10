@@ -1,11 +1,18 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { Effect } from 'effect';
 import { useParams, useSearchParams } from 'next/navigation';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
-import { useDataBlockChildPage } from '~/core/blocks/data/use-data-block-child-page';
+import { getRelationEntityRelations } from '~/core/io/queries';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { useQueryEntities, useQueryEntity, useQueryRelation, useRelation } from '~/core/sync/use-store';
 
 import { PowerToolsScreen } from '~/partials/power-tools/power-tools-screen';
 
@@ -16,16 +23,50 @@ export default function PowerToolsPage() {
   const spaceId = params?.id as string;
   const dataBlockEntityId = params?.entityId as string;
   const relationId = searchParams?.get('relationId') ?? '';
-  const parentEntityIdParam = searchParams?.get('parentEntityId') ?? '';
 
-  const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useDataBlockChildPage({
+  // Hydrate the relation from the server, then read it from the reactive store.
+  const { isLoading: isRelationLoading } = useQueryRelation({
+    id: relationId,
     spaceId,
-    dataBlockEntityId,
-    relationId,
-    parentEntityIdParam,
+    enabled: Boolean(spaceId && relationId),
   });
 
-  if (!hasValidParams) {
+  const { data: relationEntityRelations, isLoading: isRelationEntityLoading } = useQuery({
+    queryKey: ['relation-entity-relations', relationId, spaceId],
+    queryFn: ({ signal }) => Effect.runPromise(getRelationEntityRelations(relationId, spaceId, signal)),
+    enabled: Boolean(spaceId && relationId),
+  });
+
+  const relationFromStore = useRelation({
+    selector: r => r.id === relationId || r.entityId === relationId,
+  });
+
+  const blockRelation = relationFromStore ?? relationEntityRelations?.[0] ?? null;
+
+  const parentEntityId = blockRelation?.fromEntity.id ?? null;
+
+  const { entity: parentEntity, isLoading: isParentLoading } = useQueryEntity({
+    spaceId,
+    id: parentEntityId ?? '',
+    enabled: Boolean(spaceId && parentEntityId),
+  });
+
+  const blockRelations = React.useMemo(() => {
+    return parentEntity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+  }, [parentEntity]);
+
+  const blockIds = React.useMemo(() => blockRelations.map(r => r.toEntity.id), [blockRelations]);
+
+  const { entities: blocks, isLoading: isBlocksLoading } = useQueryEntities({
+    where: {
+      id: { in: blockIds },
+    },
+    enabled: blockIds.length > 0,
+  });
+
+  const isLoading = isRelationLoading || isRelationEntityLoading || isParentLoading || isBlocksLoading;
+
+  if (!spaceId || !dataBlockEntityId || !relationId) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-lg">Invalid parameters</div>

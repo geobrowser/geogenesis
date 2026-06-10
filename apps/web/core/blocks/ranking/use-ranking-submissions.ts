@@ -1,6 +1,6 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { Ops, personalSpace } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -13,11 +13,11 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { checkEntityExists } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
-import { createRank, getExistingVoteRelations, updateRank } from './ranking-rank-api';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { useMyRanking } from './use-my-ranking';
@@ -115,20 +115,30 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       setIsSaving(true);
       try {
         const rankName = blockName.trim() || 'My ranking';
-        const existingVotes = myRankEntity ? getExistingVoteRelations(myRankEntity) : [];
 
-        const { ops, id: rankId } = myRankEntity
-          ? updateRank({
-              rankId: myRankEntity.id,
-              votes,
-              existingVotes,
-            })
-          : createRank({
-              name: rankName,
-              rankType: 'ORDINAL',
-              blockId,
-              votes,
-            });
+        let ops;
+        let rankId: string;
+        try {
+          console.log("votes==============", blockId, spaceId, votes);
+          const result = myRankEntity
+            ? await geo.ranks.update({
+                rankId: myRankEntity.id,
+                rankType: 'ORDINAL',
+                votes,
+              })
+            : Ops.ranks.create({
+                name: rankName,
+                rankType: 'ORDINAL',
+                blockId,
+                votes,
+              });
+          ops = result.ops;
+          rankId = result.id;
+        } catch (error) {
+          console.error('[useRankingSubmissions] Building rank ops failed:', error);
+          reportError(`Failed to publish ranking: ${describeError(error)}`);
+          return;
+        }
 
         const publish = Effect.gen(function* () {
           if (ops.length === 0) {

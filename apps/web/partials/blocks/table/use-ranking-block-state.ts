@@ -9,7 +9,6 @@ import { useRouter } from 'next/navigation';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
-import { useSource } from '~/core/blocks/data/use-source';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
@@ -17,6 +16,7 @@ import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/rank
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -53,7 +53,7 @@ export function useRankingBlockState({
   const canEdit = useCanUserEdit(spaceId);
 
   const { filterState, setFilterState } = useFilters(canEdit);
-  const { source, setSource } = useSource({ filterState, setFilterState });
+  const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const { startDate, endDate } = useRankingBlockDates({
     startDate: rankingStartDate,

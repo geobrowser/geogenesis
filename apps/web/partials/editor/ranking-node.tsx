@@ -95,12 +95,7 @@ function RankingNodeComponent({ node, updateAttributes }: NodeViewProps) {
     <NodeViewWrapper>
       <div contentEditable="false" suppressContentEditableWarning={true} className="ranking-node">
         <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
-          <DataBlockProvider
-            spaceId={spaceId}
-            entityId={id}
-            relationId={relationEntityId}
-            sourceMode="filter-only"
-          >
+          <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relationEntityId}>
             <RankingBlock
               spaceId={spaceId}
               blockId={id}
