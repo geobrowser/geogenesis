@@ -170,6 +170,15 @@ export const ApiProposalListResponseSchema = Schema.Struct({
 
 export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListResponseSchema>;
 
+const MEMBERSHIP_ACTION_TYPES = new Set<ApiActionType>(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
+
+/** Finds the membership action in a proposal's action list. The REST schema does
+ *  not guarantee action order, so a lookup by index 0 can miss multi-action
+ *  proposals where the membership action is not first. */
+export function findMembershipAction(actions: readonly ApiAction[]): ApiAction | undefined {
+  return actions.find(a => MEMBERSHIP_ACTION_TYPES.has(a.actionType));
+}
+
 const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
   'SUBSPACE_VERIFIED',
   'SUBSPACE_UNVERIFIED',

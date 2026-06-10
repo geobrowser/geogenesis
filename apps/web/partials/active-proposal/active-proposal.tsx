@@ -7,6 +7,7 @@ import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
   getIsProposalEnded,
+  getMembershipProposalDisplayName,
   getNoVotePercentage,
   getProposalName,
   getProposalTimeRemaining,
@@ -65,8 +66,12 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
   const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
-  const proposalTitle =
-    proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space });
+  // Membership proposals are about the target person, not the proposer (which
+  // for join requests is the DAO space itself) — show them in title and byline.
+  const proposalTitle = proposal.targetProfile
+    ? getMembershipProposalDisplayName(proposal.type, proposal.targetProfile)
+    : (proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space }));
+  const bylineProfile = proposal.targetProfile ?? proposal.createdBy;
 
   const isAddEdit = proposal.type === 'ADD_EDIT';
 
@@ -101,22 +106,22 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                     <div className="text-mediumTitle">{proposalTitle}</div>
                     <div className="flex items-center justify-between">
                       <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-metadataMedium">
-                        {proposal.createdBy.profileLink ? (
+                        {bylineProfile.profileLink ? (
                           <Link
-                            href={proposal.createdBy.profileLink}
+                            href={bylineProfile.profileLink}
                             className="flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
                           >
                             <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                              <Avatar avatarUrl={bylineProfile.avatarUrl} value={bylineProfile.address} />
                             </div>
-                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                            <p className="text-grey-04">{bylineProfile.name ?? bylineProfile.address}</p>
                           </Link>
                         ) : (
                           <div className="flex min-w-0 items-center gap-2">
                             <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                              <Avatar avatarUrl={proposal.createdBy.avatarUrl} value={proposal.createdBy.address} />
+                              <Avatar avatarUrl={bylineProfile.avatarUrl} value={bylineProfile.address} />
                             </div>
-                            <p className="text-grey-04">{proposal.createdBy.name ?? proposal.createdBy.address}</p>
+                            <p className="text-grey-04">{bylineProfile.name ?? bylineProfile.address}</p>
                           </div>
                         )}
                         {isProposalEnded && (proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED') && (

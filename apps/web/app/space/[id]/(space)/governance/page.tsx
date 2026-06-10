@@ -15,6 +15,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { Environment } from '~/core/environment';
 import { cachedFetchProposal } from '~/core/io/subgraph';
 import { graphql } from '~/core/io/subgraph/graphql';
+import { getMembershipProposalDisplayName } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
@@ -46,7 +47,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   if (searchParams.proposalId) {
     const proposal = await cachedFetchProposal({ id: searchParams.proposalId });
-    const proposalName = proposal?.name;
+    const proposalName = proposal?.targetProfile
+      ? getMembershipProposalDisplayName(proposal.type, proposal.targetProfile)
+      : proposal?.name;
 
     if (proposalName) {
       return {
