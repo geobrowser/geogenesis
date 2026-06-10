@@ -617,7 +617,10 @@ export function useQueryEntitiesAsync() {
 
   return async ({ where, first = 9, after, offset, includeUnpublishedLocal = false }: FindManyParameters) => {
     const entities = await E.findMany({ store, cache, where, first, after, offset });
-    if (!includeUnpublishedLocal) return entities;
+    // Match useQueryEntities: only merge unpublished locals on the first page,
+    // otherwise paginating callers would re-prepend them on every page.
+    const isFirstPage = after === undefined && (offset === undefined || offset === 0);
+    if (!includeUnpublishedLocal || !isFirstPage) return entities;
     return mergeUnpublishedLocalEntities(
       store,
       where,

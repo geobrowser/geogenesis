@@ -77,7 +77,9 @@ describe('E.syncMany pagination', () => {
     const syncCallback = (mockStream.on as ReturnType<typeof vi.fn>).mock.calls.find(
       call => call[0] === GeoEventStream.ENTITIES_SYNCED
     )?.[1];
-    syncCallback?.({ entities: pageOne });
+    // Guard against the test silently passing if GeoStore stops registering the listener.
+    expect(syncCallback).toBeTypeOf('function');
+    syncCallback({ type: GeoEventStream.ENTITIES_SYNCED, entities: pageOne });
     // Store hydration is batched via queueMicrotask
     await Promise.resolve();
 
