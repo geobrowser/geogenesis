@@ -49,7 +49,7 @@ const VOTE_NOT_ACCEPTED_MESSAGE =
   'Your vote could not be cast — voting may have ended, or your vote may already be counted. Refreshing to show the latest state.';
 
 const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
-  'This membership change could not be applied — it has likely already been made. Refreshing to show the latest state.';
+  'This change could not be applied — it has likely already been made. Refreshing to show the latest state.';
 
 /**
  * Returns the toast message for a vote error caused by a stale proposal, or
