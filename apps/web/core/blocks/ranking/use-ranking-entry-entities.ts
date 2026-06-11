@@ -18,7 +18,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   const entityIdsKey = entityIds.filter(Boolean).join('|');
   const stableIds = React.useMemo(() => [...new Set(entityIdsKey ? entityIdsKey.split('|') : [])], [entityIdsKey]);
 
-  const { entities, isLoading } = useQueryEntities({
+  const { entities, isLoading, isFetched } = useQueryEntities({
     enabled: stableIds.length > 0,
     where: { id: { in: stableIds } },
     first: stableIds.length || undefined,
@@ -44,5 +44,5 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
     [byId, stableIds]
   );
 
-  return { entries, isLoading };
+  return { entries, isLoading: isLoading && !isFetched };
 }

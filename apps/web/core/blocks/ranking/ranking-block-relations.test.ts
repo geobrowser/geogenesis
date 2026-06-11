@@ -6,6 +6,7 @@ import type { Relation } from '~/core/types';
 import {
   buildLeaderboardFromOrderedEntityIds,
   getAggregatedRankingSubmissionCount,
+  getAggregatedRankingSubmitterRefs,
   getAggregatedRankingSubmitterSpaceIds,
   getOrderedRelationTargetIds,
 } from './ranking-block-relations';
@@ -190,5 +191,29 @@ describe('aggregated rankings submissions', () => {
     ];
 
     expect(getAggregatedRankingSubmitterSpaceIds(relations, blockId, 'space-1')).toEqual(['personal-a', 'personal-b']);
+  });
+
+  it('returns submitter refs with rank entity ids in relation order', () => {
+    const relations = [
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-2',
+        toSpaceId: 'personal-b',
+        position: '00000000000000000000000000000001',
+      }),
+      relation({
+        blockId,
+        propertyId: AGGREGATED_RANKINGS_PROPERTY_ID,
+        toEntityId: 'rank-1',
+        toSpaceId: 'personal-a',
+        position: '00000000000000000000000000000000',
+      }),
+    ];
+
+    expect(getAggregatedRankingSubmitterRefs(relations, blockId, 'space-1')).toEqual([
+      { rankEntityId: 'rank-1', spaceId: 'personal-a' },
+      { rankEntityId: 'rank-2', spaceId: 'personal-b' },
+    ]);
   });
 });

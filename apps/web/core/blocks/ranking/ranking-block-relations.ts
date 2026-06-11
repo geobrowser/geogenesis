@@ -55,12 +55,26 @@ function aggregatedRankingRelations(relations: Relation[], blockId: string, spac
 }
 
 /** Total submitted rankings — one relation per ballot on Aggregated rankings. */
-export function getAggregatedRankingSubmissionCount(
+export function getAggregatedRankingSubmissionCount(relations: Relation[], blockId: string, spaceId: string): number {
+  return aggregatedRankingRelations(relations, blockId, spaceId).length;
+}
+
+export type AggregatedRankingSubmitterRef = {
+  rankEntityId: string;
+  spaceId?: string;
+};
+
+export function getAggregatedRankingSubmitterRefs(
   relations: Relation[],
   blockId: string,
   spaceId: string
-): number {
-  return aggregatedRankingRelations(relations, blockId, spaceId).length;
+): AggregatedRankingSubmitterRef[] {
+  return aggregatedRankingRelations(relations, blockId, spaceId)
+    .map(relation => ({
+      rankEntityId: relation.toEntity.id,
+      spaceId: relation.toSpaceId,
+    }))
+    .filter(ref => Boolean(ref.rankEntityId));
 }
 
 /** Personal spaces that submitted rankings (`to_space` on each Aggregated rankings relation). */
@@ -69,7 +83,7 @@ export function getAggregatedRankingSubmitterSpaceIds(
   blockId: string,
   spaceId: string
 ): string[] {
-  return aggregatedRankingRelations(relations, blockId, spaceId)
-    .map(relation => relation.toSpaceId)
+  return getAggregatedRankingSubmitterRefs(relations, blockId, spaceId)
+    .map(ref => ref.spaceId)
     .filter((id): id is string => Boolean(id));
 }

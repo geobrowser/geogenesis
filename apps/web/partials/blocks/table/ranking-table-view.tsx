@@ -31,11 +31,11 @@ export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDat
   } = state;
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-x-hidden overflow-y-auto">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden">
       <div className="mb-4 flex shrink-0 flex-col gap-3">
         <Text
           variant="largeTitle"
-          className={cx(!isMobile && '!text-[44px]')}
+          className={cx('!leading-[1.3]', !isMobile && '!text-[44px]')}
           ellipsize={!isMobile}
           aria-label={displayName}
         >
@@ -54,7 +54,9 @@ export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDat
         ) : null}
       </div>
 
-      <RankingBlockBody state={state} presentation="fullscreen" />
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <RankingBlockBody state={state} presentation="fullscreen" />
+      </div>
     </div>
   );
 }

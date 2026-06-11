@@ -82,7 +82,7 @@ export function RankingComposeHeader({
       </div>
       <Text
         variant="largeTitle"
-        className={cx(!isMobile && '!text-[44px]')}
+        className={cx('!leading-[1.3]', !isMobile && '!text-[44px]')}
         ellipsize={!isMobile}
         aria-label={displayName}
       >

@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
@@ -37,12 +37,14 @@ type UseRankingBlockStateParams = {
   spaceId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  paginateEmbeddedRanking?: boolean;
 };
 
 export function useRankingBlockState({
   spaceId,
   rankingStartDate = '',
   rankingEndDate = '',
+  paginateEmbeddedRanking = false,
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
@@ -100,10 +102,44 @@ export function useRankingBlockState({
   );
 
   const globalDisplayEntityIds = globalRankingEntityIds;
+  const globalRankingIdsKey = globalDisplayEntityIds.join('|');
+
+  const [embeddedGlobalPageNumber, setEmbeddedGlobalPageNumber] = React.useState(0);
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(0);
+  }, [entityId, globalRankingIdsKey]);
+
+  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(globalDisplayEntityIds.length / PAGE_SIZE));
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
+  }, [embeddedGlobalTotalPages]);
+
+  const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
+    if (!paginateEmbeddedRanking) return globalDisplayEntityIds;
+    const start = embeddedGlobalPageNumber * PAGE_SIZE;
+    return globalDisplayEntityIds.slice(start, start + PAGE_SIZE);
+  }, [embeddedGlobalPageNumber, globalDisplayEntityIds, paginateEmbeddedRanking]);
+
+  const globalRankingListEntityIds = paginateEmbeddedRanking ? paginatedGlobalDisplayEntityIds : globalDisplayEntityIds;
+
+  const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
+  const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
+  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && globalDisplayEntityIds.length > PAGE_SIZE;
+
+  const setEmbeddedGlobalPage = React.useCallback(
+    (page: number | 'previous' | 'next') => {
+      setEmbeddedGlobalPageNumber(prev => {
+        if (page === 'previous') return Math.max(0, prev - 1);
+        if (page === 'next') return Math.min(embeddedGlobalTotalPages - 1, prev + 1);
+        return Math.max(0, Math.min(embeddedGlobalTotalPages - 1, page));
+      });
+    },
+    [embeddedGlobalTotalPages]
+  );
 
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
-  const showAggregatedRankingsOnGlobalTab = aggregatedRankingCount > 0;
-  const visibleAggregatedSubmitterSpaceIds = aggregatedSubmitterSpaceIds.slice(0, 3);
 
   const globalRankByEntityId = React.useMemo(
     () => new Map(globalLeaderboard.map(e => [e.entityId, e.rank])),
@@ -156,6 +192,43 @@ export function useRankingBlockState({
     return mySubmission?.orderedEntityIds ?? [];
   }, [hasSavedDraft, myOrderIds, mySubmission]);
 
+  const myRankingIdsKey = myDisplayEntityIds.join('|');
+
+  const [embeddedMyPageNumber, setEmbeddedMyPageNumber] = React.useState(0);
+
+  React.useEffect(() => {
+    setEmbeddedMyPageNumber(0);
+  }, [entityId, myRankingIdsKey]);
+
+  const embeddedMyTotalPages = Math.max(1, Math.ceil(myDisplayEntityIds.length / PAGE_SIZE));
+
+  React.useEffect(() => {
+    setEmbeddedMyPageNumber(prev => Math.min(prev, embeddedMyTotalPages - 1));
+  }, [embeddedMyTotalPages]);
+
+  const paginatedMyDisplayEntityIds = React.useMemo(() => {
+    if (!paginateEmbeddedRanking) return myDisplayEntityIds;
+    const start = embeddedMyPageNumber * PAGE_SIZE;
+    return myDisplayEntityIds.slice(start, start + PAGE_SIZE);
+  }, [embeddedMyPageNumber, myDisplayEntityIds, paginateEmbeddedRanking]);
+
+  const myRankingListEntityIds = paginateEmbeddedRanking ? paginatedMyDisplayEntityIds : myDisplayEntityIds;
+
+  const hasEmbeddedMyPreviousPage = paginateEmbeddedRanking && embeddedMyPageNumber > 0;
+  const hasEmbeddedMyNextPage = paginateEmbeddedRanking && embeddedMyPageNumber < embeddedMyTotalPages - 1;
+  const showEmbeddedMyPagination = paginateEmbeddedRanking && myDisplayEntityIds.length > PAGE_SIZE;
+
+  const setEmbeddedMyPage = React.useCallback(
+    (page: number | 'previous' | 'next') => {
+      setEmbeddedMyPageNumber(prev => {
+        if (page === 'previous') return Math.max(0, prev - 1);
+        if (page === 'next') return Math.min(embeddedMyTotalPages - 1, prev + 1);
+        return Math.max(0, Math.min(embeddedMyTotalPages - 1, page));
+      });
+    },
+    [embeddedMyTotalPages]
+  );
+
   const hasMyRankingData = myDisplayEntityIds.length > 0 || hasMySubmission;
   const hasGlobalRankingData = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
   const showMyRankingSection = showMyRankingTab && hasMyRankingData;
@@ -173,10 +246,10 @@ export function useRankingBlockState({
 
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
-    globalDisplayEntityIds
+    globalRankingListEntityIds
   );
 
-  const { entries: myEntries } = useRankingEntryEntities(spaceId, myDisplayEntityIds);
+  const { entries: myEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
@@ -357,11 +430,23 @@ export function useRankingBlockState({
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
-    globalDisplayEntityIds,
+    globalDisplayEntityIds: globalRankingListEntityIds,
+    totalGlobalRankingEntityCount: globalDisplayEntityIds.length,
     globalRankByEntityId,
+    showEmbeddedGlobalPagination,
+    embeddedGlobalPageNumber,
+    hasEmbeddedGlobalPreviousPage,
+    hasEmbeddedGlobalNextPage,
+    setEmbeddedGlobalPage,
     globalEntriesById,
     isLoadingGlobalEntries,
-    myDisplayEntityIds,
+    myDisplayEntityIds: myRankingListEntityIds,
+    totalMyRankingEntityCount: myDisplayEntityIds.length,
+    embeddedMyPageNumber,
+    showEmbeddedMyPagination,
+    hasEmbeddedMyPreviousPage,
+    hasEmbeddedMyNextPage,
+    setEmbeddedMyPage,
     myRankingEntryByEntityId,
     myAvatarUrl,
     myAvatarSeed,
@@ -369,8 +454,6 @@ export function useRankingBlockState({
     showMyRankingSection,
     showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
-    showAggregatedRankingsOnGlobalTab,
-    visibleAggregatedSubmitterSpaceIds,
     showFirstRankingPrompt,
     showEditRankingButton,
     isSaving,

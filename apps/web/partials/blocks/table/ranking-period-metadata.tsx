@@ -1,10 +1,17 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
+
+import cx from 'classnames';
+import { Effect } from 'effect';
 
 import type { RankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import type { RankingSubmissionRecord } from '~/core/blocks/ranking/ranking-submission-types';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
@@ -12,10 +19,45 @@ import { FallbackImage } from '~/design-system/fallback-image';
 import { Stars } from '~/design-system/icons/stars';
 import { Time } from '~/design-system/icons/time';
 
-const VISIBLE_RANKED_BY_AVATARS = 2;
+const VISIBLE_RANKED_BY_AVATARS = 3;
+const RANKED_BY_AVATAR_SIZE = 20;
+const RANKED_BY_ROW_CLASS = 'flex w-full min-w-0 flex-wrap items-center gap-[8px]';
+
+function dedupePreserveOrder(ids: string[]): string[] {
+  const seen = new Set<string>();
+  return ids.filter(id => {
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
 
 export function getRankingPeriodIcon(state: RankingPeriodState) {
   return state === 'not-started' ? <Stars color="grey-04" /> : <Time color="grey-04" />;
+}
+
+type RankingRankedByAvatar = {
+  key: string;
+  avatarUrl: string | null;
+  fallbackSeed: string;
+};
+
+function RankingRankedByAvatarGroup({ avatars }: { avatars: RankingRankedByAvatar[] }) {
+  if (avatars.length === 0) return null;
+
+  return (
+    <AvatarGroup variant="spaced">
+      {avatars.map(avatar => (
+        <AvatarGroup.Item key={avatar.key} size={20}>
+          {avatar.avatarUrl ? (
+            <FallbackImage value={avatar.avatarUrl} sizes={`${RANKED_BY_AVATAR_SIZE}px`} className="object-cover" />
+          ) : (
+            <Avatar size={RANKED_BY_AVATAR_SIZE} value={avatar.fallbackSeed} />
+          )}
+        </AvatarGroup.Item>
+      ))}
+    </AvatarGroup>
+  );
 }
 
 export function RankingAggregatedSubmitterAvatars({
@@ -27,31 +69,42 @@ export function RankingAggregatedSubmitterAvatars({
   totalCount?: number;
   maxVisible?: number;
 }) {
-  const count = totalCount ?? submitterSpaceIds.length;
-  const visibleSpaceIds = submitterSpaceIds.slice(0, maxVisible);
+  const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
+  const visibleSpaceIds = uniqueSpaceIds.slice(0, maxVisible);
+  const { data: profilesBySpaceId = new Map() } = useQuery({
+    queryKey: ['ranking-submitter-profiles', visibleSpaceIds],
+    enabled: visibleSpaceIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(visibleSpaceIds));
+      return new Map(visibleSpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
+    },
+  });
   const { spacesById } = useSpacesByIds(visibleSpaceIds);
 
-  if (count === 0) return null;
+  const uniqueCount = uniqueSpaceIds.length;
+  const count = totalCount ?? uniqueCount;
 
-  const extraCount = Math.max(count - visibleSpaceIds.length, 0);
+  if (count === 0 && uniqueCount === 0) return null;
+
+  const extraCount = Math.max(uniqueCount - visibleSpaceIds.length, 0);
+
+  const avatars: RankingRankedByAvatar[] = visibleSpaceIds.map(spaceId => {
+    const profile = profilesBySpaceId.get(spaceId);
+    const profileAvatarUrl =
+      profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+    const spaceImage = spacesById.get(spaceId)?.entity.image;
+    const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
+    return {
+      key: spaceId,
+      avatarUrl: profileAvatarUrl ?? spaceAvatarUrl,
+      fallbackSeed: profile?.address ?? spaceId,
+    };
+  });
 
   return (
     <>
-      <AvatarGroup>
-        {visibleSpaceIds.map(spaceId => {
-          const space = spacesById.get(spaceId);
-          const image = space?.entity.image;
-          return (
-            <AvatarGroup.Item key={spaceId}>
-              {image ? (
-                <FallbackImage value={image} sizes="24px" className="object-cover" />
-              ) : (
-                <Avatar size={24} value={spaceId} />
-              )}
-            </AvatarGroup.Item>
-          );
-        })}
-      </AvatarGroup>
+      <RankingRankedByAvatarGroup avatars={avatars} />
       {extraCount > 0 ? (
         <span className="shrink-0 rounded-full bg-grey-01 px-1.5 py-0.5 text-metadata text-grey-04">+{extraCount}</span>
       ) : null}
@@ -73,19 +126,15 @@ export function RankingRankedBy({
     const extraCount = Math.max(submissions.length - visible.length, 0);
 
     return (
-      <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <span className={RANKED_BY_ROW_CLASS}>
         <span className="shrink-0 text-grey-04">Ranked by</span>
-        <AvatarGroup>
-          {visible.map(submission => (
-            <AvatarGroup.Item key={submission.authorSpaceId}>
-              {submission.author.avatarUrl ? (
-                <FallbackImage value={submission.author.avatarUrl} sizes="24px" className="object-cover" />
-              ) : (
-                <Avatar size={24} value={submission.author.address} />
-              )}
-            </AvatarGroup.Item>
-          ))}
-        </AvatarGroup>
+        <RankingRankedByAvatarGroup
+          avatars={visible.map(submission => ({
+            key: submission.authorSpaceId,
+            avatarUrl: submission.author.avatarUrl,
+            fallbackSeed: submission.author.address,
+          }))}
+        />
         {extraCount > 0 ? (
           <span className="shrink-0 rounded-full bg-grey-01 px-1.5 py-0.5 text-metadata text-grey-04">
             +{extraCount}
@@ -95,13 +144,13 @@ export function RankingRankedBy({
     );
   }
 
-  if (aggregatedRankingCount > 0) {
+  if (aggregatedSubmitterSpaceIds.length > 0 || aggregatedRankingCount > 0) {
     return (
-      <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <span className={RANKED_BY_ROW_CLASS}>
         <span className="shrink-0 text-grey-04">Ranked by</span>
         <RankingAggregatedSubmitterAvatars
           submitterSpaceIds={aggregatedSubmitterSpaceIds}
-          totalCount={aggregatedRankingCount}
+          totalCount={aggregatedRankingCount || aggregatedSubmitterSpaceIds.length}
         />
       </span>
     );
@@ -134,18 +183,26 @@ export function RankingPeriodMetadata({
   if (!periodLabel && !hasRankedByOthers) return null;
 
   const periodIcon = getRankingPeriodIcon(periodState);
+  const showRankedBy = hasRankedByOthers;
+  const showPeriod = Boolean(periodLabel);
 
   return (
-    <div className={`${className} flex flex-wrap items-center gap-x-4 gap-y-2 text-metadata text-grey-04`}>
-      {hasRankedByOthers ? (
+    <div
+      className={cx(
+        className,
+        'w-full min-w-0 text-metadata text-grey-04',
+        showRankedBy && showPeriod ? 'flex flex-col gap-2' : 'flex flex-wrap items-center gap-x-4 gap-y-2'
+      )}
+    >
+      {showRankedBy ? (
         <RankingRankedBy
           submissions={submissions}
           aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
           aggregatedRankingCount={aggregatedRankingCount}
         />
       ) : null}
-      {periodLabel ? (
-        <span className="flex items-center gap-1.5">
+      {showPeriod ? (
+        <span className="flex w-full min-w-0 items-center gap-1.5">
           {periodIcon}
           {periodLabel}
         </span>

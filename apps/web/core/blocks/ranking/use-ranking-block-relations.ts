@@ -10,9 +10,10 @@ import { useDataBlockInstance } from '../data/use-data-block';
 import {
   buildLeaderboardFromOrderedEntityIds,
   getAggregatedRankingSubmissionCount,
-  getAggregatedRankingSubmitterSpaceIds,
+  getAggregatedRankingSubmitterRefs,
   getOrderedRelationTargetIds,
 } from './ranking-block-relations';
+import { useResolvedRankingSubmitterSpaceIds } from './use-ranking-submitter-space-ids';
 
 type Options = {
   blockId?: string;
@@ -39,10 +40,12 @@ export function useRankingBlockRelations(options: Options = {}) {
     [blockId, blockRelations, spaceId]
   );
 
-  const aggregatedSubmitterSpaceIds = React.useMemo(
-    () => getAggregatedRankingSubmitterSpaceIds(blockRelations, blockId, spaceId),
+  const aggregatedSubmitterRefs = React.useMemo(
+    () => getAggregatedRankingSubmitterRefs(blockRelations, blockId, spaceId),
     [blockId, blockRelations, spaceId]
   );
+
+  const aggregatedSubmitterSpaceIds = useResolvedRankingSubmitterSpaceIds(aggregatedSubmitterRefs);
 
   const aggregatedRankingCount = React.useMemo(
     () => getAggregatedRankingSubmissionCount(blockRelations, blockId, spaceId),

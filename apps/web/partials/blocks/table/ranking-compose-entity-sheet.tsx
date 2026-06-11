@@ -131,7 +131,6 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
                   entityId={target.entityId}
                   requestedSpaceId={target.spaceId}
                   openedWithMainViewEditing={false}
-                  showHeader={false}
                   previewImageUrl={target.previewImageUrl}
                   previewName={target.previewName}
                   previewDescription={target.previewDescription}

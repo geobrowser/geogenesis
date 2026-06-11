@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
-import type { Row } from '~/core/types';
+import type { Row, SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
@@ -22,6 +22,7 @@ type Props = {
   displayEntityIds: string[];
   isLoading: boolean;
   entriesById: Map<string, RankingEntryDisplay>;
+  searchResultsById: Map<string, SearchResult>;
   rowsByEntityId: Map<string, Row>;
   canPublish: boolean;
   isSaving: boolean;
@@ -40,6 +41,7 @@ export function RankingComposeMyRanking({
   displayEntityIds,
   isLoading,
   entriesById,
+  searchResultsById,
   rowsByEntityId,
   canPublish,
   isSaving,
@@ -94,12 +96,14 @@ export function RankingComposeMyRanking({
             renderItem={(entityId, index, isDragActive) => {
               const entry = entriesById.get(entityId);
               const row = rowsByEntityId.get(entityId);
-              if (!entry && !row) return null;
+              const searchHit = searchResultsById.get(entityId);
+              if (!entry && !row && !searchHit) return null;
               const entryDisplay = {
                 entityId,
-                name: entry?.name ?? (row ? getRowDisplayName(row) : 'Untitled'),
-                description: entry?.description ?? (row ? getRowDescription(row) : null),
-                image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+                name: entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled'),
+                description: entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null)),
+                image:
+                  entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null,
               };
               const entryRow = (
                 <RankingEntryRow

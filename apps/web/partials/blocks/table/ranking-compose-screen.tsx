@@ -24,12 +24,14 @@ import {
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
+import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compose-search';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { ID } from '~/core/id';
+import type { SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
@@ -136,33 +138,74 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   } | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-  const matchesSearch = React.useCallback(
-    (entityId: string) => {
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return true;
-      const entry = rankableEntriesById.get(entityId);
-      const row = rowsByEntityId.get(entityId);
-      const label = entry?.name ?? (row ? getRowDisplayName(row) : '');
-      return label.toLowerCase().includes(q);
-    },
-    [searchQuery, rankableEntriesById, rowsByEntityId]
-  );
-
   const myRankingIdSet = React.useMemo(() => new Set(orderedIds.map(id => ID.uuidToHex(id))), [orderedIds]);
 
-  const filteredRankedIds = React.useMemo(
-    () => rankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id)) && matchesSearch(id)),
-    [rankedEntityIds, myRankingIdSet, matchesSearch]
+  const isSearchActive = searchQuery.trim().length > 0;
+
+  const {
+    results: searchResults,
+    isLoading: isLoadingSearch,
+    isSettled: isSearchSettled,
+    isDebouncingAfterEmptySearch,
+    isFetchingNextPage: isFetchingNextSearchPage,
+    hasNextPage: hasNextSearchPage,
+    fetchNextPage: fetchNextSearchPage,
+  } = useRankingComposeSearch({
+    filterState,
+    query: searchQuery,
+    enabled: isSearchActive,
+  });
+
+  const searchResultsById = React.useMemo(
+    () => new Map(searchResults.map(result => [result.id, result])),
+    [searchResults]
   );
 
-  const filteredUnrankedIds = React.useMemo(
-    () => unrankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id)) && matchesSearch(id)),
-    [unrankedEntityIds, myRankingIdSet, matchesSearch]
+  const browseRankedIds = React.useMemo(
+    () => rankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
+    [rankedEntityIds, myRankingIdSet]
   );
+
+  const browseUnrankedIds = React.useMemo(
+    () => unrankedEntityIds.filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
+    [unrankedEntityIds, myRankingIdSet]
+  );
+
+  const searchEntityIds = React.useMemo(
+    () => searchResults.map(result => result.id).filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
+    [searchResults, myRankingIdSet]
+  );
+
+  const { searchRankedIds, searchUnrankedIds } = React.useMemo(() => {
+    const ranked: string[] = [];
+    const unranked: string[] = [];
+    for (const id of searchEntityIds) {
+      if (globalRankByEntityId.has(id)) ranked.push(id);
+      else unranked.push(id);
+    }
+    const order = searchResults.map(result => result.id);
+    const sortBySearchOrder = (ids: string[]) => [...ids].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    return {
+      searchRankedIds: sortBySearchOrder(ranked),
+      searchUnrankedIds: sortBySearchOrder(unranked),
+    };
+  }, [searchEntityIds, globalRankByEntityId, searchResults]);
+
+  const filteredRankedIds = isSearchActive ? searchRankedIds : browseRankedIds;
+  const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
   const showRankedUnrankedDivider = filteredRankedIds.length > 0 && filteredUnrankedIds.length > 0;
 
   const hasVisibleRankableEntities = filteredRankedIds.length > 0 || filteredUnrankedIds.length > 0;
+
+  const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
+  const displayRankableEntriesById = React.useMemo(() => {
+    const map = new Map(rankableEntriesById);
+    for (const entry of searchEntries) {
+      map.set(entry.entityId, entry);
+    }
+    return map;
+  }, [rankableEntriesById, searchEntries]);
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
@@ -181,6 +224,21 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
+  const myRankingEntriesById = React.useMemo(() => {
+    const map = new Map(myEntriesById);
+    for (const id of displayMyEntityIds) {
+      const entry = displayRankableEntriesById.get(id);
+      if (entry) map.set(id, entry);
+    }
+    return map;
+  }, [myEntriesById, displayRankableEntriesById, displayMyEntityIds]);
+
+  const isLoadingMyRanking =
+    isLoadingMyEntries &&
+    displayMyEntityIds.some(
+      id => !myRankingEntriesById.has(id) && !rowsByEntityId.has(id) && !searchResultsById.has(id)
+    );
+
   const addToMyRanking = (entityId: string) => {
     setOrderedIds(prev => (prev.includes(entityId) ? prev : [...prev, entityId]));
   };
@@ -195,21 +253,33 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     setOrderedIds(nextIds);
   };
 
+  const getSearchResultPreview = (searchHit: SearchResult | undefined) => ({
+    name: searchHit?.name?.trim() || null,
+    description: searchHit?.description?.trim() || null,
+    image: searchHit?.spaces[0]?.image ?? null,
+    spaceId: searchHit?.spaces[0]?.spaceId ?? null,
+  });
+
   const resolveEntitySpaceId = (entityId: string) => {
     const row = rowsByEntityId.get(entityId);
-    return row?.columns[SystemIds.NAME_PROPERTY]?.space ?? spaceId;
+    if (row?.columns[SystemIds.NAME_PROPERTY]?.space) {
+      return row.columns[SystemIds.NAME_PROPERTY].space;
+    }
+    const searchPreview = getSearchResultPreview(searchResultsById.get(entityId));
+    return searchPreview.spaceId ?? spaceId;
   };
 
   const openEntitySheet = (entityId: string) => {
     setCreateEntityFlow(null);
-    const entry = myEntriesById.get(entityId) ?? rankableEntriesById.get(entityId);
+    const entry = myEntriesById.get(entityId) ?? displayRankableEntriesById.get(entityId);
     const row = rowsByEntityId.get(entityId);
+    const searchPreview = getSearchResultPreview(searchResultsById.get(entityId));
     setEntitySheetTarget({
       entityId,
       spaceId: resolveEntitySpaceId(entityId),
-      previewImageUrl: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
-      previewName: entry?.name ?? (row ? getRowDisplayName(row) : null),
-      previewDescription: entry?.description ?? (row ? getRowDescription(row) : null),
+      previewImageUrl: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchPreview.image,
+      previewName: entry?.name ?? (row ? getRowDisplayName(row) : searchPreview.name),
+      previewDescription: entry?.description ?? (row ? getRowDescription(row) : searchPreview.description),
     });
   };
 
@@ -241,11 +311,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const handlePublish = async () => {
     const slots = orderedIds.map(id => {
       const row = rowsByEntityId.get(id);
-      const entry = rankableEntriesById.get(id);
+      const entry = displayRankableEntriesById.get(id) ?? myEntriesById.get(id);
+      const searchPreview = getSearchResultPreview(searchResultsById.get(id));
       return {
         id,
-        name: entry?.name ?? (row ? getRowDisplayName(row) : null),
-        spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? spaceId,
+        name: entry?.name ?? (row ? getRowDisplayName(row) : searchPreview.name),
+        spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? searchPreview.spaceId ?? spaceId,
       };
     });
     const published = await saveMySubmission(slots);
@@ -265,7 +336,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   };
 
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
-  const hasPopulatedMyRanking = displayMyEntityIds.length > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
   if (accessStatus !== 'ready') {
@@ -327,8 +397,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 isMobile={isMobile}
                 spaceId={spaceId}
                 displayEntityIds={displayMyEntityIds}
-                isLoading={isLoadingMyEntries}
-                entriesById={myEntriesById}
+                isLoading={isLoadingMyRanking}
+                entriesById={myRankingEntriesById}
+                searchResultsById={searchResultsById}
                 rowsByEntityId={rowsByEntityId}
                 canPublish={canPublish}
                 isSaving={isSaving}
@@ -349,16 +420,19 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
                 filteredRankedIds={filteredRankedIds}
                 filteredUnrankedIds={filteredUnrankedIds}
                 globalRankByEntityId={globalRankByEntityId}
-                rankableEntriesById={rankableEntriesById}
+                rankableEntriesById={displayRankableEntriesById}
+                searchResultsById={searchResultsById}
                 rowsByEntityId={rowsByEntityId}
                 showRankedUnrankedDivider={showRankedUnrankedDivider}
                 hasVisibleRankableEntities={hasVisibleRankableEntities}
-                hasPopulatedMyRanking={hasPopulatedMyRanking}
-                isLoadingRows={isLoadingRows && !hasRankedGlobalEntities}
-                isFetchingNextPage={isFetchingNextPage}
-                hasNextPage={hasNextPage}
+                isSearchActive={isSearchActive}
+                isSearchSettled={isSearchSettled}
+                isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
+                isLoadingRows={isSearchActive ? isLoadingSearch : isLoadingRows && !hasRankedGlobalEntities}
+                isFetchingNextPage={isSearchActive ? isFetchingNextSearchPage : isFetchingNextPage}
+                hasNextPage={isSearchActive ? hasNextSearchPage : hasNextPage}
                 hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
-                onFetchNextPage={fetchNextPage}
+                onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
                 searchQuery={searchQuery}
                 onSearchQueryChange={setSearchQuery}
                 isSearchOpen={isSearchOpen}

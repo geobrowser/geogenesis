@@ -171,6 +171,19 @@
   @apply ml-4 list-item list-disc;
 }
 
+.ProseMirror ul.avatar-group {
+  display: flex;
+}
+
+.ProseMirror ul.avatar-group > li {
+  @apply ml-0 list-none;
+  display: block;
+}
+
+.ProseMirror ul.avatar-group.spaced > li + li {
+  @apply ml-2;
+}
+
 /* Code blocks */
 .code-block {
   display: flex;

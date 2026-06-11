@@ -23,7 +23,7 @@ type Props = {
 };
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
-  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate });
+  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
   const {
     canEdit,
     filterState,

@@ -2,10 +2,14 @@
 
 import * as React from 'react';
 
-import { Avatar } from '~/design-system/avatar';
+import cx from 'classnames';
+
+import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
+
 import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 
+import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import {
   RankingFirstSubmissionPrompt,
   RankingFullscreenSectionHeaderRow,
@@ -20,7 +24,6 @@ import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingContributePointsBanner } from './ranking-contribute-points-banner';
 import { RankingEntryRow } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
-import { RankingAggregatedSubmitterAvatars } from './ranking-period-metadata';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
 type Props = {
@@ -78,18 +81,26 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     showMyRankingSection,
     showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
-    showAggregatedRankingsOnGlobalTab,
-    visibleAggregatedSubmitterSpaceIds,
-    aggregatedRankingCount,
-    myAvatarUrl,
-    myAvatarSeed,
     activeTab,
     setActiveTab,
     globalDisplayEntityIds,
+    totalGlobalRankingEntityCount,
+    hasMyRankingData,
     globalEntriesById,
     globalRankByEntityId,
     isLoadingGlobalEntries,
+    showEmbeddedGlobalPagination,
+    embeddedGlobalPageNumber,
+    hasEmbeddedGlobalPreviousPage,
+    hasEmbeddedGlobalNextPage,
+    setEmbeddedGlobalPage,
     myDisplayEntityIds,
+    totalMyRankingEntityCount,
+    embeddedMyPageNumber,
+    showEmbeddedMyPagination,
+    hasEmbeddedMyPreviousPage,
+    hasEmbeddedMyNextPage,
+    setEmbeddedMyPage,
     myRankingEntryByEntityId,
     draftHydrated,
     hasMySubmission,
@@ -146,109 +157,139 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     );
   };
 
+  const globalRankingPagination =
+    presentation === 'embedded' && showEmbeddedGlobalPagination ? (
+      <RankingBlockGlobalPagination
+        pageNumber={embeddedGlobalPageNumber}
+        hasPreviousPage={hasEmbeddedGlobalPreviousPage}
+        hasNextPage={hasEmbeddedGlobalNextPage}
+        onSetPage={setEmbeddedGlobalPage}
+      />
+    ) : null;
+
   const globalRankingBody = (
     <div className="flex flex-col gap-4">
       {showContributePointsBanner ? <RankingContributePointsBanner /> : null}
-      {globalDisplayEntityIds.length === 0 ? (
-        <RankingSubmitCtaBanner />
+      {totalGlobalRankingEntityCount === 0 ? (
+        hasMyRankingData ? (
+          <p className="text-metadata text-grey-04">No published items yet</p>
+        ) : (
+          <RankingSubmitCtaBanner />
+        )
       ) : isLoadingGlobalEntries ? (
         <p className="text-metadata text-grey-03">Loading ranking…</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {globalDisplayEntityIds.map(entityId => {
-            const entry = globalEntriesById.get(entityId);
-            const rank = globalRankByEntityId.get(entityId);
-            if (!entry || rank == null) return null;
-            const rowContent = (
-              <RankingEntryRow
-                rank={rank}
-                rankStyle="leading"
-                entry={entry}
-                spaceId={spaceId}
-                linkToEntity={!isMobile}
-              />
-            );
-            return (
-              <div key={entityId} className="w-full">
-                {isMobile ? (
-                  wrapMobileSwipeRow({
-                    rowKey: `global:${entityId}`,
-                    onView: () => openEntitySheet(entityId),
-                    onPrimaryClick: () => openEntitySheet(entityId),
-                    children: rowContent,
-                  })
-                ) : (
-                  <RankingGlobalDesktopRow onOpenSidePanel={() => openEntitySheet(entityId)}>
-                    {rowContent}
-                  </RankingGlobalDesktopRow>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <>
+          <div className="flex flex-col gap-3">
+            {globalDisplayEntityIds.map(entityId => {
+              const entry = globalEntriesById.get(entityId);
+              const rank = globalRankByEntityId.get(entityId);
+              if (!entry || rank == null) return null;
+              const rowContent = (
+                <RankingEntryRow
+                  rank={rank}
+                  rankStyle="leading"
+                  entry={entry}
+                  spaceId={spaceId}
+                  linkToEntity={!isMobile}
+                />
+              );
+              return (
+                <div key={entityId} className="w-full">
+                  {isMobile ? (
+                    wrapMobileSwipeRow({
+                      rowKey: `global:${entityId}`,
+                      onView: () => openEntitySheet(entityId),
+                      onPrimaryClick: () => openEntitySheet(entityId),
+                      children: rowContent,
+                    })
+                  ) : (
+                    <RankingGlobalDesktopRow onOpenSidePanel={() => openEntitySheet(entityId)}>
+                      {rowContent}
+                    </RankingGlobalDesktopRow>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {globalRankingPagination}
+        </>
       )}
     </div>
   );
+
+  const myRankingPagination =
+    presentation === 'embedded' && showEmbeddedMyPagination ? (
+      <RankingBlockGlobalPagination
+        pageNumber={embeddedMyPageNumber}
+        hasPreviousPage={hasEmbeddedMyPreviousPage}
+        hasNextPage={hasEmbeddedMyNextPage}
+        onSetPage={setEmbeddedMyPage}
+      />
+    ) : null;
 
   const myRankingBody = (
     <div className="flex flex-col gap-4">
       {!draftHydrated ? (
         <p className="text-metadata text-grey-03">Loading your ranking…</p>
-      ) : myDisplayEntityIds.length === 0 ? (
+      ) : totalMyRankingEntityCount === 0 ? (
         <div className="flex min-h-[120px] items-center rounded-lg bg-grey-01 px-6 py-5">
           <p className="text-metadata text-grey-04">
             Your ranking is empty. Use &ldquo;Add my ranking&rdquo; to pick entries from the filtered list.
           </p>
         </div>
       ) : (
-        <RankingMyRankingDndList
-          entityIds={myDisplayEntityIds}
-          onReorder={reorderMyRanking}
-          disabled={hasMySubmission}
-          onDragStart={() => {
-            setActiveSwipeRowKey(null);
-            setIsMyRankingDragging(true);
-          }}
-          onDragEnd={() => setIsMyRankingDragging(false)}
-          className="flex flex-col"
-          renderItem={(entityId, index, isDragActive) => {
-            const entryDisplay = myRankingEntryByEntityId.get(entityId) ?? {
-              entityId,
-              name: 'Untitled',
-              description: null,
-              image: null,
-            };
-            const rowContent = (
-              <RankingEntryRow
-                rank={index + 1}
-                rankStyle="leading"
-                linkToEntity={false}
-                entry={entryDisplay}
-                spaceId={spaceId}
-              />
-            );
-            return (
-              <div className="w-full py-3">
-                {isMobile ? (
-                  wrapMobileSwipeRow({
-                    rowKey: `my:${entityId}`,
-                    onView: () => openEntitySheet(entityId),
-                    primaryDisabled: true,
-                    children: rowContent,
-                  })
-                ) : (
-                  <RankingMyRankingDesktopRow
-                    entityName={entryDisplay.name}
-                    onOpenSidePanel={() => openEntitySheet(entityId)}
-                    hideActions={isDragActive}
-                  >
-                    {rowContent}
-                  </RankingMyRankingDesktopRow>
-                )}
-              </div>
-            );
-          }}
-        />
+        <>
+          <RankingMyRankingDndList
+            entityIds={myDisplayEntityIds}
+            onReorder={reorderMyRanking}
+            disabled={hasMySubmission || showEmbeddedMyPagination}
+            onDragStart={() => {
+              setActiveSwipeRowKey(null);
+              setIsMyRankingDragging(true);
+            }}
+            onDragEnd={() => setIsMyRankingDragging(false)}
+            className="flex flex-col gap-3"
+            renderItem={(entityId, index, isDragActive) => {
+              const entryDisplay = myRankingEntryByEntityId.get(entityId) ?? {
+                entityId,
+                name: 'Untitled',
+                description: null,
+                image: null,
+              };
+              const rowContent = (
+                <RankingEntryRow
+                  rank={embeddedMyPageNumber * PAGE_SIZE + index + 1}
+                  rankStyle="leading"
+                  linkToEntity={false}
+                  entry={entryDisplay}
+                  spaceId={spaceId}
+                />
+              );
+              return (
+                <div className="w-full">
+                  {isMobile ? (
+                    wrapMobileSwipeRow({
+                      rowKey: `my:${entityId}`,
+                      onView: () => openEntitySheet(entityId),
+                      primaryDisabled: true,
+                      children: rowContent,
+                    })
+                  ) : (
+                    <RankingMyRankingDesktopRow
+                      entityName={entryDisplay.name}
+                      onOpenSidePanel={() => openEntitySheet(entityId)}
+                      hideActions={isDragActive}
+                    >
+                      {rowContent}
+                    </RankingMyRankingDesktopRow>
+                  )}
+                </div>
+              );
+            }}
+          />
+          {myRankingPagination}
+        </>
       )}
     </div>
   );
@@ -283,29 +324,23 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               </section>
             </div>
           ) : null}
-          <div className={presentation === 'fullscreen' ? undefined : 'lg:hidden'}>
+          <div
+            className={cx(
+              presentation === 'fullscreen' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined,
+              presentation === 'fullscreen' ? undefined : 'lg:hidden'
+            )}
+          >
             {showMyRankingTab ? (
               <>
-                <div className="relative mb-4">
+                <div className="relative mb-4 shrink-0">
                   <div className="flex w-full min-w-0 flex-nowrap items-end justify-between gap-3">
                     <div className="relative flex min-w-0 flex-1 items-center gap-6 overflow-hidden pb-2">
                       <RankingTabButton
                         active={activeTab === 'global' || !showMyRankingSection}
-                        label={showAggregatedRankingsOnGlobalTab ? '' : 'Global ranking'}
-                        ariaLabel={showAggregatedRankingsOnGlobalTab ? 'Global ranking' : undefined}
+                        label="Global ranking"
                         layoutId={`ranking-${presentation}-tab-underline`}
                         onClick={() => setActiveTab('global')}
-                      >
-                        {showAggregatedRankingsOnGlobalTab ? (
-                          <div className="flex items-center gap-2">
-                            <RankingAggregatedSubmitterAvatars
-                              submitterSpaceIds={visibleAggregatedSubmitterSpaceIds}
-                              totalCount={aggregatedRankingCount}
-                              maxVisible={3}
-                            />
-                          </div>
-                        ) : null}
-                      </RankingTabButton>
+                      />
 
                       {showMyRankingSection ? (
                         <RankingTabButton
@@ -313,11 +348,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                           label="My ranking"
                           layoutId={`ranking-${presentation}-tab-underline`}
                           onClick={() => setActiveTab('my')}
-                        >
-                          <span className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full">
-                            <Avatar avatarUrl={myAvatarUrl} value={myAvatarSeed} size={24} />
-                          </span>
-                        </RankingTabButton>
+                        />
                       ) : null}
                     </div>
 
@@ -330,18 +361,31 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 </div>
 
                 {movesEditBelowTabs && activeTab === 'my' ? (
-                  <div className="mb-4 flex justify-end">{buildMobileFullscreenEditButton(state)}</div>
+                  <div className="mb-4 flex shrink-0 justify-end">{buildMobileFullscreenEditButton(state)}</div>
                 ) : null}
 
-                {showMyRankingSection && activeTab === 'my' ? myRankingBody : globalRankingBody}
+                <div
+                  className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
+                >
+                  {showMyRankingSection && activeTab === 'my' ? myRankingBody : globalRankingBody}
+                </div>
               </>
             ) : (
-              <section className="mb-4 flex w-full min-w-0 flex-col gap-3">
+              <section
+                className={cx(
+                  'flex w-full min-w-0 flex-col gap-3',
+                  presentation === 'fullscreen' ? 'min-h-0 flex-1 overflow-hidden' : 'mb-4'
+                )}
+              >
                 <SectionHeader
                   title="Global ranking"
                   action={showAddMyRankingInGlobalHeader ? myRankingActionButton : null}
                 />
-                {globalRankingBody}
+                <div
+                  className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
+                >
+                  {globalRankingBody}
+                </div>
               </section>
             )}
           </div>
