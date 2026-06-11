@@ -15,7 +15,7 @@ import { readTypes } from '../database/entities';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
-import { getSpaceRank } from '../utils/space/space-ranking';
+import { getSpaceRank, scopeBySpacePrecedence } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -536,7 +536,7 @@ export class GeoStore {
     this.stream.emit({ type: GeoEventStream.DATA_TYPE_CREATED, property: { id, dataType } });
   }
 
-  public getProperty(id: string): Property | null {
+  public getProperty(id: string, options: { spaceId?: string } = {}): Property | null {
     const entity = this.getEntity(id);
 
     const stableDataType = this.getStableDataType(id);
@@ -548,17 +548,23 @@ export class GeoStore {
       return null;
     }
 
-    const relationValueTypes = entity?.relations
-      .filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationValueTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,
       }));
 
-    const relationEntityTypes = entity?.relations
-      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationEntityTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,

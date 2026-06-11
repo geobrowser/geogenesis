@@ -486,13 +486,13 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       }
 
       // First try the store's getProperty method (works for registered local properties)
-      const storeProperty = store.getProperty(id);
+      const storeProperty = store.getProperty(id, { spaceId });
       if (storeProperty) {
         return storeProperty;
       }
 
       // Fall back to manual reconstruction for existing properties
-      return Properties.reconstructFromStore(id, getValues, getRelations);
+      return Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
     },
     equal
   );
@@ -513,10 +513,11 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
 
 type QueryPropertiesOptions = {
   ids: string[];
+  spaceId?: string;
   enabled?: boolean;
 };
 
-export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
+export function useQueryProperties({ ids, spaceId, enabled = true }: QueryPropertiesOptions) {
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -540,14 +541,14 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       for (const id of ids) {
         // First try the store's getProperty method
-        const storeProperty = store.getProperty(id);
+        const storeProperty = store.getProperty(id, { spaceId });
         if (storeProperty) {
           props.push(storeProperty);
           continue;
         }
 
         // Fall back to manual reconstruction for existing properties
-        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations);
+        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
         if (reconstructedProperty) {
           props.push(reconstructedProperty);
         }
