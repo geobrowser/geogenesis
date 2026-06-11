@@ -129,23 +129,50 @@ export async function GovernanceProposalsList({
 
           return (
             <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
-              <Link
-                href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-                className="flex w-full flex-col gap-3 py-4"
-              >
+              <div className="relative flex w-full flex-col gap-3 py-4">
+                <Link
+                  href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+                  className="absolute inset-0"
+                  aria-label={proposalTitle}
+                />
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
-                    {showReopenMenu ? <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} /> : null}
+                    {showReopenMenu ? (
+                      <div className="relative z-10">
+                        <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
+                      </div>
+                    ) : null}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
-                    <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                      <Avatar
-                        avatarUrl={displayProfile.avatarUrl}
-                        value={displayProfile.address ?? displayProfile.id}
-                      />
-                    </div>
-                    <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                    {displayProfile.profileLink ? (
+                      <Link
+                        href={displayProfile.profileLink}
+                        className="relative z-10 flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
+                      >
+                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                          <Avatar
+                            avatarUrl={displayProfile.avatarUrl}
+                            value={displayProfile.address ?? displayProfile.id}
+                          />
+                        </div>
+                        <p className="min-w-0">
+                          {displayProfile.name ?? displayProfile.address ?? displayProfile.id}
+                        </p>
+                      </Link>
+                    ) : (
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                          <Avatar
+                            avatarUrl={displayProfile.avatarUrl}
+                            value={displayProfile.address ?? displayProfile.id}
+                          />
+                        </div>
+                        <p className="min-w-0">
+                          {displayProfile.name ?? displayProfile.address ?? displayProfile.id}
+                        </p>
+                      </div>
+                    )}
                     {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
                       <>
                         <span aria-hidden className="shrink-0 select-none">
@@ -182,7 +209,7 @@ export async function GovernanceProposalsList({
 
                   <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
                 </div>
-              </Link>
+              </div>
             </ProposalListItem>
           );
         })}
