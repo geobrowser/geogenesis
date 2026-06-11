@@ -44,6 +44,8 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 import { Truncate } from '~/design-system/truncate';
 
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
@@ -87,13 +89,17 @@ export const OnboardingDialog = () => {
 
   const reportError = useReportError();
 
-  // Warm the router cache for the explore destination once the onboarding
+  // Flows like "Add my ranking" record where the user was headed before being
+  const [postOnboardingRedirect, setPostOnboardingRedirect] = useAtom(postOnboardingRedirectAtom);
+  const destination = postOnboardingRedirect || ONBOARDING_DESTINATION;
+
+  // Warm the router cache for the destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
   // instantly. Skipping for non-onboarding tabs avoids pointless prefetch.
   useEffect(() => {
     if (!isOnboardingVisible) return;
-    router.prefetch(ONBOARDING_DESTINATION);
-  }, [isOnboardingVisible, router]);
+    router.prefetch(destination);
+  }, [isOnboardingVisible, router, destination]);
 
   // Track whether this tab ever had the onboarding dialog visible. Used
   // to scope side-effects (step resets, redirects) to the tab that was
@@ -126,9 +132,19 @@ export const OnboardingDialog = () => {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
-    router.push(ONBOARDING_DESTINATION);
+    router.push(destination);
+    setPostOnboardingRedirect(null);
     setStep('done');
-  }, [step, router, setStep, hasSeenAssistant, setChatOpen, setHasSeenAssistant]);
+  }, [
+    step,
+    router,
+    setStep,
+    hasSeenAssistant,
+    setChatOpen,
+    setHasSeenAssistant,
+    destination,
+    setPostOnboardingRedirect,
+  ]);
 
   const address = smartAccount?.account.address;
 

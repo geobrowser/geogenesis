@@ -16,7 +16,7 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 export type RankingComposeAccessStatus = 'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'ready';
 
 export function useRankingComposeAccess(spaceId: string) {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
@@ -27,8 +27,9 @@ export function useRankingComposeAccess(spaceId: string) {
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
 
   const status: RankingComposeAccessStatus = (() => {
-    if (isLoading || !isFetched) return 'loading';
+    if (isLoadingSmartAccount) return 'loading';
     if (!smartAccount) return 'needs-login';
+    if (isLoading || !isFetched) return 'loading';
     if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
     if (space?.type === 'DAO' && !canEdit) return 'needs-membership';
     return 'ready';

@@ -15,7 +15,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 const ROW_AVATAR_SIZE_PX = 64;
 
 const ROW_NAME_CLASS =
-  'block break-words tracking-[-0.17px] text-text text-[17px] font-bold leading-[19px] lg:!text-[19px] lg:!font-bold';
+  'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[19px]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
 type Props = {
@@ -48,8 +48,6 @@ export function RankingEntryRow({
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;
   const showLeadingRank = showRank && rankStyle === 'leading';
-  const hasDescription = Boolean(entry.description);
-  const nameLineClamp = hasDescription ? 'line-clamp-2' : 'line-clamp-3';
 
   const avatar = (
     <div className="relative h-16 min-h-16 w-16 min-w-16 shrink-0 overflow-clip rounded-md bg-grey-02">
@@ -73,18 +71,18 @@ export function RankingEntryRow({
   );
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex w-full min-w-0 items-center gap-4 overflow-hidden">
       {showLeadingRank ? (
         <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
       ) : null}
       {avatar}
       <div className="flex h-16 min-w-0 flex-1 flex-col justify-center gap-1 overflow-hidden">
         {linkToEntity ? (
-          <Link href={href} className={cx(ROW_NAME_CLASS, nameLineClamp, 'hover:underline')} title={entry.name}>
+          <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={entry.name}>
             {entry.name}
           </Link>
         ) : (
-          <span className={cx(ROW_NAME_CLASS, nameLineClamp)} title={entry.name}>
+          <span className={ROW_NAME_CLASS} title={entry.name}>
             {entry.name}
           </span>
         )}

@@ -61,7 +61,12 @@ export function RankingComposeMyRanking({
           isDesktop && 'border-b border-grey-02 pb-4'
         )}
       >
-        <h2 className={cx('m-0 min-w-0 truncate font-bold text-text', isMobile ? 'text-[22px]' : 'text-[17px]')}>
+        <h2
+          className={cx(
+            'm-0 min-w-0 truncate text-text',
+            isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
+          )}
+        >
           My ranking
         </h2>
         {isDesktop && !hidePublishButton ? (
@@ -90,11 +95,11 @@ export function RankingComposeMyRanking({
               const entry = entriesById.get(entityId);
               const row = rowsByEntityId.get(entityId);
               if (!entry && !row) return null;
-              const entryDisplay = entry ?? {
+              const entryDisplay = {
                 entityId,
-                name: row ? getRowDisplayName(row) : 'Untitled',
-                description: row ? getRowDescription(row) : null,
-                image: row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+                name: entry?.name ?? (row ? getRowDisplayName(row) : 'Untitled'),
+                description: entry?.description ?? (row ? getRowDescription(row) : null),
+                image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
               };
               const entryRow = (
                 <RankingEntryRow

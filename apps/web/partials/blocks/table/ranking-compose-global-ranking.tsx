@@ -250,7 +250,12 @@ export function RankingComposeGlobalRanking({
           isDesktop && 'border-b border-grey-02 pb-4'
         )}
       >
-        <h2 className={cx('m-0 min-w-0 truncate font-bold text-text', isMobile ? 'text-[22px]' : 'text-[17px]')}>
+        <h2
+          className={cx(
+            'm-0 min-w-0 truncate text-text',
+            isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
+          )}
+        >
           Global ranking
         </h2>
         <div className="flex items-center justify-self-end">
@@ -295,7 +300,7 @@ export function RankingComposeGlobalRanking({
         ) : null}
         <div
           ref={isDesktop ? listScrollRootRef : undefined}
-          className={cx(isDesktop && 'min-h-0 flex-1 overflow-y-auto')}
+          className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
         >
           {isLoadingRows && !hasAnyRankableEntityIds ? (
             <p className="py-6 text-metadata text-grey-03">Loading entities…</p>

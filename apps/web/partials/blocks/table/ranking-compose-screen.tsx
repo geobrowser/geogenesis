@@ -40,6 +40,7 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposeHeader } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
 type Props = {
@@ -59,11 +60,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
   React.useEffect(() => {
     if (accessStatus === 'ready') return;
+    // If log-in/sign-up is needed, come back to this compose screen
+    if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
+      setPostOnboardingRedirect(window.location.pathname + window.location.search);
+    }
     void ensureAccess();
-  }, [accessStatus, ensureAccess]);
+  }, [accessStatus, ensureAccess, setPostOnboardingRedirect]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);

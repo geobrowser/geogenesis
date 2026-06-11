@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
@@ -27,6 +28,8 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+
 export type RankingTab = 'global' | 'my';
 
 export type RankingBlockPresentation = 'embedded' | 'fullscreen';
@@ -44,7 +47,8 @@ export function useRankingBlockState({
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
-  const { ensureAccess } = useRankingComposeAccess(spaceId);
+  const { ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
   const { name, entityId, relationId, rows } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
@@ -195,7 +199,13 @@ export function useRankingBlockState({
     }
 
     for (const entry of myEntries) {
-      map.set(entry.entityId, entry);
+      const fromRow = map.get(entry.entityId);
+      map.set(entry.entityId, {
+        entityId: entry.entityId,
+        name: entry.name,
+        description: entry.description ?? fromRow?.description ?? null,
+        image: entry.image ?? fromRow?.image ?? null,
+      });
     }
 
     return map;
@@ -278,29 +288,49 @@ export function useRankingBlockState({
 
   const openRankingCompose = React.useCallback(
     async (mode: RankingComposeMode = 'edit') => {
+      const effectiveRelationId = resolveBlockRelationId();
+      if (!effectiveRelationId) return;
+
+      const href = rankingComposeHref({
+        spaceId,
+        blockEntityId: entityId,
+        relationId: effectiveRelationId,
+        parentEntityId,
+        rankingStartDate,
+        rankingEndDate,
+        mode,
+      });
+
       // Browsing the fullscreen view doesn't require auth — only composing does.
       // Logged-out users get the sign-in prompt when they try to add a ranking.
       if (mode !== 'view') {
+        // Record the destination before prompting for auth so the user resumes
+        // this flow right after logging in or finishing onboarding, instead of
+        // staying put / landing on Explore. `!smartAccount` also covers clicks
+        // during a transient 'loading' status. Membership-pending blocks (DAO
+        // join requests) intentionally don't auto-navigate.
+        if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
+          setPostOnboardingRedirect(href);
+        }
         const allowed = await ensureAccess();
         if (!allowed) return;
       }
 
-      const effectiveRelationId = resolveBlockRelationId();
-      if (!effectiveRelationId) return;
-
-      router.push(
-        rankingComposeHref({
-          spaceId,
-          blockEntityId: entityId,
-          relationId: effectiveRelationId,
-          parentEntityId,
-          rankingStartDate,
-          rankingEndDate,
-          mode,
-        })
-      );
+      router.push(href);
     },
-    [ensureAccess, entityId, parentEntityId, rankingEndDate, rankingStartDate, resolveBlockRelationId, router, spaceId]
+    [
+      composeAccessStatus,
+      ensureAccess,
+      entityId,
+      parentEntityId,
+      rankingEndDate,
+      rankingStartDate,
+      resolveBlockRelationId,
+      router,
+      setPostOnboardingRedirect,
+      smartAccount,
+      spaceId,
+    ]
   );
 
   const showEditRankingButton = hasMySubmission || myDisplayEntityIds.length > 0;

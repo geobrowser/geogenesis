@@ -106,7 +106,10 @@ export function RankingTabButton({
     <button
       type="button"
       onClick={onClick}
-      className={cx(tabGroupTabLinkStyles({ active }), 'h-6 gap-2 !text-smallTitle', active && 'font-medium')}
+      className={cx(
+        tabGroupTabLinkStyles({ active }),
+        'h-6 gap-2 !text-smallTitle !font-semibold lg:!font-medium'
+      )}
       aria-selected={active}
       aria-label={ariaLabel}
     >
