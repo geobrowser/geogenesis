@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -21,7 +22,7 @@ export function EditModeNameField({
   entitySpaceIdForPanel,
   placeholder = 'Entity name...',
   onChange,
-  openedWithMainViewEditing = false,
+  openedWithMainViewEditing: openedWithMainViewEditingProp,
 }: {
   name: string | null;
   entityId: string;
@@ -33,6 +34,8 @@ export function EditModeNameField({
 }) {
   const [isRowHovered, setIsRowHovered] = useState(false);
   const resolvedPanelSpaceId = entitySpaceIdForPanel ?? spaceId;
+  const isEditing = useUserIsEditing(resolvedPanelSpaceId);
+  const openedWithMainViewEditing = openedWithMainViewEditingProp ?? isEditing;
   const navigateHrefSpaceId = resolvedPanelSpaceId;
 
   return (

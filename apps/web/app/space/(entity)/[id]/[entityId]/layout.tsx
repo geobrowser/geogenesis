@@ -8,7 +8,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
@@ -75,7 +75,7 @@ export default async function ProfileLayout(props: Props) {
 
   return (
     <EntityStoreProvider id={entityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={profile.id}
         spaceId={spaceId}
         initialBlocks={profile.blocks}
@@ -109,7 +109,7 @@ export default async function ProfileLayout(props: Props) {
 
           {children}
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }

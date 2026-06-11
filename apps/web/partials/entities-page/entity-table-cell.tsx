@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
