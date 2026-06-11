@@ -7,7 +7,6 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { normalizeSpaceId } from '~/core/access/space-access';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
@@ -78,9 +77,6 @@ export function useRankingBlockState({
   const myAvatarUrl = profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
   const myAvatarSeed = profile?.address ?? walletAddress ?? 'anonymous';
   const showMyRankingTab = Boolean(personalSpaceId);
-  const isPersonalSpacePage = Boolean(
-    personalSpaceId && normalizeSpaceId(spaceId) === normalizeSpaceId(personalSpaceId)
-  );
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<RankingTab>('global');
@@ -336,8 +332,6 @@ export function useRankingBlockState({
   const showEditRankingButton = hasMySubmission || myDisplayEntityIds.length > 0;
 
   const showFirstRankingPrompt =
-    isPersonalSpacePage &&
-    showMyRankingTab &&
     !isLoadingGlobalEntries &&
     globalDisplayEntityIds.length === 0 &&
     aggregatedRankingCount === 0 &&

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { Button } from '~/design-system/button';
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { Close } from '~/design-system/icons/close';
 
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
@@ -34,7 +34,7 @@ export function RankingViewScreen({ spaceId, rankingStartDate = '', rankingEndDa
         <Button
           type="button"
           variant="ghost"
-          icon={<ArrowLeft color="grey-04" />}
+          icon={<Close />}
           onClick={() => router.back()}
           className={cx(COMPOSE_ICON_BUTTON_CLASS, 'h-7 w-7 shrink-0 hover:!bg-grey-01')}
           aria-label="Close ranking view"

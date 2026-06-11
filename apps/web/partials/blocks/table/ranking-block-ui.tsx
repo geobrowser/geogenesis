@@ -130,14 +130,16 @@ export function RankingTabButton({
 
 export function RankingFirstSubmissionCta() {
   return (
-    <div className="flex min-h-[140px] items-center justify-between gap-6 rounded-lg bg-grey-01 px-6 py-5">
-      <div className="min-w-0 flex-1 text-[16px] text-grey-04">
+    <div className="flex min-h-[140px] items-center justify-between gap-6 rounded-lg bg-grey-01 px-6 py-5 lg:min-h-0 lg:justify-start lg:gap-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:py-0">
+      <div className="min-w-0 flex-1 text-grey-04 [&_p]:!text-[16px]">
         <p className="whitespace-nowrap lg:whitespace-normal">
           Your entries will become the starting global ranking for everyone else.
         </p>
-        <p>Use the &ldquo;Add my ranking&rdquo; button to get started.</p>
+        <p className="lg:hidden">Use the &ldquo;Add my ranking&rdquo; button to get started.</p>
       </div>
-      <RankingEmptyStateArt />
+      <div className="lg:hidden">
+        <RankingEmptyStateArt />
+      </div>
     </div>
   );
 }
@@ -146,7 +148,7 @@ export function RankingFirstSubmissionPrompt({ action }: { action: React.ReactNo
   return (
     <div className="flex w-full min-w-0 flex-col">
       <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-x-3 border-b border-grey-02 pb-4">
-        <p className="text-mediumTitle text-text">Submit the first ranking</p>
+        <p className="text-mediumTitle font-semibold text-text lg:font-medium">Submit the first ranking</p>
         <span className="inline-flex shrink-0 items-center">{action}</span>
       </div>
       <div className="pt-4">
@@ -159,11 +161,10 @@ export function RankingFirstSubmissionPrompt({ action }: { action: React.ReactNo
 export function RankingSectionHeaderRow({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="flex w-full min-w-0 flex-nowrap items-center gap-x-3">
-      {/* Not <h2>: .ProseMirror h2 applies mt-10 + text-mediumTitle and breaks alignment with the action. */}
       <span
         role="heading"
         aria-level={2}
-        className="m-0 min-w-0 flex-1 truncate text-[22px] font-bold text-text lg:text-[17px]"
+        className="m-0 min-w-0 flex-1 truncate text-[22px] font-bold text-text lg:text-[17px] lg:font-medium"
       >
         {title}
       </span>
