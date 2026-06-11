@@ -1,6 +1,7 @@
 'use client';
 
 import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
@@ -23,6 +24,8 @@ import {
   isBlockConfigRelationType,
 } from '~/core/blocks/data/shown-column-relations';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
+import { useCreatePropertyGroup } from '~/core/hooks/use-create-property-group';
+import { useKey } from '~/core/hooks/use-key';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
 import {
@@ -34,7 +37,7 @@ import {
 } from '~/core/state/entity-page-store/entity-store';
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
-import { Property, Relation, ValueOptions } from '~/core/types';
+import { Property, Relation, SwitchableRenderableType, ValueOptions } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -58,9 +61,11 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { Trash } from '~/design-system/icons/trash';
 import { InputPlace } from '~/design-system/input-address';
+import { MenuItem } from '~/design-system/menu';
 import ReorderableRelationChipsDnd from '~/design-system/reorderable-relation-chips-dnd';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 import SuggestedFormats from '~/design-system/suggested-formats-window';
 import { Text } from '~/design-system/text';
 
@@ -119,6 +124,55 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
     },
     [id, name, spaceId, storage.relations, typePropertyRelations]
   );
+  const createPropertyGroup = useCreatePropertyGroup(id, spaceId);
+
+  // Shared by the "+" control whether it adds the property to a type's schema or to a
+  // regular entity. `onCreateProperty` runs when a brand-new property is created;
+  // `onSelectProperty` runs when an existing one is picked.
+  const onCreateProperty = (result: {
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => {
+    const renderableType = result.renderableType || 'TEXT';
+
+    const createdPropertyId = createProperty({
+      name: result.name || '',
+      propertyType: renderableType,
+      verified: result.verified,
+      space: result.space,
+    });
+
+    if (isTypeEntity) {
+      addPropertyToType({ id: createdPropertyId, name: result.name || '' });
+    } else {
+      addPropertyToEntity({
+        entityId: id,
+        propertyId: createdPropertyId,
+        propertyName: result.name || '',
+        entityName: name || undefined,
+      });
+    }
+
+    return createdPropertyId;
+  };
+
+  const onSelectProperty = (result: { id: string; name: string | null }) => {
+    if (!result) return;
+
+    if (isTypeEntity) {
+      addPropertyToType({ id: result.id, name: result.name });
+    } else {
+      addPropertyToEntity({
+        entityId: id,
+        propertyId: result.id,
+        propertyName: result.name || '',
+        entityName: name || undefined,
+      });
+    }
+  };
+
   const visiblePropertySections = useVisiblePropertySections(id, spaceId);
   const visibleFlatPropertiesEntries = useVisiblePropertiesEntries(id, spaceId, {
     hideTypeGroupingFields: isTypeEntity,
@@ -250,52 +304,27 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
               })}
             </div>
             <div className={effectiveTotalProperties === 0 ? 'absolute bottom-0 left-0 p-4' : 'p-4'}>
-              <SelectEntityAsPopover
-                trigger={<SquareButton icon={<Create />} />}
-                spaceId={spaceId}
-                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
-                onCreateEntity={result => {
-                  const renderableType = result.renderableType || 'TEXT';
-
-                  const createdPropertyId = createProperty({
-                    name: result.name || '',
-                    propertyType: renderableType,
-                    verified: result.verified,
-                    space: result.space,
-                  });
-
-                  if (isTypeEntity) {
-                    addPropertyToType({ id: createdPropertyId, name: result.name || '' });
-                  } else {
-                    // Immediately add the property to the entity
-                    addPropertyToEntity({
-                      entityId: id,
-                      propertyId: createdPropertyId,
-                      propertyName: result.name || '',
-                      entityName: name || undefined,
-                    });
-                  }
-
-                  return createdPropertyId;
-                }}
-                onDone={result => {
-                  if (result) {
-                    if (isTypeEntity) {
-                      addPropertyToType({ id: result.id, name: result.name });
-                    } else {
-                      addPropertyToEntity({
-                        entityId: id,
-                        propertyId: result.id,
-                        propertyName: result.name || '',
-                        entityName: name || undefined,
-                      });
-                    }
-                  }
-                }}
-                placeholder="Find or create property..."
-                advanced={false}
-                showIDs={false}
-              />
+              {isTypeEntity ? (
+                // Type entities can also have property groups, but that's an advanced
+                // feature so it's buried in this menu rather than shown as its own section.
+                <AddPropertyMenu
+                  spaceId={spaceId}
+                  onCreateProperty={onCreateProperty}
+                  onSelectProperty={onSelectProperty}
+                  onAddGroup={createPropertyGroup}
+                />
+              ) : (
+                <SelectEntityAsPopover
+                  trigger={<SquareButton icon={<Create />} />}
+                  spaceId={spaceId}
+                  relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                  onCreateEntity={onCreateProperty}
+                  onDone={onSelectProperty}
+                  placeholder="Find or create property..."
+                  advanced={false}
+                  showIDs={false}
+                />
+              )}
             </div>
           </motion.div>
         </div>
@@ -305,6 +334,90 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
 }
 
 export const EditableEntityProperties = EditableEntityPage;
+
+/**
+ * The "+" control for type entities. Opens a small menu so property-group creation —
+ * an advanced feature — can live alongside "New property" without crowding the
+ * common case. Picking "New property" swaps the same popover over to the entity search.
+ */
+function AddPropertyMenu({
+  spaceId,
+  onCreateProperty,
+  onSelectProperty,
+  onAddGroup,
+}: {
+  spaceId: string;
+  onCreateProperty: (result: {
+    name: string | null;
+    space?: string;
+    verified?: boolean;
+    renderableType?: SwitchableRenderableType;
+  }) => string;
+  onSelectProperty: (result: { id: string; name: string | null }) => void;
+  onAddGroup: () => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [mode, setMode] = React.useState<'menu' | 'search'>('menu');
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
+
+  useKey('Escape', () => {
+    if (open) setOpen(false);
+  });
+
+  // Always (re)open on the menu, never lingering on a previous search.
+  React.useEffect(() => {
+    if (!open) setMode('menu');
+  }, [open]);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen} modal={false}>
+      <Popover.Trigger asChild>
+        <SquareButton icon={<Create />} />
+      </Popover.Trigger>
+
+      {open && elevatedPopoverPortal ? (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            sideOffset={4}
+            align="start"
+            className="pointer-events-auto z-[var(--elevated-popover-z,1001)]"
+            collisionPadding={10}
+            avoidCollisions={true}
+          >
+            {mode === 'menu' ? (
+              <div className="flex w-[240px] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white py-1 shadow-lg">
+                <MenuItem onClick={() => setMode('search')}>
+                  <span>New property</span>
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    onAddGroup();
+                    setOpen(false);
+                  }}
+                >
+                  <span>New property group</span>
+                </MenuItem>
+              </div>
+            ) : (
+              <SelectEntity
+                withSearchIcon={true}
+                spaceId={spaceId}
+                relationValueTypes={[{ id: SystemIds.PROPERTY, name: 'Property' }]}
+                placeholder="Find or create property..."
+                onDone={onSelectProperty}
+                onCreateEntity={onCreateProperty}
+                variant="floating"
+                advanced={false}
+                showIDs={false}
+              />
+            )}
+          </Popover.Content>
+        </Popover.Portal>
+      ) : null}
+    </Popover.Root>
+  );
+}
+
 function InlinePropertyRow({
   entityId,
   propertyId,
