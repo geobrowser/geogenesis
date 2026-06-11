@@ -54,6 +54,64 @@ describe('mergeRelations', () => {
     expect(merged).toHaveLength(2);
   });
 
+  it('keeps the duplicate whose relation entity carries view config, regardless of order', () => {
+    const configured = makeBlockRelation({ id: 'r-configured', entityId: 'junction-configured', timestamp: undefined });
+    const bare = makeBlockRelation({ id: 'r-bare', entityId: 'junction-bare', timestamp: undefined });
+    const viewConfig = makeBlockRelation({
+      id: 'r-view',
+      entityId: 'view-config-entity',
+      type: { id: SystemIds.VIEW_PROPERTY, name: 'View' },
+      fromEntity: { id: 'junction-configured', name: null },
+      toEntity: { id: SystemIds.LIST_VIEW, name: 'List', value: SystemIds.LIST_VIEW },
+      timestamp: undefined,
+    });
+
+    for (const remotes of [
+      [configured, bare, viewConfig],
+      [bare, configured, viewConfig],
+    ]) {
+      const merged = mergeRelations([], remotes);
+      const blocks = merged.filter(r => r.type.id === SystemIds.BLOCKS);
+
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].entityId).toBe('junction-configured');
+    }
+  });
+
+  it('collapses timestamp-less duplicates to the same survivor regardless of order', () => {
+    const relationA = makeBlockRelation({ id: 'r-a', entityId: 'junction-a', timestamp: undefined });
+    const relationB = makeBlockRelation({ id: 'r-b', entityId: 'junction-b', timestamp: undefined });
+
+    const mergedAB = mergeRelations([], [relationA, relationB]);
+    const mergedBA = mergeRelations([], [relationB, relationA]);
+
+    expect(mergedAB).toHaveLength(1);
+    expect(mergedBA).toHaveLength(1);
+    expect(mergedAB[0].id).toBe(mergedBA[0].id);
+  });
+
+  it('agrees with the store on the survivor when the loser is re-injected via mergeWith', () => {
+    // The store hydrate dedupes and keeps one duplicate; the SSR mergeWith
+    // payload still contains the other. The merged read must not flip to the
+    // re-injected loser, or the UI reads a different junction than the store.
+    const configured = makeBlockRelation({ id: 'r-configured', entityId: 'junction-configured', timestamp: undefined });
+    const bare = makeBlockRelation({ id: 'r-bare', entityId: 'junction-bare', timestamp: undefined });
+    const viewConfig = makeBlockRelation({
+      id: 'r-view',
+      entityId: 'view-config-entity',
+      type: { id: SystemIds.VIEW_PROPERTY, name: 'View' },
+      fromEntity: { id: 'junction-configured', name: null },
+      toEntity: { id: SystemIds.LIST_VIEW, name: 'List', value: SystemIds.LIST_VIEW },
+      timestamp: undefined,
+    });
+
+    const merged = mergeRelations([configured, viewConfig], [configured, bare, viewConfig]);
+    const blocks = merged.filter(r => r.type.id === SystemIds.BLOCKS);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].entityId).toBe('junction-configured');
+  });
+
   it('preserves a locally-deleted relation and masks its same-key remote', () => {
     const deletedLocal = makeBlockRelation({ id: 'r-old', isDeleted: true, isLocal: true, hasBeenPublished: false });
     const replacement = makeBlockRelation({ id: 'r-new', isLocal: true, hasBeenPublished: false });
