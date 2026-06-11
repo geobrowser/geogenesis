@@ -6,7 +6,8 @@ import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useVote } from '~/core/hooks/use-vote';
+import { useToast } from '~/core/hooks/use-toast';
+import { STALE_PROPOSAL_VOTE_ERROR_MESSAGE, isStaleProposalVoteError, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -83,6 +84,7 @@ export function AcceptOrRejectMember({
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
+  const [, setToast] = useToast();
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
@@ -104,6 +106,13 @@ export function AcceptOrRejectMember({
       onSuccess: onVoteSuccess,
       onError: (error: unknown) => {
         removeOptimisticVote(proposalId);
+        // A stale proposal can't be voted through — retrying would revert
+        // again, so toast + refresh instead of raising the error modal.
+        if (isStaleProposalVoteError(error)) {
+          setToast(<span>{STALE_PROPOSAL_VOTE_ERROR_MESSAGE}</span>);
+          router.refresh();
+          return;
+        }
         const message = describeError(error);
         reportError(`Vote failed: ${message}`, () => castVote(choice));
       },

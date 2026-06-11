@@ -12,7 +12,33 @@ import { SubstreamVote } from '~/core/io/substream-schema';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
+
+/**
+ * DAOSpace reverts that mean the vote arrived too late — the UI showed a stale
+ * proposal the chain has already moved past. The render-time stale-request
+ * filter can't catch these when the indexer lags the chain, so we detect them
+ * at vote time and refresh instead of surfacing raw hex (retrying would only
+ * revert again).
+ */
+const STALE_PROPOSAL_REVERTS = [
+  // ActionReverted(): a deciding YES executes the proposal's actions in the
+  // same transaction; for membership proposals this almost always means the
+  // target was already added through a duplicate request.
+  { selector: '0x24c05f9a', name: 'ActionReverted' },
+  // CanNotVote(): the proposal already executed/closed, or this account
+  // already voted — e.g. a second Accept on a card that didn't re-render.
+  { selector: '0x543ffef7', name: 'CanNotVote' },
+];
+
+export function isStaleProposalVoteError(error: unknown): boolean {
+  const description = describeError(error);
+  return STALE_PROPOSAL_REVERTS.some(r => description.includes(r.selector) || description.includes(r.name));
+}
+
+export const STALE_PROPOSAL_VOTE_ERROR_MESSAGE =
+  'This proposal was already completed, so your vote was no longer needed. Refreshing the list.';
 
 interface UseVoteArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */

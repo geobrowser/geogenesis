@@ -11,10 +11,12 @@ export const Z_LAYERS = {
   reviewOnboardingTip: 10000,
 
   statusBar: 10001,
+  toast: 10001,
 } as const;
 
 export const Z_LAYER_CLASS = {
   flowBar: 'z-1000',
   slideUp: 'z-slide-up',
   statusBar: 'z-10001',
+  toast: 'z-10001',
 } as const;
