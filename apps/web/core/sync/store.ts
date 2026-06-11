@@ -31,17 +31,63 @@ export function relationKey(r: Relation): string {
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
 }
 
-function preferRelation(existing: Relation, candidate: Relation): Relation {
+function preferRelation(
+  existing: Relation,
+  candidate: Relation,
+  hasBlockConfig?: (relationEntityId: string) => boolean
+): Relation {
   if (candidate.isLocal && !existing.isLocal) return candidate;
   if (!candidate.isLocal && existing.isLocal) return existing;
+
   const existingTs = existing.timestamp ?? '';
   const candidateTs = candidate.timestamp ?? '';
-  return candidateTs >= existingTs ? candidate : existing;
+  if (candidateTs !== existingTs) {
+    return candidateTs > existingTs ? candidate : existing;
+  }
+
+  // Remote relations carry no timestamp, so duplicate published relations
+  // always tie. Each duplicate has its own relation entity (`entityId`) — for
+  // BLOCKS relations that entity holds the block's view/shown-columns config,
+  // so prefer the duplicate other config data hangs off of.
+  if (hasBlockConfig) {
+    const existingHasConfig = hasBlockConfig(existing.entityId);
+    const candidateHasConfig = hasBlockConfig(candidate.entityId);
+    if (existingHasConfig !== candidateHasConfig) {
+      return existingHasConfig ? existing : candidate;
+    }
+  }
+
+  // Deterministic tie-break. Hydration and mergeWith reads append incoming
+  // relations in fetch order, so "later in the array wins" flips the survivor
+  // (and its relation entity) across syncs, orphaning data hung off of it.
+  return candidate.id < existing.id ? candidate : existing;
 }
+
+const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
+  SystemIds.VIEW_PROPERTY,
+  SystemIds.PROPERTIES,
+  SystemIds.SHOWN_COLUMNS,
+];
 
 export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   const byKey = new Map<string, Relation>();
   const deleted: Relation[] = [];
+
+  // Lazily index which entities have data-block config relations hanging off
+  // them, so same-key collisions can keep the duplicate whose relation entity
+  // carries the block's saved view/columns. Built at most once per dedupe.
+  let configFromIds: Set<string> | null = null;
+  const hasBlockConfig = (relationEntityId: string): boolean => {
+    if (configFromIds === null) {
+      configFromIds = new Set(
+        relations
+          .filter(r => !r.isDeleted && BLOCK_CONFIG_RELATION_TYPE_IDS.includes(r.type.id))
+          .map(r => r.fromEntity.id)
+      );
+    }
+    return configFromIds.has(relationEntityId);
+  };
+
   for (const relation of relations) {
     // Locally-deleted relations never render and carry pending delete ops;
     // collapsing one into a same-key replacement (e.g. a moved block's
@@ -52,7 +98,7 @@ export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
     }
     const key = relationKey(relation);
     const existing = byKey.get(key);
-    byKey.set(key, existing ? preferRelation(existing, relation) : relation);
+    byKey.set(key, existing ? preferRelation(existing, relation, hasBlockConfig) : relation);
   }
   return [...byKey.values(), ...deleted];
 }
