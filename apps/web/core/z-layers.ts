@@ -20,5 +20,5 @@ export const Z_LAYER_CLASS = {
   flowBar: 'z-1000',
   slideUp: 'z-slide-up',
   statusBar: 'z-10001',
-  toast: 'z-10002',
+  toast: 'z-toast',
 } as const;
