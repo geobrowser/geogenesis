@@ -152,6 +152,7 @@ export function MyGovernanceProposalCard({
             isProposalEnded={votingEnded}
             canExecute={canExecute}
             status={status}
+            proposalType={proposalType}
             userVote={userVoteSubstream}
           />
         ) : votingEnded || status !== 'PROPOSED' ? (

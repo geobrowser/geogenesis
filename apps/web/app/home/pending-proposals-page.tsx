@@ -331,6 +331,7 @@ async function PendingContentProposal({
           isProposalEnded={isProposalEnded}
           canExecute={proposal.canExecute}
           status={proposal.status}
+          proposalType={proposal.type}
           userVote={userVote}
         />
       </div>

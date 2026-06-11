@@ -7,7 +7,13 @@ import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { STALE_PROPOSAL_VOTE_ERROR_MESSAGE, isStaleProposalVoteError, useVote } from '~/core/hooks/use-vote';
+import {
+  MEMBERSHIP_ALREADY_APPLIED_MESSAGE,
+  VOTE_NOT_ACCEPTED_MESSAGE,
+  isProposalActionRevertedError,
+  isVoteNotAcceptedError,
+  useVote,
+} from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -107,9 +113,16 @@ export function AcceptOrRejectMember({
       onError: (error: unknown) => {
         removeOptimisticVote(proposalId);
         // A stale proposal can't be voted through — retrying would revert
-        // again, so toast + refresh instead of raising the error modal.
-        if (isStaleProposalVoteError(error)) {
-          setToast(<span>{STALE_PROPOSAL_VOTE_ERROR_MESSAGE}</span>);
+        // again, so toast + refresh instead of raising the error modal. This
+        // card is always a membership proposal, so ActionReverted means the
+        // change was already applied.
+        if (isVoteNotAcceptedError(error)) {
+          setToast(<span>{VOTE_NOT_ACCEPTED_MESSAGE}</span>);
+          router.refresh();
+          return;
+        }
+        if (isProposalActionRevertedError(error)) {
+          setToast(<span>{MEMBERSHIP_ALREADY_APPLIED_MESSAGE}</span>);
           router.refresh();
           return;
         }

@@ -6,7 +6,14 @@ import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { STALE_PROPOSAL_VOTE_ERROR_MESSAGE, isStaleProposalVoteError, useVote } from '~/core/hooks/use-vote';
+import {
+  MEMBERSHIP_ALREADY_APPLIED_MESSAGE,
+  VOTE_NOT_ACCEPTED_MESSAGE,
+  isMembershipProposalType,
+  isProposalActionRevertedError,
+  isVoteNotAcceptedError,
+  useVote,
+} from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -23,12 +30,21 @@ interface Props {
   isProposalEnded: boolean;
   canExecute: boolean;
   status: Proposal['status'];
+  proposalType: Proposal['type'];
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
+export function AcceptOrRejectEditor({
+  spaceId,
+  isProposalEnded,
+  canExecute,
+  status,
+  proposalType,
+  userVote,
+  proposalId,
+}: Props) {
   const router = useRouter();
 
   const { vote, status: voteStatus } = useVote({
@@ -65,9 +81,16 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
     // A stale proposal can't be voted through — retrying would revert again,
-    // so toast + refresh instead of raising the error modal.
-    if (isStaleProposalVoteError(error)) {
-      setToast(<span>{STALE_PROPOSAL_VOTE_ERROR_MESSAGE}</span>);
+    // so toast + refresh instead of raising the error modal. ActionReverted is
+    // only treated as stale for membership proposals; for content proposals it
+    // can be a genuine execution failure that should surface as an error.
+    if (isVoteNotAcceptedError(error)) {
+      setToast(<span>{VOTE_NOT_ACCEPTED_MESSAGE}</span>);
+      router.refresh();
+      return;
+    }
+    if (isMembershipProposalType(proposalType) && isProposalActionRevertedError(error)) {
+      setToast(<span>{MEMBERSHIP_ALREADY_APPLIED_MESSAGE}</span>);
       router.refresh();
       return;
     }

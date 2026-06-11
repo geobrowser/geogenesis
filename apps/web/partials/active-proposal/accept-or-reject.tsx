@@ -8,7 +8,14 @@ import { useRouter } from 'next/navigation';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { STALE_PROPOSAL_VOTE_ERROR_MESSAGE, isStaleProposalVoteError, useVote } from '~/core/hooks/use-vote';
+import {
+  MEMBERSHIP_ALREADY_APPLIED_MESSAGE,
+  VOTE_NOT_ACCEPTED_MESSAGE,
+  isMembershipProposalType,
+  isProposalActionRevertedError,
+  isVoteNotAcceptedError,
+  useVote,
+} from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -81,8 +88,17 @@ export function AcceptOrReject({
     removeOptimisticVote(proposalId);
     // A stale proposal can't be voted through — retrying would revert again,
     // so close the review window and toast instead of raising the error modal.
-    if (isStaleProposalVoteError(error)) {
-      setToast(<span>{STALE_PROPOSAL_VOTE_ERROR_MESSAGE}</span>);
+    // ActionReverted is only treated as stale for membership proposals; for
+    // content proposals it can be a genuine execution failure that should
+    // surface as an error.
+    if (isVoteNotAcceptedError(error)) {
+      setToast(<span>{VOTE_NOT_ACCEPTED_MESSAGE}</span>);
+      closeProposal();
+      router.refresh();
+      return;
+    }
+    if (isMembershipProposalType(proposalType) && isProposalActionRevertedError(error)) {
+      setToast(<span>{MEMBERSHIP_ALREADY_APPLIED_MESSAGE}</span>);
       closeProposal();
       router.refresh();
       return;
