@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PROPERTY_GROUPS_PROPERTY } from '../constants';
 import { Entity, Property, Relation } from '../types';
-import { getSchemaWithGroupsFromTypeIdsAndRelations } from './entities';
+import { getSchemaFromTypeIds, getSchemaWithGroupsFromTypeIdsAndRelations } from './entities';
 
 const mocks = vi.hoisted(() => ({
   entitiesById: new Map<string, Entity>(),
@@ -323,5 +323,81 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
     expect(result.ungroupedPropertyIds).toEqual(['roles-property', 'related-projects']);
     expect(result.hasPropertyGroups).toBe(false);
     expect(result.schema.map(item => item.id)).toContain('related-projects');
+  });
+});
+
+describe('getSchemaFromTypeIds', () => {
+  const secondSpaceId = 'space-2';
+
+  beforeEach(() => {
+    mocks.entitiesById.clear();
+    mocks.propertiesById.clear();
+    mocks.findMany.mockReset();
+    mocks.getProperties.mockReset();
+
+    mocks.findMany.mockImplementation(async ({ where }: { where: { id?: { in?: string[] } } }) => {
+      const ids = where.id?.in ?? [];
+      return ids.map(id => mocks.entitiesById.get(id)).filter((item): item is Entity => item != null);
+    });
+
+    mocks.getProperties.mockImplementation((ids: string[]) =>
+      Effect.succeed(ids.map(id => mocks.propertiesById.get(id)).filter((item): item is Property => item != null))
+    );
+
+    mocks.propertiesById.set('property-a', property('property-a', 'Property A'));
+    mocks.propertiesById.set('property-b', property('property-b', 'Property B'));
+    mocks.propertiesById.set('property-c', property('property-c', 'Property C'));
+    mocks.entitiesById.set(
+      'type',
+      entity(
+        'type',
+        'Type',
+        [
+          relation({ id: 'type-property-a', from: 'type', type: SystemIds.PROPERTIES, to: 'property-a', position: '1' }),
+          relation({ id: 'type-property-b', from: 'type', type: SystemIds.PROPERTIES, to: 'property-b', position: '2' }),
+          relation({
+            id: 'type-property-a-2',
+            from: 'type',
+            type: SystemIds.PROPERTIES,
+            to: 'property-a',
+            position: '0',
+            spaceId: secondSpaceId,
+          }),
+          relation({
+            id: 'type-property-c',
+            from: 'type',
+            type: SystemIds.PROPERTIES,
+            to: 'property-c',
+            position: '1',
+            spaceId: secondSpaceId,
+          }),
+        ],
+        [spaceId, secondSpaceId]
+      )
+    );
+  });
+
+  function schemaTestIds(result: Property[]) {
+    return result.map(p => p.id).filter(id => id.startsWith('property-'));
+  }
+
+  it('keeps only the top-ranked space iteration by default', async () => {
+    const result = await getSchemaFromTypeIds([{ id: 'type' }]);
+
+    expect(schemaTestIds(result)).toEqual(['property-a', 'property-b']);
+  });
+
+  it('unions PROPERTIES from every space iteration when includeAllTypeSpaces is set', async () => {
+    const result = await getSchemaFromTypeIds([{ id: 'type' }], undefined, { includeAllTypeSpaces: true });
+
+    expect(schemaTestIds(result)).toEqual(['property-a', 'property-b', 'property-c']);
+  });
+
+  it('orders the pinned space iteration first when a type spaceId is provided', async () => {
+    const result = await getSchemaFromTypeIds([{ id: 'type', spaceId: secondSpaceId }], undefined, {
+      includeAllTypeSpaces: true,
+    });
+
+    expect(schemaTestIds(result)).toEqual(['property-a', 'property-c', 'property-b']);
   });
 });

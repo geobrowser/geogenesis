@@ -71,7 +71,8 @@ export function useFilters(canEdit?: boolean) {
       if (!spacesInFilter.includes(spaceId)) spacesInFilter.push(spaceId);
       return await getSchemaFromTypeIds(
         typesInFilter.map(id => ({ id })),
-        spacesInFilter
+        spacesInFilter,
+        { includeAllTypeSpaces: true }
       );
     },
   });
