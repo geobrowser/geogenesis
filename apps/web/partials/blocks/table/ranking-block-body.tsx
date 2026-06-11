@@ -7,12 +7,12 @@ import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import {
-  RankingFirstSubmissionCta,
   RankingFirstSubmissionPrompt,
   RankingFullscreenSectionHeaderRow,
   RankingGlobalDesktopRow,
   RankingMyRankingDesktopRow,
   RankingSectionHeaderRow,
+  RankingSubmitCtaBanner,
   RankingTabButton,
 } from './ranking-block-ui';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
@@ -150,7 +150,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     <div className="flex flex-col gap-4">
       {showContributePointsBanner ? <RankingContributePointsBanner /> : null}
       {globalDisplayEntityIds.length === 0 ? (
-        <RankingFirstSubmissionCta />
+        <RankingSubmitCtaBanner />
       ) : isLoadingGlobalEntries ? (
         <p className="text-metadata text-grey-03">Loading ranking…</p>
       ) : (

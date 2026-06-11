@@ -8,8 +8,6 @@ import { motion } from 'framer-motion';
 import { SidePanel } from '~/design-system/icons/side-panel';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
-import { RankingEmptyStateArt } from './ranking-empty-state-art';
-
 function RankingRowSidePanelButton({ onClick, hidden = false }: { onClick: () => void; hidden?: boolean }) {
   return (
     <button
@@ -106,10 +104,7 @@ export function RankingTabButton({
     <button
       type="button"
       onClick={onClick}
-      className={cx(
-        tabGroupTabLinkStyles({ active }),
-        'h-6 gap-2 !text-smallTitle !font-semibold lg:!font-medium'
-      )}
+      className={cx(tabGroupTabLinkStyles({ active }), 'h-6 gap-2 !text-smallTitle !font-semibold lg:!font-medium')}
       aria-selected={active}
       aria-label={ariaLabel}
     >
@@ -128,17 +123,20 @@ export function RankingTabButton({
   );
 }
 
-export function RankingFirstSubmissionCta() {
+export function RankingSubmitCtaBanner() {
   return (
-    <div className="flex min-h-[140px] items-center justify-between gap-6 rounded-lg bg-grey-01 px-6 py-5 lg:min-h-0 lg:justify-start lg:gap-0 lg:rounded-none lg:bg-transparent lg:px-0 lg:py-0">
-      <div className="min-w-0 flex-1 text-grey-04 [&_p]:!text-[16px]">
-        <p className="whitespace-nowrap lg:whitespace-normal">
-          Your entries will become the starting global ranking for everyone else.
-        </p>
-        <p className="lg:hidden">Use the &ldquo;Add my ranking&rdquo; button to get started.</p>
+    <div className="relative overflow-hidden rounded-lg bg-grey-01 pr-6">
+      <div className="ml-auto aspect-[118/74] w-[140px] overflow-hidden">
+        <img
+          src="/images/ranking/submit_cta.png"
+          alt=""
+          aria-hidden
+          className="size-full object-contain object-right"
+        />
       </div>
-      <div className="lg:hidden">
-        <RankingEmptyStateArt />
+      <div className="absolute inset-y-0 left-0 right-[140px] flex flex-col justify-center px-6 text-grey-04 [&_p]:!text-[16px]">
+        <p>Your entries will become the starting global ranking for everyone else.</p>
+        <p>Use the &ldquo;Add my ranking&rdquo; button to get started.</p>
       </div>
     </div>
   );
@@ -152,7 +150,7 @@ export function RankingFirstSubmissionPrompt({ action }: { action: React.ReactNo
         <span className="inline-flex shrink-0 items-center">{action}</span>
       </div>
       <div className="pt-4">
-        <RankingFirstSubmissionCta />
+        <RankingSubmitCtaBanner />
       </div>
     </div>
   );
