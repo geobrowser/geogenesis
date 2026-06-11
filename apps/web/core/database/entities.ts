@@ -278,7 +278,15 @@ export async function getSchemaFromTypeIds(
   const spaceByType = new Map(typesInEntityOrder.map(t => [t.id, t.spaceId]));
   const dedupedTypeIds = typesInEntityOrder.map(t => t.id);
 
-  const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
+  // A scoped fetch filters relations to that space at the merge layer
+  // (E.merge), which would leave nothing for the non-primary space
+  // iterations. Fetch unscoped when unioning; typeSpaceId below still pins
+  // the primary-space ordering.
+  const fetchSpaceByType = options?.includeAllTypeSpaces
+    ? new Map<string, string | undefined>(dedupedTypeIds.map(id => [id, undefined]))
+    : spaceByType;
+
+  const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, fetchSpaceByType);
   const typeEntitiesOrdered = orderEntitiesByIdList(dedupedTypeIds, typeEntities);
 
   const nativePropertyIds = typeEntitiesOrdered.flatMap(entity => {

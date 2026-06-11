@@ -34,6 +34,16 @@ vi.mock('../query-client', () => ({
 
 const spaceId = 'space-1';
 
+// Mirrors E.findMany: a scoped fetch only returns relations from that space
+// (E.merge filters them, see core/sync/orm.ts).
+async function findManyFromMap({ where, spaceId }: { where: { id?: { in?: string[] } }; spaceId?: string }) {
+  const ids = where.id?.in ?? [];
+  return ids
+    .map(id => mocks.entitiesById.get(id))
+    .filter((item): item is Entity => item != null)
+    .map(entity => (spaceId ? { ...entity, relations: entity.relations.filter(r => r.spaceId === spaceId) } : entity));
+}
+
 function property(id: string, name: string, options: Partial<Property> = {}): Property {
   return {
     id,
@@ -84,10 +94,7 @@ describe('getSchemaWithGroupsFromTypeIdsAndRelations', () => {
     mocks.findMany.mockReset();
     mocks.getProperties.mockReset();
 
-    mocks.findMany.mockImplementation(async ({ where }: { where: { id?: { in?: string[] } } }) => {
-      const ids = where.id?.in ?? [];
-      return ids.map(id => mocks.entitiesById.get(id)).filter((item): item is Entity => item != null);
-    });
+    mocks.findMany.mockImplementation(findManyFromMap);
 
     mocks.getProperties.mockImplementation((ids: string[]) =>
       Effect.succeed(ids.map(id => mocks.propertiesById.get(id)).filter((item): item is Property => item != null))
@@ -335,10 +342,7 @@ describe('getSchemaFromTypeIds', () => {
     mocks.findMany.mockReset();
     mocks.getProperties.mockReset();
 
-    mocks.findMany.mockImplementation(async ({ where }: { where: { id?: { in?: string[] } } }) => {
-      const ids = where.id?.in ?? [];
-      return ids.map(id => mocks.entitiesById.get(id)).filter((item): item is Entity => item != null);
-    });
+    mocks.findMany.mockImplementation(findManyFromMap);
 
     mocks.getProperties.mockImplementation((ids: string[]) =>
       Effect.succeed(ids.map(id => mocks.propertiesById.get(id)).filter((item): item is Property => item != null))
@@ -353,8 +357,20 @@ describe('getSchemaFromTypeIds', () => {
         'type',
         'Type',
         [
-          relation({ id: 'type-property-a', from: 'type', type: SystemIds.PROPERTIES, to: 'property-a', position: '1' }),
-          relation({ id: 'type-property-b', from: 'type', type: SystemIds.PROPERTIES, to: 'property-b', position: '2' }),
+          relation({
+            id: 'type-property-a',
+            from: 'type',
+            type: SystemIds.PROPERTIES,
+            to: 'property-a',
+            position: '1',
+          }),
+          relation({
+            id: 'type-property-b',
+            from: 'type',
+            type: SystemIds.PROPERTIES,
+            to: 'property-b',
+            position: '2',
+          }),
           relation({
             id: 'type-property-a-2',
             from: 'type',
