@@ -1,26 +1,21 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+import { daoSpace } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { encodeFunctionData } from 'viem';
 
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeMembershipRequestData } from '~/core/utils/contracts/governance';
-import {
-  EMPTY_SIGNATURE,
-  EMPTY_TOPIC_HEX,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to join */
@@ -50,40 +45,44 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       throw new Error('User does not have a registered personal space ID');
     }
 
-    if (!spaceId) {
-      throw new Error('No target space ID provided');
+    if (!validateSpaceId(spaceId)) {
+      throw new Error('Invalid target space ID');
+    }
+
+    // Members/editors already belong to the space; a duplicate join request errors on vote.
+    // Check at submit time rather than via reactive access-control state, which reads false
+    // while still hydrating and would let a fast click through. Fail open if the check errors.
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+    const access = await runEffectEither(
+      Effect.all([
+        getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+        getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+      ])
+    );
+    if (Either.isRight(access) && (access.right[0] || access.right[1])) {
+      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
+      throw new Error('User is already a member or editor of the space');
     }
 
     console.log('Requesting to be member', {
-      fromSpaceId: personalSpaceId,
-      toSpaceId: spaceId,
+      authorSpaceId: personalSpaceId,
+      spaceId,
     });
 
-    const writeTxEffect = Effect.gen(function* () {
-      const proposalId = `0x${IdUtils.generate()}` as const;
-      const fromSpaceId = `0x${personalSpaceId}` as const;
-      const toSpaceId = `0x${spaceId}` as const;
-
-      // Encode the data payload: (proposalId, newMemberSpaceId)
-      const data = encodeMembershipRequestData(proposalId, fromSpaceId);
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
-      });
-
-      const hash = yield* tx(callData).pipe(
-        Effect.withSpan('web.write.requestMembership'),
-        Effect.annotateSpans({
-          'io.operation': 'request_membership',
-          'space.type': 'DAO',
-          'governance.action': 'membership_requested',
-        })
-      );
-      console.log('Transaction hash: ', hash);
-      return hash;
+    const { calldata: callData } = daoSpace.proposeRequestMembership({
+      authorSpaceId: personalSpaceId,
+      spaceId,
     });
+
+    const writeTxEffect = tx(callData).pipe(
+      Effect.withSpan('web.write.requestMembership'),
+      Effect.annotateSpans({
+        'io.operation': 'request_membership',
+        'space.type': 'DAO',
+        'governance.action': 'membership_requested',
+      })
+    );
 
     const result = await runEffectEither(writeTxEffect);
 
@@ -94,7 +93,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
         // Necessary to propagate error status to useMutation
         throw error;
       },
-      onRight: () => console.log('Successfully requested to be member'),
+      onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
     });
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
 

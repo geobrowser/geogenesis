@@ -1,29 +1,23 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
+import { type Hex } from 'viem';
 
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { getIsEditorOfSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
-import {
-  DAOSpaceAbi,
-  EMPTY_SIGNATURE,
-  EMPTY_TOPIC_HEX,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-  VOTING_MODE,
-} from '~/core/utils/contracts/space-registry';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeEditorArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to become an editor of */
@@ -54,63 +48,53 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       throw new Error('User does not have a registered personal space ID');
     }
 
-    if (!spaceId) {
-      throw new Error('No target space ID provided');
+    if (!validateSpaceId(spaceId)) {
+      throw new Error('Invalid target space ID');
     }
 
+    // The proposal's addEditor action must call the DAO space contract directly.
     if (!space?.address) {
-      throw new Error('No space address found');
+      const message = 'No space address found. Please try again.';
+      console.error('No space address found for space:', spaceId);
+      dispatch({ type: 'ERROR', payload: message });
+      throw new Error(message);
     }
 
-    const spaceAddress = space.address as Hex;
+    // Existing editors already belong to the space; a duplicate editor request errors on vote.
+    // Check at submit time rather than via reactive access-control state, which reads false
+    // while still hydrating and would let a fast click through. Fail open if the check errors.
+    const access = await runEffectEither(
+      getIsEditorOfSpace(normalizeSpaceId(spaceId), normalizeSpaceId(personalSpaceId))
+    );
+    if (Either.isRight(access) && access.right) {
+      dispatch({ type: 'ERROR', payload: 'You are already an editor of this space' });
+      throw new Error('User is already an editor of the space');
+    }
 
     console.log('Requesting to be editor', {
-      fromSpaceId: personalSpaceId,
-      toSpaceId: spaceId,
-      spaceAddress,
+      authorSpaceId: personalSpaceId,
+      spaceId,
     });
 
-    const writeTxEffect = Effect.gen(function* () {
-      const proposalId = `0x${IdUtils.generate()}` as const;
-      const fromSpaceId = `0x${personalSpaceId}` as const;
-      const toSpaceId = `0x${spaceId}` as const;
-
-      // Encode the addEditor call that will execute if the proposal passes
-      const addEditorCallData = encodeFunctionData({
-        functionName: 'addEditor',
-        abi: DAOSpaceAbi,
-        args: [fromSpaceId],
-      });
-
-      const proposalActions = [
-        {
-          to: spaceAddress,
-          value: 0n,
-          data: addEditorCallData,
-        },
-      ];
-
-      const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, proposalActions);
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
-      });
-
-      const hash = yield* tx(callData).pipe(
-        Effect.withSpan('web.write.createProposal.requestEditorship'),
-        Effect.annotateSpans({
-          'io.operation': 'create_proposal',
-          'space.type': 'DAO',
-          'governance.action': 'proposal_created',
-          'governance.proposal_action': 'add_editor',
-          'governance.voting_mode': 'SLOW',
-        })
-      );
-      console.log('Transaction hash: ', hash);
-      return hash;
+    // Caller proposes themselves as a new editor. Editor proposals are slow-path only.
+    const { calldata: callData } = geo.daoSpaces.proposeAddEditor({
+      authorSpaceId: personalSpaceId,
+      spaceId,
+      daoSpaceAddress: space.address as Hex,
+      newEditorSpaceId: personalSpaceId,
+      votingMode: 'SLOW',
     });
+
+    const writeTxEffect = tx(callData).pipe(
+      Effect.withSpan('web.write.createProposal.requestEditorship'),
+      Effect.annotateSpans({
+        'io.operation': 'create_proposal',
+        'space.type': 'DAO',
+        'governance.action': 'proposal_created',
+        'governance.proposal_action': 'add_editor',
+        'governance.voting_mode': 'SLOW',
+      })
+    );
 
     const result = await runEffectEither(writeTxEffect);
 
@@ -121,7 +105,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
         // Necessary to propagate error status to useMutation
         throw error;
       },
-      onRight: () => console.log('Successfully requested to be editor'),
+      onRight: hash => console.log('Successfully requested to be editor. Transaction hash:', hash),
     });
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]);
 

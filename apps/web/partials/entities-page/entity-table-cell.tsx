@@ -72,7 +72,7 @@ export const EntityTableCell = ({
             >
               {name || entityId}
             </Link>
-            <div className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/name-table-browse:pointer-events-auto group-hover/name-table-browse:opacity-100">
+            <div className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/name-table-browse:pointer-events-auto group-hover/name-table-browse:opacity-100 md:hidden">
               <DataBlockOpenSidePanelButton
                 entityId={entityId}
                 entitySpaceId={spaceId}

@@ -48,6 +48,12 @@ type WebUrlFieldProps = {
   onBlur?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   className?: string;
+  /**
+   * Render the URL as plain styled text instead of an anchor. Required when
+   * the field sits inside another link — nested <a> is invalid HTML and
+   * causes hydration errors.
+   */
+  disableLink?: boolean;
 };
 
 export function WebUrlField({
@@ -57,6 +63,7 @@ export function WebUrlField({
   value,
   format,
   className = '',
+  disableLink = false,
   ...props
 }: WebUrlFieldProps) {
   // We use the local value and onBlur to improve performance when WebUrlField is rendered
@@ -71,7 +78,7 @@ export function WebUrlField({
   const resolvedUrl = isUrlTemplate(format) ? resolveUrlTemplate(format, value) : undefined;
 
   if (!resolvedUrl && value.startsWith('graph://')) {
-    return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} />;
+    return <GraphUrlField currentSpaceId={spaceId} value={value as `graph://${string}`} disableLink={disableLink} />;
   }
 
   // Check if URL has a protocol (http://, https://, mailto:, tel:, etc.)
@@ -89,6 +96,8 @@ export function WebUrlField({
       )}
       onChange={e => setLocalValue(e.currentTarget.value)}
     />
+  ) : disableLink ? (
+    <span className={webUrlFieldStyles({ variant, editable: isEditing, className })}>{value}</span>
   ) : (
     <a
       href={normalizedUrl}
@@ -104,9 +113,10 @@ export function WebUrlField({
 type GraphUrlFieldProps = {
   currentSpaceId: string;
   value: `graph://${string}`;
+  disableLink?: boolean;
 };
 
-const GraphUrlField = ({ currentSpaceId, value }: GraphUrlFieldProps) => {
+const GraphUrlField = ({ currentSpaceId, value, disableLink = false }: GraphUrlFieldProps) => {
   const entityId = GraphUrl.toEntityId(value);
   const spaceId = GraphUrl.toSpaceId(value) ?? currentSpaceId;
   const name = useName(entityId);
@@ -114,5 +124,9 @@ const GraphUrlField = ({ currentSpaceId, value }: GraphUrlFieldProps) => {
   const entityName = name ?? value;
   const href = `/space/${spaceId}/${entityId}`;
 
-  return <LinkableChip href={href}>{entityName}</LinkableChip>;
+  return (
+    <LinkableChip href={href} disableLink={disableLink}>
+      {entityName}
+    </LinkableChip>
+  );
 };

@@ -17,18 +17,21 @@ import {
   ApiProposalListResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  findMembershipAction,
   isValidUUID,
   mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
   getIsProposalEnded,
+  getMembershipProposalDisplayName,
   getProposalName,
 } from '~/core/utils/utils';
 
@@ -51,17 +54,6 @@ const BUCKET_BASE_ORDER: Record<ProposalBucket, number> = {
 
 const PAGE_SIZE = 100;
 
-const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
-
-/** Finds the membership action in a proposal's action list. The REST schema does
- *  not guarantee action order, so a lookup by index 0 can miss multi-action
- *  proposals where the membership action is not first. */
-function findMembershipAction(
-  actions: ApiProposalListItem['actions']
-): ApiProposalListItem['actions'][number] | undefined {
-  return actions.find(a => MEMBERSHIP_ACTION_TYPES.has(a.actionType));
-}
-
 /** Unvoted proposals first; voted ones sink to the bottom (same as governance home review). */
 function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalListItem[]): ApiProposalListItem[] {
   return [...items].sort((a, b) => {
@@ -75,22 +67,6 @@ function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalLi
 function percentageFromCounts(count: number, total: number): number {
   if (total === 0) return 0;
   return Math.floor((count / total) * 100);
-}
-
-function getMembershipProposalDisplayName(type: ProposalType, targetProfile: Profile): string {
-  const targetName = targetProfile.name ?? targetProfile.address ?? targetProfile.id;
-  switch (type) {
-    case 'ADD_MEMBER':
-      return `Add ${targetName} as member`;
-    case 'REMOVE_MEMBER':
-      return `Remove ${targetName} as member`;
-    case 'ADD_EDITOR':
-      return `Add ${targetName} as editor`;
-    case 'REMOVE_EDITOR':
-      return `Remove ${targetName} as editor`;
-    default:
-      return targetName;
-  }
 }
 
 interface Props {
@@ -399,10 +375,15 @@ async function fetchGovernanceProposals({
     }),
   ]);
 
+  // Requests whose target already belongs to the space (a duplicate request was
+  // accepted, or they were added another way) stay PROPOSED/EXECUTABLE forever —
+  // drop them from the open buckets. Completed history stays intact.
+  const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
+
   // Combine in priority order: executable > active > completed; within open phases, unvoted first.
   let combinedProposals = [
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(executableProposals),
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(activeProposals),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status === 'EXECUTABLE')),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status !== 'EXECUTABLE')),
     ...completedProposals,
   ];
 

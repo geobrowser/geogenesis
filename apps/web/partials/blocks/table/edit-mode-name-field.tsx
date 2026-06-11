@@ -44,11 +44,11 @@ export function EditModeNameField({
       onMouseEnter={() => setIsRowHovered(true)}
       onMouseLeave={() => setIsRowHovered(false)}
     >
-      <div className="min-w-0 pr-14">
+      <div className="min-w-0 pr-14 md:pr-0">
         <PageStringField placeholder={placeholder} value={name ?? ''} onChange={onChange} />
       </div>
       {isRowHovered && (
-        <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center gap-0.5">
+        <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center gap-0.5 md:hidden">
           <DataBlockOpenSidePanelButton
             entityId={entityId}
             entitySpaceId={resolvedPanelSpaceId}

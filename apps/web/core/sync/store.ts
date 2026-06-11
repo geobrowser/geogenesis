@@ -4,6 +4,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
   FORMAT_PROPERTY,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
@@ -20,8 +21,40 @@ import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
-function relationKey(r: Relation): string {
+export function relationKey(r: Relation): string {
+  if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
+    return `${r.fromEntity.id}:column:${columnPropertyIdFromRelation(r)}:${r.spaceId ?? ''}`;
+  }
+  if (r.type.id === SystemIds.VIEW_PROPERTY) {
+    return `${r.fromEntity.id}:view:${r.spaceId ?? ''}`;
+  }
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
+function preferRelation(existing: Relation, candidate: Relation): Relation {
+  if (candidate.isLocal && !existing.isLocal) return candidate;
+  if (!candidate.isLocal && existing.isLocal) return existing;
+  const existingTs = existing.timestamp ?? '';
+  const candidateTs = candidate.timestamp ?? '';
+  return candidateTs >= existingTs ? candidate : existing;
+}
+
+export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
+  const byKey = new Map<string, Relation>();
+  const deleted: Relation[] = [];
+  for (const relation of relations) {
+    // Locally-deleted relations never render and carry pending delete ops;
+    // collapsing one into a same-key replacement (e.g. a moved block's
+    // recreated BLOCKS relation) would drop the delete op from the publish.
+    if (relation.isDeleted) {
+      deleted.push(relation);
+      continue;
+    }
+    const key = relationKey(relation);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? preferRelation(existing, relation) : relation);
+  }
+  return [...byKey.values(), ...deleted];
 }
 
 /**
@@ -339,7 +372,6 @@ export class GeoStore {
     if (newValues.length === 0 && newRelations.length === 0) return;
 
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
-    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     if (newValues.length > 0) {
       reactiveValues.set(prev => {
@@ -363,8 +395,9 @@ export class GeoStore {
             const local = prevById.get(r.id);
             return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
           });
+        const relationIdsToWrite = new Set(mergedIncoming.map(t => t.id));
         const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
-        return [...unchangedRelations, ...mergedIncoming];
+        return dedupeRelationsByKey([...unchangedRelations, ...mergedIncoming]);
       });
     }
   }

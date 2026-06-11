@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import type { UIMessage } from 'ai';
 import { isTextUIPart, isToolUIPart } from 'ai';
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
@@ -320,7 +321,7 @@ type ResizeHandleProps = {
 function ResizeHandle({ className, onStart, onMove, onEnd }: ResizeHandleProps) {
   return (
     <div
-      className={`${className} z-10 touch-none select-none`}
+      className={cx(className, 'z-10 touch-none select-none')}
       onPointerDown={onStart}
       onPointerMove={onMove}
       onPointerUp={onEnd}

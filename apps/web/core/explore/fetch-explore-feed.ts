@@ -236,7 +236,6 @@ async function fetchExploreEntitiesPage(args: {
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
-// This endpoint does not expose top-level `spaceIds` / `typeIds` args, unlike `entitiesConnection`.
 async function fetchTopEntitiesPage(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -252,10 +251,12 @@ async function fetchTopEntitiesPage(args: {
       variables: {
         first: args.limit,
         after: args.after,
-        filter: buildFeedFilter({ ...args, includeEntityScopeInFilter: true }),
+        filter: buildFeedFilter(args),
         propertyId: SCORE_SYSTEM_PROPERTY,
         dataType: 'integer',
         sortDirection: 'DESC',
+        spaceIds: args.spaceIds,
+        typeIds: args.typeIds?.length ? [...args.typeIds] : undefined,
         spaceIdsForLists: args.spaceIds,
       },
     })

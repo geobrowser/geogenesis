@@ -16,6 +16,12 @@ export interface CreatePropertyParams {
   propertyType: SwitchableRenderableType;
   verified?: boolean;
   space?: string;
+  /**
+   * Optional list of entity-type IDs (with names) to set as the property's
+   * `relationValueTypes`. Each is written as a RELATION_VALUE_RELATIONSHIP_TYPE
+   * relation from the property entity. Only meaningful for RELATION properties.
+   */
+  relationValueTypes?: Array<{ id: string; name: string | null }>;
 }
 
 export interface AddPropertyToEntityParams {
@@ -32,7 +38,7 @@ export function useCreateProperty(spaceId: string) {
   const { store } = useSyncEngine();
 
   const createProperty = React.useCallback(
-    ({ name, propertyType, verified = false, space }: CreatePropertyParams): string => {
+    ({ name, propertyType, verified = false, space, relationValueTypes }: CreatePropertyParams): string => {
       const { baseDataType, renderableTypeId } = mapPropertyType(propertyType);
       const propertyId = nextPropertyId;
 
@@ -45,6 +51,7 @@ export function useCreateProperty(spaceId: string) {
         renderableTypeId,
         verified,
         toSpaceId: space,
+        relationValueTypes,
       });
 
       setNextPropertyId(IdUtils.generate());

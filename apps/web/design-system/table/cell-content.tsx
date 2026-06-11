@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Text } from '../text';
@@ -15,7 +17,7 @@ const tableCellBreakable = 'block min-h-[22px] min-w-0 max-w-full break-words [o
 
 export function CellContent({ isExpanded, value, href }: Props) {
   const content = href ? (
-    <Link href={href} className={`${tableCellBreakable} text-ctaHover hover:underline hover:decoration-ctaHover`}>
+    <Link href={href} className={cx(tableCellBreakable, 'text-ctaHover hover:underline hover:decoration-ctaHover')}>
       {value}
     </Link>
   ) : (

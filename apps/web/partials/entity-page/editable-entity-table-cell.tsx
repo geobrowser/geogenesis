@@ -114,20 +114,21 @@ export function EditableEntityTableCell({
     return (
       <>
         {source.type !== 'COLLECTION' ? (
-          <div className="group/name-cell flex w-full min-w-0 items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <PageStringField
-                variant="tableCell"
-                placeholder="Entity name..."
-                value={name ?? ''}
-                onEnterKey={onAddPlaceholder}
-                onChange={value => {
-                  onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
-                }}
-              />
+          <div className="group/name-cell relative flex w-full items-center">
+            <PageStringField
+              variant="tableCell"
+              placeholder="Entity name..."
+              value={name ?? ''}
+              onEnterKey={onAddPlaceholder}
+              onChange={value => {
+                onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
+              }}
+            />
+            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
+              <NavigateButton spaceId={spaceId} entityId={entityId} />
             </div>
             {!isPlaceholderRow && (
-              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100">
+              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100 md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={spaceId}

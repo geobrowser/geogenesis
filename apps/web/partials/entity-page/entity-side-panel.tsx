@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion, useAnimation } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
@@ -122,7 +123,7 @@ function EntitySidePanelModeToggle() {
         <motion.div
           animate={controls}
           variants={variants}
-          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
+          className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
         >
           <EyeSmall />
         </motion.div>
@@ -130,7 +131,10 @@ function EntitySidePanelModeToggle() {
       <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
         {editable && <AnimatedTogglePill controls={controls} />}
         <div
-          className={`z-10 transition-colors duration-300 ${editable ? 'text-text' : canEditSpace ? 'text-grey-03' : 'text-grey-04'}`}
+          className={cx(
+            'z-10 transition-colors duration-300',
+            editable ? 'text-text' : canEditSpace ? 'text-grey-03' : 'text-grey-04'
+          )}
         >
           <BulkEdit />
         </div>
@@ -351,6 +355,19 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
+  React.useEffect(() => {
+    if (!sidePanelTarget) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+      event.preventDefault();
+      handleCloseSidePanel();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidePanelTarget, handleCloseSidePanel]);
+
   React.useLayoutEffect(() => {
     const html = document.documentElement;
     const body = document.body;
@@ -396,6 +413,18 @@ export function EntitySidePanel() {
     }
   }, [createPostFlow, pathname, sidePanelTarget, handleCloseSidePanel]);
 
+  React.useEffect(() => {
+    if (!sidePanelTarget) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      handleCloseSidePanel();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidePanelTarget, handleCloseSidePanel]);
+
   if (!sidePanelTarget) {
     return null;
   }
@@ -410,9 +439,10 @@ export function EntitySidePanel() {
     <aside
       ref={panelHostRef}
       data-entity-side-panel
-      className={`rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white ${
+      className={cx(
+        'rounded-l-2xl shadow-2xl fixed inset-y-0 right-0 flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white',
         isReviewOpen ? 'z-[10001]' : 'z-[200]'
-      }`}
+      )}
     >
       <EntitySidePanelPopoverPortalProvider>
         <EntitySidePanelSurface

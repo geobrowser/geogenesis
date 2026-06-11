@@ -62,6 +62,8 @@ export interface Mutator {
       verified?: boolean;
       toSpaceId?: string;
       skipTypeRelation?: boolean;
+      /** Optional list of to-entity-types to register as RELATION_VALUE_RELATIONSHIP_TYPE relations. */
+      relationValueTypes?: Array<{ id: string; name: string | null }>;
     }) => void;
     setDataType: (propertyId: string, dataType: DataType) => void;
   };
@@ -143,6 +145,7 @@ function createMutator(store: GeoStore): Mutator {
         verified = false,
         toSpaceId,
         skipTypeRelation = false,
+        relationValueTypes,
       }) => {
         // Check existing relations for duplicate prevention
         const existingRelations = store.getResolvedRelations(entityId);
@@ -266,6 +269,52 @@ function createMutator(store: GeoStore): Mutator {
               },
             };
             store.setRelation(renderableTypeRelation);
+          }
+        }
+
+        // For RELATION properties, register the allowed to-entity-types so the
+        // property carries the constraint and the rest of the app (search,
+        // hydration, generation) can use it.
+        if (relationValueTypes && relationValueTypes.length > 0) {
+          // Track ids written in this call so duplicates inside the caller's
+          // input array can't double-write. `existingRelations` is a snapshot
+          // taken at function entry and doesn't see the writes we issue here.
+          const writtenRvtIds = new Set<string>();
+          for (const rvt of relationValueTypes) {
+            if (writtenRvtIds.has(rvt.id)) continue;
+            const alreadyPresent = existingRelations.some(
+              r =>
+                r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE &&
+                r.toEntity.id === rvt.id &&
+                !r.isDeleted
+            );
+            if (alreadyPresent) {
+              writtenRvtIds.add(rvt.id);
+              continue;
+            }
+
+            store.setRelation({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
+                name: 'Relation Value Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: rvt.id,
+                name: rvt.name,
+                value: rvt.id,
+              },
+            });
+            writtenRvtIds.add(rvt.id);
           }
         }
       },

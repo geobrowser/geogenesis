@@ -7,6 +7,8 @@ import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttri
 import * as React from 'react';
 import { useRef, useState } from 'react';
 
+import cx from 'classnames';
+
 import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -394,9 +396,10 @@ function VideoNodeChildren({
         </div>
       ) : isEditing ? (
         <div
-          className={`flex min-h-[200px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-grey-02 p-8 transition-colors ${
-            isDragging ? 'bg-ctaPrimary/10' : ''
-          }`}
+          className={cx(
+            'flex min-h-[200px] flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-grey-02 p-8 transition-colors',
+            isDragging && 'bg-ctaPrimary/10'
+          )}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}

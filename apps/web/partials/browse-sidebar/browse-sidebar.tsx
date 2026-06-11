@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
@@ -84,7 +85,7 @@ function BrowseNavIconSwap({
         alt=""
         width={16}
         height={16}
-        className={`absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain ${isActive ? 'invisible' : ''}`}
+        className={cx('absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain', isActive && 'invisible')}
         draggable={false}
       />
       <img
@@ -92,7 +93,7 @@ function BrowseNavIconSwap({
         alt=""
         width={16}
         height={16}
-        className={`absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain ${isActive ? '' : 'invisible'}`}
+        className={cx('absolute inset-0 h-4 max-h-none w-4 max-w-none object-contain', !isActive && 'invisible')}
         draggable={false}
       />
     </span>
@@ -204,9 +205,10 @@ function SpaceRowLink({ row }: { row: BrowseSpaceRow }) {
   return (
     <Link
       href={NavUtils.toSpace(row.id)}
-      className={`flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic ${
+      className={cx(
+        'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic',
         isActive ? 'bg-divider text-text' : 'text-text hover:bg-grey-01'
-      }`}
+      )}
     >
       <SpaceRowThumb row={row} />
       <span className="min-w-0 flex-1 overflow-hidden">
@@ -237,7 +239,7 @@ function CollapsibleSection({
         className="flex w-full items-center justify-between gap-2 px-2 py-1 text-left text-browseSection font-normal text-grey-04 not-italic hover:text-text"
       >
         <span>{title}</span>
-        <span className={`transition-transform ${open ? '' : '-rotate-90'}`}>
+        <span className={cx('transition-transform', !open && '-rotate-90')}>
           <ChevronDownSmall />
         </span>
       </button>
@@ -253,9 +255,12 @@ function SidebarToggle({ open, onToggle, className }: { open: boolean; onToggle:
       aria-label={open ? 'Close browse menu' : 'Open browse menu'}
       aria-expanded={open}
       onClick={onToggle}
-      className={`absolute z-[60] flex h-5 w-5 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text ${className ?? ''}`}
+      className={cx(
+        'absolute z-[60] flex h-5 w-5 items-center justify-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-[0_1px_2px_rgba(32,32,32,0.04)] transition-colors hover:border-grey-03 hover:bg-grey-01 hover:text-text',
+        className
+      )}
     >
-      <span className={`inline-flex scale-[0.7] ${open ? 'rotate-180' : ''}`}>
+      <span className={cx('inline-flex scale-[0.7]', open && 'rotate-180')}>
         <ChevronRight />
       </span>
     </button>

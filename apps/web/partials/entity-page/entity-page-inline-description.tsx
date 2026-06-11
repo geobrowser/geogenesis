@@ -4,6 +4,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValue } from '~/core/sync/use-store';
@@ -172,7 +174,7 @@ function TruncatedDescription({ text }: { text: string }) {
           type="button"
           onClick={() => setExpanded(true)}
           aria-expanded={false}
-          className={`absolute right-0 bottom-0 ${buttonStyle}`}
+          className={cx('absolute right-0 bottom-0', buttonStyle)}
         >
           More
         </button>

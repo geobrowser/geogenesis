@@ -102,7 +102,7 @@ export function AddDataPanel({ spaceId }: Props) {
   };
 
   return (
-    <div className="relative mt-5 h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
+    <div className="relative h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
       <img
         src="/images/add-data/sculpture.png"
         alt=""

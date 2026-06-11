@@ -10,7 +10,7 @@ import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
 import { SubstreamVote } from '../io/substream-schema';
-import { Entity, Relation, Row } from '../types';
+import { Entity, Profile, Relation, Row } from '../types';
 import { Entities } from './entity';
 
 export const NavUtils = {
@@ -543,6 +543,22 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
       return `Remove space from ${proposal.space.name}`;
     case 'SET_TOPIC':
       return `Set topic for ${proposal.space.name}`;
+  }
+}
+
+export function getMembershipProposalDisplayName(type: Proposal['type'], targetProfile: Profile): string {
+  const targetName = targetProfile.name ?? targetProfile.address ?? targetProfile.id;
+  switch (type) {
+    case 'ADD_MEMBER':
+      return `Add ${targetName} as member`;
+    case 'REMOVE_MEMBER':
+      return `Remove ${targetName} as member`;
+    case 'ADD_EDITOR':
+      return `Add ${targetName} as editor`;
+    case 'REMOVE_EDITOR':
+      return `Remove ${targetName} as editor`;
+    default:
+      return targetName;
   }
 }
 

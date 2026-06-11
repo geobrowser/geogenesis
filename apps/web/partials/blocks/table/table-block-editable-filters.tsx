@@ -91,10 +91,10 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
 
     const sortedFilters = orderFiltersForPicker(filterableColumns, orderedColumnIds);
 
-    const onCreateFilter = (filters: TableBlockNewFilterRow[]) => {
-      if (filters.length === 0) return;
-      const touchedColumnIds = new Set(filters.map(f => f.columnId));
-      const base = effectiveFilterState.filter(f => !touchedColumnIds.has(f.columnId));
+    const onCreateFilter = (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => {
+      if (touchedColumnIds.length === 0) return;
+      const touched = new Set(touchedColumnIds);
+      const base = effectiveFilterState.filter(f => !touched.has(f.columnId));
       const newFilters = filters.map(f => ({
         valueType: f.valueType,
         columnId: f.columnId,
@@ -102,7 +102,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
         value: f.value,
         valueName: f.valueName,
       }));
-      const firstTouchedIndex = effectiveFilterState.findIndex(f => touchedColumnIds.has(f.columnId));
+      const firstTouchedIndex = effectiveFilterState.findIndex(f => touched.has(f.columnId));
       const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
       const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
       if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {

@@ -28,11 +28,7 @@ import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { GeoStore } from './store';
-
-function relationKey(r: Relation): string {
-  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
-}
+import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
 export function resolveSearchSpaces(
   spaces: Array<string | SpaceEntity>,
@@ -127,7 +123,10 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
     }
   }
 
-  return [...localRelations, ...remotes];
+  // Collapse semantic duplicates (same from/type/to/space) like the store does
+  // on hydrate, so duplicate relations in the published graph don't render the
+  // same block multiple times through `mergeWith` reads.
+  return dedupeRelationsByKey([...localRelations, ...remotes]);
 }
 
 /**
@@ -370,17 +369,21 @@ export class E {
         );
 
     const remoteEntities = page.entities;
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
-    const remoteIds = remoteEntities.map(e => e.id);
-    const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
-    const remoteIdSet = new Set(dedupedRemoteIds);
-    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
-    const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
+    // The merged result is exactly the server page, with local edits overlaid
+    // per id by `merge`. Local store entities matching `where` must NOT be
+    // appended here: entities synced into the store while viewing one page
+    // would be re-appended to every other page, duplicating them across
+    // pagination (GEO-2181). Unpublished local entities are surfaced on the
+    // first page by the hook layer (mergeUnpublishedLocalEntities) instead.
+    const dedupedRemoteIds = dedupeWith(
+      remoteEntities.map(e => e.id),
+      (a, b) => a === b
+    );
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
-    const merged = mergedIds
+    const merged = dedupedRemoteIds
       .map(entityId => this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) }))
       .filter((e): e is Entity => e !== null);
 

@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { getRandomArrayItem } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -13,24 +15,24 @@ export function ActivityLoading() {
   return (
     <div className="divide-y divide-divider">
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={cx(getRandomArrayItem(POSITIONS.top), 'h-4')} />}
+        bottom={<Skeleton className={cx(getRandomArrayItem(POSITIONS.bottom), 'h-4')} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={cx(getRandomArrayItem(POSITIONS.top), 'h-4')} />}
+        bottom={<Skeleton className={cx(getRandomArrayItem(POSITIONS.bottom), 'h-4')} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={cx(getRandomArrayItem(POSITIONS.top), 'h-4')} />}
+        bottom={<Skeleton className={cx(getRandomArrayItem(POSITIONS.bottom), 'h-4')} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={cx(getRandomArrayItem(POSITIONS.top), 'h-4')} />}
+        bottom={<Skeleton className={cx(getRandomArrayItem(POSITIONS.bottom), 'h-4')} />}
       />
       <SkeletonContainer
-        top={<Skeleton className={`${getRandomArrayItem(POSITIONS.top)} h-4`} />}
-        bottom={<Skeleton className={`${getRandomArrayItem(POSITIONS.bottom)} h-4`} />}
+        top={<Skeleton className={cx(getRandomArrayItem(POSITIONS.top), 'h-4')} />}
+        bottom={<Skeleton className={cx(getRandomArrayItem(POSITIONS.bottom), 'h-4')} />}
       />
     </div>
   );

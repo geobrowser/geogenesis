@@ -26,6 +26,7 @@ import { Effect, Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
+import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';
@@ -58,12 +59,6 @@ function labelMatchesQuery(label: string | null, id: string, q: string): boolean
   if (!q) return true;
   const hay = (label ?? id).toLowerCase();
   return hay.includes(q);
-}
-
-function relationPropertyId(r: Relation): string {
-  const v = r.toEntity.value;
-  if (v && String(v).length > 0) return String(v);
-  return r.toEntity.id;
 }
 
 type TableBlockPropertiesMenuProps = {
@@ -230,12 +225,12 @@ export function TableBlockPropertiesMenu({
 
   const sortableShownRelations = React.useMemo(() => {
     const withoutName = orderedShownColumnRelations.filter(
-      r => !ID.equals(relationPropertyId(r), SystemIds.NAME_PROPERTY)
+      r => !ID.equals(columnPropertyIdFromRelation(r), SystemIds.NAME_PROPERTY)
     );
     const seen = new Set<string>();
     const out: Relation[] = [];
     for (const r of withoutName) {
-      const pid = relationPropertyId(r);
+      const pid = columnPropertyIdFromRelation(r);
       if (seen.has(pid)) continue;
       seen.add(pid);
       out.push(r);
@@ -356,7 +351,7 @@ export function TableBlockPropertiesMenu({
                       isShown
                       dragDisabled={dragDisabledWhileSearch}
                       onToggleVisibility={() =>
-                        toggleProperty({ id: relationPropertyId(rel), name: rel.toEntity.name })
+                        toggleProperty({ id: columnPropertyIdFromRelation(rel), name: rel.toEntity.name })
                       }
                     />
                   ))}

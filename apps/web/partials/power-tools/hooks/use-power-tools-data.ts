@@ -212,6 +212,7 @@ export function usePowerToolsData(options?: {
     after: pageCursors[page],
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
+    includeUnpublishedLocal: true,
     sort,
   });
 
@@ -458,6 +459,7 @@ export function usePowerToolsData(options?: {
       const pageResults = await queryEntitiesAsync({
         where,
         first: FETCH_ALL_IDS_FIRST,
+        includeUnpublishedLocal: true,
       });
       return pageResults.map(entity => entity.id);
     }

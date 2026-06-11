@@ -2,6 +2,7 @@
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
@@ -19,6 +20,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
@@ -241,12 +243,12 @@ export function TableBlockListItem({
   }
 
   return (
-    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider">
+    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:relative md:block md:pr-1">
       <Link
         entityId={rowEntityId}
         spaceId={currentSpaceId}
         href={href}
-        className="flex min-w-0 flex-1 items-start gap-6 pr-2"
+        className="flex min-w-0 flex-1 items-start gap-6 pr-2 md:w-full md:pr-0"
       >
         <div className="relative h-16 w-16 shrink-0 overflow-clip rounded-lg bg-grey-01">
           {image ? (
@@ -267,22 +269,11 @@ export function TableBlockListItem({
             />
           )}
         </div>
-        <div className="relative w-full min-w-0 pr-9">
-          {source.type !== 'COLLECTION' ? (
-            <>
+        <div className="w-full min-w-0">
+          <div className="md:pr-16">
+            {source.type !== 'COLLECTION' ? (
               <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-              {!isPlaceholder && (
-                <div className="absolute top-0 right-0 opacity-0 transition duration-200 group-hover:opacity-100">
-                  <DataBlockOpenSidePanelButton
-                    entityId={rowEntityId}
-                    entitySpaceId={nameCell?.space ?? currentSpaceId}
-                    openedWithMainViewEditing={isEditing}
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            <>
+            ) : (
               <CollectionMetadata
                 view="LIST"
                 isEditing={false}
@@ -294,15 +285,15 @@ export function TableBlockListItem({
                 relationId={relationId}
                 verified={verified}
                 onLinkEntry={onLinkEntry}
-                showSidePanel={!isPlaceholder}
+                hideHoverActions
                 openedWithMainViewEditing={isEditing}
               >
                 <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
               </CollectionMetadata>
-            </>
-          )}
+            )}
+          </div>
           {description && (
-            <div className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}>{description}</div>
+            <div className={cx('mt-1 line-clamp-4 md:line-clamp-3', LIST_GALLERY_BROWSE_BODY_CLASS)}>{description}</div>
           )}
 
           {orderCellsForBrowseFigma(otherPropertyData, properties).map(p => {
@@ -332,7 +323,31 @@ export function TableBlockListItem({
           })}
         </div>
       </Link>
-      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
+        {!isPlaceholder && (
+          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
+            {source.type === 'COLLECTION' ? (
+              <CollectionRowActions
+                isEditing={false}
+                currentSpaceId={currentSpaceId}
+                entityId={rowEntityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                openedWithMainViewEditing={isEditing}
+              />
+            ) : (
+              <DataBlockOpenSidePanelButton
+                entityId={rowEntityId}
+                entitySpaceId={nameCell?.space ?? currentSpaceId}
+                openedWithMainViewEditing={isEditing}
+              />
+            )}
+          </div>
+        )}
+        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      </div>
     </div>
   );
 }
