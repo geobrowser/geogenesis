@@ -32,8 +32,8 @@ const CAN_NOT_VOTE = { selector: '0x543ffef7', name: 'CanNotVote' };
 // ActionReverted(): a deciding YES executes the proposal's actions inline and
 // one of them reverted. For membership proposals this almost always means the
 // change was already applied via a duplicate request. For other proposal types
-// it can be a genuine execution failure, so callers should only treat it as
-// stale when `isMembershipProposalType` — otherwise let it surface as an error.
+// it can be a genuine execution failure, so it's only treated as stale for
+// membership proposals — otherwise it surfaces as an error.
 const ACTION_REVERTED = { selector: '0x24c05f9a', name: 'ActionReverted' };
 
 function matchesRevert(error: unknown, revert: { selector: string; name: string }): boolean {
@@ -41,23 +41,32 @@ function matchesRevert(error: unknown, revert: { selector: string; name: string 
   return description.includes(revert.selector) || description.includes(revert.name);
 }
 
-export function isVoteNotAcceptedError(error: unknown): boolean {
-  return matchesRevert(error, CAN_NOT_VOTE);
-}
-
-export function isProposalActionRevertedError(error: unknown): boolean {
-  return matchesRevert(error, ACTION_REVERTED);
-}
-
-export function isMembershipProposalType(type: ProposalType): boolean {
+function isMembershipProposalType(type: ProposalType): boolean {
   return type === 'ADD_MEMBER' || type === 'REMOVE_MEMBER' || type === 'ADD_EDITOR' || type === 'REMOVE_EDITOR';
 }
 
-export const VOTE_NOT_ACCEPTED_MESSAGE =
+const VOTE_NOT_ACCEPTED_MESSAGE =
   'Your vote could not be cast — voting may have ended, or your vote may already be counted. Refreshing to show the latest state.';
 
-export const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
+const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
   'This membership change could not be applied — it has likely already been made. Refreshing to show the latest state.';
+
+/**
+ * Returns the toast message for a vote error caused by a stale proposal, or
+ * null when the error should surface through the regular error path. Keeps the
+ * detection + messaging policy in one place so every vote surface behaves the
+ * same: callers toast the returned message and refresh instead of raising the
+ * error modal (retrying a stale vote would only revert again).
+ */
+export function getStaleProposalVoteToastMessage(error: unknown, proposalType: ProposalType): string | null {
+  if (matchesRevert(error, CAN_NOT_VOTE)) {
+    return VOTE_NOT_ACCEPTED_MESSAGE;
+  }
+  if (isMembershipProposalType(proposalType) && matchesRevert(error, ACTION_REVERTED)) {
+    return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;
+  }
+  return null;
+}
 
 interface UseVoteArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */

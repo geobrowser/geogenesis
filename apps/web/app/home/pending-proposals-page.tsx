@@ -158,6 +158,7 @@ async function PendingMembershipProposal({
       spaceId={proposal.space.id}
       proposalId={proposal.id}
       proposalName={proposalName}
+      proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
       endTime={proposal.endTime}
       isProposalEnded={isProposalEnded}
