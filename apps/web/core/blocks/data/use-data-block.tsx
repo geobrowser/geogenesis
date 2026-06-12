@@ -116,7 +116,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   );
 
   // Use the mapping to get the potential renderable properties.
-  const propertiesSchema = useProperties(shownColumnIds);
+  const propertiesSchema = useProperties(shownColumnIds, spaceId);
 
   // Map sortState to server-side sort params — used by all source types.
   // dataType is required by the backend's entitiesOrderedByProperty SQL function
