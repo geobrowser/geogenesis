@@ -17,12 +17,12 @@ bun start
 Ranking fullscreen share URLs can use precomputed R2-hosted images when these server env vars are set:
 
 ```sh
-RANKING_OG_R2_ACCOUNT_ID=
-RANKING_OG_R2_ACCESS_KEY_ID=
-RANKING_OG_R2_SECRET_ACCESS_KEY=
-RANKING_OG_R2_BUCKET=
-RANKING_OG_PUBLIC_BASE_URL=https://img.example.com
-RANKING_OG_ADMIN_SECRET=
+CLOUDFLARE_R2_ACCOUNT_ID=
+CLOUDFLARE_R2_ACCESS_KEY_ID=
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=
+CLOUDFLARE_R2_BUCKET=
+CLOUDFLARE_R2_PUBLIC_BASE_URL=https://img.example.com
+INTERNAL_API_SECRET=
 ```
 
 Generated keys are immutable and variant-specific:

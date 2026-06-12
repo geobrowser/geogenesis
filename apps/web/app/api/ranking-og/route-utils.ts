@@ -21,9 +21,9 @@ export function isSameOrigin(req: Request): boolean {
 }
 
 export function hasRankingOgAdminSecret(req: Request): boolean {
-  const configured = process.env.RANKING_OG_ADMIN_SECRET?.trim();
+  const configured = process.env.INTERNAL_API_SECRET?.trim();
   if (!configured) return false;
-  return req.headers.get('x-ranking-og-admin-secret') === configured;
+  return req.headers.get('x-internal-api-secret') === configured;
 }
 
 export function isSafeOgVersion(value: string): boolean {

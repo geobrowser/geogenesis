@@ -65,7 +65,7 @@ export function buildRankingOgPublicUrl(publicBaseUrl: string, key: string): str
 }
 
 export function getRankingOgPublicBaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const raw = env.RANKING_OG_PUBLIC_BASE_URL?.trim();
+  const raw = env.CLOUDFLARE_R2_PUBLIC_BASE_URL?.trim();
   if (!raw) return null;
   try {
     return new URL(raw).toString().replace(/\/+$/, '');
@@ -76,11 +76,11 @@ export function getRankingOgPublicBaseUrl(env: NodeJS.ProcessEnv = process.env):
 
 export function getRankingOgStorageConfig(env: NodeJS.ProcessEnv = process.env): RankingOgStorageConfig {
   const config = {
-    accountId: env.RANKING_OG_R2_ACCOUNT_ID?.trim() ?? '',
-    accessKeyId: env.RANKING_OG_R2_ACCESS_KEY_ID?.trim() ?? '',
-    secretAccessKey: env.RANKING_OG_R2_SECRET_ACCESS_KEY?.trim() ?? '',
-    bucket: env.RANKING_OG_R2_BUCKET?.trim() ?? '',
-    publicBaseUrl: env.RANKING_OG_PUBLIC_BASE_URL?.trim() ?? '',
+    accountId: env.CLOUDFLARE_R2_ACCOUNT_ID?.trim() ?? '',
+    accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID?.trim() ?? '',
+    secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY?.trim() ?? '',
+    bucket: env.CLOUDFLARE_R2_BUCKET?.trim() ?? '',
+    publicBaseUrl: env.CLOUDFLARE_R2_PUBLIC_BASE_URL?.trim() ?? '',
   };
 
   const missing = Object.entries(config)
@@ -94,7 +94,7 @@ export function getRankingOgStorageConfig(env: NodeJS.ProcessEnv = process.env):
   try {
     new URL(config.publicBaseUrl);
   } catch {
-    throw new RankingOgStorageConfigError('RANKING_OG_PUBLIC_BASE_URL must be a valid URL');
+    throw new RankingOgStorageConfigError('CLOUDFLARE_R2_PUBLIC_BASE_URL must be a valid URL');
   }
 
   return config;

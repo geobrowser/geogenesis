@@ -40,7 +40,9 @@ describe('ranking OG storage helpers', () => {
 
   it('returns null for a missing or invalid public base URL', () => {
     expect(getRankingOgPublicBaseUrl({} as NodeJS.ProcessEnv)).toBeNull();
-    expect(getRankingOgPublicBaseUrl({ RANKING_OG_PUBLIC_BASE_URL: 'bad' } as unknown as NodeJS.ProcessEnv)).toBeNull();
+    expect(
+      getRankingOgPublicBaseUrl({ CLOUDFLARE_R2_PUBLIC_BASE_URL: 'bad' } as unknown as NodeJS.ProcessEnv)
+    ).toBeNull();
   });
 
   it('throws a typed error when required R2 env is missing', () => {

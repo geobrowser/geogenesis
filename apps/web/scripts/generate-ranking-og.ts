@@ -30,8 +30,8 @@ function readInputs(): RankingOgBackfillInput[] {
 async function main() {
   const inputs = readInputs();
   const variants = parseRankingOgVariants(argValue('--variants'));
-  const publicBaseUrl = argValue('--public-base-url') ?? process.env.RANKING_OG_PUBLIC_BASE_URL;
-  if (!publicBaseUrl) throw new Error('Missing --public-base-url or RANKING_OG_PUBLIC_BASE_URL');
+  const publicBaseUrl = argValue('--public-base-url') ?? process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
+  if (!publicBaseUrl) throw new Error('Missing --public-base-url or CLOUDFLARE_R2_PUBLIC_BASE_URL');
 
   const plan = buildRankingOgBackfillPlan({ inputs, variants, publicBaseUrl });
   if (hasArg('--dry-run')) {
@@ -41,8 +41,8 @@ async function main() {
 
   const apiUrl = argValue('--api-url');
   if (!apiUrl) throw new Error('Missing --api-url for non-dry-run generation');
-  const adminSecret = process.env.RANKING_OG_ADMIN_SECRET;
-  if (!adminSecret) throw new Error('Missing RANKING_OG_ADMIN_SECRET');
+  const adminSecret = process.env.INTERNAL_API_SECRET;
+  if (!adminSecret) throw new Error('Missing INTERNAL_API_SECRET');
 
   const uniqueInputs = [...new Map(inputs.map(input => [`${input.rankEntityId}:${input.ogVersion}`, input])).values()];
   const results = [];
@@ -52,7 +52,7 @@ async function main() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-ranking-og-admin-secret': adminSecret,
+        'x-internal-api-secret': adminSecret,
       },
       body: JSON.stringify({
         ...input,
