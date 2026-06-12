@@ -187,7 +187,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               <Tooltip
                 position="left"
                 variant="light"
-                label="Use current entity as new space home page"
+                label="Use current entity as the home page for a newly created space"
                 trigger={
                   <button
                     onClick={() => {
