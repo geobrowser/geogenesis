@@ -34,8 +34,6 @@ import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access
 import { ID } from '~/core/id';
 import type { SearchResult } from '~/core/types';
 
-import { Button } from '~/design-system/button';
-
 import { stepAtom } from '~/partials/onboarding/dialog';
 
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
@@ -63,7 +61,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { name, entityId, rows: _rows, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { showOnboarding } = useOnboarding();
-  const { status: accessStatus, promptLogin, ensureAccess } = useRankingComposeAccess(spaceId);
+  const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -347,31 +345,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
-
-  // Non-members can still compose and publish — the rank entity is published to
-  if (accessStatus !== 'ready' && accessStatus !== 'needs-membership') {
-    return (
-      <RankingComposeFullscreen>
-        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-          <p className="text-button text-text">
-            {accessStatus === 'needs-login' && 'Log in to create your ranking.'}
-            {accessStatus === 'needs-onboarding' && 'Create your account to continue.'}
-            {accessStatus === 'loading' && 'Loading…'}
-          </p>
-          <div className="flex items-center gap-3">
-            {accessStatus === 'needs-login' ? (
-              <Button small onClick={promptLogin}>
-                Log in
-              </Button>
-            ) : null}
-            <Button variant="ghost" small onClick={() => router.back()}>
-              Go back
-            </Button>
-          </div>
-        </div>
-      </RankingComposeFullscreen>
-    );
-  }
 
   return (
     <>
