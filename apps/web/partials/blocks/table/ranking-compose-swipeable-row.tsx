@@ -53,6 +53,11 @@ export function RankingComposeSwipeableRow({
   const x = useMotionValue(0);
   const suppressClickRef = React.useRef(false);
   const skipOpenSyncRef = React.useRef(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  // Swiped rows show a grey "pressed" background instead of hover styling,
+  // which has no equivalent on touch devices.
+  const isPressed = isDragging || isOpen;
 
   const animateTo = React.useCallback((target: number) => animate(x, target, SNAP_TRANSITION), [x]);
 
@@ -100,6 +105,8 @@ export function RankingComposeSwipeableRow({
   );
 
   const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    setIsDragging(false);
+
     if (Math.abs(info.offset.x) > 4) {
       suppressClickRef.current = true;
     }
@@ -193,17 +200,26 @@ export function RankingComposeSwipeableRow({
         style={{ x, touchAction: 'pan-y' }}
         onDragStart={() => {
           suppressClickRef.current = false;
+          setIsDragging(true);
         }}
         onDragEnd={handleDragEnd}
         onPointerDown={event => event.stopPropagation()}
         onMouseDown={event => event.stopPropagation()}
         onClick={handleClick}
         className={cx(
-          'relative z-[1] w-full bg-white select-none',
+          'relative z-[1] w-full select-none transition-colors duration-150',
+          isPressed ? 'bg-grey-01' : 'bg-white',
           !primaryDisabled && onPrimaryClick && 'cursor-grab active:cursor-grabbing'
         )}
       >
-        <div className="pointer-events-none w-full bg-white">{children}</div>
+        <div
+          className={cx(
+            'pointer-events-none w-full transition-colors duration-150',
+            isPressed ? 'bg-grey-01' : 'bg-white'
+          )}
+        >
+          {children}
+        </div>
       </motion.div>
     </div>
   );

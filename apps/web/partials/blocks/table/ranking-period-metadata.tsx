@@ -46,7 +46,7 @@ function RankingRankedByAvatarGroup({ avatars }: { avatars: RankingRankedByAvata
   if (avatars.length === 0) return null;
 
   return (
-    <AvatarGroup variant="spaced">
+    <AvatarGroup>
       {avatars.map(avatar => (
         <AvatarGroup.Item key={avatar.key} size={20}>
           {avatar.avatarUrl ? (

@@ -115,9 +115,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingActionButton = buildMyRankingActionButton(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
 
-  // On mobile fullscreen the action button moves below the My ranking tab as a plain "Edit" button.
-  const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
-  const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection;
+  // On mobile the action button moves below the My ranking tab as a plain "Edit" button.
+  const movesEditBelowTabs = isMobile && showMyRankingSection;
 
   const wrapMobileSwipeRow = ({
     rowKey,
@@ -299,34 +298,9 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
         <RankingFirstSubmissionPrompt action={myRankingActionButton} />
       ) : (
         <>
-          {presentation !== 'fullscreen' ? (
-            <div className="hidden w-full min-w-0 flex-col lg:flex">
-              {showMyRankingSection ? (
-                <section className="flex w-full min-w-0 flex-col gap-3">
-                  <SectionHeader title="My ranking" action={showMyRankingTab ? myRankingActionButton : null} />
-                  {myRankingBody}
-                </section>
-              ) : null}
-
-              {showMyRankingSection ? (
-                <div className="my-6 h-px shrink-0 bg-grey-02" role="separator" aria-hidden />
-              ) : null}
-
-              <section className="flex w-full min-w-0 flex-col gap-3">
-                <SectionHeader
-                  title="Global ranking"
-                  action={showAddMyRankingInGlobalHeader ? myRankingActionButton : null}
-                />
-                {globalRankingBody}
-              </section>
-            </div>
-          ) : null}
-          <div
-            className={cx(
-              presentation === 'fullscreen' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : undefined,
-              presentation === 'fullscreen' ? undefined : 'lg:hidden'
-            )}
-          >
+          {/* The embedded block mirrors the fullscreen page layout: a tab bar on
+              every viewport instead of stacked sections. */}
+          <div className={cx(presentation === 'fullscreen' && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
             {showMyRankingTab ? (
               <>
                 <div className="relative mb-4 shrink-0">
