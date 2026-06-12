@@ -186,10 +186,10 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
                   trigger={
                     <button
                       onClick={() => setIsMovingEntity(true)}
-                      className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
+                      className="flex h-full w-full items-center gap-2 px-2 py-2"
                     >
                       <div className="shrink-0">
-                        <MoveSpace color="red-01" />
+                        <MoveSpace color="grey-04" />
                       </div>
                       Move to...
                     </button>
