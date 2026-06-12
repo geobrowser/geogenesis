@@ -160,27 +160,41 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
               </button>
             </EntityPageContextMenuItem>
             <EntityPageContextMenuItem>
-              <button
-                onClick={() => setIsCreatingNewVersion(true)}
-                className="flex h-full w-full items-center gap-2 px-2 py-2"
-              >
-                <div className="shrink-0">
-                  <AddTo color="grey-04" />
-                </div>
-                Copy to...
-              </button>
+              <Tooltip
+                position="left"
+                variant="light"
+                label="Copy entity to an existing space as a multi space entity"
+                trigger={
+                  <button
+                    onClick={() => setIsCreatingNewVersion(true)}
+                    className="flex h-full w-full items-center gap-2 px-2 py-2"
+                  >
+                    <div className="shrink-0">
+                      <AddTo color="grey-04" />
+                    </div>
+                    Copy to...
+                  </button>
+                }
+              />
             </EntityPageContextMenuItem>
             {(isMember || isEditor) && editable && (
               <EntityPageContextMenuItem>
-                <button
-                  onClick={() => setIsMovingEntity(true)}
-                  className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
-                >
-                  <div className="shrink-0">
-                    <MoveSpace color="red-01" />
-                  </div>
-                  Move to...
-                </button>
+                <Tooltip
+                  position="left"
+                  variant="light"
+                  label="Move entity to an existing space and delete entity in current space"
+                  trigger={
+                    <button
+                      onClick={() => setIsMovingEntity(true)}
+                      className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
+                    >
+                      <div className="shrink-0">
+                        <MoveSpace color="red-01" />
+                      </div>
+                      Move to...
+                    </button>
+                  }
+                />
               </EntityPageContextMenuItem>
             )}
             <EntityPageContextMenuItem>
