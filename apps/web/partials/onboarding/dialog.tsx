@@ -441,14 +441,14 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
             trigger={
               <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
                 <Text as="h3" variant="footnote" className="text-center">
-                  Personal access controls
+                  By signing up you agree to our Terms & conditions
                 </Text>
                 <div>
                   <QuestionCircle />
                 </div>
               </div>
             }
-            label="A vote isn’t required to publish edits in this space"
+            label="By continuing, you accept our Terms & conditions"
             position="top"
           />
         </div>
