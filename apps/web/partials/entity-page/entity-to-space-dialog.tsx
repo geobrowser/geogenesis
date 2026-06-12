@@ -1,6 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
@@ -15,7 +14,6 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { EntityId } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { getRelations, getValues } from '~/core/sync/use-store';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
@@ -29,15 +27,12 @@ import { Text } from '~/design-system/text';
 import { Animation } from '~/partials/onboarding/dialog';
 import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
-type Mode = 'convert' | 'duplicate';
-
 type Step = 'select-type' | 'creating' | 'completed';
 
 type EntityToSpaceDialogProps = {
   entityId: string;
   entityName: string;
   sourceSpaceId: string;
-  mode: Mode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -64,7 +59,6 @@ export function EntityToSpaceDialog({
   entityId,
   entityName,
   sourceSpaceId,
-  mode,
   open,
   onOpenChange,
 }: EntityToSpaceDialogProps) {
@@ -79,62 +73,11 @@ export function EntityToSpaceDialog({
 
   const address = smartAccount?.account.address;
 
-  const title = mode === 'convert' ? 'Move to new space' : 'Copy to new space';
+  const title = 'Turn into space';
 
   const resetState = () => {
     setStep('select-type');
     setNewSpaceId('');
-  };
-
-  const deleteEntityFromSource = () => {
-    const sourceValues = getValues({
-      selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
-    });
-
-    const sourceRelations = getRelations({
-      selector: relation => relation.fromEntity.id === entityId && relation.spaceId === sourceSpaceId,
-    });
-
-    const blocksRelations = sourceRelations.filter(r => r.type.id === SystemIds.BLOCKS);
-    const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
-
-    const orphanedBlockIds = blockIds.filter(blockId => {
-      const remainingRefs = getRelations({
-        selector: r =>
-          r.toEntity.id === blockId &&
-          !(r.fromEntity.id === entityId && r.type.id === SystemIds.BLOCKS && r.spaceId === sourceSpaceId),
-      });
-      return remainingRefs.length === 0;
-    });
-
-    const allValuesToDelete = [...sourceValues];
-    const relationIds = new Set<string>();
-    const allRelationsToDelete: typeof sourceRelations = [];
-
-    for (const r of [
-      ...sourceRelations,
-      ...getRelations({ selector: r => r.toEntity.id === entityId && r.spaceId === sourceSpaceId }),
-    ]) {
-      if (!relationIds.has(r.id)) {
-        relationIds.add(r.id);
-        allRelationsToDelete.push(r);
-      }
-    }
-
-    for (const blockId of orphanedBlockIds) {
-      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
-      for (const r of getRelations({
-        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
-      })) {
-        if (!relationIds.has(r.id)) {
-          relationIds.add(r.id);
-          allRelationsToDelete.push(r);
-        }
-      }
-    }
-
-    storage.values.deleteMany(allValuesToDelete);
-    storage.relations.deleteMany(allRelationsToDelete);
   };
 
   const createSpace = async (spaceType: SpaceType) => {
@@ -152,13 +95,7 @@ export function EntityToSpaceDialog({
         throw new Error('Creating space failed');
       }
 
-      // Clone entity content from source space into the new space
       cloneEntityIntoSpace(entityId as EntityId, sourceSpaceId, spaceId, storage);
-
-      // Delete entity from source space if converting
-      if (mode === 'convert') {
-        deleteEntityFromSource();
-      }
 
       setNewSpaceId(spaceId);
       setStep('completed');
@@ -212,9 +149,7 @@ export function EntityToSpaceDialog({
           }}
         >
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
-          <Dialog.Description className="sr-only">
-            {mode === 'convert' ? 'Move this entity into a new space' : 'Copy this entity into a new space'}
-          </Dialog.Description>
+          <Dialog.Description className="sr-only">Turn this entity into a new space</Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
             <AnimatePresence mode="wait">
               <motion.div
@@ -292,9 +227,7 @@ export function EntityToSpaceDialog({
                             {hasCompleted ? 'Finalizing details...' : 'Creating space...'}
                           </Text>
                           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
-                            {mode === 'convert'
-                              ? 'Converting entity into a new space.'
-                              : 'Duplicating entity into a new space.'}
+                            Turning entity into a new space.
                           </Text>
                           {!hasCompleted && <Spacer height={32} />}
                         </div>

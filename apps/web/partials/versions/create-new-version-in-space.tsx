@@ -10,6 +10,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
+import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -43,11 +44,15 @@ export const CreateNewVersionInSpace = ({
   const [query, setQuery] = useState<string>('');
 
   const allSpaces = React.useMemo(() => {
-    const spaces = [...memberSpaces];
-    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
-      spaces.unshift(personalSpace);
-    }
-    return spaces;
+    const others = memberSpaces.filter(s => s.id !== personalSpace?.id);
+    const sortKeyed = others.map(s => ({
+      id: s.id,
+      name: s?.entity?.name ?? '',
+      unnamed: !hasName(s?.entity?.name),
+      space: s,
+    }));
+    const sorted = sortSpaceListByRankNameId(sortKeyed).map(entry => entry.space);
+    return personalSpace ? [personalSpace, ...sorted] : sorted;
   }, [personalSpace, memberSpaces]);
 
   const namedSpaces = allSpaces.filter(space => hasName(space?.entity?.name));
@@ -70,7 +75,7 @@ export const CreateNewVersionInSpace = ({
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-4 p-2 text-center text-button text-text">Select space to create in</div>
+        <div className="flex-4 whitespace-nowrap p-2 text-center text-button text-text">Select space to copy to</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">
