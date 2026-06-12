@@ -198,7 +198,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
                     <div className="shrink-0">
                       <AddTo color="grey-04" />
                     </div>
-                    Turn into new space
+                    Turn into space
                   </button>
                 }
               />
