@@ -17,6 +17,7 @@ import { AddTo } from '~/design-system/icons/add-to';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { MoveSpace } from '~/design-system/icons/move-space';
+import { Switch } from '~/design-system/icons/switch';
 import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
 import { Tooltip } from '~/design-system/tooltip';
@@ -196,7 +197,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
                     className="flex h-full w-full items-center gap-2 px-2 py-2"
                   >
                     <div className="shrink-0">
-                      <AddTo color="grey-04" />
+                      <Switch color="grey-04" />
                     </div>
                     Turn into space
                   </button>
