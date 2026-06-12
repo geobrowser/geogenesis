@@ -13,6 +13,7 @@ import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
+import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -46,12 +47,15 @@ export const MoveEntityToSpace = ({
   const [query, setQuery] = useState<string>('');
 
   const allSpaces = React.useMemo(() => {
-    const spaces = [...memberSpaces];
-    if (personalSpace && !spaces.some(s => s.id === personalSpace.id)) {
-      spaces.unshift(personalSpace);
-    }
-    // Filter out the source space since we're moving away from it
-    return spaces.filter(s => s.id !== sourceSpaceId);
+    const others = memberSpaces.filter(s => s.id !== personalSpace?.id && s.id !== sourceSpaceId);
+    const sortKeyed = others.map(s => ({
+      id: s.id,
+      name: s?.entity?.name ?? '',
+      unnamed: !hasName(s?.entity?.name),
+      space: s,
+    }));
+    const sorted = sortSpaceListByRankNameId(sortKeyed).map(entry => entry.space);
+    return personalSpace && personalSpace.id !== sourceSpaceId ? [personalSpace, ...sorted] : sorted;
   }, [personalSpace, memberSpaces, sourceSpaceId]);
 
   const namedSpaces = allSpaces.filter(space => hasName(space?.entity?.name));
@@ -126,7 +130,7 @@ export const MoveEntityToSpace = ({
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-4 p-2 text-center text-button text-text">Select space to move to</div>
+        <div className="flex-4 whitespace-nowrap p-2 text-center text-button text-text">Select space to move to</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">
