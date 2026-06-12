@@ -41,11 +41,28 @@ describe('ranking OG storage helpers', () => {
   it('returns null for a missing or invalid public base URL', () => {
     expect(getRankingOgPublicBaseUrl({} as NodeJS.ProcessEnv)).toBeNull();
     expect(
-      getRankingOgPublicBaseUrl({ CLOUDFLARE_R2_PUBLIC_BASE_URL: 'bad' } as unknown as NodeJS.ProcessEnv)
+      getRankingOgPublicBaseUrl({ SOCIAL_PREVIEW_PUBLIC_BASE_URL: 'bad' } as unknown as NodeJS.ProcessEnv)
+    ).toBeNull();
+    expect(
+      getRankingOgPublicBaseUrl({
+        SOCIAL_PREVIEW_PUBLIC_BASE_URL: 'https://account.r2.cloudflarestorage.com/social-preview',
+      } as unknown as NodeJS.ProcessEnv)
     ).toBeNull();
   });
 
   it('throws a typed error when required R2 env is missing', () => {
     expect(() => getRankingOgStorageConfig({} as NodeJS.ProcessEnv)).toThrow(RankingOgStorageConfigError);
+  });
+
+  it('rejects the R2 API endpoint as the public base URL', () => {
+    expect(() =>
+      getRankingOgStorageConfig({
+        CLOUDFLARE_R2_ACCOUNT_ID: 'account',
+        CLOUDFLARE_R2_ACCESS_KEY_ID: 'key',
+        CLOUDFLARE_R2_SECRET_ACCESS_KEY: 'secret',
+        SOCIAL_PREVIEW_R2_BUCKET: 'social-preview',
+        SOCIAL_PREVIEW_PUBLIC_BASE_URL: 'https://account.r2.cloudflarestorage.com/social-preview',
+      } as unknown as NodeJS.ProcessEnv)
+    ).toThrow('not the r2.cloudflarestorage.com API endpoint');
   });
 });

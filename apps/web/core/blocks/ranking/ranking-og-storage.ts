@@ -64,37 +64,56 @@ export function buildRankingOgPublicUrl(publicBaseUrl: string, key: string): str
   return `${base}/${path}`;
 }
 
+function isR2ApiEndpointUrl(url: URL): boolean {
+  return url.hostname.endsWith('.r2.cloudflarestorage.com');
+}
+
 export function getRankingOgPublicBaseUrl(env: NodeJS.ProcessEnv = process.env): string | null {
-  const raw = env.CLOUDFLARE_R2_PUBLIC_BASE_URL?.trim();
+  const raw = env.SOCIAL_PREVIEW_PUBLIC_BASE_URL?.trim();
   if (!raw) return null;
   try {
-    return new URL(raw).toString().replace(/\/+$/, '');
+    const url = new URL(raw);
+    if (isR2ApiEndpointUrl(url)) return null;
+    return url.toString().replace(/\/+$/, '');
   } catch {
     return null;
   }
 }
 
 export function getRankingOgStorageConfig(env: NodeJS.ProcessEnv = process.env): RankingOgStorageConfig {
+  const values = {
+    CLOUDFLARE_R2_ACCOUNT_ID: env.CLOUDFLARE_R2_ACCOUNT_ID?.trim() ?? '',
+    CLOUDFLARE_R2_ACCESS_KEY_ID: env.CLOUDFLARE_R2_ACCESS_KEY_ID?.trim() ?? '',
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY?.trim() ?? '',
+    SOCIAL_PREVIEW_R2_BUCKET: env.SOCIAL_PREVIEW_R2_BUCKET?.trim() ?? '',
+    SOCIAL_PREVIEW_PUBLIC_BASE_URL: env.SOCIAL_PREVIEW_PUBLIC_BASE_URL?.trim() ?? '',
+  };
   const config = {
-    accountId: env.CLOUDFLARE_R2_ACCOUNT_ID?.trim() ?? '',
-    accessKeyId: env.CLOUDFLARE_R2_ACCESS_KEY_ID?.trim() ?? '',
-    secretAccessKey: env.CLOUDFLARE_R2_SECRET_ACCESS_KEY?.trim() ?? '',
-    bucket: env.CLOUDFLARE_R2_BUCKET?.trim() ?? '',
-    publicBaseUrl: env.CLOUDFLARE_R2_PUBLIC_BASE_URL?.trim() ?? '',
+    accountId: values.CLOUDFLARE_R2_ACCOUNT_ID,
+    accessKeyId: values.CLOUDFLARE_R2_ACCESS_KEY_ID,
+    secretAccessKey: values.CLOUDFLARE_R2_SECRET_ACCESS_KEY,
+    bucket: values.SOCIAL_PREVIEW_R2_BUCKET,
+    publicBaseUrl: values.SOCIAL_PREVIEW_PUBLIC_BASE_URL,
   };
 
-  const missing = Object.entries(config)
+  const missing = Object.entries(values)
     .filter(([, value]) => !value)
     .map(([key]) => key);
 
   if (missing.length > 0) {
-    throw new RankingOgStorageConfigError(`Missing ranking OG R2 env: ${missing.join(', ')}`);
+    throw new RankingOgStorageConfigError(`Missing ranking OG storage env: ${missing.join(', ')}`);
   }
 
+  let publicBaseUrl: URL;
   try {
-    new URL(config.publicBaseUrl);
+    publicBaseUrl = new URL(config.publicBaseUrl);
   } catch {
-    throw new RankingOgStorageConfigError('CLOUDFLARE_R2_PUBLIC_BASE_URL must be a valid URL');
+    throw new RankingOgStorageConfigError('SOCIAL_PREVIEW_PUBLIC_BASE_URL must be a valid URL');
+  }
+  if (isR2ApiEndpointUrl(publicBaseUrl)) {
+    throw new RankingOgStorageConfigError(
+      'SOCIAL_PREVIEW_PUBLIC_BASE_URL must be a public custom domain or r2.dev URL, not the r2.cloudflarestorage.com API endpoint'
+    );
   }
 
   return config;

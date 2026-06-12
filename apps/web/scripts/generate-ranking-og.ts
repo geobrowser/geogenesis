@@ -30,8 +30,8 @@ function readInputs(): RankingOgBackfillInput[] {
 async function main() {
   const inputs = readInputs();
   const variants = parseRankingOgVariants(argValue('--variants'));
-  const publicBaseUrl = argValue('--public-base-url') ?? process.env.CLOUDFLARE_R2_PUBLIC_BASE_URL;
-  if (!publicBaseUrl) throw new Error('Missing --public-base-url or CLOUDFLARE_R2_PUBLIC_BASE_URL');
+  const publicBaseUrl = argValue('--public-base-url') ?? process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL;
+  if (!publicBaseUrl) throw new Error('Missing --public-base-url or SOCIAL_PREVIEW_PUBLIC_BASE_URL');
 
   const plan = buildRankingOgBackfillPlan({ inputs, variants, publicBaseUrl });
   if (hasArg('--dry-run')) {

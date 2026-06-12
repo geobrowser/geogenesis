@@ -37,7 +37,7 @@ The desired design should follow the energy of `docs/images/wrapup.png`: a playf
 
 - **Use Cloudflare R2 as the storage target:** Store generated ranking images in Cloudflare R2 through its S3-compatible API, using server-only env vars and a custom public base URL.
 - **Make `rankEntityId` and `authorSpaceId` part of the public share URL:** The correct ranking identifier is the submitted Rank entity ID. Current publish code receives it as `result.id` from `Ops.ranks.create()` or `geo.ranks.update()`, and the existing "my ranking" fetch later exposes the same value as `myRankEntity.id`. This is distinct from `blockEntityId`, which identifies the ranking block being composed; `relationId`, which identifies the block placement; and `parentEntityId`, which identifies the containing page.
-- **Use deterministic image URLs instead of a stored URL column:** The app does not currently have a page-row database for `og_image_url`. Use variantized immutable keys such as `og/rankings/{rankEntityId}/{version}/landscape.png` and `og/rankings/{rankEntityId}/{version}/story.png` with `CLOUDFLARE_R2_PUBLIC_BASE_URL` so metadata can compute the final landscape URL without generation or storage reads.
+- **Use deterministic image URLs instead of a stored URL column:** The app does not currently have a page-row database for `og_image_url`. Use variantized immutable keys such as `og/rankings/{rankEntityId}/{version}/landscape.png` and `og/rankings/{rankEntityId}/{version}/story.png` with `SOCIAL_PREVIEW_PUBLIC_BASE_URL` so metadata can compute the final landscape URL without generation or storage reads.
 - **Generate both landscape and story variants, but keep metadata landscape-only:** Open Graph and Twitter/X previews should point at the 2400x1260 landscape image, preserving the standard 1.91:1 preview ratio at higher pixel density without oversized files. Instagram-style portrait sharing should use the 1080x1920 story image as a downloadable or native Web Share file; do not add the portrait image to `og:image` because link-preview crawlers expect the landscape card. Defer a 1080x1350 feed variant until there is a concrete feed-post workflow.
 - **Only publish personalized metadata URLs after generation succeeds:** Because `generateMetadata()` should not check R2 existence, the share URL should include `rankEntityId` and `ogVersion` only after the landscape object is confirmed uploaded or already present. If generation fails, navigate or expose a non-personalized fullscreen URL without those metadata-enabling params so crawlers receive the inherited fallback OG image instead of a 404 R2 URL.
 - **Generate via `ImageResponse` in server code, then upload the PNG bytes:** The app already uses `next/og` in `apps/web/core/opengraph.tsx`. A new ranking-specific renderer should support explicit `landscape` and `story` variants, use flexbox and absolute positioning only, and keep bundled assets small.
@@ -228,7 +228,7 @@ flowchart TB
 
 ## Acceptance Examples
 
-- AE1. Given a user publishes "Best public goods projects" with five ranked entries, when publish completes, the app generates landscape and story PNGs, uploads them to `CLOUDFLARE_R2_PUBLIC_BASE_URL/og/rankings/{rankEntityId}/{version}/landscape.png` and `CLOUDFLARE_R2_PUBLIC_BASE_URL/og/rankings/{rankEntityId}/{version}/story.png`, and navigates to a share URL containing `rankEntityId`, `authorSpaceId`, and `ogVersion`.
+- AE1. Given a user publishes "Best public goods projects" with five ranked entries, when publish completes, the app generates landscape and story PNGs, uploads them to `SOCIAL_PREVIEW_PUBLIC_BASE_URL/og/rankings/{rankEntityId}/{version}/landscape.png` and `SOCIAL_PREVIEW_PUBLIC_BASE_URL/og/rankings/{rankEntityId}/{version}/story.png`, and navigates to a share URL containing `rankEntityId`, `authorSpaceId`, and `ogVersion`.
 - AE2. Given a crawler requests the share URL, when `generateMetadata()` runs, it returns the static CDN image URL and does not call `ImageResponse`, Playwright, screenshot tooling, or R2 upload code.
 - AE3. Given the same rank is regenerated with unchanged preview data, when the generation API runs again, it returns the existing public URL without rewriting the object.
 - AE4. Given the author reorders their ranking, when the new share URL is generated, `ogVersion` changes and the metadata image URL changes with it.
@@ -249,14 +249,14 @@ flowchart TB
 
 ## Documentation / Operational Notes
 
-- Required production storage should use a Cloudflare custom domain, for example `https://img.geobrowser.io`, configured as `CLOUDFLARE_R2_PUBLIC_BASE_URL`.
+- Required production storage should use a Cloudflare custom domain, for example `https://img.geobrowser.io`, configured as `SOCIAL_PREVIEW_PUBLIC_BASE_URL`.
 - Server-only env should not live in `NEXT_PUBLIC_*` variables and should not be imported from client components.
 - Suggested env names:
   - `CLOUDFLARE_R2_ACCOUNT_ID`
   - `CLOUDFLARE_R2_ACCESS_KEY_ID`
   - `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
-  - `CLOUDFLARE_R2_BUCKET`
-  - `CLOUDFLARE_R2_PUBLIC_BASE_URL`
+  - `SOCIAL_PREVIEW_R2_BUCKET`
+  - `SOCIAL_PREVIEW_PUBLIC_BASE_URL`
   - `INTERNAL_API_SECRET` for script or admin-triggered backfills only
 - The first layout version should be encoded into `ogVersion` as a constant so visual changes can force regeneration without changing rank data.
 - Metadata should always compute `og/rankings/{rankEntityId}/{ogVersion}/landscape.png`; portrait story images are for explicit share/download flows.
