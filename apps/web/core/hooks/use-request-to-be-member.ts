@@ -12,15 +12,20 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
-  /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to join */
   spaceId: string | null;
 }
+
+/**
+ * Guards against duplicate membership requests across hook instances
+ */
+const inFlightOrSubmittedRequests = new Set<string>();
 
 export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
   const { dispatch } = useStatusBar();
@@ -49,52 +54,77 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       throw new Error('Invalid target space ID');
     }
 
-    // Members/editors already belong to the space; a duplicate join request errors on vote.
-    // Check at submit time rather than via reactive access-control state, which reads false
-    // while still hydrating and would let a fast click through. Fail open if the check errors.
     const normalizedSpaceId = normalizeSpaceId(spaceId);
     const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
-    const access = await runEffectEither(
-      Effect.all([
-        getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
-        getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
-      ])
-    );
-    if (Either.isRight(access) && (access.right[0] || access.right[1])) {
-      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
-      throw new Error('User is already a member or editor of the space');
+    const requestKey = `${normalizedSpaceId}:${normalizedPersonalSpaceId}`;
+
+    if (inFlightOrSubmittedRequests.has(requestKey)) {
+      console.log('Membership request already in flight or submitted this session, skipping duplicate', {
+        spaceId,
+        personalSpaceId,
+      });
+      return;
     }
+    inFlightOrSubmittedRequests.add(requestKey);
 
-    console.log('Requesting to be member', {
-      authorSpaceId: personalSpaceId,
-      spaceId,
-    });
+    try {
+      // Members/editors already belong to the space; a duplicate join request errors on vote.
+      const access = await runEffectEither(
+        Effect.all([
+          getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+          getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+        ])
+      );
+      if (Either.isRight(access) && (access.right[0] || access.right[1])) {
+        dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
+        throw new Error('User is already a member or editor of the space');
+      }
 
-    const { calldata: callData } = daoSpace.proposeRequestMembership({
-      authorSpaceId: personalSpaceId,
-      spaceId,
-    });
+      // An active ADD_MEMBER proposal means a request is already pending
+      const alreadyRequested = await hasActiveMemberProposal(normalizedSpaceId, normalizedPersonalSpaceId).catch(
+        () => false
+      );
+      if (alreadyRequested) {
+        console.log('Membership request already pending for this space, skipping duplicate', {
+          spaceId,
+          personalSpaceId,
+        });
+        return;
+      }
 
-    const writeTxEffect = tx(callData).pipe(
-      Effect.withSpan('web.write.requestMembership'),
-      Effect.annotateSpans({
-        'io.operation': 'request_membership',
-        'space.type': 'DAO',
-        'governance.action': 'membership_requested',
-      })
-    );
+      console.log('Requesting to be member', {
+        authorSpaceId: personalSpaceId,
+        spaceId,
+      });
 
-    const result = await runEffectEither(writeTxEffect);
+      const { calldata: callData } = daoSpace.proposeRequestMembership({
+        authorSpaceId: personalSpaceId,
+        spaceId,
+      });
 
-    Either.match(result, {
-      onLeft: error => {
-        console.error('Failed to request membership', { spaceId, personalSpaceId }, error);
-        dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
-        // Necessary to propagate error status to useMutation
-        throw error;
-      },
-      onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
-    });
+      const writeTxEffect = tx(callData).pipe(
+        Effect.withSpan('web.write.requestMembership'),
+        Effect.annotateSpans({
+          'io.operation': 'request_membership',
+          'space.type': 'DAO',
+          'governance.action': 'membership_requested',
+        })
+      );
+
+      const result = await runEffectEither(writeTxEffect);
+
+      Either.match(result, {
+        onLeft: error => {
+          console.error('Failed to request membership', { spaceId, personalSpaceId }, error);
+          dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
+          throw error;
+        },
+        onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
+      });
+    } catch (error) {
+      inFlightOrSubmittedRequests.delete(requestKey);
+      throw error;
+    }
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
 
   const { mutate, status } = useMutation({

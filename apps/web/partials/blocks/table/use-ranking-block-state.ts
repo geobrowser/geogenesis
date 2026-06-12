@@ -375,11 +375,7 @@ export function useRankingBlockState({
       });
 
       if (mode !== 'view') {
-        if (
-          !smartAccount ||
-          composeAccessStatus === 'needs-login' ||
-          composeAccessStatus === 'needs-onboarding'
-        ) {
+        if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
           setPostOnboardingRedirect(href);
         }
 
@@ -394,8 +390,8 @@ export function useRankingBlockState({
           return;
         }
 
-        const allowed = await ensureAccess();
-        if (!allowed) return;
+        // Non-members can still build and publish their ranking
+        void ensureAccess();
       }
 
       router.push(href);

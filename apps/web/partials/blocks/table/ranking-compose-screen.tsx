@@ -36,6 +36,8 @@ import type { SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 
+import { stepAtom } from '~/partials/onboarding/dialog';
+
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -43,8 +45,6 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposeHeader } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
-import { stepAtom } from '~/partials/onboarding/dialog';
-
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
@@ -348,14 +348,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
-  if (accessStatus !== 'ready') {
+  // Non-members can still compose and publish — the rank entity is published to
+  if (accessStatus !== 'ready' && accessStatus !== 'needs-membership') {
     return (
       <RankingComposeFullscreen>
         <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-button text-text">
             {accessStatus === 'needs-login' && 'Log in to create your ranking.'}
             {accessStatus === 'needs-onboarding' && 'Create your account to continue.'}
-            {accessStatus === 'needs-membership' && 'Requesting membership to this space…'}
             {accessStatus === 'loading' && 'Loading…'}
           </p>
           <div className="flex items-center gap-3">
