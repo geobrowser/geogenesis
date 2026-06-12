@@ -6,8 +6,8 @@ import { useQueryProperties } from '~/core/sync/use-store';
 
 import { Property } from '../types';
 
-export function useProperties(propertyIds: string[]): Record<string, Property> {
-  const { properties } = useQueryProperties({ ids: propertyIds });
+export function useProperties(propertyIds: string[], spaceId?: string): Record<string, Property> {
+  const { properties } = useQueryProperties({ ids: propertyIds, spaceId });
 
   const sorted = sortProperties(properties ?? []);
   const map: Record<string, Property> = {};

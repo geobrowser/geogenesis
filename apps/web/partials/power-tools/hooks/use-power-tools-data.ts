@@ -423,7 +423,7 @@ export function usePowerToolsData(options?: {
     }
   }, [extraColumnIds, excludedColumnIdsSet, propertyIdSet, schemaProperties, columnIds, arraysEqual]);
 
-  const propertiesById = useProperties(columnIds);
+  const propertiesById = useProperties(columnIds, spaceId);
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
