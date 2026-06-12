@@ -220,8 +220,8 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
             </EntityPageContextMenuItem>
             {(isMember || isEditor) && editable && (
               <EntityPageContextMenuItem>
-                <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
-                  <Trash />
+                <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onDelete}>
+                  <Trash color="grey-04" />
                   Delete entity
                 </button>
               </EntityPageContextMenuItem>
