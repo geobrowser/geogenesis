@@ -73,7 +73,7 @@ export function EntityToSpaceDialog({
 
   const address = smartAccount?.account.address;
 
-  const title = 'Copy to new space';
+  const title = 'Turn into space';
 
   const resetState = () => {
     setStep('select-type');
@@ -149,7 +149,7 @@ export function EntityToSpaceDialog({
           }}
         >
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
-          <Dialog.Description className="sr-only">Copy this entity into a new space</Dialog.Description>
+          <Dialog.Description className="sr-only">Turn this entity into a new space</Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
             <AnimatePresence mode="wait">
               <motion.div
@@ -227,7 +227,7 @@ export function EntityToSpaceDialog({
                             {hasCompleted ? 'Finalizing details...' : 'Creating space...'}
                           </Text>
                           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
-                            Duplicating entity into a new space.
+                            Turning entity into a new space.
                           </Text>
                           {!hasCompleted && <Spacer height={32} />}
                         </div>
