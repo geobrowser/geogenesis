@@ -288,9 +288,13 @@ export function PowerToolsScreen() {
   const handleReorderColumns = React.useCallback(
     (ids: string[]) => {
       hasUserReorderedRef.current = true;
-      setOrderedPropertyIds(ids);
+      // The persisted order treats Name as implicitly first, so keep it first
+      // locally too — otherwise it would snap back on remount.
+      const name = ids.find(id => ID.equals(id, SystemIds.NAME_PROPERTY));
+      const normalized = name ? [name, ...ids.filter(id => id !== name)] : ids;
+      setOrderedPropertyIds(normalized);
       if (!canEdit) return;
-      const visible = ids.filter(id => id !== SystemIds.NAME_PROPERTY && !hiddenColumnIds.has(id));
+      const visible = normalized.filter(id => id !== name && !hiddenColumnIds.has(id));
       setShownColumnOrder(visible.map(id => ({ id, name: data.propertiesById[id]?.name ?? null })));
     },
     [canEdit, hiddenColumnIds, data.propertiesById, setShownColumnOrder]
