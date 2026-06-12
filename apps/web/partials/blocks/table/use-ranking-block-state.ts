@@ -21,6 +21,7 @@ import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submiss
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
@@ -50,7 +51,8 @@ export function useRankingBlockState({
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
-  const { ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
+  const { showOnboarding } = useOnboarding();
+  const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const setStep = useSetAtom(stepAtom);
 
@@ -373,14 +375,25 @@ export function useRankingBlockState({
       });
 
       if (mode !== 'view') {
-
-        // during a transient 'loading' status.
-        if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
+        if (
+          !smartAccount ||
+          composeAccessStatus === 'needs-login' ||
+          composeAccessStatus === 'needs-onboarding'
+        ) {
           setPostOnboardingRedirect(href);
         }
-        if (composeAccessStatus === 'needs-onboarding') {
-          setStep('enter-profile');
+
+        if (!smartAccount) {
+          promptLogin();
+          return;
         }
+
+        if (composeAccessStatus === 'needs-onboarding') {
+          showOnboarding();
+          setStep('enter-profile');
+          return;
+        }
+
         const allowed = await ensureAccess();
         if (!allowed) return;
       }
@@ -390,6 +403,8 @@ export function useRankingBlockState({
     [
       composeAccessStatus,
       ensureAccess,
+      promptLogin,
+      showOnboarding,
       entityId,
       parentEntityId,
       rankingEndDate,

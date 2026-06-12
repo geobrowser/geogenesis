@@ -29,6 +29,7 @@ import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { ID } from '~/core/id';
 import type { SearchResult } from '~/core/types';
@@ -61,7 +62,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const relationId = searchParams?.get('relationId') ?? '';
   const { name, entityId, rows: _rows, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
-  const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
+  const { showOnboarding } = useOnboarding();
+  const { status: accessStatus, promptLogin, ensureAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -74,10 +76,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
     }
     if (accessStatus === 'needs-onboarding') {
+      showOnboarding();
       setStep('enter-profile');
     }
-    void ensureAccess();
-  }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep]);
+    if (accessStatus === 'needs-membership') {
+      void ensureAccess();
+    }
+  }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
@@ -350,11 +355,19 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           <p className="text-button text-text">
             {accessStatus === 'needs-login' && 'Log in to create your ranking.'}
             {accessStatus === 'needs-onboarding' && 'Create your account to continue.'}
+            {accessStatus === 'needs-membership' && 'Requesting membership to this space…'}
             {accessStatus === 'loading' && 'Loading…'}
           </p>
-          <Button variant="ghost" small onClick={() => router.back()}>
-            Go back
-          </Button>
+          <div className="flex items-center gap-3">
+            {accessStatus === 'needs-login' ? (
+              <Button small onClick={promptLogin}>
+                Log in
+              </Button>
+            ) : null}
+            <Button variant="ghost" small onClick={() => router.back()}>
+              Go back
+            </Button>
+          </div>
         </div>
       </RankingComposeFullscreen>
     );

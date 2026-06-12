@@ -31,6 +31,7 @@ import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
+import { Close } from '~/design-system/icons/close';
 import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -71,7 +72,7 @@ function filterExactNameMatches(results: SearchResult[], name: string, allowedTy
 }
 
 export const OnboardingDialog = () => {
-  const { isOnboardingVisible } = useOnboarding();
+  const { isOnboardingVisible, hideOnboarding } = useOnboarding();
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
@@ -93,6 +94,11 @@ export const OnboardingDialog = () => {
   // Flows like "Add my ranking" record where the user was headed before being
   const [postOnboardingRedirect, setPostOnboardingRedirect] = useAtom(postOnboardingRedirectAtom);
   const destination = postOnboardingRedirect || ONBOARDING_DESTINATION;
+
+  const dismissOnboarding = React.useCallback(() => {
+    hideOnboarding();
+    setPostOnboardingRedirect(null);
+  }, [hideOnboarding, setPostOnboardingRedirect]);
 
   // Warm the router cache for the destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
@@ -223,7 +229,11 @@ export const OnboardingDialog = () => {
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
           <ModalCard childKey="card">
-            <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            <StepHeader
+              onClearEntityMatches={() => setEntityMatchCandidates([])}
+              onDismiss={dismissOnboarding}
+              postOnboardingRedirect={postOnboardingRedirect}
+            />
             {effectiveStep === 'start' && <StepStart />}
             {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
@@ -272,17 +282,30 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
   );
 };
 
-const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void }) => {
+const StepHeader = ({
+  onClearEntityMatches,
+  onDismiss,
+  postOnboardingRedirect,
+}: {
+  onClearEntityMatches: () => void;
+  onDismiss: () => void;
+  postOnboardingRedirect: string | null;
+}) => {
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
 
   const showBack = step === 'enter-profile' || step === 'existing-entity-match';
+  const canDismiss = step !== 'create-space' && step !== 'completed';
 
   const handleBack = () => {
     if (step === 'existing-entity-match') {
       onClearEntityMatches();
       setStep('enter-profile');
+      return;
+    }
+    if (step === 'enter-profile' && isRankingComposePath(postOnboardingRedirect)) {
+      onDismiss();
       return;
     }
     setName('');
@@ -299,6 +322,11 @@ const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
         )}
       </div>
+      {canDismiss ? (
+        <SquareButton onClick={onDismiss} icon={<Close />} className="border-none! bg-transparent!" aria-label="Close" />
+      ) : (
+        <div className="size-8" aria-hidden />
+      )}
     </div>
   );
 };

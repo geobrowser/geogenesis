@@ -10,6 +10,7 @@ import { useSearchParams } from 'next/navigation';
 import { usePersonalSpaceId } from './use-personal-space-id';
 
 const isOnboardingVisibleAtom = atom(false);
+const onboardingDismissedAtom = atom(false);
 
 // URL param set when opening an entity preview from the onboarding
 // "is this you?" step. Suppresses the onboarding dialog so the user can
@@ -26,9 +27,11 @@ export function useOnboarding() {
   const suppress = searchParams?.get(SUPPRESS_ONBOARDING_PARAM) === '1' || windowSuppress;
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
+  const [onboardingDismissed, setOnboardingDismissed] = useAtom(onboardingDismissedAtom);
   const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
 
-  const shouldOnboard = isFetched && !isLoading && !isRegistered && user && !suppress;
+  const shouldOnboard =
+    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -48,19 +51,30 @@ export function useOnboarding() {
   }, [isModalOpen, setIsOnboardingVisible, shouldOnboard]);
 
   useAccountEffect({
-    onDisconnect: () => setIsOnboardingVisible(false),
+    onDisconnect: () => {
+      setIsOnboardingVisible(false);
+      setOnboardingDismissed(false);
+    },
     onConnect(data) {
       const { address } = data;
 
-      if (address && isFetched && !isRegistered && !suppress) {
+      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed) {
         setIsOnboardingVisible(true);
       }
     },
   });
 
   const hideOnboarding = useCallback(() => {
+    setOnboardingDismissed(true);
     setIsOnboardingVisible(false);
-  }, [setIsOnboardingVisible]);
+  }, [setIsOnboardingVisible, setOnboardingDismissed]);
 
-  return { isOnboardingVisible, hideOnboarding };
+  const showOnboarding = useCallback(() => {
+    setOnboardingDismissed(false);
+    if (!isModalOpen) {
+      setIsOnboardingVisible(true);
+    }
+  }, [isModalOpen, setIsOnboardingVisible, setOnboardingDismissed]);
+
+  return { isOnboardingVisible, hideOnboarding, showOnboarding };
 }

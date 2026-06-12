@@ -31,6 +31,8 @@ export default function RankingComposePage() {
   const rankingEndDate = searchParams?.get('rankingEndDate') ?? '';
   const mode: RankingComposeMode = searchParams?.get('mode') === 'view' ? 'view' : 'edit';
 
+  useBrowseSidebarFullscreenRoute();
+
   const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
     spaceId,
     blockEntityId: dataBlockEntityId,

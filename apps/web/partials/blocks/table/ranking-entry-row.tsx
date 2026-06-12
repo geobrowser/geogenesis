@@ -15,7 +15,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 const ROW_AVATAR_SIZE_PX = 64;
 
 const ROW_NAME_CLASS =
-  'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[19px]';
+  'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
 type Props = {
@@ -76,7 +76,7 @@ export function RankingEntryRow({
         <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
       ) : null}
       {avatar}
-      <div className="flex h-16 min-w-0 flex-1 flex-col justify-center gap-1 overflow-hidden">
+      <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-1">
         {linkToEntity ? (
           <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={entry.name}>
             {entry.name}
