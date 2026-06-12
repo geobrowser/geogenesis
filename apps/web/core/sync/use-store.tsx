@@ -845,3 +845,35 @@ export function getRelation(options: UseRelationParams) {
 
   return found ? resolveRelationNames(found) : null;
 }
+
+/**
+ * Space-aware relation lookup for data block cells. Returns a single Relation
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useRelation when rendering data that may originate from
+ * a different space than the one being viewed — the store accumulates relations
+ * from every visited space, so an unscoped selector can match another space's
+ * relation. Entity pages should use useRelation with a strict spaceId filter
+ * instead — they want null when the relation doesn't exist in the current space.
+ */
+export function useSpaceAwareRelation(options: { selector: (r: Relation) => boolean; spaceId: string }) {
+  const { selector, spaceId } = options;
+
+  const relation = useSelector(
+    reactive,
+    () => {
+      let fallback: Relation | null = null;
+
+      for (const r of reactiveRelations.get()) {
+        if (r.isDeleted || !selector(r)) continue;
+        if (r.spaceId === spaceId) return resolveRelationNames(r);
+        fallback ??= r;
+      }
+
+      return fallback ? resolveRelationNames(fallback) : null;
+    },
+    equal
+  );
+
+  return relation;
+}
