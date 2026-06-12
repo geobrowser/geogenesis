@@ -14,12 +14,26 @@ type Props = {
   spaceId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  rankEntityId?: string;
+  authorSpaceId?: string;
 };
 
 /** Fullscreen ranking browse view with compose-aligned title and metadata typography. */
-export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
+export function RankingTableView({
+  spaceId,
+  rankingStartDate = '',
+  rankingEndDate = '',
+  rankEntityId = '',
+  authorSpaceId = '',
+}: Props) {
   const isMobile = useIsMobileLayout();
-  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate });
+  const state = useRankingBlockState({
+    spaceId,
+    rankingStartDate,
+    rankingEndDate,
+    sharedRankEntityId: rankEntityId,
+    sharedAuthorSpaceId: authorSpaceId,
+  });
   const {
     displayName,
     periodState,

@@ -22,6 +22,36 @@ import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { useMyRanking } from './use-my-ranking';
 
+export type RankingSubmissionPublishResult = {
+  rankEntityId: string;
+  authorSpaceId: string;
+  orderedEntityIds: string[];
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+};
+
+type PublishEditOps = Parameters<typeof personalSpace.publishEdit>[0]['ops'];
+
+type RankMutationResult = {
+  id: string;
+  ops: PublishEditOps;
+};
+
+type RankMutationInput = {
+  rankId?: string;
+  name?: string;
+  rankType: 'ORDINAL';
+  blockId?: string;
+  votes: { entityId: string; spaceId: string }[];
+};
+
+type RankMutationClient = {
+  ranks: {
+    update(input: RankMutationInput & { rankId: string }): Promise<RankMutationResult>;
+    create(input: RankMutationInput & { name: string; blockId: string }): RankMutationResult;
+  };
+};
+
 /** One ballot per author — avoids double-counting duplicate ballots per author. */
 export function dedupeSubmissionsByAuthor(submissions: RankingSubmissionRecord[]): RankingSubmissionRecord[] {
   const byAuthor = new Map<string, RankingSubmissionRecord>();
@@ -96,11 +126,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]): Promise<boolean> => {
-      if (!personalSpaceId) return false;
+    async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
+      if (!personalSpaceId) return null;
       if (!smartAccount) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
-        return false;
+        return null;
       }
 
       const votes = slots
@@ -110,7 +140,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           spaceId: slot.spaceId ?? spaceId,
         }));
 
-      if (votes.length === 0) return false;
+      if (votes.length === 0) return null;
 
       setIsSaving(true);
       try {
@@ -119,13 +149,15 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         let ops;
         let rankId: string;
         try {
+          const rankClient = geo as unknown as RankMutationClient;
+          const rankOps = Ops as unknown as RankMutationClient;
           const result = myRankEntity
-            ? await geo.ranks.update({
+            ? await rankClient.ranks.update({
                 rankId: myRankEntity.id,
                 rankType: 'ORDINAL',
                 votes,
               })
-            : Ops.ranks.create({
+            : rankOps.ranks.create({
                 name: rankName,
                 rankType: 'ORDINAL',
                 blockId,
@@ -136,7 +168,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           reportError(`Failed to publish ranking: ${describeError(error)}`);
-          return false;
+          return null;
         }
 
         const publish = Effect.gen(function* () {
@@ -183,11 +215,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         if (Either.isLeft(result)) {
           const err = result.left;
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return false;
+            return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
           reportError(`Failed to publish ranking: ${describeError(err)}`);
-          return false;
+          return null;
         }
 
         clearLocalMyRankingDraft(spaceId, blockId);
@@ -209,12 +241,33 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         }
 
         await refetchMyRanking();
-        return true;
+        const authorAvatarUrl =
+          profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+        return {
+          rankEntityId: rankId,
+          authorSpaceId: personalSpaceId,
+          orderedEntityIds: votes.map(vote => vote.entityId),
+          authorName: profile?.name ?? null,
+          authorAvatarUrl,
+        };
       } finally {
         setIsSaving(false);
       }
     },
-    [blockId, blockName, myRankEntity, personalSpaceId, refetchMyRanking, reportError, setToast, smartAccount, spaceId]
+    [
+      blockId,
+      blockName,
+      myRankEntity,
+      personalSpaceId,
+      profile?.avatarUrl,
+      profile?.name,
+      refetchMyRanking,
+      reportError,
+      setToast,
+      smartAccount,
+      spaceId,
+    ]
   );
 
   return {

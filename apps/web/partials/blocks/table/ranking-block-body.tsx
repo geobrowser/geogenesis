@@ -29,7 +29,8 @@ type Props = {
 };
 
 function buildMobileFullscreenEditButton(state: RankingBlockState) {
-  const { isSaving, openRankingCompose } = state;
+  const { isSaving, isSharedRankingView, openRankingCompose } = state;
+  if (isSharedRankingView) return null;
 
   return (
     <Button
@@ -44,7 +45,8 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isSaving, isSharedRankingView, openRankingCompose } = state;
+  if (isSharedRankingView) return null;
 
   return showEditRankingButton ? (
     <Button
@@ -204,7 +206,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
         <RankingMyRankingDndList
           entityIds={myDisplayEntityIds}
           onReorder={reorderMyRanking}
-          disabled={hasMySubmission}
+          disabled={hasMySubmission || state.isSharedRankingView}
           onDragStart={() => {
             setActiveSwipeRowKey(null);
             setIsMyRankingDragging(true);

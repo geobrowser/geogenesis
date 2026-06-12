@@ -1,5 +1,5 @@
 import type { EntityFilter } from '~/core/gql/graphql';
-import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
@@ -13,6 +13,17 @@ export function buildMyRankingEntityFilter(blockId: string): EntityFilter {
       },
     },
   };
+}
+
+export function isRankSubmittedToBlock(rankEntity: Entity, authorSpaceId: string, blockEntityId: string): boolean {
+  return rankEntity.relations.some(
+    relation =>
+      !relation.isDeleted &&
+      relation.spaceId === authorSpaceId &&
+      relation.fromEntity.id === rankEntity.id &&
+      relation.type.id === SUBMITTED_TO_PROPERTY_ID &&
+      relation.toEntity.id === blockEntityId
+  );
 }
 
 function parseEntityTimestampMs(raw: string | number | undefined | null): number {
