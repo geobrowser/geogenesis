@@ -12,7 +12,6 @@ import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 
 import { AddTo } from '~/design-system/icons/add-to';
 import { Context } from '~/design-system/icons/context';
@@ -20,6 +19,7 @@ import { Copy } from '~/design-system/icons/copy';
 import { MoveSpace } from '~/design-system/icons/move-space';
 import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
+import { Tooltip } from '~/design-system/tooltip';
 
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 import { MoveEntityToSpace } from '~/partials/versions/move-entity-to-space';
@@ -35,7 +35,6 @@ type Props = {
 export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
-  const { store } = useSyncEngine();
   const { isMember, isEditor } = useAccessControl(spaceId);
 
   const { editable, setEditable } = useEditable();
@@ -90,7 +89,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
     storage.values.deleteMany(allValuesToDelete);
     storage.relations.deleteMany(allRelationsToDelete);
-  }, [entityId, outgoingRelations, store, storage.relations, storage.values, values]);
+  }, [entityId, outgoingRelations, storage.relations, storage.values, values]);
 
   const onCopyEntityId = async () => {
     try {
@@ -113,12 +112,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
 
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
   const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
-  const [convertToSpaceOpen, setConvertToSpaceOpen] = useState(false);
   const [duplicateToSpaceOpen, setDuplicateToSpaceOpen] = useState(false);
-
-  // Check if entity exists in multiple spaces
-  const entity = store.getEntity(entityId);
-  const isMultiSpaceEntity = (entity?.spaces?.length ?? 0) > 1;
 
   const isSubMenu = isCreatingNewVersion || isMovingEntity;
 
@@ -172,7 +166,7 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
                 <div className="shrink-0">
                   <AddTo color="grey-04" />
                 </div>
-                Create in existing space
+                Copy to...
               </button>
             </EntityPageContextMenuItem>
             {(isMember || isEditor) && editable && (
@@ -184,40 +178,31 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
                   <div className="shrink-0">
                     <MoveSpace color="red-01" />
                   </div>
-                  Move to existing space
+                  Move to...
                 </button>
               </EntityPageContextMenuItem>
             )}
             <EntityPageContextMenuItem>
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setDuplicateToSpaceOpen(true);
-                }}
-                className="flex h-full w-full items-center gap-2 px-2 py-2"
-              >
-                <div className="shrink-0">
-                  <AddTo color="grey-04" />
-                </div>
-                Clone to new space
-              </button>
+              <Tooltip
+                position="left"
+                variant="light"
+                label="Use current entity as new space home page"
+                trigger={
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setDuplicateToSpaceOpen(true);
+                    }}
+                    className="flex h-full w-full items-center gap-2 px-2 py-2"
+                  >
+                    <div className="shrink-0">
+                      <AddTo color="grey-04" />
+                    </div>
+                    Turn into new space
+                  </button>
+                }
+              />
             </EntityPageContextMenuItem>
-            {(isMember || isEditor) && editable && !isMultiSpaceEntity && (
-              <EntityPageContextMenuItem>
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setConvertToSpaceOpen(true);
-                  }}
-                  className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01"
-                >
-                  <div className="shrink-0">
-                    <MoveSpace color="red-01" />
-                  </div>
-                  Convert to new space
-                </button>
-              </EntityPageContextMenuItem>
-            )}
             {(isMember || isEditor) && editable && (
               <EntityPageContextMenuItem>
                 <button className="flex h-full w-full items-center gap-2 px-2 py-2 text-red-01" onClick={onDelete}>
@@ -233,15 +218,6 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
         entityId={entityId}
         entityName={entityName}
         sourceSpaceId={spaceId}
-        mode="convert"
-        open={convertToSpaceOpen}
-        onOpenChange={setConvertToSpaceOpen}
-      />
-      <EntityToSpaceDialog
-        entityId={entityId}
-        entityName={entityName}
-        sourceSpaceId={spaceId}
-        mode="duplicate"
         open={duplicateToSpaceOpen}
         onOpenChange={setDuplicateToSpaceOpen}
       />
