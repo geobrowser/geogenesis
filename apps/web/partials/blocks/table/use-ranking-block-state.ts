@@ -235,7 +235,6 @@ export function useRankingBlockState({
   const hasMyRankingData = myDisplayEntityIds.length > 0 || hasMySubmission;
   const hasGlobalRankingData = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
   const showMyRankingSection = showMyRankingTab && hasMyRankingData;
-  const showContributePointsBanner = showMyRankingTab && !hasMyRankingData && hasGlobalRankingData;
   // Logged-out users still see "Add my ranking" — clicking it opens the sign-in
   // prompt via ensureAccess instead of hiding the entry point entirely.
   const isLoggedIn = Boolean(smartAccount);
@@ -454,7 +453,6 @@ export function useRankingBlockState({
     myAvatarSeed,
     showMyRankingTab,
     showMyRankingSection,
-    showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,

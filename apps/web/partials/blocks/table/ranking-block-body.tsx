@@ -21,7 +21,6 @@ import {
 } from './ranking-block-ui';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
-import { RankingContributePointsBanner } from './ranking-contribute-points-banner';
 import { RankingEntryRow } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
@@ -79,7 +78,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     showFirstRankingPrompt,
     showMyRankingTab,
     showMyRankingSection,
-    showContributePointsBanner,
     showAddMyRankingInGlobalHeader,
     activeTab,
     setActiveTab,
@@ -169,7 +167,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
 
   const globalRankingBody = (
     <div className="flex flex-col gap-4">
-      {showContributePointsBanner ? <RankingContributePointsBanner /> : null}
       {totalGlobalRankingEntityCount === 0 ? (
         hasMyRankingData ? (
           <p className="text-metadata text-grey-04">No published items yet</p>
