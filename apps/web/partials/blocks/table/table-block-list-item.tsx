@@ -8,7 +8,7 @@ import NextImage from 'next/image';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelation, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
@@ -79,14 +79,16 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const avatarRelation = useRelation({
+  const avatarRelation = useSpaceAwareRelation({
     selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+    spaceId: currentSpaceId,
   });
 
   const maybeAvatarUrl = avatarRelation?.toEntity.value;
 
-  const coverRelation = useRelation({
+  const coverRelation = useSpaceAwareRelation({
     selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
+    spaceId: currentSpaceId,
   });
 
   const maybeCoverUrl = coverRelation?.toEntity.value;
