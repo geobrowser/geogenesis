@@ -1,0 +1,27 @@
+diff --git a/dist/src/ranks/vote-ops.js b/dist/src/ranks/vote-ops.js
+index 8b5ba99e06d73c6be21809ac4ed579134d293b91..79f77a901d88467dc340a87b145b6704b80b58de 100644
+--- a/dist/src/ranks/vote-ops.js
++++ b/dist/src/ranks/vote-ops.js
+@@ -1,7 +1,11 @@
+-import { createEntity as grcCreateEntity, createRelation as grcCreateRelation, languages, } from '@geoprotocol/grc-20';
++import { createEntity as grcCreateEntity, createRelation as grcCreateRelation, formatId, languages, parseId, } from '@geoprotocol/grc-20';
+ import { generateNJitteredKeysBetween } from 'fractional-indexing-jittered';
+ import { RANK_VOTES_RELATION_TYPE, VOTE_ORDINAL_VALUE_PROPERTY, VOTE_WEIGHTED_VALUE_PROPERTY, } from '../core/ids/system.js';
+-import { assertValid, fromBytes, generate, toBytes, toGrcId } from '../id-utils.js';
++import { assertValid, generate, toGrcId } from '../id-utils.js';
++function normalizeVoteKeyId(id) {
++    const parsed = parseId(id);
++    return parsed ? formatId(parsed) : String(id).replaceAll('-', '').toLowerCase();
++}
+ /**
+  * Validates every vote and enforces `(entityId, spaceId)` uniqueness within a
+  * rank. A rank may include the same `entityId` under multiple `spaceId`s (ranking
+@@ -29,7 +33,7 @@ export function validateVotes(votes, rankType, context) {
+         }
+         // Key on the canonical (lowercase, dashless) form so a dashed and a dashless
+         // — or differently-cased — spelling of the same UUID still collide.
+-        const key = `${fromBytes(toBytes(vote.entityId))}:${fromBytes(toBytes(vote.spaceId))}`;
++        const key = `${normalizeVoteKeyId(vote.entityId)}:${normalizeVoteKeyId(vote.spaceId)}`;
+         if (seen.has(key)) {
+             throw new Error(`Duplicate (entityId, spaceId) in votes: "${String(vote.entityId)}:${String(vote.spaceId)}". Each entity can only be voted once per space perspective in a rank.`);
+         }
