@@ -72,7 +72,7 @@ export function usePowerToolsData(options?: {
   const { resolvedFilterState, isFilterResolving, filterMode, filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
   const { blockEntity } = useDataBlock();
-  const { shownColumnRelations } = useView();
+  const { orderedShownColumnRelations } = useView();
 
   const effectiveFilterState = options?.filterStateOverride ?? resolvedFilterState;
   const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
@@ -120,9 +120,15 @@ export function usePowerToolsData(options?: {
       type: source.type,
       value: sourceValue,
       where,
-      sort,
     });
-  }, [source.type, sourceValue, where, sort]);
+  }, [source.type, sourceValue, where]);
+
+  // Sorting only changes row order, so it resets the loaded pages but must not
+  // reset the accumulated columns — otherwise the column layout gets re-derived
+  // from whichever rows the sorted query returns first (GEO-2196).
+  const pageKey = React.useMemo(() => {
+    return JSON.stringify({ sourceKey, sort });
+  }, [sourceKey, sort]);
 
   React.useEffect(() => {
     setPage(0);
@@ -130,6 +136,9 @@ export function usePowerToolsData(options?: {
     setLoadedEntityPages([]);
     setLastPageCount(0);
     setLoadedCollectionRelationPages([]);
+  }, [pageKey]);
+
+  React.useEffect(() => {
     setColumnIds([SystemIds.NAME_PROPERTY]);
   }, [sourceKey]);
 
@@ -254,8 +263,8 @@ export function usePowerToolsData(options?: {
         setLoadedCollectionRelationPages(prev => upsertRelationPage(prev, page, collectionRelations));
       }
     }
-    // sourceKey: re-fire after reset clears pages
-  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, sourceKey]);
+    // pageKey: re-fire after reset clears pages
+  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, pageKey]);
 
   React.useEffect(() => {
     if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -263,8 +272,8 @@ export function usePowerToolsData(options?: {
       setLoadedEntityPages(prev => upsertEntityPage(prev, page, queriedEntities));
       setLastPageCount(queriedEntities.length);
     }
-    // sourceKey: re-fire after reset clears pages
-  }, [queriedEntities, source.type, page, upsertEntityPage, sourceKey]);
+    // pageKey: re-fire after reset clears pages
+  }, [queriedEntities, source.type, page, upsertEntityPage, pageKey]);
 
   const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
@@ -337,7 +346,8 @@ export function usePowerToolsData(options?: {
     const ids = new Set<string>();
     ids.add(SystemIds.NAME_PROPERTY);
 
-    for (const relation of shownColumnRelations) {
+    // Set insertion order becomes column order, so iterate position-sorted.
+    for (const relation of orderedShownColumnRelations) {
       ids.add(relation.toEntity.id);
     }
 
@@ -346,7 +356,7 @@ export function usePowerToolsData(options?: {
     }
 
     return ids;
-  }, [shownColumnRelations, discoveredPropertyIds]);
+  }, [orderedShownColumnRelations, discoveredPropertyIds]);
 
   const typeIds = React.useMemo(() => {
     const ids = new Map<string, { id: string; spaceId?: string }>();
