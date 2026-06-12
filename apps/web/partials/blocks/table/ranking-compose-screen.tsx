@@ -42,6 +42,8 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposeHeader } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import { stepAtom } from '~/partials/onboarding/dialog';
+
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
@@ -63,6 +65,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const setStep = useSetAtom(stepAtom);
 
   React.useEffect(() => {
     if (accessStatus === 'ready') return;
@@ -70,8 +73,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
     }
+    if (accessStatus === 'needs-onboarding') {
+      setStep('enter-profile');
+    }
     void ensureAccess();
-  }, [accessStatus, ensureAccess, setPostOnboardingRedirect]);
+  }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
@@ -260,11 +266,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     spaceId: searchHit?.spaces[0]?.spaceId ?? null,
   });
 
-  const resolveEntitySpaceId = (entityId: string) => {
+  const resolveEntitySpaceId = (entityId: string): string => {
     const row = rowsByEntityId.get(entityId);
-    if (row?.columns[SystemIds.NAME_PROPERTY]?.space) {
-      return row.columns[SystemIds.NAME_PROPERTY].space;
-    }
+    const rowSpaceId = row?.columns[SystemIds.NAME_PROPERTY]?.space;
+    if (rowSpaceId) return rowSpaceId;
     const searchPreview = getSearchResultPreview(searchResultsById.get(entityId));
     return searchPreview.spaceId ?? spaceId;
   };
@@ -345,7 +350,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           <p className="text-button text-text">
             {accessStatus === 'needs-login' && 'Log in to create your ranking.'}
             {accessStatus === 'needs-onboarding' && 'Create your account to continue.'}
-            {accessStatus === 'needs-membership' && 'Requesting membership to this space…'}
             {accessStatus === 'loading' && 'Loading…'}
           </p>
           <Button variant="ghost" small onClick={() => router.back()}>

@@ -27,6 +27,8 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
+import { stepAtom } from '~/partials/onboarding/dialog';
+
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export type RankingTab = 'global' | 'my';
@@ -50,6 +52,7 @@ export function useRankingBlockState({
   const router = useRouter();
   const { ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const setStep = useSetAtom(stepAtom);
 
   const { name, entityId, relationId, rows } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
@@ -370,16 +373,14 @@ export function useRankingBlockState({
         mode,
       });
 
-      // Browsing the fullscreen view doesn't require auth — only composing does.
-      // Logged-out users get the sign-in prompt when they try to add a ranking.
       if (mode !== 'view') {
-        // Record the destination before prompting for auth so the user resumes
-        // this flow right after logging in or finishing onboarding, instead of
-        // staying put / landing on Explore. `!smartAccount` also covers clicks
-        // during a transient 'loading' status. Membership-pending blocks (DAO
-        // join requests) intentionally don't auto-navigate.
+
+        // during a transient 'loading' status.
         if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
           setPostOnboardingRedirect(href);
+        }
+        if (composeAccessStatus === 'needs-onboarding') {
+          setStep('enter-profile');
         }
         const allowed = await ensureAccess();
         if (!allowed) return;
@@ -397,6 +398,7 @@ export function useRankingBlockState({
       resolveBlockRelationId,
       router,
       setPostOnboardingRedirect,
+      setStep,
       smartAccount,
       spaceId,
     ]

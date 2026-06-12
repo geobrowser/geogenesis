@@ -13,6 +13,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { isRankingComposePath } from '~/core/blocks/ranking/ranking-compose-url';
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -119,6 +120,14 @@ export const OnboardingDialog = () => {
       setStep('enter-profile');
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
+
+  // Ranking compose skips the intro — go straight to name/avatar entry.
+  useEffect(() => {
+    if (!isOnboardingVisible) return;
+    if (step !== 'start') return;
+    if (!isRankingComposePath(postOnboardingRedirect)) return;
+    setStep('enter-profile');
+  }, [isOnboardingVisible, step, postOnboardingRedirect, setStep]);
 
   // Fire the post-creation redirect as soon as step flips to 'completed'.
   // Gated on wasOnboardingActiveRef (not the live isOnboardingVisible)

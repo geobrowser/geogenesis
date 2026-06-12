@@ -29,3 +29,7 @@ export function rankingComposeHref({
 export function rankingComposeReturnHref(spaceId: string, parentEntityId: string): string {
   return `/space/${spaceId}/${parentEntityId}`;
 }
+
+export function isRankingComposePath(path: string | null | undefined): boolean {
+  return Boolean(path?.includes('/ranking-compose'));
+}
