@@ -32,6 +32,7 @@ import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Entity, TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
+import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 import { Divider } from '~/design-system/divider';
@@ -61,10 +62,22 @@ import { editorContentVersionAtom, entitySidePanelHostElementAtom, entitySidePan
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
 
+function spaceHasDisplayName(entity: Entity | null | undefined, spaceId: string): boolean {
+  if (!entity?.values) return false;
+  return entity.values.some(
+    value =>
+      !value.isDeleted &&
+      value.spaceId === spaceId &&
+      value.property.id === SystemIds.NAME_PROPERTY &&
+      typeof value.value === 'string' &&
+      value.value.trim().length > 0
+  );
+}
+
 /**
  * `GeoStore.getEntity(id, { spaceId })` only keeps triples for that space. If callers pass the
- * block’s space while the row’s data lives in another space, the panel looks empty. We prefer the
- * requested scope when it has content; otherwise we derive a space from unscoped entity data.
+ * block’s space while the row’s data lives in another space, the panel looks empty. Prefer a scope
+ * that actually has the entity name — not merely backlinks/votes in the ranking block’s space.
  */
 function useSidePanelEntityScope(entityId: string, requestedSpaceId: string) {
   const { entity: unscopedEntity, isLoading: isLoadingHydration } = useQueryEntity({
@@ -78,18 +91,22 @@ function useSidePanelEntityScope(entityId: string, requestedSpaceId: string) {
     enabled: Boolean(entityId && requestedSpaceId),
   });
 
-  const scopedHasContent = React.useMemo(() => {
-    if (!requestedScoped) return false;
-    return requestedScoped.values.length > 0 || requestedScoped.relations.some(r => !r.isDeleted);
-  }, [requestedScoped]);
-
   const derivedSpaceId = React.useMemo(() => {
+    if (unscopedEntity) {
+      const nameValue = Entities.nameValue(unscopedEntity.values);
+      if (nameValue?.spaceId) return nameValue.spaceId;
+    }
     const v = unscopedEntity?.values.find(x => !x.isDeleted)?.spaceId;
     const r = unscopedEntity?.relations.find(rel => !rel.isDeleted)?.spaceId;
     return v ?? r ?? requestedSpaceId;
   }, [unscopedEntity, requestedSpaceId]);
 
-  const effectiveSpaceId = scopedHasContent ? requestedSpaceId : derivedSpaceId;
+  const effectiveSpaceId = React.useMemo(() => {
+    if (spaceHasDisplayName(requestedScoped, requestedSpaceId)) {
+      return requestedSpaceId;
+    }
+    return derivedSpaceId;
+  }, [derivedSpaceId, requestedScoped, requestedSpaceId]);
 
   const { entity, isLoading: isLoadingScopedView } = useQueryEntity({
     id: entityId,
@@ -257,12 +274,31 @@ function EntitySidePanelBody({
   entitySpaceId,
   entity,
   isLoadingEntity,
+  previewImageUrl,
+  previewName,
+  previewDescription,
 }: {
   entityId: string;
   entitySpaceId: string;
   entity: Entity | null;
   isLoadingEntity: boolean;
+  /** Fallback avatar/cover when scoped entity relations are not loaded yet (e.g. ranking row image). */
+  previewImageUrl?: string | null;
+  previewName?: string | null;
+  previewDescription?: string | null;
 }) {
+  const entityMediaUrl = useEntityMediaUrl(entityId, entitySpaceId);
+  const previewImageResolvedUrl = useImageUrlFromEntity(
+    previewImageUrl && !previewImageUrl.startsWith('ipfs://') && !previewImageUrl.startsWith('http')
+      ? previewImageUrl
+      : undefined,
+    entitySpaceId
+  );
+  const previewImageUrlResolved =
+    previewImageUrl?.startsWith('ipfs://') || previewImageUrl?.startsWith('http')
+      ? previewImageUrl
+      : (previewImageResolvedUrl ?? previewImageUrl);
+
   const relationEntityRelations = useRelationEntityRelations(entityId, entitySpaceId);
   const isRelationPage = relationEntityRelations.length > 0;
 
@@ -396,7 +432,7 @@ function EntitySidePanelBody({
     );
   }
 
-  const avatarUrl = Entities.avatar(entity.relations);
+  const avatarUrl = Entities.avatar(entity.relations) ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
   const coverUrl = Entities.cover(entity.relations);
 
   return (
@@ -410,15 +446,20 @@ function EntitySidePanelBody({
         initialCollectionItems={initialCollectionItems}
       >
         <div className="px-4 pt-6 pb-12 sm:px-5">
-          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} fitImage />
+          <EntityPageCover avatarUrl={avatarUrl} coverUrl={coverUrl} />
           <EntityPageContentContainer>
             <div>
               <div className="space-y-2">
                 <div className="[&_.line-clamp-1]:!line-clamp-none [&_.line-clamp-2]:!line-clamp-none [&_.line-clamp-3]:!line-clamp-none [&_.line-clamp-4]:!line-clamp-none [&_.line-clamp-5]:!line-clamp-none [&_.line-clamp-6]:!line-clamp-none">
-                  <EditableHeading spaceId={entitySpaceId} entityId={entityId} />
+                  <EditableHeading spaceId={entitySpaceId} entityId={entityId} fallbackName={previewName} />
                 </div>
                 {!isRelationPage && (
-                  <EntityPageInlineDescription entityId={entityId} spaceId={entitySpaceId} truncate={false} />
+                  <EntityPageInlineDescription
+                    entityId={entityId}
+                    spaceId={entitySpaceId}
+                    truncate={false}
+                    fallbackDescription={previewDescription}
+                  />
                 )}
                 {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={entitySpaceId} isVoteable />}
               </div>
@@ -447,17 +488,26 @@ function EntitySidePanelBody({
   );
 }
 
-function EntitySidePanelSurface({
+export function EntitySidePanelSurface({
   entityId,
   requestedSpaceId,
   openedWithMainViewEditing,
   openedFromReviewEdits,
+  showHeader = true,
+  previewImageUrl,
+  previewName,
+  previewDescription,
   onClose,
 }: {
   entityId: string;
   requestedSpaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** When false, hides the default side-panel chrome (close, space link, edit toggle, open). */
+  showHeader?: boolean;
+  previewImageUrl?: string | null;
+  previewName?: string | null;
+  previewDescription?: string | null;
   onClose: () => void;
 }) {
   const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId);
@@ -470,8 +520,10 @@ function EntitySidePanelSurface({
       openedFromReviewEdits={openedFromReviewEdits}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {showHeader ? (
+          <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain" data-entity-side-panel-scroll>
           <EntitySidePanelActiveTabProvider entityId={entityId}>
             <EntitySidePanelBody
               key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
@@ -479,6 +531,9 @@ function EntitySidePanelSurface({
               entitySpaceId={effectiveSpaceId}
               entity={entity}
               isLoadingEntity={isLoading}
+              previewImageUrl={previewImageUrl}
+              previewName={previewName}
+              previewDescription={previewDescription}
             />
           </EntitySidePanelActiveTabProvider>
         </div>

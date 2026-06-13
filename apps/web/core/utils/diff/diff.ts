@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation, Value } from '~/core/types';
 
 import type {
@@ -124,7 +125,15 @@ export function mapApiEntityDiff(apiEntity: ApiEntityDiffShape): EntityDiff {
   };
 }
 
-export const BLOCK_TYPE_IDS: string[] = [TEXT_BLOCK, IMAGE_BLOCK, IMAGE_TYPE, DATA_BLOCK, VIDEO_TYPE, VIDEO_BLOCK];
+export const BLOCK_TYPE_IDS: string[] = [
+  TEXT_BLOCK,
+  IMAGE_BLOCK,
+  IMAGE_TYPE,
+  DATA_BLOCK,
+  VIDEO_TYPE,
+  VIDEO_BLOCK,
+  RANKING_BLOCK_TYPE_ID,
+];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
 const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
@@ -743,7 +752,7 @@ export function detectBlockType(entity: EntityDiff): 'textBlock' | 'imageBlock' 
       if (typeId === TEXT_BLOCK) return 'textBlock';
       if (typeId === IMAGE_BLOCK || typeId === IMAGE_TYPE) return 'imageBlock';
       if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) return 'videoBlock';
-      if (typeId === DATA_BLOCK) return 'dataBlock';
+      if (typeId === DATA_BLOCK || typeId === RANKING_BLOCK_TYPE_ID) return 'dataBlock';
     }
   }
   return 'textBlock';

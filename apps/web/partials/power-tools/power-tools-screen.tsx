@@ -895,7 +895,7 @@ export function PowerToolsScreen() {
 
   if (data.sourceType === 'RELATIONS') {
     return (
-      <div className="fixed inset-0 z-50 bg-white" style={{ top: '60px' }}>
+      <div className="fixed inset-0 z-50 bg-white" style={{ top: '44px' }}>
         <div className="flex h-full items-center justify-center">
           <Text variant="body" color="grey-04">
             Power Tools does not yet support Relation-based data sources.
@@ -913,7 +913,7 @@ export function PowerToolsScreen() {
     <div
       className="fixed inset-0 z-50 bg-white"
       style={{
-        top: '60px',
+        top: '44px',
         display: 'grid',
         gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
           .filter(Boolean)

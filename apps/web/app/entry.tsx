@@ -37,6 +37,11 @@ const SignInPrompt = dynamic(
   { ssr: false }
 );
 
+const PostAuthRedirect = dynamic(
+  () => import('~/partials/post-auth-redirect').then(m => ({ default: m.PostAuthRedirect })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -89,6 +94,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <OnboardingDialog />
         <CreateSpaceDialog />
         <SignInPrompt />
+        <PostAuthRedirect />
         <Toast />
         <GovernanceReopenEditLoadingBar />
         <FlowBar />

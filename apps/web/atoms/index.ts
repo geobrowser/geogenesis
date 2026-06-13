@@ -16,6 +16,8 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
+export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);
