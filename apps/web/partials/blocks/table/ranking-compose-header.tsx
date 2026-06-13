@@ -116,11 +116,11 @@ export function RankingComposeTitleMetadata({
       >
         {displayName}
       </Text>
-      {showMetadata && (periodLabel || hasRankedByOthers) ? (
+      {showMetadata && periodState && (periodLabel || hasRankedByOthers) ? (
         <RankingPeriodMetadata
           className={isMobile ? undefined : 'mt-0'}
           periodState={periodState}
-          periodLabel={periodLabel}
+          periodLabel={periodLabel ?? null}
           hasRankedByOthers={hasRankedByOthers}
           submissions={submissions}
           aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}

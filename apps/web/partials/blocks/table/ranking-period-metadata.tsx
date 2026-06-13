@@ -21,7 +21,7 @@ import { Time } from '~/design-system/icons/time';
 
 const VISIBLE_RANKED_BY_AVATARS = 3;
 const RANKED_BY_AVATAR_SIZE = 20;
-const RANKED_BY_ROW_CLASS = 'flex w-full min-w-0 flex-wrap items-center gap-[8px]';
+const RANKED_BY_ROW_CLASS = 'inline-flex min-w-0 shrink-0 flex-nowrap items-center gap-[8px]';
 
 function dedupePreserveOrder(ids: string[]): string[] {
   const seen = new Set<string>();
@@ -42,8 +42,14 @@ type RankingRankedByAvatar = {
   fallbackSeed: string;
 };
 
-function RankingRankedByAvatarGroup({ avatars }: { avatars: RankingRankedByAvatar[] }) {
-  if (avatars.length === 0) return null;
+function RankingRankedByAvatarGroup({
+  avatars,
+  extraCount = 0,
+}: {
+  avatars: RankingRankedByAvatar[];
+  extraCount?: number;
+}) {
+  if (avatars.length === 0 && extraCount <= 0) return null;
 
   return (
     <AvatarGroup>
@@ -56,6 +62,14 @@ function RankingRankedByAvatarGroup({ avatars }: { avatars: RankingRankedByAvata
           )}
         </AvatarGroup.Item>
       ))}
+      {extraCount > 0 ? (
+        <li
+          key="extra-count"
+          className="relative box-content flex h-5 shrink-0 list-none items-center rounded-[25%] border-2 border-white bg-grey-02 px-1.5 text-metadata leading-none text-grey-04"
+        >
+          +{extraCount}
+        </li>
+      ) : null}
     </AvatarGroup>
   );
 }
@@ -102,14 +116,7 @@ export function RankingAggregatedSubmitterAvatars({
     };
   });
 
-  return (
-    <>
-      <RankingRankedByAvatarGroup avatars={avatars} />
-      {extraCount > 0 ? (
-        <span className="shrink-0 rounded-full bg-grey-01 px-1.5 py-0.5 text-metadata text-grey-04">+{extraCount}</span>
-      ) : null}
-    </>
-  );
+  return <RankingRankedByAvatarGroup avatars={avatars} extraCount={extraCount} />;
 }
 
 export function RankingRankedBy({
@@ -134,12 +141,8 @@ export function RankingRankedBy({
             avatarUrl: submission.author.avatarUrl,
             fallbackSeed: submission.author.address,
           }))}
+          extraCount={extraCount}
         />
-        {extraCount > 0 ? (
-          <span className="shrink-0 rounded-full bg-grey-01 px-1.5 py-0.5 text-metadata text-grey-04">
-            +{extraCount}
-          </span>
-        ) : null}
       </span>
     );
   }
@@ -190,8 +193,7 @@ export function RankingPeriodMetadata({
     <div
       className={cx(
         className,
-        'w-full min-w-0 text-metadata text-grey-04',
-        showRankedBy && showPeriod ? 'flex flex-col gap-2' : 'flex flex-wrap items-center gap-x-4 gap-y-2'
+        'flex w-full min-w-0 flex-nowrap items-center gap-x-4 text-metadata text-grey-04'
       )}
     >
       {showRankedBy ? (
@@ -202,7 +204,7 @@ export function RankingPeriodMetadata({
         />
       ) : null}
       {showPeriod ? (
-        <span className="flex w-full min-w-0 items-center gap-1.5">
+        <span className="flex min-w-0 shrink-0 items-center gap-1.5">
           {periodIcon}
           {periodLabel}
         </span>
