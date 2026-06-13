@@ -34,6 +34,27 @@ type Props = {
 };
 
 const ENTITY_SHEET_TOP_OFFSET_PX = 200;
+const ENTITY_SHEET_SCROLL_SELECTOR = '[data-entity-side-panel-scroll]';
+
+function isInteractiveDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
+    )
+  );
+}
+
+function shouldStartEntitySheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
+  if (isInteractiveDragTarget(event.target)) return false;
+
+  const scrollEl = root.querySelector<HTMLElement>(ENTITY_SHEET_SCROLL_SELECTOR);
+  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) {
+    return false;
+  }
+
+  return true;
+}
 
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
   const isMobile = useIsMobileLayout();
@@ -86,6 +107,11 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
     }
   };
 
+  const handleOverlayPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isMobile || !shouldStartEntitySheetDrag(event, event.currentTarget)) return;
+    dragControls.start(event);
+  };
+
   if (!portalTarget) {
     return null;
   }
@@ -101,6 +127,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
+          onPointerDown={handleOverlayPointerDown}
         >
           <button
             type="button"
@@ -112,6 +139,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           <motion.div
             role="dialog"
             aria-modal="true"
+            data-ranking-entity-sheet
             drag={isMobile ? 'y' : false}
             dragControls={dragControls}
             dragListener={false}
@@ -132,11 +160,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             onClick={event => event.stopPropagation()}
           >
             {isMobile ? (
-              <div
-                className="flex shrink-0 cursor-grab justify-center pt-2 pb-1 active:cursor-grabbing"
-                aria-hidden
-                onPointerDown={event => dragControls.start(event)}
-              >
+              <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
                 <div className="h-1 w-10 rounded-full bg-grey-02" />
               </div>
             ) : null}

@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
 
-import { linearVoteWeight } from './ranking-vote-weights';
+import { rankingVoteWeight, rankingVoteWeightFromIndex } from './ranking-vote-weights';
 
-describe('linearVoteWeight', () => {
-  it('returns 1 for a single vote', () => {
-    expect(linearVoteWeight(0, 1)).toBe(1);
+describe('rankingVoteWeight', () => {
+  it('uses 0.5 + 0.5 / ln(k + 1) for 1-based position k', () => {
+    expect(rankingVoteWeight(1)).toBeCloseTo(0.5 + 0.5 / Math.log(2));
+    expect(rankingVoteWeight(2)).toBeCloseTo(0.5 + 0.5 / Math.log(3));
+    expect(rankingVoteWeight(5)).toBeCloseTo(0.5 + 0.5 / Math.log(6));
   });
 
-  it('returns 1 and 0.5 for two votes', () => {
-    expect(linearVoteWeight(0, 2)).toBe(1);
-    expect(linearVoteWeight(1, 2)).toBe(0.5);
+  it('maps zero-based indices to 1-based positions', () => {
+    expect(rankingVoteWeightFromIndex(0)).toBeCloseTo(rankingVoteWeight(1));
+    expect(rankingVoteWeightFromIndex(1)).toBeCloseTo(rankingVoteWeight(2));
+    expect(rankingVoteWeightFromIndex(4)).toBeCloseTo(rankingVoteWeight(5));
   });
 
-  it('linearly interpolates between 1 and 0.5', () => {
-    expect(linearVoteWeight(0, 5)).toBe(1);
-    expect(linearVoteWeight(1, 5)).toBe(0.875);
-    expect(linearVoteWeight(2, 5)).toBe(0.75);
-    expect(linearVoteWeight(3, 5)).toBe(0.625);
-    expect(linearVoteWeight(4, 5)).toBe(0.5);
+  it('assigns higher weight to earlier ranks', () => {
+    expect(rankingVoteWeight(1)).toBeGreaterThan(rankingVoteWeight(2));
+    expect(rankingVoteWeight(2)).toBeGreaterThan(rankingVoteWeight(3));
   });
 });

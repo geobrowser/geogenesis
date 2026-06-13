@@ -1,4 +1,8 @@
 export type RankingComposeMode = 'view' | 'edit';
+export type RankingComposeTab = 'global_ranking' | 'my_ranking';
+
+export const RANKING_COMPOSE_TAB_GLOBAL = 'global_ranking' as const satisfies RankingComposeTab;
+export const RANKING_COMPOSE_TAB_MY = 'my_ranking' as const satisfies RankingComposeTab;
 
 export function rankingComposeHref({
   spaceId,
@@ -8,6 +12,7 @@ export function rankingComposeHref({
   rankingStartDate = '',
   rankingEndDate = '',
   mode = 'edit',
+  tab,
 }: {
   spaceId: string;
   blockEntityId: string;
@@ -16,6 +21,7 @@ export function rankingComposeHref({
   rankingStartDate?: string;
   rankingEndDate?: string;
   mode?: RankingComposeMode;
+  tab?: RankingComposeTab;
 }): string {
   const params = new URLSearchParams();
   params.set('relationId', relationId);
@@ -23,6 +29,7 @@ export function rankingComposeHref({
   if (rankingStartDate) params.set('rankingStartDate', rankingStartDate);
   if (rankingEndDate) params.set('rankingEndDate', rankingEndDate);
   if (mode === 'view') params.set('mode', 'view');
+  if (tab) params.set('tab', tab);
   return `/space/${spaceId}/${blockEntityId}/ranking-compose?${params.toString()}`;
 }
 

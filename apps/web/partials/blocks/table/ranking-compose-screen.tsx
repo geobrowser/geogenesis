@@ -9,7 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
-import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
@@ -340,6 +340,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         rankingStartDate,
         rankingEndDate,
         mode: 'view',
+        tab: RANKING_COMPOSE_TAB_MY,
       })
     );
   };

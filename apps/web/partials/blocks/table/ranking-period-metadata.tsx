@@ -65,7 +65,7 @@ function RankingRankedByAvatarGroup({
       {extraCount > 0 ? (
         <li
           key="extra-count"
-          className="relative box-content flex h-5 shrink-0 list-none items-center rounded-[25%] border-2 border-white bg-grey-02 px-1.5 text-metadata leading-none text-grey-04"
+          className="relative box-content flex h-5 shrink-0 list-none items-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-metadata leading-none text-grey-04"
         >
           +{extraCount}
         </li>
@@ -190,12 +190,7 @@ export function RankingPeriodMetadata({
   const showPeriod = Boolean(periodLabel);
 
   return (
-    <div
-      className={cx(
-        className,
-        'flex w-full min-w-0 flex-nowrap items-center gap-x-4 text-metadata text-grey-04'
-      )}
-    >
+    <div className={cx(className, 'flex w-full min-w-0 flex-nowrap items-center gap-x-4 text-metadata text-grey-04')}>
       {showRankedBy ? (
         <RankingRankedBy
           submissions={submissions}

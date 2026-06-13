@@ -1,4 +1,7 @@
-export function linearVoteWeight(index: number, total: number): number {
-  if (total <= 1) return 1;
-  return 1 - (index / (total - 1)) * 0.5;
+export function rankingVoteWeight(k: number): number {
+  return 0.5 + 0.5 / Math.log(k + 1);
+}
+
+export function rankingVoteWeightFromIndex(index: number): number {
+  return rankingVoteWeight(index + 1);
 }

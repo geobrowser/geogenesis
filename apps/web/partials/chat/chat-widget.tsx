@@ -54,7 +54,7 @@ type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
 
-const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose', '/power-tools'] as const;
+const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
 function isFullscreenChildRoute(pathname: string): boolean {
   return FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix));
@@ -202,7 +202,7 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const hideFabOnRoute = isFullscreenChildRoute(pathname);
+  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -535,6 +535,12 @@ export function ChatWidget() {
     },
     [setIsOpen, trackAssistantPanel]
   );
+
+  React.useEffect(() => {
+    if (hideAssistantOnRoute && isOpen) {
+      closeAssistant('fullscreen_route');
+    }
+  }, [hideAssistantOnRoute, isOpen, closeAssistant]);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
@@ -1041,7 +1047,7 @@ export function ChatWidget() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         // Don't hijack the shortcut mid-IME composition.
-        if (event.isComposing) return;
+        if (event.isComposing || hideAssistantOnRoute) return;
         event.preventDefault();
         if (isOpen) {
           closeAssistant('keyboard_shortcut');
@@ -1052,7 +1058,7 @@ export function ChatWidget() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeAssistant, isBusy, isOpen, openAssistant, stopAndScrub]);
+  }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -1074,7 +1080,7 @@ export function ChatWidget() {
     return null;
   }
 
-  const ui = (
+  const ui = hideAssistantOnRoute ? null : (
     <AnimatePresence mode="wait">
       {isOpen ? (
         <ChatPanel
@@ -1096,7 +1102,7 @@ export function ChatWidget() {
           onSwitchChat={handleSwitchChat}
           onClearHistory={handleClearHistory}
         />
-      ) : hideFabOnRoute ? null : (
+      ) : (
         <motion.button
           type="button"
           key="fab"

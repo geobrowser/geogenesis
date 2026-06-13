@@ -297,6 +297,7 @@ const StepHeader = ({
 
   const showBack = step === 'enter-profile' || step === 'existing-entity-match';
   const canDismiss = step !== 'create-space' && step !== 'completed';
+  const isWorkflowStep = step === 'create-space' || step === 'completed';
 
   const handleBack = () => {
     if (step === 'existing-entity-match') {
@@ -318,10 +319,13 @@ const StepHeader = ({
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
-        {showBack && (
+        {showBack ? (
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
+        ) : (
+          <div className="h-1 w-4" />
         )}
       </div>
+      {isWorkflowStep ? <h3 className="text-smallTitle"></h3> : null}
       {canDismiss ? (
         <SquareButton
           onClick={onDismiss}
@@ -330,7 +334,7 @@ const StepHeader = ({
           aria-label="Close"
         />
       ) : (
-        <div className="size-8" aria-hidden />
+        <div className="h-1 w-4" />
       )}
     </div>
   );
@@ -349,7 +353,7 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative"
+      className="relative flex grow flex-col"
     >
       {children}
     </motion.div>
@@ -687,24 +691,29 @@ function StepComplete() {
   const hasCompleted = step === 'completed';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <>
       <StepContents childKey="start">
-        <div className="flex w-full shrink-0 flex-col items-center pt-3">
+        <div className="flex w-full flex-col items-center pt-3">
           <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
             {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
+          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
-      <div className="mt-auto flex flex-col items-center">
-        <div className="mb-3 flex size-11 shrink-0 items-center justify-center rounded-full bg-white shadow-card">
-          <Dots />
+      <div className="absolute inset-x-4 bottom-4">
+        <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
+          <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
+            <Dots />
+          </div>
         </div>
-        <Animation active={hasCompleted} />
+        <div className="relative z-0">
+          <Animation active={hasCompleted} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 

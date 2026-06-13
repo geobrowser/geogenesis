@@ -21,7 +21,7 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
-import { linearVoteWeight } from './ranking-vote-weights';
+import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
 
 function createdAtToEpochMillis(value: string): number {
@@ -113,7 +113,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       const votes = filteredSlots.map((slot, index) => ({
         entityId: slot.id,
         spaceId: validateSpaceId(slot.spaceId) ? slot.spaceId : spaceId,
-        value: linearVoteWeight(index, filteredSlots.length),
+        value: rankingVoteWeightFromIndex(index),
       }));
 
       if (votes.length === 0) return false;

@@ -5,12 +5,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
-import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import {
+  RANKING_COMPOSE_TAB_MY,
+  type RankingComposeMode,
+  rankingComposeHref,
+} from '~/core/blocks/ranking/ranking-compose-url';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
@@ -51,6 +55,8 @@ export function useRankingBlockState({
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preferMyTab = searchParams?.get('tab') === RANKING_COMPOSE_TAB_MY;
   const { showOnboarding } = useOnboarding();
   const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -243,10 +249,16 @@ export function useRankingBlockState({
   const showAddMyRankingInGlobalHeader = (showMyRankingTab || !isLoggedIn) && !hasMyRankingData;
 
   React.useEffect(() => {
-    if (!showMyRankingSection && activeTab === 'my') {
+    if (preferMyTab) {
+      setActiveTab('my');
+    }
+  }, [preferMyTab]);
+
+  React.useEffect(() => {
+    if (!showMyRankingSection && activeTab === 'my' && !preferMyTab) {
       setActiveTab('global');
     }
-  }, [activeTab, showMyRankingSection]);
+  }, [activeTab, preferMyTab, showMyRankingSection]);
 
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,

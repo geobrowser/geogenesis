@@ -342,22 +342,40 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   {showMyRankingSection && activeTab === 'my' ? myRankingBody : globalRankingBody}
                 </div>
               </>
-            ) : (
-              <section
-                className={cx(
-                  'flex w-full min-w-0 flex-col gap-3',
-                  presentation === 'fullscreen' ? 'min-h-0 flex-1 overflow-hidden' : 'mb-4'
-                )}
-              >
-                <SectionHeader
-                  title="Global ranking"
-                  action={showAddMyRankingInGlobalHeader ? myRankingActionButton : null}
-                />
+            ) : presentation === 'fullscreen' ? (
+              <>
+                <div className="relative mb-4 shrink-0">
+                  <div className="flex w-full min-w-0 flex-nowrap items-end justify-between gap-3">
+                    <div className="relative flex min-w-0 flex-1 items-center gap-6 overflow-hidden pb-2">
+                      <RankingTabButton
+                        active
+                        label="Global ranking"
+                        layoutId={`ranking-${presentation}-tab-underline`}
+                        onClick={() => setActiveTab('global')}
+                      />
+                    </div>
+
+                    {showAddMyRankingInGlobalHeader ? (
+                      <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
+                    ) : null}
+                  </div>
+
+                  <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+                </div>
+
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
                   {globalRankingBody}
                 </div>
+              </>
+            ) : (
+              <section className="mb-4 flex w-full min-w-0 flex-col gap-3">
+                <SectionHeader
+                  title="Global ranking"
+                  action={showAddMyRankingInGlobalHeader ? myRankingActionButton : null}
+                />
+                <div>{globalRankingBody}</div>
               </section>
             )}
           </div>
