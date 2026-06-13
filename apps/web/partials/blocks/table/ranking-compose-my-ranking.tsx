@@ -20,7 +20,6 @@ type Props = {
   isMobile: boolean;
   spaceId: string;
   displayEntityIds: string[];
-  isLoading: boolean;
   entriesById: Map<string, RankingEntryDisplay>;
   searchResultsById: Map<string, SearchResult>;
   rowsByEntityId: Map<string, Row>;
@@ -39,7 +38,6 @@ export function RankingComposeMyRanking({
   isMobile,
   spaceId,
   displayEntityIds,
-  isLoading,
   entriesById,
   searchResultsById,
   rowsByEntityId,
@@ -83,9 +81,7 @@ export function RankingComposeMyRanking({
         ) : null}
       </div>
       <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1 overflow-y-auto pt-4')}>
-        {isLoading ? (
-          <p className="text-metadata text-grey-03">Loading your ranking…</p>
-        ) : displayEntityIds.length === 0 ? (
+        {displayEntityIds.length === 0 ? (
           <p className="text-metadata text-grey-04">Add or search global ranking list to get started</p>
         ) : (
           <RankingMyRankingDndList

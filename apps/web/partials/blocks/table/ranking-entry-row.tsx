@@ -6,7 +6,7 @@ import NextImage from 'next/image';
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -40,12 +40,12 @@ export function RankingEntryRow({
   linkToEntity = true,
   rankStyle = 'avatar-badge',
 }: Props) {
-  const mediaUrl = useEntityMediaUrl(entry.entityId, spaceId);
+  const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
   const directIpfs =
     imageHint && typeof imageHint === 'string' && imageHint.startsWith('ipfs://') ? imageHint : undefined;
   const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl = imageUrlOverride ?? mediaUrl ?? directIpfs ?? lookedUpFromHint;
+  const imageUrl = imageUrlOverride ?? directIpfs ?? lookedUpFromHint ?? coverUrl ?? avatarUrl;
   const avatarImageValue = imageUrl ?? PLACEHOLDER_SPACE_IMAGE;
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;
@@ -62,7 +62,14 @@ export function RankingEntryRow({
         </span>
       ) : null}
       {imageUrl ? (
-        <GeoImage value={imageUrl} alt="" fill sizes={`${ROW_AVATAR_SIZE_PX}px`} className="object-cover" />
+        <GeoImage
+          key={avatarImageValue}
+          value={imageUrl}
+          alt=""
+          fill
+          sizes={`${ROW_AVATAR_SIZE_PX}px`}
+          className="object-cover"
+        />
       ) : (
         <NextImage
           src={PLACEHOLDER_SPACE_IMAGE}

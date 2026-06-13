@@ -231,7 +231,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const displayMyEntityIds = orderedIds;
 
-  const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
+  const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
   const myRankingEntriesById = React.useMemo(() => {
@@ -242,12 +242,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     }
     return map;
   }, [myEntriesById, displayRankableEntriesById, displayMyEntityIds]);
-
-  const isLoadingMyRanking =
-    isLoadingMyEntries &&
-    displayMyEntityIds.some(
-      id => !myRankingEntriesById.has(id) && !rowsByEntityId.has(id) && !searchResultsById.has(id)
-    );
 
   const addToMyRanking = (entityId: string) => {
     setOrderedIds(prev => (prev.includes(entityId) ? prev : [...prev, entityId]));
@@ -371,7 +365,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           isMobile={isMobile}
           spaceId={spaceId}
           displayEntityIds={displayMyEntityIds}
-          isLoading={isLoadingMyRanking}
           entriesById={myRankingEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}

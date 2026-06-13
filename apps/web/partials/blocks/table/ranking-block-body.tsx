@@ -84,9 +84,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     globalDisplayEntityIds,
     totalGlobalRankingEntityCount,
     hasMyRankingData,
-    globalEntriesById,
+    globalRankingEntryByEntityId,
     globalRankByEntityId,
-    isLoadingGlobalEntries,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -172,13 +171,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
         ) : (
           <RankingSubmitCtaBanner />
         )
-      ) : isLoadingGlobalEntries ? (
-        <p className="text-metadata text-grey-03">Loading ranking…</p>
       ) : (
         <>
           <div className="flex flex-col gap-3">
             {globalDisplayEntityIds.map(entityId => {
-              const entry = globalEntriesById.get(entityId);
+              const entry = globalRankingEntryByEntityId.get(entityId);
               const rank = globalRankByEntityId.get(entityId);
               if (!entry || rank == null) return null;
               const rowContent = (
@@ -226,9 +223,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
 
   const myRankingBody = (
     <div className="flex flex-col gap-4">
-      {!draftHydrated ? (
-        <p className="text-metadata text-grey-03">Loading your ranking…</p>
-      ) : totalMyRankingEntityCount === 0 ? (
+      {!draftHydrated ? null : totalMyRankingEntityCount === 0 ? (
         <div className="flex min-h-[120px] items-center rounded-lg bg-grey-01 px-6 py-5">
           <p className="text-metadata text-grey-04">
             Your ranking is empty. Use &ldquo;Add my ranking&rdquo; to pick entries from the filtered list.
@@ -339,7 +334,12 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
-                  {showMyRankingSection && activeTab === 'my' ? myRankingBody : globalRankingBody}
+                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>
+                    {globalRankingBody}
+                  </div>
+                  {showMyRankingSection ? (
+                    <div className={cx(activeTab !== 'my' && 'hidden')}>{myRankingBody}</div>
+                  ) : null}
                 </div>
               </>
             ) : presentation === 'fullscreen' ? (

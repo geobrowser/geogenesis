@@ -270,6 +270,38 @@ export function useRankingBlockState({
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
+  const globalRankingEntryByEntityId = React.useMemo(() => {
+    const map = new Map<string, RankingEntryDisplay>();
+
+    for (const row of rows) {
+      if (!row.entityId || row.placeholder) continue;
+      map.set(row.entityId, {
+        entityId: row.entityId,
+        name: getRowDisplayName(row),
+        description: getRowDescription(row),
+        image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+      });
+    }
+
+    for (const entry of globalEntries) {
+      const fromRow = map.get(entry.entityId);
+      map.set(entry.entityId, {
+        entityId: entry.entityId,
+        name: entry.name,
+        description: entry.description ?? fromRow?.description ?? null,
+        image: entry.image ?? fromRow?.image ?? null,
+      });
+    }
+
+    for (const id of globalRankingListEntityIds) {
+      if (!map.has(id)) {
+        map.set(id, { entityId: id, name: 'Untitled', description: null, image: null });
+      }
+    }
+
+    return map;
+  }, [globalEntries, globalRankingListEntityIds, rows]);
+
   const myRankingEntryByEntityId = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
@@ -306,7 +338,7 @@ export function useRankingBlockState({
 
   const openEntitySheet = React.useCallback(
     (targetEntityId: string) => {
-      const entry = myRankingEntryByEntityId.get(targetEntityId) ?? globalEntriesById.get(targetEntityId);
+      const entry = myRankingEntryByEntityId.get(targetEntityId) ?? globalRankingEntryByEntityId.get(targetEntityId);
       const row = rowsByEntityId.get(targetEntityId);
       setEntitySheetTarget({
         entityId: targetEntityId,
@@ -316,7 +348,7 @@ export function useRankingBlockState({
         previewDescription: entry?.description ?? (row ? getRowDescription(row) : null),
       });
     },
-    [globalEntriesById, myRankingEntryByEntityId, resolveEntitySpaceId, rowsByEntityId]
+    [globalRankingEntryByEntityId, myRankingEntryByEntityId, resolveEntitySpaceId, rowsByEntityId]
   );
 
   const buildSubmissionSlots = React.useCallback(
@@ -467,6 +499,7 @@ export function useRankingBlockState({
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
     globalEntriesById,
+    globalRankingEntryByEntityId,
     isLoadingGlobalEntries,
     myDisplayEntityIds: myRankingListEntityIds,
     totalMyRankingEntityCount: myDisplayEntityIds.length,
