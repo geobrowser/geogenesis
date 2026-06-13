@@ -86,14 +86,14 @@ export function RankingComposeMyRanking({
         {isLoading ? (
           <p className="text-metadata text-grey-03">Loading your ranking…</p>
         ) : displayEntityIds.length === 0 ? (
-          <p className="text-metadata text-grey-04">Add or search from movies in global ranking to get started</p>
+          <p className="text-metadata text-grey-04">Add or search global ranking list to get started</p>
         ) : (
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
             onReorder={onReorder}
             onDragStart={() => onActiveSwipeRowKeyChange(null)}
             className="flex flex-col"
-            renderItem={(entityId, index, isDragActive) => {
+            renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const entry = entriesById.get(entityId);
               const row = rowsByEntityId.get(entityId);
               const searchHit = searchResultsById.get(entityId);
@@ -112,6 +112,7 @@ export function RankingComposeMyRanking({
                   linkToEntity={false}
                   entry={entryDisplay}
                   spaceId={spaceId}
+                  imageUrl={overlayImageUrl}
                 />
               );
 
@@ -132,7 +133,6 @@ export function RankingComposeMyRanking({
                   showRemove
                   onView={() => onView(entityId)}
                   onRemove={() => onRemove(entityId)}
-                  onPrimaryClick={() => onRemove(entityId)}
                   primaryDisabled={isDragActive}
                 >
                   {entryRow}

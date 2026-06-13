@@ -19,6 +19,19 @@ import * as React from 'react';
 const POINTER_ACTIVATION = { distance: 8 };
 const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
+type DragOverlaySnapshot = {
+  entityId: string;
+  index: number;
+  imageUrl?: string;
+};
+
+function readRowImageValue(rowEl: Element | null): string | undefined {
+  if (!rowEl) return undefined;
+  const avatarEl = rowEl.querySelector('[data-ranking-image-value]');
+  const value = avatarEl?.getAttribute('data-ranking-image-value');
+  return value || undefined;
+}
+
 type Props = {
   entityIds: string[];
   onReorder: (entityIds: string[]) => void;
@@ -26,7 +39,7 @@ type Props = {
   onDragEnd?: () => void;
   className?: string;
   disabled?: boolean;
-  renderItem: (entityId: string, index: number, isDragActive?: boolean) => React.ReactNode;
+  renderItem: (entityId: string, index: number, isDragActive?: boolean, overlayImageUrl?: string) => React.ReactNode;
 };
 
 function RankingMyRankingSortableItem({ id, children }: { id: string; children: React.ReactNode }) {
@@ -34,14 +47,7 @@ function RankingMyRankingSortableItem({ id, children }: { id: string; children: 
     id,
   });
 
-  const innerRef = React.useRef<HTMLDivElement>(null);
-  const [rowHeight, setRowHeight] = React.useState<number | null>(null);
   const [justDragged, setJustDragged] = React.useState(false);
-
-  React.useLayoutEffect(() => {
-    if (isDragging || !innerRef.current) return;
-    setRowHeight(innerRef.current.offsetHeight);
-  });
 
   React.useEffect(() => {
     if (isDragging) {
@@ -76,11 +82,9 @@ function RankingMyRankingSortableItem({ id, children }: { id: string; children: 
       onClickCapture={suppressClickAfterDrag}
       onMouseDown={event => event.stopPropagation()}
     >
-      {isDragging ? (
-        <div className="w-full" style={{ height: rowHeight ?? 72 }} aria-hidden />
-      ) : (
-        <div ref={innerRef}>{children}</div>
-      )}
+      <div data-ranking-sortable-id={id} className={isDragging ? 'invisible' : undefined} aria-hidden={isDragging}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -114,17 +118,28 @@ export function RankingMyRankingDndList({
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [activeWidth, setActiveWidth] = React.useState<number | null>(null);
+  const [dragOverlaySnapshot, setDragOverlaySnapshot] = React.useState<DragOverlaySnapshot | null>(null);
 
   const finishDrag = React.useCallback(() => {
     setActiveDragOrder(null);
     setActiveId(null);
     setActiveWidth(null);
+    setDragOverlaySnapshot(null);
     onDragEnd?.();
   }, [onDragEnd]);
 
   const handleDragStart = (event: DragStartEvent) => {
+    const draggedId = event.active.id as string;
+    const rowEl = document.querySelector(`[data-ranking-sortable-id="${draggedId}"]`);
+    const imageUrl = readRowImageValue(rowEl);
+
     setActiveDragOrder([...entityIdsRef.current]);
-    setActiveId(event.active.id as string);
+    setActiveId(draggedId);
+    setDragOverlaySnapshot({
+      entityId: draggedId,
+      index: entityIdsRef.current.indexOf(draggedId),
+      imageUrl,
+    });
     const initialRect = event.active.rect.current.initial;
     if (initialRect) {
       setActiveWidth(initialRect.width);
@@ -158,13 +173,11 @@ export function RankingMyRankingDndList({
     return (
       <div className={className}>
         {items.map((entityId, index) => (
-          <React.Fragment key={entityId}>{renderItem(entityId, index)}</React.Fragment>
+          <React.Fragment key={entityId}>{renderItem(entityId, index, false)}</React.Fragment>
         ))}
       </div>
     );
   }
-
-  const activeIndex = activeId ? items.indexOf(activeId) : -1;
 
   return (
     <DndContext
@@ -185,12 +198,17 @@ export function RankingMyRankingDndList({
       </SortableContext>
 
       <DragOverlay dropAnimation={null}>
-        {activeId && activeIndex >= 0 ? (
+        {dragOverlaySnapshot && dragOverlaySnapshot.index >= 0 ? (
           <div
             className="cursor-grabbing rounded-lg bg-white shadow-lg ring-1 ring-grey-02"
             style={{ width: activeWidth ?? undefined }}
           >
-            {renderItemRef.current(activeId, activeIndex, true)}
+            {renderItemRef.current(
+              dragOverlaySnapshot.entityId,
+              dragOverlaySnapshot.index,
+              true,
+              dragOverlaySnapshot.imageUrl
+            )}
           </div>
         ) : null}
       </DragOverlay>

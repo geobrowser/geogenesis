@@ -246,7 +246,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             }}
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
-            renderItem={(entityId, index, isDragActive) => {
+            renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const entryDisplay = myRankingEntryByEntityId.get(entityId) ?? {
                 entityId,
                 name: 'Untitled',
@@ -260,6 +260,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   linkToEntity={false}
                   entry={entryDisplay}
                   spaceId={spaceId}
+                  imageUrl={overlayImageUrl}
                 />
               );
               return (

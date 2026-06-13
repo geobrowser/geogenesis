@@ -49,7 +49,9 @@ export function useRankingComposeSearch({
   }, [scope, globalAdditionalSpaceIds]);
 
   const trimmedQuery = debouncedQuery.trim();
-  const shouldSearch = enabled && trimmedQuery.length > 0;
+  const hasTypedQuery = enabled && query.trim().length > 0;
+  const shouldSearch = hasTypedQuery && trimmedQuery.length > 0;
+  const isQuerySyncing = query.trim() !== trimmedQuery;
 
   const {
     data: searchPages,
@@ -100,8 +102,7 @@ export function useRankingComposeSearch({
     return rows;
   }, [searchPages, filterByTypes]);
 
-  const isQuerySyncing = query.trim() !== trimmedQuery;
-  const isLoading = shouldSearch && (isQuerySyncing || isFetching || isPending);
+  const isLoading = hasTypedQuery && (isQuerySyncing || (shouldSearch && (isFetching || isPending)));
   const isSettled = shouldSearch && !isQuerySyncing && !isFetching && !isPending;
 
   const [lastSettledHadNoResults, setLastSettledHadNoResults] = React.useState(false);
@@ -117,7 +118,7 @@ export function useRankingComposeSearch({
     }
   }, [enabled, query]);
 
-  const isDebouncingAfterEmptySearch = shouldSearch && isQuerySyncing && !isFetching && lastSettledHadNoResults;
+  const isDebouncingAfterEmptySearch = hasTypedQuery && isQuerySyncing && !isFetching && lastSettledHadNoResults;
 
   return {
     results,

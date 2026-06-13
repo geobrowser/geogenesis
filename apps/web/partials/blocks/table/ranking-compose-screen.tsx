@@ -4,7 +4,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -40,7 +39,7 @@ import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
 import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
-import { RankingComposeHeader } from './ranking-compose-header';
+import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
@@ -146,6 +145,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     previewDescription?: string | null;
   } | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const mobilePageScrollRef = React.useRef<HTMLDivElement>(null);
 
   const myRankingIdSet = React.useMemo(() => new Set(orderedIds.map(id => ID.uuidToHex(id))), [orderedIds]);
 
@@ -346,97 +346,125 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
+  const titleMetadata = (
+    <RankingComposeTitleMetadata
+      isMobile={isMobile}
+      displayName={displayName}
+      showMetadata={!isMobile}
+      periodState={periodState}
+      periodLabel={periodLabel}
+      hasRankedByOthers={hasRankedByOthers}
+      submissions={submissions}
+      aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
+      aggregatedRankingCount={aggregatedRankingCount}
+    />
+  );
+
+  const rankingLayout = (
+    <RankingComposeLayout
+      isMobile={isMobile}
+      mobilePageScrollRef={isMobile ? mobilePageScrollRef : undefined}
+      myRanking={
+        <RankingComposeMyRanking
+          isMobile={isMobile}
+          spaceId={spaceId}
+          displayEntityIds={displayMyEntityIds}
+          isLoading={isLoadingMyRanking}
+          entriesById={myRankingEntriesById}
+          searchResultsById={searchResultsById}
+          rowsByEntityId={rowsByEntityId}
+          canPublish={canPublish}
+          isSaving={isSaving}
+          hidePublishButton={isEntityPreviewOpen}
+          activeSwipeRowKey={activeSwipeRowKey}
+          onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
+          onPublish={() => void handlePublish()}
+          onReorder={reorderMyRanking}
+          onRemove={removeFromMyRanking}
+          onView={openEntitySheet}
+        />
+      }
+      globalRanking={
+        <RankingComposeGlobalRanking
+          isMobile={isMobile}
+          spaceId={spaceId}
+          orderedIds={orderedIds}
+          filteredRankedIds={filteredRankedIds}
+          filteredUnrankedIds={filteredUnrankedIds}
+          globalRankByEntityId={globalRankByEntityId}
+          rankableEntriesById={displayRankableEntriesById}
+          searchResultsById={searchResultsById}
+          rowsByEntityId={rowsByEntityId}
+          showRankedUnrankedDivider={showRankedUnrankedDivider}
+          hasVisibleRankableEntities={hasVisibleRankableEntities}
+          isSearchActive={isSearchActive}
+          isSearchSettled={isSearchSettled}
+          isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
+          isLoadingRows={isSearchActive ? isLoadingSearch : isLoadingRows && !hasRankedGlobalEntities}
+          isFetchingNextPage={isSearchActive ? isFetchingNextSearchPage : isFetchingNextPage}
+          hasNextPage={isSearchActive ? hasNextSearchPage : hasNextPage}
+          hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
+          onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          isSearchOpen={isSearchOpen}
+          onSearchOpenChange={setIsSearchOpen}
+          searchInputRef={searchInputRef}
+          onAddToMyRanking={addToMyRanking}
+          onCreateNew={handleCreateNew}
+          activeSwipeRowKey={activeSwipeRowKey}
+          onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
+          onViewEntity={openEntitySheet}
+        />
+      }
+    />
+  );
+
   return (
     <>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
-      <RankingComposeFullscreen
-        style={{
-          display: 'grid',
-          gridTemplateRows: 'auto minmax(0, 1fr)',
-        }}
-      >
-        <div className={cx('px-4 py-2', isMobile ? '' : 'mx-auto w-full max-w-[1200px]')}>
-          <RankingComposeHeader
-            isMobile={isMobile}
-            displayName={displayName}
-            periodState={periodState}
-            periodLabel={periodLabel}
-            hasRankedByOthers={hasRankedByOthers}
-            submissions={submissions}
-            aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
-            aggregatedRankingCount={aggregatedRankingCount}
-            onBack={() => router.back()}
-            showPublishButton={!isEntityPreviewOpen}
-            canPublish={canPublish}
-            isSaving={isSaving}
-            onPublish={() => void handlePublish()}
-          />
-        </div>
-
-        <div
-          className={cx(
-            'relative flex h-full min-h-0 flex-col overflow-hidden px-4',
-            isMobile ? '' : 'mx-auto w-full max-w-[1200px]'
-          )}
-        >
-          <RankingComposeLayout
-            isMobile={isMobile}
-            myRanking={
-              <RankingComposeMyRanking
+      <RankingComposeFullscreen coverNavbar={isMobile}>
+        {isMobile ? (
+          <>
+            <div className="shrink-0 bg-white px-4 py-2">
+              <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                spaceId={spaceId}
-                displayEntityIds={displayMyEntityIds}
-                isLoading={isLoadingMyRanking}
-                entriesById={myRankingEntriesById}
-                searchResultsById={searchResultsById}
-                rowsByEntityId={rowsByEntityId}
+                onBack={() => router.back()}
+                showPublishButton
                 canPublish={canPublish}
                 isSaving={isSaving}
-                hidePublishButton={isEntityPreviewOpen}
-                activeSwipeRowKey={activeSwipeRowKey}
-                onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
                 onPublish={() => void handlePublish()}
-                onReorder={reorderMyRanking}
-                onRemove={removeFromMyRanking}
-                onView={openEntitySheet}
               />
-            }
-            globalRanking={
-              <RankingComposeGlobalRanking
+            </div>
+
+            <div
+              ref={mobilePageScrollRef}
+              data-ranking-compose-mobile-scroll=""
+              data-app-scroll-surface
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4"
+            >
+              <div className="pt-2 pb-4">{titleMetadata}</div>
+              <div className="relative flex min-h-0 flex-col">{rankingLayout}</div>
+            </div>
+          </>
+        ) : (
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-[1200px] flex-col overflow-hidden px-4">
+            <div className="shrink-0 py-2">
+              <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                spaceId={spaceId}
-                orderedIds={orderedIds}
-                filteredRankedIds={filteredRankedIds}
-                filteredUnrankedIds={filteredUnrankedIds}
-                globalRankByEntityId={globalRankByEntityId}
-                rankableEntriesById={displayRankableEntriesById}
-                searchResultsById={searchResultsById}
-                rowsByEntityId={rowsByEntityId}
-                showRankedUnrankedDivider={showRankedUnrankedDivider}
-                hasVisibleRankableEntities={hasVisibleRankableEntities}
-                isSearchActive={isSearchActive}
-                isSearchSettled={isSearchSettled}
-                isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
-                isLoadingRows={isSearchActive ? isLoadingSearch : isLoadingRows && !hasRankedGlobalEntities}
-                isFetchingNextPage={isSearchActive ? isFetchingNextSearchPage : isFetchingNextPage}
-                hasNextPage={isSearchActive ? hasNextSearchPage : hasNextPage}
-                hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
-                onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-                isSearchOpen={isSearchOpen}
-                onSearchOpenChange={setIsSearchOpen}
-                searchInputRef={searchInputRef}
-                onAddToMyRanking={addToMyRanking}
-                onCreateNew={handleCreateNew}
-                activeSwipeRowKey={activeSwipeRowKey}
-                onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
-                onViewEntity={openEntitySheet}
+                onBack={() => router.back()}
+                showPublishButton={false}
+                canPublish={canPublish}
+                isSaving={isSaving}
+                onPublish={() => void handlePublish()}
               />
-            }
-          />
-        </div>
+              <div className="mt-3 pb-4">{titleMetadata}</div>
+            </div>
+
+            <div className="relative min-h-0 flex-1">{rankingLayout}</div>
+          </div>
+        )}
       </RankingComposeFullscreen>
     </>
   );

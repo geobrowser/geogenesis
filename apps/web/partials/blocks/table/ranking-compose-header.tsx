@@ -20,7 +20,7 @@ export const COMPOSE_ICON_BUTTON_CLASS =
 export const RANKING_COMPOSE_PUBLISH_BUTTON_CLASS =
   'h-8 !rounded-full border-grey-02 bg-text px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text disabled:!cursor-not-allowed disabled:!bg-divider disabled:!text-grey-03 disabled:hover:!bg-divider';
 
-type Props = {
+type SharedHeaderProps = {
   isMobile: boolean;
   displayName: string;
   periodState: RankingPeriodState;
@@ -36,21 +36,19 @@ type Props = {
   onPublish?: () => void;
 };
 
-export function RankingComposeHeader({
+type PinnedToolbarProps = Pick<
+  SharedHeaderProps,
+  'isMobile' | 'onBack' | 'showPublishButton' | 'canPublish' | 'isSaving' | 'onPublish'
+>;
+
+export function RankingComposePinnedToolbar({
   isMobile,
-  displayName,
-  periodState,
-  periodLabel,
-  hasRankedByOthers,
-  submissions,
-  aggregatedSubmitterSpaceIds,
-  aggregatedRankingCount,
   onBack,
   showPublishButton = false,
   canPublish = false,
   isSaving = false,
   onPublish,
-}: Props) {
+}: PinnedToolbarProps) {
   const mobilePublishButton =
     isMobile && showPublishButton ? (
       <Button
@@ -64,22 +62,52 @@ export function RankingComposeHeader({
     ) : null;
 
   return (
-    <div className="flex shrink-0 flex-col gap-3">
-      <div className={cx('flex items-center', isMobile && showPublishButton && 'h-8 justify-between gap-3')}>
-        <Button
-          type="button"
-          variant="ghost"
-          icon={<ArrowLeft color="grey-04" />}
-          onClick={onBack}
-          className={cx(
-            COMPOSE_ICON_BUTTON_CLASS,
-            'shrink-0 hover:!bg-grey-01',
-            isMobile && showPublishButton ? 'h-8 w-8' : 'h-7 w-7'
-          )}
-          aria-label="Exit ranking editor"
-        />
-        {mobilePublishButton}
-      </div>
+    <div className={cx('flex items-center', isMobile && showPublishButton && 'h-8 justify-between gap-3')}>
+      <Button
+        type="button"
+        variant="ghost"
+        icon={<ArrowLeft color="grey-04" />}
+        onClick={onBack}
+        className={cx(
+          COMPOSE_ICON_BUTTON_CLASS,
+          'shrink-0 hover:!bg-grey-01',
+          isMobile && showPublishButton ? 'h-8 w-8' : 'h-7 w-7'
+        )}
+        aria-label="Exit ranking editor"
+      />
+      {mobilePublishButton}
+    </div>
+  );
+}
+
+type TitleMetadataProps = Pick<SharedHeaderProps, 'isMobile' | 'displayName'> &
+  Partial<
+    Pick<
+      SharedHeaderProps,
+      | 'periodState'
+      | 'periodLabel'
+      | 'hasRankedByOthers'
+      | 'submissions'
+      | 'aggregatedSubmitterSpaceIds'
+      | 'aggregatedRankingCount'
+    >
+  > & {
+    showMetadata?: boolean;
+  };
+
+export function RankingComposeTitleMetadata({
+  isMobile,
+  displayName,
+  showMetadata = true,
+  periodState,
+  periodLabel,
+  hasRankedByOthers = false,
+  submissions = [],
+  aggregatedSubmitterSpaceIds = [],
+  aggregatedRankingCount = 0,
+}: TitleMetadataProps) {
+  return (
+    <div className="flex flex-col gap-3">
       <Text
         variant="largeTitle"
         className={cx('!leading-[1.3]', !isMobile && '!text-[44px]')}
@@ -88,7 +116,7 @@ export function RankingComposeHeader({
       >
         {displayName}
       </Text>
-      {periodLabel || hasRankedByOthers ? (
+      {showMetadata && (periodLabel || hasRankedByOthers) ? (
         <RankingPeriodMetadata
           className={isMobile ? undefined : 'mt-0'}
           periodState={periodState}
@@ -102,6 +130,31 @@ export function RankingComposeHeader({
           }
         />
       ) : null}
+    </div>
+  );
+}
+
+export function RankingComposeHeader(props: SharedHeaderProps) {
+  return (
+    <div className="flex shrink-0 flex-col gap-3">
+      <RankingComposePinnedToolbar
+        isMobile={props.isMobile}
+        onBack={props.onBack}
+        showPublishButton={props.showPublishButton}
+        canPublish={props.canPublish}
+        isSaving={props.isSaving}
+        onPublish={props.onPublish}
+      />
+      <RankingComposeTitleMetadata
+        isMobile={props.isMobile}
+        displayName={props.displayName}
+        periodState={props.periodState}
+        periodLabel={props.periodLabel}
+        hasRankedByOthers={props.hasRankedByOthers}
+        submissions={props.submissions}
+        aggregatedSubmitterSpaceIds={props.aggregatedSubmitterSpaceIds}
+        aggregatedRankingCount={props.aggregatedRankingCount}
+      />
     </div>
   );
 }

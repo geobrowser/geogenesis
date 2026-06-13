@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -11,6 +12,8 @@ import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-p
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
+
+import { rankingComposeRemoveScrollShardAtom } from '~/atoms';
 
 type Target = {
   entityId: string;
@@ -34,10 +37,22 @@ const ENTITY_SHEET_TOP_OFFSET_PX = 200;
 
 export function RankingComposeEntitySheet({ target, onClose }: Props) {
   const isMobile = useIsMobileLayout();
+  const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
   const dragControls = useDragControls();
+
+  const overlayRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setRemoveScrollShard(node);
+    },
+    [setRemoveScrollShard]
+  );
+
+  React.useLayoutEffect(() => {
+    return () => setRemoveScrollShard(null);
+  }, [setRemoveScrollShard]);
 
   React.useLayoutEffect(() => {
     setPortalTarget(document.body);
@@ -80,6 +95,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
       {target ? (
         <motion.div
           key={`${target.spaceId}:${target.entityId}`}
+          ref={overlayRef}
           className="fixed inset-0 z-[210]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

@@ -31,10 +31,10 @@ import { NavUtils, sleep } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
-import { Close } from '~/design-system/icons/close';
 import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Close } from '~/design-system/icons/close';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
@@ -323,7 +323,12 @@ const StepHeader = ({
         )}
       </div>
       {canDismiss ? (
-        <SquareButton onClick={onDismiss} icon={<Close />} className="border-none! bg-transparent!" aria-label="Close" />
+        <SquareButton
+          onClick={onDismiss}
+          icon={<Close />}
+          className="border-none! bg-transparent!"
+          aria-label="Close"
+        />
       ) : (
         <div className="size-8" aria-hidden />
       )}
@@ -682,29 +687,24 @@ function StepComplete() {
   const hasCompleted = step === 'completed';
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <StepContents childKey="start">
-        <div className="flex w-full flex-col items-center pt-3">
+        <div className="flex w-full shrink-0 flex-col items-center pt-3">
           <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
             {step === 'completed' ? `Finalizing details...` : `Creating space...`}
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
-      <div className="absolute inset-x-4 bottom-4">
-        <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
-          <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
-            <Dots />
-          </div>
+      <div className="mt-auto flex flex-col items-center">
+        <div className="mb-3 flex size-11 shrink-0 items-center justify-center rounded-full bg-white shadow-card">
+          <Dots />
         </div>
-        <div className="relative z-0">
-          <Animation active={hasCompleted} />
-        </div>
+        <Animation active={hasCompleted} />
       </div>
-    </>
+    </div>
   );
 }
 

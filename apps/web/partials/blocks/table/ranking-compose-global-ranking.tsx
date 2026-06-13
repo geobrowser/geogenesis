@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { flushSync } from 'react-dom';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
@@ -13,12 +14,102 @@ import type { Row, SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Search } from '~/design-system/icons/search';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
-import { useRankingComposeScrollRoot } from './ranking-compose-layout';
+import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
+
+const MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX = 8;
+const SEARCH_LIST_ROW_HEIGHT_PX = 88;
+const SEARCH_LIST_SKELETON_ROW_COUNT = 4;
+const SEARCH_LIST_SKELETON_MAX_ROWS = 64;
+const SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX = SEARCH_LIST_SKELETON_ROW_COUNT * SEARCH_LIST_ROW_HEIGHT_PX;
+
+function skeletonRowCountForHeight(minHeightPx: number) {
+  return Math.min(
+    SEARCH_LIST_SKELETON_MAX_ROWS,
+    Math.max(SEARCH_LIST_SKELETON_ROW_COUNT, Math.ceil(minHeightPx / SEARCH_LIST_ROW_HEIGHT_PX))
+  );
+}
+
+function RankingComposeUnrankedDivider() {
+  return (
+    <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
+      <div className="h-px flex-1 bg-grey-02" aria-hidden />
+      <span className="shrink-0 text-[17px] font-[600] text-text">Unranked</span>
+      <div className="h-px flex-1 bg-grey-02" aria-hidden />
+    </div>
+  );
+}
+
+function computeSearchListMinHeight(scrollRoot: HTMLElement, listEl: HTMLElement | null) {
+  if (!listEl) {
+    return Math.max(
+      SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX,
+      scrollRoot.scrollHeight,
+      scrollRoot.scrollTop + scrollRoot.clientHeight
+    );
+  }
+
+  const rootRect = scrollRoot.getBoundingClientRect();
+  const listRect = listEl.getBoundingClientRect();
+  const listTop = listRect.top - rootRect.top + scrollRoot.scrollTop;
+  const viewportBottom = scrollRoot.scrollTop + scrollRoot.clientHeight;
+
+  return Math.max(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX, scrollRoot.scrollHeight - listTop, viewportBottom - listTop);
+}
+
+function scrollMobilePageToElement(target: HTMLElement) {
+  const scrollRoot = target.closest('[data-ranking-compose-mobile-scroll]');
+  if (scrollRoot instanceof HTMLElement) {
+    const rootRect = scrollRoot.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const nextScrollTop = scrollRoot.scrollTop + (targetRect.top - rootRect.top) - MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX;
+
+    scrollRoot.scrollTo({
+      top: Math.max(0, nextScrollTop),
+      behavior: 'smooth',
+    });
+    return Math.max(0, nextScrollTop);
+  }
+
+  target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  return null;
+}
+
+function RankingComposePickRowSkeletons({ count = SEARCH_LIST_SKELETON_ROW_COUNT }: { count?: number }) {
+  return (
+    <div aria-hidden className="flex flex-col">
+      {Array.from({ length: count }).map((_, index) => (
+        <div key={index} className="flex w-full items-center gap-4 py-3">
+          <Skeleton className="h-16 w-16 shrink-0 rounded-md" />
+          <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-3 w-3/4" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RankingComposeSearchListPlaceholder({
+  children,
+  minHeight,
+}: {
+  children: React.ReactNode;
+  minHeight: number;
+}) {
+  return (
+    <div className="flex flex-col justify-start" style={{ minHeight }}>
+      {children}
+    </div>
+  );
+}
 
 function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
   return (
@@ -153,12 +244,63 @@ export function RankingComposeGlobalRanking({
   onViewEntity,
 }: Props) {
   const isDesktop = !isMobile;
+  const mobileScrollRootRef = useRankingComposeScrollRootRef();
   const mobileScrollRoot = useRankingComposeScrollRoot();
+  const globalSectionRef = React.useRef<HTMLDivElement>(null);
+  const globalSearchChromeRef = React.useRef<HTMLDivElement>(null);
+  const searchFieldContainerRef = React.useRef<HTMLDivElement>(null);
+  const listContainerRef = React.useRef<HTMLDivElement>(null);
+  const searchScrollTopRef = React.useRef<number | null>(null);
+  const [searchListMinHeight, setSearchListMinHeight] = React.useState(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
   const [listScrollRoot, setListScrollRoot] = React.useState<Element | null>(null);
-  const listScrollRootRef = React.useCallback((node: HTMLDivElement | null) => {
-    setListScrollRoot(node);
-  }, []);
+  const setListContainerRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      listContainerRef.current = node;
+      if (isDesktop) {
+        setListScrollRoot(node);
+      }
+    },
+    [isDesktop]
+  );
   const scrollRoot = isDesktop ? listScrollRoot : mobileScrollRoot;
+
+  const getPageScrollRoot = React.useCallback((): HTMLElement | null => {
+    if (isMobile) {
+      return mobileScrollRootRef?.current ?? null;
+    }
+    return listContainerRef.current;
+  }, [isMobile, mobileScrollRootRef]);
+
+  const captureSearchListLayout = React.useCallback(
+    (options?: { scrollTop?: number }) => {
+      const pageScrollRoot = getPageScrollRoot();
+      if (!pageScrollRoot) return;
+
+      searchScrollTopRef.current = options?.scrollTop ?? pageScrollRoot.scrollTop;
+      setSearchListMinHeight(prev =>
+        Math.max(prev, computeSearchListMinHeight(pageScrollRoot, listContainerRef.current))
+      );
+    },
+    [getPageScrollRoot]
+  );
+
+  const handleSearchQueryChange = React.useCallback(
+    (value: string) => {
+      const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
+      if (isFirstSearchCharacter) {
+        captureSearchListLayout();
+      }
+      onSearchQueryChange(value);
+    },
+    [captureSearchListLayout, onSearchQueryChange, searchQuery]
+  );
+
+  React.useEffect(() => {
+    if (!isSearchOpen && !searchQuery.trim()) {
+      searchScrollTopRef.current = null;
+      setSearchListMinHeight(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
+    }
+  }, [isSearchOpen, searchQuery]);
 
   const canLoadMore = hasNextPage;
 
@@ -192,7 +334,7 @@ export function RankingComposeGlobalRanking({
 
   React.useEffect(() => {
     if (isSearchOpen) {
-      searchInputRef.current?.focus();
+      searchInputRef.current?.focus({ preventScroll: true });
     }
   }, [isSearchOpen, searchInputRef]);
 
@@ -203,6 +345,8 @@ export function RankingComposeGlobalRanking({
   }, [searchQuery, onSearchOpenChange]);
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
+  const showSearchSkeleton = isSearchActive && !isSearchingWithNoResults && (isLoadingRows || !isSearchSettled);
+  const searchSkeletonRowCount = skeletonRowCountForHeight(searchListMinHeight);
 
   const renderPickEntity = (id: string, globalRank?: number) => {
     const entry = rankableEntriesById.get(id);
@@ -246,40 +390,64 @@ export function RankingComposeGlobalRanking({
   };
 
   return (
-    <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}>
+    <div
+      ref={globalSectionRef}
+      className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1')}
+      style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
+    >
       <div
-        className={cx(
-          'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-          isDesktop && 'border-b border-grey-02 pb-4'
-        )}
+        ref={globalSearchChromeRef}
+        className="shrink-0"
+        style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
-        <h2
+        <div
           className={cx(
-            'm-0 min-w-0 truncate text-text',
-            isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
+            'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
+            isDesktop && 'border-b border-grey-02 pb-4'
           )}
         >
-          Global ranking
-        </h2>
-        <div className="flex items-center justify-self-end">
-          <Button
-            type="button"
-            variant="ghost"
-            icon={<Search color={isSearchOpen ? undefined : 'grey-04'} />}
-            onClick={() => onSearchOpenChange(!isSearchOpen)}
+          <h2
             className={cx(
-              COMPOSE_ICON_BUTTON_CLASS,
-              'h-8 w-8 !bg-transparent text-grey-04 transition-colors hover:!border-transparent hover:!bg-transparent hover:!text-text',
-              isSearchOpen && '!text-text'
+              'm-0 min-w-0 truncate text-text',
+              isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
             )}
-            aria-label={isSearchOpen ? 'Close search' : 'Search rankable entities'}
-            aria-expanded={isSearchOpen}
-          />
+          >
+            Global ranking
+          </h2>
+          <div className="flex items-center justify-self-end">
+            <Button
+              type="button"
+              variant="ghost"
+              icon={<Search color={isSearchOpen ? undefined : 'grey-04'} />}
+              onClick={() => {
+                if (isSearchOpen) {
+                  onSearchOpenChange(false);
+                  return;
+                }
+
+                if (isMobile) {
+                  flushSync(() => onSearchOpenChange(true));
+                  const scrollTarget = globalSearchChromeRef.current ?? globalSectionRef.current;
+                  const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
+                  captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
+                  searchInputRef.current?.focus({ preventScroll: true });
+                  return;
+                }
+
+                onSearchOpenChange(true);
+              }}
+              className={cx(
+                COMPOSE_ICON_BUTTON_CLASS,
+                'h-8 w-8 !bg-transparent text-grey-04 transition-colors hover:!border-transparent hover:!bg-transparent hover:!text-text',
+                isSearchOpen && '!text-text'
+              )}
+              aria-label={isSearchOpen ? 'Close search' : 'Search rankable entities'}
+              aria-expanded={isSearchOpen}
+            />
+          </div>
         </div>
-      </div>
-      <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
         {isSearchOpen ? (
-          <div className="shrink-0 py-2">
+          <div ref={searchFieldContainerRef} className="shrink-0 py-2">
             <div className="relative flex items-center">
               <span className="pointer-events-none absolute left-2 flex">
                 <Search color="grey-04" />
@@ -288,7 +456,7 @@ export function RankingComposeGlobalRanking({
                 ref={searchInputRef}
                 type="search"
                 value={searchQuery}
-                onChange={e => onSearchQueryChange(e.target.value)}
+                onChange={e => handleSearchQueryChange(e.target.value)}
                 placeholder="Search"
                 aria-label="Search rankable entities"
                 className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
@@ -296,32 +464,37 @@ export function RankingComposeGlobalRanking({
             </div>
           </div>
         ) : null}
-        <div
-          ref={isDesktop ? listScrollRootRef : undefined}
-          className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
-        >
+      </div>
+      <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
+        <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
           {isSearchActive ? (
-            isLoadingRows && !isDebouncingAfterEmptySearch ? (
-              <p className="py-6 text-metadata text-grey-03">Searching…</p>
+            showSearchSkeleton ? (
+              <RankingComposeSearchListPlaceholder minHeight={searchListMinHeight}>
+                <RankingComposePickRowSkeletons count={searchSkeletonRowCount} />
+              </RankingComposeSearchListPlaceholder>
             ) : isSearchingWithNoResults ? (
-              <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
+              <RankingComposeSearchListPlaceholder minHeight={searchListMinHeight}>
+                <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
+              </RankingComposeSearchListPlaceholder>
             ) : (
               <>
                 {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-                {showRankedUnrankedDivider ? <div className="my-3 border-t border-grey-02" role="separator" /> : null}
+                {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
                 {filteredUnrankedIds.map(id => renderPickEntity(id))}
                 {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
                 {canLoadMore && isFetchingNextPage ? (
-                  <p className="py-3 text-metadata text-grey-03">Loading more results…</p>
+                  <RankingComposePickRowSkeletons count={Math.min(6, searchSkeletonRowCount)} />
                 ) : null}
               </>
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
-            <p className="py-6 text-metadata text-grey-03">Loading entities…</p>
+            <RankingComposeSearchListPlaceholder minHeight={searchListMinHeight}>
+              <RankingComposePickRowSkeletons count={searchSkeletonRowCount} />
+            </RankingComposeSearchListPlaceholder>
           ) : !hasVisibleRankableEntities ? null : (
             <>
               {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-              {showRankedUnrankedDivider ? <div className="my-3 border-t border-grey-02" role="separator" /> : null}
+              {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
               {filteredUnrankedIds.map(id => renderPickEntity(id))}
               {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
               {canLoadMore && isFetchingNextPage ? (

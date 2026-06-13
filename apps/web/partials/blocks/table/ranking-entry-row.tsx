@@ -14,8 +14,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 const ROW_AVATAR_SIZE_PX = 64;
 
-const ROW_NAME_CLASS =
-  'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
+const ROW_NAME_CLASS = 'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
 type Props = {
@@ -23,6 +22,7 @@ type Props = {
   rank?: number;
   entry: RankingEntryDisplay;
   spaceId: string;
+  imageUrl?: string | null;
   /** Aggregated Borda score — only rendered when `RANKING_POINTS_UI_ENABLED` (competition-linked). */
   score?: number;
   /** When false, the name is plain text (e.g. compose pick rows that navigate on row click). */
@@ -35,6 +35,7 @@ export function RankingEntryRow({
   rank,
   entry,
   spaceId,
+  imageUrl: imageUrlOverride,
   score,
   linkToEntity = true,
   rankStyle = 'avatar-badge',
@@ -44,13 +45,17 @@ export function RankingEntryRow({
   const directIpfs =
     imageHint && typeof imageHint === 'string' && imageHint.startsWith('ipfs://') ? imageHint : undefined;
   const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl = mediaUrl ?? directIpfs ?? lookedUpFromHint;
+  const imageUrl = imageUrlOverride ?? mediaUrl ?? directIpfs ?? lookedUpFromHint;
+  const avatarImageValue = imageUrl ?? PLACEHOLDER_SPACE_IMAGE;
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;
   const showLeadingRank = showRank && rankStyle === 'leading';
 
   const avatar = (
-    <div className="relative h-16 min-h-16 w-16 min-w-16 shrink-0 overflow-clip rounded-md bg-grey-02">
+    <div
+      className="relative h-16 min-h-16 w-16 min-w-16 shrink-0 overflow-clip rounded-md bg-grey-02"
+      data-ranking-image-value={avatarImageValue}
+    >
       {showRank && rankStyle === 'avatar-badge' ? (
         <span className="absolute -top-1.5 -left-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-medium text-white ring-2 ring-white">
           {rank}
