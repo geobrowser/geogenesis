@@ -13,6 +13,7 @@ import { FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
+import { columnPropertyIdFromRelation, useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -234,33 +235,78 @@ export function PowerToolsScreen() {
     sort: serverSort,
   });
 
+  const { orderedShownColumnRelations, setShownColumnOrder } = useView();
+
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
+  // Once the user drags a column this session, their layout wins over the
+  // derived ordering until the persisted relations catch up.
+  const hasUserReorderedRef = React.useRef(false);
+
+  const persistedColumnIds = React.useMemo(
+    () => orderedShownColumnRelations.map(columnPropertyIdFromRelation),
+    [orderedShownColumnRelations]
+  );
 
   React.useEffect(() => {
     setOrderedPropertyIds(prev => {
       const idsSet = new Set(propertyIds);
+
+      if (!hasUserReorderedRef.current) {
+        // Columns persisted on the block-relation entity come first, in their
+        // stored position order; the rest keep the default (alphabetical) order.
+        // Compare ids hex-normalized — persisted relation ids may be dash-formatted.
+        const idByHex = new Map(propertyIds.map(id => [ID.uuidToHex(id), id]));
+        const persisted = persistedColumnIds
+          .map(id => idByHex.get(ID.uuidToHex(id)))
+          .filter((id): id is string => Boolean(id) && !ID.equals(id as string, SystemIds.NAME_PROPERTY));
+        const persistedSet = new Set(persisted);
+        const name = propertyIds.find(id => ID.equals(id, SystemIds.NAME_PROPERTY));
+        const rest = propertyIds.filter(id => id !== name && !persistedSet.has(id));
+        const next = [...(name ? [name] : []), ...persisted, ...rest];
+        const same = next.length === prev.length && next.every((id, i) => id === prev[i]);
+        return same ? prev : next;
+      }
+
       const ordered = prev.filter(id => idsSet.has(id));
       const appended = propertyIds.filter(id => !ordered.includes(id));
       if (appended.length === 0 && ordered.length === prev.length) return prev;
       return [...ordered, ...appended];
     });
-  }, [propertyIds]);
+  }, [propertyIds, persistedColumnIds]);
 
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const { peekNextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const reservedEntityId = peekNextEntityId();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
   const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set([SystemIds.BLOCKS]));
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
+
+  // Editors (by permission) persist the layout on the block-relation entity,
+  // same as filters; non-editors keep a local, session-only order.
+  const handleReorderColumns = React.useCallback(
+    (ids: string[]) => {
+      hasUserReorderedRef.current = true;
+      // The persisted order treats Name as implicitly first, so keep it first
+      // locally too — otherwise it would snap back on remount.
+      const name = ids.find(id => ID.equals(id, SystemIds.NAME_PROPERTY));
+      const normalized = name ? [name, ...ids.filter(id => id !== name)] : ids;
+      setOrderedPropertyIds(normalized);
+      if (!canEdit) return;
+      const visible = normalized.filter(id => id !== name && !hiddenColumnIds.has(id));
+      setShownColumnOrder(visible.map(id => ({ id, name: data.propertiesById[id]?.name ?? null })));
+    },
+    [canEdit, hiddenColumnIds, data.propertiesById, setShownColumnOrder]
+  );
   const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
   const shouldShowPlaceholder =
     isEditing &&
-    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === nextEntityId)) ||
+    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === reservedEntityId)) ||
       (pendingEntityId && !data.rows.find(r => r.entityId === pendingEntityId)));
 
-  const placeholderEntityId = pendingEntityId || nextEntityId;
+  const placeholderEntityId = pendingEntityId || reservedEntityId;
   const sourceValue = 'value' in source ? source.value : null;
   const panelEntityId = searchParams?.get(PANEL_ENTITY_ID_PARAM) ?? null;
   const panelSpaceId = searchParams?.get(PANEL_SPACE_ID_PARAM) ?? spaceId;
@@ -735,7 +781,7 @@ export function PowerToolsScreen() {
           action.type === 'FIND_ENTITY'
             ? action.entity
             : action.type === 'CREATE_ENTITY'
-              ? { id: nextEntityId, name: action.name }
+              ? { id: entityId, name: action.name }
               : { id: entityId, name: null, space: actionSpaceId, verified: false };
 
         upsertCollectionItemRelation({
@@ -751,7 +797,7 @@ export function PowerToolsScreen() {
       }
     }
 
-    if (entityId === nextEntityId) {
+    if (entityId === reservedEntityId) {
       setHasPlaceholderRow(false);
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
@@ -1040,7 +1086,7 @@ export function PowerToolsScreen() {
               hiddenColumnIds={hiddenColumnIds}
               onHideColumn={toggleColumnVisibility}
               orderedPropertyIds={orderedPropertyIds}
-              onReorderColumns={setOrderedPropertyIds}
+              onReorderColumns={handleReorderColumns}
               selection={selectionProps}
               imageUploadingFor={imageUploadingFor}
               bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}

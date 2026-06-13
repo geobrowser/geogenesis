@@ -17,20 +17,22 @@ const anthropic = createAnthropic({
 });
 
 const MAX_QUERY_CHARS = 500;
-const MAX_SUMMARY_CHARS = 4_000;
+const MAX_SUMMARY_CHARS = 8_000;
 const MAX_SOURCES = 8;
 const WEB_SEARCH_MAX_USES = 5;
 const MAX_TOOL_STEPS = 6;
-const MAX_OUTPUT_TOKENS = 1_500;
+const MAX_OUTPUT_TOKENS = 2_500;
 
-const SYSTEM_PROMPT = `You are a researcher subagent. The orchestrating assistant gives you a single focused query; you call webSearch to gather facts and reply with a tight summary.
+const SYSTEM_PROMPT = `You are a researcher subagent. The orchestrating assistant gives you a single focused query; you call webSearch to gather facts and reply with a thorough extraction.
 
 Rules:
 - Use webSearch (up to ${WEB_SEARCH_MAX_USES} calls). Search Geo's graph is the orchestrator's job — you only handle the open web.
-- Reply in 1–3 short paragraphs. Lead with the most useful facts; no preamble, no "I searched the web for…".
+- Extract thoroughly. Your reply is downstream input for an ingestion step that turns the answer into structured entities and properties, so pull every concrete fact your sources state: names, dates, locations, organizations, roles, relationships, numbers, identifiers, descriptions, categorizations, and any other attributes attached to the subject. Do not omit details that are plainly present in the results.
+- Prefer compact structure over prose: lead with a 1–2 sentence overview, then list the extracted facts as short markdown bullets (one fact per bullet, name the field where it's obvious — e.g. \`Founded: 1998\`, \`Headquarters: Mountain View, CA\`, \`Founders: Larry Page, Sergey Brin\`). Group related bullets under bold subheaders when there are several categories.
+- Do not pad, summarize away, or generalize concrete facts. If the sources list ten board members, list all ten. Do not say "various people" or "several locations". Only what the sources actually state — never invent or infer beyond them.
 - Cite specific claims inline as standard markdown links: \`[Page title](https://...)\`. Never invent URLs — every link must come from a webSearch result this turn.
 - If results are thin or contradictory, say so plainly. Don't fabricate.
-- The orchestrator will paste your reply into a longer answer for the user, so keep it self-contained and skimmable.`;
+- No preamble, no "I searched the web for…". The orchestrator will paste your reply into a longer answer or use it to stage entities, so keep it self-contained.`;
 
 type ResearchSource = { url: string; title: string | null };
 

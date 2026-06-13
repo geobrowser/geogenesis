@@ -15,6 +15,7 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
@@ -486,11 +487,10 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
-      const currentBlockIds = getRelations({
-        mergeWith: initialBlockEntityRelations,
-        selector: r =>
-          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
-      }).map(r => r.toEntity.id);
+      // Use `blockRelations` (merges the SSR page→block BLOCKS via useBlocks), not a raw
+      // store read: the page entity hydrates async, so a store read can miss published
+      // blocks mid-load and misclassify them as newly added, duplicating their relations.
+      const currentBlockIds = blockRelations.map(r => r.block.id);
 
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.
@@ -558,11 +558,41 @@ export function useEditorStore() {
             break;
           }
           case SystemIds.DATA_BLOCK: {
-            const initialSourceType =
-              node.attrs?.initialDataSource === 'QUERY' ? ('GEO' as const) : ('COLLECTION' as const);
+            const isQuery = node.attrs?.initialDataSource === 'QUERY';
+            const initialSourceType = isQuery ? ('SPACES' as const) : ('COLLECTION' as const);
 
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
               storage.relations.set(relation);
+            }
+
+            if (isQuery) {
+              const initialFilterString = toGeoFilterState(
+                [
+                  {
+                    columnId: SystemIds.SPACE_FILTER,
+                    columnName: 'Space',
+                    valueType: 'RELATION',
+                    value: spaceId,
+                  },
+                ],
+                'AND'
+              );
+
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: node.id,
+                  propertyId: SystemIds.FILTER,
+                  spaceId,
+                }),
+                spaceId,
+                entity: { id: node.id, name: null },
+                property: {
+                  id: SystemIds.FILTER,
+                  name: 'Filter',
+                  dataType: 'TEXT',
+                },
+                value: initialFilterString,
+              });
             }
 
             break;

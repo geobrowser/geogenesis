@@ -1,8 +1,12 @@
+// Mirrors ROOT_SPACE in ~/core/constants; kept local so this module stays
+// free of imports (it is pulled into partially-mocked test environments).
+const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+
 // Hard-coded space rankings. Replace SPACE_RANK with a dynamic source
 // when true ranking is implemented.
 
 const SPACE_RANK: Record<string, number> = {
-  a19c345ab9866679b001d7d2138d88a1: 0, // Root
+  [ROOT_SPACE]: 0, // Root
   '784bfddae3f3976118c561bf28195b44': 1, // Geo Education
   c9f267dcb0d270718c2a3c45a64afd32: 2, // Crypto
   '41e851610e13a19441c4d980f2f2ce6b': 3, // AI
@@ -18,6 +22,21 @@ const UNRANKED = Number.MAX_SAFE_INTEGER;
 
 export function getSpaceRank(spaceId: string): number {
   return SPACE_RANK[spaceId] ?? UNRANKED;
+}
+
+/**
+ * Scopes space-attributed schema data (e.g. a property's relation value type
+ * relations) to a viewing space. The space's own entries win; otherwise only
+ * entries from the Root space apply, since Root holds the canonical schema.
+ * Entries defined in any other space never apply outside it (GEO-2168).
+ */
+export function scopeBySpacePrecedence<T extends { spaceId: string }>(items: T[], spaceId?: string): T[] {
+  if (!spaceId || items.length === 0) return items;
+
+  const inSpace = items.filter(item => item.spaceId === spaceId);
+  if (inSpace.length > 0) return inSpace;
+
+  return items.filter(item => item.spaceId === ROOT_SPACE);
 }
 
 export function getTopRankedSpaceId(spaceIds: string[]): string | null {

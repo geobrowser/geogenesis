@@ -46,12 +46,15 @@ export async function SpaceMembers({ spaceId }: Props) {
       spaceId={spaceId}
       isPublicSpace={isPublicSpace}
       isMember={isMember}
+      isEditor={isEditor}
       hasRequestedSpaceMembership={hasRequestedSpaceMembership}
       connectedAddress={connectedAddress ?? null}
     />
   );
 
-  if (isMember) {
+  // Editors aren't always in the members list, but they already belong to the space — treat
+  // them as joined so they don't see (and can't fire) a duplicate membership request.
+  if (isMember || isEditor) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
         <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />

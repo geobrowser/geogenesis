@@ -9,9 +9,10 @@ import {
   ApiProposalStatusResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  findMembershipAction,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
-  mapActionTypeToProposalType,
+  mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
 } from '../rest';
@@ -73,16 +74,18 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   const apiProposal = decoded.right;
 
-  // Fetch profiles for the creator and voters
+  // On membership requests `proposedBy` is the DAO space itself, so the
+  // action's targetId is the only way to know who the request is about.
+  const membershipAction = findMembershipAction(apiProposal.actions);
+
   const voterIds = apiProposal.votes.voters.map(v => v.voterId);
-  const [creatorProfile, voterProfiles] = await Promise.all([
+  const [creatorProfile, voterProfiles, targetProfile] = await Promise.all([
     Effect.runPromise(fetchProfileBySpaceId(apiProposal.proposedBy)),
     Effect.runPromise(fetchProfilesBySpaceIds(voterIds)),
+    membershipAction?.targetId ? Effect.runPromise(fetchProfileBySpaceId(membershipAction.targetId)) : undefined,
   ]);
 
-  // Determine proposal type from the first action
-  const firstAction = apiProposal.actions[0];
-  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+  const proposalType = mapApiActionsToProposalType(apiProposal.actions);
   const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
   const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
 
@@ -124,5 +127,6 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     },
     subspaceDetails: subspaceDetails ?? undefined,
     spaceTopicDetails: spaceTopicDetails ?? undefined,
+    targetProfile,
   };
 }

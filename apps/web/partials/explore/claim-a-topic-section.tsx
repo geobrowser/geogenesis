@@ -4,12 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Dropdown } from '~/design-system/dropdown';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 type Props = {
@@ -31,6 +34,7 @@ async function fetchSubtopicsForParent(parentId: string, signal?: AbortSignal): 
 export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
   const [showAll, setShowAll] = React.useState(false);
   const [selectedParentId, setSelectedParentId] = React.useState<string>(ANY_TOPIC_VALUE);
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   // Per-parent fetch: the SSR `topics` list is capped at the 200 most-recent
   // unclaimed curated topics globally, so client-side filtering by parent ID
@@ -63,51 +67,63 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
       ? ANY_TOPIC_LABEL
       : (parentTopicOptions.find(o => o.id === selectedParentId)?.name ?? ANY_TOPIC_LABEL);
 
-  const dropdownOptions = [
-    {
-      label: ANY_TOPIC_LABEL,
-      value: ANY_TOPIC_VALUE,
-      disabled: false,
-      onClick: () => {
-        setSelectedParentId(ANY_TOPIC_VALUE);
-        setShowAll(false);
-      },
-    },
-    ...parentTopicOptions.map(option => ({
-      label: option.name,
-      value: option.id,
-      disabled: false,
-      onClick: () => {
-        setSelectedParentId(option.id);
-        setShowAll(false);
-      },
-    })),
+  const menuOptions: { label: string; value: string }[] = [
+    { label: ANY_TOPIC_LABEL, value: ANY_TOPIC_VALUE },
+    ...parentTopicOptions.map(option => ({ label: option.name, value: option.id })),
   ];
 
+  const selectParent = (value: string) => {
+    setSelectedParentId(value);
+    setShowAll(false);
+    setMenuOpen(false);
+  };
+
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col">
       {/* z-30 keeps the dropdown popover above the Recently Claimed sticky header
           (z-20) which sits later in DOM order. Without this, the popover gets
           painted over when its menu extends past the section boundary. */}
-      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-divider bg-white pt-1 pb-3">
-        <h2 className="text-[16px] leading-[20px] font-semibold tracking-[-0.02em] text-text">
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-3 bg-white pt-1 pb-4">
+        <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
           Available topics to claim
         </h2>
         {parentTopicOptions.length > 0 && (
-          <Dropdown
-            align="end"
-            scrollableList
-            trigger={<span className="text-[12px] leading-[13px] text-grey-04">{selectedLabel}</span>}
-            options={dropdownOptions}
-          />
+          <Menu
+            asChild
+            open={menuOpen}
+            onOpenChange={setMenuOpen}
+            sideOffset={8}
+            className="max-w-60 bg-white"
+            trigger={
+              <button
+                type="button"
+                className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
+              >
+                <span>{selectedLabel}</span>
+                <span className={cx('inline-flex transition-transform duration-200', menuOpen && 'rotate-180')}>
+                  <ChevronDownSmall color="grey-04" />
+                </span>
+              </button>
+            }
+          >
+            {menuOptions.map(option => (
+              <MenuItem
+                key={option.value}
+                active={option.value === selectedParentId}
+                onClick={() => selectParent(option.value)}
+              >
+                {option.label}
+              </MenuItem>
+            ))}
+          </Menu>
         )}
       </header>
 
       <div className="flex flex-wrap gap-2">
         {isLoading ? (
-          <span className="text-[13px] leading-[14px] text-grey-04">Loading topics…</span>
+          <span className="text-[16px] leading-[18px] text-grey-04">Loading topics…</span>
         ) : visible.length === 0 ? (
-          <span className="text-[13px] leading-[14px] text-grey-04">No unclaimed topics under this parent yet.</span>
+          <span className="text-[16px] leading-[18px] text-grey-04">No unclaimed topics under this parent yet.</span>
         ) : (
           visible.map(topic => {
             // Pick one of the topic's actual spaces as the link context — using
@@ -121,7 +137,7 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
                 key={topic.id}
                 href={NavUtils.toEntity(linkSpaceId, topic.id)}
                 aria-label={topic.name}
-                className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 px-2.5 py-1 text-[13px] leading-[14px] text-text transition-colors hover:bg-grey-01"
+                className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text"
               >
                 <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
                   <FallbackImage value={topic.image} sizes="16px" className="object-cover" />
@@ -132,13 +148,13 @@ export function ClaimATopicSection({ topics, parentTopicOptions }: Props) {
           })
         )}
 
-        {hasMore && !showAll && !isLoading ? (
+        {hasMore && !isLoading ? (
           <button
             type="button"
-            onClick={() => setShowAll(true)}
-            className="inline-flex items-center rounded-full border border-grey-02 px-2.5 py-1 text-[13px] leading-[14px] text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            onClick={() => setShowAll(prev => !prev)}
+            className="inline-flex items-center rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
           >
-            Show more
+            {showAll ? 'Show less' : 'Show more'}
           </button>
         ) : null}
       </div>

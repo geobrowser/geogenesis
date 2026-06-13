@@ -1,5 +1,5 @@
 export const MAX_URL_CHARS = 2_000;
-export const MAX_SUMMARY_CHARS = 4_000;
+export const MAX_SUMMARY_CHARS = 8_000;
 
 export type Source = { url: string; title: string | null };
 export type ParsedUrl = {

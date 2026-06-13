@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
@@ -239,9 +240,10 @@ function GovernanceFilterMenu({
       open={open}
       onOpenChange={setOpen}
       asChild
-      viewportClassName={`w-full min-h-0 min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box] ${
+      viewportClassName={cx(
+        'min-h-0 w-full min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]',
         maxHeightClass ?? 'max-h-[200px]'
-      }`}
+      )}
       trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
     >
       <>
@@ -331,7 +333,7 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
   if (dismissedNotices.includes(id)) return null;
 
   return (
-    <div id={id} className={`${classNames({ color })} ${media ? 'pb-6' : 'pb-4'}`}>
+    <div id={id} className={cx(classNames({ color }), media ? 'pb-6' : 'pb-4')}>
       <div className="min-w-0 flex-1">
         {media ? (
           <div className="flex items-start gap-4">

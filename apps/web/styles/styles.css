@@ -69,6 +69,7 @@
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
   --z-index-status-bar: 10001;
+  --z-index-toast: 10002;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;

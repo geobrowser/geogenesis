@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Effect } from 'effect';
 import { useAtom, useSetAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
@@ -43,9 +44,10 @@ export function personalSpaceIdsEqual(a: string | null | undefined, b: string | 
 type Props = {
   spaceId: string;
   entityId: string;
+  withBottomSpacing?: boolean;
 };
 
-export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
+export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpacing = true }: Props) {
   const router = useRouter();
   const { setEditable } = useEditable();
   const bumpBioStarterMerge = useSetAtom(personalProfileBioStarterTriggerAtom);
@@ -244,7 +246,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
 
   return (
     <div
-      className="relative mb-10 min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat"
+      className={`${withBottomSpacing ? 'mb-10 ' : ''}relative min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat`}
       style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
       <div className="absolute top-6 right-6 z-20">
@@ -276,7 +278,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
         <div className="mt-12 flex flex-wrap gap-2">
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.bio ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.bio ? donePillClass : pillClass)}
             icon={tasks.bio ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.bio}
             onClick={tasks.bio ? undefined : onAddBio}
@@ -285,7 +287,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           </SmallButton>
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.skills ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.skills ? donePillClass : pillClass)}
             icon={tasks.skills ? <Check color="white" /> : <CreateSmall />}
             disabled={tasks.skills}
             onClick={tasks.skills ? undefined : onAddSkills}
@@ -294,7 +296,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId }: Props) {
           </SmallButton>
           <SmallButton
             variant="secondary"
-            className={`${suggestedActionPillTypography} ${tasks.post ? donePillClass : pillClass}`}
+            className={cx(suggestedActionPillTypography, tasks.post ? donePillClass : pillClass)}
             icon={tasks.post ? <Check color="white" /> : <CreateSmall />}
             aria-busy={createPostPending && !tasks.post}
             disabled={tasks.post}

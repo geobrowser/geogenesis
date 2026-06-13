@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { useKey } from '~/core/hooks/use-key';
@@ -449,9 +450,10 @@ function RemovePropertyPanel(props: RemovePropertyPanelProps) {
                       return (
                         <div
                           key={prop.id}
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
+                          className={cx(
+                            'inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5',
                             isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
-                          }`}
+                          )}
                         >
                           <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
                             {prop.name ?? prop.id}
@@ -1131,9 +1133,10 @@ export function EditEntitiesPopover({
                         key={id}
                         type="button"
                         onClick={() => setAction(id)}
-                        className={`rounded-sm px-3 py-1 text-[13px] font-medium ${
+                        className={cx(
+                          'rounded-sm px-3 py-1 text-[13px] font-medium',
                           action === id ? 'shadow-sm bg-white text-text' : 'bg-transparent text-grey-04 hover:text-text'
-                        }`}
+                        )}
                       >
                         {label}
                       </button>

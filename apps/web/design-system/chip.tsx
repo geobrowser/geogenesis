@@ -34,6 +34,7 @@ import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/at
 type LinkableChipProps = {
   href: string;
   children: React.ReactNode;
+  disableLink?: boolean;
 };
 
 const linkableChipStyles = cva(
@@ -51,12 +52,19 @@ const linkableChipStyles = cva(
   }
 );
 
-export function LinkableChip({ href, children }: LinkableChipProps) {
+export function LinkableChip({ href, children, disableLink = false }: LinkableChipProps) {
+  const className = linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 });
+
+  if (disableLink) {
+    return (
+      <span className={className}>
+        <span>{children}</span>
+      </span>
+    );
+  }
+
   return (
-    <Link
-      href={href}
-      className={linkableChipStyles({ shouldClamp: typeof children === 'string' && children.length >= 42 })}
-    >
+    <Link href={href} className={className}>
       <span>{children}</span>
     </Link>
   );
@@ -258,15 +266,18 @@ export function LinkableRelationChip({
 
   return (
     <div
-      className={`${linkableRelationChipStyles({
-        truncateLabel,
-        shouldClamp,
-        isDotsHovered,
-        isSpaceHovered,
-        isRelationHovered,
-        isDeleteHovered,
-        small,
-      })} ${className}`.trim()}
+      className={cx(
+        linkableRelationChipStyles({
+          truncateLabel,
+          shouldClamp,
+          isDotsHovered,
+          isSpaceHovered,
+          isRelationHovered,
+          isDeleteHovered,
+          small,
+        }),
+        className
+      )}
     >
       {disableLink ? (
         truncateLabel ? (
@@ -287,7 +298,7 @@ export function LinkableRelationChip({
         </Link>
       )}
       {verified && (
-        <span className={`inline-block shrink-0 pl-1.5${truncateLabel ? 'py-1' : ''}`}>
+        <span className={cx('inline-block shrink-0 pl-1.5', truncateLabel && 'py-1')}>
           <CheckCircle color="current" />
         </span>
       )}

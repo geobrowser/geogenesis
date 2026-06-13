@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useVote } from '~/core/hooks/use-vote';
+import { useToast } from '~/core/hooks/use-toast';
+import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -20,6 +21,7 @@ import { GovernanceReopenEditButton } from '~/partials/governance/governance-reo
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 import { Execute } from './execute';
+import { useCloseProposal } from './use-close-proposal';
 
 interface Props {
   spaceId: string;
@@ -59,6 +61,8 @@ export function AcceptOrReject({
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
+  const [, setToast] = useToast();
+  const closeProposal = useCloseProposal(spaceId);
 
   // Once the server-rendered userVote catches up after router.refresh, the
   // optimistic entry has done its job — drop it so the atom doesn't grow
@@ -75,6 +79,15 @@ export function AcceptOrReject({
 
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
+    // A stale proposal can't be voted through — retrying would revert again,
+    // so close the review window and toast instead of raising the error modal.
+    const staleMessage = getStaleProposalVoteToastMessage(error, proposalType);
+    if (staleMessage) {
+      setToast(<span>{staleMessage}</span>);
+      closeProposal();
+      router.refresh();
+      return;
+    }
     const message = describeError(error);
     reportError(`Vote failed: ${message}`, () => {
       addOptimisticVote(proposalId);

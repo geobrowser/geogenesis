@@ -18,7 +18,7 @@ import { getStrictRenderableType } from '~/core/io/dto/properties';
 import { getEntity } from '~/core/io/queries';
 import type { GeoStore } from '~/core/sync/store';
 import { DataType, Entity, Property, Relation, SwitchableRenderableType, Value } from '~/core/types';
-import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { getSpaceRank, scopeBySpacePrecedence } from '~/core/utils/space/space-ranking';
 
 /** Reverse mapping: data type entity ID → DataType string */
 const ENTITY_ID_TO_DATA_TYPE: Record<string, DataType> = Object.fromEntries(
@@ -178,7 +178,8 @@ export const typeToBaseDataType: Record<SwitchableRenderableType, DataType> = {
 export function reconstructFromStore(
   id: string,
   getValues: (selector: { selector: (v: Value) => boolean }) => Value[],
-  getRelations: (selector: { selector: (r: Relation) => boolean }) => Relation[]
+  getRelations: (selector: { selector: (r: Relation) => boolean }) => Relation[],
+  spaceId?: string
 ): Property | null {
   // Check if this entity has a Property type relation
   const hasPropertyType =
@@ -231,18 +232,24 @@ export function reconstructFromStore(
   })[0];
 
   // Get relation value types
-  const relationValueTypes = getRelations({
-    selector: r => r.fromEntity.id === id && r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
-  }).map(r => ({
+  const relationValueTypes = scopeBySpacePrecedence(
+    getRelations({
+      selector: r => r.fromEntity.id === id && r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
+    }),
+    spaceId
+  ).map(r => ({
     id: r.toEntity.id,
     name: r.toEntity.name || null,
     spaceId: r.toSpaceId,
   }));
 
   // Get relation entity types
-  const relationEntityTypes = getRelations({
-    selector: r => r.fromEntity.id === id && r.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE,
-  }).map(r => ({
+  const relationEntityTypes = scopeBySpacePrecedence(
+    getRelations({
+      selector: r => r.fromEntity.id === id && r.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE,
+    }),
+    spaceId
+  ).map(r => ({
     id: r.toEntity.id,
     name: r.toEntity.name || null,
     spaceId: r.toSpaceId,
@@ -267,11 +274,11 @@ export function reconstructFromStore(
 }
 
 /** Fills `relationValueTypes` from the sync store when the API omitted them. */
-export function mergeRelationValueTypesFromStore(p: Property, geoStore: GeoStore): Property {
+export function mergeRelationValueTypesFromStore(p: Property, geoStore: GeoStore, spaceId?: string): Property {
   if (p.dataType !== 'RELATION') return p;
   if (p.relationValueTypes && p.relationValueTypes.length > 0) return p;
 
-  const fromGetProperty = geoStore.getProperty(p.id)?.relationValueTypes;
+  const fromGetProperty = geoStore.getProperty(p.id, { spaceId })?.relationValueTypes;
   if (fromGetProperty && fromGetProperty.length > 0) {
     return { ...p, relationValueTypes: fromGetProperty };
   }
@@ -279,9 +286,10 @@ export function mergeRelationValueTypesFromStore(p: Property, geoStore: GeoStore
   const entity = geoStore.getEntity(p.id);
   if (!entity) return p;
 
-  const relationValueTypes = entity.relations
-    .filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-    .map(r => ({ id: r.toEntity.id, name: r.toEntity.name ?? null }));
+  const relationValueTypes = scopeBySpacePrecedence(
+    entity.relations.filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE),
+    spaceId
+  ).map(r => ({ id: r.toEntity.id, name: r.toEntity.name ?? null }));
 
   if (relationValueTypes.length === 0) return p;
   return { ...p, relationValueTypes };
@@ -290,14 +298,13 @@ export function mergeRelationValueTypesFromStore(p: Property, geoStore: GeoStore
 /**
  * Loads relation target type ids from the network. The subgraph returns relation value types
  * for a property entity only when queried with the right space (see `hydrateRelationValueTypes`).
+ * Results are scoped via `scopeBySpacePrecedence` so definitions from unrelated spaces don't
+ * constrain pickers in the block's space (GEO-2168).
  */
 export async function fetchRelationTargetTypeIdsForProperty(
   propertyId: string,
   blockSpaceId: string | undefined
 ): Promise<string[] | null> {
-  const hasRvts = (entity: Entity | null | undefined) =>
-    Boolean(entity?.relations.some(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE));
-
   const candidates: Array<Entity | null> = [];
 
   if (blockSpaceId) {
@@ -313,10 +320,11 @@ export async function fetchRelationTargetTypeIdsForProperty(
   }
 
   for (const entity of candidates) {
-    if (!hasRvts(entity)) continue;
-    const ids =
-      entity!.relations.filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE).map(r => r.toEntity.id) ??
-      [];
+    if (!entity) continue;
+    const ids = scopeBySpacePrecedence(
+      entity.relations.filter(r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE),
+      blockSpaceId
+    ).map(r => r.toEntity.id);
     if (ids.length > 0) return ids;
   }
 

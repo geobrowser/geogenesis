@@ -8,11 +8,65 @@ import { Effect, Either } from 'effect';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { SubstreamVote } from '~/core/io/substream-schema';
+import { ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
+
+/**
+ * DAOSpace reverts that usually mean the UI showed a stale proposal the chain
+ * has already moved past. The render-time stale-request filter can't catch
+ * these when the indexer lags the chain, so we detect them at vote time and
+ * toast + refresh instead of surfacing raw hex (retrying would only revert
+ * again). Both errors are parameterless, so we can't tell sub-cases apart —
+ * the user-facing messages below must hold for every possible cause.
+ */
+
+// CanNotVote(): the DAOSpace rejected the vote upfront — the proposal already
+// executed or closed, this account already voted, or it is no longer eligible
+// to vote. No action runs, so treating this as stale never masks a failure.
+const CAN_NOT_VOTE = { selector: '0x543ffef7', name: 'CanNotVote' };
+
+// ActionReverted(): a deciding YES executes the proposal's actions inline and
+// one of them reverted. For membership proposals this almost always means the
+// change was already applied via a duplicate request. For other proposal types
+// it can be a genuine execution failure, so it's only treated as stale for
+// membership proposals — otherwise it surfaces as an error.
+const ACTION_REVERTED = { selector: '0x24c05f9a', name: 'ActionReverted' };
+
+function matchesRevert(error: unknown, revert: { selector: string; name: string }): boolean {
+  const description = describeError(error);
+  return description.includes(revert.selector) || description.includes(revert.name);
+}
+
+function isMembershipProposalType(type: ProposalType): boolean {
+  return type === 'ADD_MEMBER' || type === 'REMOVE_MEMBER' || type === 'ADD_EDITOR' || type === 'REMOVE_EDITOR';
+}
+
+const VOTE_NOT_ACCEPTED_MESSAGE =
+  'Your vote could not be cast — voting may have ended, or your vote may already be counted. Refreshing to show the latest state.';
+
+const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
+  'This change could not be applied — it has likely already been made. Refreshing to show the latest state.';
+
+/**
+ * Returns the toast message for a vote error caused by a stale proposal, or
+ * null when the error should surface through the regular error path. Keeps the
+ * detection + messaging policy in one place so every vote surface behaves the
+ * same: callers toast the returned message and refresh instead of raising the
+ * error modal (retrying a stale vote would only revert again).
+ */
+export function getStaleProposalVoteToastMessage(error: unknown, proposalType: ProposalType): string | null {
+  if (matchesRevert(error, CAN_NOT_VOTE)) {
+    return VOTE_NOT_ACCEPTED_MESSAGE;
+  }
+  if (isMembershipProposalType(proposalType) && matchesRevert(error, ACTION_REVERTED)) {
+    return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;
+  }
+  return null;
+}
 
 interface UseVoteArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */

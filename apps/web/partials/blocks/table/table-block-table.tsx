@@ -105,6 +105,8 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
     const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
+    const focusRowEntityIdRef = table.options.meta!.focusRowEntityIdRef;
+    const focusRowEntityId = focusRowEntityIdRef?.current ?? null;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
     const openedWithMainViewEditing = table.options.meta!.openedWithMainViewEditing;
 
@@ -124,13 +126,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
+    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId })?.value ?? null;
     const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
-    const autofocus = Boolean(row.original.placeholder) && isNameCell && shouldAutoFocusPlaceholder;
+    const autofocus =
+      isNameCell &&
+      shouldAutoFocusPlaceholder &&
+      (Boolean(row.original.placeholder) || focusRowEntityId === entityId);
 
     if (!property) {
       return null;
@@ -145,7 +150,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           property={property}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
-          currentSpaceId={space}
+          currentSpaceId={spaceId}
           collectionId={collectionId}
           relationId={relationId}
           toSpaceId={nameCell?.space}
@@ -155,7 +160,9 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
-          focusRequestKey={row.original.placeholder ? placeholderFocusKey : undefined}
+          focusRequestKey={
+            row.original.placeholder || focusRowEntityId === entityId ? placeholderFocusKey : undefined
+          }
           collectionTypeFilters={collectionTypeFilters}
           openedWithMainViewEditing={openedWithMainViewEditing}
         />
@@ -198,6 +205,7 @@ type TableBlockTableProps = {
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
   placeholderFocusKey?: number;
+  focusRowEntityIdRef?: React.RefObject<string | null>;
   collectionTypeFilters?: { id: string; name: string | null }[];
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
@@ -218,6 +226,7 @@ export const TableBlockTable = ({
   source,
   shouldAutoFocusPlaceholder,
   placeholderFocusKey = 0,
+  focusRowEntityIdRef,
   collectionTypeFilters,
   sortState,
   onSort,
@@ -250,6 +259,7 @@ export const TableBlockTable = ({
       source,
       shouldAutoFocusPlaceholder,
       placeholderFocusKey,
+      focusRowEntityIdRef,
       collectionTypeFilters,
       openedWithMainViewEditing: isEditing,
     },

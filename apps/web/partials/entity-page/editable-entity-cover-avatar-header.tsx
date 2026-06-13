@@ -4,6 +4,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ChangeEvent, useRef, useState } from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import { useEditableProperties } from '~/core/hooks/use-renderables';
@@ -20,6 +21,8 @@ import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 
 const COVER_IMAGE_HEIGHT = 320;
+const MOBILE_COVER_IMAGE_HEIGHT_CLASS = 'md:!h-[180px]';
+const MOBILE_COVER_AVATAR_MARGIN_CLASS = 'md:!mb-16';
 const COVER_PLACEHOLDER_HEIGHT = 120;
 const AVATAR_OVERFLOW = 40;
 const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
@@ -82,9 +85,16 @@ export const EditableCoverAvatarHeader = ({
 
   const layout = computeLayout(hasCover, hasCoverImage, hasAvatar);
   const coverHeight = hasCoverImage ? COVER_IMAGE_HEIGHT : COVER_PLACEHOLDER_HEIGHT;
+  const mobileCoverHeightClass = hasCoverImage ? MOBILE_COVER_IMAGE_HEIGHT_CLASS : '';
+  const mobileCoverAvatarMarginClass = hasCoverImage && hasAvatar ? MOBILE_COVER_AVATAR_MARGIN_CLASS : '';
 
   return (
-    <motion.div initial={false} animate={layout} transition={TRANSITION} className="relative mx-auto w-full">
+    <motion.div
+      initial={false}
+      animate={layout}
+      transition={TRANSITION}
+      className={`relative mx-auto w-full ${mobileCoverHeightClass} ${mobileCoverAvatarMarginClass}`}
+    >
       {/* Cover — fixed size, fades in/out. The inner div clips it via overflow-hidden
           so during the height animation the cover is revealed, not scaled. */}
       <div className="absolute inset-0 overflow-hidden rounded-lg">
@@ -96,7 +106,7 @@ export const EditableCoverAvatarHeader = ({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={TRANSITION}
-              className="flex items-center justify-center"
+              className={`flex items-center justify-center ${mobileCoverHeightClass}`}
               style={{ height: coverHeight, width: '100%' }}
             >
               <AvatarCoverInput
@@ -150,7 +160,6 @@ const AvatarCoverInput = ({
   fitImage?: boolean;
 }) => {
   const [hovered, setHovered] = useState(false);
-  const [hoveredIcon, setHoveredIcon] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const { spaceId } = useEntityStoreInstance();
 
@@ -228,16 +237,16 @@ const AvatarCoverInput = ({
         }}
         className={
           fitImage
-            ? `relative w-full rounded-lg ${imgUrl ? 'bg-transparent' : ''} ${!imgUrl && editable ? 'cursor-pointer' : ''}`
-            : `relative h-full w-full rounded-lg ${!imgUrl && editable ? 'cursor-pointer' : ''} ${
+            ? cx('relative w-full rounded-lg', imgUrl && 'bg-transparent', !imgUrl && editable && 'cursor-pointer')
+            : cx(
+                'relative h-full w-full rounded-lg',
+                !imgUrl && editable && 'cursor-pointer',
                 isCover
-                  ? imgUrl
-                    ? 'bg-transparent'
-                    : ''
+                  ? imgUrl && 'bg-transparent'
                   : imgUrl
                     ? 'relative h-[80px] w-[80px] overflow-hidden rounded-lg border border-white bg-transparent shadow-lg'
                     : 'h-[80px] w-[80px] bg-avatar-default bg-center bg-no-repeat hover:bg-white hover:bg-avatar-hover'
-              }`
+              )
         }
       >
         {/* Cover placeholder — two layers crossfaded via opacity for smooth hover */}
@@ -268,7 +277,10 @@ const AvatarCoverInput = ({
           ))}
         {editable && (
           <div
-            className={`absolute ${imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'} flex transform items-center gap-[6px]`}
+            className={cx(
+              'absolute flex transform items-center gap-[6px]',
+              imgUrl && isCover ? 'top-4 right-4 justify-end' : 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'
+            )}
           >
             {isUploading ? (
               <SquareButton disabled className="pointer-events-none border-none bg-white/85">
@@ -286,16 +298,9 @@ const AvatarCoverInput = ({
             ) : (
               hovered && (
                 <>
-                  <SquareButton
-                    onMouseEnter={() => setHoveredIcon('Upload')}
-                    onMouseLeave={() => setHoveredIcon('')}
-                    onClick={openInput}
-                    icon={<Upload />}
-                  />
+                  <SquareButton onClick={openInput} icon={<Upload />} />
 
                   <SquareButton
-                    onMouseEnter={() => setHoveredIcon('Trash')}
-                    onMouseLeave={() => setHoveredIcon('')}
                     onClick={() => (firstRenderable ? deleteRelation(firstRenderable) : undefined)}
                     icon={<Trash />}
                   />
