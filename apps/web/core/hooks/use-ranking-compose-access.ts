@@ -2,18 +2,19 @@
 
 import { useGeoLogin } from '@geogenesis/auth';
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 
 import { Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
-import { getSpaceAccessById } from '~/core/access/space-access';
+import { getSpaceAccessById, normalizeSpaceId } from '~/core/access/space-access';
 import { trackPrivyAuth } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
+import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
@@ -23,7 +24,11 @@ export type RankingComposeAccessStatus =
   | 'needs-login'
   | 'needs-onboarding'
   | 'needs-membership'
+  | 'not-found'
   | 'ready';
+
+/** Dedupes automatic membership requests across compose screen + embedded block mounts. */
+const autoRequestedMemberships = new Set<string>();
 
 export function useRankingComposeAccess(spaceId: string) {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -31,7 +36,6 @@ export function useRankingComposeAccess(spaceId: string) {
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const { requestToBeMember, status: membershipRequestStatus } = useRequestToBeMember({ spaceId });
-  const membershipRequestedRef = useRef(false);
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -49,7 +53,8 @@ export function useRankingComposeAccess(spaceId: string) {
     if (!smartAccount) return 'needs-login';
     if (isLoading || !isFetched) return 'loading';
     if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
-    if (space?.type === 'DAO' && !canEdit) return 'needs-membership';
+    if (!space) return 'not-found';
+    if (space.type === 'DAO' && !canEdit) return 'needs-membership';
     return 'ready';
   })();
 
@@ -75,9 +80,13 @@ export function useRankingComposeAccess(spaceId: string) {
     }
 
     if (space?.type === 'DAO') {
-      if (!membershipRequestedRef.current && membershipRequestStatus !== 'pending') {
-        membershipRequestedRef.current = true;
-        requestToBeMember();
+      const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
+      if (!autoRequestedMemberships.has(requestKey) && membershipRequestStatus !== 'pending') {
+        autoRequestedMemberships.add(requestKey);
+        const alreadyPending = await hasActiveMemberProposal(spaceId, personalSpaceId).catch(() => false);
+        if (!alreadyPending) {
+          requestToBeMember();
+        }
       }
     }
 

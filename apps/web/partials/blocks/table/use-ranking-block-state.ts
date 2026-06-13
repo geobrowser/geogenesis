@@ -374,6 +374,10 @@ export function useRankingBlockState({
         mode,
       });
 
+      if (composeAccessStatus === 'not-found') {
+        return;
+      }
+
       if (mode !== 'view') {
         if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
           setPostOnboardingRedirect(href);

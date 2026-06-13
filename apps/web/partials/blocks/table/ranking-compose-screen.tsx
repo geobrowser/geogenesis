@@ -42,6 +42,7 @@ import { RankingComposeGlobalRanking } from './ranking-compose-global-ranking';
 import { RankingComposePinnedToolbar, RankingComposeTitleMetadata } from './ranking-compose-header';
 import { RankingComposeLayout } from './ranking-compose-layout';
 import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
+import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
@@ -67,7 +68,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const setStep = useSetAtom(stepAtom);
 
   React.useEffect(() => {
-    if (accessStatus === 'ready') return;
+    if (accessStatus === 'ready' || accessStatus === 'not-found') return;
     // If log-in/sign-up is needed, come back to this compose screen
     if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
@@ -419,6 +420,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       }
     />
   );
+
+  if (accessStatus === 'not-found') {
+    return <Custom404 />;
+  }
 
   return (
     <>

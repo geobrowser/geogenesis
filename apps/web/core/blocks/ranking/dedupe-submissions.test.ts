@@ -24,4 +24,26 @@ describe('dedupeSubmissionsByAuthor', () => {
     expect(deduped).toHaveLength(1);
     expect(deduped[0]?.orderedEntityIds).toEqual(['c', 'd']);
   });
+
+  it('keeps the latest submission when timestamps mix unix-seconds and ISO formats', () => {
+    // 2024-01-01T00:00:00Z in unix seconds vs a later ISO string.
+    const olderUnixSeconds = '1704067200';
+    const newerIso = '2026-06-01T00:00:00Z';
+
+    const orderInsensitive = [
+      dedupeSubmissionsByAuthor([
+        submission('alice', ['a', 'b'], olderUnixSeconds),
+        submission('alice', ['c', 'd'], newerIso),
+      ]),
+      dedupeSubmissionsByAuthor([
+        submission('alice', ['c', 'd'], newerIso),
+        submission('alice', ['a', 'b'], olderUnixSeconds),
+      ]),
+    ];
+
+    for (const deduped of orderInsensitive) {
+      expect(deduped).toHaveLength(1);
+      expect(deduped[0]?.orderedEntityIds).toEqual(['c', 'd']);
+    }
+  });
 });

@@ -24,12 +24,16 @@ import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { linearVoteWeight } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
 
+function createdAtToEpochMillis(value: string): number {
+  return /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) || 0;
+}
+
 /** One ballot per author — avoids double-counting duplicate ballots per author. */
 export function dedupeSubmissionsByAuthor(submissions: RankingSubmissionRecord[]): RankingSubmissionRecord[] {
   const byAuthor = new Map<string, RankingSubmissionRecord>();
   for (const submission of submissions) {
     const existing = byAuthor.get(submission.authorSpaceId);
-    if (!existing || submission.createdAt >= existing.createdAt) {
+    if (!existing || createdAtToEpochMillis(submission.createdAt) >= createdAtToEpochMillis(existing.createdAt)) {
       byAuthor.set(submission.authorSpaceId, submission);
     }
   }

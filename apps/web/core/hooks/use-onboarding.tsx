@@ -5,12 +5,13 @@ import { useAccountEffect, usePrivy } from '@geogenesis/auth';
 import { useCallback, useEffect } from 'react';
 
 import { atom, useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { usePersonalSpaceId } from './use-personal-space-id';
 
 const isOnboardingVisibleAtom = atom(false);
-const onboardingDismissedAtom = atom(false);
+// Tracks the path where onboarding was dismissed so the prompt is suppressed
+const onboardingDismissedAtPathAtom = atom<string | null>(null);
 
 // URL param set when opening an entity preview from the onboarding
 // "is this you?" step. Suppresses the onboarding dialog so the user can
@@ -19,6 +20,7 @@ export const SUPPRESS_ONBOARDING_PARAM = 'fromOnboarding';
 
 export function useOnboarding() {
   const { user, isModalOpen } = usePrivy();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   // Double-check via window.location.search as a fallback in case the
   // router hook hasn't hydrated the value yet on first render.
@@ -27,11 +29,12 @@ export function useOnboarding() {
   const suppress = searchParams?.get(SUPPRESS_ONBOARDING_PARAM) === '1' || windowSuppress;
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
-  const [onboardingDismissed, setOnboardingDismissed] = useAtom(onboardingDismissedAtom);
+  const [dismissedAtPath, setDismissedAtPath] = useAtom(onboardingDismissedAtPathAtom);
   const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
 
-  const shouldOnboard =
-    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed;
+  const onboardingDismissed = dismissedAtPath !== null && dismissedAtPath === pathname;
+
+  const shouldOnboard = isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -53,7 +56,7 @@ export function useOnboarding() {
   useAccountEffect({
     onDisconnect: () => {
       setIsOnboardingVisible(false);
-      setOnboardingDismissed(false);
+      setDismissedAtPath(null);
     },
     onConnect(data) {
       const { address } = data;
@@ -65,16 +68,16 @@ export function useOnboarding() {
   });
 
   const hideOnboarding = useCallback(() => {
-    setOnboardingDismissed(true);
+    setDismissedAtPath(pathname);
     setIsOnboardingVisible(false);
-  }, [setIsOnboardingVisible, setOnboardingDismissed]);
+  }, [pathname, setIsOnboardingVisible, setDismissedAtPath]);
 
   const showOnboarding = useCallback(() => {
-    setOnboardingDismissed(false);
+    setDismissedAtPath(null);
     if (!isModalOpen) {
       setIsOnboardingVisible(true);
     }
-  }, [isModalOpen, setIsOnboardingVisible, setOnboardingDismissed]);
+  }, [isModalOpen, setIsOnboardingVisible, setDismissedAtPath]);
 
   return { isOnboardingVisible, hideOnboarding, showOnboarding };
 }
