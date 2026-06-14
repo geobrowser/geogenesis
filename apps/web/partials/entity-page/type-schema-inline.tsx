@@ -23,31 +23,24 @@ type Props = {
 export function TypeSchemaInline({ entityId, spaceId }: Props) {
   const types = useEntityTypes(entityId, spaceId);
   const isTypeEntity = types.some(type => type.id === SystemIds.SCHEMA_TYPE);
+  const isEditing = useUserIsEditing(spaceId);
+  const [keepEditorMounted, setKeepEditorMounted] = React.useState(isEditing);
+
+  React.useEffect(() => {
+    if (isEditing) setKeepEditorMounted(true);
+  }, [isEditing]);
 
   if (!isTypeEntity) return null;
 
-  return <TypeSchemaInlineContent entityId={entityId} spaceId={spaceId} />;
-}
-
-function TypeSchemaInlineContent({ entityId, spaceId }: Props) {
-  const isEditing = useUserIsEditing(spaceId);
-
-  const propertyGroupRelations = useRelations({
-    selector: relation =>
-      relation.fromEntity.id === entityId &&
-      relation.spaceId === spaceId &&
-      relation.type.id === PROPERTY_GROUPS_PROPERTY,
-  });
-  const propertyGroupIds = React.useMemo(
-    () => [...new Set(propertyGroupRelations.map(relation => relation.toEntity.id))],
-    [propertyGroupRelations]
-  );
-  useHydrateEntities({ ids: propertyGroupIds });
-
-  return isEditing ? (
-    <TypePropertyGroupsEditor entityId={entityId} spaceId={spaceId} />
-  ) : (
-    <TypeSchemaReadView entityId={entityId} spaceId={spaceId} />
+  return (
+    <>
+      {keepEditorMounted ? (
+        <div className={isEditing ? undefined : 'hidden'} aria-hidden={!isEditing}>
+          <TypePropertyGroupsEditor entityId={entityId} spaceId={spaceId} isActive={isEditing} />
+        </div>
+      ) : null}
+      {!isEditing ? <TypeSchemaReadView entityId={entityId} spaceId={spaceId} /> : null}
+    </>
   );
 }
 
