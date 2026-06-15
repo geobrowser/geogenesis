@@ -37,7 +37,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
             entityId: id,
             name: entity.name?.trim() || 'Untitled',
             description: entity.description?.trim() || null,
-            image: Entities.cover(entity.relations) ?? Entities.avatar(entity.relations) ?? null,
+            image: Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null,
           };
         })
         .filter((e): e is RankingEntryDisplay => e != null),
