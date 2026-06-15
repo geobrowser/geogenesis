@@ -175,10 +175,12 @@ export function DataBlockScopeDropdown({
   // resolveFilterDisplayNames have fetched the canonical record.
   const pickedSpaceNamesRef = React.useRef<Map<string, string | null>>(new Map());
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: variant === 'setup' ? 300 : 340,
     gap: 8,
+    contentElement,
   });
 
   const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -346,6 +348,7 @@ export function DataBlockScopeDropdown({
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={variant === 'setup' ? 'start' : align}
           sideOffset={8}

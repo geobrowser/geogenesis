@@ -1859,10 +1859,12 @@ function TableBlockEntityFilterInput({
   const stagingEntityIds = React.useMemo(() => new Set(stagingSelections.map(e => e.id)), [stagingSelections]);
 
   const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
+  const [entityDropdownEl, setEntityDropdownEl] = React.useState<HTMLDivElement | null>(null);
   const entityDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
     isOpen: showDropdown,
     preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
     gap: 8,
+    contentElement: entityDropdownEl,
   });
   const entityDropdownMaxHeight = useFourAndHalfRowsMaxHeight(entityResultsListRef, showDropdown, rowsToRender.length);
   const onEntityDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -1931,6 +1933,7 @@ function TableBlockEntityFilterInput({
       />
       {showDropdown && (
         <div
+          ref={setEntityDropdownEl}
           className={cx(
             'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
             entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
@@ -2171,10 +2174,12 @@ function TableBlockSpaceFilterInput({
   );
 
   const inputDisplay = multi ? query : query === '' ? selectedValue : query;
+  const [spaceDropdownEl, setSpaceDropdownEl] = React.useState<HTMLDivElement | null>(null);
   const spaceDropdownPlacement = useAdaptiveDropdownPlacement(interactionRootRef, {
     isOpen: showScopedOnlyPanel || showQueryPanel,
     preferredHeight: FILTER_RESULTS_DROPDOWN_MAX_HEIGHT_PX,
     gap: 8,
+    contentElement: spaceDropdownEl,
   });
   const activeSpaceListRef = showScopedOnlyPanel ? spaceScopedListRef : spaceQueryListRef;
   const activeSpaceRowsCount = showScopedOnlyPanel
@@ -2276,6 +2281,7 @@ function TableBlockSpaceFilterInput({
       />
       {showScopedOnlyPanel && (
         <div
+          ref={setSpaceDropdownEl}
           className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
           onWheel={onSpaceDropdownWheel}
@@ -2305,6 +2311,7 @@ function TableBlockSpaceFilterInput({
       )}
       {showQueryPanel && (
         <div
+          ref={setSpaceDropdownEl}
           className={spaceDropdownClassName}
           onPointerDown={e => e.preventDefault()}
           onWheel={onSpaceDropdownWheel}

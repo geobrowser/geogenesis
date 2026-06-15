@@ -323,6 +323,7 @@ export const SelectEntity = ({
     isOpen: isSearchOpen,
     preferredHeight: advanced ? 520 : 300,
     gap: 12,
+    contentElement: popoverElement,
   });
 
   const isQueried = isSearchOpen;
