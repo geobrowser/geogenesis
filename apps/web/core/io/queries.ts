@@ -30,7 +30,10 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
-import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
+import {
+  entitiesOrderedByPropertyConnectionDocument,
+  entitiesOrderedByPropertyConnectionLocalDevDocument,
+} from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
@@ -301,6 +304,27 @@ export function getEntitiesOrderedByPropertyConnection(
 
   const topLevelTypeIds =
     nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
+
+  // The geo-migration-e2e API only exposes the singular `spaceId` arg on this
+  // resolver and has no `typeIds` arg. Type narrowing stays inside `filter`.
+  if (Environment.variables.isLocalDev) {
+    return graphql({
+      query: entitiesOrderedByPropertyConnectionLocalDevDocument,
+      decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
+        decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
+      variables: {
+        propertyId,
+        sortDirection,
+        dataType,
+        spaceId: topLevelSpaceId,
+        limit,
+        after,
+        offset,
+        filter,
+      },
+      signal,
+    });
+  }
 
   let normalizedFilter = filter;
   if (topLevelSpaceId || topLevelSpaceIds) {
