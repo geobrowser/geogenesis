@@ -24,10 +24,12 @@ export function GovernanceRejectedProposalMenu({ proposalId, spaceId }: Props) {
   const { reopenEdit, busy } = useReopenRejectedProposalEdits(proposalId, spaceId);
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef<HTMLDivElement>(null);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(anchorRef, {
     isOpen: open,
     preferredHeight: 180,
     gap: 8,
+    contentElement,
   });
 
   const onReopenEdit = React.useCallback(async () => {
@@ -59,6 +61,7 @@ export function GovernanceRejectedProposalMenu({ proposalId, spaceId }: Props) {
         </Dropdown.Trigger>
         <Dropdown.Portal>
           <Dropdown.Content
+            ref={setContentElement}
             align={align}
             side={side}
             sideOffset={8}

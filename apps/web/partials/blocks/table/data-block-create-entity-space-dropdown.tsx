@@ -13,9 +13,9 @@ import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import {
+  type QueryFromSpaceRow,
   sortSpacesForDropdownSearch,
   useQueryFromSpacesList,
-  type QueryFromSpaceRow,
 } from '~/core/hooks/use-query-from-spaces-list';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
@@ -79,9 +79,7 @@ function SpaceDropdownRow({
             <span className="truncate text-button">{row.name}</span>
           </div>
         </div>
-        {row.pendingLabel ? (
-          <p className="truncate pl-6 text-footnote text-grey-04">{row.pendingLabel}</p>
-        ) : null}
+        {row.pendingLabel ? <p className="truncate pl-6 text-footnote text-grey-04">{row.pendingLabel}</p> : null}
       </div>
     </Dropdown.Item>
   );
@@ -112,10 +110,12 @@ export function DataBlockCreateEntitySpaceDropdown({
   const { spaceId } = useDataBlockInstance();
   const { personalSpaceId } = usePersonalSpaceId();
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 340,
     gap: 8,
+    contentElement,
   });
 
   const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -132,10 +132,11 @@ export function DataBlockCreateEntitySpaceDropdown({
   const sections = scopeData?.sections;
   const scopeOrdering = scopeData?.ordering;
 
-  const { setQuery: setRemoteSearchQuery, spaces: remoteSearchSpaces, isLoading: remoteSearchLoading } = useSpacesQuery(
-    open && source.type === 'GEO',
-    { matchLimit: 1000 }
-  );
+  const {
+    setQuery: setRemoteSearchQuery,
+    spaces: remoteSearchSpaces,
+    isLoading: remoteSearchLoading,
+  } = useSpacesQuery(open && source.type === 'GEO', { matchLimit: 1000 });
 
   const debouncedSearch = useDebouncedValue(search, 200);
 
@@ -163,10 +164,7 @@ export function DataBlockCreateEntitySpaceDropdown({
       const hintedName = source.nameById?.[id] ?? null;
       return {
         id,
-        name:
-          space?.entity?.name?.trim() ||
-          hintedName?.trim() ||
-          id.slice(0, 8),
+        name: space?.entity?.name?.trim() || hintedName?.trim() || id.slice(0, 8),
         image: typeof space?.entity?.image === 'string' && space.entity.image.length > 0 ? space.entity.image : null,
         tier: 3 as const,
       };
@@ -203,7 +201,11 @@ export function DataBlockCreateEntitySpaceDropdown({
     return filteredSourceRows;
   }, [filteredGeoSearchRows, filteredSourceRows, isGeoSource, orderedScopeRows, searchMode]);
 
-  const { canCreateInSpace, isLoading: accessLoading, isResolved: accessResolved } = useCreatableSpaceIds(
+  const {
+    canCreateInSpace,
+    isLoading: accessLoading,
+    isResolved: accessResolved,
+  } = useCreatableSpaceIds(
     visibleRows.map(row => row.id),
     open
   );
@@ -245,6 +247,7 @@ export function DataBlockCreateEntitySpaceDropdown({
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={align}
           sideOffset={8}
@@ -276,9 +279,7 @@ export function DataBlockCreateEntitySpaceDropdown({
               </div>
             )}
 
-            {!listLoading && !isGeoSource && filteredSourceRows.length > 0 && (
-              <>{filteredSourceRows.map(renderRow)}</>
-            )}
+            {!listLoading && !isGeoSource && filteredSourceRows.length > 0 && <>{filteredSourceRows.map(renderRow)}</>}
 
             {!listLoading && !isGeoSource && filteredSourceRows.length === 0 && (
               <div className="px-3 py-4 text-footnote text-grey-04">No spaces in this query.</div>

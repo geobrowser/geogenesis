@@ -174,10 +174,12 @@ export function QuerySetupTypesSelectEntityPopover({
 
   const showPopoverHeader = draft.length > 0 || baseline.length > 0 || pendingSpacePick != null;
 
+  const [resultsContentElement, setResultsContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(inputRef, {
     isOpen: open,
     preferredHeight: 300,
     gap: 12,
+    contentElement: resultsContentElement,
     recomputeDeps: [showPopoverHeader, draft.length, baseline.length, pendingSpacePick],
   });
 
@@ -266,6 +268,7 @@ export function QuerySetupTypesSelectEntityPopover({
               {open ? (
                 <Popover.Portal>
                   <Popover.Content
+                    ref={setResultsContentElement}
                     side={popoverSide}
                     align={popoverAlign}
                     sideOffset={0}

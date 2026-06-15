@@ -39,11 +39,13 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
   const { spaceId, entityId, relationId } = useDataBlockInstance();
   const isEditing = useUserIsEditing(spaceId);
   const [isEditingProperties, setIsEditingProperties] = useAtom(editingPropertiesAtom);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,
     preferredHeight: 240,
     gap: 8,
+    contentElement,
   });
 
   const onCopyBlockId = async () => {
@@ -82,6 +84,7 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={align}
           sideOffset={8}
