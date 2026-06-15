@@ -57,11 +57,13 @@ export function DataBlockSortMenu({
   const triggerRef = React.useRef<Element | null>(null);
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [pickDirectionForColumnId, setPickDirectionForColumnId] = React.useState<string | null>(null);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
 
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,
     preferredHeight: 260,
     gap: 8,
+    contentElement,
   });
 
   const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -247,6 +249,7 @@ export function DataBlockSortMenu({
       )}
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={align}
           sideOffset={8}

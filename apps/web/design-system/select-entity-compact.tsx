@@ -120,10 +120,12 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
     isOpen: focused,
     preferredHeight: 320,
     gap: 12,
+    contentElement,
   });
 
   useKey('Escape', () => {
@@ -235,6 +237,7 @@ export function SelectEntityCompact({
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
+          ref={setContentElement}
           side={popoverSide}
           align={popoverAlign}
           sideOffset={4}

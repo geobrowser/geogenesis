@@ -32,10 +32,12 @@ type TableBlockViewMenuProps = {
 export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,
     preferredHeight: 180,
     gap: 8,
+    contentElement,
   });
   const { spaceId } = useDataBlock();
 
@@ -58,6 +60,7 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={align}
           sideOffset={8}
