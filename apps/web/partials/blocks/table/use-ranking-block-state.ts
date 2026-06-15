@@ -24,6 +24,7 @@ import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
 import { buildAbsoluteRankingShareUrl, buildRankingSharePath, shareRankingOnX } from '~/core/blocks/ranking/ranking-share';
+import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { ID } from '~/core/id';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -520,6 +521,26 @@ export function useRankingBlockState({
   const effectiveRelationId = resolveBlockRelationId();
   const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
   const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
+  const effectiveOgVersion = React.useMemo(() => {
+    if (sharedOgVersion) return sharedOgVersion;
+    if (!mySubmission || !shareRankEntityId) return '';
+    return buildRankingOgVersion({
+      rankEntityId: shareRankEntityId,
+      orderedEntityIds: mySubmission.orderedEntityIds,
+      rankingName: displayName,
+      rankingStartDate,
+      rankingEndDate,
+      authorName: mySubmission.author.name,
+      authorAvatarUrl: mySubmission.author.avatarUrl,
+    });
+  }, [
+    displayName,
+    mySubmission,
+    rankingEndDate,
+    rankingStartDate,
+    shareRankEntityId,
+    sharedOgVersion,
+  ]);
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
       ? buildRankingSharePath({
@@ -531,11 +552,11 @@ export function useRankingBlockState({
           rankingEndDate,
           rankEntityId: shareRankEntityId,
           authorSpaceId: shareAuthorSpaceId,
-          ...(sharedOgVersion ? { ogVersion: sharedOgVersion } : {}),
+          ...(effectiveOgVersion ? { ogVersion: effectiveOgVersion } : {}),
           tab: RANKING_COMPOSE_TAB_MY,
         })
       : null;
-  const canSharePersonalRanking = Boolean(personalSharePath && sharedOgVersion && !isSharedRankingView);
+  const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
   const sharePersonalRanking = React.useCallback(() => {
     if (!personalSharePath) return;

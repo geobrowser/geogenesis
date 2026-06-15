@@ -87,7 +87,7 @@ function buildMyRankingTabActions(state: RankingBlockState) {
   if (!showEditRankingButton && !canSharePersonalRanking) return null;
 
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex w-full shrink-0 items-center justify-between gap-2">
       {showEditRankingButton ? (
         <Button
           variant="secondary"
@@ -101,11 +101,14 @@ function buildMyRankingTabActions(state: RankingBlockState) {
       {canSharePersonalRanking ? (
         <Button
           variant="primary"
-          className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-          icon={<XIcon color="white" />}
+          className={cx(
+            'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
+            !showEditRankingButton && 'ml-auto'
+          )}
           onClick={sharePersonalRanking}
         >
           Share
+          <XIcon color="white" />
         </Button>
       ) : null}
     </div>
@@ -375,7 +378,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 </div>
 
                 {showMyTabActionsBelowTabs ? (
-                  <div className="mb-4 flex shrink-0 justify-end">{myRankingTabActions}</div>
+                  <div className="mb-4 flex w-full shrink-0">{myRankingTabActions}</div>
                 ) : movesEditBelowTabs && activeTab === 'my' ? (
                   <div className="mb-4 flex shrink-0 justify-end">{buildMobileFullscreenEditButton(state)}</div>
                 ) : null}

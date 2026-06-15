@@ -376,7 +376,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       authorName: published.authorName,
       authorAvatarUrl: published.authorAvatarUrl,
     });
-    const generated = await generateRankingOgImages({
+    void generateRankingOgImages({
       rankEntityId: published.rankEntityId,
       authorSpaceId: published.authorSpaceId,
       blockEntityId: entityId,
@@ -397,9 +397,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         rankingEndDate,
         mode: 'view',
         tab: RANKING_COMPOSE_TAB_MY,
-        rankEntityId: generated ? published.rankEntityId : '',
-        authorSpaceId: generated ? published.authorSpaceId : '',
-        ogVersion: generated ? ogVersion : '',
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        ogVersion,
       })
     );
   };
