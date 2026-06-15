@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+
 import { buildSearchPath, groupRestResults, hasDefaultSearchExcludedType } from './queries';
 
 describe('buildSearchPath', () => {
@@ -101,7 +103,7 @@ describe('groupRestResults', () => {
             id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             name: 'Alpha',
             description: null,
-            image: 'ipfs://alpha',
+            image: PLACEHOLDER_SPACE_IMAGE,
             relations: [],
             spaceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
             spaces: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
@@ -112,7 +114,7 @@ describe('groupRestResults', () => {
             id: 'cccccccccccccccccccccccccccccccc',
             name: null,
             description: null,
-            image: '',
+            image: PLACEHOLDER_SPACE_IMAGE,
             relations: [],
             spaceId: 'cccccccccccccccccccccccccccccccc',
             spaces: ['cccccccccccccccccccccccccccccccc'],

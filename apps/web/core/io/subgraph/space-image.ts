@@ -20,6 +20,10 @@ export const AVATAR_PROPERTY_ID = toHex(ContentIds.AVATAR_PROPERTY);
 export const COVER_PROPERTY_ID = toHex(SystemIds.COVER_PROPERTY);
 export const IMAGE_URL_PROPERTY_ID = toHex(SystemIds.IMAGE_URL_PROPERTY);
 
+export function defaultSpaceImage(spaceId?: string): string {
+  return spaceId === ROOT_SPACE ? ROOT_SPACE_IMAGE : PLACEHOLDER_SPACE_IMAGE;
+}
+
 export function resolveSpaceImage(relations: SpaceImageRelationNode[], spaceId?: string): string {
   if (spaceId === ROOT_SPACE) return ROOT_SPACE_IMAGE;
 
@@ -33,5 +37,5 @@ export function resolveSpaceImage(relations: SpaceImageRelationNode[], spaceId?:
 
   if (coverUrl) return coverUrl;
 
-  return PLACEHOLDER_SPACE_IMAGE;
+  return defaultSpaceImage(spaceId);
 }

@@ -12,6 +12,7 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
+  defaultSpaceImage,
   type SpaceImageRelationNode,
   resolveSpaceImage,
 } from '~/core/io/subgraph/space-image';
@@ -216,7 +217,7 @@ async function fetchTopicProposalMetadata(topicId: string): Promise<TopicProposa
     associatedSpaces: result.entity.spacesByTopicId.map(space => ({
       id: space.id,
       name: space.page?.name ?? space.id,
-      image: resolveSpaceImage(space.page?.relationsList ?? [], space.id),
+      image: defaultSpaceImage(space.id),
       editorsCount: space.editorsList.length,
       membersCount: space.membersList.length,
     })),

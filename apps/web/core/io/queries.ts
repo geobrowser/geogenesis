@@ -28,6 +28,7 @@ import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
+import { defaultSpaceImage } from './subgraph/space-image';
 import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
@@ -747,7 +748,7 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
           id: spaceId,
           name: r.space.name ?? null,
           description: null,
-          image: r.space.avatar ?? '',
+          image: defaultSpaceImage(spaceId),
           relations: [],
           spaceId,
           spaces: [spaceId],
@@ -789,7 +790,7 @@ export function groupRestResults(results: RestSearchResult[]): SearchResult[] {
             id: spaceId,
             name: r.space.name ?? null,
             description: null,
-            image: r.space.avatar ?? '',
+            image: defaultSpaceImage(spaceId),
             relations: [],
             spaceId,
             spaces: [spaceId],

@@ -1,9 +1,10 @@
-import { PLACEHOLDER_SPACE_IMAGE, ROOT_SPACE, ROOT_SPACE_IMAGE } from '~/core/constants';
+import { ROOT_SPACE, ROOT_SPACE_IMAGE } from '~/core/constants';
 import { SpaceGovernanceType } from '~/core/types';
 import { SpaceEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { type Address, RemoteEntity, RemoteSpace } from '../schema';
+import { defaultSpaceImage } from '../subgraph/space-image';
 import { EntityDtoLive } from './entities';
 
 export type Space = {
@@ -22,7 +23,9 @@ export type Space = {
 
 export function SpaceDto(space: RemoteSpace): Space {
   const spaceId = space.id;
-  const spaceEntity = SpaceEntityDto(spaceId, space.topic ?? space.page);
+  const spaceEntity = SpaceEntityDto(spaceId, space.topic ?? space.page, {
+    useEntityImage: Boolean(space.topic),
+  });
 
   return {
     id: spaceId,
@@ -37,7 +40,11 @@ export function SpaceDto(space: RemoteSpace): Space {
   };
 }
 
-export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | null): SpaceEntity {
+export function SpaceEntityDto(
+  spaceId: string,
+  remoteEntity: RemoteEntity | null,
+  options: { useEntityImage?: boolean } = {}
+): SpaceEntity {
   const maybeEntity = remoteEntity ? EntityDtoLive(remoteEntity) : null;
 
   let entity = null;
@@ -51,12 +58,13 @@ export function SpaceEntityDto(spaceId: string, remoteEntity: RemoteEntity | nul
     };
   }
 
+  const useEntityImage = options.useEntityImage ?? true;
   const resolvedImage =
     spaceId === ROOT_SPACE
       ? ROOT_SPACE_IMAGE
-      : entity
-        ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? PLACEHOLDER_SPACE_IMAGE)
-        : PLACEHOLDER_SPACE_IMAGE;
+      : entity && useEntityImage
+        ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? defaultSpaceImage(spaceId))
+        : defaultSpaceImage(spaceId);
 
   const spaceConfigWithImage: SpaceEntity = entity
     ? {

@@ -10,8 +10,8 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
+  defaultSpaceImage,
   type SpaceImageRelationNode,
-  resolveSpaceImage,
 } from './space-image';
 import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 
@@ -153,7 +153,7 @@ export async function fetchRecentlyClaimedSpaces(): Promise<RecentlyClaimedSpace
     for (const space of entity.spacesByTopicIdConnection.nodes ?? []) {
       if (rowsBySpaceId.has(space.id)) continue;
       const spaceName = space.page?.name?.trim() ? space.page.name : name;
-      const spaceImage = resolveSpaceImage(space.page?.relationsList ?? [], space.id);
+      const spaceImage = defaultSpaceImage(space.id);
       rowsBySpaceId.set(space.id, {
         space: {
           spaceId: space.id,

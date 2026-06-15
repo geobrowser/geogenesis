@@ -8,8 +8,8 @@ import {
   AVATAR_PROPERTY_ID,
   COVER_PROPERTY_ID,
   IMAGE_URL_PROPERTY_ID,
+  defaultSpaceImage,
   type SpaceImageRelationNode,
-  resolveSpaceImage,
 } from './space-image';
 
 interface SubspaceNode {
@@ -158,7 +158,7 @@ export async function fetchActiveSubspaces(spaceId: string): Promise<ActiveSubsp
         id: subspace.childSpaceId,
         name: page?.name ?? 'Untitled',
         description: page?.description ?? null,
-        image: resolveSpaceImage(page?.relationsList ?? [], subspace.childSpaceId),
+        image: defaultSpaceImage(subspace.childSpaceId),
         relationType,
       };
     })

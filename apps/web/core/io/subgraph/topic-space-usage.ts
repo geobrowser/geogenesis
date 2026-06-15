@@ -1,6 +1,6 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 
-import { type SpaceImageRelationNode, resolveSpaceImage } from './space-image';
+import { defaultSpaceImage, type SpaceImageRelationNode } from './space-image';
 
 export const MAX_TOPIC_USAGE_AVATARS = 3;
 export const PLACEHOLDER_TOPIC_NAME = 'Untitled';
@@ -37,7 +37,7 @@ function toUsageSpace(space: TopicUsageSpaceNode): TopicUsage['spaces'][number] 
   return {
     id: space.id,
     name: space.page?.name ?? PLACEHOLDER_TOPIC_NAME,
-    image: resolveSpaceImage(space.page?.relationsList ?? [], space.id),
+    image: defaultSpaceImage(space.id),
   };
 }
 
