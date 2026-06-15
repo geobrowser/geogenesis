@@ -248,7 +248,6 @@ export default async function RankingComposePage({ params, searchParams }: Props
       rankEntityId={stringParam(resolvedSearchParams, 'rankEntityId')}
       authorSpaceId={stringParam(resolvedSearchParams, 'authorSpaceId')}
       ogVersion={stringParam(resolvedSearchParams, 'ogVersion')}
-      globalOgVersion={stringParam(resolvedSearchParams, 'globalOgVersion')}
     />
   );
 }
