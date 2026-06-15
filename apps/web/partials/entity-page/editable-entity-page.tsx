@@ -8,6 +8,11 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import {
+  columnPropertyIdFromRelation,
+  dedupeRelationsByColumnProperty,
+  isBlockConfigRelationType,
+} from '~/core/blocks/data/shown-column-relations';
+import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
   IS_TYPE_PROPERTY,
@@ -17,11 +22,6 @@ import {
   VALUE_TYPE_PROPERTY,
 } from '~/core/constants';
 import { ADDRESS_PROPERTY, VENUE_PROPERTY } from '~/core/constants';
-import {
-  columnPropertyIdFromRelation,
-  dedupeRelationsByColumnProperty,
-  isBlockConfigRelationType,
-} from '~/core/blocks/data/shown-column-relations';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useEditableProperties } from '~/core/hooks/use-renderables';
 import { ID } from '~/core/id';
@@ -468,7 +468,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   // @TODO: Should just read from local property store instead of querying since
   // it should already be queried in useEditableProperties
-  const { property } = useQueryProperty({ id: propertyId });
+  const { property } = useQueryProperty({ id: propertyId, spaceId });
 
   const relationsRaw = useRelations({
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
@@ -1089,7 +1089,7 @@ function RenderedValue({
   hideActions?: boolean;
 }) {
   const { storage } = useMutate();
-  const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+  const { property: queriedProperty } = useQueryProperty({ id: propertyId, spaceId });
   const property = propProperty || queriedProperty;
 
   const rawValue = useValue({

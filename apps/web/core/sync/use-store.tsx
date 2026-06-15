@@ -423,7 +423,9 @@ export function useQueryEntities({
       if (data?.ids) {
         const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
 
-        const isFirstPage = offset === undefined || offset === 0;
+        // Cursor-anchored fetches of later pages arrive as (after, offset:
+        // undefined), so a missing offset alone does not mean page one.
+        const isFirstPage = after === undefined && (offset === undefined || offset === 0);
         if (!isFirstPage || !includeUnpublishedLocal) {
           return serverEntities;
         }
@@ -489,13 +491,13 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       }
 
       // First try the store's getProperty method (works for registered local properties)
-      const storeProperty = store.getProperty(id);
+      const storeProperty = store.getProperty(id, { spaceId });
       if (storeProperty) {
         return storeProperty;
       }
 
       // Fall back to manual reconstruction for existing properties
-      return Properties.reconstructFromStore(id, getValues, getRelations);
+      return Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
     },
     equal
   );
@@ -516,10 +518,11 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
 
 type QueryPropertiesOptions = {
   ids: string[];
+  spaceId?: string;
   enabled?: boolean;
 };
 
-export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
+export function useQueryProperties({ ids, spaceId, enabled = true }: QueryPropertiesOptions) {
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -543,14 +546,14 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       for (const id of ids) {
         // First try the store's getProperty method
-        const storeProperty = store.getProperty(id);
+        const storeProperty = store.getProperty(id, { spaceId });
         if (storeProperty) {
           props.push(storeProperty);
           continue;
         }
 
         // Fall back to manual reconstruction for existing properties
-        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations);
+        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
         if (reconstructedProperty) {
           props.push(reconstructedProperty);
         }
@@ -606,14 +609,31 @@ interface FindManyParameters {
   after?: string;
   offset?: number;
   where: WhereCondition;
+  /**
+   * When true, prepends unpublished local entities that match `where` to the
+   * result. Use for fetch-all flows (e.g. power tools "apply to all") so they
+   * cover the same unpublished entities the paginated views display.
+   */
+  includeUnpublishedLocal?: boolean;
 }
 
 export function useQueryEntitiesAsync() {
   const cache = useQueryClient();
   const { store } = useSyncEngine();
 
-  return ({ where, first = 9, after, offset }: FindManyParameters) =>
-    E.findMany({ store, cache, where, first, after, offset });
+  return async ({ where, first = 9, after, offset, includeUnpublishedLocal = false }: FindManyParameters) => {
+    const entities = await E.findMany({ store, cache, where, first, after, offset });
+    // Match useQueryEntities: only merge unpublished locals on the first page,
+    // otherwise paginating callers would re-prepend them on every page.
+    const isFirstPage = after === undefined && (offset === undefined || offset === 0);
+    if (!includeUnpublishedLocal || !isFirstPage) return entities;
+    return mergeUnpublishedLocalEntities(
+      store,
+      where,
+      entities,
+      entities.map(e => e.id)
+    );
+  };
 }
 
 export function useQueryEntityAsync() {
@@ -829,4 +849,36 @@ export function getRelation(options: UseRelationParams) {
   }
 
   return found ? resolveRelationNames(found) : null;
+}
+
+/**
+ * Space-aware relation lookup for data block cells. Returns a single Relation
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useRelation when rendering data that may originate from
+ * a different space than the one being viewed — the store accumulates relations
+ * from every visited space, so an unscoped selector can match another space's
+ * relation. Entity pages should use useRelation with a strict spaceId filter
+ * instead — they want null when the relation doesn't exist in the current space.
+ */
+export function useSpaceAwareRelation(options: { selector: (r: Relation) => boolean; spaceId: string }) {
+  const { selector, spaceId } = options;
+
+  const relation = useSelector(
+    reactive,
+    () => {
+      let fallback: Relation | null = null;
+
+      for (const r of reactiveRelations.get()) {
+        if (r.isDeleted || !selector(r)) continue;
+        if (r.spaceId === spaceId) return resolveRelationNames(r);
+        fallback ??= r;
+      }
+
+      return fallback ? resolveRelationNames(fallback) : null;
+    },
+    equal
+  );
+
+  return relation;
 }

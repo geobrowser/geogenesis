@@ -189,6 +189,7 @@ export function EditableEntityValueField({
 
   const { property: resolvedProperty } = useQueryProperty({
     id: isRelation && !isImageType && property.id ? property.id : undefined,
+    spaceId,
     enabled: isRelation && !isImageType && Boolean(property.id),
   });
   const relationValueTypes = property.relationValueTypes?.length

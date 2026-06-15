@@ -403,6 +403,68 @@ describe('GeoStore', () => {
       expect(relations.find(r => r.id === 'relation-old')?.isDeleted).toBe(true);
     });
 
+    it('should keep the duplicate BLOCKS relation whose relation entity carries view config, across re-hydrations in any order', () => {
+      // Duplicate published page→block relations (no timestamps, like real
+      // remote data). Only one junction entity holds the block's view config.
+      const configured: Relation = {
+        ...mockRelation1,
+        id: 'blocks-configured',
+        entityId: 'junction-configured',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        timestamp: undefined,
+      };
+      const bare: Relation = {
+        ...configured,
+        id: 'blocks-bare',
+        entityId: 'junction-bare',
+      };
+      const viewConfig: Relation = {
+        ...mockRelation1,
+        id: 'view-config',
+        entityId: 'view-config-entity',
+        type: { id: SystemIds.VIEW_PROPERTY, name: 'View' },
+        fromEntity: { id: 'junction-configured', name: null },
+        toEntity: { id: SystemIds.LIST_VIEW, name: 'List', value: SystemIds.LIST_VIEW },
+        timestamp: undefined,
+      };
+
+      store.hydrateWith([{ ...mockEntity1, relations: [configured, bare, viewConfig] }]);
+
+      const survivingBlocks = () => reactiveRelations.get().filter(r => r.type.id === SystemIds.BLOCKS && !r.isDeleted);
+
+      expect(survivingBlocks()).toHaveLength(1);
+      expect(survivingBlocks()[0].entityId).toBe('junction-configured');
+
+      // A later sync delivers the duplicates in the opposite order — the
+      // survivor must not flip, or the view config is orphaned.
+      store.hydrateWith([{ ...mockEntity1, relations: [bare, configured] }]);
+
+      expect(survivingBlocks()).toHaveLength(1);
+      expect(survivingBlocks()[0].entityId).toBe('junction-configured');
+    });
+
+    it('should collapse timestamp-less duplicates to the same survivor regardless of hydration order', () => {
+      const relationA: Relation = {
+        ...mockRelation1,
+        id: 'dup-a',
+        entityId: 'junction-a',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        timestamp: undefined,
+      };
+      const relationB: Relation = { ...relationA, id: 'dup-b', entityId: 'junction-b' };
+
+      store.hydrateWith([{ ...mockEntity1, relations: [relationA, relationB] }]);
+      const firstSurvivor = reactiveRelations.get().find(r => r.type.id === SystemIds.BLOCKS);
+
+      reactiveRelations.set([]);
+      store.hydrateWith([{ ...mockEntity1, relations: [relationB, relationA] }]);
+      const secondSurvivor = reactiveRelations.get().find(r => r.type.id === SystemIds.BLOCKS);
+
+      expect(firstSurvivor?.id).toBe(secondSurvivor?.id);
+    });
+
     it('should replace existing values and relations with same ID', () => {
       // Set initial data
       reactiveValues.set([mockValue1]);

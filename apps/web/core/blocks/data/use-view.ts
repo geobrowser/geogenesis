@@ -292,6 +292,61 @@ export function useView() {
     }
   }, [blockRelationRelations, storage]);
 
+  /**
+   * Persist a full column ordering on the block-relation entity. Rewrites
+   * positions on existing shown-column relations and materializes PROPERTIES
+   * relations for columns that don't have one yet, so the ordering survives
+   * navigation. Name is implicit (always first) and never persisted.
+   */
+  const setShownColumnOrder = React.useCallback(
+    (columns: Column[]) => {
+      if (!blocksRelationEntityId) return;
+
+      const active = dedupeRelationsByColumnProperty(blockRelationRelations.filter(isShownColumnRelation));
+      const relationByPropertyId = new Map(active.map(r => [ID.uuidToHex(columnPropertyIdFromRelation(r)), r]));
+
+      let cursor: string | null = null;
+      for (const column of columns) {
+        if (ID.equals(column.id, SystemIds.NAME_PROPERTY)) continue;
+        const position = Position.generateBetween(cursor, null);
+        if (!position) continue;
+        cursor = position;
+
+        const existing = relationByPropertyId.get(ID.uuidToHex(column.id));
+        if (existing) {
+          if (existing.position !== position) {
+            storage.relations.update(existing, draft => {
+              draft.position = position;
+            });
+          }
+          continue;
+        }
+
+        storage.relations.set({
+          id: IdUtils.generate(),
+          entityId: IdUtils.generate(),
+          spaceId,
+          position,
+          renderableType: 'RELATION',
+          type: {
+            id: SystemIds.PROPERTIES,
+            name: 'Properties',
+          },
+          fromEntity: {
+            id: blocksRelationEntityId,
+            name: blockRelationName,
+          },
+          toEntity: {
+            id: column.id,
+            name: column.name,
+            value: column.id,
+          },
+        });
+      }
+    },
+    [blockRelationRelations, blocksRelationEntityId, blockRelationName, spaceId, storage]
+  );
+
   const reorderShownPropertyRelations = React.useCallback(
     (fromIndex: number, toIndex: number) => {
       const sorted = [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
@@ -324,6 +379,7 @@ export function useView() {
     toggleProperty,
     hideAllShownPropertyColumns,
     reorderShownPropertyRelations,
+    setShownColumnOrder,
     mapping,
   };
 }

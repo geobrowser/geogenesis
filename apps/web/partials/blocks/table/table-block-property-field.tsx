@@ -156,6 +156,7 @@ const RenderedProperty = ({
           property={property}
           spaceId={spaceId}
           isEditing={false}
+          disableLink={disableLink}
           browseListTypography={browseListBody}
         />
       )}
@@ -299,6 +300,8 @@ type EditableValueGroupProps = {
   property: Property;
   spaceId: string;
   isEditing: boolean;
+  /** Render URL values as plain text — the whole list item is already a link, and nested <a> is invalid HTML. */
+  disableLink?: boolean;
   /** List/gallery browse: match description (`text-metadata` / tableProperty) instead of table cell scale. */
   browseListTypography?: boolean;
 };
@@ -308,6 +311,7 @@ function EditableValueGroup({
   property,
   spaceId,
   isEditing,
+  disableLink = false,
   browseListTypography = false,
 }: EditableValueGroupProps) {
   const { storage } = useMutate();
@@ -336,6 +340,7 @@ function EditableValueGroup({
           spaceId={spaceId}
           value={value}
           format={property.format}
+          disableLink={disableLink}
           className={BROWSE_LIST_URL_CLASS}
         />
       );
@@ -370,6 +375,7 @@ function EditableValueGroup({
           value={value}
           format={property.format}
           onBlur={isEditing ? e => onWriteValue(e.currentTarget.value) : undefined}
+          disableLink={disableLink}
           className={compactBrowse ? BROWSE_LIST_URL_CLASS : undefined}
         />
       );

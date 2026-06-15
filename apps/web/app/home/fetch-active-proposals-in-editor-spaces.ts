@@ -15,6 +15,7 @@ import {
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 
@@ -199,7 +200,11 @@ export async function getActiveProposalsForSpacesWhereEditor(
   // already passed (often already reflected as membership in the space); showing Approve/Reject
   // for those is incorrect.
   const activeVotingOnly = status === 'pending' ? merged.filter(p => p.status === 'PROPOSED') : merged;
-  const filteredProposals = status === 'pending' ? deduplicateMembershipProposals(activeVotingOnly) : activeVotingOnly;
+  // Targets that already belong to the space (a duplicate request was accepted,
+  // or they were added another way) have nothing left to review.
+  const notYetGranted =
+    status === 'pending' ? await filterGrantedMembershipRequests(activeVotingOnly) : activeVotingOnly;
+  const filteredProposals = status === 'pending' ? deduplicateMembershipProposals(notYetGranted) : notYetGranted;
 
   filteredProposals.sort((a, b) => {
     const aVoted = a.userVote !== null;

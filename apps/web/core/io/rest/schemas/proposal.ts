@@ -170,6 +170,15 @@ export const ApiProposalListResponseSchema = Schema.Struct({
 
 export type ApiProposalListResponse = Schema.Schema.Type<typeof ApiProposalListResponseSchema>;
 
+const MEMBERSHIP_ACTION_TYPES = new Set<ApiActionType>(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
+
+/** Finds the membership action in a proposal's action list. The REST schema does
+ *  not guarantee action order, so a lookup by index 0 can miss multi-action
+ *  proposals where the membership action is not first. */
+export function findMembershipAction(actions: readonly ApiAction[]): ApiAction | undefined {
+  return actions.find(a => MEMBERSHIP_ACTION_TYPES.has(a.actionType));
+}
+
 const SUBSPACE_ACTION_TYPES = new Set<ApiActionType>([
   'SUBSPACE_VERIFIED',
   'SUBSPACE_UNVERIFIED',
@@ -304,16 +313,20 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
 }
 
 /**
- * Map REST `actions` to a single {@link ProposalType}. Any `PUBLISH` action means a content edit
- * proposal (`ADD_EDIT`) — action order from the API is not guaranteed, so the first action alone
- * can mis-classify multi-action proposals.
+ * Map REST `actions` to a single {@link ProposalType}. Action order from the API is not
+ * guaranteed, so the first action alone can mis-classify multi-action proposals: any
+ * `PUBLISH` action means a content edit proposal (`ADD_EDIT`), then a membership action
+ * anywhere in the list wins over whatever happens to be first.
  */
-export function mapApiActionsToProposalType(actions: readonly { actionType: string }[]): ProposalType {
+export function mapApiActionsToProposalType(actions: readonly ApiAction[]): ProposalType {
   if (actions.some(a => a.actionType === 'PUBLISH')) {
     return 'ADD_EDIT';
   }
-  const first = actions[0]?.actionType ?? 'UNKNOWN';
-  return mapActionTypeToProposalType(first);
+  const membershipAction = findMembershipAction(actions);
+  if (membershipAction) {
+    return mapActionTypeToProposalType(membershipAction.actionType);
+  }
+  return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
 }
 
 export function mapActionTypeToProposalType(actionType: string): ProposalType {
