@@ -4,6 +4,20 @@ export type RankingComposeTab = 'global_ranking' | 'my_ranking';
 export const RANKING_COMPOSE_TAB_GLOBAL = 'global_ranking' as const satisfies RankingComposeTab;
 export const RANKING_COMPOSE_TAB_MY = 'my_ranking' as const satisfies RankingComposeTab;
 
+export type RankingComposeHrefParams = {
+  spaceId: string;
+  blockEntityId: string;
+  relationId: string;
+  parentEntityId: string;
+  rankingStartDate?: string;
+  rankingEndDate?: string;
+  mode?: RankingComposeMode;
+  tab?: RankingComposeTab;
+  rankEntityId?: string;
+  authorSpaceId?: string;
+  ogVersion?: string;
+};
+
 export function rankingComposeHref({
   spaceId,
   blockEntityId,
@@ -13,16 +27,10 @@ export function rankingComposeHref({
   rankingEndDate = '',
   mode = 'edit',
   tab,
-}: {
-  spaceId: string;
-  blockEntityId: string;
-  relationId: string;
-  parentEntityId: string;
-  rankingStartDate?: string;
-  rankingEndDate?: string;
-  mode?: RankingComposeMode;
-  tab?: RankingComposeTab;
-}): string {
+  rankEntityId = '',
+  authorSpaceId = '',
+  ogVersion = '',
+}: RankingComposeHrefParams): string {
   const params = new URLSearchParams();
   params.set('relationId', relationId);
   params.set('parentEntityId', parentEntityId);
@@ -30,6 +38,9 @@ export function rankingComposeHref({
   if (rankingEndDate) params.set('rankingEndDate', rankingEndDate);
   if (mode === 'view') params.set('mode', 'view');
   if (tab) params.set('tab', tab);
+  if (rankEntityId) params.set('rankEntityId', rankEntityId);
+  if (authorSpaceId) params.set('authorSpaceId', authorSpaceId);
+  if (ogVersion) params.set('ogVersion', ogVersion);
   return `/space/${spaceId}/${blockEntityId}/ranking-compose?${params.toString()}`;
 }
 

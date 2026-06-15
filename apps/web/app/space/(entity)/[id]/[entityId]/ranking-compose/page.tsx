@@ -1,75 +1,128 @@
-'use client';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
-import { useParams, useSearchParams } from 'next/navigation';
+import type { Metadata } from 'next';
 
-import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
-import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
-import { useRankingComposePage } from '~/core/blocks/ranking/use-ranking-compose-page';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
-import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import {
+  type RankingComposeMode,
+  rankingComposeHref,
+} from '~/core/blocks/ranking/ranking-compose-url';
+import {
+  RANKING_OG_VARIANT_SIZES,
+  buildRankingOgObjectKey,
+  buildRankingOgPublicUrl,
+  getRankingOgPublicBaseUrl,
+} from '~/core/blocks/ranking/ranking-og-storage';
 
-import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
-import { RankingViewScreen } from '~/partials/blocks/table/ranking-view-screen';
+import { cachedFetchEntity } from '../cached-fetch-entity';
+import { RankingComposeClientPage } from './ranking-compose-client-page';
 
-function RankingComposeLoadingState({ message }: { message: string }) {
-  return (
-    <div className="flex h-screen items-center justify-center">
-      <p className="text-lg text-text">{message}</p>
-    </div>
-  );
+type PageParams = {
+  id: string;
+  entityId: string;
+};
+
+type SearchParams = Record<string, string | string[] | undefined>;
+
+type Props = {
+  params: Promise<PageParams>;
+  searchParams: Promise<SearchParams>;
+};
+
+function stringParam(searchParams: SearchParams, key: string): string {
+  const value = searchParams[key];
+  if (Array.isArray(value)) return value[0] ?? '';
+  return value ?? '';
 }
 
-export default function RankingComposePage() {
-  const params = useParams();
-  const searchParams = useSearchParams();
+function rankingMode(searchParams: SearchParams): RankingComposeMode {
+  return stringParam(searchParams, 'mode') === 'view' ? 'view' : 'edit';
+}
 
-  const spaceId = params?.id as string;
-  const dataBlockEntityId = params?.entityId as string;
-  const relationId = searchParams?.get('relationId') ?? '';
-  const parentEntityIdParam = searchParams?.get('parentEntityId') ?? '';
-  const rankingStartDate = searchParams?.get('rankingStartDate') ?? '';
-  const rankingEndDate = searchParams?.get('rankingEndDate') ?? '';
-  const mode: RankingComposeMode = searchParams?.get('mode') === 'view' ? 'view' : 'edit';
+function hasValidRankingOgParams({
+  rankEntityId,
+  authorSpaceId,
+  ogVersion,
+}: {
+  rankEntityId: string;
+  authorSpaceId: string;
+  ogVersion: string;
+}): boolean {
+  return IdUtils.isValid(rankEntityId) && IdUtils.isValid(authorSpaceId) && /^[a-zA-Z0-9._-]+$/.test(ogVersion);
+}
 
-  const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
+  const [{ id: spaceId, entityId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const rankEntityId = stringParam(resolvedSearchParams, 'rankEntityId');
+  const authorSpaceId = stringParam(resolvedSearchParams, 'authorSpaceId');
+  const ogVersion = stringParam(resolvedSearchParams, 'ogVersion');
+  const publicBaseUrl = getRankingOgPublicBaseUrl();
+
+  if (!publicBaseUrl || !hasValidRankingOgParams({ rankEntityId, authorSpaceId, ogVersion })) {
+    return {};
+  }
+
+  const ranking =
+    IdUtils.isValid(entityId) && IdUtils.isValid(spaceId) ? await cachedFetchEntity(entityId, spaceId) : null;
+  const rankingName = ranking?.name?.trim() || 'ranking';
+  const title = `My ${rankingName}`;
+  const imageKey = buildRankingOgObjectKey({ rankEntityId, version: ogVersion, variant: 'landscape' });
+  const imageUrl = buildRankingOgPublicUrl(publicBaseUrl, imageKey);
+  const url = rankingComposeHref({
     spaceId,
-    blockEntityId: dataBlockEntityId,
-    relationId,
-    parentEntityIdParam,
+    blockEntityId: entityId,
+    relationId: stringParam(resolvedSearchParams, 'relationId'),
+    parentEntityId: stringParam(resolvedSearchParams, 'parentEntityId'),
+    rankingStartDate: stringParam(resolvedSearchParams, 'rankingStartDate'),
+    rankingEndDate: stringParam(resolvedSearchParams, 'rankingEndDate'),
+    mode: 'view',
+    rankEntityId,
+    authorSpaceId,
+    ogVersion,
   });
+  const siteUrl = new URL(process.env.ENV_URL ?? 'https://geobrowser.io');
 
-  if (!hasValidParams) {
-    return <RankingComposeLoadingState message="Invalid parameters" />;
-  }
+  return {
+    title,
+    description: `A personal Geo ranking for ${rankingName}.`,
+    openGraph: {
+      title,
+      description: `A personal Geo ranking for ${rankingName}.`,
+      url: new URL(url, siteUrl).toString(),
+      images: [
+        {
+          url: imageUrl,
+          ...RANKING_OG_VARIANT_SIZES.landscape,
+          alt: title,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description: `A personal Geo ranking for ${rankingName}.`,
+      images: [imageUrl],
+    },
+  };
+}
 
-  if (isLoading) {
-    return <RankingComposeLoadingState message="Loading ranking…" />;
-  }
-
-  if (!parentEntityId) {
-    return <RankingComposeLoadingState message="Data block not found" />;
-  }
+export default async function RankingComposePage({ params, searchParams }: Props) {
+  const [{ id: spaceId, entityId: dataBlockEntityId }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
 
   return (
-    <EntityStoreProvider id={parentEntityId} spaceId={spaceId}>
-      <EditorProvider
-        id={parentEntityId}
-        spaceId={spaceId}
-        initialBlocks={blocks}
-        initialBlockRelations={blockRelations}
-      >
-        <DataBlockProvider spaceId={spaceId} entityId={dataBlockEntityId} relationId={relationId}>
-          {mode === 'view' ? (
-            <RankingViewScreen spaceId={spaceId} rankingStartDate={rankingStartDate} rankingEndDate={rankingEndDate} />
-          ) : (
-            <RankingComposeScreen
-              spaceId={spaceId}
-              rankingStartDate={rankingStartDate}
-              rankingEndDate={rankingEndDate}
-            />
-          )}
-        </DataBlockProvider>
-      </EditorProvider>
-    </EntityStoreProvider>
+    <RankingComposeClientPage
+      spaceId={spaceId}
+      dataBlockEntityId={dataBlockEntityId}
+      relationId={stringParam(resolvedSearchParams, 'relationId')}
+      parentEntityIdParam={stringParam(resolvedSearchParams, 'parentEntityId')}
+      rankingStartDate={stringParam(resolvedSearchParams, 'rankingStartDate')}
+      rankingEndDate={stringParam(resolvedSearchParams, 'rankingEndDate')}
+      mode={rankingMode(resolvedSearchParams)}
+      rankEntityId={stringParam(resolvedSearchParams, 'rankEntityId')}
+      authorSpaceId={stringParam(resolvedSearchParams, 'authorSpaceId')}
+      ogVersion={stringParam(resolvedSearchParams, 'ogVersion')}
+    />
   );
 }

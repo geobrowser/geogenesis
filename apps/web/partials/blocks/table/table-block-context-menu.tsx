@@ -15,10 +15,13 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { Link } from '~/design-system/icons/link';
 import { Relation } from '~/design-system/icons/relation';
 import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+
+import { buildAbsoluteRankingShareUrl, copyRankingShareLink } from '~/core/blocks/ranking/ranking-share';
 
 import { TableBlockEditPropertiesPanel } from './table-block-edit-properties-panel';
 import { editingPropertiesAtom } from '~/atoms';
@@ -31,9 +34,10 @@ const CONTEXT_MENU_SURFACE = 'z-1001 min-w-0 w-52 overflow-hidden rounded-lg bor
 
 type TableBlockContextMenuProps = {
   sourceType: Source['type'];
+  globalRankingSharePath?: string | null;
 };
 
-export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({ sourceType, globalRankingSharePath = null }: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { spaceId, entityId, relationId } = useDataBlockInstance();
@@ -55,6 +59,15 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
       setIsEditingProperties(false);
     } catch {
       console.error('Failed to copy table block entity ID for: ', entityId);
+    }
+  };
+
+  const onCopyGlobalShareLink = async () => {
+    if (!globalRankingSharePath) return;
+    const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
+    if (copied) {
+      setIsMenuOpen(false);
+      setIsEditingProperties(false);
     }
   };
 
@@ -117,6 +130,14 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
                     <Relation />
                   </div>
                 </MenuItem>
+                {globalRankingSharePath ? (
+                  <MenuItem className={listRowClassName} onClick={() => void onCopyGlobalShareLink()}>
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span>Copy share link</span>
+                      <Link />
+                    </div>
+                  </MenuItem>
+                ) : null}
                 <MenuItem className={listRowClassName} onClick={onCopyBlockId}>
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Copy block ID</span>

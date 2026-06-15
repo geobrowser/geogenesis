@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
@@ -51,6 +52,47 @@ type Props = {
   rankingStartDate?: string;
   rankingEndDate?: string;
 };
+
+async function generateRankingOgImages({
+  rankEntityId,
+  authorSpaceId,
+  blockEntityId,
+  blockEntitySpaceId,
+  rankingStartDate,
+  rankingEndDate,
+  ogVersion,
+}: {
+  rankEntityId: string;
+  authorSpaceId: string;
+  blockEntityId: string;
+  blockEntitySpaceId: string;
+  rankingStartDate: string;
+  rankingEndDate: string;
+  ogVersion: string;
+}): Promise<boolean> {
+  try {
+    const response = await fetch('/api/ranking-og/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rankEntityId,
+        authorSpaceId,
+        blockEntityId,
+        blockEntitySpaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+        variants: ['landscape', 'story'],
+      }),
+    });
+    if (!response.ok) return false;
+    const result = (await response.json()) as { ok?: boolean; imageUrls?: { landscape?: string } };
+    return Boolean(result.ok && result.imageUrls?.landscape);
+  } catch (error) {
+    console.error('[RankingComposeScreen] OG generation failed:', error);
+    return false;
+  }
+}
 
 export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const isMobile = useIsMobileLayout();
@@ -324,6 +366,26 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
     const published = await saveMySubmission(slots);
     if (!published) return;
+
+    const ogVersion = buildRankingOgVersion({
+      rankEntityId: published.rankEntityId,
+      orderedEntityIds: published.orderedEntityIds,
+      rankingName: displayName,
+      rankingStartDate,
+      rankingEndDate,
+      authorName: published.authorName,
+      authorAvatarUrl: published.authorAvatarUrl,
+    });
+    const generated = await generateRankingOgImages({
+      rankEntityId: published.rankEntityId,
+      authorSpaceId: published.authorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion,
+    });
+
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     router.replace(
       rankingComposeHref({
@@ -335,6 +397,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         rankingEndDate,
         mode: 'view',
         tab: RANKING_COMPOSE_TAB_MY,
+        rankEntityId: generated ? published.rankEntityId : '',
+        authorSpaceId: generated ? published.authorSpaceId : '',
+        ogVersion: generated ? ogVersion : '',
       })
     );
   };

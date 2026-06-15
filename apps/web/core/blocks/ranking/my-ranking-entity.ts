@@ -15,6 +15,17 @@ export function buildMyRankingEntityFilter(blockId: string): EntityFilter {
   };
 }
 
+export function isRankSubmittedToBlock(rankEntity: Entity, authorSpaceId: string, blockEntityId: string): boolean {
+  return rankEntity.relations.some(
+    relation =>
+      !relation.isDeleted &&
+      relation.spaceId === authorSpaceId &&
+      relation.fromEntity.id === rankEntity.id &&
+      relation.type.id === SUBMITTED_TO_PROPERTY_ID &&
+      relation.toEntity.id === blockEntityId
+  );
+}
+
 function parseEntityTimestampMs(raw: string | number | undefined | null): number {
   if (raw == null) return 0;
   if (typeof raw === 'number') {
