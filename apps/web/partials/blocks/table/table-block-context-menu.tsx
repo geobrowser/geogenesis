@@ -62,7 +62,7 @@ export function TableBlockContextMenu({ sourceType, globalRankingSharePath = nul
     }
   };
 
-  const onCopyGlobalShareLink = async () => {
+  const onCopyShareLink = async () => {
     if (!globalRankingSharePath) return;
     const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
     if (copied) {
@@ -131,7 +131,7 @@ export function TableBlockContextMenu({ sourceType, globalRankingSharePath = nul
                   </div>
                 </MenuItem>
                 {globalRankingSharePath ? (
-                  <MenuItem className={listRowClassName} onClick={() => void onCopyGlobalShareLink()}>
+                  <MenuItem className={listRowClassName} onClick={() => void onCopyShareLink()}>
                     <div className="flex w-full items-center justify-between gap-2">
                       <span>Copy share link</span>
                       <Link />

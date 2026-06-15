@@ -1,4 +1,5 @@
 import type { EntityFilter } from '~/core/gql/graphql';
+import { ID } from '~/core/id';
 import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
@@ -19,10 +20,10 @@ export function isRankSubmittedToBlock(rankEntity: Entity, authorSpaceId: string
   return rankEntity.relations.some(
     relation =>
       !relation.isDeleted &&
-      relation.spaceId === authorSpaceId &&
-      relation.fromEntity.id === rankEntity.id &&
-      relation.type.id === SUBMITTED_TO_PROPERTY_ID &&
-      relation.toEntity.id === blockEntityId
+      ID.equals(relation.spaceId, authorSpaceId) &&
+      ID.equals(relation.fromEntity.id, rankEntity.id) &&
+      ID.equals(relation.type.id, SUBMITTED_TO_PROPERTY_ID) &&
+      ID.equals(relation.toEntity.id, blockEntityId)
   );
 }
 
