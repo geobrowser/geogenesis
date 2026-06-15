@@ -2,11 +2,12 @@ import { getGeoChain } from '@geogenesis/auth/server';
 
 import { Environment } from '../environment';
 
-const chainId = Environment.getConfig().chainId;
+const config = Environment.getConfig();
 
-/**
- * @TODO: getGeoChain should handle the chainId. Currently we use chainId to switch between
- * TESTNET and MAINNET dynamically within the app. We should use a human-understandable label
- * like MAINNET or TESTNET instead though.
- */
-export const GEOGENESIS = chainId === '19411' ? getGeoChain('TESTNET') : getGeoChain('MAINNET');
+const networkForChain = (id: string): 'TESTNET' | 'MAINNET' | 'LOCAL' => {
+  if (Environment.variables.isLocalDev) return 'LOCAL';
+  if (id === '19411') return 'TESTNET';
+  return 'MAINNET';
+};
+
+export const GEOGENESIS = getGeoChain(networkForChain(config.chainId), config.rpc);

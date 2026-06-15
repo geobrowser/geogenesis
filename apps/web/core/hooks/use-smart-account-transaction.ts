@@ -3,11 +3,19 @@ import { Duration, Effect } from 'effect';
 import { TransactionWriteFailedError } from '../errors';
 import { useSmartAccount } from './use-smart-account';
 
-interface Args {
-  address: string | null;
-}
+type SendTxArgs = {
+  to: `0x${string}`;
+  data: `0x${string}`;
+  value?: bigint;
+};
 
-export function useSmartAccountTransaction({ address }: Args) {
+/**
+ * Returns an Effect-returning function that signs and submits a transaction via the
+ * smart account (or local-dev EOA polyfill). Each caller provides the destination `to`
+ * and `data` per call, which lets us forward the `to` the SDK already returns rather
+ * than pinning a contract address at hook setup.
+ */
+export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
 
   const sanitizeErrorMessage = (error: unknown) => {
@@ -18,18 +26,22 @@ export function useSmartAccountTransaction({ address }: Args) {
     return 'Transaction write failed';
   };
 
-  const sendTransaction = (calldata: `0x${string}`) => {
+  const sendTransaction = ({ to, data, value = 0n }: SendTxArgs) => {
     return Effect.gen(function* () {
-      if (!smartAccount || !address) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account or transaction target'));
+      if (!smartAccount) {
+        return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
+      }
+
+      if (!to) {
+        return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
       }
 
       const hash = yield* Effect.tryPromise({
         try: async () => {
           return await smartAccount.sendTransaction({
-            to: address as `0x${string}`,
-            value: 0n,
-            data: calldata,
+            to,
+            value,
+            data,
           });
         },
         catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),

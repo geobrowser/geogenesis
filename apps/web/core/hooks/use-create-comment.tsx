@@ -1,6 +1,5 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,6 +19,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
@@ -310,12 +310,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Comment: ${commentName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -539,12 +538,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Edit comment: ${newName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),

@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
+import { Environment } from '~/core/environment';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -846,7 +847,9 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length && !args.spaceId) {
+  // The local e2e API doesn't yet accept `additional_space_ids` — skip it there.
+  // On testnet/mainnet this still flows through unchanged.
+  if (args.additionalSpaceIds?.length && !args.spaceId && !Environment.variables.isLocalDev) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 

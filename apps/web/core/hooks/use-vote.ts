@@ -11,7 +11,6 @@ import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-trans
 import { ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -88,9 +87,7 @@ interface UseVoteArgs {
 export function useVote({ spaceId, proposalId }: UseVoteArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleVote = useCallback(
     async (option: SubstreamVote['vote']) => {
@@ -108,7 +105,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       const vote = option === 'ACCEPT' ? 'YES' : option === 'REJECT' ? 'NO' : 'ABSTAIN';
 
-      const { calldata: callData } = geo.daoSpaces.proposals.vote({
+      const { to, calldata } = geo.daoSpaces.voteProposal({
         authorSpaceId: personalSpaceId,
         spaceId,
         proposalId,
@@ -123,7 +120,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         action: 'PROPOSAL_VOTED',
       });
 
-      const txEffect = tx(callData).pipe(
+      const txEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.vote'),
         Effect.annotateSpans({
           'io.operation': 'vote',

@@ -1,6 +1,26 @@
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
+// Local-dev escape hatch: when 'true', the app bypasses Privy + smart-account bundling
+// and signs directly from an injected wallet (MetaMask, Rabby) against a local chain.
+// See packages/auth/src/wallet-config.ts (createLocalDevConfig) and
+// apps/web/core/sdk/geo-client.ts (defineGeoNetworkConfig).
+const IS_LOCAL_DEV = process.env.NEXT_PUBLIC_IS_LOCAL_DEV;
+
+// Optional overrides only consumed when IS_LOCAL_DEV=true.
+const LOCAL_CHAIN_ID = process.env.NEXT_PUBLIC_LOCAL_CHAIN_ID;
+const LOCAL_SPACE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS;
+const LOCAL_DAO_SPACE_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS;
+
+if (IS_LOCAL_DEV === 'true') {
+  if (!LOCAL_SPACE_REGISTRY_ADDRESS) {
+    throw new Error('NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS is required when NEXT_PUBLIC_IS_LOCAL_DEV=true');
+  }
+  if (!LOCAL_DAO_SPACE_FACTORY_ADDRESS) {
+    throw new Error('NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS is required when NEXT_PUBLIC_IS_LOCAL_DEV=true');
+  }
+}
+
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
@@ -71,6 +91,10 @@ if (SENTRY_DSN) {
 
 export {
   TEST_ENV,
+  IS_LOCAL_DEV,
+  LOCAL_CHAIN_ID,
+  LOCAL_SPACE_REGISTRY_ADDRESS,
+  LOCAL_DAO_SPACE_FACTORY_ADDRESS,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   API_ENDPOINT,

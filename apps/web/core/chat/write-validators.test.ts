@@ -556,7 +556,7 @@ describe('planWriteTool: setEntityImage', () => {
       id: PROPERTY,
       name: 'Director',
       dataType: 'RELATION',
-      renderableTypeStrict: 'RELATION',
+      renderableTypeStrict: 'VIDEO',
     });
     findOne.mockResolvedValueOnce(makeEntity());
     const out = await planWriteTool(

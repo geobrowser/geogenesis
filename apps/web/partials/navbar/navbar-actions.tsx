@@ -9,9 +9,11 @@ import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
+import { useAccount, useDisconnect } from 'wagmi';
 
 import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
+import { Environment } from '~/core/environment';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -64,7 +66,51 @@ function useResetOnboarding() {
   return resetOnboarding;
 }
 
+// Local-dev navbar — no Privy. Uses wagmi for connect state and disconnect.
+// Skips smart account, profile lookup, and the personal-space link to avoid
+// pulling in any Privy-dependent hooks.
+function NavbarActionsLocal() {
+  const [open, onOpenChange] = React.useState(false);
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const spaceId = useSpaceId();
+
+  if (!isConnected || !address) {
+    return <GeoConnectButton />;
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      {spaceId && <ModeToggle />}
+      <Menu
+        open={open}
+        onOpenChange={onOpenChange}
+        trigger={
+          <div className="relative h-7 w-7 overflow-hidden rounded-full">
+            <Avatar value={address} size={28} />
+          </div>
+        }
+        sideOffset={12}
+        className="max-w-[165px]"
+      >
+        <AvatarMenuItem onClick={() => disconnect()}>
+          <p className="text-button">Disconnect</p>
+          <DisconnectWallet />
+        </AvatarMenuItem>
+      </Menu>
+    </div>
+  );
+}
+
 export function NavbarActions() {
+  if (Environment.variables.isLocalDev) {
+    return <NavbarActionsLocal />;
+  }
+
+  return <NavbarActionsPrivy />;
+}
+
+function NavbarActionsPrivy() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();

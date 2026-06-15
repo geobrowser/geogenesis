@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import { Environment } from '~/core/environment';
 import { getSpaceByAddress } from '~/core/io/queries';
 
 import { useSmartAccount } from './use-smart-account';
@@ -19,6 +20,11 @@ export function usePersonalSpaceId() {
       if (!address) return null;
 
       const space = await Effect.runPromise(getSpaceByAddress(address));
+
+      if (Environment.variables.isLocalDev) {
+        // eslint-disable-next-line no-console
+        console.log('[local-dev] getSpaceByAddress', { address, space });
+      }
 
       if (!space) {
         return { isRegistered: false, personalSpaceId: null };

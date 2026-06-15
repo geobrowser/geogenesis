@@ -1,9 +1,22 @@
 import { type Hex } from 'viem';
 
+import { Environment } from '~/core/environment';
+
 /**
- * SpaceRegistry address (Geo Testnet)
+ * SpaceRegistry address. Resolves at module-load time to:
+ * - The local stack's registry (NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS) when running with
+ *   NEXT_PUBLIC_IS_LOCAL_DEV=true. Without this, every governance write (vote, execute,
+ *   propose-add/remove-editor, request-to-be-editor, deploy-space) sends its tx to
+ *   `0xB01683…` on the local Anvil chain — an uncontracted EOA address — so the tx
+ *   "succeeds" as a value transfer and no event ever fires.
+ * - The hardcoded testnet registry otherwise.
  */
-export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
+const TESTNET_SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
+
+export const SPACE_REGISTRY_ADDRESS: `0x${string}` =
+  Environment.variables.isLocalDev && Environment.variables.localContracts
+    ? Environment.variables.localContracts.spaceRegistry
+    : TESTNET_SPACE_REGISTRY_ADDRESS;
 
 export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
 

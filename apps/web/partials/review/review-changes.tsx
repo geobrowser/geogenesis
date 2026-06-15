@@ -12,6 +12,7 @@ import { useSetAtom, useStore } from 'jotai';
 
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
+import { Environment } from '~/core/environment';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -23,7 +24,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
-import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
@@ -177,6 +178,42 @@ export const ReviewChanges = () => {
 
     const fetchSpaces = async () => {
       const result = await Effect.runPromise(getSpaces({ spaceIds: dedupedSpacesWithActions }));
+
+      // Local-dev synthetic-home merge (mirrors apps/web/app/space/[id]/(space)/layout.tsx
+      // Phase 3.9). The e2e indexer returns space records with empty home entities; we
+      // separately published edits under entity-id = spaceId. Without this merge, the
+      // review screen shows the spaceId instead of the published name.
+      if (Environment.variables.isLocalDev) {
+        const idsNeedingMerge = result
+          .filter(space => !space.entity?.id && space.id)
+          .map(space => space.id);
+
+        if (idsNeedingMerge.length > 0) {
+          const syntheticEntities = await Effect.runPromise(getBatchEntities(idsNeedingMerge));
+          const byId = new Map(syntheticEntities.map(e => [e.id, e]));
+          const merged = result.map(space => {
+            if (space.entity?.id || !space.id) return space;
+            const synthetic = byId.get(space.id);
+            if (!synthetic) return space;
+            return {
+              ...space,
+              entity: {
+                ...space.entity,
+                id: space.id,
+                spaceId: space.id,
+                name: synthetic.name ?? space.entity.name,
+                description: synthetic.description ?? space.entity.description,
+                values: synthetic.values,
+                relations: synthetic.relations,
+                types: synthetic.types,
+              },
+            };
+          });
+          setSpaces(merged);
+          return;
+        }
+      }
+
       setSpaces(result);
     };
 

@@ -1,17 +1,16 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
-import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/utils/contracts/space-registry';
-import { buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 
 type CreatePersonalSpaceArgs = {
@@ -35,7 +34,12 @@ export function useCreatePersonalSpace() {
       if (existingSpaceId) return existingSpaceId;
 
       // 1. Register space ID using SDK
-      const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
+      // We use getCreatePersonalSpaceCalldata directly (instead of geo.personalSpaces.create,
+      // which also generates space-entity ops). The space-entity ops are produced separately by
+      // generateOpsForSpaceType below and bundled into a follow-up publishEdit.
+      const registryTo = geo.network.contracts?.SPACE_REGISTRY_ADDRESS;
+      if (!registryTo) throw new Error('SDK network is missing SPACE_REGISTRY_ADDRESS');
+      const registryCalldata = getCreatePersonalSpaceCalldata();
       const registerResult = await runEffectEither(
         Effect.tryPromise({
           try: () =>
@@ -74,12 +78,11 @@ export function useCreatePersonalSpace() {
       });
 
       // 4. Publish ops using SDK (uploads to IPFS + encodes enter() calldata)
-      const { to: publishTo, calldata: publishCalldata } = await personalSpace.publishEdit({
+      const { to: publishTo, calldata: publishCalldata } = await geo.personalSpaces.publishEdit({
         name: spaceName,
         spaceId,
         ops,
         author: spaceId,
-        network: 'TESTNET',
       });
 
       // 5. Submit to space registry
@@ -104,6 +107,12 @@ export function useCreatePersonalSpace() {
         throw submitResult.left;
       }
 
+      const { to: setTopicTo, calldata: setTopicCalldata } = geo.personalSpaces.setTopic({
+        authorSpaceId: spaceId,
+        spaceId,
+        topicId: resolvedTopicId,
+      });
+
       const topicDeclarationResult = await runEffectEither(
         Effect.retry(
           Effect.tryPromise({
@@ -111,13 +120,9 @@ export function useCreatePersonalSpace() {
               smartAccount.sendUserOperation({
                 calls: [
                   {
-                    to: SPACE_REGISTRY_ADDRESS_HEX,
+                    to: setTopicTo as `0x${string}`,
                     value: 0n,
-                    data: buildPersonalTopicDeclaredCalldata({
-                      authorSpaceId: spaceId,
-                      spaceId,
-                      topicId: resolvedTopicId,
-                    }),
+                    data: setTopicCalldata as `0x${string}`,
                   },
                 ],
               }),

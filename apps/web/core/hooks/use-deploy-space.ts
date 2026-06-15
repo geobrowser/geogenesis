@@ -1,8 +1,12 @@
 'use client';
 
-import { getCreateDaoSpaceCalldata, personalSpace } from '@geoprotocol/geo-sdk';
+import { getCreateDaoSpaceCalldata, getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
-import { Ipfs } from '@geoprotocol/geo-sdk/lite';
+
+/** The SDK doesn't re-export `VotingSettingsInput` from the public entry, so we
+ *  derive it from the function signature we already depend on. Source of truth
+ *  stays in the SDK. */
+export type VotingSettingsInput = Parameters<typeof getCreateDaoSpaceCalldata>[0]['votingSettings'];
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
@@ -10,6 +14,7 @@ import { type Hex, createPublicClient, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import {
@@ -30,6 +35,23 @@ type DeployArgs = {
   spaceImage?: string;
   governanceType?: SpaceGovernanceType;
   topicId?: string;
+  /** Optional override for DAO voting settings; ignored for personal-style spaces. */
+  votingSettings?: VotingSettingsInput;
+};
+
+/**
+ * Defaults used when the caller doesn't override voting settings.
+ * Aligned with the SDK's DEFAULT_VOTING_SETTINGS but with a 1-day voting
+ * duration so newly-created DAOs are usable without waiting two days.
+ */
+export const NEW_SPACE_DEFAULT_VOTING_SETTINGS: VotingSettingsInput = {
+  partialPercentageSupportThreshold: 51,
+  universalPercentageSupportThreshold: 90,
+  flatSupportThreshold: 1,
+  quorum: 1,
+  disableFastPathAccessForNewMembers: true,
+  executionGracePeriodInDays: 14,
+  durationInDays: NEW_SPACE_VOTING_DURATION_DAYS,
 };
 
 const PUBLIC_GOVERNANCE_TYPES: SpaceType[] = [
@@ -69,7 +91,7 @@ export function useDeploySpace() {
         return null;
       }
 
-      const { spaceName, type, governanceType, spaceImage, topicId } = args;
+      const { spaceName, type, governanceType, spaceImage, topicId, votingSettings } = args;
 
       const isPublicGovernance = determineIsPublicGovernance(type, governanceType);
 
@@ -81,6 +103,7 @@ export function useDeploySpace() {
           spaceName,
           spaceCoverUri: spaceImage,
           topicId,
+          votingSettings,
         });
       } else {
         return await createPersonalStyleSpace({
@@ -127,6 +150,7 @@ type CreateDaoSpaceParams = {
   spaceName: string;
   spaceCoverUri?: string;
   topicId?: string;
+  votingSettings?: VotingSettingsInput;
 };
 
 async function createDaoSpace({
@@ -136,6 +160,7 @@ async function createDaoSpace({
   spaceName,
   spaceCoverUri,
   topicId,
+  votingSettings,
 }: CreateDaoSpaceParams): Promise<string> {
   const personalSpaceId = await getPersonalSpaceId(walletAddress);
   if (!personalSpaceId) {
@@ -153,14 +178,17 @@ async function createDaoSpace({
     topicId,
   });
 
+  // We only need the cid for the createDaoSpace calldata — the {to, calldata} the SDK
+  // also returns are for pushing the edit to the personal space, which we ignore. The IPFS
+  // binary contains only name/ops/author and does not embed spaceId, so the cid is reusable.
   const { cid } = await runWriteEffect(
     Effect.tryPromise({
       try: () =>
-        Ipfs.publishEdit({
+        geo.personalSpaces.publishEdit({
           name: `Create ${spaceName} space`,
+          spaceId: personalSpaceId,
           ops,
           author: personalSpaceId,
-          network: 'TESTNET',
         }),
       catch: error => new Error('Failed to publish DAO space edit to IPFS', { cause: error }),
     }).pipe(
@@ -205,15 +233,8 @@ async function createDaoSpace({
     throw new Error('DAOSpaceFactory is not properly initialized: daoSpaceBeacon is zero address');
   }
 
-  // TODO(GEO-2120/2105): when SDK 0.20.x ships and testnet redeploys with the 6-arg ABI,
-  // rename to the 7-field VotingSettingsInput (partialPercentageSupportThreshold, etc.).
   const calldata = getCreateDaoSpaceCalldata({
-    votingSettings: {
-      slowPathPercentageThreshold: 51,
-      fastPathFlatThreshold: 0,
-      quorum: 1,
-      durationInDays: NEW_SPACE_VOTING_DURATION_DAYS,
-    },
+    votingSettings: votingSettings ?? NEW_SPACE_DEFAULT_VOTING_SETTINGS,
     initialEditorSpaceIds: [userSpaceIdHex],
     initialMemberSpaceIds: [userSpaceIdHex],
     initialEditsContentUri: cid,
@@ -292,7 +313,9 @@ async function createPersonalStyleSpace({
   let spaceId = await getPersonalSpaceId(walletAddress);
 
   if (!spaceId) {
-    const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
+    const registryTo = geo.network.contracts?.SPACE_REGISTRY_ADDRESS;
+    if (!registryTo) throw new Error('SDK network is missing SPACE_REGISTRY_ADDRESS');
+    const registryCalldata = getCreatePersonalSpaceCalldata();
     await runWriteEffect(
       Effect.tryPromise({
         try: () =>
@@ -328,12 +351,11 @@ async function createPersonalStyleSpace({
   const { to: publishTo, calldata: publishCalldata } = await runWriteEffect(
     Effect.tryPromise({
       try: () =>
-        personalSpace.publishEdit({
+        geo.personalSpaces.publishEdit({
           name: spaceName,
           spaceId,
           ops,
           author: spaceId,
-          network: 'TESTNET',
         }),
       catch: error => new Error('Failed to build personal-style publish edit', { cause: error }),
     }).pipe(
