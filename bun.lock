@@ -5,7 +5,7 @@
     "": {
       "name": "geogenesis",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.1",
+        "@geoprotocol/geo-sdk": "^0.20.0-beta.4",
       },
       "devDependencies": {
         "@graphql-codegen/client-preset": "^5.2.4",
@@ -31,7 +31,7 @@
         "@effect/opentelemetry": "^0.63.0",
         "@floating-ui/dom": "^1.7.5",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.1",
+        "@geoprotocol/geo-sdk": "^0.20.0-beta.4",
         "@geoprotocol/grc-20": "^0.4.1",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.214.0",
@@ -407,7 +407,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.20.0-beta.1", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-AVcAaq3cTKp3WaMQte5L4ckjccDfdWOVUu81c6bPVA5bB9T4kIphzgnT7sIo3gVxynIoM+qZHSoW4mgchpw0xw=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.20.0-beta.4", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-zgK5GZs7vClACeCM7MeAH2Rsn3bI66M+v4rSMP9KwF2aNMS/vCZyDGkAtWaktI8fHv68XDBze1vwilA6eZouog=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.1", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww=="],
 
