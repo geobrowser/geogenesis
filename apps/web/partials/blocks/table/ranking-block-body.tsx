@@ -386,9 +386,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
-                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>
-                    {globalRankingBody}
-                  </div>
+                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>{globalRankingBody}</div>
                   {showMyRankingSection ? (
                     <div className={cx(activeTab !== 'my' && 'hidden')}>{myRankingBody}</div>
                   ) : null}

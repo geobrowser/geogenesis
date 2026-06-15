@@ -162,9 +162,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankId = result.id;
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
-        reportError(`Failed to publish ranking: ${describeError(error)}`);
-        return null;
-      }
+          reportError(`Failed to publish ranking: ${describeError(error)}`);
+          return null;
+        }
 
         const publish = Effect.gen(function* () {
           if (ops.length === 0) {
@@ -250,7 +250,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         setIsSaving(false);
       }
     },
-    [blockId, blockName, myRankEntity, personalSpaceId, profile?.avatarUrl, profile?.name, refetchMyRanking, reportError, setToast, smartAccount, spaceId]
+    [
+      blockId,
+      blockName,
+      myRankEntity,
+      personalSpaceId,
+      profile?.avatarUrl,
+      profile?.name,
+      refetchMyRanking,
+      reportError,
+      setToast,
+      smartAccount,
+      spaceId,
+    ]
   );
 
   return {

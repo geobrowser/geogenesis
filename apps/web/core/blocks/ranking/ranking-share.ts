@@ -1,4 +1,4 @@
-import { rankingComposeHref, type RankingComposeHrefParams } from './ranking-compose-url';
+import { type RankingComposeHrefParams, rankingComposeHref } from './ranking-compose-url';
 
 export type RankingShareIdentity = {
   rankEntityId: string;
@@ -6,9 +6,7 @@ export type RankingShareIdentity = {
   ogVersion: string;
 };
 
-export function buildRankingSharePath(
-  params: RankingComposeHrefParams & Partial<RankingShareIdentity>
-): string {
+export function buildRankingSharePath(params: RankingComposeHrefParams & Partial<RankingShareIdentity>): string {
   return rankingComposeHref({ mode: 'view', ...params });
 }
 
