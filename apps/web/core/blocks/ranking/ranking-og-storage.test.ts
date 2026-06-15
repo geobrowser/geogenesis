@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RANKING_OG_VARIANT_SIZES,
   RankingOgStorageConfigError,
+  buildGlobalRankingOgObjectKey,
   buildRankingOgObjectKey,
   buildRankingOgPublicUrl,
   getRankingOgPublicBaseUrl,
@@ -30,6 +31,16 @@ describe('ranking OG storage helpers', () => {
         variant: 'landscape',
       })
     ).toBe('og/rankings/rank-1/ranking-og-v1-abc123/landscape.png');
+  });
+
+  it('builds global variant-specific immutable object keys', () => {
+    expect(
+      buildGlobalRankingOgObjectKey({
+        blockEntityId: 'block-1',
+        version: 'ranking-global-og-v1-abc123',
+        variant: 'landscape',
+      })
+    ).toBe('og/rankings/global/block-1/ranking-global-og-v1-abc123/landscape.png');
   });
 
   it('builds public CDN URLs', () => {

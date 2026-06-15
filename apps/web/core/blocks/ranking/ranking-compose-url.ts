@@ -16,6 +16,7 @@ export type RankingComposeHrefParams = {
   rankEntityId?: string;
   authorSpaceId?: string;
   ogVersion?: string;
+  globalOgVersion?: string;
 };
 
 export function rankingComposeHref({
@@ -30,6 +31,7 @@ export function rankingComposeHref({
   rankEntityId = '',
   authorSpaceId = '',
   ogVersion = '',
+  globalOgVersion = '',
 }: RankingComposeHrefParams): string {
   const params = new URLSearchParams();
   params.set('relationId', relationId);
@@ -41,6 +43,7 @@ export function rankingComposeHref({
   if (rankEntityId) params.set('rankEntityId', rankEntityId);
   if (authorSpaceId) params.set('authorSpaceId', authorSpaceId);
   if (ogVersion) params.set('ogVersion', ogVersion);
+  if (globalOgVersion) params.set('globalOgVersion', globalOgVersion);
   return `/space/${spaceId}/${blockEntityId}/ranking-compose?${params.toString()}`;
 }
 

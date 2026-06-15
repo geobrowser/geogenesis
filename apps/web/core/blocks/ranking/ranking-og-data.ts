@@ -4,10 +4,12 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getAllEntities, getEntity } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
+import { getOrderedRelationTargetIds } from './ranking-block-relations';
 import { formatRankingPeriodLabel, getRankingPeriodState } from './ranking-period';
 
 export type RankingOgEntryData = {
@@ -17,7 +19,10 @@ export type RankingOgEntryData = {
   image: string | null;
 };
 
+export type RankingOgCardKind = 'personal' | 'global';
+
 export type RankingOgCardData = {
+  kind?: RankingOgCardKind;
   rankEntityId: string;
   authorSpaceId: string;
   blockEntityId: string;
@@ -36,6 +41,13 @@ export type RankingOgCardData = {
 export type RankingOgDataInput = {
   rankEntityId: string;
   authorSpaceId: string;
+  blockEntityId: string;
+  blockEntitySpaceId: string;
+  rankingStartDate?: string;
+  rankingEndDate?: string;
+};
+
+export type GlobalRankingOgDataInput = {
   blockEntityId: string;
   blockEntitySpaceId: string;
   rankingStartDate?: string;
@@ -112,6 +124,7 @@ export async function getRankingOgCardData(
   const authorName = profileName(profile, input.authorSpaceId);
 
   return {
+    kind: 'personal',
     rankEntityId: input.rankEntityId,
     authorSpaceId: input.authorSpaceId,
     blockEntityId: input.blockEntityId,
@@ -123,6 +136,42 @@ export async function getRankingOgCardData(
       name: authorName,
       avatarUrl: profileAvatar(profile),
       avatarSeed: profile.address ?? profile.spaceId ?? input.authorSpaceId,
+    },
+    entries,
+  };
+}
+
+export async function getGlobalRankingOgCardData(
+  input: GlobalRankingOgDataInput,
+  deps: RankingOgDataDeps = defaultDeps
+): Promise<RankingOgCardData | null> {
+  const blockEntity = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
+  if (!blockEntity) return null;
+
+  const orderedEntityIds = getOrderedRelationTargetIds(
+    blockEntity.relations,
+    input.blockEntityId,
+    RANK_POSITION_PROPERTY_ID,
+    input.blockEntitySpaceId
+  ).slice(0, 5);
+  const [entities] = await Promise.all([deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId)]);
+  const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+  const rankingName = blockEntity.name?.trim() || 'Untitled ranking';
+  const entries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
+
+  return {
+    kind: 'global',
+    rankEntityId: '',
+    authorSpaceId: '',
+    blockEntityId: input.blockEntityId,
+    blockEntitySpaceId: input.blockEntitySpaceId,
+    rankingName,
+    title: rankingName,
+    periodLabel: periodLabel(input.rankingStartDate, input.rankingEndDate),
+    author: {
+      name: '',
+      avatarUrl: null,
+      avatarSeed: input.blockEntityId,
     },
     entries,
   };

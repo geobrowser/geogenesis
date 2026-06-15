@@ -1,4 +1,5 @@
 export const RANKING_OG_LAYOUT_VERSION = 'ranking-og-v1';
+export const RANKING_GLOBAL_OG_LAYOUT_VERSION = 'ranking-global-og-v1';
 
 export type RankingOgVersionInput = {
   rankEntityId: string;
@@ -39,6 +40,35 @@ export function buildRankingOgVersion({
     rankingEndDate,
     authorName: authorName?.trim() ?? '',
     authorAvatarUrl: authorAvatarUrl ?? '',
+  });
+
+  return `${layoutVersion}-${stableHash(payload)}`;
+}
+
+export type GlobalRankingOgVersionInput = {
+  blockEntityId: string;
+  orderedEntityIds: string[];
+  rankingName: string;
+  rankingStartDate?: string;
+  rankingEndDate?: string;
+  layoutVersion?: string;
+};
+
+export function buildGlobalRankingOgVersion({
+  blockEntityId,
+  orderedEntityIds,
+  rankingName,
+  rankingStartDate = '',
+  rankingEndDate = '',
+  layoutVersion = RANKING_GLOBAL_OG_LAYOUT_VERSION,
+}: GlobalRankingOgVersionInput): string {
+  const payload = JSON.stringify({
+    layoutVersion,
+    blockEntityId,
+    orderedEntityIds,
+    rankingName: rankingName.trim(),
+    rankingStartDate,
+    rankingEndDate,
   });
 
   return `${layoutVersion}-${stableHash(payload)}`;

@@ -25,7 +25,17 @@ export type RankingOgObjectKeyInput = {
   variant: RankingOgVariant;
 };
 
+export type GlobalRankingOgObjectKeyInput = {
+  blockEntityId: string;
+  version: string;
+  variant: RankingOgVariant;
+};
+
 export type RankingOgPutObjectInput = RankingOgObjectKeyInput & {
+  body: Uint8Array;
+};
+
+export type GlobalRankingOgPutObjectInput = GlobalRankingOgObjectKeyInput & {
   body: Uint8Array;
 };
 
@@ -50,6 +60,21 @@ export function buildRankingOgObjectKey({ rankEntityId, version, variant }: Rank
     'og',
     'rankings',
     normalizeRankingOgKeyPart(rankEntityId),
+    normalizeRankingOgKeyPart(version),
+    `${variant}.png`,
+  ].join('/');
+}
+
+export function buildGlobalRankingOgObjectKey({
+  blockEntityId,
+  version,
+  variant,
+}: GlobalRankingOgObjectKeyInput): string {
+  return [
+    'og',
+    'rankings',
+    'global',
+    normalizeRankingOgKeyPart(blockEntityId),
     normalizeRankingOgKeyPart(version),
     `${variant}.png`,
   ].join('/');
@@ -212,6 +237,29 @@ export async function rankingOgObjectExists(config: RankingOgStorageConfig, key:
 
 export async function putRankingOgObject(config: RankingOgStorageConfig, input: RankingOgPutObjectInput) {
   const key = buildRankingOgObjectKey(input);
+  const url = r2ObjectUrl(config, key);
+  const headers = signR2Request({ method: 'PUT', url, body: input.body, config });
+  headers.set('content-type', RANKING_OG_IMAGE_CONTENT_TYPE);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: Buffer.from(input.body) as unknown as BodyInit,
+  });
+
+  if (!response.ok) {
+    throw new Error(`R2 PUT failed with ${response.status}`);
+  }
+
+  return {
+    key,
+    imageUrl: buildRankingOgPublicUrl(config.publicBaseUrl, key),
+  };
+}
+
+export async function putGlobalRankingOgObject(config: RankingOgStorageConfig, input: GlobalRankingOgPutObjectInput) {
+  const key = buildGlobalRankingOgObjectKey(input);
   const url = r2ObjectUrl(config, key);
   const headers = signR2Request({ method: 'PUT', url, body: input.body, config });
   headers.set('content-type', RANKING_OG_IMAGE_CONTENT_TYPE);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildRankingOgVersion } from './ranking-og-version';
+import { buildGlobalRankingOgVersion, buildRankingOgVersion } from './ranking-og-version';
 
 describe('buildRankingOgVersion', () => {
   it('is stable for the same preview-affecting inputs', () => {
@@ -28,5 +28,15 @@ describe('buildRankingOgVersion', () => {
     });
 
     expect(first).not.toBe(second);
+  });
+
+  it('builds stable global versions from block state', () => {
+    const input = {
+      blockEntityId: 'block-1',
+      orderedEntityIds: ['a', 'b'],
+      rankingName: 'Top projects',
+    };
+
+    expect(buildGlobalRankingOgVersion(input)).toBe(buildGlobalRankingOgVersion(input));
   });
 });

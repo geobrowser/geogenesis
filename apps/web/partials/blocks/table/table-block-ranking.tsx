@@ -40,6 +40,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     aggregatedRankingCount,
     openRankingCompose,
     globalSharePath,
+    ensureGlobalRankingOg,
   } = state;
 
   return (
@@ -74,7 +75,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             aria-label="Open fullscreen ranking"
           />
 
-          <TableBlockContextMenu sourceType={source.type} globalRankingSharePath={globalSharePath} />
+          <TableBlockContextMenu
+            sourceType={source.type}
+            globalRankingSharePath={globalSharePath}
+            onPrepareGlobalShareLink={ensureGlobalRankingOg}
+          />
         </div>
       </div>
 

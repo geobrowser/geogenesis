@@ -8,6 +8,7 @@ import { useAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { buildAbsoluteRankingShareUrl, copyRankingShareLink } from '~/core/blocks/ranking/ranking-share';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -21,8 +22,6 @@ import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
-import { buildAbsoluteRankingShareUrl, copyRankingShareLink } from '~/core/blocks/ranking/ranking-share';
-
 import { TableBlockEditPropertiesPanel } from './table-block-edit-properties-panel';
 import { editingPropertiesAtom } from '~/atoms';
 
@@ -35,9 +34,14 @@ const CONTEXT_MENU_SURFACE = 'z-1001 min-w-0 w-52 overflow-hidden rounded-lg bor
 type TableBlockContextMenuProps = {
   sourceType: Source['type'];
   globalRankingSharePath?: string | null;
+  onPrepareGlobalShareLink?: () => Promise<void>;
 };
 
-export function TableBlockContextMenu({ sourceType, globalRankingSharePath = null }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({
+  sourceType,
+  globalRankingSharePath = null,
+  onPrepareGlobalShareLink,
+}: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { spaceId, entityId, relationId } = useDataBlockInstance();
@@ -64,6 +68,7 @@ export function TableBlockContextMenu({ sourceType, globalRankingSharePath = nul
 
   const onCopyShareLink = async () => {
     if (!globalRankingSharePath) return;
+    await onPrepareGlobalShareLink?.();
     const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
     if (copied) {
       setIsMenuOpen(false);

@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import {
+  RANK_POSITION_PROPERTY_ID,
+  RANK_TYPE_ID,
+  RANK_VOTES_RELATION_TYPE_ID,
+  SUBMITTED_TO_PROPERTY_ID,
+} from '~/core/ranking-block-ids';
 import type { Entity, Profile } from '~/core/types';
 
 import { isRankSubmittedToBlock } from './my-ranking-entity';
-import { getRankingOgCardData } from './ranking-og-data';
+import { getGlobalRankingOgCardData, getRankingOgCardData } from './ranking-og-data';
 
 function entity(partial: Partial<Entity> & { id: string }): Entity {
   return {
@@ -135,5 +140,59 @@ describe('getRankingOgCardData', () => {
     );
 
     expect(data).toBeNull();
+  });
+});
+
+describe('getGlobalRankingOgCardData', () => {
+  it('uses the block name and global rank positions for the card', async () => {
+    const block = entity({
+      id: 'block-1',
+      name: 'Top projects',
+      relations: [
+        {
+          id: 'rank-b',
+          entityId: 'block-1',
+          isDeleted: false,
+          type: { id: RANK_POSITION_PROPERTY_ID, name: null },
+          fromEntity: { id: 'block-1', name: null },
+          toEntity: { id: 'entry-b', name: null, value: 'entry-b' },
+          renderableType: 'RELATION',
+          spaceId: 'block-space',
+          position: '00000000000000000000000000000001',
+        },
+        {
+          id: 'rank-a',
+          entityId: 'block-1',
+          isDeleted: false,
+          type: { id: RANK_POSITION_PROPERTY_ID, name: null },
+          fromEntity: { id: 'block-1', name: null },
+          toEntity: { id: 'entry-a', name: null, value: 'entry-a' },
+          renderableType: 'RELATION',
+          spaceId: 'block-space',
+          position: '00000000000000000000000000000000',
+        },
+      ],
+    });
+    const entries = [
+      entity({ id: 'entry-a', name: 'Entry A', description: 'First' }),
+      entity({ id: 'entry-b', name: 'Entry B', description: 'Second' }),
+    ];
+
+    const data = await getGlobalRankingOgCardData(
+      {
+        blockEntityId: 'block-1',
+        blockEntitySpaceId: 'block-space',
+        rankingEndDate: '2026-06-30',
+      },
+      {
+        fetchEntity: async id => (id === 'block-1' ? block : null),
+        fetchEntities: async () => entries,
+        fetchProfile: async () => profile,
+      }
+    );
+
+    expect(data?.kind).toBe('global');
+    expect(data?.title).toBe('Top projects');
+    expect(data?.entries.map(entry => entry.entityId)).toEqual(['entry-a', 'entry-b']);
   });
 });

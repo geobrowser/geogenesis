@@ -643,7 +643,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
       }}
     >
       <Background />
-      <OwnerBadge data={data} variant={variant} scale={scale} />
+      {data.kind !== 'global' ? <OwnerBadge data={data} variant={variant} scale={scale} /> : null}
       <div
         style={{
           position: 'absolute',
