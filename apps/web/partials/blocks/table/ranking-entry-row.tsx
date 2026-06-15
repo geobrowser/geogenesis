@@ -1,7 +1,6 @@
 'use client';
 
 import cx from 'classnames';
-import NextImage from 'next/image';
 
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
@@ -9,10 +8,8 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
+import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-
-const ROW_AVATAR_SIZE_PX = 64;
 
 const ROW_NAME_CLASS = 'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
@@ -61,24 +58,7 @@ export function RankingEntryRow({
           {rank}
         </span>
       ) : null}
-      {imageUrl ? (
-        <GeoImage
-          key={avatarImageValue}
-          value={imageUrl}
-          alt=""
-          fill
-          sizes={`${ROW_AVATAR_SIZE_PX}px`}
-          className="object-cover"
-        />
-      ) : (
-        <NextImage
-          src={PLACEHOLDER_SPACE_IMAGE}
-          alt=""
-          fill
-          sizes={`${ROW_AVATAR_SIZE_PX}px`}
-          className="object-cover"
-        />
-      )}
+      <ThumbGeoImage key={avatarImageValue} value={avatarImageValue} className="object-cover" />
     </div>
   );
 
