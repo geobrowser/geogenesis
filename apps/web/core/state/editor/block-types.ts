@@ -18,8 +18,9 @@ const BLOCK_TYPE_NAMES: Record<BlockTypeId, string> = {
 
 export function getRelationForBlockType(
   fromBlockEntityId: string,
-  blockTypeId: BlockTypeId,
-  spaceId: string
+  blockTypeId: BlockTypeId | string,
+  spaceId: string,
+  blockTypeName?: string | null
 ): Relation {
   return {
     id: IdUtils.generate(),
@@ -33,7 +34,7 @@ export function getRelationForBlockType(
     },
     toEntity: {
       id: EntityId(blockTypeId),
-      name: BLOCK_TYPE_NAMES[blockTypeId],
+      name: blockTypeName ?? BLOCK_TYPE_NAMES[blockTypeId as BlockTypeId] ?? null,
       value: blockTypeId,
     },
     fromEntity: {

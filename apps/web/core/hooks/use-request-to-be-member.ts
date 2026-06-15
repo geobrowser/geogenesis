@@ -49,9 +49,6 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       throw new Error('Invalid target space ID');
     }
 
-    // Members/editors already belong to the space; a duplicate join request errors on vote.
-    // Check at submit time rather than via reactive access-control state, which reads false
-    // while still hydrating and would let a fast click through. Fail open if the check errors.
     const normalizedSpaceId = normalizeSpaceId(spaceId);
     const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
     const access = await runEffectEither(

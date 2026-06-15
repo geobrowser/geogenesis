@@ -8,6 +8,7 @@ import { DefaultChatTransport, type UIMessage, isTextUIPart, isToolUIPart } from
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 import { capture } from '~/core/analytics';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
@@ -52,6 +53,12 @@ import { ChatPanel } from './chat-panel';
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
+
+const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
+
+function isFullscreenChildRoute(pathname: string): boolean {
+  return FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix));
+}
 
 // Guard router.push against hallucinated id shapes.
 function validId(value: string | undefined): value is string {
@@ -180,6 +187,7 @@ function describeChatError(error: Error): string {
 type ChatMode = 'default' | 'ingestion';
 
 export function ChatWidget() {
+  const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
   const [isOpen, setIsOpen] = useAtom(isChatOpenAtom);
   const [seed, setSeed] = useAtom(assistantSeedAtom);
   const setInjectInline = useSetAtom(injectInlineAtom);
@@ -193,8 +201,13 @@ export function ChatWidget() {
   // actually have something to persist.
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
-  const pathname = usePathname();
+  const pathname = usePathname() ?? '';
+  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
   const params = useParams();
+
+  React.useLayoutEffect(() => {
+    setPortalTarget(document.body);
+  }, []);
   const router = useRouter();
   const { editable } = useEditable();
   const { setIsReviewOpen, bumpReviewVersion } = useDiff();
@@ -522,6 +535,12 @@ export function ChatWidget() {
     },
     [setIsOpen, trackAssistantPanel]
   );
+
+  React.useEffect(() => {
+    if (hideAssistantOnRoute && isOpen) {
+      closeAssistant('fullscreen_route');
+    }
+  }, [hideAssistantOnRoute, isOpen, closeAssistant]);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
@@ -1028,7 +1047,7 @@ export function ChatWidget() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         // Don't hijack the shortcut mid-IME composition.
-        if (event.isComposing) return;
+        if (event.isComposing || hideAssistantOnRoute) return;
         event.preventDefault();
         if (isOpen) {
           closeAssistant('keyboard_shortcut');
@@ -1039,7 +1058,7 @@ export function ChatWidget() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeAssistant, isBusy, isOpen, openAssistant, stopAndScrub]);
+  }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -1057,45 +1076,49 @@ export function ChatWidget() {
     sendMessage({ text });
   };
 
-  return (
-    <>
-      <AnimatePresence mode="wait">
-        {isOpen ? (
-          <ChatPanel
-            key="panel"
-            messages={messages}
-            status={status}
-            error={error}
-            isBusy={isBusy}
-            isCompacting={isCompacting}
-            input={input}
-            onInputChange={setInput}
-            onSend={handleSend}
-            onStop={stopAndScrub}
-            onSuggestion={handleSuggestion}
-            onNewChat={handleNewChat}
-            onClose={() => closeAssistant('header_button')}
-            suppressWelcome={seed !== null || (status === 'submitted' && messages.length === 0)}
-            history={history}
-            onSwitchChat={handleSwitchChat}
-            onClearHistory={handleClearHistory}
-          />
-        ) : (
-          <motion.button
-            type="button"
-            key="fab"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.15 }}
-            onClick={() => openAssistant('fab')}
-            aria-label="Open assistant"
-            className="fixed right-4 bottom-4 z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
-          >
-            <AssistantSparkle size={20} />
-          </motion.button>
-        )}
-      </AnimatePresence>
-    </>
+  if (!portalTarget) {
+    return null;
+  }
+
+  const ui = hideAssistantOnRoute ? null : (
+    <AnimatePresence mode="wait">
+      {isOpen ? (
+        <ChatPanel
+          key="panel"
+          messages={messages}
+          status={status}
+          error={error}
+          isBusy={isBusy}
+          isCompacting={isCompacting}
+          input={input}
+          onInputChange={setInput}
+          onSend={handleSend}
+          onStop={stopAndScrub}
+          onSuggestion={handleSuggestion}
+          onNewChat={handleNewChat}
+          onClose={() => closeAssistant('header_button')}
+          suppressWelcome={seed !== null || (status === 'submitted' && messages.length === 0)}
+          history={history}
+          onSwitchChat={handleSwitchChat}
+          onClearHistory={handleClearHistory}
+        />
+      ) : (
+        <motion.button
+          type="button"
+          key="fab"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.8 }}
+          transition={{ duration: 0.15 }}
+          onClick={() => openAssistant('fab')}
+          aria-label="Open assistant"
+          className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
+        >
+          <AssistantSparkle size={20} />
+        </motion.button>
+      )}
+    </AnimatePresence>
   );
+
+  return createPortal(ui, portalTarget);
 }

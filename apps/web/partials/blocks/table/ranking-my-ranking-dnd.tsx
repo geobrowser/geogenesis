@@ -1,0 +1,217 @@
+'use client';
+
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+import * as React from 'react';
+
+const POINTER_ACTIVATION = { distance: 8 };
+const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
+
+type DragOverlaySnapshot = {
+  entityId: string;
+  index: number;
+  imageUrl?: string;
+};
+
+function readRowImageValue(rowEl: Element | null): string | undefined {
+  if (!rowEl) return undefined;
+  const avatarEl = rowEl.querySelector('[data-ranking-image-value]');
+  const value = avatarEl?.getAttribute('data-ranking-image-value');
+  return value || undefined;
+}
+
+type Props = {
+  entityIds: string[];
+  onReorder: (entityIds: string[]) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  className?: string;
+  disabled?: boolean;
+  renderItem: (entityId: string, index: number, isDragActive?: boolean, overlayImageUrl?: string) => React.ReactNode;
+};
+
+function RankingMyRankingSortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+
+  const [justDragged, setJustDragged] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isDragging) {
+      setJustDragged(true);
+    } else if (justDragged) {
+      const timeout = setTimeout(() => setJustDragged(false), 200);
+      return () => clearTimeout(timeout);
+    }
+  }, [isDragging, justDragged]);
+
+  const suppressClickAfterDrag = (event: React.MouseEvent) => {
+    if (justDragged) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  const style: React.CSSProperties = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    ...(isDragging ? { pointerEvents: 'none' } : {}),
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="relative cursor-grab touch-manipulation active:cursor-grabbing"
+      {...attributes}
+      {...listeners}
+      onClick={suppressClickAfterDrag}
+      onClickCapture={suppressClickAfterDrag}
+      onMouseDown={event => event.stopPropagation()}
+    >
+      <div data-ranking-sortable-id={id} className={isDragging ? 'invisible' : undefined} aria-hidden={isDragging}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+export function RankingMyRankingDndList({
+  entityIds,
+  onReorder,
+  onDragStart,
+  onDragEnd,
+  className,
+  disabled = false,
+  renderItem,
+}: Props) {
+  const [activeDragOrder, setActiveDragOrder] = React.useState<string[] | null>(null);
+  const onReorderRef = React.useRef(onReorder);
+  const renderItemRef = React.useRef(renderItem);
+  const entityIdsRef = React.useRef(entityIds);
+
+  onReorderRef.current = onReorder;
+  renderItemRef.current = renderItem;
+  entityIdsRef.current = entityIds;
+
+  const items = activeDragOrder ?? entityIds;
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: POINTER_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION })
+  );
+
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const [activeWidth, setActiveWidth] = React.useState<number | null>(null);
+  const [dragOverlaySnapshot, setDragOverlaySnapshot] = React.useState<DragOverlaySnapshot | null>(null);
+
+  const finishDrag = React.useCallback(() => {
+    setActiveDragOrder(null);
+    setActiveId(null);
+    setActiveWidth(null);
+    setDragOverlaySnapshot(null);
+    onDragEnd?.();
+  }, [onDragEnd]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const draggedId = event.active.id as string;
+    const rowEl = document.querySelector(`[data-ranking-sortable-id="${draggedId}"]`);
+    const imageUrl = readRowImageValue(rowEl);
+
+    setActiveDragOrder([...entityIdsRef.current]);
+    setActiveId(draggedId);
+    setDragOverlaySnapshot({
+      entityId: draggedId,
+      index: entityIdsRef.current.indexOf(draggedId),
+      imageUrl,
+    });
+    const initialRect = event.active.rect.current.initial;
+    if (initialRect) {
+      setActiveWidth(initialRect.width);
+    }
+    onDragStart?.();
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    try {
+      if (!over || active.id === over.id) return;
+
+      const dragItems = itemsRef.current;
+      const oldIndex = dragItems.indexOf(active.id as string);
+      const newIndex = dragItems.indexOf(over.id as string);
+      if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return;
+
+      const nextItems = arrayMove([...dragItems], oldIndex, newIndex);
+      onReorderRef.current(nextItems);
+    } finally {
+      finishDrag();
+    }
+  };
+
+  const handleDragCancel = () => {
+    finishDrag();
+  };
+
+  if (disabled || items.length < 2) {
+    return (
+      <div className={className}>
+        {items.map((entityId, index) => (
+          <React.Fragment key={entityId}>{renderItem(entityId, index, false)}</React.Fragment>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <SortableContext items={items} strategy={verticalListSortingStrategy}>
+        <div className={className}>
+          {items.map((entityId, index) => (
+            <RankingMyRankingSortableItem key={entityId} id={entityId}>
+              {renderItem(entityId, index, activeId !== null)}
+            </RankingMyRankingSortableItem>
+          ))}
+        </div>
+      </SortableContext>
+
+      <DragOverlay dropAnimation={null}>
+        {dragOverlaySnapshot && dragOverlaySnapshot.index >= 0 ? (
+          <div
+            className="cursor-grabbing rounded-lg bg-white shadow-lg ring-1 ring-grey-02"
+            style={{ width: activeWidth ?? undefined }}
+          >
+            {renderItemRef.current(
+              dragOverlaySnapshot.entityId,
+              dragOverlaySnapshot.index,
+              true,
+              dragOverlaySnapshot.imageUrl
+            )}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
