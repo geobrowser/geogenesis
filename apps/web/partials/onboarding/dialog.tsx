@@ -36,14 +36,12 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { NewTab } from '~/design-system/icons/new-tab';
-import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
-import { Tooltip } from '~/design-system/tooltip';
 import { Truncate } from '~/design-system/truncate';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
@@ -60,6 +58,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
+const TERMS_AND_CONDITIONS_URL =
+  'https://docs.google.com/document/d/1clBax9yApV8uI1m36gX9pEf6jrpMEslsqxmqXW2w9I4/edit?tab=t.0';
 
 const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
@@ -499,20 +499,17 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
-          <Tooltip
-            trigger={
-              <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
-                <Text as="h3" variant="footnote" className="text-center">
-                  Personal access controls
-                </Text>
-                <div>
-                  <QuestionCircle />
-                </div>
-              </div>
-            }
-            label="A vote isn’t required to publish edits in this space"
-            position="top"
-          />
+          <Text as="p" variant="footnote" className="text-center text-grey-04">
+            By signing up, you agree to our{' '}
+            <a
+              href={TERMS_AND_CONDITIONS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text underline decoration-text underline-offset-2"
+            >
+              Terms &amp; Conditions
+            </a>
+          </Text>
         </div>
         <Button disabled={!validName || isSearching || isUploadingAvatar} onClick={handleContinue} className="w-full">
           {isSearching ? (
