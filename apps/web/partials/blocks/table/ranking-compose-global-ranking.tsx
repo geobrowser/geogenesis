@@ -441,7 +441,10 @@ export function RankingComposeGlobalRanking({
 
                 if (isMobile) {
                   flushSync(() => onSearchOpenChange(true));
-                  const scrollTarget = globalSearchChromeRef.current ?? globalSectionRef.current;
+                  // Scroll to the section wrapper, not the sticky chrome: the chrome's bounding
+                  // rect reflects its pinned position so scrolling to it is a no-op, leaving the
+                  // list anchored at its natural offset above the viewport.
+                  const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
                   const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
                   captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
                   searchInputRef.current?.focus({ preventScroll: true });
