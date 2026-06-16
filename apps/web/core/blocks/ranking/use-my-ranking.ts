@@ -59,7 +59,8 @@ export function useMyRanking(blockId: string) {
     orderedEntityIds,
     isLoading,
     refetchMyRanking: React.useCallback(async () => {
-      await refetch();
+      const result = await refetch();
+      return result.data ?? { rankEntity: null, orderedEntityIds: [] as string[] };
     }, [refetch]),
   };
 }

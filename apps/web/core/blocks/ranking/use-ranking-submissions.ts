@@ -12,7 +12,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { checkEntityExists } from '~/core/io/queries';
+import { ID } from '~/core/id';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
@@ -224,18 +224,20 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const POLL_INTERVAL_MS = 2000;
         const MAX_POLL_ATTEMPTS = 30;
 
+        // Poll until the indexer reflects the exact order we just submitted.
+        const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
+        const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+
         await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           try {
-            const exists = await Effect.runPromise(checkEntityExists(rankId));
-            if (exists) break;
+            const refreshed = await refetchMyRanking();
+            if (matchesExpectedOrder(refreshed.orderedEntityIds)) break;
           } catch (e) {
-            console.error('[useRankingSubmissions] Poll for indexed rank failed:', e);
+            console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
           }
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         }
-
-        await refetchMyRanking();
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
 
