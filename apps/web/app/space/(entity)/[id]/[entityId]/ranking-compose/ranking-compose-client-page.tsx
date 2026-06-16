@@ -8,6 +8,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 
 import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
 import { RankingViewScreen } from '~/partials/blocks/table/ranking-view-screen';
+import { type InitialGlobalRanking } from '~/partials/blocks/table/use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -20,6 +21,7 @@ type Props = {
   rankEntityId?: string;
   authorSpaceId?: string;
   ogVersion?: string;
+  initialGlobalRanking?: InitialGlobalRanking;
 };
 
 function RankingComposeLoadingState({ message }: { message: string }) {
@@ -41,6 +43,7 @@ export function RankingComposeClientPage({
   rankEntityId = '',
   authorSpaceId = '',
   ogVersion = '',
+  initialGlobalRanking,
 }: Props) {
   const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
     spaceId,
@@ -49,16 +52,24 @@ export function RankingComposeClientPage({
     parentEntityIdParam,
   });
 
+  // Seeded view pages render immediately instead of waiting on the client block
+  // resolution; the live store reconciles in the background with no visible swap.
+  const hasSeededRanking = mode === 'view' && initialGlobalRanking != null;
+
   if (!hasValidParams) {
     return <RankingComposeLoadingState message="Invalid parameters" />;
   }
 
-  if (isLoading) {
-    return <RankingComposeLoadingState message="Loading ranking..." />;
+  if (!parentEntityId) {
+    return isLoading ? (
+      <RankingComposeLoadingState message="Loading ranking..." />
+    ) : (
+      <RankingComposeLoadingState message="Data block not found" />
+    );
   }
 
-  if (!parentEntityId) {
-    return <RankingComposeLoadingState message="Data block not found" />;
+  if (isLoading && !hasSeededRanking) {
+    return <RankingComposeLoadingState message="Loading ranking..." />;
   }
 
   return (
@@ -78,6 +89,7 @@ export function RankingComposeClientPage({
               rankEntityId={rankEntityId}
               authorSpaceId={authorSpaceId}
               ogVersion={ogVersion}
+              initialGlobalRanking={initialGlobalRanking}
             />
           ) : (
             <RankingComposeScreen
