@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getAllEntities, getEntity } from '~/core/io/queries';
+import { getAllEntities, getEntity, getEntityPage } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
-import type { Entity, Profile } from '~/core/types';
+import type { Entity, Profile, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
@@ -56,12 +56,14 @@ export type GlobalRankingOgDataInput = {
 
 type RankingOgDataDeps = {
   fetchEntity: (entityId: string, spaceId?: string) => Promise<Entity | null>;
+  fetchEntityPage: (entityId: string, spaceId?: string) => Promise<{ entity: Entity; relations: Relation[] } | null>;
   fetchEntities: (entityIds: string[], spaceId?: string) => Promise<Entity[]>;
   fetchProfile: (spaceId: string) => Promise<Profile>;
 };
 
 const defaultDeps: RankingOgDataDeps = {
   fetchEntity: (entityId, spaceId) => Effect.runPromise(getEntity(entityId, spaceId)),
+  fetchEntityPage: (entityId, spaceId) => Effect.runPromise(getEntityPage(entityId, spaceId)),
   fetchEntities: async (entityIds, spaceId) => {
     if (entityIds.length === 0) return [];
     const { entities } = await Effect.runPromise(
@@ -75,6 +77,24 @@ const defaultDeps: RankingOgDataDeps = {
   },
   fetchProfile: spaceId => Effect.runPromise(fetchProfileBySpaceId(spaceId)),
 };
+
+async function resolveEntityRelations(
+  deps: RankingOgDataDeps,
+  entityId: string,
+  spaceId?: string
+): Promise<{ entity: Entity; relations: Relation[] } | null> {
+  const page = await deps.fetchEntityPage(entityId, spaceId);
+  if (page?.entity) {
+    return {
+      entity: page.entity,
+      relations: page.relations.length > 0 ? page.relations : (page.entity.relations ?? []),
+    };
+  }
+
+  const entity = await deps.fetchEntity(entityId, spaceId);
+  if (!entity) return null;
+  return { entity, relations: entity.relations ?? [] };
+}
 
 function hasRankType(entity: Entity): boolean {
   return entity.types.some(type => type.id === RANK_TYPE_ID);
@@ -108,13 +128,21 @@ export async function getRankingOgCardData(
   input: RankingOgDataInput,
   deps: RankingOgDataDeps = defaultDeps
 ): Promise<RankingOgCardData | null> {
-  const rankEntity = await deps.fetchEntity(input.rankEntityId, input.authorSpaceId);
+  const rankPage = await resolveEntityRelations(deps, input.rankEntityId, input.authorSpaceId);
+  const rankEntity = rankPage?.entity;
   if (!rankEntity || !hasRankType(rankEntity)) return null;
-  if (!isRankSubmittedToBlock(rankEntity, input.authorSpaceId, input.blockEntityId)) return null;
+  if (
+    !isRankSubmittedToBlock({ ...rankEntity, relations: rankPage.relations }, input.authorSpaceId, input.blockEntityId)
+  ) {
+    return null;
+  }
 
   const rankingBlock = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
   const rankingName = rankingBlock?.name?.trim() || rankEntity.name?.trim() || 'Untitled ranking';
-  const orderedEntityIds = getMyRankingOrderedEntityIds(rankEntity, input.authorSpaceId).slice(0, 5);
+  const orderedEntityIds = getMyRankingOrderedEntityIds(
+    { ...rankEntity, relations: rankPage.relations },
+    input.authorSpaceId
+  ).slice(0, 5);
   const [entities, profile] = await Promise.all([
     deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId),
     deps.fetchProfile(input.authorSpaceId),
@@ -145,18 +173,18 @@ export async function getGlobalRankingOgCardData(
   input: GlobalRankingOgDataInput,
   deps: RankingOgDataDeps = defaultDeps
 ): Promise<RankingOgCardData | null> {
-  const blockEntity = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
-  if (!blockEntity) return null;
+  const blockPage = await resolveEntityRelations(deps, input.blockEntityId, input.blockEntitySpaceId);
+  if (!blockPage) return null;
 
   const orderedEntityIds = getOrderedRelationTargetIds(
-    blockEntity.relations,
+    blockPage.relations,
     input.blockEntityId,
     RANK_POSITION_PROPERTY_ID,
     input.blockEntitySpaceId
   ).slice(0, 5);
   const [entities] = await Promise.all([deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId)]);
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-  const rankingName = blockEntity.name?.trim() || 'Untitled ranking';
+  const rankingName = blockPage.entity.name?.trim() || 'Untitled ranking';
   const entries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
 
   return {

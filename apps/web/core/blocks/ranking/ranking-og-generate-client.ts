@@ -23,7 +23,11 @@ async function postRankingOgGenerate(body: Record<string, unknown>): Promise<boo
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!response.ok) return false;
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => '');
+      console.error('[ranking-og/generate-client] failed:', response.status, errorBody);
+      return false;
+    }
     const result = (await response.json()) as { ok?: boolean; imageUrls?: { landscape?: string } };
     return Boolean(result.ok && result.imageUrls?.landscape);
   } catch (error) {

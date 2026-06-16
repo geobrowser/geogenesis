@@ -113,6 +113,7 @@ describe('getRankingOgCardData', () => {
       },
       {
         fetchEntity: async id => (id === 'rank-1' ? rank : block),
+        fetchEntityPage: async id => (id === 'rank-1' ? { entity: rank, relations: rank.relations } : null),
         fetchEntities: async () => entries,
         fetchProfile: async () => profile,
       }
@@ -134,6 +135,10 @@ describe('getRankingOgCardData', () => {
       },
       {
         fetchEntity: async () => entity({ id: 'rank-1', types: [{ id: RANK_TYPE_ID, name: 'Rank' }] }),
+        fetchEntityPage: async () => ({
+          entity: entity({ id: 'rank-1', types: [{ id: RANK_TYPE_ID, name: 'Rank' }] }),
+          relations: [],
+        }),
         fetchEntities: async () => [],
         fetchProfile: async () => profile,
       }
@@ -186,6 +191,7 @@ describe('getGlobalRankingOgCardData', () => {
       },
       {
         fetchEntity: async id => (id === 'block-1' ? block : null),
+        fetchEntityPage: async id => (id === 'block-1' ? { entity: block, relations: block.relations } : null),
         fetchEntities: async () => entries,
         fetchProfile: async () => profile,
       }

@@ -1,79 +1,51 @@
-import type { RankingOgCardData } from '~/core/blocks/ranking/ranking-og-data';
-import { getRankingOgCardData } from '~/core/blocks/ranking/ranking-og-data';
+import { getGlobalRankingOgCardData, getRankingOgCardData } from '~/core/blocks/ranking/ranking-og-data';
 import { generateRankingOgImageResponse } from '~/core/blocks/ranking/ranking-og-image';
 
 import { isValidEntityId, jsonResponse, parseVariant } from '../route-utils';
 
 export const runtime = 'nodejs';
 
-const sampleData: RankingOgCardData = {
-  rankEntityId: 'sample-rank',
-  authorSpaceId: 'sample-author',
-  blockEntityId: 'sample-block',
-  blockEntitySpaceId: 'sample-space',
-  rankingName: 'public goods projects',
-  title: 'My public goods projects',
-  periodLabel: 'Ends in 8 days',
-  author: {
-    name: 'Nico from Geo',
-    avatarUrl: null,
-    avatarSeed: 'nico',
-  },
-  entries: [
-    {
-      entityId: 'one',
-      name: 'Hypercerts',
-      description: 'Funding impact with crisp evidence trails',
-      image: null,
-    },
-    {
-      entityId: 'two',
-      name: 'Protocol Guild',
-      description: 'Sustaining core Ethereum contributors',
-      image: null,
-    },
-    {
-      entityId: 'three',
-      name: 'Open source maintainers',
-      description: 'The quiet backbone of shared software',
-      image: null,
-    },
-    {
-      entityId: 'four',
-      name: 'Local-first tools',
-      description: 'Software that keeps user agency close',
-      image: null,
-    },
-    {
-      entityId: 'five',
-      name: 'Knowledge graphs',
-      description: 'Better shared memory for the internet',
-      image: null,
-    },
-  ],
-};
-
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
   const variant = parseVariant(url.searchParams.get('variant')) ?? 'landscape';
-  const rankEntityId = url.searchParams.get('rankEntityId') ?? '';
-  const authorSpaceId = url.searchParams.get('authorSpaceId') ?? '';
+  const scope = url.searchParams.get('scope') === 'global' ? 'global' : 'personal';
   const blockEntityId = url.searchParams.get('blockEntityId') ?? '';
   const blockEntitySpaceId = url.searchParams.get('blockEntitySpaceId') ?? '';
+  const rankingStartDate = url.searchParams.get('rankingStartDate') ?? '';
+  const rankingEndDate = url.searchParams.get('rankingEndDate') ?? '';
 
-  let data = sampleData;
-  if ([rankEntityId, authorSpaceId, blockEntityId, blockEntitySpaceId].every(isValidEntityId)) {
-    const fetched = await getRankingOgCardData({
-      rankEntityId,
-      authorSpaceId,
+  if (scope === 'global') {
+    if (!isValidEntityId(blockEntityId) || !isValidEntityId(blockEntitySpaceId)) {
+      return jsonResponse(400, { ok: false, error: 'invalid_input' });
+    }
+
+    const data = await getGlobalRankingOgCardData({
       blockEntityId,
       blockEntitySpaceId,
-      rankingStartDate: url.searchParams.get('rankingStartDate') ?? '',
-      rankingEndDate: url.searchParams.get('rankingEndDate') ?? '',
+      rankingStartDate,
+      rankingEndDate,
     });
-    if (!fetched) return jsonResponse(404, { ok: false, error: 'not_found' });
-    data = fetched;
+    if (!data) return jsonResponse(404, { ok: false, error: 'not_found' });
+
+    return generateRankingOgImageResponse(data, variant);
   }
+
+  const rankEntityId = url.searchParams.get('rankEntityId') ?? '';
+  const authorSpaceId = url.searchParams.get('authorSpaceId') ?? '';
+
+  if (![rankEntityId, authorSpaceId, blockEntityId, blockEntitySpaceId].every(isValidEntityId)) {
+    return jsonResponse(400, { ok: false, error: 'invalid_input' });
+  }
+
+  const data = await getRankingOgCardData({
+    rankEntityId,
+    authorSpaceId,
+    blockEntityId,
+    blockEntitySpaceId,
+    rankingStartDate,
+    rankingEndDate,
+  });
+  if (!data) return jsonResponse(404, { ok: false, error: 'not_found' });
 
   return generateRankingOgImageResponse(data, variant);
 }
