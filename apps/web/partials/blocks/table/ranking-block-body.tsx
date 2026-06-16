@@ -49,8 +49,7 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, isSharedRankingView, openRankingCompose } = state;
-  if (isSharedRankingView) return null;
+  const { showEditRankingButton, isSaving, openRankingCompose } = state;
 
   return showEditRankingButton ? (
     <Button
@@ -172,7 +171,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
 
   // On mobile fullscreen the action buttons move below the My ranking tab.
   const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
-  const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection;
+  const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection && !isSharedRankingView;
   const showMyTabActionsBelowTabs =
     presentation === 'fullscreen' && activeTab === 'my' && showMyRankingSection && Boolean(myRankingTabActions);
 

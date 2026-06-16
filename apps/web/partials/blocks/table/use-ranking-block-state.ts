@@ -293,7 +293,6 @@ export function useRankingBlockState({
     [embeddedMyTotalPages]
   );
 
-  const hasDisplayedSubmission = Boolean(sharedSubmission || hasMySubmission);
   const hasOwnMyRankingData =
     hasMySubmission || (!hasSharedRankingUrl && !sharedSubmission && myDisplayEntityIds.length > 0);
   const hasMyRankingData =
@@ -635,7 +634,7 @@ export function useRankingBlockState({
     });
   }, [effectiveGlobalOgVersion, entityId, rankingEndDate, rankingStartDate, spaceId]);
 
-  const showEditRankingButton = !isSharedRankingView && (hasMySubmission || myDisplayEntityIds.length > 0);
+  const showEditRankingButton = hasMySubmission || (!isSharedRankingView && myDisplayEntityIds.length > 0);
 
   const showFirstRankingPrompt =
     !isLoadingGlobalEntries &&
