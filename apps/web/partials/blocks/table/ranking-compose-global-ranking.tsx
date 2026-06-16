@@ -261,11 +261,19 @@ export function RankingComposeGlobalRanking({
     (value: string) => {
       const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
       if (isFirstSearchCharacter) {
-        captureSearchListLayout();
+        if (isMobile) {
+          // Defer the scroll-to-top until the first keystroke so it happens at the same
+          // moment results clear — feels like a focus change, not a page jump on icon tap.
+          const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
+          const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
+          captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
+        } else {
+          captureSearchListLayout();
+        }
       }
       onSearchQueryChange(value);
     },
-    [captureSearchListLayout, onSearchQueryChange, searchQuery]
+    [captureSearchListLayout, isMobile, onSearchQueryChange, searchQuery]
   );
 
   React.useEffect(() => {
@@ -441,12 +449,6 @@ export function RankingComposeGlobalRanking({
 
                 if (isMobile) {
                   flushSync(() => onSearchOpenChange(true));
-                  // Scroll to the section wrapper, not the sticky chrome: the chrome's bounding
-                  // rect reflects its pinned position so scrolling to it is a no-op, leaving the
-                  // list anchored at its natural offset above the viewport.
-                  const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
-                  const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
-                  captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
                   searchInputRef.current?.focus({ preventScroll: true });
                   return;
                 }
