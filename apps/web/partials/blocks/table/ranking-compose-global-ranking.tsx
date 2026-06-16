@@ -411,7 +411,7 @@ export function RankingComposeGlobalRanking({
     >
       <div
         ref={globalSearchChromeRef}
-        className="shrink-0"
+        className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div
