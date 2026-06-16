@@ -4,6 +4,8 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { getImagePath } from '~/core/utils/utils';
+
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
 import { RANKING_OG_IMAGE_CONTENT_TYPE, RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
 
@@ -68,6 +70,12 @@ const geistFonts = [
     style: 'normal' as const,
   },
 ];
+
+function toRenderableImageSrc(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const resolved = getImagePath(value);
+  return resolved.startsWith('http') || resolved.startsWith('data:') ? resolved : null;
+}
 
 function initials(name: string): string {
   const parts = name
@@ -235,8 +243,9 @@ function Avatar({
     overflow: 'hidden',
   };
 
-  if (data.author.avatarUrl) {
-    return <img src={data.author.avatarUrl} width={size} height={size} style={{ ...style, objectFit: 'cover' }} />;
+  const avatarSrc = toRenderableImageSrc(data.author.avatarUrl);
+  if (avatarSrc) {
+    return <img src={avatarSrc} width={size} height={size} style={{ ...style, objectFit: 'cover' }} />;
   }
 
   return <div style={style}>{initials(data.author.name).toUpperCase()}</div>;
@@ -451,7 +460,7 @@ function EntryImage({
   variant: RankingOgVariant;
   scale: number;
 }) {
-  const src = entry.image ?? fallbackThumbnailSrc(entry);
+  const src = toRenderableImageSrc(entry.image) ?? fallbackThumbnailSrc(entry);
   const { width, height } = imageDimensions(index, variant, scale);
 
   if (src) {
