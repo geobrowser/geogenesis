@@ -14,6 +14,7 @@ import { searchResultMatchesAllowedTypes, useSearch } from '~/core/hooks/use-sea
 import { ID } from '~/core/id';
 import type { Property, SearchResult, SpaceEntity } from '~/core/types';
 
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Check } from '~/design-system/icons/check';
@@ -504,11 +505,9 @@ export function QuerySetupTypesSelectEntityPopover({
                                                   </Truncate>
                                                 )}
                                               </div>
-                                              {isDraftSelected ? (
-                                                <span className="shrink-0 self-start pt-0.5">
-                                                  <Check />
-                                                </span>
-                                              ) : null}
+                                              <span className="shrink-0 self-start pt-0.5">
+                                                <CheckboxVisual checked={isDraftSelected} />
+                                              </span>
                                             </button>
                                           </div>
                                           {pickable && multiSpace ? (
