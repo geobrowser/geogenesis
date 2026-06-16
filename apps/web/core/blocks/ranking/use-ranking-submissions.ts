@@ -24,6 +24,14 @@ import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
 
+export type RankingSubmissionPublishResult = {
+  rankEntityId: string;
+  authorSpaceId: string;
+  orderedEntityIds: string[];
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+};
+
 function createdAtToEpochMillis(value: string): number {
   return /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) || 0;
 }
@@ -102,11 +110,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]): Promise<boolean> => {
-      if (!personalSpaceId) return false;
+    async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
+      if (!personalSpaceId) return null;
       if (!smartAccount) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
-        return false;
+        return null;
       }
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
@@ -116,19 +124,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         value: rankingVoteWeightFromIndex(index),
       }));
 
-      if (votes.length === 0) return false;
+      if (votes.length === 0) return null;
 
       const invalidVote = votes.find(vote => !validateEntityId(vote.entityId));
       if (invalidVote) {
         console.error('[useRankingSubmissions] Invalid vote entity id:', invalidVote.entityId);
         reportError(`Failed to publish ranking: invalid entity id "${invalidVote.entityId}"`);
-        return false;
+        return null;
       }
 
       if (myRankEntity && !validateEntityId(myRankEntity.id)) {
         console.error('[useRankingSubmissions] Invalid rank entity id:', myRankEntity.id);
         reportError(`Failed to publish ranking: invalid rank id "${myRankEntity.id}"`);
-        return false;
+        return null;
       }
 
       setIsSaving(true);
@@ -155,7 +163,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
           reportError(`Failed to publish ranking: ${describeError(error)}`);
-          return false;
+          return null;
         }
 
         const publish = Effect.gen(function* () {
@@ -202,11 +210,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         if (Either.isLeft(result)) {
           const err = result.left;
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return false;
+            return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
           reportError(`Failed to publish ranking: ${describeError(err)}`);
-          return false;
+          return null;
         }
 
         clearLocalMyRankingDraft(spaceId, blockId);
@@ -228,12 +236,33 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         }
 
         await refetchMyRanking();
-        return true;
+        const authorAvatarUrl =
+          profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+        return {
+          rankEntityId: rankId,
+          authorSpaceId: personalSpaceId,
+          orderedEntityIds: votes.map(vote => vote.entityId),
+          authorName: profile?.name ?? null,
+          authorAvatarUrl,
+        };
       } finally {
         setIsSaving(false);
       }
     },
-    [blockId, blockName, myRankEntity, personalSpaceId, refetchMyRanking, reportError, setToast, smartAccount, spaceId]
+    [
+      blockId,
+      blockName,
+      myRankEntity,
+      personalSpaceId,
+      profile?.avatarUrl,
+      profile?.name,
+      refetchMyRanking,
+      reportError,
+      setToast,
+      smartAccount,
+      spaceId,
+    ]
   );
 
   return {

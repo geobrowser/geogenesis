@@ -1,5 +1,6 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
+import { ID } from '~/core/id';
 import { AGGREGATED_RANKINGS_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Relation } from '~/core/types';
 
@@ -20,9 +21,9 @@ export function getOrderedRelationTargetIds(
     .filter(
       relation =>
         !relation.isDeleted &&
-        relation.spaceId === spaceId &&
-        relation.fromEntity.id === blockId &&
-        relation.type.id === propertyId &&
+        ID.equals(relation.spaceId, spaceId) &&
+        ID.equals(relation.fromEntity.id, blockId) &&
+        ID.equals(relation.type.id, propertyId) &&
         Boolean(relation.toEntity.id)
     )
     .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null))

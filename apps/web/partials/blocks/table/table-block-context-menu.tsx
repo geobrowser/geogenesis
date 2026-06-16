@@ -8,6 +8,7 @@ import { useAtom } from 'jotai';
 
 import type { Source } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { buildAbsoluteRankingShareUrl, copyRankingShareLink } from '~/core/blocks/ranking/ranking-share';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -15,6 +16,7 @@ import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Cog } from '~/design-system/icons/cog';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { Link } from '~/design-system/icons/link';
 import { Relation } from '~/design-system/icons/relation';
 import { MenuItem } from '~/design-system/menu';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
@@ -31,9 +33,15 @@ const CONTEXT_MENU_SURFACE = 'z-1001 min-w-0 w-52 overflow-hidden rounded-lg bor
 
 type TableBlockContextMenuProps = {
   sourceType: Source['type'];
+  globalRankingSharePath?: string | null;
+  onPrepareGlobalShareLink?: () => Promise<void>;
 };
 
-export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps) {
+export function TableBlockContextMenu({
+  sourceType,
+  globalRankingSharePath = null,
+  onPrepareGlobalShareLink,
+}: TableBlockContextMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { spaceId, entityId, relationId } = useDataBlockInstance();
@@ -58,9 +66,25 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
     }
   };
 
+  const onCopyShareLink = async () => {
+    if (!globalRankingSharePath) return;
+    try {
+      await onPrepareGlobalShareLink?.();
+    } catch (error) {
+      console.error('Failed to prepare global ranking share image:', error);
+    }
+    const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
+    if (copied) {
+      setIsMenuOpen(false);
+      setIsEditingProperties(false);
+    }
+  };
+
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);
-    if (!open) {
+    if (open) {
+      void Promise.resolve(onPrepareGlobalShareLink?.()).catch(() => {});
+    } else {
       setIsEditingProperties(false);
     }
   };
@@ -117,6 +141,14 @@ export function TableBlockContextMenu({ sourceType }: TableBlockContextMenuProps
                     <Relation />
                   </div>
                 </MenuItem>
+                {globalRankingSharePath ? (
+                  <MenuItem className={listRowClassName} onClick={() => void onCopyShareLink()}>
+                    <div className="flex w-full items-center justify-between gap-2">
+                      <span>Copy share link</span>
+                      <Link />
+                    </div>
+                  </MenuItem>
+                ) : null}
                 <MenuItem className={listRowClassName} onClick={onCopyBlockId}>
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Copy block ID</span>

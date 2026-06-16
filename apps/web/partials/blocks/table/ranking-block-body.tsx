@@ -7,7 +7,9 @@ import cx from 'classnames';
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 
 import { Button } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
+import { XIcon } from '~/design-system/icons/x';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import {
@@ -31,7 +33,8 @@ type Props = {
 };
 
 function buildMobileFullscreenEditButton(state: RankingBlockState) {
-  const { isSaving, openRankingCompose } = state;
+  const { isSaving, isSharedRankingView, openRankingCompose } = state;
+  if (isSharedRankingView) return null;
 
   return (
     <Button
@@ -46,7 +49,8 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isSaving, isSharedRankingView, openRankingCompose } = state;
+  if (isSharedRankingView) return null;
 
   return showEditRankingButton ? (
     <Button
@@ -71,6 +75,55 @@ function buildMyRankingActionButton(state: RankingBlockState) {
   );
 }
 
+function buildMyRankingTabActions(state: RankingBlockState) {
+  const {
+    isSharedRankingView,
+    showEditRankingButton,
+    canSharePersonalRanking,
+    sharePersonalRanking,
+    isPreparingPersonalShare,
+    isSaving,
+    openRankingCompose,
+  } = state;
+  if (isSharedRankingView) return null;
+  if (!showEditRankingButton && !canSharePersonalRanking) return null;
+
+  return (
+    <div className="flex w-full shrink-0 items-center justify-between gap-2">
+      {showEditRankingButton ? (
+        <Button
+          variant="secondary"
+          className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
+          disabled={isSaving}
+          onClick={() => void openRankingCompose('edit')}
+        >
+          Edit
+        </Button>
+      ) : null}
+      {canSharePersonalRanking ? (
+        <Button
+          variant="primary"
+          className={cx(
+            'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
+            !showEditRankingButton && 'ml-auto'
+          )}
+          disabled={isPreparingPersonalShare}
+          onClick={sharePersonalRanking}
+        >
+          {isPreparingPersonalShare ? (
+            <Dots color="bg-grey-02" />
+          ) : (
+            <>
+              Share
+              <XIcon color="white" />
+            </>
+          )}
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const {
     spaceId,
@@ -79,6 +132,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     showMyRankingTab,
     showMyRankingSection,
     showAddMyRankingInGlobalHeader,
+    myRankingTabLabel,
     activeTab,
     setActiveTab,
     globalDisplayEntityIds,
@@ -101,6 +155,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     myRankingEntryByEntityId,
     draftHydrated,
     hasMySubmission,
+    isSharedRankingView,
     reorderMyRanking,
     openEntitySheet,
     activeSwipeRowKey,
@@ -112,10 +167,14 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   } = state;
 
   const myRankingActionButton = buildMyRankingActionButton(state);
+  const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
 
-  // On mobile the action button moves below the My ranking tab as a plain "Edit" button.
-  const movesEditBelowTabs = isMobile && showMyRankingSection;
+  // On mobile fullscreen the action buttons move below the My ranking tab.
+  const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
+  const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection;
+  const showMyTabActionsBelowTabs =
+    presentation === 'fullscreen' && activeTab === 'my' && showMyRankingSection && Boolean(myRankingTabActions);
 
   const wrapMobileSwipeRow = ({
     rowKey,
@@ -234,7 +293,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
           <RankingMyRankingDndList
             entityIds={myDisplayEntityIds}
             onReorder={reorderMyRanking}
-            disabled={hasMySubmission || showEmbeddedMyPagination}
+            disabled={hasMySubmission || showEmbeddedMyPagination || isSharedRankingView}
             onDragStart={() => {
               setActiveSwipeRowKey(null);
               setIsMyRankingDragging(true);
@@ -312,14 +371,14 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       {showMyRankingSection ? (
                         <RankingTabButton
                           active={activeTab === 'my'}
-                          label="My ranking"
+                          label={myRankingTabLabel}
                           layoutId={`ranking-${presentation}-tab-underline`}
                           onClick={() => setActiveTab('my')}
                         />
                       ) : null}
                     </div>
 
-                    {!movesEditBelowTabs ? (
+                    {!movesEditBelowTabs && !showMyTabActionsBelowTabs ? (
                       <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
                     ) : null}
                   </div>
@@ -327,16 +386,16 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
                 </div>
 
-                {movesEditBelowTabs && activeTab === 'my' ? (
+                {showMyTabActionsBelowTabs ? (
+                  <div className="mb-4 flex w-full shrink-0">{myRankingTabActions}</div>
+                ) : movesEditBelowTabs && activeTab === 'my' ? (
                   <div className="mb-4 flex shrink-0 justify-end">{buildMobileFullscreenEditButton(state)}</div>
                 ) : null}
 
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
-                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>
-                    {globalRankingBody}
-                  </div>
+                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>{globalRankingBody}</div>
                   {showMyRankingSection ? (
                     <div className={cx(activeTab !== 'my' && 'hidden')}>{myRankingBody}</div>
                   ) : null}

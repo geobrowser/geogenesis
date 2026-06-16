@@ -11,17 +11,30 @@ import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
+  RANKING_COMPOSE_TAB_GLOBAL,
   RANKING_COMPOSE_TAB_MY,
   type RankingComposeMode,
   rankingComposeHref,
 } from '~/core/blocks/ranking/ranking-compose-url';
+import {
+  generateGlobalRankingOgImages,
+  generatePersonalRankingOgImages,
+} from '~/core/blocks/ranking/ranking-og-generate-client';
+import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
+import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import {
+  buildAbsoluteRankingShareUrl,
+  buildRankingSharePath,
+  shareRankingOnX,
+} from '~/core/blocks/ranking/ranking-share';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
+import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -29,6 +42,7 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
@@ -45,6 +59,9 @@ type UseRankingBlockStateParams = {
   rankingStartDate?: string;
   rankingEndDate?: string;
   paginateEmbeddedRanking?: boolean;
+  sharedRankEntityId?: string;
+  sharedAuthorSpaceId?: string;
+  sharedOgVersion?: string;
 };
 
 export function useRankingBlockState({
@@ -52,6 +69,9 @@ export function useRankingBlockState({
   rankingStartDate = '',
   rankingEndDate = '',
   paginateEmbeddedRanking = false,
+  sharedRankEntityId = '',
+  sharedAuthorSpaceId = '',
+  sharedOgVersion = '',
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
@@ -81,15 +101,36 @@ export function useRankingBlockState({
   const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
     useRankingSubmissions(entityId, spaceId, displayName);
 
+  const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({
+    rankEntityId: sharedRankEntityId,
+    authorSpaceId: sharedAuthorSpaceId,
+    blockEntityId: entityId,
+    blockEntitySpaceId: spaceId,
+  });
+
+  const hasSharedRankingUrl = Boolean(sharedRankEntityId && sharedAuthorSpaceId);
+  const isViewingOwnSharedRanking = Boolean(
+    hasSharedRankingUrl && personalSpaceId && ID.equals(sharedAuthorSpaceId, personalSpaceId)
+  );
+  const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
+  const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
+
   const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
     useRankingBlockRelations();
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
   const { profile } = useGeoProfile(walletAddress);
-  const myAvatarUrl = profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-  const myAvatarSeed = profile?.address ?? walletAddress ?? 'anonymous';
-  const showMyRankingTab = Boolean(personalSpaceId);
+  const myAvatarUrl =
+    sharedSubmission?.author.avatarUrl ??
+    (profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null);
+  const myAvatarSeed = sharedSubmission?.author.address ?? profile?.address ?? walletAddress ?? 'anonymous';
+  const showMyRankingTab = Boolean(personalSpaceId || hasSharedRankingUrl || sharedSubmission);
+  const myRankingTabLabel = isSharedRankingView
+    ? sharedSubmission?.author.name?.trim()
+      ? formatSharedRankingOwnerLabel(sharedSubmission.author.name)
+      : 'Ranking'
+    : 'My ranking';
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<RankingTab>('global');
@@ -157,16 +198,28 @@ export function useRankingBlockState({
     [globalLeaderboard]
   );
 
-  const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
+  const mySubmissionIdsKey = (displayedSubmission?.orderedEntityIds ?? []).join('|');
 
   const [myOrderIds, setMyOrderIds] = React.useState<string[]>([]);
   const [hasSavedDraft, setHasSavedDraft] = React.useState(false);
 
   React.useEffect(() => {
-    const apiIds = mySubmission?.orderedEntityIds ?? [];
+    const apiIds = displayedSubmission?.orderedEntityIds ?? [];
     if (apiIds.length > 0) {
       setHasSavedDraft(false);
       setMyOrderIds(apiIds);
+      return;
+    }
+
+    if (hasSharedRankingUrl) {
+      setHasSavedDraft(false);
+      setMyOrderIds([]);
+      return;
+    }
+
+    if (isLoadingSharedSubmission) {
+      setHasSavedDraft(false);
+      setMyOrderIds([]);
       return;
     }
 
@@ -178,7 +231,7 @@ export function useRankingBlockState({
     }
     setHasSavedDraft(false);
     setMyOrderIds([]);
-  }, [entityId, mySubmissionIdsKey, mySubmission, spaceId]);
+  }, [displayedSubmission, entityId, hasSharedRankingUrl, isLoadingSharedSubmission, mySubmissionIdsKey, spaceId]);
 
   const draftHydrated = true;
 
@@ -200,8 +253,8 @@ export function useRankingBlockState({
   const myDisplayEntityIds = React.useMemo(() => {
     if (myOrderIds.length > 0) return myOrderIds;
     if (hasSavedDraft) return myOrderIds;
-    return mySubmission?.orderedEntityIds ?? [];
-  }, [hasSavedDraft, myOrderIds, mySubmission]);
+    return displayedSubmission?.orderedEntityIds ?? [];
+  }, [displayedSubmission, hasSavedDraft, myOrderIds]);
 
   const myRankingIdsKey = myDisplayEntityIds.join('|');
 
@@ -240,19 +293,23 @@ export function useRankingBlockState({
     [embeddedMyTotalPages]
   );
 
-  const hasMyRankingData = myDisplayEntityIds.length > 0 || hasMySubmission;
+  const hasDisplayedSubmission = Boolean(sharedSubmission || hasMySubmission);
+  const hasOwnMyRankingData =
+    hasMySubmission || (!hasSharedRankingUrl && !sharedSubmission && myDisplayEntityIds.length > 0);
+  const hasMyRankingData =
+    hasOwnMyRankingData || Boolean(sharedSubmission) || (hasSharedRankingUrl && isSharedRankingView);
   const hasGlobalRankingData = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
   const showMyRankingSection = showMyRankingTab && hasMyRankingData;
   // Logged-out users still see "Add my ranking" — clicking it opens the sign-in
   // prompt via ensureAccess instead of hiding the entry point entirely.
   const isLoggedIn = Boolean(smartAccount);
-  const showAddMyRankingInGlobalHeader = (showMyRankingTab || !isLoggedIn) && !hasMyRankingData;
+  const showAddMyRankingInGlobalHeader = (showMyRankingTab || !isLoggedIn) && !hasOwnMyRankingData;
 
   React.useEffect(() => {
-    if (preferMyTab) {
+    if (preferMyTab || (isSharedRankingView && showMyRankingSection)) {
       setActiveTab('my');
     }
-  }, [preferMyTab]);
+  }, [isSharedRankingView, preferMyTab, showMyRankingSection]);
 
   React.useEffect(() => {
     if (!showMyRankingSection && activeTab === 'my' && !preferMyTab) {
@@ -368,6 +425,7 @@ export function useRankingBlockState({
   const removeFromMyRanking = React.useCallback(
     (targetEntityId: string) => {
       setActiveSwipeRowKey(null);
+      if (isSharedRankingView) return;
       const remaining = myDisplayEntityIds.filter(id => id !== targetEntityId);
       persistMyOrder(remaining);
 
@@ -375,12 +433,13 @@ export function useRankingBlockState({
         void saveMySubmission(buildSubmissionSlots(remaining));
       }
     },
-    [buildSubmissionSlots, hasMySubmission, myDisplayEntityIds, persistMyOrder, saveMySubmission]
+    [buildSubmissionSlots, hasMySubmission, isSharedRankingView, myDisplayEntityIds, persistMyOrder, saveMySubmission]
   );
 
   const reorderMyRanking = React.useCallback(
     (nextIds: string[]) => {
       const current = myDisplayEntityIds;
+      if (isSharedRankingView) return;
       if (nextIds.length === 0 && current.length > 0) return;
       if (nextIds.length !== current.length) return;
 
@@ -394,7 +453,7 @@ export function useRankingBlockState({
         void saveMySubmission(buildSubmissionSlots(nextIds));
       }
     },
-    [buildSubmissionSlots, hasMySubmission, myDisplayEntityIds, persistMyOrder, saveMySubmission]
+    [buildSubmissionSlots, hasMySubmission, isSharedRankingView, myDisplayEntityIds, persistMyOrder, saveMySubmission]
   );
 
   const resolveBlockRelationId = React.useCallback(() => {
@@ -462,7 +521,121 @@ export function useRankingBlockState({
     ]
   );
 
-  const showEditRankingButton = hasMySubmission || myDisplayEntityIds.length > 0;
+  const effectiveRelationId = resolveBlockRelationId();
+  const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
+  const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
+  const effectiveOgVersion = React.useMemo(() => {
+    if (sharedOgVersion) return sharedOgVersion;
+    if (!mySubmission || !shareRankEntityId) return '';
+    return buildRankingOgVersion({
+      rankEntityId: shareRankEntityId,
+      orderedEntityIds: mySubmission.orderedEntityIds,
+      rankingName: displayName,
+      rankingStartDate,
+      rankingEndDate,
+      authorName: mySubmission.author.name,
+      authorAvatarUrl: mySubmission.author.avatarUrl,
+    });
+  }, [displayName, mySubmission, rankingEndDate, rankingStartDate, shareRankEntityId, sharedOgVersion]);
+  const effectiveGlobalOgVersion = React.useMemo(
+    () =>
+      buildGlobalRankingOgVersion({
+        blockEntityId: entityId,
+        orderedEntityIds: globalRankingEntityIds,
+        rankingName: displayName,
+        rankingStartDate,
+        rankingEndDate,
+      }),
+    [displayName, entityId, globalRankingEntityIds, rankingEndDate, rankingStartDate]
+  );
+  const personalSharePath =
+    shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
+      ? buildRankingSharePath({
+          spaceId,
+          blockEntityId: entityId,
+          relationId: effectiveRelationId,
+          parentEntityId,
+          rankingStartDate,
+          rankingEndDate,
+          rankEntityId: shareRankEntityId,
+          authorSpaceId: shareAuthorSpaceId,
+          ...(effectiveOgVersion ? { ogVersion: effectiveOgVersion } : {}),
+          tab: RANKING_COMPOSE_TAB_MY,
+        })
+      : null;
+  const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
+
+  const ensurePersonalRankingOg = React.useCallback(async () => {
+    if (isSharedRankingView || !effectiveOgVersion || !shareRankEntityId || !shareAuthorSpaceId) return;
+    await generatePersonalRankingOgImages({
+      rankEntityId: shareRankEntityId,
+      authorSpaceId: shareAuthorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion: effectiveOgVersion,
+    });
+  }, [
+    effectiveOgVersion,
+    entityId,
+    isSharedRankingView,
+    rankingEndDate,
+    rankingStartDate,
+    shareAuthorSpaceId,
+    shareRankEntityId,
+    spaceId,
+  ]);
+
+  const [isPreparingPersonalShare, setIsPreparingPersonalShare] = React.useState(false);
+
+  const sharePersonalRanking = React.useCallback(() => {
+    if (!personalSharePath || isPreparingPersonalShare) return;
+    const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
+
+    setIsPreparingPersonalShare(true);
+    void ensurePersonalRankingOg()
+      .catch(() => {})
+      .finally(() => {
+        setIsPreparingPersonalShare(false);
+        shareRankingOnX(shareUrl);
+      });
+  }, [ensurePersonalRankingOg, isPreparingPersonalShare, personalSharePath]);
+
+  // Generate the personal OG image
+  React.useEffect(() => {
+    if (!canSharePersonalRanking || !effectiveOgVersion) return;
+    const timer = window.setTimeout(() => {
+      void ensurePersonalRankingOg();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
+
+  const globalSharePath = effectiveRelationId
+    ? buildRankingSharePath({
+        spaceId,
+        blockEntityId: entityId,
+        relationId: effectiveRelationId,
+        parentEntityId,
+        rankingStartDate,
+        rankingEndDate,
+        tab: RANKING_COMPOSE_TAB_GLOBAL,
+        ...(effectiveGlobalOgVersion ? { globalOgVersion: effectiveGlobalOgVersion } : {}),
+      })
+    : null;
+
+  const ensureGlobalRankingOg = React.useCallback(async () => {
+    if (!effectiveGlobalOgVersion) return;
+    await generateGlobalRankingOgImages({
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      globalOgVersion: effectiveGlobalOgVersion,
+    });
+  }, [effectiveGlobalOgVersion, entityId, rankingEndDate, rankingStartDate, spaceId]);
+
+  const showEditRankingButton = !isSharedRankingView && (hasMySubmission || myDisplayEntityIds.length > 0);
 
   const showFirstRankingPrompt =
     !isLoadingGlobalEntries &&
@@ -511,11 +684,20 @@ export function useRankingBlockState({
     myRankingEntryByEntityId,
     myAvatarUrl,
     myAvatarSeed,
+    myRankingTabLabel,
+    isSharedRankingView,
     showMyRankingTab,
     showMyRankingSection,
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,
+    canSharePersonalRanking,
+    sharePersonalRanking,
+    isPreparingPersonalShare,
+    globalSharePath,
+    ensureGlobalRankingOg,
+    personalSharePath,
+    parentEntityId,
     isSaving,
     openRankingCompose,
     activeTab,
