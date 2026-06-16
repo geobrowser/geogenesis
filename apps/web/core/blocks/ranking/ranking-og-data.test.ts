@@ -119,7 +119,7 @@ describe('getRankingOgCardData', () => {
       }
     );
 
-    expect(data?.title).toBe('My Top projects');
+    expect(data?.title).toBe('Top projects');
     expect(data?.author.name).toBe('Alice');
     expect(data?.periodLabel).toMatch(/^Ends in \d+ days$|^Ended$/);
     expect(data?.entries.map(entry => entry.entityId)).toEqual(['entry-a', 'entry-b']);
