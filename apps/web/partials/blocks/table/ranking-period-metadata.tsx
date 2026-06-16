@@ -65,9 +65,9 @@ function RankingRankedByAvatarGroup({
       {extraCount > 0 ? (
         <li
           key="extra-count"
-          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] leading-none text-grey-04 tabular-nums"
+          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] text-grey-04 tabular-nums"
         >
-          +{extraCount}
+          <span className="block h-5 leading-[20px]">+{extraCount}</span>
         </li>
       ) : null}
     </AvatarGroup>
