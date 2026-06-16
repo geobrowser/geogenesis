@@ -16,7 +16,10 @@ import {
   type RankingComposeMode,
   rankingComposeHref,
 } from '~/core/blocks/ranking/ranking-compose-url';
-import { generateGlobalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
+import {
+  generateGlobalRankingOgImages,
+  generatePersonalRankingOgImages,
+} from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
@@ -563,10 +566,43 @@ export function useRankingBlockState({
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
+  const ensurePersonalRankingOg = React.useCallback(async () => {
+    if (isSharedRankingView || !effectiveOgVersion || !shareRankEntityId || !shareAuthorSpaceId) return;
+    await generatePersonalRankingOgImages({
+      rankEntityId: shareRankEntityId,
+      authorSpaceId: shareAuthorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion: effectiveOgVersion,
+    });
+  }, [
+    effectiveOgVersion,
+    entityId,
+    isSharedRankingView,
+    rankingEndDate,
+    rankingStartDate,
+    shareAuthorSpaceId,
+    shareRankEntityId,
+    spaceId,
+  ]);
+
   const sharePersonalRanking = React.useCallback(() => {
     if (!personalSharePath) return;
+    // Fire-and-forget so the deterministic image is (re)generated if missing;
+    void ensurePersonalRankingOg();
     shareRankingOnX(buildAbsoluteRankingShareUrl(personalSharePath));
-  }, [personalSharePath]);
+  }, [ensurePersonalRankingOg, personalSharePath]);
+
+  // Generate the personal OG image
+  React.useEffect(() => {
+    if (!canSharePersonalRanking || !effectiveOgVersion) return;
+    const timer = window.setTimeout(() => {
+      void ensurePersonalRankingOg();
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
   const globalSharePath = effectiveRelationId
     ? buildRankingSharePath({
