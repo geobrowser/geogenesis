@@ -35,8 +35,15 @@ function RankingComposeUnrankedDivider() {
   );
 }
 
-function computeSearchListStableHeight(scrollRoot: HTMLElement, listEl: HTMLElement | null) {
-  const viewportBottom = scrollRoot.scrollTop + scrollRoot.clientHeight;
+function computeSearchListStableHeight(
+  scrollRoot: HTMLElement,
+  listEl: HTMLElement | null,
+  scrollTopOverride?: number
+) {
+  // Use the override when the caller knows the post-scroll value (the rect-based path below reads
+  // current DOM, which lags behind an in-flight scrollTo).
+  const effectiveScrollTop = scrollTopOverride ?? scrollRoot.scrollTop;
+  const viewportBottom = effectiveScrollTop + scrollRoot.clientHeight;
 
   if (!listEl) {
     return Math.max(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX, scrollRoot.clientHeight);
@@ -50,7 +57,7 @@ function computeSearchListStableHeight(scrollRoot: HTMLElement, listEl: HTMLElem
   return Math.max(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX, viewportBottom - listTop);
 }
 
-function scrollMobilePageToElement(target: HTMLElement) {
+function scrollMobilePageToElement(target: HTMLElement, behavior: ScrollBehavior = 'smooth') {
   const scrollRoot = target.closest('[data-ranking-compose-mobile-scroll]');
   if (scrollRoot instanceof HTMLElement) {
     const rootRect = scrollRoot.getBoundingClientRect();
@@ -59,12 +66,12 @@ function scrollMobilePageToElement(target: HTMLElement) {
 
     scrollRoot.scrollTo({
       top: Math.max(0, nextScrollTop),
-      behavior: 'smooth',
+      behavior,
     });
     return Math.max(0, nextScrollTop);
   }
 
-  target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  target.scrollIntoView({ behavior, block: 'start', inline: 'nearest' });
   return null;
 }
 
@@ -252,7 +259,9 @@ export function RankingComposeGlobalRanking({
       if (!pageScrollRoot) return;
 
       searchScrollTopRef.current = options?.scrollTop ?? pageScrollRoot.scrollTop;
-      setSearchListStableHeight(computeSearchListStableHeight(pageScrollRoot, listContainerRef.current));
+      setSearchListStableHeight(
+        computeSearchListStableHeight(pageScrollRoot, listContainerRef.current, options?.scrollTop)
+      );
     },
     [getPageScrollRoot]
   );
@@ -264,8 +273,11 @@ export function RankingComposeGlobalRanking({
         if (isMobile) {
           // Defer the scroll-to-top until the first keystroke so it happens at the same
           // moment results clear — feels like a focus change, not a page jump on icon tap.
+          // Use instant scroll so scrollTop updates synchronously before we size the
+          // placeholder; a smooth scroll would leave captureSearchListLayout reading the
+          // pre-scroll position and anchoring the placeholder below the new viewport.
           const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
-          const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
+          const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget, 'auto') : null;
           captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
         } else {
           captureSearchListLayout();
