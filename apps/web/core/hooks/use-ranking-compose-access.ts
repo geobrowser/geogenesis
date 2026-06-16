@@ -2,10 +2,11 @@
 
 import { useGeoLogin } from '@geogenesis/auth';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { Either } from 'effect';
 import { useSetAtom } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import { getSpaceAccessById, normalizeSpaceId } from '~/core/access/space-access';
 import { trackPrivyAuth } from '~/core/analytics';
@@ -31,6 +32,7 @@ export type RankingComposeAccessStatus =
 const autoRequestedMemberships = new Set<string>();
 
 export function useRankingComposeAccess(spaceId: string) {
+  const router = useRouter();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
@@ -41,9 +43,18 @@ export function useRankingComposeAccess(spaceId: string) {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const postLoginRedirectRef = useRef<string | null>(null);
 
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const postLoginRedirect = postLoginRedirectRef.current;
+      postLoginRedirectRef.current = null;
+      if (postLoginRedirect) {
+        router.push(postLoginRedirect);
+      }
+    },
   });
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
@@ -58,7 +69,8 @@ export function useRankingComposeAccess(spaceId: string) {
     return 'ready';
   })();
 
-  const promptLogin = useCallback(() => {
+  const promptLogin = useCallback((postLoginRedirect?: string) => {
+    postLoginRedirectRef.current = postLoginRedirect ?? null;
     setName('');
     setTopicId('');
     setAvatar('');

@@ -486,7 +486,7 @@ export function useRankingBlockState({
         }
 
         if (!smartAccount) {
-          promptLogin();
+          promptLogin(href);
           return;
         }
 
