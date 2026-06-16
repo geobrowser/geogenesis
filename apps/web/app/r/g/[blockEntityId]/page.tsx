@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+
 import { notFound } from 'next/navigation';
 
 import { buildGlobalRankingMetadata } from '~/core/blocks/ranking/ranking-og-metadata';
@@ -34,6 +35,11 @@ export default async function ShortGlobalRankingPage({ params }: Props) {
       rankingStartDate={resolved.rankingStartDate}
       rankingEndDate={resolved.rankingEndDate}
       mode="view"
+      initialGlobalRanking={{
+        rankingName: resolved.rankingName,
+        orderedEntityIds: resolved.orderedEntityIds,
+        entries: resolved.entries,
+      }}
     />
   );
 }

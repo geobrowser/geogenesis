@@ -55,6 +55,12 @@ export type RankingTab = 'global' | 'my';
 
 export type RankingBlockPresentation = 'embedded' | 'fullscreen';
 
+export type InitialGlobalRanking = {
+  rankingName: string;
+  orderedEntityIds: string[];
+  entries: RankingEntryDisplay[];
+};
+
 type UseRankingBlockStateParams = {
   spaceId: string;
   rankingStartDate?: string;
@@ -63,6 +69,8 @@ type UseRankingBlockStateParams = {
   sharedRankEntityId?: string;
   sharedAuthorSpaceId?: string;
   sharedOgVersion?: string;
+  /** Server-resolved full ranking, seeds first paint so rows don't flash placeholders. */
+  initialGlobalRanking?: InitialGlobalRanking;
 };
 
 export function useRankingBlockState({
@@ -73,6 +81,7 @@ export function useRankingBlockState({
   sharedRankEntityId = '',
   sharedAuthorSpaceId = '',
   sharedOgVersion = '',
+  initialGlobalRanking,
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
@@ -99,7 +108,7 @@ export function useRankingBlockState({
     endDate: rankingEndDate,
   });
 
-  const displayName = name?.trim() || 'Untitled ranking';
+  const displayName = name?.trim() || initialGlobalRanking?.rankingName?.trim() || 'Untitled ranking';
 
   const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
     useRankingSubmissions(entityId, spaceId, displayName);
@@ -118,8 +127,10 @@ export function useRankingBlockState({
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
   const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
-    useRankingBlockRelations();
+  const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
+
+  const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? [];
+  const initialGlobalEntries = initialGlobalRanking?.entries ?? [];
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
@@ -156,7 +167,8 @@ export function useRankingBlockState({
     [periodState, startDate, endDate]
   );
 
-  const globalDisplayEntityIds = globalRankingEntityIds;
+  // Fall back to the server-resolved order until block relations load client-side.
+  const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
   const globalRankingIdsKey = globalDisplayEntityIds.join('|');
 
   const [embeddedGlobalPageNumber, setEmbeddedGlobalPageNumber] = React.useState(0);
@@ -197,8 +209,8 @@ export function useRankingBlockState({
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
 
   const globalRankByEntityId = React.useMemo(
-    () => new Map(globalLeaderboard.map(e => [e.entityId, e.rank])),
-    [globalLeaderboard]
+    () => new Map(globalDisplayEntityIds.map((id, index) => [id, index + 1])),
+    [globalDisplayEntityIds]
   );
 
   const mySubmissionIdsKey = (displayedSubmission?.orderedEntityIds ?? []).join('|');
@@ -332,6 +344,11 @@ export function useRankingBlockState({
   const globalRankingEntryByEntityId = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
+    // Seed from the server ranking; live `rows`/`globalEntries` below override with the same data.
+    for (const entry of initialGlobalEntries) {
+      map.set(entry.entityId, entry);
+    }
+
     for (const row of rows) {
       if (!row.entityId || row.placeholder) continue;
       map.set(row.entityId, {
@@ -352,14 +369,8 @@ export function useRankingBlockState({
       });
     }
 
-    for (const id of globalRankingListEntityIds) {
-      if (!map.has(id)) {
-        map.set(id, { entityId: id, name: 'Untitled', description: null, image: null });
-      }
-    }
-
     return map;
-  }, [globalEntries, globalRankingListEntityIds, rows]);
+  }, [globalEntries, initialGlobalEntries, rows]);
 
   const myRankingEntryByEntityId = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
