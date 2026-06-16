@@ -58,6 +58,7 @@ type ThumbGeoImageProps = {
   loading?: ImgHTMLAttributes<HTMLImageElement>['loading'];
   fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
   className?: string;
+  style?: ImgHTMLAttributes<HTMLImageElement>['style'];
   onLoad?: ImgHTMLAttributes<HTMLImageElement>['onLoad'];
 };
 
@@ -71,13 +72,15 @@ export function ThumbGeoImage({
   loading = 'lazy',
   fetchPriority,
   className,
+  style,
   onLoad,
 }: ThumbGeoImageProps) {
   return (
     <NativeGeoImage
       value={value}
       alt={alt}
-      className={cn('absolute inset-0 h-full w-full object-cover', className)}
+      className={cn('absolute inset-0', className)}
+      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', ...style }}
       loading={loading}
       fetchPriority={fetchPriority}
       decoding="async"
