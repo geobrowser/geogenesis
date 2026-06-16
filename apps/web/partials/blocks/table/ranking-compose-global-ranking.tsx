@@ -506,7 +506,12 @@ export function RankingComposeGlobalRanking({
                 <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
               </RankingComposeSearchListPlaceholder>
             ) : (
-              searchResultList
+              // Pin via min-height so the chrome stays at the top of the viewport even when the
+              // result set is shorter than the captured placeholder — without this, scrollTop
+              // clamps down and the section slides back into view.
+              <div className="flex flex-col" style={{ minHeight: searchListStableHeight }}>
+                {searchResultList}
+              </div>
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
