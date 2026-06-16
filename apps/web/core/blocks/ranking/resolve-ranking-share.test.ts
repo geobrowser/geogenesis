@@ -134,6 +134,7 @@ function personalDeps(overrides: Partial<ResolveRankingShareDeps> = {}): Resolve
     fetchRelationsByToEntity: async blockId =>
       blockId === BLOCK_ID ? [{ id: REL_ID, fromEntityId: PARENT_ID, toEntityId: BLOCK_ID, spaceId: BLOCK_SPACE }] : [],
     fetchProfile: async () => profile,
+    fetchEntities: async () => [],
     fetchPersonalCardData: async () => personalCardData,
     fetchGlobalCardData: async () => null,
     ...overrides,
@@ -178,10 +179,7 @@ describe('resolvePersonalRankingShareImpl', () => {
 
   it('returns null for a non-RANK entity', async () => {
     const notRank = { ...rankEntity, types: [{ id: 'something-else', name: 'Other' }] } as unknown as Entity;
-    const resolved = await resolvePersonalRankingShareImpl(
-      RANK_ID,
-      personalDeps({ fetchEntity: async () => notRank })
-    );
+    const resolved = await resolvePersonalRankingShareImpl(RANK_ID, personalDeps({ fetchEntity: async () => notRank }));
     expect(resolved).toBeNull();
   });
 
@@ -207,10 +205,8 @@ describe('resolvePersonalRankingShareImpl', () => {
         },
         fetchEntityPage: async (id, spaceId) => {
           // OTHER_SPACE has no submitted-to relation; AUTHOR_SPACE does.
-          if (id === RANK_ID && spaceId === AUTHOR_SPACE)
-            return { entity: multiSpaceRank, relations: rankRelations };
-          if (id === RANK_ID && spaceId === OTHER_SPACE)
-            return { entity: multiSpaceRank, relations: [voteRelA] };
+          if (id === RANK_ID && spaceId === AUTHOR_SPACE) return { entity: multiSpaceRank, relations: rankRelations };
+          if (id === RANK_ID && spaceId === OTHER_SPACE) return { entity: multiSpaceRank, relations: [voteRelA] };
           return null;
         },
       })
@@ -297,6 +293,11 @@ describe('resolveGlobalRankingShareImpl', () => {
         { id: REL_ID, fromEntityId: PARENT_ID, toEntityId: BLOCK_ID, spaceId: BLOCK_SPACE },
       ],
       fetchProfile: async () => null,
+      fetchEntities: async () =>
+        [
+          { id: 'ent-a', name: 'A', description: null, relations: [], values: [] },
+          { id: 'ent-b', name: 'B', description: null, relations: [], values: [] },
+        ] as unknown as Entity[],
       fetchPersonalCardData: async () => null,
       fetchGlobalCardData: async () => globalCardData,
       ...overrides,
@@ -321,6 +322,16 @@ describe('resolveGlobalRankingShareImpl', () => {
       rankingEndDate: END_DATE,
     });
     expect(resolved?.globalOgVersion).toBe(expectedVersion);
+  });
+
+  it('resolves the full ordered list with display data to seed first paint', async () => {
+    const resolved = await resolveGlobalRankingShareImpl(BLOCK_ID, globalDeps());
+
+    expect(resolved?.orderedEntityIds).toEqual(['ent-a', 'ent-b']);
+    expect(resolved?.entries).toEqual([
+      { entityId: 'ent-a', name: 'A', description: null, image: null },
+      { entityId: 'ent-b', name: 'B', description: null, image: null },
+    ]);
   });
 
   it('returns null when the block is missing', async () => {

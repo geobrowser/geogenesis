@@ -11,6 +11,7 @@ import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
 import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { RankingTableView } from './ranking-table-view';
+import { type InitialGlobalRanking } from './use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -19,6 +20,7 @@ type Props = {
   rankEntityId?: string;
   authorSpaceId?: string;
   ogVersion?: string;
+  initialGlobalRanking?: InitialGlobalRanking;
 };
 
 /** Fullscreen ranking browse view — compose-aligned typography, separate from the embedded block. */
@@ -29,6 +31,7 @@ export function RankingViewScreen({
   rankEntityId = '',
   authorSpaceId = '',
   ogVersion = '',
+  initialGlobalRanking,
 }: Props) {
   const router = useRouter();
   const isMobile = useIsMobileLayout();
@@ -64,6 +67,7 @@ export function RankingViewScreen({
           rankEntityId={rankEntityId}
           authorSpaceId={authorSpaceId}
           ogVersion={ogVersion}
+          initialGlobalRanking={initialGlobalRanking}
         />
       </div>
     </RankingComposeFullscreen>
