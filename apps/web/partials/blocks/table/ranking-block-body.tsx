@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 
 import { Button } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
@@ -80,6 +81,7 @@ function buildMyRankingTabActions(state: RankingBlockState) {
     showEditRankingButton,
     canSharePersonalRanking,
     sharePersonalRanking,
+    isPreparingPersonalShare,
     isSaving,
     openRankingCompose,
   } = state;
@@ -105,10 +107,17 @@ function buildMyRankingTabActions(state: RankingBlockState) {
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
             !showEditRankingButton && 'ml-auto'
           )}
+          disabled={isPreparingPersonalShare}
           onClick={sharePersonalRanking}
         >
-          Share
-          <XIcon color="white" />
+          {isPreparingPersonalShare ? (
+            <Dots color="bg-grey-02" />
+          ) : (
+            <>
+              Share
+              <XIcon color="white" />
+            </>
+          )}
         </Button>
       ) : null}
     </div>

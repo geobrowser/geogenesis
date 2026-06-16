@@ -587,12 +587,20 @@ export function useRankingBlockState({
     spaceId,
   ]);
 
+  const [isPreparingPersonalShare, setIsPreparingPersonalShare] = React.useState(false);
+
   const sharePersonalRanking = React.useCallback(() => {
-    if (!personalSharePath) return;
-    // Fire-and-forget so the deterministic image is (re)generated if missing;
-    void ensurePersonalRankingOg();
-    shareRankingOnX(buildAbsoluteRankingShareUrl(personalSharePath));
-  }, [ensurePersonalRankingOg, personalSharePath]);
+    if (!personalSharePath || isPreparingPersonalShare) return;
+    const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
+
+    setIsPreparingPersonalShare(true);
+    void ensurePersonalRankingOg()
+      .catch(() => {})
+      .finally(() => {
+        setIsPreparingPersonalShare(false);
+        shareRankingOnX(shareUrl);
+      });
+  }, [ensurePersonalRankingOg, isPreparingPersonalShare, personalSharePath]);
 
   // Generate the personal OG image
   React.useEffect(() => {
@@ -685,6 +693,7 @@ export function useRankingBlockState({
     showEditRankingButton,
     canSharePersonalRanking,
     sharePersonalRanking,
+    isPreparingPersonalShare,
     globalSharePath,
     ensureGlobalRankingOg,
     personalSharePath,
