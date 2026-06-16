@@ -1,6 +1,5 @@
-import { cookies } from 'next/headers';
-
 import { Effect } from 'effect';
+import { cookies } from 'next/headers';
 
 import { getSpaceAccessById } from '~/core/access/space-access';
 import { WALLET_ADDRESS } from '~/core/cookie';
