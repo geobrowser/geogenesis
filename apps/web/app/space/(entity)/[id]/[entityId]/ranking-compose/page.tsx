@@ -88,8 +88,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (hasValidPersonalRankingOgParams({ rankEntityId, authorSpaceId, ogVersion })) {
     const authorProfile = await cachedFetchProfileBySpaceId(authorSpaceId);
     const authorName = authorProfile?.name?.trim() || '';
-    const title = authorName ? formatSharedRankingOwnerLabel(authorName) : `My ${rankingName}`;
-    const description = authorName ? `${title} for ${rankingName}.` : `A personal Geo ranking for ${rankingName}.`;
+    const pageTitle = rankingName;
+    const shareTitle = authorName ? formatSharedRankingOwnerLabel(authorName) : `My ${rankingName}`;
+    const description = authorName
+      ? `${shareTitle} for ${rankingName}.`
+      : `A personal Geo ranking for ${rankingName}.`;
     const imageUrl = buildRankingOgPreviewUrl(siteUrl.toString(), {
       scope: 'personal',
       rankEntityId,
@@ -114,23 +117,23 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     });
 
     return {
-      title,
+      title: pageTitle,
       description,
       openGraph: {
-        title,
+        title: shareTitle,
         description,
         url: new URL(url, siteUrl).toString(),
         images: [
           {
             url: imageUrl,
             ...RANKING_OG_VARIANT_SIZES.landscape,
-            alt: title,
+            alt: shareTitle,
           },
         ],
       },
       twitter: {
         card: 'summary_large_image',
-        title,
+        title: shareTitle,
         description,
         images: [imageUrl],
       },
