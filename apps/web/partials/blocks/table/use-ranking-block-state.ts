@@ -600,15 +600,16 @@ export function useRankingBlockState({
   const sharePersonalRanking = React.useCallback(() => {
     if (!personalSharePath || isPreparingPersonalShare) return;
     const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
+    const shareText = `I just published my "${displayName}" ranking. Check it out and add your vote 🔮`;
 
     setIsPreparingPersonalShare(true);
     void ensurePersonalRankingOg()
       .catch(() => {})
       .finally(() => {
         setIsPreparingPersonalShare(false);
-        shareRankingOnX(shareUrl);
+        shareRankingOnX(shareUrl, shareText);
       });
-  }, [ensurePersonalRankingOg, isPreparingPersonalShare, personalSharePath]);
+  }, [displayName, ensurePersonalRankingOg, isPreparingPersonalShare, personalSharePath]);
 
   // Generate the personal OG image
   React.useEffect(() => {
