@@ -22,7 +22,7 @@ import {
 } from './ranking-block-ui';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
-import { RankingEntryRow } from './ranking-entry-row';
+import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -228,7 +228,17 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             {globalDisplayEntityIds.map(entityId => {
               const entry = globalRankingEntryByEntityId.get(entityId);
               const rank = globalRankByEntityId.get(entityId);
-              if (!entry || rank == null) return null;
+              if (rank == null) return null;
+              // Rank is known from relations/seed before the entity name/image
+              // resolve — render a skeleton row so the list keeps its height
+              // instead of collapsing until entries hydrate.
+              if (!entry) {
+                return (
+                  <div key={entityId} className="w-full">
+                    <RankingEntryRowSkeleton rank={rank} />
+                  </div>
+                );
+              }
               const rowContent = (
                 <RankingEntryRow
                   rank={rank}

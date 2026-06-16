@@ -1,5 +1,11 @@
 'use client';
 
+import { useSetAtom } from 'jotai';
+
+import { useEffect } from 'react';
+
+import { navbarSpaceOverrideAtom } from '~/atoms';
+
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
 import { useRankingComposePage } from '~/core/blocks/ranking/use-ranking-compose-page';
@@ -51,6 +57,13 @@ export function RankingComposeClientPage({
     relationId,
     parentEntityIdParam,
   });
+
+  // Short-link routes (/r/g, /r) have no space in the URL; surface it to the navbar.
+  const setNavbarSpaceOverride = useSetAtom(navbarSpaceOverrideAtom);
+  useEffect(() => {
+    setNavbarSpaceOverride({ spaceId });
+    return () => setNavbarSpaceOverride(null);
+  }, [spaceId, setNavbarSpaceOverride]);
 
   // Seeded view pages render immediately instead of waiting on the client block
   // resolution; the live store reconciles in the background with no visible swap.
