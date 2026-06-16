@@ -190,8 +190,14 @@ export const entitySpacesBatchQuery = graphql(/* GraphQL */ `
   }
 `);
 
+// Relations are fetched through the paginated `relations` connection (not the
+// non-paginated `relationsList`, which silently truncates at the server's
+// 100-row default). `getEntity` drains follow-up pages via $cursor when
+// `pageInfo.hasNextPage`, so hydration is correct for any number of relations.
+// Most entities fit in the first page, so the extra round-trips only fire when
+// actually needed.
 export const entityQuery = graphql(/* GraphQL */ `
-  query Entity($id: UUID!, $spaceId: UUID) {
+  query Entity($id: UUID!, $spaceId: UUID, $cursor: Cursor) {
     entity(id: $id) {
       id
       name
@@ -205,7 +211,7 @@ export const entityQuery = graphql(/* GraphQL */ `
       }
 
       # Lightweight cross-space view used to decide which space an entity link
-      # routes to. The main valuesList/relationsList below are space-scoped for
+      # routes to. The main valuesList/relations below are space-scoped for
       # display, so we need an unscoped projection to know which spaces hold
       # real (non-hidden) content.
       allValuesList: valuesList(first: 1000) {
@@ -221,8 +227,33 @@ export const entityQuery = graphql(/* GraphQL */ `
         ...EntityValueFields
       }
 
-      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        ...RelationFields
+      relations(first: 500, after: $cursor, filter: { spaceId: { is: $spaceId } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          ...RelationFields
+        }
+      }
+    }
+  }
+`);
+
+// Drains subsequent relation pages for an entity. `getEntity` calls this with
+// the prior page's `endCursor` until `hasNextPage` is false, then merges all
+// nodes into the entity's `relationsList` before decoding.
+export const entityRelationsPageQuery = graphql(/* GraphQL */ `
+  query EntityRelationsPage($id: UUID!, $spaceId: UUID, $cursor: Cursor) {
+    entity(id: $id) {
+      relations(first: 500, after: $cursor, filter: { spaceId: { is: $spaceId } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          ...RelationFields
+        }
       }
     }
   }
