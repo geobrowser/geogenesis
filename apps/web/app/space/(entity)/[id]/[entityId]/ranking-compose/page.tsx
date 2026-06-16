@@ -7,15 +7,17 @@ import type { Metadata } from 'next';
 import { Effect } from 'effect';
 
 import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import {
+  buildGlobalRankingMetadataFromParts,
+  buildPersonalRankingMetadataFromParts,
+} from '~/core/blocks/ranking/ranking-og-metadata';
 import { buildRankingOgPreviewUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
 import {
-  RANKING_OG_VARIANT_SIZES,
   buildGlobalRankingOgObjectKey,
   buildRankingOgObjectKey,
   buildRankingOgPublicUrl,
   getRankingOgPublicBaseUrl,
 } from '~/core/blocks/ranking/ranking-og-storage';
-import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 
 import { cachedFetchEntity } from '../cached-fetch-entity';
@@ -94,11 +96,6 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (hasValidPersonalRankingOgParams({ rankEntityId, authorSpaceId, ogVersion })) {
     const authorProfile = await cachedFetchProfileBySpaceId(authorSpaceId);
     const authorName = authorProfile?.name?.trim() || '';
-    const pageTitle = rankingName;
-    const shareTitle = authorName ? formatSharedRankingOwnerLabel(authorName) : `My ${rankingName}`;
-    const description = authorName
-      ? `${shareTitle} for ${rankingName}.`
-      : `A personal Geo ranking for ${rankingName}.`;
     const publicBaseUrl = getRankingOgPublicBaseUrl();
     const imageUrl = publicBaseUrl
       ? buildRankingOgPublicUrl(
@@ -128,32 +125,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       ogVersion,
     });
 
-    return {
-      title: pageTitle,
-      description,
-      openGraph: {
-        title: shareTitle,
-        description,
-        url: new URL(url, siteUrl).toString(),
-        images: [
-          {
-            url: imageUrl,
-            ...RANKING_OG_VARIANT_SIZES.landscape,
-            alt: shareTitle,
-          },
-        ],
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: shareTitle,
-        description,
-        images: [imageUrl],
-      },
-    };
+    return buildPersonalRankingMetadataFromParts({
+      rankingName,
+      authorName,
+      imageUrl,
+      url: new URL(url, siteUrl).toString(),
+    });
   }
 
   if (hasValidGlobalRankingOgParams({ blockEntityId: entityId, globalOgVersion })) {
-    const title = rankingName;
     const publicBaseUrl = getRankingOgPublicBaseUrl();
     const imageUrl = publicBaseUrl
       ? buildRankingOgPublicUrl(
@@ -179,28 +159,11 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       globalOgVersion,
     });
 
-    return {
-      title,
-      description: `Vote on the global Geo ranking for ${rankingName}.`,
-      openGraph: {
-        title,
-        description: `Vote on the global Geo ranking for ${rankingName}.`,
-        url: new URL(url, siteUrl).toString(),
-        images: [
-          {
-            url: imageUrl,
-            ...RANKING_OG_VARIANT_SIZES.landscape,
-            alt: title,
-          },
-        ],
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title,
-        description: `Vote on the global Geo ranking for ${rankingName}.`,
-        images: [imageUrl],
-      },
-    };
+    return buildGlobalRankingMetadataFromParts({
+      rankingName,
+      imageUrl,
+      url: new URL(url, siteUrl).toString(),
+    });
   }
 
   return {};

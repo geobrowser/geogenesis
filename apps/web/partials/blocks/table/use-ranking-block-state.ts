@@ -11,7 +11,6 @@ import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
-  RANKING_COMPOSE_TAB_GLOBAL,
   RANKING_COMPOSE_TAB_MY,
   type RankingComposeMode,
   rankingComposeHref,
@@ -26,7 +25,8 @@ import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/r
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import {
   buildAbsoluteRankingShareUrl,
-  buildRankingSharePath,
+  buildShortGlobalRankingSharePath,
+  buildShortPersonalRankingSharePath,
   shareRankingOnX,
 } from '~/core/blocks/ranking/ranking-share';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
@@ -556,20 +556,12 @@ export function useRankingBlockState({
       }),
     [displayName, entityId, globalRankingEntityIds, rankingEndDate, rankingStartDate]
   );
+  // Short, opaque deep link — the `/r/{rankEntityId}` resolver reconstructs the
+  // block, dates, placement, ogVersion and tab server-side. Gating stays the same
+  // so the share button's visibility is unchanged.
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
-      ? buildRankingSharePath({
-          spaceId,
-          blockEntityId: entityId,
-          relationId: effectiveRelationId,
-          parentEntityId,
-          rankingStartDate,
-          rankingEndDate,
-          rankEntityId: shareRankEntityId,
-          authorSpaceId: shareAuthorSpaceId,
-          ...(effectiveOgVersion ? { ogVersion: effectiveOgVersion } : {}),
-          tab: RANKING_COMPOSE_TAB_MY,
-        })
+      ? buildShortPersonalRankingSharePath(shareRankEntityId)
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
@@ -595,21 +587,17 @@ export function useRankingBlockState({
     spaceId,
   ]);
 
-  const [isPreparingPersonalShare, setIsPreparingPersonalShare] = React.useState(false);
-
   const sharePersonalRanking = React.useCallback(() => {
-    if (!personalSharePath || isPreparingPersonalShare) return;
+    if (!personalSharePath) return;
     const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
-    const shareText = `I just published my "${displayName}" ranking. Check it out and add your vote 🔮`;
-
-    setIsPreparingPersonalShare(true);
-    void ensurePersonalRankingOg()
-      .catch(() => {})
-      .finally(() => {
-        setIsPreparingPersonalShare(false);
-        shareRankingOnX(shareUrl, shareText);
-      });
-  }, [displayName, ensurePersonalRankingOg, isPreparingPersonalShare, personalSharePath]);
+    const shareText = `Here's my ${name?.trim() || 'ranking'}. What's yours?`;
+    // Open X within the click's user activation — popup blockers drop window.open
+    // after an await. The OG image is pre-warmed in the background (and the share
+    // route falls back to a live preview render if the R2 object isn't ready yet),
+    // so the card still resolves even if the user posts immediately.
+    shareRankingOnX(shareUrl, shareText);
+    void ensurePersonalRankingOg().catch(() => {});
+  }, [name, ensurePersonalRankingOg, personalSharePath]);
 
   // Generate the personal OG image
   React.useEffect(() => {
@@ -620,18 +608,7 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId
-    ? buildRankingSharePath({
-        spaceId,
-        blockEntityId: entityId,
-        relationId: effectiveRelationId,
-        parentEntityId,
-        rankingStartDate,
-        rankingEndDate,
-        tab: RANKING_COMPOSE_TAB_GLOBAL,
-        ...(effectiveGlobalOgVersion ? { globalOgVersion: effectiveGlobalOgVersion } : {}),
-      })
-    : null;
+  const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
@@ -702,7 +679,6 @@ export function useRankingBlockState({
     showEditRankingButton,
     canSharePersonalRanking,
     sharePersonalRanking,
-    isPreparingPersonalShare,
     globalSharePath,
     ensureGlobalRankingOg,
     personalSharePath,

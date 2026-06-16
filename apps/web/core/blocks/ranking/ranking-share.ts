@@ -10,6 +10,20 @@ export function buildRankingSharePath(params: RankingComposeHrefParams & Partial
   return rankingComposeHref({ ...params, mode: 'view' });
 }
 
+/**
+ * Short, opaque personal ranking share path. Everything else (block, dates,
+ * placement, ogVersion, tab) is reconstructed server-side from the rank entity id
+ * by the `/r/[rankEntityId]` resolver route.
+ */
+export function buildShortPersonalRankingSharePath(rankEntityId: string): string {
+  return `/r/${rankEntityId}`;
+}
+
+/** Short, opaque global ranking share path resolved by `/r/g/[blockEntityId]`. */
+export function buildShortGlobalRankingSharePath(blockEntityId: string): string {
+  return `/r/g/${blockEntityId}`;
+}
+
 export function buildAbsoluteRankingShareUrl(path: string): string {
   if (typeof window === 'undefined') return path;
   return new URL(path, window.location.origin).toString();
