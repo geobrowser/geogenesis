@@ -38,8 +38,8 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
           if (!entity) return null;
           return {
             entityId: id,
-            name: pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId)?.trim() || 'Untitled',
-            description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId)?.trim() || null,
+            name: pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId) ?? 'Untitled',
+            description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
             image: pickImage(entity.relations, spaceId),
           };
         })
@@ -50,16 +50,23 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   return { entries, isLoading: isLoading && !isFetched };
 }
 
-function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
+/**
+ * Pick a value for `propertyId` preferring `currentSpaceId`, then the highest-ranked
+ * space per {@link getSpaceRank}. Whitespace-only values are ignored so they don't
+ * mask a usable value from another space.
+ */
+export function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
   let inSpace: string | null = null;
-  const others: Value[] = [];
+  const others: { spaceId: string; value: string }[] = [];
 
   for (const v of values) {
-    if (v.property.id !== propertyId || !v.value) continue;
+    if (v.property.id !== propertyId) continue;
+    const trimmed = v.value?.trim();
+    if (!trimmed) continue;
     if (v.spaceId === currentSpaceId) {
-      if (inSpace == null) inSpace = v.value;
+      if (inSpace == null) inSpace = trimmed;
     } else {
-      others.push(v);
+      others.push({ spaceId: v.spaceId, value: trimmed });
     }
   }
 
@@ -69,7 +76,11 @@ function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: s
   return others.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0].value;
 }
 
-function pickRelationBySpace(relations: Relation[], typeId: string, currentSpaceId: string): Relation | null {
+/**
+ * Pick a relation of `typeId` preferring `currentSpaceId`, then the highest-ranked
+ * space per {@link getSpaceRank}.
+ */
+export function pickRelationBySpace(relations: Relation[], typeId: string, currentSpaceId: string): Relation | null {
   let inSpace: Relation | null = null;
   const others: Relation[] = [];
 
@@ -88,15 +99,23 @@ function pickRelationBySpace(relations: Relation[], typeId: string, currentSpace
   return others.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
 }
 
-function pickImage(relations: Relation[], currentSpaceId: string): string | null {
-  // Current-space avatar wins, then current-space cover, then ranked-space avatar, then ranked-space cover.
-  const avatar = pickRelationBySpace(relations, EntityId(ContentIds.AVATAR_PROPERTY), currentSpaceId);
-  if (avatar?.spaceId === currentSpaceId && avatar.toEntity.value) return avatar.toEntity.value;
+/**
+ * Resolve an image URL for a ranking card. Order:
+ *   current-space avatar → current-space cover → ranked-space avatar → ranked-space cover.
+ *
+ * Relations whose target image has no URL value are skipped at every step so a
+ * placeholder avatar in the current space can't mask a usable image from another space.
+ */
+export function pickImage(relations: Relation[], currentSpaceId: string): string | null {
+  const withValue = relations.filter(r => r.toEntity.value);
 
-  const cover = pickRelationBySpace(relations, EntityId(SystemIds.COVER_PROPERTY), currentSpaceId);
-  if (cover?.spaceId === currentSpaceId && cover.toEntity.value) return cover.toEntity.value;
+  const avatar = pickRelationBySpace(withValue, EntityId(ContentIds.AVATAR_PROPERTY), currentSpaceId);
+  if (avatar?.spaceId === currentSpaceId) return avatar.toEntity.value;
 
-  if (avatar?.toEntity.value) return avatar.toEntity.value;
-  if (cover?.toEntity.value) return cover.toEntity.value;
+  const cover = pickRelationBySpace(withValue, EntityId(SystemIds.COVER_PROPERTY), currentSpaceId);
+  if (cover?.spaceId === currentSpaceId) return cover.toEntity.value;
+
+  if (avatar) return avatar.toEntity.value;
+  if (cover) return cover.toEntity.value;
   return null;
 }
