@@ -18,6 +18,7 @@ import {
 } from '~/core/blocks/ranking/ranking-compose-url';
 import { generateGlobalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
+import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import {
@@ -124,7 +125,7 @@ export function useRankingBlockState({
   const showMyRankingTab = Boolean(personalSpaceId || hasSharedRankingUrl || sharedSubmission);
   const myRankingTabLabel =
     isSharedRankingView && sharedSubmission?.author.name?.trim()
-      ? sharedSubmission.author.name.trim()
+      ? formatSharedRankingOwnerLabel(sharedSubmission.author.name)
       : isSharedRankingView && isLoadingSharedSubmission
         ? 'Ranking'
         : 'My ranking';

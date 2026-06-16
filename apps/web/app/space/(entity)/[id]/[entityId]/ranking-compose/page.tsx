@@ -1,13 +1,27 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
+import { cache } from 'react';
+
 import type { Metadata } from 'next';
+
+import { Effect } from 'effect';
 
 import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { buildRankingOgPreviewUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
 import { RANKING_OG_VARIANT_SIZES } from '~/core/blocks/ranking/ranking-og-storage';
+import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
+import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 
 import { cachedFetchEntity } from '../cached-fetch-entity';
 import { RankingComposeClientPage } from './ranking-compose-client-page';
+
+const cachedFetchProfileBySpaceId = cache(async (spaceId: string) => {
+  try {
+    return await Effect.runPromise(fetchProfileBySpaceId(spaceId));
+  } catch {
+    return null;
+  }
+});
 
 type PageParams = {
   id: string;
@@ -72,7 +86,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const rankingName = ranking?.name?.trim() || 'ranking';
 
   if (hasValidPersonalRankingOgParams({ rankEntityId, authorSpaceId, ogVersion })) {
-    const title = `My ${rankingName}`;
+    const authorProfile = await cachedFetchProfileBySpaceId(authorSpaceId);
+    const authorName = authorProfile?.name?.trim() || '';
+    const title = authorName ? formatSharedRankingOwnerLabel(authorName) : `My ${rankingName}`;
+    const description = authorName ? `${title} for ${rankingName}.` : `A personal Geo ranking for ${rankingName}.`;
     const imageUrl = buildRankingOgPreviewUrl(siteUrl.toString(), {
       scope: 'personal',
       rankEntityId,
@@ -98,10 +115,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
     return {
       title,
-      description: `A personal Geo ranking for ${rankingName}.`,
+      description,
       openGraph: {
         title,
-        description: `A personal Geo ranking for ${rankingName}.`,
+        description,
         url: new URL(url, siteUrl).toString(),
         images: [
           {
@@ -114,7 +131,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       twitter: {
         card: 'summary_large_image',
         title,
-        description: `A personal Geo ranking for ${rankingName}.`,
+        description,
         images: [imageUrl],
       },
     };
