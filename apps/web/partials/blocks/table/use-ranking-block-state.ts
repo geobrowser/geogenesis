@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useSetAtom } from 'jotai';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
@@ -49,6 +49,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { stepAtom } from '~/partials/onboarding/dialog';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
 export type RankingTab = 'global' | 'my';
 
@@ -75,11 +76,13 @@ export function useRankingBlockState({
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const preferMyTab = searchParams?.get('tab') === RANKING_COMPOSE_TAB_MY;
   const { showOnboarding } = useOnboarding();
   const { promptLogin, ensureAccess, status: composeAccessStatus } = useRankingComposeAccess(spaceId);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
   const { name, entityId, relationId, rows } = useDataBlock();
@@ -293,7 +296,6 @@ export function useRankingBlockState({
     [embeddedMyTotalPages]
   );
 
-  const hasDisplayedSubmission = Boolean(sharedSubmission || hasMySubmission);
   const hasOwnMyRankingData =
     hasMySubmission || (!hasSharedRankingUrl && !sharedSubmission && myDisplayEntityIds.length > 0);
   const hasMyRankingData =
@@ -482,13 +484,16 @@ export function useRankingBlockState({
       }
 
       if (mode !== 'view') {
-        if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
-          setPostOnboardingRedirect(href);
-        }
+        const queryString = searchParams?.toString() ?? '';
+        setRankingComposeReturnHref(`${pathname}${queryString ? `?${queryString}` : ''}`);
 
         if (!smartAccount) {
-          promptLogin();
+          promptLogin(href);
           return;
+        }
+
+        if (composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
+          setPostOnboardingRedirect(href);
         }
 
         if (composeAccessStatus === 'needs-onboarding') {
@@ -510,12 +515,15 @@ export function useRankingBlockState({
       showOnboarding,
       entityId,
       parentEntityId,
+      pathname,
       rankingEndDate,
       rankingStartDate,
       resolveBlockRelationId,
       router,
       setPostOnboardingRedirect,
+      setRankingComposeReturnHref,
       setStep,
+      searchParams,
       smartAccount,
       spaceId,
     ]
@@ -636,7 +644,7 @@ export function useRankingBlockState({
     });
   }, [effectiveGlobalOgVersion, entityId, rankingEndDate, rankingStartDate, spaceId]);
 
-  const showEditRankingButton = !isSharedRankingView && (hasMySubmission || myDisplayEntityIds.length > 0);
+  const showEditRankingButton = hasMySubmission || (!isSharedRankingView && myDisplayEntityIds.length > 0);
 
   const showFirstRankingPrompt =
     !isLoadingGlobalEntries &&

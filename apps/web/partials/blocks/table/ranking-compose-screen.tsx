@@ -4,7 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
@@ -47,6 +47,7 @@ import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
+import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
 type Props = {
   spaceId: string;
@@ -60,14 +61,25 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
   const relationId = searchParams?.get('relationId') ?? '';
-  const { name, entityId, rows: _rows, filterState } = useDataBlock();
+  const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { showOnboarding } = useOnboarding();
   const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
+
+  const handleBack = React.useCallback(() => {
+    if (rankingComposeReturnHref) {
+      setRankingComposeReturnHref(null);
+      router.replace(rankingComposeReturnHref);
+      return;
+    }
+
+    router.back();
+  }, [rankingComposeReturnHref, router, setRankingComposeReturnHref]);
 
   React.useEffect(() => {
     if (accessStatus === 'ready' || accessStatus === 'not-found') return;
@@ -347,6 +359,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
+    setRankingComposeReturnHref(null);
     router.replace(
       rankingComposeHref({
         spaceId,
@@ -454,7 +467,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             <div className="shrink-0 bg-white px-4 py-2">
               <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                onBack={() => router.back()}
+                onBack={handleBack}
                 showPublishButton
                 canPublish={canPublish}
                 isSaving={isSaving}
@@ -477,7 +490,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             <div className="shrink-0 py-2">
               <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                onBack={() => router.back()}
+                onBack={handleBack}
                 showPublishButton={false}
                 canPublish={canPublish}
                 isSaving={isSaving}
