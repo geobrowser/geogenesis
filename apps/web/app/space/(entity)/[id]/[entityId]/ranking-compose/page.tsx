@@ -7,14 +7,8 @@ import type { Metadata } from 'next';
 import { Effect } from 'effect';
 
 import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
-import { buildRankingOgPreviewUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
-import {
-  RANKING_OG_VARIANT_SIZES,
-  buildGlobalRankingOgObjectKey,
-  buildRankingOgObjectKey,
-  buildRankingOgPublicUrl,
-  getRankingOgPublicBaseUrl,
-} from '~/core/blocks/ranking/ranking-og-storage';
+import { buildRankingOgFileUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
+import { RANKING_OG_VARIANT_SIZES } from '~/core/blocks/ranking/ranking-og-storage';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 
@@ -96,25 +90,17 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     const authorName = authorProfile?.name?.trim() || '';
     const pageTitle = rankingName;
     const shareTitle = authorName ? formatSharedRankingOwnerLabel(authorName) : `My ${rankingName}`;
-    const description = authorName
-      ? `${shareTitle} for ${rankingName}.`
-      : `A personal Geo ranking for ${rankingName}.`;
-    const publicBaseUrl = getRankingOgPublicBaseUrl();
-    const imageUrl = publicBaseUrl
-      ? buildRankingOgPublicUrl(
-          publicBaseUrl,
-          buildRankingOgObjectKey({ rankEntityId, version: ogVersion, variant: 'landscape' })
-        )
-      : buildRankingOgPreviewUrl(siteUrl.toString(), {
-          scope: 'personal',
-          rankEntityId,
-          authorSpaceId,
-          blockEntityId: entityId,
-          blockEntitySpaceId: spaceId,
-          rankingStartDate,
-          rankingEndDate,
-          ogVersion,
-        });
+    const description = authorName ? `${shareTitle} for ${rankingName}.` : `A personal Geo ranking for ${rankingName}.`;
+    const imageUrl = buildRankingOgFileUrl(siteUrl.toString(), {
+      scope: 'personal',
+      rankEntityId,
+      authorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion,
+    });
     const url = rankingComposeHref({
       spaceId,
       blockEntityId: entityId,
@@ -154,20 +140,14 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
   if (hasValidGlobalRankingOgParams({ blockEntityId: entityId, globalOgVersion })) {
     const title = rankingName;
-    const publicBaseUrl = getRankingOgPublicBaseUrl();
-    const imageUrl = publicBaseUrl
-      ? buildRankingOgPublicUrl(
-          publicBaseUrl,
-          buildGlobalRankingOgObjectKey({ blockEntityId: entityId, version: globalOgVersion, variant: 'landscape' })
-        )
-      : buildRankingOgPreviewUrl(siteUrl.toString(), {
-          scope: 'global',
-          blockEntityId: entityId,
-          blockEntitySpaceId: spaceId,
-          rankingStartDate,
-          rankingEndDate,
-          globalOgVersion,
-        });
+    const imageUrl = buildRankingOgFileUrl(siteUrl.toString(), {
+      scope: 'global',
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      globalOgVersion,
+    });
     const url = rankingComposeHref({
       spaceId,
       blockEntityId: entityId,
