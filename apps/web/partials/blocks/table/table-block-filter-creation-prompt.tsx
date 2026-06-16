@@ -1994,7 +1994,7 @@ function TableBlockEntityFilterInput({
                   <ResultContent
                     onClick={() => handleEntityPick(row.result)}
                     active={stagingEntityIds.has(row.result.id)}
-                    multiSelectChecked={stagingEntityIds.has(row.result.id)}
+                    multiSelectChecked={multi ? stagingEntityIds.has(row.result.id) : undefined}
                     alreadySelected={false}
                     result={row.result}
                   />
