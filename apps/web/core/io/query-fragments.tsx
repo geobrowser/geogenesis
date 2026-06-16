@@ -1,5 +1,73 @@
 import { graphql } from '~/core/gql';
 
+// Shared selection sets for the entity-shaped queries below. These collapse
+// the per-relation/per-value shape into one place so a schema change (or a
+// truncation/payload fix) happens once instead of being re-inlined per query.
+//
+// Field selections are intentionally trimmed to what consumers actually read
+// (see core/io/dto/relations.ts + values.ts):
+//   - toEntity.valuesList → only { spaceId, propertyId, text }
+//   - toEntity.types      → only { id } (renderableType detection)
+//   - top-level valuesList → no `bytes` (getValueFromDataType returns null for BYTES)
+
+export const relationToEntityFragment = graphql(/* GraphQL */ `
+  fragment RelationToEntity on Entity {
+    id
+    name
+    types {
+      id
+    }
+    valuesList {
+      spaceId
+      propertyId
+      text
+    }
+  }
+`);
+
+export const entityValueFragment = graphql(/* GraphQL */ `
+  fragment EntityValueFields on Value {
+    spaceId
+    property {
+      ...PropertyFragment
+    }
+    text
+    integer
+    float
+    point
+    boolean
+    time
+    language
+    unit
+    datetime
+    date
+    decimal
+    schedule
+  }
+`);
+
+export const relationFieldsFragment = graphql(/* GraphQL */ `
+  fragment RelationFields on Relation {
+    id
+    spaceId
+    position
+    verified
+    entityId
+    fromEntity {
+      id
+      name
+    }
+    toEntity {
+      ...RelationToEntity
+    }
+    toSpaceId
+    type {
+      id
+      name
+    }
+  }
+`);
+
 export const entityFragment = graphql(/* GraphQL */ `
   fragment FullEntity on Entity {
     id
@@ -16,63 +84,11 @@ export const entityFragment = graphql(/* GraphQL */ `
     }
 
     valuesList(first: 1000) {
-      spaceId
-      property {
-        ...PropertyFragment
-      }
-      text
-      integer
-      float
-      point
-      boolean
-      time
-      language
-      unit
-      datetime
-      date
-      decimal
-      bytes
-      schedule
+      ...EntityValueFields
     }
 
     relationsList(first: 1000) {
-      id
-      spaceId
-      position
-      verified
-      entityId
-      fromEntity {
-        id
-        name
-      }
-      toEntity {
-        id
-        name
-        types {
-          id
-          name
-        }
-        valuesList {
-          spaceId
-          propertyId
-          text
-          integer
-          float
-          point
-          boolean
-          time
-          datetime
-          date
-          decimal
-          bytes
-          schedule
-        }
-      }
-      toSpaceId
-      type {
-        id
-        name
-      }
+      ...RelationFields
     }
   }
 `);
@@ -122,63 +138,11 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       }
 
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        ...EntityValueFields
       }
 
       relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+        ...RelationFields
       }
     }
   }
@@ -198,63 +162,11 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       }
 
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        ...EntityValueFields
       }
 
       relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+        ...RelationFields
       }
     }
   }
@@ -306,63 +218,11 @@ export const entityQuery = graphql(/* GraphQL */ `
       }
 
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        ...EntityValueFields
       }
 
       relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+        ...RelationFields
       }
     }
   }
@@ -370,44 +230,8 @@ export const entityQuery = graphql(/* GraphQL */ `
 
 export const relationFragment = graphql(/* GraphQL */ `
   fragment FullRelation on Relation {
-    id
-    spaceId
-    position
-    verified
-    entityId
+    ...RelationFields
     entity {
-      id
-      name
-    }
-    fromEntity {
-      id
-      name
-    }
-    toEntity {
-      id
-      name
-      types {
-        id
-        name
-      }
-      valuesList {
-        spaceId
-        propertyId
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        datetime
-        date
-        decimal
-        bytes
-        schedule
-      }
-    }
-    toSpaceId
-    type {
       id
       name
     }
@@ -468,63 +292,11 @@ export const entityPageQuery = graphql(/* GraphQL */ `
       }
 
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        ...EntityValueFields
       }
 
       relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+        ...RelationFields
       }
     }
     relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
@@ -590,63 +362,11 @@ export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
       }
 
       valuesList(first: 1000) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        ...EntityValueFields
       }
 
       relationsList(first: 1000) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+        ...RelationFields
       }
     }
   }
@@ -969,7 +689,6 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
         relationsList(first: 1000) {
@@ -984,27 +703,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
             name
           }
           toEntity {
-            id
-            name
-            types {
-              id
-              name
-            }
-            valuesList {
-              spaceId
-              propertyId
-              text
-              integer
-              float
-              point
-              boolean
-              time
-              datetime
-              date
-              decimal
-              bytes
-              schedule
-            }
+            ...RelationToEntity
           }
           type {
             id
