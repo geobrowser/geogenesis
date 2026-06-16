@@ -1,5 +1,5 @@
-export const RANKING_OG_LAYOUT_VERSION = 'ranking-og-v2';
-export const RANKING_GLOBAL_OG_LAYOUT_VERSION = 'ranking-global-og-v2';
+export const RANKING_OG_LAYOUT_VERSION = 'ranking-og-v3';
+export const RANKING_GLOBAL_OG_LAYOUT_VERSION = 'ranking-global-og-v3';
 
 export type RankingOgVersionInput = {
   rankEntityId: string;

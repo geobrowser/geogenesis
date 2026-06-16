@@ -727,7 +727,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
         style={{
           position: 'absolute',
           left: scaled(isStory ? 78 : 52, scale),
-          bottom: scaled(isStory ? 132 : 84, scale),
+          bottom: scaled(isStory ? 132 : 116, scale),
           display: 'flex',
         }}
       >
