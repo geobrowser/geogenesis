@@ -13,12 +13,14 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
+import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
@@ -231,12 +233,20 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           try {
-            const refreshed = await refetchMyRanking();
-            if (matchesExpectedOrder(refreshed.orderedEntityIds)) break;
+            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+              break;
+            }
           } catch (e) {
             console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
           }
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+
+        try {
+          await refetchMyRanking();
+        } catch (e) {
+          console.error('[useRankingSubmissions] Refetch after publish failed:', e);
         }
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;

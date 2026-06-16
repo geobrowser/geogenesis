@@ -60,7 +60,13 @@ export function useMyRanking(blockId: string) {
     isLoading,
     refetchMyRanking: React.useCallback(async () => {
       const result = await refetch();
-      return result.data ?? { rankEntity: null, orderedEntityIds: [] as string[] };
+      if (result.isError) {
+        throw result.error ?? new Error('Failed to refetch my ranking');
+      }
+      return {
+        myRankEntity: result.data?.rankEntity ?? null,
+        orderedEntityIds: result.data?.orderedEntityIds ?? [],
+      };
     }, [refetch]),
   };
 }
