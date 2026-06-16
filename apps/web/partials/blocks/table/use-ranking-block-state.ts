@@ -484,15 +484,16 @@ export function useRankingBlockState({
       }
 
       if (mode !== 'view') {
-        setRankingComposeReturnHref(`${pathname}${searchParams?.toString() ? `?${searchParams.toString()}` : ''}`);
-
-        if (!smartAccount || composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
-          setPostOnboardingRedirect(href);
-        }
+        const queryString = searchParams?.toString() ?? '';
+        setRankingComposeReturnHref(`${pathname}${queryString ? `?${queryString}` : ''}`);
 
         if (!smartAccount) {
           promptLogin(href);
           return;
+        }
+
+        if (composeAccessStatus === 'needs-login' || composeAccessStatus === 'needs-onboarding') {
+          setPostOnboardingRedirect(href);
         }
 
         if (composeAccessStatus === 'needs-onboarding') {

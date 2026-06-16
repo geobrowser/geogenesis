@@ -52,6 +52,8 @@ export function useRankingComposeAccess(spaceId: string) {
       const postLoginRedirect = postLoginRedirectRef.current;
       postLoginRedirectRef.current = null;
       if (postLoginRedirect) {
+        // Logged-out compose entry goes straight to compose after auth. If the
+        // account is new, the compose screen records this URL for onboarding.
         router.push(postLoginRedirect);
       }
     },
