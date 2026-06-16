@@ -172,6 +172,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   // On mobile fullscreen the action buttons move below the My ranking tab.
   const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
   const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection && !isSharedRankingView;
+  const movesSharedAddBelowTabs = isFullscreenMobile && isSharedRankingView && showAddMyRankingInGlobalHeader;
+  const movesActionBelowTabs = movesEditBelowTabs || movesSharedAddBelowTabs;
   const showMyTabActionsBelowTabs =
     presentation === 'fullscreen' && activeTab === 'my' && showMyRankingSection && Boolean(myRankingTabActions);
 
@@ -377,7 +379,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       ) : null}
                     </div>
 
-                    {!movesEditBelowTabs && !showMyTabActionsBelowTabs ? (
+                    {!movesActionBelowTabs && !showMyTabActionsBelowTabs ? (
                       <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
                     ) : null}
                   </div>
@@ -387,6 +389,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
 
                 {showMyTabActionsBelowTabs ? (
                   <div className="mb-4 flex w-full shrink-0">{myRankingTabActions}</div>
+                ) : movesSharedAddBelowTabs ? (
+                  <div className="mb-4 flex shrink-0 justify-start">{myRankingActionButton}</div>
                 ) : movesEditBelowTabs && activeTab === 'my' ? (
                   <div className="mb-4 flex shrink-0 justify-end">{buildMobileFullscreenEditButton(state)}</div>
                 ) : null}
