@@ -63,7 +63,11 @@ type RankingOgDataDeps = {
 
 const defaultDeps: RankingOgDataDeps = {
   fetchEntity: (entityId, spaceId) => Effect.runPromise(getEntity(entityId, spaceId)),
-  fetchEntityPage: (entityId, spaceId) => Effect.runPromise(getEntityPage(entityId, spaceId)),
+  fetchEntityPage: async (entityId, spaceId) => {
+    const page = await Effect.runPromise(getEntityPage(entityId, spaceId));
+    if (!page?.entity) return null;
+    return { entity: page.entity, relations: page.relations };
+  },
   fetchEntities: async (entityIds, spaceId) => {
     if (entityIds.length === 0) return [];
     const { entities } = await Effect.runPromise(

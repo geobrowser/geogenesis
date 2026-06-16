@@ -1,5 +1,6 @@
 import { getGlobalRankingOgCardData, getRankingOgCardData } from '~/core/blocks/ranking/ranking-og-data';
 import { generateRankingOgImageResponse } from '~/core/blocks/ranking/ranking-og-image';
+import { buildRankingOgPreviewUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
 import {
   RankingOgStorageConfigError,
   type RankingOgVariant,
@@ -7,6 +8,7 @@ import {
   buildRankingOgObjectKey,
   buildRankingOgPublicUrl,
   getRankingOgStorageConfig,
+  isRankingOgStorageConfigured,
   putGlobalRankingOgObject,
   putRankingOgObject,
   rankingOgObjectExists,
@@ -50,6 +52,63 @@ function generateScope(body: GenerateBody): 'global' | 'personal' {
   if (scope === 'global') return 'global';
   if (scope === 'personal') return 'personal';
   return stringField(body, 'globalOgVersion') && !stringField(body, 'rankEntityId') ? 'global' : 'personal';
+}
+
+function resolveRankingOgSiteOrigin(req: Request): string {
+  const configured = process.env.ENV_URL?.trim();
+  if (configured) return new URL(configured).origin;
+  return new URL(req.url).origin;
+}
+
+function previewFallbackResponse({
+  req,
+  scope,
+  body,
+  variants,
+}: {
+  req: Request;
+  scope: 'global' | 'personal';
+  body: GenerateBody;
+  variants: RankingOgVariant[];
+}) {
+  const siteOrigin = resolveRankingOgSiteOrigin(req);
+  const blockEntityId = stringField(body, 'blockEntityId');
+  const blockEntitySpaceId = stringField(body, 'blockEntitySpaceId');
+  const rankingStartDate = stringField(body, 'rankingStartDate');
+  const rankingEndDate = stringField(body, 'rankingEndDate');
+  const previewParams =
+    scope === 'global'
+      ? {
+          scope: 'global' as const,
+          blockEntityId,
+          blockEntitySpaceId,
+          rankingStartDate,
+          rankingEndDate,
+          globalOgVersion: stringField(body, 'globalOgVersion'),
+        }
+      : {
+          scope: 'personal' as const,
+          rankEntityId: stringField(body, 'rankEntityId'),
+          authorSpaceId: stringField(body, 'authorSpaceId'),
+          blockEntityId,
+          blockEntitySpaceId,
+          rankingStartDate,
+          rankingEndDate,
+          ogVersion: stringField(body, 'ogVersion'),
+        };
+
+  const imageUrls = Object.fromEntries(
+    variants.map(variant => [variant, buildRankingOgPreviewUrl(siteOrigin, previewParams, { variant })])
+  );
+
+  return jsonResponse(200, {
+    ok: true,
+    scope,
+    storageConfigured: false,
+    uploaded: false,
+    imageUrls,
+    keys: {},
+  });
 }
 
 async function uploadPersonalVariant({
@@ -155,6 +214,10 @@ export async function POST(req: Request): Promise<Response> {
         return jsonResponse(400, { ok: false, error: 'invalid_block' });
       }
 
+      if (!isRankingOgStorageConfigured()) {
+        return previewFallbackResponse({ req, scope, body, variants });
+      }
+
       const results = await Promise.all(
         variants.map(variant =>
           uploadGlobalVariant({
@@ -171,6 +234,7 @@ export async function POST(req: Request): Promise<Response> {
       return jsonResponse(200, {
         ok: true,
         scope: 'global',
+        storageConfigured: true,
         imageUrls,
         keys,
         uploaded: results.some(result => result.uploaded),
@@ -198,6 +262,10 @@ export async function POST(req: Request): Promise<Response> {
       return jsonResponse(400, { ok: false, error: 'invalid_rank' });
     }
 
+    if (!isRankingOgStorageConfigured()) {
+      return previewFallbackResponse({ req, scope, body, variants });
+    }
+
     const results = await Promise.all(
       variants.map(variant =>
         uploadPersonalVariant({
@@ -214,13 +282,14 @@ export async function POST(req: Request): Promise<Response> {
     return jsonResponse(200, {
       ok: true,
       scope: 'personal',
+      storageConfigured: true,
       imageUrls,
       keys,
       uploaded: results.some(result => result.uploaded),
     });
   } catch (error) {
     if (error instanceof RankingOgStorageConfigError) {
-      return jsonResponse(500, { ok: false, error: 'storage_not_configured', message: error.message });
+      return previewFallbackResponse({ req, scope, body, variants: variants ?? ['landscape', 'story'] });
     }
     console.error('[ranking-og/generate] failed', error);
     return jsonResponse(500, { ok: false, error: 'generation_failed' });

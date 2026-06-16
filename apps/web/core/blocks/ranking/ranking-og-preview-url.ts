@@ -20,7 +20,11 @@ export type GlobalRankingOgPreviewParams = {
 
 export type RankingOgPreviewParams = PersonalRankingOgPreviewParams | GlobalRankingOgPreviewParams;
 
-export function buildRankingOgPreviewUrl(siteOrigin: string, params: RankingOgPreviewParams): string {
+export function buildRankingOgPreviewUrl(
+  siteOrigin: string,
+  params: RankingOgPreviewParams,
+  options?: { variant?: 'landscape' | 'story' }
+): string {
   const url = new URL('/api/ranking-og/preview', siteOrigin);
   url.searchParams.set('scope', params.scope);
   url.searchParams.set('blockEntityId', params.blockEntityId);
@@ -35,6 +39,10 @@ export function buildRankingOgPreviewUrl(siteOrigin: string, params: RankingOgPr
     if (params.ogVersion) url.searchParams.set('ogVersion', params.ogVersion);
   } else if (params.globalOgVersion) {
     url.searchParams.set('globalOgVersion', params.globalOgVersion);
+  }
+
+  if (options?.variant && options.variant !== 'landscape') {
+    url.searchParams.set('variant', options.variant);
   }
 
   return url.toString();

@@ -105,6 +105,16 @@ export function getRankingOgPublicBaseUrl(env: NodeJS.ProcessEnv = process.env):
   }
 }
 
+export function isRankingOgStorageConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  try {
+    getRankingOgStorageConfig(env);
+    return true;
+  } catch (error) {
+    if (error instanceof RankingOgStorageConfigError) return false;
+    throw error;
+  }
+}
+
 export function getRankingOgStorageConfig(env: NodeJS.ProcessEnv = process.env): RankingOgStorageConfig {
   const values = {
     CLOUDFLARE_R2_ACCOUNT_ID: env.CLOUDFLARE_R2_ACCOUNT_ID?.trim() ?? '',

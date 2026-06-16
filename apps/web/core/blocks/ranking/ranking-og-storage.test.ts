@@ -8,6 +8,7 @@ import {
   buildRankingOgPublicUrl,
   getRankingOgPublicBaseUrl,
   getRankingOgStorageConfig,
+  isRankingOgStorageConfigured,
   normalizeRankingOgKeyPart,
 } from './ranking-og-storage';
 
@@ -63,6 +64,7 @@ describe('ranking OG storage helpers', () => {
 
   it('throws a typed error when required R2 env is missing', () => {
     expect(() => getRankingOgStorageConfig({} as NodeJS.ProcessEnv)).toThrow(RankingOgStorageConfigError);
+    expect(isRankingOgStorageConfigured({} as NodeJS.ProcessEnv)).toBe(false);
   });
 
   it('rejects the R2 API endpoint as the public base URL', () => {
