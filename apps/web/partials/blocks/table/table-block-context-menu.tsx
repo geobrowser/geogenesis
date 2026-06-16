@@ -68,7 +68,11 @@ export function TableBlockContextMenu({
 
   const onCopyShareLink = async () => {
     if (!globalRankingSharePath) return;
-    await onPrepareGlobalShareLink?.();
+    try {
+      await onPrepareGlobalShareLink?.();
+    } catch (error) {
+      console.error('Failed to prepare global ranking share image:', error);
+    }
     const copied = await copyRankingShareLink(buildAbsoluteRankingShareUrl(globalRankingSharePath));
     if (copied) {
       setIsMenuOpen(false);
@@ -78,7 +82,9 @@ export function TableBlockContextMenu({
 
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);
-    if (!open) {
+    if (open) {
+      void Promise.resolve(onPrepareGlobalShareLink?.()).catch(() => {});
+    } else {
       setIsEditingProperties(false);
     }
   };

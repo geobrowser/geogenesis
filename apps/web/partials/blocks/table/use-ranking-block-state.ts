@@ -126,12 +126,11 @@ export function useRankingBlockState({
     (profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null);
   const myAvatarSeed = sharedSubmission?.author.address ?? profile?.address ?? walletAddress ?? 'anonymous';
   const showMyRankingTab = Boolean(personalSpaceId || hasSharedRankingUrl || sharedSubmission);
-  const myRankingTabLabel =
-    isSharedRankingView && sharedSubmission?.author.name?.trim()
+  const myRankingTabLabel = isSharedRankingView
+    ? sharedSubmission?.author.name?.trim()
       ? formatSharedRankingOwnerLabel(sharedSubmission.author.name)
-      : isSharedRankingView && isLoadingSharedSubmission
-        ? 'Ranking'
-        : 'My ranking';
+      : 'Ranking'
+    : 'My ranking';
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<RankingTab>('global');
@@ -627,14 +626,6 @@ export function useRankingBlockState({
       globalOgVersion: effectiveGlobalOgVersion,
     });
   }, [effectiveGlobalOgVersion, entityId, rankingEndDate, rankingStartDate, spaceId]);
-
-  React.useEffect(() => {
-    if (!effectiveGlobalOgVersion) return;
-    const timer = window.setTimeout(() => {
-      void ensureGlobalRankingOg();
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [effectiveGlobalOgVersion, ensureGlobalRankingOg]);
 
   const showEditRankingButton = !isSharedRankingView && (hasMySubmission || myDisplayEntityIds.length > 0);
 

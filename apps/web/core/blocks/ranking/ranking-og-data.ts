@@ -162,7 +162,7 @@ export async function getRankingOgCardData(
     blockEntityId: input.blockEntityId,
     blockEntitySpaceId: input.blockEntitySpaceId,
     rankingName,
-    title: `My ${rankingName}`,
+    title: rankingName,
     periodLabel: periodLabel(input.rankingStartDate, input.rankingEndDate),
     author: {
       name: authorName,

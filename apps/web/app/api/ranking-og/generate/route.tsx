@@ -14,6 +14,8 @@ import {
   rankingOgObjectExists,
 } from '~/core/blocks/ranking/ranking-og-storage';
 
+import { getRequestWallet, walletCanEditSpace } from '../auth';
+import { checkRankingOgWalletRateLimit } from '../rate-limit';
 import {
   hasRankingOgAdminSecret,
   isSafeOgVersion,
@@ -174,8 +176,23 @@ async function uploadGlobalVariant({
 }
 
 export async function POST(req: Request): Promise<Response> {
-  if (!isSameOrigin(req) && !hasRankingOgAdminSecret(req)) {
-    return jsonResponse(403, { ok: false, error: 'forbidden' });
+  // The server-to-server backfill script authenticates with the admin secret.
+  // The browser publish/share flow must be same-origin and present a valid
+  // wallet cookie, and is rate-limited per wallet.
+  const isAdmin = hasRankingOgAdminSecret(req);
+  let wallet: string | null = null;
+  if (!isAdmin) {
+    if (!isSameOrigin(req)) {
+      return jsonResponse(403, { ok: false, error: 'forbidden' });
+    }
+    wallet = await getRequestWallet();
+    if (!wallet) {
+      return jsonResponse(403, { ok: false, error: 'forbidden' });
+    }
+    const limit = await checkRankingOgWalletRateLimit(wallet);
+    if (!limit.ok) {
+      return jsonResponse(429, { ok: false, error: 'rate_limited', retryAfter: limit.retryAfter });
+    }
   }
 
   let body: GenerateBody;
@@ -247,6 +264,14 @@ export async function POST(req: Request): Promise<Response> {
 
     if (!isValidEntityId(rankEntityId) || !isValidEntityId(authorSpaceId) || !isSafeOgVersion(ogVersion)) {
       return jsonResponse(400, { ok: false, error: 'invalid_input' });
+    }
+
+    // Only the rank's author (or a member of their space) may generate personal
+    // OG images for it — prevents writing R2 objects under someone else's rank.
+    if (!isAdmin) {
+      if (!wallet || !(await walletCanEditSpace(wallet, authorSpaceId))) {
+        return jsonResponse(403, { ok: false, error: 'forbidden' });
+      }
     }
 
     const data = await getRankingOgCardData({

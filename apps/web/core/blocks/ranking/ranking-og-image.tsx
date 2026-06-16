@@ -4,6 +4,7 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '~/core/constants';
 import { getImagePath } from '~/core/utils/utils';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
@@ -71,10 +72,33 @@ const geistFonts = [
   },
 ];
 
+// Only these hosts (our IPFS gateways) may be fetched by Satori
+const ALLOWED_IMAGE_HOSTS = new Set(
+  [PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH]
+    .map(base => {
+      try {
+        return new URL(base).host;
+      } catch {
+        return null;
+      }
+    })
+    .filter((host): host is string => Boolean(host))
+);
+
+// next/og (Satori) can only fetch http(s) or data: images.
 function toRenderableImageSrc(value: string | null | undefined): string | null {
   if (!value) return null;
   const resolved = getImagePath(value);
-  return resolved.startsWith('http') || resolved.startsWith('data:') ? resolved : null;
+  if (resolved.startsWith('data:')) return resolved;
+  try {
+    const url = new URL(resolved);
+    if ((url.protocol === 'https:' || url.protocol === 'http:') && ALLOWED_IMAGE_HOSTS.has(url.host)) {
+      return resolved;
+    }
+  } catch {
+    // Not an absolute URL — not renderable by Satori.
+  }
+  return null;
 }
 
 function initials(name: string): string {
@@ -703,7 +727,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
         style={{
           position: 'absolute',
           left: scaled(isStory ? 78 : 52, scale),
-          bottom: scaled(isStory ? 92 : 54, scale),
+          bottom: scaled(isStory ? 132 : 84, scale),
           display: 'flex',
         }}
       >

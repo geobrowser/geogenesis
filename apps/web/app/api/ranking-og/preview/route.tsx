@@ -1,11 +1,19 @@
 import { getGlobalRankingOgCardData, getRankingOgCardData } from '~/core/blocks/ranking/ranking-og-data';
 import { generateRankingOgImageResponse } from '~/core/blocks/ranking/ranking-og-image';
 
+import { checkRankingOgIpRateLimit, getClientIp } from '../rate-limit';
 import { isValidEntityId, jsonResponse, parseVariant } from '../route-utils';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: Request): Promise<Response> {
+  // Public, unauthenticated renderer (OG fallback) — rate-limit per IP to bound
+  // on-demand image-generation cost.
+  const rateLimit = await checkRankingOgIpRateLimit(getClientIp(req));
+  if (!rateLimit.ok) {
+    return jsonResponse(429, { ok: false, error: 'rate_limited', retryAfter: rateLimit.retryAfter });
+  }
+
   const url = new URL(req.url);
   const variant = parseVariant(url.searchParams.get('variant')) ?? 'landscape';
   const scope = url.searchParams.get('scope') === 'global' ? 'global' : 'personal';

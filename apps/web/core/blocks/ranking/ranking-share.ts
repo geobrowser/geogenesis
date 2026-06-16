@@ -7,7 +7,7 @@ export type RankingShareIdentity = {
 };
 
 export function buildRankingSharePath(params: RankingComposeHrefParams & Partial<RankingShareIdentity>): string {
-  return rankingComposeHref({ mode: 'view', ...params });
+  return rankingComposeHref({ ...params, mode: 'view' });
 }
 
 export function buildAbsoluteRankingShareUrl(path: string): string {
