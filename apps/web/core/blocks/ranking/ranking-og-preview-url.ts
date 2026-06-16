@@ -20,13 +20,12 @@ export type GlobalRankingOgPreviewParams = {
 
 export type RankingOgPreviewParams = PersonalRankingOgPreviewParams | GlobalRankingOgPreviewParams;
 
-function buildRankingOgRouteUrl(
-  pathname: string,
+export function buildRankingOgPreviewUrl(
   siteOrigin: string,
   params: RankingOgPreviewParams,
   options?: { variant?: 'landscape' | 'story' }
 ): string {
-  const url = new URL(pathname, siteOrigin);
+  const url = new URL('/api/ranking-og/preview', siteOrigin);
   url.searchParams.set('scope', params.scope);
   url.searchParams.set('blockEntityId', params.blockEntityId);
   url.searchParams.set('blockEntitySpaceId', params.blockEntitySpaceId);
@@ -47,21 +46,4 @@ function buildRankingOgRouteUrl(
   }
 
   return url.toString();
-}
-
-export function buildRankingOgPreviewUrl(
-  siteOrigin: string,
-  params: RankingOgPreviewParams,
-  options?: { variant?: 'landscape' | 'story' }
-): string {
-  return buildRankingOgRouteUrl('/api/ranking-og/preview', siteOrigin, params, options);
-}
-
-// Stable, same-origin URL used for og:image. The /file route serves the cached R2 object.
-export function buildRankingOgFileUrl(
-  siteOrigin: string,
-  params: RankingOgPreviewParams,
-  options?: { variant?: 'landscape' | 'story' }
-): string {
-  return buildRankingOgRouteUrl('/api/ranking-og/file', siteOrigin, params, options);
 }
