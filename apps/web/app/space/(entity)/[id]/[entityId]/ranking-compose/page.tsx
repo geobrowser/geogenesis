@@ -10,14 +10,9 @@ import { type RankingComposeMode, rankingComposeHref } from '~/core/blocks/ranki
 import {
   buildGlobalRankingMetadataFromParts,
   buildPersonalRankingMetadataFromParts,
+  resolveGlobalRankingOgImageUrl,
+  resolvePersonalRankingOgImageUrl,
 } from '~/core/blocks/ranking/ranking-og-metadata';
-import { buildRankingOgPreviewUrl } from '~/core/blocks/ranking/ranking-og-preview-url';
-import {
-  buildGlobalRankingOgObjectKey,
-  buildRankingOgObjectKey,
-  buildRankingOgPublicUrl,
-  getRankingOgPublicBaseUrl,
-} from '~/core/blocks/ranking/ranking-og-storage';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 
 import { cachedFetchEntity } from '../cached-fetch-entity';
@@ -96,22 +91,15 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   if (hasValidPersonalRankingOgParams({ rankEntityId, authorSpaceId, ogVersion })) {
     const authorProfile = await cachedFetchProfileBySpaceId(authorSpaceId);
     const authorName = authorProfile?.name?.trim() || '';
-    const publicBaseUrl = getRankingOgPublicBaseUrl();
-    const imageUrl = publicBaseUrl
-      ? buildRankingOgPublicUrl(
-          publicBaseUrl,
-          buildRankingOgObjectKey({ rankEntityId, version: ogVersion, variant: 'landscape' })
-        )
-      : buildRankingOgPreviewUrl(siteUrl.toString(), {
-          scope: 'personal',
-          rankEntityId,
-          authorSpaceId,
-          blockEntityId: entityId,
-          blockEntitySpaceId: spaceId,
-          rankingStartDate,
-          rankingEndDate,
-          ogVersion,
-        });
+    const imageUrl = await resolvePersonalRankingOgImageUrl(siteUrl.toString(), {
+      rankEntityId,
+      authorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion,
+    });
     const url = rankingComposeHref({
       spaceId,
       blockEntityId: entityId,
@@ -134,20 +122,13 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   }
 
   if (hasValidGlobalRankingOgParams({ blockEntityId: entityId, globalOgVersion })) {
-    const publicBaseUrl = getRankingOgPublicBaseUrl();
-    const imageUrl = publicBaseUrl
-      ? buildRankingOgPublicUrl(
-          publicBaseUrl,
-          buildGlobalRankingOgObjectKey({ blockEntityId: entityId, version: globalOgVersion, variant: 'landscape' })
-        )
-      : buildRankingOgPreviewUrl(siteUrl.toString(), {
-          scope: 'global',
-          blockEntityId: entityId,
-          blockEntitySpaceId: spaceId,
-          rankingStartDate,
-          rankingEndDate,
-          globalOgVersion,
-        });
+    const imageUrl = await resolveGlobalRankingOgImageUrl(siteUrl.toString(), {
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      globalOgVersion,
+    });
     const url = rankingComposeHref({
       spaceId,
       blockEntityId: entityId,

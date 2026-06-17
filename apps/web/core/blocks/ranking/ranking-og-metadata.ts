@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 
-import { buildRankingOgPreviewUrl } from './ranking-og-preview-url';
+import {
+  type GlobalRankingOgPreviewParams,
+  type PersonalRankingOgPreviewParams,
+  buildRankingOgPreviewUrl,
+} from './ranking-og-preview-url';
 import { formatSharedRankingOwnerLabel } from './ranking-owner-label';
 import {
   RANKING_OG_VARIANT_SIZES,
@@ -26,6 +30,14 @@ type GlobalMetadataParts = {
   rankingName: string;
   imageUrl: string;
   url: string;
+};
+
+type PersonalRankingOgImageUrlParams = Omit<PersonalRankingOgPreviewParams, 'scope'> & {
+  ogVersion: string;
+};
+
+type GlobalRankingOgImageUrlParams = Omit<GlobalRankingOgPreviewParams, 'scope'> & {
+  globalOgVersion: string;
 };
 
 /**
@@ -111,35 +123,58 @@ async function rankingOgObjectExistsSafe(key: string): Promise<boolean> {
   }
 }
 
+export async function resolvePersonalRankingOgImageUrl(
+  siteOrigin: string,
+  params: PersonalRankingOgImageUrlParams
+): Promise<string> {
+  const publicBaseUrl = getRankingOgPublicBaseUrl();
+  if (publicBaseUrl) {
+    const key = buildRankingOgObjectKey({
+      rankEntityId: params.rankEntityId,
+      version: params.ogVersion,
+      variant: 'landscape',
+    });
+    if (await rankingOgObjectExistsSafe(key)) {
+      return buildRankingOgPublicUrl(publicBaseUrl, key);
+    }
+  }
+
+  return buildRankingOgPreviewUrl(siteOrigin, { scope: 'personal', ...params });
+}
+
+export async function resolveGlobalRankingOgImageUrl(
+  siteOrigin: string,
+  params: GlobalRankingOgImageUrlParams
+): Promise<string> {
+  const publicBaseUrl = getRankingOgPublicBaseUrl();
+  if (publicBaseUrl) {
+    const key = buildGlobalRankingOgObjectKey({
+      blockEntityId: params.blockEntityId,
+      version: params.globalOgVersion,
+      variant: 'landscape',
+    });
+    if (await rankingOgObjectExistsSafe(key)) {
+      return buildRankingOgPublicUrl(publicBaseUrl, key);
+    }
+  }
+
+  return buildRankingOgPreviewUrl(siteOrigin, { scope: 'global', ...params });
+}
+
 export async function buildPersonalRankingMetadata(
   resolved: ResolvedPersonalRankingShare,
   siteUrl: URL,
   canonicalUrl: string
 ): Promise<Metadata> {
-  const publicBaseUrl = getRankingOgPublicBaseUrl();
-  let imageUrl: string | null = null;
-  if (publicBaseUrl) {
-    const key = buildRankingOgObjectKey({
-      rankEntityId: resolved.rankEntityId,
-      version: resolved.ogVersion,
-      variant: 'landscape',
-    });
-    if (await rankingOgObjectExistsSafe(key)) {
-      imageUrl = buildRankingOgPublicUrl(publicBaseUrl, key);
-    }
-  }
-  if (!imageUrl) {
-    imageUrl = buildRankingOgPreviewUrl(siteUrl.toString(), {
-      scope: 'personal',
-      rankEntityId: resolved.rankEntityId,
-      authorSpaceId: resolved.authorSpaceId,
-      blockEntityId: resolved.blockEntityId,
-      blockEntitySpaceId: resolved.blockEntitySpaceId,
-      rankingStartDate: resolved.rankingStartDate,
-      rankingEndDate: resolved.rankingEndDate,
-      ogVersion: resolved.ogVersion,
-    });
-  }
+  const imageUrl = await resolvePersonalRankingOgImageUrl(siteUrl.toString(), {
+    rankEntityId: resolved.rankEntityId,
+    authorSpaceId: resolved.authorSpaceId,
+    blockEntityId: resolved.blockEntityId,
+    blockEntitySpaceId: resolved.blockEntitySpaceId,
+    rankingStartDate: resolved.rankingStartDate,
+    rankingEndDate: resolved.rankingEndDate,
+    ogVersion: resolved.ogVersion,
+  });
 
   return buildPersonalRankingMetadataFromParts({
     rankingName: resolved.rankingName,
@@ -154,28 +189,13 @@ export async function buildGlobalRankingMetadata(
   siteUrl: URL,
   canonicalUrl: string
 ): Promise<Metadata> {
-  const publicBaseUrl = getRankingOgPublicBaseUrl();
-  let imageUrl: string | null = null;
-  if (publicBaseUrl) {
-    const key = buildGlobalRankingOgObjectKey({
-      blockEntityId: resolved.blockEntityId,
-      version: resolved.globalOgVersion,
-      variant: 'landscape',
-    });
-    if (await rankingOgObjectExistsSafe(key)) {
-      imageUrl = buildRankingOgPublicUrl(publicBaseUrl, key);
-    }
-  }
-  if (!imageUrl) {
-    imageUrl = buildRankingOgPreviewUrl(siteUrl.toString(), {
-      scope: 'global',
-      blockEntityId: resolved.blockEntityId,
-      blockEntitySpaceId: resolved.blockEntitySpaceId,
-      rankingStartDate: resolved.rankingStartDate,
-      rankingEndDate: resolved.rankingEndDate,
-      globalOgVersion: resolved.globalOgVersion,
-    });
-  }
+  const imageUrl = await resolveGlobalRankingOgImageUrl(siteUrl.toString(), {
+    blockEntityId: resolved.blockEntityId,
+    blockEntitySpaceId: resolved.blockEntitySpaceId,
+    rankingStartDate: resolved.rankingStartDate,
+    rankingEndDate: resolved.rankingEndDate,
+    globalOgVersion: resolved.globalOgVersion,
+  });
 
   return buildGlobalRankingMetadataFromParts({
     rankingName: resolved.rankingName,
