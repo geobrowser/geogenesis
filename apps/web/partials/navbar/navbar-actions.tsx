@@ -87,7 +87,7 @@ export function NavbarActions() {
       // Refetch the sidebar now the wallet cookie is cleared; otherwise the
       // refetch triggered by the wagmi disconnect reads the stale cookie and the
       // editor's spaces stay pinned under the signed-out key by `staleTime`.
-      await queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+      void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
     },
   });
 
