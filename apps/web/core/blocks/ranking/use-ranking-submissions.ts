@@ -16,7 +16,7 @@ import { ID } from '~/core/id';
 import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
@@ -164,7 +164,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankId = result.id;
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
-          reportError(`Failed to publish ranking: ${describeError(error)}`);
+          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
@@ -215,7 +216,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
-          reportError(`Failed to publish ranking: ${describeError(err)}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
