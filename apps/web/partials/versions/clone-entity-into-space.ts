@@ -20,7 +20,7 @@ function signatureOf(relation: Relation): string {
  * - relationFromIds: entityIds plus each containment relation's *relation
  *   entity* id, which is where the data block view/shown-columns config hangs.
  */
-function collectSubtree(rootEntityId: string, sourceSpaceId: string) {
+export function collectSubtree(rootEntityId: string, sourceSpaceId: string) {
   const entityIds = new Set<string>([rootEntityId]);
   const relationFromIds = new Set<string>([rootEntityId]);
   const queue = [rootEntityId];
