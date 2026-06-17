@@ -35,6 +35,8 @@ const personalResolved: ResolvedPersonalRankingShare = {
     author: { name: 'Alice', avatarUrl: null, avatarSeed: 'seed' },
     entries: [],
   },
+  orderedEntityIds: [],
+  entries: [],
 };
 
 const globalResolved: ResolvedGlobalRankingShare = {
@@ -59,6 +61,8 @@ const globalResolved: ResolvedGlobalRankingShare = {
     author: { name: '', avatarUrl: null, avatarSeed: 'block-1' },
     entries: [],
   },
+  orderedEntityIds: [],
+  entries: [],
 };
 
 describe('buildPersonalRankingMetadataFromParts', () => {

@@ -37,6 +37,11 @@ export default async function ShortPersonalRankingPage({ params }: Props) {
       rankEntityId={resolved.rankEntityId}
       authorSpaceId={resolved.authorSpaceId}
       ogVersion={resolved.ogVersion}
+      initialSharedRanking={{
+        rankingName: resolved.rankingName,
+        orderedEntityIds: resolved.orderedEntityIds,
+        entries: resolved.entries,
+      }}
     />
   );
 }
