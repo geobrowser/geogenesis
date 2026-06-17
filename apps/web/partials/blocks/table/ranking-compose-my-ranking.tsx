@@ -98,8 +98,7 @@ export function RankingComposeMyRanking({
                 entityId,
                 name: entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled'),
                 description: entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null)),
-                image:
-                  entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null,
+                image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
               };
               const entryRow = (
                 <RankingEntryRow
