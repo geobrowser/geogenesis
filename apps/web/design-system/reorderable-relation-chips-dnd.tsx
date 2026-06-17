@@ -11,7 +11,6 @@ import {
   closestCenter,
   closestCorners,
   pointerWithin,
-  rectIntersection,
   useDroppable,
   useSensor,
   useSensors,
@@ -26,7 +25,7 @@ import {
 } from '@dnd-kit/sortable';
 import type { SortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { LayoutGroup, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 
 import React from 'react';
 
@@ -36,7 +35,8 @@ import { sortRelations } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from './chip';
 
-const wrappedLayoutTransition = { type: 'spring' as const, stiffness: 500, damping: 38 };
+const SUBTLE_GAP_TRANSITION = { duration: 0.24, ease: [0.4, 0, 0.2, 1] as const };
+const CHIP_REFLOW_TRANSITION_CLASS = 'transition-[opacity,transform] duration-200 ease-out';
 const chipListClassName =
   'relative flex w-full min-w-0 max-w-full flex-row flex-wrap content-start justify-start items-start gap-1';
 
@@ -152,40 +152,22 @@ const snapCenterToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transf
 export const inlineWrappedCollisionDetection: CollisionDetection = args => {
   const pointerCollisions = pointerWithin(args);
   if (pointerCollisions.length > 0) return pointerCollisions;
-  const rectCollisions = rectIntersection(args);
-  if (rectCollisions.length > 0) return rectCollisions;
   return closestCorners(args);
 };
 
 type DragPointerEvent = {
   activatorEvent: Event | null;
   delta?: { x: number; y: number };
-  active: { rect: { current: { translated: ClientRect | null; initial: ClientRect | null } } };
 };
 
 function pointerFromDragEvent(event: DragPointerEvent): { x: number; y: number } | null {
   const activator = event.activatorEvent;
   const pointer = activator ? pointerClientPosition(activator) : null;
-  if (pointer) {
-    const deltaX = event.delta?.x ?? 0;
-    const deltaY = event.delta?.y ?? 0;
-    return {
-      x: pointer.x + deltaX,
-      y: pointer.y + deltaY,
-    };
-  }
-
-  const translated = event.active.rect.current.translated;
-  if (translated && translated.width > 0 && translated.height > 0) {
-    return { x: translated.left + translated.width / 2, y: translated.top + translated.height / 2 };
-  }
-
-  const initial = event.active.rect.current.initial;
-  if (initial && initial.width > 0 && initial.height > 0) {
-    return { x: initial.left + initial.width / 2, y: initial.top + initial.height / 2 };
-  }
-
-  return null;
+  if (!pointer) return null;
+  return {
+    x: pointer.x + (event.delta?.x ?? 0),
+    y: pointer.y + (event.delta?.y ?? 0),
+  };
 }
 
 function collectRects(chipNodes: Map<string, HTMLElement>, activeId: string): Map<string, ClientRect> {
@@ -237,13 +219,96 @@ function resolveOverlaySize(
   return null;
 }
 
-/** Reading order: row (top→bottom), then column (left→right) — matches wrapped flex. */
-function computeInsertBeforeIndex(
+const CURSOR_REGION_PX = 12;
+const POINTER_MOVE_THRESHOLD_PX = 6;
+const COLUMN_HYSTERESIS_RATIO = 0.25;
+const COLUMN_HYSTERESIS_MIN_PX = 10;
+const ROW_HYSTERESIS_PX = 10;
+
+function pointerMovedEnough(
+  next: { x: number; y: number },
+  last: { x: number; y: number } | null
+): boolean {
+  if (!last) return true;
+  const dx = next.x - last.x;
+  const dy = next.y - last.y;
+  return dx * dx + dy * dy >= POINTER_MOVE_THRESHOLD_PX * POINTER_MOVE_THRESHOLD_PX;
+}
+
+/** Ignore pointer samples outside the chip list while dragging — rapid moves often leave the group. */
+function pointerInsideListBounds(
   pointer: { x: number; y: number },
-  relations: Relation[],
-  rectById: Map<string, ClientRect>,
-  activeId: string
-): number {
+  bounds: ClientRect,
+  margin = CURSOR_REGION_PX
+): boolean {
+  return (
+    pointer.x >= bounds.left - margin &&
+    pointer.x <= bounds.right + margin &&
+    pointer.y >= bounds.top - margin &&
+    pointer.y <= bounds.bottom + margin
+  );
+}
+
+type InsertPointerResolution = {
+  insertBefore: number;
+  pointer: { x: number; y: number };
+};
+
+function resolveInsertBeforeFromPointer(args: {
+  pointer: { x: number; y: number };
+  activeId: string;
+  relations: Relation[];
+  chipNodes: Map<string, HTMLElement>;
+  listLayoutEl: HTMLElement | null;
+  currentInsertBefore: number | null;
+  lastPointer: { x: number; y: number } | null;
+  requirePointerMove?: boolean;
+  requireInsideList?: boolean;
+}): InsertPointerResolution | null {
+  const {
+    pointer,
+    activeId,
+    relations,
+    chipNodes,
+    listLayoutEl,
+    currentInsertBefore,
+    lastPointer,
+    requirePointerMove = true,
+    requireInsideList = true,
+  } = args;
+
+  if (requirePointerMove && currentInsertBefore != null && !pointerMovedEnough(pointer, lastPointer)) {
+    return null;
+  }
+
+  const listBounds = listLayoutEl?.getBoundingClientRect() ?? null;
+  if (requireInsideList && listBounds && !pointerInsideListBounds(pointer, listBounds)) {
+    return null;
+  }
+
+  let rectById = collectRects(chipNodes, activeId);
+  if (rectById.size === 0) return null;
+
+  const insertBefore = computeInsertBeforeIndex(
+    pointer,
+    relations,
+    rectById,
+    activeId,
+    currentInsertBefore
+  );
+
+  return { insertBefore, pointer };
+}
+
+type ChipRow = {
+  top: number;
+  bottom: number;
+  items: { index: number; rect: ClientRect }[];
+};
+
+function buildChipRows(relations: Relation[], rectById: Map<string, ClientRect>, activeId: string): ChipRow[] {
+  const rows: ChipRow[] = [];
+
   for (let i = 0; i < relations.length; i++) {
     const relation = relations[i];
     if (relation.id === activeId) continue;
@@ -251,21 +316,93 @@ function computeInsertBeforeIndex(
     const rect = rectById.get(relation.id);
     if (!rect) continue;
 
-    const rowTolerance = Math.max(rect.height * 0.45, 6);
-    const midX = rect.left + rect.width / 2;
-
-    if (pointer.y < rect.top - rowTolerance) {
-      return i;
+    const currentRow = rows[rows.length - 1];
+    if (currentRow) {
+      const overlap = Math.min(rect.bottom, currentRow.bottom) - Math.max(rect.top, currentRow.top);
+      const minHeight = Math.min(rect.height, currentRow.bottom - currentRow.top);
+      if (overlap > minHeight * 0.5) {
+        currentRow.items.push({ index: i, rect });
+        currentRow.top = Math.min(currentRow.top, rect.top);
+        currentRow.bottom = Math.max(currentRow.bottom, rect.bottom);
+        continue;
+      }
     }
 
-    if (pointer.y <= rect.bottom + rowTolerance) {
-      if (pointer.x < midX) {
-        return i;
+    rows.push({ top: rect.top, bottom: rect.bottom, items: [{ index: i, rect }] });
+  }
+
+  return rows;
+}
+
+function findTargetRowIndex(rows: ChipRow[], pointerY: number): number {
+  const r = CURSOR_REGION_PX;
+  const contained = rows.findIndex(row => pointerY >= row.top - r && pointerY <= row.bottom + r);
+  if (contained !== -1) return contained;
+
+  const firstRow = rows[0];
+  const lastRow = rows[rows.length - 1];
+  if (pointerY <= firstRow.top) return 0;
+  if (pointerY >= lastRow.bottom) return rows.length - 1;
+
+  let closest = 0;
+  let closestDistance = Infinity;
+  for (let i = 0; i < rows.length; i++) {
+    const center = (rows[i].top + rows[i].bottom) / 2;
+    const distance = Math.abs(pointerY - center);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closest = i;
+    }
+  }
+  return closest;
+}
+
+function computeInsertBeforeIndex(
+  pointer: { x: number; y: number },
+  relations: Relation[],
+  rectById: Map<string, ClientRect>,
+  activeId: string,
+  currentInsertBefore: number | null = null
+): number {
+  const rows = buildChipRows(relations, rectById, activeId);
+  if (rows.length === 0) return relations.length;
+
+  const targetRowIndex = findTargetRowIndex(rows, pointer.y);
+
+  let resolvedRowIndex = targetRowIndex;
+  if (currentInsertBefore != null) {
+    const currentRowIndex = rows.findIndex(row =>
+      row.items.some(item => item.index === currentInsertBefore || item.index + 1 === currentInsertBefore)
+    );
+    if (currentRowIndex !== -1 && currentRowIndex !== targetRowIndex) {
+      const currentRow = rows[currentRowIndex];
+      const movingDown = targetRowIndex > currentRowIndex;
+      const stayWithinCurrentRow = movingDown
+        ? pointer.y < currentRow.bottom + ROW_HYSTERESIS_PX
+        : pointer.y > currentRow.top - ROW_HYSTERESIS_PX;
+      if (stayWithinCurrentRow) {
+        resolvedRowIndex = currentRowIndex;
       }
     }
   }
 
-  return relations.length;
+  const targetRow = rows[resolvedRowIndex];
+
+  for (const item of targetRow.items) {
+    const midX = item.rect.left + item.rect.width / 2;
+    const isCurrentSlot = currentInsertBefore === item.index;
+    const isNextSlot = currentInsertBefore === item.index + 1;
+    const deadZone =
+      currentInsertBefore == null
+        ? 0
+        : Math.max(item.rect.width * COLUMN_HYSTERESIS_RATIO, COLUMN_HYSTERESIS_MIN_PX);
+    const threshold = midX + (isCurrentSlot ? deadZone : isNextSlot ? -deadZone : 0);
+    if (pointer.x < threshold) {
+      return item.index;
+    }
+  }
+
+  return targetRow.items[targetRow.items.length - 1].index + 1;
 }
 
 function insertBeforeToMoveIndex(insertBefore: number, activeIndex: number): number {
@@ -278,18 +415,27 @@ function insertBeforeToMoveIndex(insertBefore: number, activeIndex: number): num
   return insertBefore - 1;
 }
 
-function DragInsertGap({ width, height, animateLayout }: { width: number; height: number; animateLayout: boolean }) {
-  const style = { width, height, minHeight: height, flex: 'none' as const, boxSizing: 'border-box' as const };
+function DragInsertGap({
+  width,
+  height,
+  subtleMotion,
+}: {
+  width: number;
+  height: number;
+  subtleMotion: boolean;
+}) {
+  const style = { height, minHeight: height, flex: 'none' as const, boxSizing: 'border-box' as const };
 
-  if (!animateLayout) {
-    return <div className="shrink-0 self-start" style={style} aria-hidden />;
+  if (!subtleMotion) {
+    return <div className="shrink-0 self-start" style={{ ...style, width }} aria-hidden />;
   }
 
   return (
     <motion.div
-      layout="position"
-      transition={wrappedLayoutTransition}
-      className="shrink-0 self-start"
+      initial={{ width: 0, opacity: 0.35, scale: 0.94 }}
+      animate={{ width, opacity: 1, scale: 1 }}
+      transition={SUBTLE_GAP_TRANSITION}
+      className="shrink-0 origin-left self-start overflow-hidden"
       style={style}
       aria-hidden
     />
@@ -339,7 +485,6 @@ function RelationChipsSortableList({
         relation={relation}
         spaceId={spaceId}
         layoutMode={layoutMode}
-        layoutAnimate={useLayoutAnimateWhileDragging}
         collapseInPlaceWhenDragging
         isListDragging={activeId != null}
         onMeasureSize={node => registerChipNode(relation.id, node)}
@@ -352,7 +497,7 @@ function RelationChipsSortableList({
           <DragInsertGap
             width={gapSize.width}
             height={gapSize.height}
-            animateLayout={useLayoutAnimateWhileDragging}
+            subtleMotion={useLayoutAnimateWhileDragging}
           />
         ) : null}
         {chip}
@@ -366,28 +511,30 @@ function RelationChipsSortableList({
     gapSize &&
     insertBeforeIndex === sortedRelations.length;
 
+  const listClassName = useLayoutAnimateWhileDragging
+    ? `${chipListClassName} overflow-hidden`
+    : chipListClassName;
+
   if (useLayoutAnimateWhileDragging) {
     return (
-      <LayoutGroup>
-        <motion.div ref={listLayoutRef} className={chipListClassName}>
-          {sortableItems}
-          {showTrailingGap ? (
-            <DragInsertGap width={gapSize.width} height={gapSize.height} animateLayout />
-          ) : null}
-          {afterChips}
-        </motion.div>
-      </LayoutGroup>
+      <div ref={listLayoutRef} className={listClassName}>
+        {sortableItems}
+        {showTrailingGap ? (
+          <DragInsertGap width={gapSize.width} height={gapSize.height} subtleMotion />
+        ) : null}
+        {afterChips}
+      </div>
     );
   }
 
   return (
-    <motion.div ref={listLayoutRef} className={chipListClassName}>
+    <div ref={listLayoutRef} className={listClassName}>
       {sortableItems}
       {showTrailingGap ? (
-        <DragInsertGap width={gapSize.width} height={gapSize.height} animateLayout={false} />
+        <DragInsertGap width={gapSize.width} height={gapSize.height} subtleMotion={false} />
       ) : null}
       {afterChips}
-    </motion.div>
+    </div>
   );
 }
 
@@ -419,6 +566,13 @@ export function RelationChipsDndRoot({
   const overlaySizeRef = React.useRef<OverlaySize | null>(null);
   const itemSizesRef = React.useRef<Record<string, OverlaySize>>({});
   const lastOverIdRef = React.useRef<string | null>(null);
+  const lastInsertPointerRef = React.useRef<{ x: number; y: number } | null>(null);
+  const insertRafRef = React.useRef<number | null>(null);
+  const pendingInsertRef = React.useRef<{
+    pointer: { x: number; y: number };
+    activeRelationId: string;
+    overId: string | null;
+  } | null>(null);
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [activeSourceContainerId, setActiveSourceContainerId] = React.useState<string | null>(null);
@@ -479,6 +633,7 @@ export function RelationChipsDndRoot({
 
   const updateDestinationFromPointer = React.useCallback(
     (pointer: { x: number; y: number } | null, activeRelationId: string, overId: string | null) => {
+      const previousDestinationId = destinationContainerIdRef.current;
       const destinationId =
         findContainerForOverId(overId, relationIdToContainerIdRef.current) ??
         activeSourceContainerIdRef.current;
@@ -488,6 +643,7 @@ export function RelationChipsDndRoot({
       if (!registration || registration.relations.length <= 1) {
         destinationContainerIdRef.current = destinationId;
         insertBeforeIndexRef.current = null;
+        lastInsertPointerRef.current = null;
         setDestinationContainerId(destinationId);
         setInsertBeforeIndex(null);
         return;
@@ -501,26 +657,51 @@ export function RelationChipsDndRoot({
       const sortedRelations = sortRelations(registration.relations);
       if (isRelationChipsContainerId(overId ?? '')) {
         insertBeforeIndexRef.current = sortedRelations.length;
+        lastInsertPointerRef.current = pointer;
         setInsertBeforeIndex(sortedRelations.length);
         return;
       }
 
+      const sameContainer = previousDestinationId === destinationId;
       let rectById = collectRects(registration.chipNodesRef.current, activeRelationId);
       if (rectById.size === 0) {
         measureChipNodes(registration.chipNodesRef.current, itemSizesRef.current);
-        rectById = collectRects(registration.chipNodesRef.current, activeRelationId);
       }
 
-      const nextInsertBefore = computeInsertBeforeIndex(
+      const result = resolveInsertBeforeFromPointer({
         pointer,
-        sortedRelations,
-        rectById,
-        activeRelationId
-      );
-      insertBeforeIndexRef.current = nextInsertBefore;
-      setInsertBeforeIndex(nextInsertBefore);
+        activeId: activeRelationId,
+        relations: sortedRelations,
+        chipNodes: registration.chipNodesRef.current,
+        listLayoutEl: registration.listLayoutRef.current,
+        currentInsertBefore: sameContainer ? insertBeforeIndexRef.current : null,
+        lastPointer: sameContainer ? lastInsertPointerRef.current : null,
+      });
+      if (!result) return;
+
+      insertBeforeIndexRef.current = result.insertBefore;
+      lastInsertPointerRef.current = result.pointer;
+      setInsertBeforeIndex(result.insertBefore);
     },
     []
+  );
+
+  const flushDestinationFromPointer = React.useCallback(() => {
+    insertRafRef.current = null;
+    const pending = pendingInsertRef.current;
+    pendingInsertRef.current = null;
+    if (!pending) return;
+    updateDestinationFromPointer(pending.pointer, pending.activeRelationId, pending.overId);
+  }, [updateDestinationFromPointer]);
+
+  const scheduleDestinationFromPointer = React.useCallback(
+    (pointer: { x: number; y: number } | null, activeRelationId: string, overId: string | null) => {
+      if (!pointer) return;
+      pendingInsertRef.current = { pointer, activeRelationId, overId };
+      if (insertRafRef.current != null) return;
+      insertRafRef.current = requestAnimationFrame(flushDestinationFromPointer);
+    },
+    [flushDestinationFromPointer]
   );
 
   const clearDragState = () => {
@@ -529,6 +710,12 @@ export function RelationChipsDndRoot({
     destinationContainerIdRef.current = null;
     insertBeforeIndexRef.current = null;
     overlaySizeRef.current = null;
+    lastInsertPointerRef.current = null;
+    pendingInsertRef.current = null;
+    if (insertRafRef.current != null) {
+      cancelAnimationFrame(insertRafRef.current);
+      insertRafRef.current = null;
+    }
     setActiveId(null);
     setActiveSourceContainerId(null);
     setDestinationContainerId(null);
@@ -572,14 +759,18 @@ export function RelationChipsDndRoot({
     const activeRelationId = String(event.active.id);
     if (!relationIdToContainerIdRef.current.has(activeRelationId)) return;
     const overId = event.over ? String(event.over.id) : lastOverIdRef.current;
-    updateDestinationFromPointer(pointerFromDragEvent(event), activeRelationId, overId);
+    scheduleDestinationFromPointer(pointerFromDragEvent(event), activeRelationId, overId);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     const activeRelationId = String(event.active.id);
     if (!relationIdToContainerIdRef.current.has(activeRelationId)) return;
     lastOverIdRef.current = event.over ? String(event.over.id) : null;
-    updateDestinationFromPointer(pointerFromDragEvent(event), activeRelationId, lastOverIdRef.current);
+    scheduleDestinationFromPointer(
+      pointerFromDragEvent(event),
+      activeRelationId,
+      lastOverIdRef.current
+    );
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -606,31 +797,50 @@ export function RelationChipsDndRoot({
           const oldIndex = sortedRelations.findIndex(item => item.id === activeRelationId);
           if (oldIndex >= 0 && sortedRelations.length > 1) {
             const pointer = pointerFromDragEvent(event);
-            const rectById = collectRects(sourceRegistration.chipNodesRef.current, activeRelationId);
-            const insertBefore =
-              insertBeforeIndexRef.current ??
-              (pointer
-                ? computeInsertBeforeIndex(pointer, sortedRelations, rectById, activeRelationId)
-                : oldIndex);
-            const newIndex = insertBeforeToMoveIndex(insertBefore, oldIndex);
-            if (newIndex >= 0 && newIndex !== oldIndex) {
-              const newList = arrayMove(sortedRelations, oldIndex, newIndex);
-              newList.forEach((item, index) => {
-                sourceRegistration.onUpdateRelation(item, sortedRelations[index].position ?? null);
+            const resolved =
+              pointer &&
+              resolveInsertBeforeFromPointer({
+                pointer,
+                activeId: activeRelationId,
+                relations: sortedRelations,
+                chipNodes: sourceRegistration.chipNodesRef.current,
+                listLayoutEl: sourceRegistration.listLayoutRef.current,
+                currentInsertBefore: insertBeforeIndexRef.current,
+                lastPointer: lastInsertPointerRef.current,
+                requirePointerMove: false,
+                requireInsideList: false,
               });
+            const insertBefore = resolved?.insertBefore ?? insertBeforeIndexRef.current;
+            if (insertBefore != null) {
+              const newIndex = insertBeforeToMoveIndex(insertBefore, oldIndex);
+              if (newIndex >= 0 && newIndex !== oldIndex) {
+                const newList = arrayMove(sortedRelations, oldIndex, newIndex);
+                newList.forEach((item, index) => {
+                  sourceRegistration.onUpdateRelation(item, sortedRelations[index].position ?? null);
+                });
+              }
             }
           }
         } else {
           const sortedDestination = sortRelations(destinationRegistration.relations);
           const pointer = pointerFromDragEvent(event);
-          const rectById = collectRects(destinationRegistration.chipNodesRef.current, activeRelationId);
+          const resolved =
+            pointer &&
+            resolveInsertBeforeFromPointer({
+              pointer,
+              activeId: activeRelationId,
+              relations: sortedDestination,
+              chipNodes: destinationRegistration.chipNodesRef.current,
+              listLayoutEl: destinationRegistration.listLayoutRef.current,
+              currentInsertBefore: insertBeforeIndexRef.current,
+              lastPointer: lastInsertPointerRef.current,
+              requirePointerMove: false,
+              requireInsideList: false,
+            });
           const insertBefore =
+            resolved?.insertBefore ??
             insertBeforeIndexRef.current ??
-            (isRelationChipsContainerId(overId ?? '')
-              ? sortedDestination.length
-              : pointer
-                ? computeInsertBeforeIndex(pointer, sortedDestination, rectById, activeRelationId)
-                : sortedDestination.length);
+            (isRelationChipsContainerId(overId ?? '') ? sortedDestination.length : sortedDestination.length);
 
           onChipDragEnd({
             relation,
@@ -839,6 +1049,13 @@ export default function ReorderableRelationChipsDnd({
   const chipNodesRef = React.useRef<Map<string, HTMLElement>>(new Map());
   const activeIdRef = React.useRef<string | null>(null);
   const [insertBeforeIndex, setInsertBeforeIndex] = React.useState<number | null>(null);
+  const insertBeforeIndexRef = React.useRef<number | null>(null);
+  const lastInsertPointerRef = React.useRef<{ x: number; y: number } | null>(null);
+  const insertRafRef = React.useRef<number | null>(null);
+  const pendingInsertRef = React.useRef<{
+    pointer: { x: number; y: number };
+    active: string;
+  } | null>(null);
   const itemSizesRef = React.useRef<Record<string, OverlaySize>>({});
 
   const sensors = useSensors(
@@ -880,28 +1097,52 @@ export default function ReorderableRelationChipsDnd({
     }
   }, []);
 
-  const updateInsertIndexFromPointer = React.useCallback(
+  const flushInsertUpdate = React.useCallback(() => {
+    insertRafRef.current = null;
+    const pending = pendingInsertRef.current;
+    pendingInsertRef.current = null;
+    if (!pending || !useInsertGapDnD) return;
+
+    let rectById = collectRects(chipNodesRef.current, pending.active);
+    if (rectById.size === 0) {
+      measureChipNodes(chipNodesRef.current, itemSizesRef.current);
+      rectById = collectRects(chipNodesRef.current, pending.active);
+    }
+
+    const result = resolveInsertBeforeFromPointer({
+      pointer: pending.pointer,
+      activeId: pending.active,
+      relations: sortedRelations,
+      chipNodes: chipNodesRef.current,
+      listLayoutEl: listLayoutRef.current,
+      currentInsertBefore: insertBeforeIndexRef.current,
+      lastPointer: lastInsertPointerRef.current,
+    });
+    if (!result) return;
+
+    insertBeforeIndexRef.current = result.insertBefore;
+    lastInsertPointerRef.current = result.pointer;
+    setInsertBeforeIndex(result.insertBefore);
+  }, [sortedRelations, useInsertGapDnD]);
+
+  const scheduleInsertUpdate = React.useCallback(
     (pointer: { x: number; y: number } | null, active: string) => {
       if (!pointer || !useInsertGapDnD) return;
-      let rectById = collectRects(chipNodesRef.current, active);
-      if (rectById.size === 0) {
-        measureChipNodes(chipNodesRef.current, itemSizesRef.current);
-        rectById = collectRects(chipNodesRef.current, active);
-      }
-      const insertBefore = computeInsertBeforeIndex(pointer, sortedRelations, rectById, active);
-      setInsertBeforeIndex(insertBefore);
+      pendingInsertRef.current = { pointer, active };
+      if (insertRafRef.current != null) return;
+      insertRafRef.current = requestAnimationFrame(flushInsertUpdate);
     },
-    [sortedRelations, useInsertGapDnD]
+    [flushInsertUpdate, useInsertGapDnD]
   );
 
   const handleDragMove = (event: DragMoveEvent) => {
     if (!useInsertGapDnD) return;
-    updateInsertIndexFromPointer(pointerFromDragEvent(event), String(event.active.id));
+    scheduleInsertUpdate(pointerFromDragEvent(event), String(event.active.id));
   };
 
   const handleDragOver = (event: DragOverEvent) => {
     if (!useInsertGapDnD) return;
-    updateInsertIndexFromPointer(pointerFromDragEvent(event), String(event.active.id));
+    scheduleInsertUpdate(pointerFromDragEvent(event), String(event.active.id));
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -918,11 +1159,36 @@ export default function ReorderableRelationChipsDnd({
     );
     setOverlaySize(nextOverlaySize);
 
-    updateInsertIndexFromPointer(pointerFromDragEvent(event), id);
+    const pointer = pointerFromDragEvent(event);
+    if (pointer) {
+      const result = resolveInsertBeforeFromPointer({
+        pointer,
+        activeId: id,
+        relations: sortedRelations,
+        chipNodes: chipNodesRef.current,
+        listLayoutEl: listLayoutRef.current,
+        currentInsertBefore: null,
+        lastPointer: null,
+        requirePointerMove: false,
+        requireInsideList: false,
+      });
+      if (result) {
+        insertBeforeIndexRef.current = result.insertBefore;
+        lastInsertPointerRef.current = result.pointer;
+        setInsertBeforeIndex(result.insertBefore);
+      }
+    }
   };
 
   const clearDragState = () => {
     activeIdRef.current = null;
+    insertBeforeIndexRef.current = null;
+    lastInsertPointerRef.current = null;
+    pendingInsertRef.current = null;
+    if (insertRafRef.current != null) {
+      cancelAnimationFrame(insertRafRef.current);
+      insertRafRef.current = null;
+    }
     setActiveId(null);
     setOverlaySize(null);
     setInsertBeforeIndex(null);
@@ -940,10 +1206,24 @@ export default function ReorderableRelationChipsDnd({
 
     if (useInsertGapDnD) {
       const pointer = pointerFromDragEvent(event);
-      const rectById = collectRects(chipNodesRef.current, String(active.id));
-      const insertBefore =
-        insertBeforeIndex ??
-        (pointer ? computeInsertBeforeIndex(pointer, sortedRelations, rectById, String(active.id)) : oldIndex);
+      const resolved =
+        pointer &&
+        resolveInsertBeforeFromPointer({
+          pointer,
+          activeId: String(active.id),
+          relations: sortedRelations,
+          chipNodes: chipNodesRef.current,
+          listLayoutEl: listLayoutRef.current,
+          currentInsertBefore: insertBeforeIndexRef.current,
+          lastPointer: lastInsertPointerRef.current,
+          requirePointerMove: false,
+          requireInsideList: false,
+        });
+      const insertBefore = resolved?.insertBefore ?? insertBeforeIndexRef.current;
+      if (insertBefore == null) {
+        clearDragState();
+        return;
+      }
       newIndex = insertBeforeToMoveIndex(insertBefore, oldIndex);
     } else {
       const { over } = event;
@@ -1129,7 +1409,6 @@ interface SortableRelationChipProps {
   relation: Relation;
   spaceId: string;
   layoutMode: LayoutMode;
-  layoutAnimate: boolean;
   collapseInPlaceWhenDragging: boolean;
   isListDragging: boolean;
   onMeasureSize: (node: HTMLDivElement | null) => void;
@@ -1139,7 +1418,6 @@ function SortableRelationChip({
   relation,
   spaceId,
   layoutMode,
-  layoutAnimate,
   collapseInPlaceWhenDragging,
   isListDragging,
   onMeasureSize,
@@ -1149,7 +1427,6 @@ function SortableRelationChip({
   });
 
   const collapseInPlace = collapseInPlaceWhenDragging && isDragging;
-  const shouldLayoutAnimate = layoutAnimate && !collapseInPlace;
 
   const style: React.CSSProperties = {
     position: 'relative',
@@ -1204,7 +1481,12 @@ function SortableRelationChip({
     [onMeasureSize, setNodeRef]
   );
 
-  const shellClassName = 'relative inline-block max-w-full min-w-0';
+  const shellClassName = [
+    'relative inline-block max-w-full min-w-0',
+    isListDragging && !collapseInPlace ? CHIP_REFLOW_TRANSITION_CLASS : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   const handleClassName =
     'inline-flex max-w-full min-w-0 cursor-grab items-center active:cursor-grabbing';
@@ -1214,7 +1496,6 @@ function SortableRelationChip({
       ref={setMeasuredNodeRef}
       style={style}
       className={shellClassName}
-      layoutAnimate={shouldLayoutAnimate}
       onClick={handleClick}
       onClickCapture={handleClick}
       dragHandleProps={{ ...attributes, ...listeners }}
@@ -1229,7 +1510,6 @@ function SortableRelationChipShell({
   ref,
   style,
   className,
-  layoutAnimate,
   onClick,
   onClickCapture,
   dragHandleProps,
@@ -1239,7 +1519,6 @@ function SortableRelationChipShell({
   ref: React.Ref<HTMLDivElement>;
   style: React.CSSProperties;
   className?: string;
-  layoutAnimate: boolean;
   onClick?: (e: React.MouseEvent) => void;
   onClickCapture?: (e: React.MouseEvent) => void;
   dragHandleProps: React.HTMLAttributes<HTMLDivElement>;
@@ -1251,22 +1530,6 @@ function SortableRelationChipShell({
       {children}
     </div>
   );
-
-  if (layoutAnimate) {
-    return (
-      <motion.div
-        ref={ref}
-        layout="position"
-        transition={wrappedLayoutTransition}
-        style={style}
-        className={className}
-        onClick={onClick}
-        onClickCapture={onClickCapture}
-      >
-        {handle}
-      </motion.div>
-    );
-  }
 
   return (
     <div ref={ref} style={style} className={className} onClick={onClick} onClickCapture={onClickCapture}>
