@@ -86,6 +86,11 @@ type UseRankingBlockStateParams = {
   initialSharedRanking?: InitialSharedRanking;
 };
 
+// Stable empty fallbacks so absent SSR seeds don't produce a fresh `[]` each
+// render, which would defeat the `useMemo`s that depend on these values.
+const EMPTY_ENTITY_IDS: string[] = [];
+const EMPTY_RANKING_ENTRIES: RankingEntryDisplay[] = [];
+
 export function useRankingBlockState({
   spaceId,
   rankingStartDate = '',
@@ -147,10 +152,10 @@ export function useRankingBlockState({
 
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
 
-  const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? [];
-  const initialGlobalEntries = initialGlobalRanking?.entries ?? [];
-  const initialSharedOrderedIds = initialSharedRanking?.orderedEntityIds ?? [];
-  const initialSharedEntries = initialSharedRanking?.entries ?? [];
+  const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
+  const initialGlobalEntries = initialGlobalRanking?.entries ?? EMPTY_RANKING_ENTRIES;
+  const initialSharedOrderedIds = initialSharedRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
+  const initialSharedEntries = initialSharedRanking?.entries ?? EMPTY_RANKING_ENTRIES;
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
