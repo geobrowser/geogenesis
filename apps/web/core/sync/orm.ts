@@ -9,6 +9,7 @@ import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/
 
 import { readTypes } from '../database/entities';
 import {
+  ENTITY_ID_BATCH_SIZE,
   getAllEntities,
   getBatchEntities,
   getBatchEntitySpaces,
@@ -316,13 +317,17 @@ export class E {
         return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
-      const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds, spaceId],
-        queryFn: async ({ signal }) => {
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
-          return entities;
-        },
-      });
+      const remoteEntities = (
+        await Promise.all(
+          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+            return cache.fetchQuery({
+              queryKey: ['network', 'entities', batchIds, spaceId],
+              queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
+            });
+          })
+        )
+      ).flat();
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
