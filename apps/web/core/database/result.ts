@@ -1,7 +1,7 @@
 import { Duration, Effect } from 'effect';
 
 import { ROOT_SPACE } from '../constants';
-import { getBatchEntities, getResult, getSpaces } from '../io/queries';
+import { getBatchEntities, getBatchEntitySpaces, getResult, getSpaces } from '../io/queries';
 import { queryClient } from '../query-client';
 import { GeoStore } from '../sync/store';
 import { SearchResult } from '../types';
@@ -23,9 +23,25 @@ export async function mergeSearchResult(args: FetchResultOptions) {
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
 
+  // `getResult`'s spaceIds include every space where the entity has any value or
+  // relation — including spaces whose only contribution is a hidden system
+  // property (e.g. a permissionless upvote score). Resolve the entity's real
+  // "presence" spaces so a score-only space isn't surfaced/ranked as its home.
+  // (GEO-2218)
+  const presenceSpaces = await queryClient.fetchQuery({
+    queryKey: ['merge-search-result-presence-spaces', args.id],
+    queryFn: () => Effect.runPromise(getBatchEntitySpaces([args.id])),
+    staleTime: Duration.toMillis(Duration.seconds(15)),
+  });
+  const presenceSpaceIds = presenceSpaces.find(e => e.id === args.id)?.spaces;
+  const rawRemoteSpaceIds = cachedRemoteResult?.spaces?.map(s => (typeof s === 'string' ? s : s.spaceId)) ?? [];
+  // Fall back to the raw spaceIds when the entity has no non-hidden presence
+  // anywhere, so a vote-only entity is still navigable (mirrors Entities.spaces).
+  const remoteSpaceIds = presenceSpaceIds?.length ? presenceSpaceIds : rawRemoteSpaceIds;
+
   let merged = cachedRemoteResult
     ? localEntity
-      ? { ...localEntity, spaces: cachedRemoteResult.spaces }
+      ? { ...localEntity, spaces: remoteSpaceIds }
       : cachedRemoteResult
     : localEntity
       ? localEntity
@@ -36,10 +52,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
   }
 
   // Collect all space IDs from both local and remote entities
-  const allSpaceIds = [
-    ...(localEntity?.spaces || []),
-    ...(cachedRemoteResult?.spaces?.map(s => (typeof s === 'string' ? s : s.spaceId)) || []),
-  ];
+  const allSpaceIds = [...(localEntity?.spaces || []), ...remoteSpaceIds];
   const uniqueSpaceIds = [...new Set(allSpaceIds)];
 
   // Fetch space entities for all space IDs
