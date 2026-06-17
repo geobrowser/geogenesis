@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 
 import { Button } from '~/design-system/button';
+import { Dots } from '~/design-system/dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
@@ -78,6 +79,7 @@ function buildMyRankingTabActions(state: RankingBlockState) {
     isSharedRankingView,
     showEditRankingButton,
     canSharePersonalRanking,
+    isPersonalShareReady,
     sharePersonalRanking,
     isSaving,
     openRankingCompose,
@@ -102,12 +104,24 @@ function buildMyRankingTabActions(state: RankingBlockState) {
           variant="primary"
           className={cx(
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
-            !showEditRankingButton && 'ml-auto'
+            !showEditRankingButton && 'ml-auto',
+            !isPersonalShareReady && 'cursor-default opacity-60 hover:bg-text'
           )}
-          onClick={sharePersonalRanking}
+          aria-disabled={!isPersonalShareReady}
+          aria-label={isPersonalShareReady ? 'Share ranking on X' : 'Preparing share image'}
+          onClick={isPersonalShareReady ? sharePersonalRanking : undefined}
         >
-          Share
-          <XIcon color="white" />
+          {isPersonalShareReady ? (
+            <>
+              Share
+              <XIcon color="white" />
+            </>
+          ) : (
+            <>
+              Preparing
+              <Dots color="bg-grey-02" />
+            </>
+          )}
         </Button>
       ) : null}
     </div>

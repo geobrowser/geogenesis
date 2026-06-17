@@ -609,17 +609,24 @@ export function useRankingBlockState({
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
-  const ensurePersonalRankingOg = React.useCallback(async () => {
-    if (isSharedRankingView || !effectiveOgVersion || !shareRankEntityId || !shareAuthorSpaceId) return;
-    await generatePersonalRankingOgImages({
-      rankEntityId: shareRankEntityId,
-      authorSpaceId: shareAuthorSpaceId,
-      blockEntityId: entityId,
-      blockEntitySpaceId: spaceId,
-      rankingStartDate,
-      rankingEndDate,
-      ogVersion: effectiveOgVersion,
-    });
+  const [preparedOgVersion, setPreparedOgVersion] = React.useState<string | null>(null);
+
+  const ensurePersonalRankingOg = React.useCallback(async (): Promise<boolean> => {
+    if (isSharedRankingView || !effectiveOgVersion || !shareRankEntityId || !shareAuthorSpaceId) return false;
+    const requestedOgVersion = effectiveOgVersion;
+    try {
+      return await generatePersonalRankingOgImages({
+        rankEntityId: shareRankEntityId,
+        authorSpaceId: shareAuthorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion: requestedOgVersion,
+      });
+    } finally {
+      setPreparedOgVersion(requestedOgVersion);
+    }
   }, [
     effectiveOgVersion,
     entityId,
@@ -631,26 +638,25 @@ export function useRankingBlockState({
     spaceId,
   ]);
 
+  // Ready to post once a generation attempt for the *current* version has settled
+  const isPersonalShareReady = Boolean(effectiveOgVersion) && preparedOgVersion === effectiveOgVersion;
+
   const sharePersonalRanking = React.useCallback(() => {
     if (!personalSharePath) return;
     const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
     const shareText = `Here's my ${name?.trim() || 'ranking'}. What's yours?`;
-    // Open X within the click's user activation — popup blockers drop window.open
-    // after an await. The OG image is pre-warmed in the background (and the share
-    // route falls back to a live preview render if the R2 object isn't ready yet),
-    // so the card still resolves even if the user posts immediately.
-    shareRankingOnX(shareUrl, shareText);
-    void ensurePersonalRankingOg().catch(() => {});
-  }, [name, ensurePersonalRankingOg, personalSharePath]);
+    // Open X within the click's user activation — popup blockers drop window.open after shareRankingOnX(shareUrl, shareText);
+  }, [name, personalSharePath]);
 
-  // Generate the personal OG image
+  // Pre-warm the personal OG image as soon as a share becomes possible
   React.useEffect(() => {
     if (!canSharePersonalRanking || !effectiveOgVersion) return;
+    if (preparedOgVersion === effectiveOgVersion) return;
     const timer = window.setTimeout(() => {
-      void ensurePersonalRankingOg();
+      void ensurePersonalRankingOg().catch(() => {});
     }, 1500);
     return () => window.clearTimeout(timer);
-  }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
+  }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg, preparedOgVersion]);
 
   const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
 
@@ -722,6 +728,7 @@ export function useRankingBlockState({
     showFirstRankingPrompt,
     showEditRankingButton,
     canSharePersonalRanking,
+    isPersonalShareReady,
     sharePersonalRanking,
     globalSharePath,
     ensureGlobalRankingOg,
