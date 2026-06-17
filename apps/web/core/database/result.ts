@@ -18,7 +18,7 @@ export async function mergeSearchResult(args: FetchResultOptions) {
   const localEntity = args.store.getEntity(args.id);
 
   const cachedRemoteResult = await queryClient.fetchQuery({
-    queryKey: ['merge-search-result', args],
+    queryKey: ['merge-search-result', args.id],
     queryFn: () => Effect.runPromise(getResult(args.id)),
     staleTime: Duration.toMillis(Duration.seconds(15)),
   });
