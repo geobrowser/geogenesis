@@ -43,6 +43,9 @@ export type ResolvedPersonalRankingShare = {
   /** Recomputed to match the publish-time inputs so the R2 fast path hits. */
   ogVersion: string;
   cardData: RankingOgCardData;
+  /** Full ordered ranking, resolved server-side so the shared ranking renders all rows on first paint. */
+  orderedEntityIds: string[];
+  entries: RankingOgEntryData[];
 };
 
 export type ResolvedGlobalRankingShare = {
@@ -213,6 +216,23 @@ export async function resolvePersonalRankingShareImpl(
   // 6. Resolve placement for back-navigation / vote / "add my ranking".
   const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
 
+  // 7. Resolve the full ordered ranking (names + images) server-side so the
+  //    shared view paints every row immediately instead of cascading through
+  //    "loading" -> "empty" -> "Untitled" -> resolved on the client. Shape
+  //    matches the client's RankingEntryDisplay so seeded rows reconcile against
+  //    the live query without a swap (mirrors the global resolver).
+  const rankedEntities = await deps.fetchEntities(orderedEntityIds, blockEntitySpaceId);
+  const rankedEntityById = new Map(rankedEntities.map(e => [e.id, e]));
+  const entries: RankingOgEntryData[] = orderedEntityIds.map(id => {
+    const entity = rankedEntityById.get(id);
+    return {
+      entityId: id,
+      name: entity?.name?.trim() || 'Untitled',
+      description: entity?.description?.trim() || null,
+      image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? null,
+    };
+  });
+
   return {
     kind: 'personal',
     rankEntityId,
@@ -227,6 +247,8 @@ export async function resolvePersonalRankingShareImpl(
     authorName,
     ogVersion,
     cardData,
+    orderedEntityIds,
+    entries,
   };
 }
 
