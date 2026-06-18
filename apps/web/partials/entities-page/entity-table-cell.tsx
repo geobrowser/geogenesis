@@ -138,18 +138,23 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
   });
   const dedupedRelations = dedupeRelationsByToEntityId(relations);
 
-  return dedupedRelations.map(relation => {
-    if (property.renderableTypeStrict === 'IMAGE') {
-      return (
-        <ImageRelation
-          key={relation.id}
-          linkedEntityId={relation.toEntity.id}
-          directImageUrl={relation.toEntity.value}
-          spaceId={spaceId}
-        />
-      );
-    }
+  // Avatar/cover are single-valued, but this selector isn't space-scoped and
+  // dedupe only collapses identical targets — so a replaced image's old relation
+  // still shows alongside the new one. Render one, preferring the current space.
+  if (property.renderableTypeStrict === 'IMAGE') {
+    const relation = dedupedRelations.find(r => r.spaceId === spaceId) ?? dedupedRelations[0];
+    if (!relation) return null;
+    return (
+      <ImageRelation
+        key={relation.id}
+        linkedEntityId={relation.toEntity.id}
+        directImageUrl={relation.toEntity.value}
+        spaceId={spaceId}
+      />
+    );
+  }
 
+  return dedupedRelations.map(relation => {
     const value = relation.toEntity.value;
     const name = relation.toEntity.name;
     const relationId = relation.id;
