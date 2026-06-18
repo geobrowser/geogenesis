@@ -72,8 +72,6 @@ export const EntityType = Schema.Struct({
   name: Schema.NullOr(Schema.String),
 });
 
-export type RemoteEntityType = Schema.Schema.Type<typeof EntityType>;
-
 export const Relation = Schema.Struct({
   id: HexId,
   spaceId: HexId,
