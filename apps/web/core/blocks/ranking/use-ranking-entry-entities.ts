@@ -8,7 +8,7 @@ import * as React from 'react';
 import { EntityId } from '~/core/io/substream-schema';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Relation, Value } from '~/core/types';
-import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
 export type RankingEntryDisplay = {
   entityId: string;
@@ -50,53 +50,29 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   return { entries, isLoading: isLoading && !isFetched };
 }
 
-/**
- * Pick a value for `propertyId` preferring `currentSpaceId`, then the highest-ranked
- * space per {@link getSpaceRank}. Whitespace-only values are ignored so they don't
- * mask a usable value from another space.
- */
-export function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
-  let inSpace: string | null = null;
-  const others: { spaceId: string; value: string }[] = [];
+function pickBySpacePrecedence<T extends { spaceId: string }>(items: T[], currentSpaceId: string): T | null {
+  const inSpace = items.find(item => item.spaceId === currentSpaceId);
+  if (inSpace) return inSpace;
 
-  for (const v of values) {
-    if (v.property.id !== propertyId) continue;
-    const trimmed = v.value?.trim();
-    if (!trimmed) continue;
-    if (v.spaceId === currentSpaceId) {
-      if (inSpace == null) inSpace = trimmed;
-    } else {
-      others.push({ spaceId: v.spaceId, value: trimmed });
-    }
-  }
-
-  if (inSpace != null) return inSpace;
+  const others = items.filter(item => item.spaceId !== currentSpaceId);
   if (others.length === 0) return null;
 
-  return others.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0].value;
+  return others.sort(compareBySpaceRank(item => item.spaceId))[0];
+}
+
+export function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
+  const candidates = values.filter(v => v.property.id === propertyId && v.value?.trim());
+  return pickBySpacePrecedence(candidates, currentSpaceId)?.value?.trim() ?? null;
 }
 
 /**
- * Pick a relation of `typeId` preferring `currentSpaceId`, then the highest-ranked
- * space per {@link getSpaceRank}.
+ * Pick a relation of `typeId` preferring `currentSpaceId`, then the highest-ranked space.
  */
 export function pickRelationBySpace(relations: Relation[], typeId: string, currentSpaceId: string): Relation | null {
-  let inSpace: Relation | null = null;
-  const others: Relation[] = [];
-
-  for (const r of relations) {
-    if (r.type.id !== typeId) continue;
-    if (r.spaceId === currentSpaceId) {
-      if (inSpace == null) inSpace = r;
-    } else {
-      others.push(r);
-    }
-  }
-
-  if (inSpace) return inSpace;
-  if (others.length === 0) return null;
-
-  return others.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+  return pickBySpacePrecedence(
+    relations.filter(r => r.type.id === typeId),
+    currentSpaceId
+  );
 }
 
 /**
