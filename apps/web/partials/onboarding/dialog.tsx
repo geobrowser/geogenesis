@@ -500,7 +500,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
       <div className="absolute inset-x-4 bottom-4 flex">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Text as="p" variant="footnote" className="text-center text-grey-04">
-            By signing up, you agree to our{' '}
+            All content is public. By signing up, you agree to our{' '}
             <a
               href={TERMS_AND_CONDITIONS_URL}
               target="_blank"
