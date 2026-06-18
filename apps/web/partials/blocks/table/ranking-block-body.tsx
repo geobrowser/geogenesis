@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 
 import { Button } from '~/design-system/button';
-import { Dots } from '~/design-system/dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
@@ -23,7 +22,7 @@ import {
 } from './ranking-block-ui';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
-import { RankingEntryRow } from './ranking-entry-row';
+import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -80,7 +79,6 @@ function buildMyRankingTabActions(state: RankingBlockState) {
     showEditRankingButton,
     canSharePersonalRanking,
     sharePersonalRanking,
-    isPreparingPersonalShare,
     isSaving,
     openRankingCompose,
   } = state;
@@ -106,17 +104,10 @@ function buildMyRankingTabActions(state: RankingBlockState) {
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
             !showEditRankingButton && 'ml-auto'
           )}
-          disabled={isPreparingPersonalShare}
           onClick={sharePersonalRanking}
         >
-          {isPreparingPersonalShare ? (
-            <Dots color="bg-grey-02" />
-          ) : (
-            <>
-              Share
-              <XIcon color="white" />
-            </>
-          )}
+          Share
+          <XIcon color="white" />
         </Button>
       ) : null}
     </div>
@@ -237,7 +228,17 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             {globalDisplayEntityIds.map(entityId => {
               const entry = globalRankingEntryByEntityId.get(entityId);
               const rank = globalRankByEntityId.get(entityId);
-              if (!entry || rank == null) return null;
+              if (rank == null) return null;
+              // Rank is known from relations/seed before the entity name/image
+              // resolve — render a skeleton row so the list keeps its height
+              // instead of collapsing until entries hydrate.
+              if (!entry) {
+                return (
+                  <div key={entityId} className="w-full">
+                    <RankingEntryRowSkeleton rank={rank} />
+                  </div>
+                );
+              }
               const rowContent = (
                 <RankingEntryRow
                   rank={rank}

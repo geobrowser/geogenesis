@@ -10,9 +10,28 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 
 const ROW_NAME_CLASS = 'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
+
+/** Placeholder row shown while an entry's name/image resolve — rank is already known. */
+export function RankingEntryRowSkeleton({ rank }: { rank?: number }) {
+  const showLeadingRank = rank != null && rank > 0;
+
+  return (
+    <div className="flex w-full min-w-0 items-center gap-4 overflow-hidden">
+      {showLeadingRank ? (
+        <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+      ) : null}
+      <Skeleton className="h-16 min-h-16 w-16 min-w-16 shrink-0 rounded-md" />
+      <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-3 w-3/5" />
+      </div>
+    </div>
+  );
+}
 
 type Props = {
   /** Omit or pass 0 to hide the rank indicator. */

@@ -1,7 +1,7 @@
 import type { EntityFilter } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
 import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
-import type { Entity } from '~/core/types';
+import type { Entity, Relation } from '~/core/types';
 
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
 
@@ -25,6 +25,19 @@ export function isRankSubmittedToBlock(rankEntity: Entity, authorSpaceId: string
       ID.equals(relation.type.id, SUBMITTED_TO_PROPERTY_ID) &&
       ID.equals(relation.toEntity.id, blockEntityId)
   );
+}
+
+/**
+ * Resolve the data/ranking block a rank entity was submitted to from its
+ * relations. A RANK entity carries a single SUBMITTED_TO relation (scoped to the
+ * author's personal space) pointing at the block it ranks. Shared with the short
+ * share-link resolver so the block-detection logic lives in one place.
+ */
+export function getSubmittedBlockIdFromRank(relations: Relation[], authorSpaceId: string): string | null {
+  const relation = relations.find(
+    r => !r.isDeleted && ID.equals(r.spaceId, authorSpaceId) && ID.equals(r.type.id, SUBMITTED_TO_PROPERTY_ID)
+  );
+  return relation?.toEntity.id ?? null;
 }
 
 function parseEntityTimestampMs(raw: string | number | undefined | null): number {

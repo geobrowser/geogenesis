@@ -4,7 +4,7 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '~/core/constants';
+import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getImagePath } from '~/core/utils/utils';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
@@ -31,10 +31,11 @@ function scaledBorder(width: number, scale: number, color: string): string {
   return `${Math.max(1, scaled(width, scale))}px solid ${color}`;
 }
 
-function readStaticImageSrc(fileName: string, contentType: string): string | null {
+function readPublicImageSrc(fileName: string, contentType: string): string | null {
+  const normalizedFileName = fileName.replace(/^\/+/, '');
   const candidates = [
-    join(process.cwd(), `public/static/${fileName}`),
-    join(process.cwd(), `apps/web/public/static/${fileName}`),
+    join(process.cwd(), `public/${normalizedFileName}`),
+    join(process.cwd(), `apps/web/public/${normalizedFileName}`),
   ];
   const filePath = candidates.find(candidate => existsSync(candidate));
   if (!filePath) return null;
@@ -53,9 +54,7 @@ function readStaticFontData(fileName: string): ArrayBuffer {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
 }
 
-const cityThumbnailSrcs = [1, 2, 3, 4, 5]
-  .map(index => readStaticImageSrc(`ranking-og-city-${index}.jpg`, 'image/jpeg'))
-  .filter((src): src is string => Boolean(src));
+const placeholderThumbnailSrc = readPublicImageSrc(PLACEHOLDER_SPACE_IMAGE, 'image/png');
 
 const geistFonts = [
   {
@@ -318,9 +317,8 @@ function BrandMark({ variant, scale }: { variant: RankingOgVariant; scale: numbe
   );
 }
 
-function fallbackThumbnailSrc(entry: RankingOgEntryData): string | null {
-  if (cityThumbnailSrcs.length === 0) return null;
-  return cityThumbnailSrcs[seedHue(entry.entityId || entry.name) % cityThumbnailSrcs.length] ?? cityThumbnailSrcs[0];
+export function resolveRankingOgEntryImageSrc(entry: RankingOgEntryData): string | null {
+  return toRenderableImageSrc(entry.image) ?? placeholderThumbnailSrc;
 }
 
 function OwnerBadge({ data, variant, scale }: { data: RankingOgCardData; variant: RankingOgVariant; scale: number }) {
@@ -484,7 +482,7 @@ function EntryImage({
   variant: RankingOgVariant;
   scale: number;
 }) {
-  const src = toRenderableImageSrc(entry.image) ?? fallbackThumbnailSrc(entry);
+  const src = resolveRankingOgEntryImageSrc(entry);
   const { width, height } = imageDimensions(index, variant, scale);
 
   if (src) {
