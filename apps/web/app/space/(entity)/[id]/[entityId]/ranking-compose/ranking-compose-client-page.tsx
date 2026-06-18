@@ -1,5 +1,11 @@
 'use client';
 
+import { useSetAtom } from 'jotai';
+
+import { useEffect } from 'react';
+
+import { navbarSpaceOverrideAtom } from '~/atoms';
+
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
 import { useRankingComposePage } from '~/core/blocks/ranking/use-ranking-compose-page';
@@ -8,6 +14,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 
 import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
 import { RankingViewScreen } from '~/partials/blocks/table/ranking-view-screen';
+import { type InitialGlobalRanking, type InitialSharedRanking } from '~/partials/blocks/table/use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -20,6 +27,8 @@ type Props = {
   rankEntityId?: string;
   authorSpaceId?: string;
   ogVersion?: string;
+  initialGlobalRanking?: InitialGlobalRanking;
+  initialSharedRanking?: InitialSharedRanking;
 };
 
 function RankingComposeLoadingState({ message }: { message: string }) {
@@ -41,6 +50,8 @@ export function RankingComposeClientPage({
   rankEntityId = '',
   authorSpaceId = '',
   ogVersion = '',
+  initialGlobalRanking,
+  initialSharedRanking,
 }: Props) {
   const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
     spaceId,
@@ -49,16 +60,31 @@ export function RankingComposeClientPage({
     parentEntityIdParam,
   });
 
+  // Short-link routes (/r/g, /r) have no space in the URL; surface it to the navbar.
+  const setNavbarSpaceOverride = useSetAtom(navbarSpaceOverrideAtom);
+  useEffect(() => {
+    setNavbarSpaceOverride({ spaceId });
+    return () => setNavbarSpaceOverride(null);
+  }, [spaceId, setNavbarSpaceOverride]);
+
+  // Seeded view pages render immediately instead of waiting on the client block
+  // resolution; the live store reconciles in the background with no visible swap.
+  const hasSeededRanking = mode === 'view' && (initialGlobalRanking != null || initialSharedRanking != null);
+
   if (!hasValidParams) {
     return <RankingComposeLoadingState message="Invalid parameters" />;
   }
 
-  if (isLoading) {
-    return <RankingComposeLoadingState message="Loading ranking..." />;
+  if (!parentEntityId) {
+    return isLoading ? (
+      <RankingComposeLoadingState message="Loading ranking..." />
+    ) : (
+      <RankingComposeLoadingState message="Data block not found" />
+    );
   }
 
-  if (!parentEntityId) {
-    return <RankingComposeLoadingState message="Data block not found" />;
+  if (isLoading && !hasSeededRanking) {
+    return <RankingComposeLoadingState message="Loading ranking..." />;
   }
 
   return (
@@ -78,6 +104,8 @@ export function RankingComposeClientPage({
               rankEntityId={rankEntityId}
               authorSpaceId={authorSpaceId}
               ogVersion={ogVersion}
+              initialGlobalRanking={initialGlobalRanking}
+              initialSharedRanking={initialSharedRanking}
             />
           ) : (
             <RankingComposeScreen

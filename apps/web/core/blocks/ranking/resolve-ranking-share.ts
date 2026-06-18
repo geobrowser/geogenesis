@@ -5,7 +5,7 @@ import { cache } from 'react';
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
+import { getAllEntities, getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import {
   RANKING_END_DATE_PROPERTY_ID,
@@ -14,11 +14,13 @@ import {
   RANK_TYPE_ID,
 } from '~/core/ranking-block-ids';
 import type { Entity, Profile, Relation } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 
 import { getMyRankingOrderedEntityIds, getSubmittedBlockIdFromRank } from './my-ranking-entity';
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
 import {
   type RankingOgCardData,
+  type RankingOgEntryData,
   getGlobalRankingOgCardData,
   getRankingOgCardData,
 } from './ranking-og-data';
@@ -41,6 +43,9 @@ export type ResolvedPersonalRankingShare = {
   /** Recomputed to match the publish-time inputs so the R2 fast path hits. */
   ogVersion: string;
   cardData: RankingOgCardData;
+  /** Full ordered ranking, resolved server-side so the shared ranking renders all rows on first paint. */
+  orderedEntityIds: string[];
+  entries: RankingOgEntryData[];
 };
 
 export type ResolvedGlobalRankingShare = {
@@ -54,6 +59,9 @@ export type ResolvedGlobalRankingShare = {
   rankingName: string;
   globalOgVersion: string;
   cardData: RankingOgCardData;
+  /** Full ordered ranking, resolved server-side so the page renders all rows on first paint. */
+  orderedEntityIds: string[];
+  entries: RankingOgEntryData[];
 };
 
 type ToEntityRelation = {
@@ -68,6 +76,7 @@ export type ResolveRankingShareDeps = {
   fetchEntityPage: (entityId: string, spaceId?: string) => Promise<{ entity: Entity; relations: Relation[] } | null>;
   fetchRelationsByToEntity: (blockEntityId: string, typeId: string, spaceId: string) => Promise<ToEntityRelation[]>;
   fetchProfile: (spaceId: string) => Promise<Profile | null>;
+  fetchEntities: (entityIds: string[], spaceId?: string) => Promise<Entity[]>;
   fetchPersonalCardData: typeof getRankingOgCardData;
   fetchGlobalCardData: typeof getGlobalRankingOgCardData;
 };
@@ -80,15 +89,22 @@ const defaultDeps: ResolveRankingShareDeps = {
     return { entity: page.entity, relations: page.relations };
   },
   fetchRelationsByToEntity: (blockEntityId, typeId, spaceId) =>
-    Effect.runPromise(
-      getRelationsByToEntityIds([blockEntityId], typeId, spaceId)
-    ) as unknown as Promise<ToEntityRelation[]>,
+    Effect.runPromise(getRelationsByToEntityIds([blockEntityId], typeId, spaceId)) as unknown as Promise<
+      ToEntityRelation[]
+    >,
   fetchProfile: async spaceId => {
     try {
       return await Effect.runPromise(fetchProfileBySpaceId(spaceId));
     } catch {
       return null;
     }
+  },
+  fetchEntities: async (entityIds, spaceId) => {
+    if (entityIds.length === 0) return [];
+    const { entities } = await Effect.runPromise(
+      getAllEntities({ filter: { id: { in: entityIds } }, spaceId, limit: entityIds.length })
+    );
+    return entities;
   },
   fetchPersonalCardData: getRankingOgCardData,
   fetchGlobalCardData: getGlobalRankingOgCardData,
@@ -200,6 +216,23 @@ export async function resolvePersonalRankingShareImpl(
   // 6. Resolve placement for back-navigation / vote / "add my ranking".
   const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
 
+  // 7. Resolve the full ordered ranking (names + images) server-side so the
+  //    shared view paints every row immediately instead of cascading through
+  //    "loading" -> "empty" -> "Untitled" -> resolved on the client. Shape
+  //    matches the client's RankingEntryDisplay so seeded rows reconcile against
+  //    the live query without a swap (mirrors the global resolver).
+  const rankedEntities = await deps.fetchEntities(orderedEntityIds, blockEntitySpaceId);
+  const rankedEntityById = new Map(rankedEntities.map(e => [e.id, e]));
+  const entries: RankingOgEntryData[] = orderedEntityIds.map(id => {
+    const entity = rankedEntityById.get(id);
+    return {
+      entityId: id,
+      name: entity?.name?.trim() || 'Untitled',
+      description: entity?.description?.trim() || null,
+      image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? null,
+    };
+  });
+
   return {
     kind: 'personal',
     rankEntityId,
@@ -214,6 +247,8 @@ export async function resolvePersonalRankingShareImpl(
     authorName,
     ogVersion,
     cardData,
+    orderedEntityIds,
+    entries,
   };
 }
 
@@ -259,6 +294,20 @@ export async function resolveGlobalRankingShareImpl(
     rankingEndDate,
   });
 
+  // Shape matches the client's RankingEntryDisplay (avatar before cover, plain
+  // description) so the seeded rows reconcile against the live query without a swap.
+  const rankedEntities = await deps.fetchEntities(orderedEntityIds, blockEntitySpaceId);
+  const rankedEntityById = new Map(rankedEntities.map(e => [e.id, e]));
+  const entries: RankingOgEntryData[] = orderedEntityIds.map(id => {
+    const entity = rankedEntityById.get(id);
+    return {
+      entityId: id,
+      name: entity?.name?.trim() || 'Untitled',
+      description: entity?.description?.trim() || null,
+      image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? null,
+    };
+  });
+
   const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
 
   return {
@@ -272,6 +321,8 @@ export async function resolveGlobalRankingShareImpl(
     rankingName,
     globalOgVersion,
     cardData,
+    orderedEntityIds,
+    entries,
   };
 }
 
@@ -281,6 +332,4 @@ export const resolvePersonalRankingShare = cache((rankEntityId: string) =>
   resolvePersonalRankingShareImpl(rankEntityId)
 );
 
-export const resolveGlobalRankingShare = cache((blockEntityId: string) =>
-  resolveGlobalRankingShareImpl(blockEntityId)
-);
+export const resolveGlobalRankingShare = cache((blockEntityId: string) => resolveGlobalRankingShareImpl(blockEntityId));

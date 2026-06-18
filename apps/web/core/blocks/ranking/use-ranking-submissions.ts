@@ -12,13 +12,15 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { checkEntityExists } from '~/core/io/queries';
+import { ID } from '~/core/id';
+import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
+import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
@@ -162,7 +164,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankId = result.id;
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
-          reportError(`Failed to publish ranking: ${describeError(error)}`);
+          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
@@ -213,7 +216,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
-          reportError(`Failed to publish ranking: ${describeError(err)}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
@@ -224,18 +228,28 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const POLL_INTERVAL_MS = 2000;
         const MAX_POLL_ATTEMPTS = 30;
 
+        // Poll until the indexer reflects the exact order we just submitted.
+        const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
+        const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+
         await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           try {
-            const exists = await Effect.runPromise(checkEntityExists(rankId));
-            if (exists) break;
+            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+              break;
+            }
           } catch (e) {
-            console.error('[useRankingSubmissions] Poll for indexed rank failed:', e);
+            console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
           }
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         }
 
-        await refetchMyRanking();
+        try {
+          await refetchMyRanking();
+        } catch (e) {
+          console.error('[useRankingSubmissions] Refetch after publish failed:', e);
+        }
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
 

@@ -4,7 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAllEntities } from '../io/queries';
+import { getAllEntities, getBatchEntities } from '../io/queries';
 import type { Entity, Value } from '../types';
 import { E } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
@@ -15,6 +15,7 @@ vi.mock('./use-sync-engine.tsx', () => ({}));
 vi.mock('./use-store.tsx', () => ({}));
 vi.mock('../database/entities', () => ({ readTypes: () => [] }));
 vi.mock('../io/queries', () => ({
+  ENTITY_ID_BATCH_SIZE: 50,
   getAllEntities: vi.fn(),
   getBatchEntities: vi.fn(),
   getBatchEntitySpaces: vi.fn(),
@@ -104,5 +105,23 @@ describe('E.syncMany pagination', () => {
     const result = await E.syncMany({ store, cache, where: {}, first: 9 });
 
     expect(result.merged.map(e => e.id)).toEqual(['entity-c']);
+  });
+
+  it('hydrates large id.in queries in bounded batches while preserving requested order', async () => {
+    const ids = Array.from({ length: 117 }, (_, index) => `entity-${index}`);
+    vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
+      Effect.succeed(batchIds.map(id => makeEntity(id, `Entity ${id}`)))
+    );
+
+    const result = await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ids } },
+      first: ids.length,
+    });
+
+    expect(vi.mocked(getBatchEntities).mock.calls.map(call => call[0].length)).toEqual([50, 50, 17]);
+    expect(result.merged.map(e => e.id)).toEqual(ids);
+    expect(result.remote).toHaveLength(ids.length);
   });
 });
