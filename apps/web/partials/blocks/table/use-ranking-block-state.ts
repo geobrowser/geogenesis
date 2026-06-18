@@ -652,9 +652,14 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId
-    ? buildShortGlobalRankingSharePath(entityId, effectiveGlobalOgVersion)
-    : null;
+  // Only expose the global share link once the ranking relations have hydrated.
+  // Before then `globalRankingEntityIds` is empty, so `effectiveGlobalOgVersion`
+  // hashes an empty list and we'd hand X a cache-buster that never matches the
+  // populated version. Gating on real data keeps the `?v=` stable from first share.
+  const globalSharePath =
+    effectiveRelationId && globalRankingEntityIds.length > 0
+      ? buildShortGlobalRankingSharePath(entityId, effectiveGlobalOgVersion)
+      : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
