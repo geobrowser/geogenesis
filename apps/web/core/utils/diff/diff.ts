@@ -1068,6 +1068,7 @@ function computeRelationChanges(
     if (
       changeType === 'UPDATE' &&
       remoteRelation?.toEntity.id === localRelation.toEntity.id &&
+      (remoteRelation?.toSpaceId ?? null) === (localRelation.toSpaceId ?? null) &&
       remoteRelation?.position === localRelation.position
     ) {
       continue;
