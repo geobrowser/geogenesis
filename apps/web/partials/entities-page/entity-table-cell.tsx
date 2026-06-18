@@ -149,7 +149,7 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
         key={relation.id}
         linkedEntityId={relation.toEntity.id}
         directImageUrl={relation.toEntity.value}
-        spaceId={spaceId}
+        spaceId={relation.spaceId}
       />
     );
   }
