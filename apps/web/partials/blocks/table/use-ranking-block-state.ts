@@ -605,7 +605,7 @@ export function useRankingBlockState({
   // so the share button's visibility is unchanged.
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
-      ? buildShortPersonalRankingSharePath(shareRankEntityId)
+      ? buildShortPersonalRankingSharePath(shareRankEntityId, effectiveOgVersion)
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
@@ -652,7 +652,9 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
+  const globalSharePath = effectiveRelationId
+    ? buildShortGlobalRankingSharePath(entityId, effectiveGlobalOgVersion)
+    : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
