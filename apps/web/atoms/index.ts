@@ -5,6 +5,11 @@ export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
 
+// Holds the entity id of a newly-created property group whose name input should
+// auto-focus. Set when a group is created (from the "+" menu) and consumed by the
+// property groups editor, which can live in a separate page section from the trigger.
+export const focusPropertyGroupNameAtom = atom<string | null>(null);
+
 export type EntitySidePanelTarget = {
   entityId: string;
   spaceId: string;

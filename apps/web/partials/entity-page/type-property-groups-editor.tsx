@@ -27,8 +27,10 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
-import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY, PROPERTY_GROUP_TYPE } from '~/core/constants';
+import { focusPropertyGroupNameAtom } from '~/atoms';
+import { COLLAPSED_PROPERTY, PROPERTY_GROUPS_PROPERTY } from '~/core/constants';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -38,7 +40,6 @@ import { sortRelations } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Trash } from '~/design-system/icons/trash';
@@ -96,11 +97,12 @@ type CreatePropertyFn = ReturnType<typeof useCreateProperty>['createProperty'];
 export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
   const { storage } = useMutate();
   const { createProperty } = useCreateProperty(spaceId);
-  const [sectionCollapsed, setSectionCollapsed] = React.useState(false);
   const [activePropertyDragId, setActivePropertyDragId] = React.useState<string | null>(null);
   const [activeGroupDragId, setActiveGroupDragId] = React.useState<string | null>(null);
   const [groupOverlayWidths, setGroupOverlayWidths] = React.useState<Record<string, number>>({});
-  const [focusGroupNameId, setFocusGroupNameId] = React.useState<string | null>(null);
+  // Newly-created groups (added from the "+" menu, possibly in another page section)
+  // flag their name input to auto-focus via this shared atom.
+  const [focusGroupNameId, setFocusGroupNameId] = useAtom(focusPropertyGroupNameAtom);
   const lastOverIdRef = React.useRef<string | null>(null);
 
   const typePropertyRelations = sortRelations(
@@ -286,44 +288,6 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     });
   };
 
-  const onAddGroup = () => {
-    const groupEntityId = ID.createEntityId();
-    const lastGroupPosition = propertyGroupRelations.at(-1)?.position ?? null;
-
-    storage.entities.name.set(groupEntityId, spaceId, '');
-    storage.values.set({
-      spaceId,
-      entity: { id: groupEntityId, name: null },
-      property: { id: COLLAPSED_PROPERTY, name: 'Collapsed', dataType: 'BOOLEAN' },
-      value: '0',
-    });
-
-    storage.relations.set({
-      id: ID.createEntityId(),
-      entityId: ID.createEntityId(),
-      spaceId,
-      renderableType: 'RELATION',
-      verified: false,
-      position: Position.generate(),
-      type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-      fromEntity: { id: groupEntityId, name: null },
-      toEntity: { id: PROPERTY_GROUP_TYPE, name: 'Property group', value: PROPERTY_GROUP_TYPE },
-    });
-
-    storage.relations.set({
-      id: ID.createEntityId(),
-      entityId: ID.createEntityId(),
-      spaceId,
-      renderableType: 'RELATION',
-      verified: false,
-      position: Position.generateBetween(lastGroupPosition, null),
-      type: { id: PROPERTY_GROUPS_PROPERTY, name: 'Property groups' },
-      fromEntity: { id: entityId, name: null },
-      toEntity: { id: groupEntityId, name: null, value: groupEntityId },
-    });
-    setFocusGroupNameId(groupEntityId);
-  };
-
   const onDeleteGroup = (groupRelation: Relation) => {
     const groupId = groupRelation.toEntity.id;
     const groupRelations = allGroupOutgoingRelations.filter(relation => relation.fromEntity.id === groupId);
@@ -492,99 +456,80 @@ export function TypePropertyGroupsEditor({ entityId, spaceId }: EditorProps) {
     ensurePropertyOnType(draggedPropertyId, draggedName);
   };
 
+  // Property groups are an advanced feature, so the editor stays out of the way until
+  // a group actually exists. Creation lives in the "+" menu (useCreatePropertyGroup).
+  if (propertyGroupRelations.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 text-tableCell text-grey-04"
-          onClick={() => setSectionCollapsed(previous => !previous)}
+    <div className="rounded-lg border border-grey-02 shadow-button">
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        onDragStart={onDragStart}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          setActivePropertyDragId(null);
+          setActiveGroupDragId(null);
+        }}
+      >
+        <SortableContext
+          items={propertyGroupRelations.map(groupRelation => groupDragId(groupRelation.id))}
+          strategy={verticalListSortingStrategy}
         >
-          <span>Property groups</span>
-          <div className={cx(sectionCollapsed && '-rotate-90', 'scale-110 transition-transform')}>
-            <ChevronDownSmall color="grey-04" />
+          <div>
+            {groupContainers.map(container => (
+              <TypePropertyGroupCard
+                key={container.groupRelation.id}
+                spaceId={spaceId}
+                groupRelation={container.groupRelation}
+                propertyRelations={container.propertyRelations}
+                typePropertyRelations={typePropertyRelations}
+                onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
+                onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
+                createProperty={createProperty}
+                autoFocusName={focusGroupNameId === container.groupEntityId}
+                onNameAutoFocused={() =>
+                  setFocusGroupNameId(current => (current === container.groupEntityId ? null : current))
+                }
+                onMeasureWidth={width =>
+                  setGroupOverlayWidths(previous => {
+                    if (previous[container.groupRelation.id] === width) return previous;
+                    return { ...previous, [container.groupRelation.id]: width };
+                  })
+                }
+              />
+            ))}
           </div>
-        </button>
-        <button
-          type="button"
-          onClick={onAddGroup}
-          className="inline-flex h-6 w-6 items-center justify-center text-grey-04 transition-colors hover:text-text"
-          aria-label="Add property group"
-        >
-          <Create />
-        </button>
-      </div>
+        </SortableContext>
 
-      {!sectionCollapsed && (
-        <div className="rounded-lg border border-grey-02 shadow-button">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={collisionDetection}
-            onDragStart={onDragStart}
-            onDragOver={onDragOver}
-            onDragEnd={onDragEnd}
-            onDragCancel={() => {
-              setActivePropertyDragId(null);
-              setActiveGroupDragId(null);
-            }}
-          >
-            <SortableContext
-              items={propertyGroupRelations.map(groupRelation => groupDragId(groupRelation.id))}
-              strategy={verticalListSortingStrategy}
-            >
-              <div>
-                {groupContainers.map(container => (
-                  <TypePropertyGroupCard
-                    key={container.groupRelation.id}
-                    spaceId={spaceId}
-                    groupRelation={container.groupRelation}
-                    propertyRelations={container.propertyRelations}
-                    typePropertyRelations={typePropertyRelations}
-                    onDeleteGroup={() => onDeleteGroup(container.groupRelation)}
-                    onAddProperty={property => onAddPropertyToGroup(container.groupEntityId, property)}
-                    createProperty={createProperty}
-                    autoFocusName={focusGroupNameId === container.groupEntityId}
-                    onNameAutoFocused={() =>
-                      setFocusGroupNameId(current => (current === container.groupEntityId ? null : current))
-                    }
-                    onMeasureWidth={width =>
-                      setGroupOverlayWidths(previous => {
-                        if (previous[container.groupRelation.id] === width) return previous;
-                        return { ...previous, [container.groupRelation.id]: width };
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </SortableContext>
-
-            <UngroupedDropContainer
-              entityId={entityId}
+        <UngroupedDropContainer
+          entityId={entityId}
+          spaceId={spaceId}
+          relations={ungroupedRelations}
+          allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
+          hasGroupsAbove={groupContainers.length > 0}
+          createProperty={createProperty}
+        />
+        <DragOverlay>
+          {activePropertyDragId ? (
+            <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-metadata font-normal tracking-[-0.25px] text-text shadow-lg">
+              <span className="truncate">{propertyNameById.get(activePropertyDragId) ?? activePropertyDragId}</span>
+            </div>
+          ) : activeGroupDragId ? (
+            <GroupDragOverlayPreview
+              groupRelation={propertyGroupRelations.find(relation => relation.id === activeGroupDragId) ?? null}
+              groupContainer={
+                groupContainers.find(container => container.groupRelation.id === activeGroupDragId) ?? null
+              }
               spaceId={spaceId}
-              relations={ungroupedRelations}
-              allTypePropertyIds={typePropertyRelations.map(relation => relation.toEntity.id)}
-              hasGroupsAbove={groupContainers.length > 0}
-              createProperty={createProperty}
+              width={activeGroupDragId ? groupOverlayWidths[activeGroupDragId] : undefined}
             />
-            <DragOverlay>
-              {activePropertyDragId ? (
-                <div className="inline-flex max-w-[220px] items-center rounded border border-text bg-white px-1.5 py-px text-metadata font-normal tracking-[-0.25px] text-text shadow-lg">
-                  <span className="truncate">{propertyNameById.get(activePropertyDragId) ?? activePropertyDragId}</span>
-                </div>
-              ) : activeGroupDragId ? (
-                <GroupDragOverlayPreview
-                  groupRelation={propertyGroupRelations.find(relation => relation.id === activeGroupDragId) ?? null}
-                  groupContainer={
-                    groupContainers.find(container => container.groupRelation.id === activeGroupDragId) ?? null
-                  }
-                  spaceId={spaceId}
-                  width={activeGroupDragId ? groupOverlayWidths[activeGroupDragId] : undefined}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
-      )}
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
