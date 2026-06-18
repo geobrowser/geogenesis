@@ -60,6 +60,7 @@ export function useRankingBlockRelations(options: Options = {}) {
   return {
     globalRankingEntityIds,
     globalLeaderboard,
+    aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
   };

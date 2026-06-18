@@ -57,7 +57,7 @@ import { stepAtom } from '~/partials/onboarding/dialog';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
-export type RankingTab = 'global' | 'my';
+export type RankingTab = 'global' | 'my' | 'viewer';
 
 export type RankingBlockPresentation = 'embedded' | 'fullscreen';
 
@@ -157,7 +157,8 @@ export function useRankingBlockState({
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
   const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
 
-  const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
+  const { globalRankingEntityIds, aggregatedSubmitterRefs, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
+    useRankingBlockRelations();
 
   const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
   const initialGlobalEntries = initialGlobalRanking?.entries ?? EMPTY_RANKING_ENTRIES;
@@ -546,6 +547,55 @@ export function useRankingBlockState({
     [visibleGlobalDisplayEntityIds]
   );
 
+  const showViewerOwnTab = isSharedRankingView && hasMySubmission;
+  const viewerOwnDisplayEntityIds = React.useMemo(
+    () => (showViewerOwnTab ? (mySubmission?.orderedEntityIds ?? EMPTY_ENTITY_IDS) : EMPTY_ENTITY_IDS),
+    [showViewerOwnTab, mySubmission]
+  );
+
+  const { entries: viewerOwnEntries } = useRankingEntryEntities(spaceId, viewerOwnDisplayEntityIds);
+
+  const viewerOwnEntryByEntityId = React.useMemo(() => {
+    const map = new Map<string, RankingEntryDisplay>();
+
+    for (const row of rows) {
+      if (!row.entityId || row.placeholder) continue;
+      map.set(row.entityId, {
+        entityId: row.entityId,
+        name: getRowDisplayName(row),
+        description: getRowDescription(row),
+        image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+      });
+    }
+
+    for (const entry of viewerOwnEntries) {
+      const fromRow = map.get(entry.entityId);
+      map.set(entry.entityId, {
+        entityId: entry.entityId,
+        name: entry.name,
+        description: entry.description ?? fromRow?.description ?? null,
+        image: entry.image ?? fromRow?.image ?? null,
+      });
+    }
+
+    return map;
+  }, [viewerOwnEntries, rows]);
+
+  const viewerOwnRankEntityId = showViewerOwnTab ? (mySubmission?.id ?? '') : '';
+  const viewerOwnSharePath = viewerOwnRankEntityId ? buildShortPersonalRankingSharePath(viewerOwnRankEntityId) : null;
+  const shareViewerOwnRanking = React.useCallback(() => {
+    if (!viewerOwnSharePath) return;
+    const shareUrl = buildAbsoluteRankingShareUrl(viewerOwnSharePath);
+    const shareText = `Here's my ${name?.trim() || 'ranking'}. What's yours?`;
+    shareRankingOnX(shareUrl, shareText);
+  }, [name, viewerOwnSharePath]);
+
+  React.useEffect(() => {
+    if (!showViewerOwnTab && activeTab === 'viewer') {
+      setActiveTab('global');
+    }
+  }, [showViewerOwnTab, activeTab]);
+
   const resolveEntitySpaceId = React.useCallback(
     (targetEntityId: string) => {
       const row = rowsByEntityId.get(targetEntityId);
@@ -556,7 +606,10 @@ export function useRankingBlockState({
 
   const openEntitySheet = React.useCallback(
     (targetEntityId: string) => {
-      const entry = myRankingEntryByEntityId.get(targetEntityId) ?? globalRankingEntryByEntityId.get(targetEntityId);
+      const entry =
+        myRankingEntryByEntityId.get(targetEntityId) ??
+        viewerOwnEntryByEntityId.get(targetEntityId) ??
+        globalRankingEntryByEntityId.get(targetEntityId);
       const row = rowsByEntityId.get(targetEntityId);
       setEntitySheetTarget({
         entityId: targetEntityId,
@@ -566,7 +619,13 @@ export function useRankingBlockState({
         previewDescription: entry?.description ?? (row ? getRowDescription(row) : null),
       });
     },
-    [globalRankingEntryByEntityId, myRankingEntryByEntityId, resolveEntitySpaceId, rowsByEntityId]
+    [
+      globalRankingEntryByEntityId,
+      myRankingEntryByEntityId,
+      viewerOwnEntryByEntityId,
+      resolveEntitySpaceId,
+      rowsByEntityId,
+    ]
   );
 
   const buildSubmissionSlots = React.useCallback(
@@ -806,6 +865,7 @@ export function useRankingBlockState({
     periodState,
     periodLabel,
     hasRankedByOthers,
+    aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     globalDisplayEntityIds: globalRankingListEntityIds,
@@ -829,6 +889,12 @@ export function useRankingBlockState({
     hasEmbeddedMyNextPage,
     setEmbeddedMyPage,
     myRankingEntryByEntityId,
+    showViewerOwnTab,
+    viewerOwnDisplayEntityIds,
+    totalViewerOwnEntityCount: viewerOwnDisplayEntityIds.length,
+    viewerOwnEntryByEntityId,
+    shareViewerOwnRanking,
+    canShareViewerOwnRanking: Boolean(viewerOwnSharePath),
     myAvatarUrl,
     myAvatarSeed,
     myRankingTabLabel,

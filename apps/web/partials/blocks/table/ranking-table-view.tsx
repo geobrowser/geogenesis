@@ -49,6 +49,7 @@ export function RankingTableView({
     periodLabel,
     hasRankedByOthers,
     submissions,
+    aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
   } = state;
@@ -71,6 +72,7 @@ export function RankingTableView({
             periodLabel={periodLabel}
             hasRankedByOthers={hasRankedByOthers}
             submissions={submissions}
+            aggregatedSubmitterRefs={aggregatedSubmitterRefs}
             aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
             aggregatedRankingCount={aggregatedRankingCount}
           />
