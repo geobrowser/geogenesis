@@ -187,7 +187,7 @@ describe('image url selection (storage configured)', () => {
     const imageUrl = meta.twitter?.images as string[];
 
     expect(imageUrl[0]).toBe(
-      'https://cdn.example.com/og/rankings/rank-1/ranking-og-v3-abcd1234/landscape.png'
+      'https://cdn.example.com/og/rankings/rank-1/ranking-og-v3-abcd1234/landscape.jpg'
     );
   });
 

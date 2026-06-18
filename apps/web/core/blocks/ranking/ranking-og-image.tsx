@@ -5,10 +5,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { ogImageToJpeg } from '~/core/og-jpeg';
 import { getImagePath } from '~/core/utils/utils';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
-import { RANKING_OG_IMAGE_CONTENT_TYPE, RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
+import { RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
 
 const purple = '#5B19FF';
 const ink = '#111111';
@@ -736,11 +737,10 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
 }
 
 export function generateRankingOgImageResponse(data: RankingOgCardData, variant: RankingOgVariant) {
-  return new ImageResponse(<Card data={data} variant={variant} />, {
-    ...RANKING_OG_VARIANT_SIZES[variant],
-    fonts: geistFonts,
-    headers: {
-      'Content-Type': RANKING_OG_IMAGE_CONTENT_TYPE,
-    },
-  });
+  return ogImageToJpeg(
+    new ImageResponse(<Card data={data} variant={variant} />, {
+      ...RANKING_OG_VARIANT_SIZES[variant],
+      fonts: geistFonts,
+    })
+  );
 }
