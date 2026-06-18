@@ -11,9 +11,11 @@ import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingCardConfigProvider, useRankingShownProperties } from './ranking-card-config';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
+import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
@@ -24,6 +26,7 @@ type Props = {
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
+  const { cardConfig, menuProps } = useRankingShownProperties();
   const {
     canEdit,
     filterState,
@@ -62,6 +65,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
+          {canEdit ? <TableBlockPropertiesMenu {...menuProps} /> : null}
+
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
@@ -102,7 +107,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </AnimatePresence>
       )}
 
-      <RankingBlockBody state={state} presentation="embedded" />
+      <RankingCardConfigProvider value={cardConfig}>
+        <RankingBlockBody state={state} presentation="embedded" />
+      </RankingCardConfigProvider>
     </div>
   );
 }
