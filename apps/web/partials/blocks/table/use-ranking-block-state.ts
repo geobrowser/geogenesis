@@ -148,7 +148,11 @@ export function useRankingBlockState({
     hasSharedRankingUrl && personalSpaceId && ID.equals(sharedAuthorSpaceId, personalSpaceId)
   );
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
-  const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
+  // When viewing our own ranking (including right after publishing) trust the live
+  // `mySubmission` query, which `saveMySubmission` refetches once the indexer reflects
+  // the new order. `sharedSubmission` has a 60s staleTime and isn't invalidated on
+  // publish, so preferring it here showed the pre-edit order until a hard refresh.
+  const displayedSubmission = isSharedRankingView ? sharedSubmission : (mySubmission ?? sharedSubmission);
 
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
 
