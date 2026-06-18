@@ -506,10 +506,11 @@ export function RankingComposeGlobalRanking({
                 <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
               </RankingComposeSearchListPlaceholder>
             ) : (
-              // Pin via min-height so the chrome stays at the top of the viewport even when the
-              // result set is shorter than the captured placeholder — without this, scrollTop
-              // clamps down and the section slides back into view.
-              <div className="flex flex-col" style={{ minHeight: searchListStableHeight }}>
+              // Mobile only: pin via min-height so the chrome stays at the top of the viewport
+              // even when the result set is shorter than the captured placeholder — without
+              // this, scrollTop clamps down and the section slides back into view. Desktop has
+              // its own per-column scroll and a non-sticky chrome, so no min-height there.
+              <div className="flex flex-col" style={isMobile ? { minHeight: searchListStableHeight } : undefined}>
                 {searchResultList}
               </div>
             )
