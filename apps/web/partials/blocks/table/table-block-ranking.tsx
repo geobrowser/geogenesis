@@ -15,6 +15,7 @@ import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
+import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
@@ -39,6 +40,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     setFilterState,
     setFilterMode,
     source,
+    setSource,
     isFilterOpen,
     setIsFilterOpen,
     displayName,
@@ -110,14 +112,42 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             onMouseDown={e => e.stopPropagation()}
           >
             <div className="flex flex-col gap-2">
-              <TableBlockEditableFilters
-                ref={filterPromptRef}
-                filterState={filterState}
-                setFilterState={setFilterState}
-                filterSuggestionSpaceId={spaceId}
-                isEditing={canEdit}
-              />
-              {filterGroupsForToolbarPills.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={canEdit} />
+                {canEdit && (
+                  <>
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    <TableBlockEditableFilters
+                      ref={filterPromptRef}
+                      filterState={filterState}
+                      setFilterState={setFilterState}
+                      filterSuggestionSpaceId={spaceId}
+                      isEditing={canEdit}
+                    />
+                  </>
+                )}
+                {!canEdit &&
+                  filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.columnId}
+                      group={group}
+                      mode={filterMode}
+                      onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                      }}
+                      isEditing={canEdit}
+                    />
+                  ))}
+              </div>
+              {canEdit && filterGroupsForToolbarPills.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   {filterGroupsForToolbarPills.map(group => (
                     <TableBlockFilterGroupPill
@@ -135,17 +165,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                       onClearGroup={() => {
                         setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
                       }}
-                      onAddSimilar={
-                        canEdit
-                          ? anchorEl => {
-                              requestAnimationFrame(() => {
-                                requestAnimationFrame(() => {
-                                  filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                                });
-                              });
-                            }
-                          : undefined
-                      }
+                      onAddSimilar={anchorEl => {
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                          });
+                        });
+                      }}
                       isEditing={canEdit}
                     />
                   ))}
