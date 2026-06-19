@@ -29,7 +29,6 @@ export type RankingComposeAccessStatus =
   | 'not-found'
   | 'ready';
 
-/** Dedupes automatic membership requests across compose screen + embedded block mounts. */
 const autoRequestedMemberships = new Set<string>();
 
 export function useRankingComposeAccess(spaceId: string) {
@@ -54,8 +53,6 @@ export function useRankingComposeAccess(spaceId: string) {
       const postLoginRedirect = postLoginRedirectRef.current;
       postLoginRedirectRef.current = null;
       if (postLoginRedirect) {
-        // Logged-out compose entry goes straight to compose after auth. If the
-        // account is new, the compose screen records this URL for onboarding.
         router.push(postLoginRedirect);
       }
     },
@@ -131,5 +128,5 @@ export function useRankingComposeAccess(spaceId: string) {
     });
   }, [queryClient, spaceId, personalSpaceId]);
 
-  return { status, promptLogin, ensureAccess, recheckAccess, isLoading };
+  return { status, canEdit, promptLogin, ensureAccess, recheckAccess, isLoading };
 }

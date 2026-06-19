@@ -183,6 +183,7 @@ function RankingComposePickRow({
   entityId,
   onAdd,
   isInMyRanking,
+  pending = false,
 }: {
   rank?: number;
   name: string;
@@ -192,6 +193,7 @@ function RankingComposePickRow({
   entityId: string;
   onAdd: () => void;
   isInMyRanking: boolean;
+  pending?: boolean;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -220,6 +222,7 @@ function RankingComposePickRow({
         rank={rank}
         rankStyle="leading"
         linkToEntity={false}
+        pending={pending}
         entry={{
           entityId,
           name,
@@ -262,6 +265,7 @@ type Props = {
   canCreateNew: boolean;
   isAwaitingMembership: boolean;
   onRecheckMembership: () => void;
+  pendingEntityIds: ReadonlySet<string>;
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
@@ -297,6 +301,7 @@ export function RankingComposeGlobalRanking({
   canCreateNew,
   isAwaitingMembership,
   onRecheckMembership,
+  pendingEntityIds,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
   onViewEntity,
@@ -444,6 +449,7 @@ export function RankingComposeGlobalRanking({
         imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
+        pending={pendingEntityIds.has(id)}
       />
     );
 

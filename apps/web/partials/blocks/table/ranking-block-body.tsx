@@ -154,6 +154,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     setIsMyRankingDragging,
     entitySheetTarget,
     setEntitySheetTarget,
+    pendingEntityIds,
   } = state;
 
   const myRankingActionButton = buildMyRankingActionButton(state);
@@ -228,7 +229,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             {globalDisplayEntityIds.map(entityId => {
               const entry = globalRankingEntryByEntityId.get(entityId);
               const rank = globalRankByEntityId.get(entityId);
-              if (rank == null) return null;
+              const isPending = pendingEntityIds.has(entityId);
+              if (rank == null && !isPending) return null;
               // Rank is known from relations/seed before the entity name/image
               // resolve — render a skeleton row so the list keeps its height
               // instead of collapsing until entries hydrate.
@@ -246,6 +248,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entry}
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
+                  pending={isPending}
                 />
               );
               return (
@@ -317,6 +320,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (

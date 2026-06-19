@@ -41,6 +41,8 @@ type Props = {
   imageUrl?: string | null;
   /** Aggregated Borda score — only rendered when `RANKING_POINTS_UI_ENABLED` (competition-linked). */
   score?: number;
+  /** Entity is in an open governance proposal and not yet live in the space. */
+  pending?: boolean;
   /** When false, the name is plain text (e.g. compose pick rows that navigate on row click). */
   linkToEntity?: boolean;
   /** `leading` = rank column left of avatar; `avatar-badge` = overlapping corner badge (default). */
@@ -53,6 +55,7 @@ export function RankingEntryRow({
   spaceId,
   imageUrl: imageUrlOverride,
   score,
+  pending = false,
   linkToEntity = true,
   rankStyle = 'avatar-badge',
 }: Props) {
@@ -105,6 +108,9 @@ export function RankingEntryRow({
           <div className={cx(ROW_DESCRIPTION_CLASS, 'line-clamp-2')} title={entry.description}>
             {entry.description}
           </div>
+        ) : null}
+        {pending ? (
+          <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p>
         ) : null}
       </div>
     </div>
