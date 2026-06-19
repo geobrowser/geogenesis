@@ -57,7 +57,7 @@ export const getSpaceMembersBootstrap = cache(
 
     let isMember = isMemberFromQuery;
     if (normalizedPersonalSpaceId && !needsMembershipQuery) {
-      isMember = space.members.map(m => m.toLowerCase()).includes(normalizedPersonalSpaceId);
+      isMember = space.members.some(m => m.toLowerCase() === normalizedPersonalSpaceId);
     }
 
     return {

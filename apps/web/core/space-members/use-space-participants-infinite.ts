@@ -13,7 +13,6 @@ import {
 import {
   getCachedParticipantsPage,
   spaceParticipantsQueryKey,
-  seedSpaceParticipantsCache,
   type SpaceParticipantsInfiniteData,
   writeParticipantsPageToCache,
 } from './space-participants-cache';
@@ -67,10 +66,6 @@ export function useSpaceParticipantsInfinite({
   const queryKey = spaceParticipantsQueryKey(spaceId, kind, pageSize);
   const hasServerPage = Boolean(initialPage);
 
-  if (initialPage) {
-    seedSpaceParticipantsCache(queryClient, { spaceId, kind, page: initialPage, pageSize });
-  }
-
   const query = useInfiniteQuery({
     enabled,
     queryKey,
@@ -88,8 +83,15 @@ export function useSpaceParticipantsInfinite({
     },
     initialPageParam: 0,
     getNextPageParam: last => last.nextOffset ?? undefined,
-    initialData: () =>
-      queryClient.getQueryData<SpaceParticipantsInfiniteData>(queryKey) ?? undefined,
+    // Bootstrap from the server-rendered page 0 without mutating the cache during
+    // render. React Query persists this initialData into the shared cache, so the
+    // chip, popover, and manage dialog all read the same seeded page 0.
+    initialData: (): SpaceParticipantsInfiniteData | undefined => {
+      const existing = queryClient.getQueryData<SpaceParticipantsInfiniteData>(queryKey);
+      if (existing) return existing;
+      if (initialPage) return { pages: [initialPage], pageParams: [0] };
+      return undefined;
+    },
     staleTime: hasServerPage ? Number.POSITIVE_INFINITY : 0,
     gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
