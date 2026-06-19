@@ -4,9 +4,10 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
-import { getEntity } from '~/core/io/queries';
+import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';
 
 export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
@@ -35,6 +36,7 @@ export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId
 
 export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string): string | undefined {
   const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
+  const cache = useQueryClient();
 
   const storeAvatarRelation = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
@@ -50,10 +52,19 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
 
     const fetchAvatar = async () => {
       try {
-        const entity = await Effect.runPromise(getEntity(entityId, spaceId));
-        if (!entity) return;
+        // Fetch only the avatar relation for this entity rather than draining
+        // the entity's entire relation set (`getEntity`). Cached under a stable
+        // key so repeated media hooks for the same entity reuse one request.
+        // Media URLs are effectively immutable, so keep results fresh for a
+        // while to dedupe across remounts, not just concurrent in-flight calls.
+        const relations = await cache.fetchQuery({
+          queryKey: ['network', 'relations-by-property', entityId, ContentIds.AVATAR_PROPERTY, spaceId],
+          queryFn: ({ signal }) =>
+            Effect.runPromise(getRelationsByFromEntityId(entityId, ContentIds.AVATAR_PROPERTY, spaceId, signal)),
+          staleTime: 5 * 60 * 1000,
+        });
 
-        const avatarRelation = entity.relations.find(r => r.type.id === ContentIds.AVATAR_PROPERTY);
+        const avatarRelation = relations[0];
         if (!avatarRelation) return;
 
         const imageUrl = avatarRelation.toEntity.value;
@@ -66,13 +77,14 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
     };
 
     fetchAvatar();
-  }, [entityId, spaceId, storeImageUrl]);
+  }, [entityId, spaceId, storeImageUrl, cache]);
 
   return storeImageUrl ?? fetchedAvatarUrl;
 }
 
 export function useEntityCoverUrl(entityId: string | undefined, spaceId: string): string | undefined {
   const [fetchedCoverUrl, setFetchedCoverUrl] = React.useState<string | undefined>(undefined);
+  const cache = useQueryClient();
 
   const storeCoverRelation = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === SystemIds.COVER_PROPERTY && r.spaceId === spaceId,
@@ -88,10 +100,19 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
 
     const fetchCover = async () => {
       try {
-        const entity = await Effect.runPromise(getEntity(entityId, spaceId));
-        if (!entity) return;
+        // Fetch only the cover relation for this entity rather than draining
+        // the entity's entire relation set (`getEntity`). Cached under a stable
+        // key so repeated media hooks for the same entity reuse one request.
+        // Media URLs are effectively immutable, so keep results fresh for a
+        // while to dedupe across remounts, not just concurrent in-flight calls.
+        const relations = await cache.fetchQuery({
+          queryKey: ['network', 'relations-by-property', entityId, SystemIds.COVER_PROPERTY, spaceId],
+          queryFn: ({ signal }) =>
+            Effect.runPromise(getRelationsByFromEntityId(entityId, SystemIds.COVER_PROPERTY, spaceId, signal)),
+          staleTime: 5 * 60 * 1000,
+        });
 
-        const coverRelation = entity.relations.find(r => r.type.id === SystemIds.COVER_PROPERTY);
+        const coverRelation = relations[0];
         if (!coverRelation) return;
 
         const imageUrl = coverRelation.toEntity.value;
@@ -104,7 +125,7 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
     };
 
     fetchCover();
-  }, [entityId, spaceId, storeImageUrl]);
+  }, [entityId, spaceId, storeImageUrl, cache]);
 
   return storeImageUrl ?? fetchedCoverUrl;
 }
@@ -123,6 +144,7 @@ export function useEntityMedia(
 ): { avatarUrl: string | undefined; coverUrl: string | undefined } {
   const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
   const [fetchedCoverUrl, setFetchedCoverUrl] = React.useState<string | undefined>(undefined);
+  const cache = useQueryClient();
 
   const storeAvatarRelation = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
@@ -143,29 +165,41 @@ export function useEntityMedia(
       return;
     }
 
+    // Fetch only the avatar/cover relations rather than draining the entity's
+    // entire relation set (`getEntity`), and only for the ones not already in
+    // the store. These reuse the same cache keys as the single-purpose hooks
+    // above, so all media hooks for one entity dedupe onto shared requests.
+    const id = entityId;
+
     const fetchMedia = async () => {
       try {
-        const entity = await Effect.runPromise(getEntity(entityId, spaceId));
-        if (!entity) return;
+        const [avatarRelations, coverRelations] = await Promise.all([
+          storeAvatarUrl
+            ? Promise.resolve([])
+            : cache.fetchQuery({
+                queryKey: ['network', 'relations-by-property', id, ContentIds.AVATAR_PROPERTY, spaceId],
+                queryFn: ({ signal }) =>
+                  Effect.runPromise(getRelationsByFromEntityId(id, ContentIds.AVATAR_PROPERTY, spaceId, signal)),
+                staleTime: 5 * 60 * 1000,
+              }),
+          storeCoverUrl
+            ? Promise.resolve([])
+            : cache.fetchQuery({
+                queryKey: ['network', 'relations-by-property', id, SystemIds.COVER_PROPERTY, spaceId],
+                queryFn: ({ signal }) =>
+                  Effect.runPromise(getRelationsByFromEntityId(id, SystemIds.COVER_PROPERTY, spaceId, signal)),
+                staleTime: 5 * 60 * 1000,
+              }),
+        ]);
 
-        if (!storeAvatarUrl) {
-          const avatarRelation = entity.relations.find(r => r.type.id === ContentIds.AVATAR_PROPERTY);
-          if (avatarRelation) {
-            const imageUrl = avatarRelation.toEntity.value;
-            if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
-              setFetchedAvatarUrl(imageUrl);
-            }
-          }
+        const avatarUrl = avatarRelations[0]?.toEntity.value;
+        if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('ipfs://')) {
+          setFetchedAvatarUrl(avatarUrl);
         }
 
-        if (!storeCoverUrl) {
-          const coverRelation = entity.relations.find(r => r.type.id === SystemIds.COVER_PROPERTY);
-          if (coverRelation) {
-            const imageUrl = coverRelation.toEntity.value;
-            if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
-              setFetchedCoverUrl(imageUrl);
-            }
-          }
+        const coverUrl = coverRelations[0]?.toEntity.value;
+        if (coverUrl && typeof coverUrl === 'string' && coverUrl.startsWith('ipfs://')) {
+          setFetchedCoverUrl(coverUrl);
         }
       } catch {
         // ignored — entity may not exist
@@ -173,7 +207,7 @@ export function useEntityMedia(
     };
 
     fetchMedia();
-  }, [entityId, spaceId, storeAvatarUrl, storeCoverUrl]);
+  }, [entityId, spaceId, storeAvatarUrl, storeCoverUrl, cache]);
 
   return {
     avatarUrl: storeAvatarUrl ?? fetchedAvatarUrl,
