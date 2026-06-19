@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useAtom, useStore } from 'jotai';
+import { useAtom, useSetAtom, useStore } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { filterLocalChangesToEntitySubgraph } from '~/core/blocks/ranking/ranking-compose-create-entity';
@@ -15,7 +15,7 @@ import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
 
 import { RankingComposeCreateEntityHeader } from './ranking-compose-create-entity-header';
-import { entitySidePanelPersistEditorAtom } from '~/atoms';
+import { entitySidePanelPersistEditorAtom, rankingComposeRemoveScrollShardAtom } from '~/atoms';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
 type Props = {
@@ -26,7 +26,27 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
   const isMobile = useIsMobileLayout();
   const jotaiStore = useStore();
   const [flow, setFlow] = useAtom(rankingComposeCreateEntityAtom);
+  const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
   const { store } = useSyncEngine();
+
+  const panelOverlayRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (isMobile) {
+        setRemoveScrollShard(node);
+      }
+    },
+    [isMobile, setRemoveScrollShard]
+  );
+
+  React.useLayoutEffect(() => {
+    if (!flow && isMobile) {
+      setRemoveScrollShard(null);
+    }
+  }, [flow, isMobile, setRemoveScrollShard]);
+
+  React.useLayoutEffect(() => {
+    return () => setRemoveScrollShard(null);
+  }, [setRemoveScrollShard]);
 
   const publishSpaceId = flow?.publishSpaceId ?? '';
 
@@ -120,16 +140,16 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
 
   return createPortal(
     isMobile ? (
-      <>
-        <div aria-hidden className="fixed inset-0 z-[200] bg-grey-04/50" />
+      <div ref={panelOverlayRef} className="fixed inset-0 z-[210]">
+        <div aria-hidden className="absolute inset-0 bg-grey-04/50" />
         <aside
           data-ranking-compose-create-entity-panel
-          className="rounded-t-2xl shadow-2xl fixed inset-x-0 bottom-0 z-[201] flex w-full flex-col overflow-hidden bg-white"
+          className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex w-full flex-col overflow-hidden rounded-t-2xl bg-white"
           style={{ top: 'calc(var(--ranking-compose-top, 2.75rem) + 8rem)' }}
         >
           {panelBody}
         </aside>
-      </>
+      </div>
     ) : (
       <aside
         data-ranking-compose-create-entity-panel
