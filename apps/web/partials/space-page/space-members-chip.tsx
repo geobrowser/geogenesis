@@ -1,19 +1,17 @@
 import pluralize from 'pluralize';
 
+import { type SpaceParticipantProfile } from '~/core/space-members/fetch-space-participants-page';
+
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
 import { FallbackImage } from '~/design-system/fallback-image';
 
-import { getFirstThreeMembersForSpace } from './get-first-three-members-for-space';
-
 interface Props {
-  spaceId: string;
+  firstThreeMembers: SpaceParticipantProfile[];
+  totalMembers: number;
 }
 
-export async function SpaceMembersChip({ spaceId }: Props) {
-  // For now we use editors for both editors and members until we have the new membership
-  const { firstThreeMembers, totalMembers } = await getFirstThreeMembersForSpace(spaceId);
-
+export function SpaceMembersChip({ firstThreeMembers, totalMembers }: Props) {
   return (
     <div className="flex items-center gap-1">
       <AvatarGroup>

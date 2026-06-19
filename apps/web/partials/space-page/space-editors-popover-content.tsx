@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import pluralize from 'pluralize';
 
+import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
@@ -20,6 +21,7 @@ interface Props {
   isMember: boolean;
   hasRequestedSpaceEditorship: boolean;
   connectedAddress: string | null;
+  initialParticipantsPage?: SpaceParticipantsPage;
 }
 
 export function SpaceEditorsContent({
@@ -28,9 +30,14 @@ export function SpaceEditorsContent({
   isMember,
   hasRequestedSpaceEditorship,
   connectedAddress,
+  initialParticipantsPage,
 }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useSpaceParticipantsInfinite({ spaceId, kind: 'editors' });
+    useSpaceParticipantsInfinite({
+      spaceId,
+      kind: 'editors',
+      initialPage: initialParticipantsPage,
+    });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 
