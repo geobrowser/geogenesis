@@ -1,6 +1,7 @@
 'use client';
 
 import { useGeoLogin } from '@geogenesis/auth';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback, useRef } from 'react';
 
@@ -33,6 +34,7 @@ const autoRequestedMemberships = new Set<string>();
 
 export function useRankingComposeAccess(spaceId: string) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
@@ -115,5 +117,19 @@ export function useRankingComposeAccess(spaceId: string) {
     return ensureMembership();
   }, [smartAccount, isRegistered, personalSpaceId, ensureMembership]);
 
-  return { status, promptLogin, ensureAccess, isLoading };
+  const recheckAccess = useCallback(() => {
+    if (!personalSpaceId) return;
+
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+
+    void queryClient.invalidateQueries({
+      queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['space-access-control', 'editor', normalizedSpaceId, normalizedPersonalSpaceId],
+    });
+  }, [queryClient, spaceId, personalSpaceId]);
+
+  return { status, promptLogin, ensureAccess, recheckAccess, isLoading };
 }

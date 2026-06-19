@@ -64,7 +64,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
   const { showOnboarding } = useOnboarding();
-  const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
+  const { status: accessStatus, ensureAccess, recheckAccess } = useRankingComposeAccess(spaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -380,6 +380,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
+  const canCreateNew = accessStatus === 'ready';
+  const isAwaitingMembership = accessStatus === 'needs-membership';
+
   const titleMetadata = (
     <RankingComposeTitleMetadata
       isMobile={isMobile}
@@ -445,6 +448,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
           onCreateNew={handleCreateNew}
+          canCreateNew={canCreateNew}
+          isAwaitingMembership={isAwaitingMembership}
+          onRecheckMembership={recheckAccess}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
           onViewEntity={openEntitySheet}
