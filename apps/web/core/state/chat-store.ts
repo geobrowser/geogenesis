@@ -87,7 +87,7 @@ export function updateChatHistorySafely(
   // throw leaves the new list live but unpersisted. List is newest-first; drop
   // from the tail so the just-archived chat (index 0) survives.
   // ponytail: per-chat size cap would fit more chats — add if 5MB pressure persists.
-  let trimmed = computed!;
+  let trimmed = computed as PersistedChat[];
   while (trimmed.length > 1) {
     trimmed = trimmed.slice(0, -1);
     try {
