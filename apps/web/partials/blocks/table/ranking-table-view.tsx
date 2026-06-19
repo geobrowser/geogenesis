@@ -8,7 +8,7 @@ import { Text } from '~/design-system/text';
 
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
-import { type InitialGlobalRanking, useRankingBlockState } from './use-ranking-block-state';
+import { type InitialGlobalRanking, type InitialSharedRanking, useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -18,6 +18,7 @@ type Props = {
   authorSpaceId?: string;
   ogVersion?: string;
   initialGlobalRanking?: InitialGlobalRanking;
+  initialSharedRanking?: InitialSharedRanking;
 };
 
 /** Fullscreen ranking browse view with compose-aligned title and metadata typography. */
@@ -29,6 +30,7 @@ export function RankingTableView({
   authorSpaceId = '',
   ogVersion = '',
   initialGlobalRanking,
+  initialSharedRanking,
 }: Props) {
   const isMobile = useIsMobileLayout();
   const state = useRankingBlockState({
@@ -39,6 +41,7 @@ export function RankingTableView({
     sharedAuthorSpaceId: authorSpaceId,
     sharedOgVersion: ogVersion,
     initialGlobalRanking,
+    initialSharedRanking,
   });
   const {
     displayName,

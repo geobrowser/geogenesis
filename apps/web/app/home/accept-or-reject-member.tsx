@@ -11,7 +11,7 @@ import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 import {
   NavUtils,
   formatGovernanceOutcomeDate,
@@ -116,7 +116,7 @@ export function AcceptOrRejectMember({
           router.refresh();
           return;
         }
-        const message = describeError(error);
+        const message = describeGovernanceError(error);
         reportError(`Vote failed: ${message}`, () => castVote(choice));
       },
     });
@@ -161,7 +161,7 @@ export function AcceptOrRejectMember({
     } else if (status === 'REJECTED') {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     } else if (canExecute && smartAccount) {
-      actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+      actions = <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
     } else if (canExecute) {
       actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {

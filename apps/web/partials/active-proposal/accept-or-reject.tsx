@@ -12,7 +12,7 @@ import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -88,7 +88,7 @@ export function AcceptOrReject({
       router.refresh();
       return;
     }
-    const message = describeError(error);
+    const message = describeGovernanceError(error);
     reportError(`Vote failed: ${message}`, () => {
       addOptimisticVote(proposalId);
       vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
@@ -134,7 +134,7 @@ export function AcceptOrReject({
     }
 
     if (canExecute && smartAccount) {
-      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+      return <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
     }
 
     if (canExecute) {

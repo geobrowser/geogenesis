@@ -2,9 +2,14 @@
 
 import * as React from 'react';
 
-import { useExecuteProposal } from '~/core/hooks/use-execute-proposal';
+import { useRouter } from 'next/navigation';
+
+import { useCanExecuteProposal, useExecuteProposal } from '~/core/hooks/use-execute-proposal';
+import { useToast } from '~/core/hooks/use-toast';
+import { getStaleProposalExecuteToastMessage } from '~/core/hooks/use-vote';
+import { ProposalType } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -12,29 +17,58 @@ import { Pending } from '~/design-system/pending';
 interface Props {
   proposalId: string;
   spaceId: string;
+  proposalType?: ProposalType;
   variant?: 'default' | 'small';
 }
 
-export function Execute({ proposalId, spaceId, variant = 'default' }: Props) {
+export function Execute({ proposalId, spaceId, proposalType, variant = 'default' }: Props) {
   const { execute, status, error, reset } = useExecuteProposal({
     spaceId,
     proposalId,
   });
+  const canExecute = useCanExecuteProposal({ spaceId, proposalId });
   const reportError = useReportError();
+  const router = useRouter();
+  const [, setToast] = useToast();
 
   const isPending = status === 'pending';
   const isSuccess = status === 'success';
 
-  // Surface execution failures via the global error modal (with copy + retry).
-  // After dismiss the user lands back on the regular Execute button.
+  // An on-chain simulation confirmed this proposal would revert (already
+  // executed / stale) — refresh once so the list re-runs its filters and drops
+  // the dead card; the ref guards against a refresh loop while the indexer is
+  // still catching up.
+  const hasRefreshedStale = React.useRef(false);
+  React.useEffect(() => {
+    if (canExecute !== false || hasRefreshedStale.current) return;
+    hasRefreshedStale.current = true;
+    router.refresh();
+  }, [canExecute, router]);
+
   React.useEffect(() => {
     if (status !== 'error') return;
-    const message = error ? describeError(error) : 'An unknown error occurred';
+
+    // A stale membership/editor request reverts because the change was already
+    // applied via a duplicate request. Retrying would only revert again, so
+    // toast + refresh (which re-runs the granted-request filter and drops the
+    // proposal) instead of raising the looping retry error modal.
+    const staleMessage = getStaleProposalExecuteToastMessage(error, proposalType);
+    if (staleMessage) {
+      reset();
+      setToast(<span>{staleMessage}</span>);
+      router.refresh();
+      return;
+    }
+
+    // Surface other execution failures via the global error modal (with copy +
+    // retry) — decoded to the named on-chain revert so a copied report tells us
+    // the exact cause. After dismiss the user lands back on the Execute button.
+    const message = error ? describeGovernanceError(error) : 'An unknown error occurred';
     reportError(`Execute failed: ${message}`, () => {
       reset();
       execute();
     });
-  }, [status, error, reportError, reset, execute]);
+  }, [status, error, proposalType, reportError, reset, execute, router, setToast]);
 
   if (isSuccess) {
     return (
@@ -42,6 +76,13 @@ export function Execute({ proposalId, spaceId, variant = 'default' }: Props) {
         Executed
       </div>
     );
+  }
+
+  // Stay invisible until the simulation confirms execution would succeed
+  // (`undefined` = still checking, `false` = would revert) — unless the user is
+  // already mid-execute, in which case the error effect above handles it.
+  if (canExecute !== true && status === 'idle') {
+    return null;
   }
 
   const ButtonComponent = variant === 'small' ? SmallButton : Button;

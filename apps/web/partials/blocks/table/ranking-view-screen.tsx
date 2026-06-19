@@ -6,7 +6,7 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
 import { RankingTableView } from './ranking-table-view';
-import { type InitialGlobalRanking } from './use-ranking-block-state';
+import { type InitialGlobalRanking, type InitialSharedRanking } from './use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -16,6 +16,7 @@ type Props = {
   authorSpaceId?: string;
   ogVersion?: string;
   initialGlobalRanking?: InitialGlobalRanking;
+  initialSharedRanking?: InitialSharedRanking;
 };
 
 /** Fullscreen ranking browse view — compose-aligned typography, separate from the embedded block. */
@@ -27,6 +28,7 @@ export function RankingViewScreen({
   authorSpaceId = '',
   ogVersion = '',
   initialGlobalRanking,
+  initialSharedRanking,
 }: Props) {
   const isMobile = useIsMobileLayout();
 
@@ -46,6 +48,7 @@ export function RankingViewScreen({
           authorSpaceId={authorSpaceId}
           ogVersion={ogVersion}
           initialGlobalRanking={initialGlobalRanking}
+          initialSharedRanking={initialSharedRanking}
         />
       </div>
     </RankingComposeFullscreen>

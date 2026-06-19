@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildGlobalRankingMetadata,
@@ -9,6 +9,35 @@ import {
 import type { ResolvedGlobalRankingShare, ResolvedPersonalRankingShare } from './resolve-ranking-share';
 
 const SITE_URL = new URL('https://geobrowser.io');
+const STORAGE_ENV_KEYS = [
+  'CLOUDFLARE_R2_ACCOUNT_ID',
+  'CLOUDFLARE_R2_ACCESS_KEY_ID',
+  'CLOUDFLARE_R2_SECRET_ACCESS_KEY',
+  'SOCIAL_PREVIEW_R2_BUCKET',
+  'SOCIAL_PREVIEW_PUBLIC_BASE_URL',
+] as const;
+
+type StorageEnvSnapshot = Record<(typeof STORAGE_ENV_KEYS)[number], string | undefined>;
+
+function snapshotStorageEnv(): StorageEnvSnapshot {
+  return Object.fromEntries(STORAGE_ENV_KEYS.map(key => [key, process.env[key]])) as StorageEnvSnapshot;
+}
+
+function restoreStorageEnv(snapshot: StorageEnvSnapshot) {
+  for (const key of STORAGE_ENV_KEYS) {
+    const value = snapshot[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+}
+
+function configureStorageEnv() {
+  process.env.CLOUDFLARE_R2_ACCOUNT_ID = 'account-id';
+  process.env.CLOUDFLARE_R2_ACCESS_KEY_ID = 'access-key-id';
+  process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY = 'secret-access-key';
+  process.env.SOCIAL_PREVIEW_R2_BUCKET = 'ranking-og';
+  process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL = 'https://cdn.example.com';
+}
 
 const personalResolved: ResolvedPersonalRankingShare = {
   kind: 'personal',
@@ -35,6 +64,8 @@ const personalResolved: ResolvedPersonalRankingShare = {
     author: { name: 'Alice', avatarUrl: null, avatarSeed: 'seed' },
     entries: [],
   },
+  orderedEntityIds: [],
+  entries: [],
 };
 
 const globalResolved: ResolvedGlobalRankingShare = {
@@ -59,6 +90,8 @@ const globalResolved: ResolvedGlobalRankingShare = {
     author: { name: '', avatarUrl: null, avatarSeed: 'block-1' },
     entries: [],
   },
+  orderedEntityIds: [],
+  entries: [],
 };
 
 describe('buildPersonalRankingMetadataFromParts', () => {
@@ -104,16 +137,15 @@ describe('buildGlobalRankingMetadataFromParts', () => {
 });
 
 describe('image url selection (storage unconfigured)', () => {
-  let savedBaseUrl: string | undefined;
+  let savedStorageEnv: StorageEnvSnapshot;
 
   beforeEach(() => {
-    savedBaseUrl = process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL;
-    delete process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL;
+    savedStorageEnv = snapshotStorageEnv();
+    for (const key of STORAGE_ENV_KEYS) delete process.env[key];
   });
 
   afterEach(() => {
-    if (savedBaseUrl === undefined) delete process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL;
-    else process.env.SOCIAL_PREVIEW_PUBLIC_BASE_URL = savedBaseUrl;
+    restoreStorageEnv(savedStorageEnv);
   });
 
   it('uses the live preview endpoint and points the card at the short URL (personal)', async () => {
@@ -132,5 +164,52 @@ describe('image url selection (storage unconfigured)', () => {
     expect(imageUrl[0]).toContain('/api/ranking-og/preview');
     expect(imageUrl[0]).toContain('scope=global');
     expect(meta.openGraph?.url).toBe('https://geobrowser.io/r/g/block-1');
+  });
+});
+
+describe('image url selection (storage configured)', () => {
+  let savedStorageEnv: StorageEnvSnapshot;
+
+  beforeEach(() => {
+    savedStorageEnv = snapshotStorageEnv();
+    configureStorageEnv();
+  });
+
+  afterEach(() => {
+    restoreStorageEnv(savedStorageEnv);
+    vi.restoreAllMocks();
+  });
+
+  it('uses the static object when it exists', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+
+    const meta = await buildPersonalRankingMetadata(personalResolved, SITE_URL, '/r/rank-1');
+    const imageUrl = meta.twitter?.images as string[];
+
+    expect(imageUrl[0]).toBe(
+      'https://cdn.example.com/og/rankings/rank-1/ranking-og-v3-abcd1234/landscape.jpg'
+    );
+  });
+
+  it('falls back to the live preview endpoint when the personal static object is missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
+
+    const meta = await buildPersonalRankingMetadata(personalResolved, SITE_URL, '/r/rank-1');
+    const imageUrl = meta.twitter?.images as string[];
+
+    expect(imageUrl[0]).toContain('/api/ranking-og/preview');
+    expect(imageUrl[0]).toContain('scope=personal');
+    expect(imageUrl[0]).toContain('ogVersion=ranking-og-v3-abcd1234');
+  });
+
+  it('falls back to the live preview endpoint when the global static object is missing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 404 }));
+
+    const meta = await buildGlobalRankingMetadata(globalResolved, SITE_URL, '/r/g/block-1');
+    const imageUrl = meta.twitter?.images as string[];
+
+    expect(imageUrl[0]).toContain('/api/ranking-og/preview');
+    expect(imageUrl[0]).toContain('scope=global');
+    expect(imageUrl[0]).toContain('globalOgVersion=ranking-global-og-v3-abcd1234');
   });
 });

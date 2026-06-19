@@ -14,7 +14,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 
 import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
 import { RankingViewScreen } from '~/partials/blocks/table/ranking-view-screen';
-import { type InitialGlobalRanking } from '~/partials/blocks/table/use-ranking-block-state';
+import { type InitialGlobalRanking, type InitialSharedRanking } from '~/partials/blocks/table/use-ranking-block-state';
 
 type Props = {
   spaceId: string;
@@ -28,6 +28,7 @@ type Props = {
   authorSpaceId?: string;
   ogVersion?: string;
   initialGlobalRanking?: InitialGlobalRanking;
+  initialSharedRanking?: InitialSharedRanking;
 };
 
 function RankingComposeLoadingState({ message }: { message: string }) {
@@ -50,6 +51,7 @@ export function RankingComposeClientPage({
   authorSpaceId = '',
   ogVersion = '',
   initialGlobalRanking,
+  initialSharedRanking,
 }: Props) {
   const { hasValidParams, isLoading, parentEntityId, blocks, blockRelations } = useRankingComposePage({
     spaceId,
@@ -67,7 +69,7 @@ export function RankingComposeClientPage({
 
   // Seeded view pages render immediately instead of waiting on the client block
   // resolution; the live store reconciles in the background with no visible swap.
-  const hasSeededRanking = mode === 'view' && initialGlobalRanking != null;
+  const hasSeededRanking = mode === 'view' && (initialGlobalRanking != null || initialSharedRanking != null);
 
   if (!hasValidParams) {
     return <RankingComposeLoadingState message="Invalid parameters" />;
@@ -103,6 +105,7 @@ export function RankingComposeClientPage({
               authorSpaceId={authorSpaceId}
               ogVersion={ogVersion}
               initialGlobalRanking={initialGlobalRanking}
+              initialSharedRanking={initialSharedRanking}
             />
           ) : (
             <RankingComposeScreen
