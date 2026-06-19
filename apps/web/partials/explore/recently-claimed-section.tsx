@@ -40,16 +40,15 @@ export function RecentlyClaimedSection({ spaces, pendingMembershipSpaceIds, memb
 
           return (
             <li key={space.spaceId} className="flex items-center justify-between gap-3">
-              <Link
-                href={NavUtils.toSpace(space.spaceId)}
-                className="flex min-w-0 flex-1 items-center gap-2"
-              >
+              <Link href={NavUtils.toSpace(space.spaceId)} className="flex min-w-0 flex-1 items-center gap-2">
                 <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded bg-grey-01">
                   <FallbackImage value={space.image} sizes="80px" className="object-cover" />
                 </span>
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[16px] leading-[20px] font-medium text-text">{space.name}</span>
-                  <span className="text-[16px] leading-[20px] font-normal text-grey-04">{formatMembers(space.memberCount)}</span>
+                  <span className="text-[16px] leading-[20px] font-normal text-grey-04">
+                    {formatMembers(space.memberCount)}
+                  </span>
                 </span>
               </Link>
 

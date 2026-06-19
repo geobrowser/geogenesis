@@ -68,19 +68,9 @@ function scrollMobilePageToElement(target: HTMLElement) {
   return null;
 }
 
-function RankingComposeSearchListPlaceholder({
-  height,
-  children,
-}: {
-  height: number;
-  children?: React.ReactNode;
-}) {
+function RankingComposeSearchListPlaceholder({ height, children }: { height: number; children?: React.ReactNode }) {
   return (
-    <div
-      className="flex shrink-0 flex-col justify-start overflow-hidden"
-      style={{ height }}
-      aria-hidden={!children}
-    >
+    <div className="flex shrink-0 flex-col justify-start overflow-hidden" style={{ height }} aria-hidden={!children}>
       {children}
     </div>
   );
@@ -277,12 +267,8 @@ export function RankingComposeGlobalRanking({
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
-    isSearchActive &&
-    !isSearchingWithNoResults &&
-    !hasVisibleRankableEntities &&
-    (isLoadingRows || !isSearchSettled);
-  const needsSearchStablePlaceholder =
-    isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
+    isSearchActive && !isSearchingWithNoResults && !hasVisibleRankableEntities && (isLoadingRows || !isSearchSettled);
+  const needsSearchStablePlaceholder = isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
 
   React.useLayoutEffect(() => {
     if (!needsSearchStablePlaceholder) return;
@@ -382,9 +368,7 @@ export function RankingComposeGlobalRanking({
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
       {isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}
@@ -397,9 +381,7 @@ export function RankingComposeGlobalRanking({
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
     </>
   );
 

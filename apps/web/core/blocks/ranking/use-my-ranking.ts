@@ -38,7 +38,7 @@ export function useMyRanking(blockId: string) {
           limit: 100,
         })
       );
-      
+
       const rankEntity = pickMostRecentlyUpdatedRankingEntity(entities);
       if (!rankEntity) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };

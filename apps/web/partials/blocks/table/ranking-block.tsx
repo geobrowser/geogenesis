@@ -23,9 +23,7 @@ export function RankingBlock({
   rankingEndDate = '',
 }: Props) {
   if (rankingSetupPending) {
-    return (
-      <TableBlockRankingSetup spaceId={spaceId} onCompleteRankingSetup={onCompleteRankingSetup ?? (() => {})} />
-    );
+    return <TableBlockRankingSetup spaceId={spaceId} onCompleteRankingSetup={onCompleteRankingSetup ?? (() => {})} />;
   }
 
   if (!blockId) {
@@ -36,7 +34,5 @@ export function RankingBlock({
     );
   }
 
-  return (
-    <TableBlockRanking spaceId={spaceId} rankingStartDate={rankingStartDate} rankingEndDate={rankingEndDate} />
-  );
+  return <TableBlockRanking spaceId={spaceId} rankingStartDate={rankingStartDate} rankingEndDate={rankingEndDate} />;
 }

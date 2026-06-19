@@ -252,7 +252,11 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
           const hasContent =
             editor.getText().trim().length > 0 ||
             editorContent.some(
-              node => node.type === 'image' || node.type === 'tableNode' || node.type === 'rankingNode' || node.type === 'codeBlock'
+              node =>
+                node.type === 'image' ||
+                node.type === 'tableNode' ||
+                node.type === 'rankingNode' ||
+                node.type === 'codeBlock'
             );
 
           // Update the state immediately to show/hide properties panel

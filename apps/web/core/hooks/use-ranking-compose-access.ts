@@ -71,15 +71,18 @@ export function useRankingComposeAccess(spaceId: string) {
     return 'ready';
   })();
 
-  const promptLogin = useCallback((postLoginRedirect?: string) => {
-    postLoginRedirectRef.current = postLoginRedirect ?? null;
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-    login();
-  }, [setName, setTopicId, setAvatar, setSpaceId, setStep, login]);
+  const promptLogin = useCallback(
+    (postLoginRedirect?: string) => {
+      postLoginRedirectRef.current = postLoginRedirect ?? null;
+      setName('');
+      setTopicId('');
+      setAvatar('');
+      setSpaceId('');
+      setStep('start');
+      login();
+    },
+    [setName, setTopicId, setAvatar, setSpaceId, setStep, login]
+  );
 
   const ensureMembership = useCallback(async (): Promise<boolean> => {
     if (!personalSpaceId) return false;

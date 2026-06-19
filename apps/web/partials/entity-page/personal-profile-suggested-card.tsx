@@ -246,7 +246,7 @@ export function PersonalProfileSuggestedCard({ spaceId, entityId, withBottomSpac
 
   return (
     <div
-      className={`${withBottomSpacing ? 'mb-10 ' : ''}relative min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat`}
+      className={`${withBottomSpacing ? 'mb-10' : ''}relative min-h-[173px] overflow-hidden rounded-lg bg-[#dbe9c6] bg-cover bg-right bg-no-repeat`}
       style={{ backgroundImage: `url('/personal-profile/suggested-card-leaves.png')` }}
     >
       <div className="absolute top-6 right-6 z-20">

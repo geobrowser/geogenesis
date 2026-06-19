@@ -957,13 +957,10 @@ export function searchPropertiesPage(
       })) ?? [];
 
     const uniqueSpaceIds = [
-      ...new Set(
-        entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
-      ),
+      ...new Set(entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')),
     ];
 
-    const spaces =
-      uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
+    const spaces = uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
 
     const spaceEntityBySpaceId = new Map(spaces.map(s => [s.id, s.entity]));
 
