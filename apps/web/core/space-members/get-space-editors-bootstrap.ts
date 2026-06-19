@@ -69,7 +69,7 @@ export const getSpaceEditorsBootstrap = cache(
 
     let isEditor = isEditorFromQuery;
     if (normalizedPersonalSpaceId && !needsEditorshipQuery) {
-      isEditor = space.editors.map(e => e.toLowerCase()).includes(normalizedPersonalSpaceId);
+      isEditor = space.editors.some(e => e.toLowerCase() === normalizedPersonalSpaceId);
     }
 
     return {

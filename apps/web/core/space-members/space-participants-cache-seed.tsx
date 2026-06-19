@@ -18,13 +18,12 @@ type Props = {
 
 export function SpaceParticipantsCacheSeed({ spaceId, kind, page }: Props) {
   const queryClient = useQueryClient();
-  const seededKeyRef = React.useRef<string | null>(null);
-  const seedKey = `${spaceId}:${kind}`;
 
-  if (seededKeyRef.current !== seedKey) {
+  // Seed in an effect rather than during render — mutating the React Query cache
+  // while rendering can warn or loop. Idempotent, so re-running on prop changes is safe.
+  React.useEffect(() => {
     seedSpaceParticipantsCache(queryClient, { spaceId, kind, page });
-    seededKeyRef.current = seedKey;
-  }
+  }, [queryClient, spaceId, kind, page]);
 
   return null;
 }
