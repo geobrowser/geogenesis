@@ -82,12 +82,14 @@ export function RankingComposePublishSpacePicker({
         <Dropdown.Content
           align="start"
           sideOffset={4}
-          className="z-[250] min-w-[12rem] rounded-md border border-grey-02 bg-white py-1 shadow-dropdown"
+          avoidCollisions
+          collisionPadding={8}
+          className="z-[250] flex max-h-[min(280px,60vh)] min-w-[12rem] flex-col overflow-y-auto overscroll-contain rounded-md border border-grey-02 bg-white py-1 shadow-dropdown"
         >
           {resolved.map(row => (
             <Dropdown.Item
               key={row.id}
-              className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-button outline-none data-highlighted:bg-grey-01"
+              className="flex shrink-0 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-button outline-none data-highlighted:bg-grey-01"
               onSelect={() => {
                 onPublishSpaceIdChange(row.id);
                 setOpen(false);

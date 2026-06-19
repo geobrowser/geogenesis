@@ -181,6 +181,7 @@ type Props = {
   onSearchOpenChange: (open: boolean) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
+  canCreateNew: boolean;
   onCreateNew: () => void;
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
@@ -213,6 +214,7 @@ export function RankingComposeGlobalRanking({
   onSearchOpenChange,
   searchInputRef,
   onAddToMyRanking,
+  canCreateNew,
   onCreateNew,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
@@ -385,7 +387,7 @@ export function RankingComposeGlobalRanking({
       {canLoadMore && isFetchingNextPage ? (
         <p className="py-3 text-metadata text-grey-03">Loading more…</p>
       ) : null}
-      {isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
+      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}
     </>
@@ -486,7 +488,7 @@ export function RankingComposeGlobalRanking({
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
+                {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
               </RankingComposeSearchListPlaceholder>
             ) : (
               searchResultList

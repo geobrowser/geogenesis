@@ -12,7 +12,6 @@ type Props = {
   onFinish: () => void;
   isFinishing?: boolean;
   finishDisabled?: boolean;
-  /** Draft is tied to `publishSpaceId` for this session; space picker is display-only until move is supported. */
   publishSpaceLocked?: boolean;
 };
 

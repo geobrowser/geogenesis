@@ -8,7 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
+import { useRankingCreateNewSpaces } from '~/core/blocks/ranking/use-ranking-create-new-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
@@ -300,9 +300,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
   };
 
+  const { canCreateNew, memberSpaceIds, defaultPublishSpaceId } = useRankingCreateNewSpaces(
+    filterState,
+    spaceId,
+    true
+  );
+
   const handleCreateNew = () => {
-    const publishSpaceIds = getRankingPublishSpaceIds(filterState, spaceId);
-    const publishSpaceId = publishSpaceIds[0] ?? spaceId;
+    const publishSpaceId = defaultPublishSpaceId ?? spaceId;
     const draftName = searchQuery.trim();
 
     const newEntityId = createEntityWithFilters({
@@ -314,7 +319,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     setCreateEntityFlow({
       entityId: newEntityId,
       publishSpaceId,
-      publishSpaceIds,
+      publishSpaceIds: memberSpaceIds,
     });
   };
 
@@ -444,6 +449,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onSearchOpenChange={setIsSearchOpen}
           searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
+          canCreateNew={canCreateNew}
           onCreateNew={handleCreateNew}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
