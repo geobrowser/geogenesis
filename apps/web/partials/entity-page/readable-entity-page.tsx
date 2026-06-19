@@ -212,7 +212,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                     if (isRelation) {
                       return (
                         <RelationsGroup
-                          key={propertyId}
+                          key={`${spaceId}-${entityId}-${propertyId}`}
                           entityId={entityId}
                           spaceId={spaceId}
                           propertyId={propertyId}
@@ -245,7 +245,12 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
 
               if (isRelation) {
                 return (
-                  <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />
+                  <RelationsGroup
+                    key={`${spaceId}-${entityId}-${propertyId}`}
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    propertyId={propertyId}
+                  />
                 );
               }
 
@@ -442,7 +447,12 @@ export function RelationsGroup({
           })}
           {hasMoreRelations && (
             <div className="mt-1 max-w-full min-w-0">
-              <SmallButton variant="transparent" onClick={() => setIsExpanded(prev => !prev)}>
+              <SmallButton
+                type="button"
+                variant="transparent"
+                aria-expanded={isExpanded}
+                onClick={() => setIsExpanded(prev => !prev)}
+              >
                 {isExpanded ? 'Show less' : `Show ${relations.length - DEFAULT_VISIBLE_RELATIONS} more`}
                 <span className={cx('inline-flex transition-transform duration-200', isExpanded && 'rotate-180')}>
                   <ChevronDownSmall />
