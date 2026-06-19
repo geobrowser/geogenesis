@@ -55,10 +55,13 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
         // Fetch only the avatar relation for this entity rather than draining
         // the entity's entire relation set (`getEntity`). Cached under a stable
         // key so repeated media hooks for the same entity reuse one request.
+        // Media URLs are effectively immutable, so keep results fresh for a
+        // while to dedupe across remounts, not just concurrent in-flight calls.
         const relations = await cache.fetchQuery({
           queryKey: ['network', 'relations-by-property', entityId, ContentIds.AVATAR_PROPERTY, spaceId],
           queryFn: ({ signal }) =>
             Effect.runPromise(getRelationsByFromEntityId(entityId, ContentIds.AVATAR_PROPERTY, spaceId, signal)),
+          staleTime: 5 * 60 * 1000,
         });
 
         const avatarRelation = relations[0];
@@ -100,10 +103,13 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
         // Fetch only the cover relation for this entity rather than draining
         // the entity's entire relation set (`getEntity`). Cached under a stable
         // key so repeated media hooks for the same entity reuse one request.
+        // Media URLs are effectively immutable, so keep results fresh for a
+        // while to dedupe across remounts, not just concurrent in-flight calls.
         const relations = await cache.fetchQuery({
           queryKey: ['network', 'relations-by-property', entityId, SystemIds.COVER_PROPERTY, spaceId],
           queryFn: ({ signal }) =>
             Effect.runPromise(getRelationsByFromEntityId(entityId, SystemIds.COVER_PROPERTY, spaceId, signal)),
+          staleTime: 5 * 60 * 1000,
         });
 
         const coverRelation = relations[0];
@@ -174,6 +180,7 @@ export function useEntityMedia(
                 queryKey: ['network', 'relations-by-property', id, ContentIds.AVATAR_PROPERTY, spaceId],
                 queryFn: ({ signal }) =>
                   Effect.runPromise(getRelationsByFromEntityId(id, ContentIds.AVATAR_PROPERTY, spaceId, signal)),
+                staleTime: 5 * 60 * 1000,
               }),
           storeCoverUrl
             ? Promise.resolve([])
@@ -181,6 +188,7 @@ export function useEntityMedia(
                 queryKey: ['network', 'relations-by-property', id, SystemIds.COVER_PROPERTY, spaceId],
                 queryFn: ({ signal }) =>
                   Effect.runPromise(getRelationsByFromEntityId(id, SystemIds.COVER_PROPERTY, spaceId, signal)),
+                staleTime: 5 * 60 * 1000,
               }),
         ]);
 
