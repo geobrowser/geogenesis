@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
@@ -90,7 +92,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         ) : null}
       </div>
 
-      <div className={`flex gap-10 ${item.description ? 'items-start' : 'items-center'}`}>
+      <div className={cx('flex gap-10', item.description ? 'items-start' : 'items-center')}>
         <div className="min-w-0 flex-1">
           <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
             <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text hover:underline">
@@ -106,7 +108,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         {item.imageUrl ? (
           <Link
             href={NavUtils.toEntity(item.spaceId, item.entityId)}
-            className="relative h-[40px] w-[93px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
+            className="relative h-[40px] w-[93px] shrink-0 overflow-hidden rounded bg-grey-01"
           >
             <FallbackImage value={item.imageUrl} sizes="186px" className="object-cover" />
           </Link>

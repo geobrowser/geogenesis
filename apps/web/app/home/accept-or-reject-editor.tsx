@@ -5,11 +5,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useVote } from '~/core/hooks/use-vote';
+import { useToast } from '~/core/hooks/use-toast';
+import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
 import { SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -22,12 +23,21 @@ interface Props {
   isProposalEnded: boolean;
   canExecute: boolean;
   status: Proposal['status'];
+  proposalType: Proposal['type'];
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
 }
 
-export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, status, userVote, proposalId }: Props) {
+export function AcceptOrRejectEditor({
+  spaceId,
+  isProposalEnded,
+  canExecute,
+  status,
+  proposalType,
+  userVote,
+  proposalId,
+}: Props) {
   const router = useRouter();
 
   const { vote, status: voteStatus } = useVote({
@@ -46,6 +56,7 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
+  const [, setToast] = useToast();
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
@@ -62,7 +73,15 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
 
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
-    const message = describeError(error);
+    // A stale proposal can't be voted through — retrying would revert again,
+    // so toast + refresh instead of raising the error modal.
+    const staleMessage = getStaleProposalVoteToastMessage(error, proposalType);
+    if (staleMessage) {
+      setToast(<span>{staleMessage}</span>);
+      router.refresh();
+      return;
+    }
+    const message = describeGovernanceError(error);
     reportError(`Vote failed: ${message}`, () => {
       addOptimisticVote(proposalId);
       vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
@@ -93,7 +112,7 @@ export function AcceptOrRejectEditor({ spaceId, isProposalEnded, canExecute, sta
     }
 
     if (canExecute && smartAccount) {
-      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+      return <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
     }
 
     if (canExecute) {

@@ -36,13 +36,6 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
 
   return (
     <div className="table-block-editable-title flex grow items-center gap-2">
-      {source.type === 'GEO' && (
-        <img
-          src={PLACEHOLDER_SPACE_IMAGE}
-          alt=""
-          className="flex size-[16px]! shrink-0 overflow-clip rounded-sm! border border-white object-cover"
-        />
-      )}
       {source.type === 'SPACES' && (
         <div className="group relative z-10 flex h-full">
           {renderedSpaces.map(spaceId => {

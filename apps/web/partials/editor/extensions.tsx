@@ -11,6 +11,7 @@ import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/prof
 
 import { CodeBlockNode } from './code-block-node';
 import { DataNode } from './data-node';
+import { RankingNode } from './ranking-node';
 import { FloatingToolbarExtension } from './floating-toolbar-extension';
 import { GraphLinkExtension, MarkdownLinkExtension } from './graph-link-extension';
 import { HeadingNode } from './heading-node';
@@ -53,6 +54,7 @@ export const tiptapExtensions = [
   CodeBlockNode,
   MathNode,
   DataNode,
+  RankingNode,
   ImageNode,
   VideoNode,
   // mode: 'deepest' tags only the leaf node, not the wrapper chain. With

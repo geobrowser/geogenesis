@@ -7,26 +7,29 @@ type Entry = {
   entityId: string;
 };
 
-export function usePlaceholderAutofocus(entries: Entry[]): boolean {
+/**
+ * @param entriesKey Stable string identity for the row list (entity ids + placeholder flags).
+ * @param entries Row list used to resolve the placeholder entity id (read via ref in the effect).
+ */
+export function usePlaceholderAutofocus(entriesKey: string, entries: Entry[]): boolean {
   const lastPlaceholderIdRef = React.useRef<string | null>(null);
   const [shouldAutoFocus, setShouldAutoFocus] = React.useState(false);
+  const entriesRef = React.useRef(entries);
+  entriesRef.current = entries;
 
-  // Track when a new placeholder is added
   React.useEffect(() => {
-    const placeholderRow = entries.find(e => e.placeholder);
-    if (placeholderRow) {
-      const placeholderId = placeholderRow.entityId;
-      if (lastPlaceholderIdRef.current !== placeholderId) {
-        // New placeholder detected
-        lastPlaceholderIdRef.current = placeholderId;
+    const placeholderEntityId = entriesRef.current.find(e => e.placeholder)?.entityId ?? null;
+
+    if (placeholderEntityId) {
+      if (lastPlaceholderIdRef.current !== placeholderEntityId) {
+        lastPlaceholderIdRef.current = placeholderEntityId;
         setShouldAutoFocus(true);
       }
     } else if (lastPlaceholderIdRef.current !== null) {
-      // No placeholder present, reset
       lastPlaceholderIdRef.current = null;
       setShouldAutoFocus(false);
     }
-  }, [entries]);
+  }, [entriesKey]);
 
   return shouldAutoFocus;
 }

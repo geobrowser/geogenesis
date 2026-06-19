@@ -16,6 +16,12 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
+export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
+
+// Short links (e.g. /r/g/[blockEntityId]) don't carry the space in the URL, so
+// pages that resolve their space publish it here for the navbar breadcrumb.
+export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);

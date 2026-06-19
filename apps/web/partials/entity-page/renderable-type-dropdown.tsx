@@ -14,6 +14,7 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { DashedCircle } from '~/design-system/icons/dashed-circle';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { TYPE_ICONS, TypeIconComponent } from './type-icons';
 
@@ -26,6 +27,7 @@ interface Props {
 export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props) => {
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   // Show all available renderable types
   const availableOptions = React.useMemo(() => {
@@ -48,10 +50,12 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     },
     Icon: TYPE_ICONS[key],
   }));
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 180,
     gap: 8,
+    contentElement,
   });
   const onTypeMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);
@@ -72,24 +76,30 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
           ref={triggerRef}
-          className={`flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4 ${open ? 'border-text' : 'border-grey-02'}`}
+          className={cx(
+            'flex items-center gap-[6px] rounded-[6px] border px-1.5 py-[3px] text-[1rem] leading-4',
+            open ? 'border-text' : 'border-grey-02'
+          )}
         >
           <Icon color={open ? 'text' : 'grey-04'} className="h-3 w-3" />
           {label}
-          <div className={`${open ? '-rotate-180' : ''} transition-transform duration-300 ease-in-out`}>
+          <div className={cx(open && '-rotate-180', 'transition-transform duration-300 ease-in-out')}>
             <ChevronDown />
           </div>
         </button>
       </DropdownPrimitive.Trigger>
       {/*
-        Portal so the menu can escape ancestor `overflow-hidden` + `transform`
-        clipping (e.g. when this dropdown lives inside SelectEntity's popover
-        shell — without the portal, the menu opens but is invisible because
-        Radix's transform-positioned `Content` is clipped by the parent's
-        rounded overflow).
+        Portal into the shared `.elevated-popover` container (same as
+        SelectEntity's own popover) so the menu (1) escapes ancestor
+        `overflow-hidden` + `transform` clipping when nested inside
+        SelectEntity's popover shell, and (2) inherits the elevated z-index
+        instead of being capped at z-60 by the global
+        `[data-radix-popper-content-wrapper]` rule — which would otherwise
+        render it BEHIND the "Find property…" dropdown.
       */}
-      <DropdownPrimitive.Portal>
+      <DropdownPrimitive.Portal container={elevatedPopoverPortal ?? undefined}>
         <DropdownPrimitive.Content
+          ref={setContentElement}
           align={align}
           side={side}
           sideOffset={8}

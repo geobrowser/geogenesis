@@ -9,6 +9,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
 
+import type { EntitiesOrderBy } from '../gql/graphql';
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Property, Relation, Value } from '../types';
@@ -54,6 +55,61 @@ const reactive = createAtom(
   },
   { compare: () => false }
 );
+
+function getUnpublishedLocalEntityIds(): string[] {
+  const ids = new Set<string>();
+  for (const v of reactiveValues.get()) {
+    if (v.isLocal && !v.hasBeenPublished && !v.isDeleted) {
+      ids.add(v.entity.id);
+    }
+  }
+  for (const r of reactiveRelations.get()) {
+    if (r.isLocal && !r.hasBeenPublished && !r.isDeleted) {
+      ids.add(r.fromEntity.id);
+    }
+  }
+  return [...ids];
+}
+
+function localEntityLatestTimestamp(entity: Entity): string {
+  let latest = '';
+  for (const v of entity.values ?? []) {
+    if (v.timestamp && v.timestamp > latest) latest = v.timestamp;
+  }
+  for (const r of entity.relations ?? []) {
+    if (r.timestamp && r.timestamp > latest) latest = r.timestamp;
+  }
+  return latest;
+}
+
+/**
+ * Prepend unpublished local entities that match the query filter but are not yet in the server page
+ */
+function mergeUnpublishedLocalEntities(
+  store: GeoStore,
+  where: WhereCondition | undefined,
+  serverEntities: Entity[],
+  serverIds: string[]
+): Entity[] {
+  const serverIdSet = new Set(serverIds);
+  const localIds = getUnpublishedLocalEntityIds().filter(id => !serverIdSet.has(id));
+  if (localIds.length === 0) return serverEntities;
+
+  const localEntities = localIds.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+
+  if (localEntities.length === 0) return serverEntities;
+
+  const matching =
+    where && Object.keys(where).length > 0 ? new EntityQuery(localEntities).where(where).execute() : localEntities;
+
+  if (matching.length === 0) return serverEntities;
+
+  const sortedLocal = [...matching].sort((a, b) =>
+    localEntityLatestTimestamp(b).localeCompare(localEntityLatestTimestamp(a))
+  );
+
+  return [...sortedLocal, ...serverEntities];
+}
 
 /**
  * Triggers sync for a specific entity. This is useful when we want to
@@ -225,6 +281,13 @@ type QueryEntitiesOptions = {
   deferUntilFetched?: boolean;
 
   /**
+   * When true, prepends unpublished local entities that match `where` to the
+   * first page of server-paginated results. Use for open-ended paginated queries
+   * (e.g. data blocks, power tools) so newly created entities appear before sync.
+   */
+  includeUnpublishedLocal?: boolean;
+
+  /**
    * By default we query the local store for the entity without
    * querying the remote server. This assumes that the entity
    * has already been hydrated elsewhere in the app, so there's
@@ -249,9 +312,13 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
+  includeUnpublishedLocal = false,
   sort,
+  orderBy,
 }: QueryEntitiesOptions & {
   sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
+  orderBy?: EntitiesOrderBy[];
 }) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -275,7 +342,7 @@ export function useQueryEntities({
   const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
     queryFn: async () => {
       const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
         store,
@@ -285,6 +352,7 @@ export function useQueryEntities({
         after,
         offset,
         sort,
+        orderBy,
       });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
       return { ids: merged.map(e => e.id), endCursor, hasNextPage };
@@ -302,17 +370,17 @@ export function useQueryEntities({
   // inline each render) so the effect only re-runs when the semantic key
   // changes, not on every render.
   const prefetchKeyTail = React.useMemo(
-    () => stableStringify({ where, first, sort: sort ?? null }),
-    [where, first, sort]
+    () => stableStringify({ where, first, sort: sort ?? null, orderBy: orderBy ?? null }),
+    [where, first, sort, orderBy]
   );
   React.useEffect(() => {
     if (!enabled) return;
     if (!prefetchEndCursor) return;
     const nextAfter = prefetchEndCursor;
     cache.prefetchQuery({
-      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null, orderBy ?? null],
       queryFn: async () => {
-        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort, orderBy });
         stream.emit({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: result.merged,
@@ -330,7 +398,10 @@ export function useQueryEntities({
         return [];
       }
 
-      if (deferUntilFetched && !isFetched) {
+      // Defer only on the initial load. During a keepPreviousData refetch (e.g. a sort,
+      // which is in the query key) the new key is !isFetched but `data` still holds the
+      // previous page — without this guard we'd flash the loading placeholder every sort.
+      if (deferUntilFetched && !isFetched && !isPlaceholderData) {
         return [];
       }
 
@@ -350,7 +421,16 @@ export function useQueryEntities({
       // from the server-returned ids; store.getEntity still picks up local
       // edits. Falls through to a local EntityQuery only before first fetch.
       if (data?.ids) {
-        return data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+        const serverEntities = data.ids.map(id => store.getEntity(id)).filter((e): e is Entity => e !== null);
+
+        // Cursor-anchored fetches of later pages arrive as (after, offset:
+        // undefined), so a missing offset alone does not mean page one.
+        const isFirstPage = after === undefined && (offset === undefined || offset === 0);
+        if (!isFirstPage || !includeUnpublishedLocal) {
+          return serverEntities;
+        }
+
+        return mergeUnpublishedLocalEntities(store, where, serverEntities, data.ids);
       }
 
       const query = new EntityQuery(store.getEntities())
@@ -366,7 +446,9 @@ export function useQueryEntities({
   return {
     entities: results,
     isLoading: !isFetched && enabled && isLoading,
-    isFetched: isFetched && enabled,
+    // Serving keepPreviousData means we have rows to show, so report fetched —
+    // otherwise consumers render the loading placeholder over valid data.
+    isFetched: (isFetched || isPlaceholderData) && enabled,
     /**
      * True while React Query is serving the previous page's data because
      * `placeholderData: keepPreviousData` is in effect and the current key
@@ -409,13 +491,13 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       }
 
       // First try the store's getProperty method (works for registered local properties)
-      const storeProperty = store.getProperty(id);
+      const storeProperty = store.getProperty(id, { spaceId });
       if (storeProperty) {
         return storeProperty;
       }
 
       // Fall back to manual reconstruction for existing properties
-      return Properties.reconstructFromStore(id, getValues, getRelations);
+      return Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
     },
     equal
   );
@@ -436,10 +518,11 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
 
 type QueryPropertiesOptions = {
   ids: string[];
+  spaceId?: string;
   enabled?: boolean;
 };
 
-export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
+export function useQueryProperties({ ids, spaceId, enabled = true }: QueryPropertiesOptions) {
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -463,14 +546,14 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       for (const id of ids) {
         // First try the store's getProperty method
-        const storeProperty = store.getProperty(id);
+        const storeProperty = store.getProperty(id, { spaceId });
         if (storeProperty) {
           props.push(storeProperty);
           continue;
         }
 
         // Fall back to manual reconstruction for existing properties
-        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations);
+        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
         if (reconstructedProperty) {
           props.push(reconstructedProperty);
         }
@@ -526,14 +609,31 @@ interface FindManyParameters {
   after?: string;
   offset?: number;
   where: WhereCondition;
+  /**
+   * When true, prepends unpublished local entities that match `where` to the
+   * result. Use for fetch-all flows (e.g. power tools "apply to all") so they
+   * cover the same unpublished entities the paginated views display.
+   */
+  includeUnpublishedLocal?: boolean;
 }
 
 export function useQueryEntitiesAsync() {
   const cache = useQueryClient();
   const { store } = useSyncEngine();
 
-  return ({ where, first = 9, after, offset }: FindManyParameters) =>
-    E.findMany({ store, cache, where, first, after, offset });
+  return async ({ where, first = 9, after, offset, includeUnpublishedLocal = false }: FindManyParameters) => {
+    const entities = await E.findMany({ store, cache, where, first, after, offset });
+    // Match useQueryEntities: only merge unpublished locals on the first page,
+    // otherwise paginating callers would re-prepend them on every page.
+    const isFirstPage = after === undefined && (offset === undefined || offset === 0);
+    if (!includeUnpublishedLocal || !isFirstPage) return entities;
+    return mergeUnpublishedLocalEntities(
+      store,
+      where,
+      entities,
+      entities.map(e => e.id)
+    );
+  };
 }
 
 export function useQueryEntityAsync() {
@@ -749,4 +849,36 @@ export function getRelation(options: UseRelationParams) {
   }
 
   return found ? resolveRelationNames(found) : null;
+}
+
+/**
+ * Space-aware relation lookup for data block cells. Returns a single Relation
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useRelation when rendering data that may originate from
+ * a different space than the one being viewed — the store accumulates relations
+ * from every visited space, so an unscoped selector can match another space's
+ * relation. Entity pages should use useRelation with a strict spaceId filter
+ * instead — they want null when the relation doesn't exist in the current space.
+ */
+export function useSpaceAwareRelation(options: { selector: (r: Relation) => boolean; spaceId: string }) {
+  const { selector, spaceId } = options;
+
+  const relation = useSelector(
+    reactive,
+    () => {
+      let fallback: Relation | null = null;
+
+      for (const r of reactiveRelations.get()) {
+        if (r.isDeleted || !selector(r)) continue;
+        if (r.spaceId === spaceId) return resolveRelationNames(r);
+        fallback ??= r;
+      }
+
+      return fallback ? resolveRelationNames(fallback) : null;
+    },
+    equal
+  );
+
+  return relation;
 }

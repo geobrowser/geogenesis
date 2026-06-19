@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { motion } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 
 import { useDiff } from '~/core/state/diff-store';
 
@@ -13,6 +14,8 @@ type MainProps = {
 export const Main = ({ children }: MainProps) => {
   const { isReviewOpen } = useDiff();
   const isHidden = isReviewOpen;
+  const pathname = usePathname();
+  const isExplore = pathname === '/explore';
 
   return (
     <motion.main
@@ -20,7 +23,9 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className="mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16"
+      className={
+        isExplore ? 'min-w-0 flex-1' : 'mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16'
+      }
     >
       {children}
     </motion.main>

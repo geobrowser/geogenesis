@@ -9,15 +9,20 @@ import { useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { storage } from '~/core/sync/use-mutate';
-import { getRelations, getValues, useValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
+import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
+import { RANKING_END_DATE_PROPERTY_ID, RANKING_START_DATE_PROPERTY_ID } from '../../ranking-block-ids';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -99,6 +104,7 @@ function makeNewBlockRelation({
       case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
+      case 'rankingNode':
         return 'DATA';
       case 'image':
         return 'IMAGE';
@@ -265,25 +271,33 @@ export function useEditorStore() {
     return initialBlockEntities.flatMap(b => b.relations);
   }, [initialBlockEntities]);
 
-  // Subscribe to markdown content changes for all text blocks.
-  // This ensures editorJson re-computes when text content is edited.
   const markdownValues = useValues({
     selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
   });
 
-  /**
-   * Tiptap expects a JSON representation of the editor state, but we store our block state
-   * in a Knowledge Graph-specific data model. We need to map from our KG representation
-   * back to the Tiptap representation whenever the KG data changes.
-   */
+  const blockConfigValues = useValues({
+    selector: value =>
+      blockIds.includes(value.entity.id) &&
+      value.spaceId === spaceId &&
+      (value.property.id === SystemIds.NAME_PROPERTY ||
+        value.property.id === SystemIds.FILTER ||
+        value.property.id === RANKING_START_DATE_PROPERTY_ID ||
+        value.property.id === RANKING_END_DATE_PROPERTY_ID),
+  });
+
+  const blockTypesRelations = useRelations({
+    selector: relation =>
+      blockIds.includes(relation.fromEntity.id) &&
+      relation.spaceId === spaceId &&
+      relation.type.id === SystemIds.TYPES_PROPERTY,
+  });
+
   const { editorJson, serverBlocks } = React.useMemo(() => {
     const sBlocks: ServerBlock[] = [];
 
     const json = {
       type: 'doc',
       content: blockRelations.flatMap(block => {
-        // Find the markdown value for this block. Prefer local (reactive) values over initial server values.
-        // Local values from markdownValues take precedence since they reflect user edits.
         const markdownValueForBlockId =
           markdownValues.find(v => v.entity.id === block.block.id) ??
           initialBlockValues.find(v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT);
@@ -353,6 +367,73 @@ export function useEditorStore() {
           ];
         }
 
+        const blockTypeRelations = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            r.fromEntity.id === block.block.id &&
+            r.type.id === SystemIds.TYPES_PROPERTY &&
+            r.spaceId === spaceId &&
+            !r.isDeleted,
+        });
+
+        if (isRankingBlockEntity(block.block.id, blockTypeRelations, spaceId)) {
+          sBlocks.push({ type: 'data' });
+
+          const configuredFilters = getValues({
+            mergeWith: initialBlockValues,
+            selector: v =>
+              v.entity.id === block.block.id &&
+              v.property.id === SystemIds.FILTER &&
+              v.spaceId === spaceId &&
+              v.value.length > 0 &&
+              !v.isDeleted,
+          });
+          const rankingBlockEntity = initialBlockEntities.find(b => b.id === block.block.id);
+          const blockName = store.getEntity(block.block.id, { spaceId })?.name ?? rankingBlockEntity?.name;
+          const rankingSetupConfigured = isRankingSetupConfigured(
+            block.block.id,
+            blockName,
+            configuredFilters,
+            spaceId
+          );
+          const rankingStartDate =
+            RANKING_START_DATE_PROPERTY_ID != null
+              ? (getValues({
+                  mergeWith: initialBlockValues,
+                  selector: v =>
+                    v.entity.id === block.block.id &&
+                    v.property.id === RANKING_START_DATE_PROPERTY_ID &&
+                    v.spaceId === spaceId &&
+                    !v.isDeleted,
+                })[0]?.value ?? null)
+              : null;
+          const rankingEndDate =
+            RANKING_END_DATE_PROPERTY_ID != null
+              ? (getValues({
+                  mergeWith: initialBlockValues,
+                  selector: v =>
+                    v.entity.id === block.block.id &&
+                    v.property.id === RANKING_END_DATE_PROPERTY_ID &&
+                    v.spaceId === spaceId &&
+                    !v.isDeleted,
+                })[0]?.value ?? null)
+              : null;
+
+          return [
+            {
+              type: 'rankingNode',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+                rankingSetupCompleted: rankingSetupConfigured,
+                rankingStartDate,
+                rankingEndDate,
+              },
+            },
+          ];
+        }
+
         if (toEntity?.type === 'DATA') {
           sBlocks.push({ type: 'data' });
 
@@ -384,6 +465,8 @@ export function useEditorStore() {
               !v.isDeleted,
           });
 
+          const initialDataSource = isQuerySource ? ('QUERY' as const) : ('COLLECTION' as const);
+
           return [
             {
               type: 'tableNode',
@@ -391,7 +474,7 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
-                initialDataSource: isQuerySource ? 'QUERY' : 'COLLECTION',
+                initialDataSource,
                 querySetupCompleted: isQuerySource
                   ? configuredShownColumns.length > 0 || configuredFilters.length > 0
                   : null,
@@ -452,7 +535,15 @@ export function useEditorStore() {
     }
 
     return { editorJson: json, serverBlocks: sBlocks };
-  }, [blockRelations, spaceId, initialBlockValues, markdownValues]);
+  }, [
+    blockRelations,
+    spaceId,
+    initialBlockValues,
+    initialBlockEntities,
+    markdownValues,
+    blockConfigValues,
+    blockTypesRelations,
+  ]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -486,11 +577,10 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
-      const currentBlockIds = getRelations({
-        mergeWith: initialBlockEntityRelations,
-        selector: r =>
-          r.fromEntity.id === activeEntityId && r.type.id === SystemIds.BLOCKS && r.spaceId === spaceId && !r.isDeleted,
-      }).map(r => r.toEntity.id);
+      // Use `blockRelations` (merges the SSR page→block BLOCKS via useBlocks), not a raw
+      // store read: the page entity hydrates async, so a store read can miss published
+      // blocks mid-load and misclassify them as newly added, duplicating their relations.
+      const currentBlockIds = blockRelations.map(r => r.block.id);
 
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.
@@ -521,6 +611,8 @@ export function useEditorStore() {
       for (const node of addedBlocks) {
         const blockType = (() => {
           switch (node.type) {
+            case 'rankingNode':
+              return 'RANKING' as const;
             case 'tableNode':
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
@@ -557,12 +649,48 @@ export function useEditorStore() {
             storage.relations.set(relation);
             break;
           }
+          case 'RANKING': {
+            for (const relation of makeInitialRankingBlockRelations(EntityId(node.id), spaceId)) {
+              storage.relations.set(relation);
+            }
+            break;
+          }
           case SystemIds.DATA_BLOCK: {
-            const initialSourceType =
-              node.attrs?.initialDataSource === 'QUERY' ? ('GEO' as const) : ('COLLECTION' as const);
+            const isQuery = node.attrs?.initialDataSource === 'QUERY';
+            const initialSourceType = isQuery ? ('SPACES' as const) : ('COLLECTION' as const);
 
             for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
               storage.relations.set(relation);
+            }
+
+            if (isQuery) {
+              const initialFilterString = toGeoFilterState(
+                [
+                  {
+                    columnId: SystemIds.SPACE_FILTER,
+                    columnName: 'Space',
+                    valueType: 'RELATION',
+                    value: spaceId,
+                  },
+                ],
+                'AND'
+              );
+
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: node.id,
+                  propertyId: SystemIds.FILTER,
+                  spaceId,
+                }),
+                spaceId,
+                entity: { id: node.id, name: null },
+                property: {
+                  id: SystemIds.FILTER,
+                  name: 'Filter',
+                  dataType: 'TEXT',
+                },
+                value: initialFilterString,
+              });
             }
 
             break;
@@ -642,6 +770,8 @@ export function useEditorStore() {
         switch (node.type) {
           case 'tableNode':
             // createTableBlockMetadata(node);
+            break;
+          case 'rankingNode':
             break;
           case 'bulletList':
           case 'heading':

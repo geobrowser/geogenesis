@@ -7,9 +7,11 @@ import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -45,6 +47,19 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
     if (!validateSpaceId(spaceId)) {
       throw new Error('Invalid target space ID');
+    }
+
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+    const access = await runEffectEither(
+      Effect.all([
+        getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+        getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+      ])
+    );
+    if (Either.isRight(access) && (access.right[0] || access.right[1])) {
+      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
+      throw new Error('User is already a member or editor of the space');
     }
 
     console.log('Requesting to be member', {

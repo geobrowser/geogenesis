@@ -7,11 +7,12 @@ import { useRouter } from 'next/navigation';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useVote } from '~/core/hooks/use-vote';
+import { useToast } from '~/core/hooks/use-toast';
+import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
 import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -20,6 +21,7 @@ import { GovernanceReopenEditButton } from '~/partials/governance/governance-reo
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 import { Execute } from './execute';
+import { useCloseProposal } from './use-close-proposal';
 
 interface Props {
   spaceId: string;
@@ -59,6 +61,8 @@ export function AcceptOrReject({
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
+  const [, setToast] = useToast();
+  const closeProposal = useCloseProposal(spaceId);
 
   // Once the server-rendered userVote catches up after router.refresh, the
   // optimistic entry has done its job — drop it so the atom doesn't grow
@@ -75,7 +79,16 @@ export function AcceptOrReject({
 
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
     removeOptimisticVote(proposalId);
-    const message = describeError(error);
+    // A stale proposal can't be voted through — retrying would revert again,
+    // so close the review window and toast instead of raising the error modal.
+    const staleMessage = getStaleProposalVoteToastMessage(error, proposalType);
+    if (staleMessage) {
+      setToast(<span>{staleMessage}</span>);
+      closeProposal();
+      router.refresh();
+      return;
+    }
+    const message = describeGovernanceError(error);
     reportError(`Vote failed: ${message}`, () => {
       addOptimisticVote(proposalId);
       vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
@@ -121,7 +134,7 @@ export function AcceptOrReject({
     }
 
     if (canExecute && smartAccount) {
-      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+      return <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
     }
 
     if (canExecute) {

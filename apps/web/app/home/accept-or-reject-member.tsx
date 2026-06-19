@@ -6,11 +6,12 @@ import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useVote } from '~/core/hooks/use-vote';
+import { useToast } from '~/core/hooks/use-toast';
+import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 import {
   NavUtils,
   formatGovernanceOutcomeDate,
@@ -31,6 +32,7 @@ interface Props {
   spaceId: string;
   proposalId: string;
   proposalName: string;
+  proposalType: Proposal['type'];
   governanceHomeReturnSearch?: string;
   endTime: number;
   isProposalEnded: boolean;
@@ -57,6 +59,7 @@ export function AcceptOrRejectMember({
   spaceId,
   proposalId,
   proposalName,
+  proposalType,
   governanceHomeReturnSearch,
   endTime,
   isProposalEnded,
@@ -83,6 +86,7 @@ export function AcceptOrRejectMember({
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
+  const [, setToast] = useToast();
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
@@ -104,7 +108,15 @@ export function AcceptOrRejectMember({
       onSuccess: onVoteSuccess,
       onError: (error: unknown) => {
         removeOptimisticVote(proposalId);
-        const message = describeError(error);
+        // A stale proposal can't be voted through — retrying would revert
+        // again, so toast + refresh instead of raising the error modal.
+        const staleMessage = getStaleProposalVoteToastMessage(error, proposalType);
+        if (staleMessage) {
+          setToast(<span>{staleMessage}</span>);
+          router.refresh();
+          return;
+        }
+        const message = describeGovernanceError(error);
         reportError(`Vote failed: ${message}`, () => castVote(choice));
       },
     });
@@ -149,7 +161,7 @@ export function AcceptOrRejectMember({
     } else if (status === 'REJECTED') {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     } else if (canExecute && smartAccount) {
-      actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
+      actions = <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
     } else if (canExecute) {
       actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {

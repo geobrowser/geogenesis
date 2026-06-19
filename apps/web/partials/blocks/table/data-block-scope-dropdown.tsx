@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { Filter } from '~/core/blocks/data/filters';
 import { type Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -24,6 +25,7 @@ import { NativeGeoImage } from '~/design-system/geo-image';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
+import { TextButton } from '~/design-system/text-button';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from '~/design-system/use-adaptive-dropdown-placement';
 
@@ -116,7 +118,7 @@ function SpaceDropdownRow({
 
 type DataBlockScopeDropdownProps = {
   source: Source;
-  setSource: (source: Source) => void;
+  setSource: (source: Source, options?: { filterStateOverride?: Filter[] }) => void;
   disabled?: boolean;
   /** When false, trigger is a grey read-only pill (no border); menu does not open. */
   isEditing?: boolean;
@@ -173,10 +175,12 @@ export function DataBlockScopeDropdown({
   // resolveFilterDisplayNames have fetched the canonical record.
   const pickedSpaceNamesRef = React.useRef<Map<string, string | null>>(new Map());
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: variant === 'setup' ? 300 : 340,
     gap: 8,
+    contentElement,
   });
 
   const onListWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -188,23 +192,27 @@ export function DataBlockScopeDropdown({
   const { personalSpaceId } = usePersonalSpaceId();
 
   const scopeDraftDirtyRef = React.useRef(false);
+  const isSetup = variant === 'setup';
 
-  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    if (nextOpen) {
-      scopeDraftDirtyRef.current = false;
-      setPendingSource(sourceRef.current);
-    } else {
-      setPendingSource(prev => {
-        if (prev !== null && scopeDraftDirtyRef.current) {
-          const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
-          setSourceRef.current(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
-        }
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
         scopeDraftDirtyRef.current = false;
-        return null;
-      });
-    }
-    setOpen(nextOpen);
-  }, []);
+        setPendingSource(sourceRef.current);
+      } else {
+        setPendingSource(prev => {
+          if (!isSetup && prev !== null && scopeDraftDirtyRef.current) {
+            const nextSource = prev.type === 'SPACES' && prev.value.length === 0 ? { type: 'GEO' as const } : prev;
+            setSourceRef.current(attachSpaceNames(nextSource, pickedSpaceNamesRef.current));
+          }
+          scopeDraftDirtyRef.current = false;
+          return null;
+        });
+      }
+      setOpen(nextOpen);
+    },
+    [isSetup]
+  );
 
   const commitSource = React.useCallback((nextSource: Source) => {
     const sourceWithNames = attachSpaceNames(nextSource, pickedSpaceNamesRef.current);
@@ -212,6 +220,22 @@ export function DataBlockScopeDropdown({
     setPendingSource(sourceWithNames);
     setSourceRef.current(sourceWithNames);
   }, []);
+
+  const updateDraft = React.useCallback((nextSource: Source) => {
+    scopeDraftDirtyRef.current = true;
+    setPendingSource(nextSource);
+  }, []);
+
+  const clearDraft = React.useCallback(() => {
+    updateDraft({ type: 'GEO' });
+  }, [updateDraft]);
+
+  const commitDraft = React.useCallback(() => {
+    const next = pendingSource ?? sourceRef.current;
+    const finalized = next.type === 'SPACES' && next.value.length === 0 ? { type: 'GEO' as const } : next;
+    commitSource(finalized);
+    setOpen(false);
+  }, [commitSource, pendingSource]);
 
   React.useEffect(() => {
     if (!open || scopeDraftDirtyRef.current) return;
@@ -282,14 +306,24 @@ export function DataBlockScopeDropdown({
     [labelSource, spacesById]
   );
   const isAllOfGeo = draft.type === 'GEO';
+  const showClearAll = isSetup && draft.type === 'SPACES' && draft.value.length > 0;
 
   const toggleSpace = (id: string, name: string | null) => {
     pickedSpaceNamesRef.current.set(id, name);
-    commitSource(toggleSpaceSource(draft, id));
+    const next = toggleSpaceSource(draft, id);
+    if (isSetup) {
+      updateDraft(next);
+    } else {
+      commitSource(next);
+    }
   };
 
   const onPickAllOfGeo = () => {
-    commitSource({ type: 'GEO' });
+    if (isSetup) {
+      updateDraft({ type: 'GEO' });
+    } else {
+      commitSource({ type: 'GEO' });
+    }
   };
 
   const triggerDisabled = disabled || !isEditing;
@@ -314,6 +348,7 @@ export function DataBlockScopeDropdown({
       </Dropdown.Trigger>
       <Dropdown.Portal>
         <Dropdown.Content
+          ref={setContentElement}
           side={side}
           align={variant === 'setup' ? 'start' : align}
           sideOffset={8}
@@ -321,9 +356,25 @@ export function DataBlockScopeDropdown({
           collisionPadding={8}
           className="z-1001 flex max-h-[min(360px,80vh)] w-[min(300px,calc(100vw-24px))] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
-          <div className="shrink-0 border-b border-grey-02 px-2.5 py-1.5">
-            <p className="text-footnoteMedium text-grey-04">Query from</p>
-          </div>
+          {isSetup ? (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-grey-02 px-3 py-2">
+              <span className="text-resultTitle text-text">Query from</span>
+              <div className="flex shrink-0 items-center gap-2">
+                {showClearAll ? (
+                  <TextButton type="button" color="grey-04" onClick={clearDraft}>
+                    Clear all
+                  </TextButton>
+                ) : null}
+                <TextButton type="button" color="ctaPrimary" onClick={commitDraft}>
+                  Done
+                </TextButton>
+              </div>
+            </div>
+          ) : (
+            <div className="shrink-0 border-b border-grey-02 px-2.5 py-1.5">
+              <p className="text-footnoteMedium text-grey-04">Query from</p>
+            </div>
+          )}
 
           <div className="shrink-0 border-b border-grey-02 p-1.5">
             <Input

@@ -69,6 +69,7 @@
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
   --z-index-status-bar: 10001;
+  --z-index-toast: 10002;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
@@ -511,19 +512,29 @@ body[data-entity-side-panel-open] {
 
 /* Hide main-page scrollbars when the panel keeps its own scrollbar. */
 html[data-entity-side-panel-open],
+html[data-ranking-compose-edit],
 html[data-entity-side-panel-open] body,
+html[data-ranking-compose-edit] body,
 body[data-entity-side-panel-open],
+body[data-ranking-compose-edit],
 body[data-entity-side-panel-open] [data-app-scroll-surface],
-body[data-entity-side-panel-open] [data-power-tools-scroll] {
+body[data-ranking-compose-edit] [data-app-scroll-surface],
+body[data-entity-side-panel-open] [data-power-tools-scroll],
+body[data-ranking-compose-edit] [data-power-tools-scroll] {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
 
 html[data-entity-side-panel-open]::-webkit-scrollbar,
+html[data-ranking-compose-edit]::-webkit-scrollbar,
 html[data-entity-side-panel-open] body::-webkit-scrollbar,
+html[data-ranking-compose-edit] body::-webkit-scrollbar,
 body[data-entity-side-panel-open]::-webkit-scrollbar,
+body[data-ranking-compose-edit]::-webkit-scrollbar,
 body[data-entity-side-panel-open] [data-app-scroll-surface]::-webkit-scrollbar,
-body[data-entity-side-panel-open] [data-power-tools-scroll]::-webkit-scrollbar {
+body[data-ranking-compose-edit] [data-app-scroll-surface]::-webkit-scrollbar,
+body[data-entity-side-panel-open] [data-power-tools-scroll]::-webkit-scrollbar,
+body[data-ranking-compose-edit] [data-power-tools-scroll]::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -557,6 +568,14 @@ body[data-entity-side-panel-open] .elevated-popover {
 
 body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
+}
+
+/* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
+@media (max-width: 1023px) {
+  html[data-ranking-compose-edit] [data-app-navbar],
+  body[data-ranking-compose-edit] [data-app-navbar] {
+    display: none !important;
+  }
 }
 
 [data-entity-side-panel] [data-radix-popper-content-wrapper] {

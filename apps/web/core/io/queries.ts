@@ -17,8 +17,10 @@ import {
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
+import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
@@ -31,6 +33,7 @@ import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
+  entitiesPageQuery,
   entityBacklinksQuery,
   entityNamesQuery,
   entityPageQuery,
@@ -61,18 +64,37 @@ import { restFetch } from './rest';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
+// `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
+export const ENTITY_ID_BATCH_SIZE = 50;
+
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
 // automatically...
 //
 // We also want to merge local data as much as possible
 
-export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
+function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
     signal,
+  });
+}
+
+export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
+  if (entityIds.length === 0) return Effect.succeed([]);
+  if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
+
+  return Effect.gen(function* () {
+    const entities: Entity[] = [];
+
+    for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const batch = yield* getBatchEntitiesPage(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE), spaceId, signal);
+      entities.push(...batch);
+    }
+
+    return entities;
   });
 }
 
@@ -243,6 +265,8 @@ type GetEntitiesOrderedByPropertyOptions = {
   sortDirection: SortOrder;
   dataType?: string;
   spaceId?: string;
+  spaceIds?: string[];
+  typeIds?: string[];
   limit?: number;
   after?: string;
   /** Bounded forward skip relative to `after`. See `GetAllEntitiesOptions.offset`. */
@@ -250,10 +274,60 @@ type GetEntitiesOrderedByPropertyOptions = {
   filter?: EntityFilter;
 };
 
+function nonEmptyIds(ids?: readonly (string | null | undefined)[]): string[] | undefined {
+  const normalized = ids?.filter((id): id is string => typeof id === 'string' && id.length > 0) ?? [];
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function idsFromUuidFilter(filter?: UuidFilter): string[] | undefined {
+  if (!filter) return undefined;
+
+  if (Array.isArray(filter.in)) {
+    return nonEmptyIds(filter.in);
+  }
+
+  if (typeof filter.is === 'string') {
+    return [filter.is];
+  }
+
+  return undefined;
+}
+
 export function getEntitiesOrderedByPropertyConnection(
-  { propertyId, sortDirection, dataType, spaceId, limit, after, offset, filter }: GetEntitiesOrderedByPropertyOptions,
+  {
+    propertyId,
+    sortDirection,
+    dataType,
+    spaceId,
+    spaceIds,
+    typeIds,
+    limit,
+    after,
+    offset,
+    filter,
+  }: GetEntitiesOrderedByPropertyOptions,
   signal?: AbortController['signal']
 ) {
+  const extractedSpaceId = extractSingleSpaceIdFromFilter(filter);
+  const extractedSpaceIds = extractSpaceIdsFromFilter(filter);
+  const extractedTypeId = extractSingleTypeIdFromFilter(filter);
+  const extractedTypeIds = extractTypeIdsFromFilter(filter);
+
+  const topLevelSpaceId = spaceId ?? extractedSpaceId;
+  const topLevelSpaceIds =
+    nonEmptyIds(spaceIds) ?? idsFromUuidFilter(extractedSpaceIds) ?? (topLevelSpaceId ? [topLevelSpaceId] : undefined);
+
+  const topLevelTypeIds =
+    nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
+
+  let normalizedFilter = filter;
+  if (topLevelSpaceId || topLevelSpaceIds) {
+    normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
+  }
+  if (topLevelTypeIds) {
+    normalizedFilter = removeTypeIdsFromFilter(normalizedFilter);
+  }
+
   return graphql({
     query: entitiesOrderedByPropertyConnectionDocument,
     decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
@@ -262,11 +336,13 @@ export function getEntitiesOrderedByPropertyConnection(
       propertyId,
       sortDirection,
       dataType,
-      spaceId,
+      spaceId: topLevelSpaceId,
+      spaceIds: topLevelSpaceIds,
+      typeIds: topLevelTypeIds,
       limit,
       after,
       offset,
-      filter,
+      filter: normalizedFilter,
     },
     signal,
   });
@@ -789,7 +865,7 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length) {
+  if (args.additionalSpaceIds?.length && !args.spaceId) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 
@@ -819,6 +895,66 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
 
 export function getResults(args: ResultsArgs, signal?: AbortController['signal']) {
   return Effect.map(getResultsPage(args, signal), page => page.results);
+}
+
+export type PropertiesSearchPage = {
+  results: SearchResult[];
+  offset: number;
+};
+
+/**
+ * Server-side property search backed by GraphQL `entities(filter, first, offset)`.
+ * The caller composes an `EntityFilter` with `relations.some` clauses so the
+ * dataType / renderableType / relationValueTypes narrowing happens server-side
+ * instead of by hydrating each result and filtering on the client. After the
+ * entity page lands we issue one batched `getSpaces` to attach the `SpaceEntity`
+ * objects `ResultContent` needs for the breadcrumb.
+ */
+export function searchPropertiesPage(
+  args: { filter: EntityFilter; limit: number; offset: number },
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const entities =
+      (yield* graphql({
+        query: entitiesPageQuery,
+        decoder: data => data.entities ?? [],
+        variables: { filter: args.filter, first: args.limit, offset: args.offset },
+        signal,
+      })) ?? [];
+
+    const uniqueSpaceIds = [
+      ...new Set(
+        entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
+      ),
+    ];
+
+    const spaces =
+      uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
+
+    const spaceEntityBySpaceId = new Map(spaces.map(s => [s.id, s.entity]));
+
+    const results: SearchResult[] = entities
+      .filter((e): e is NonNullable<typeof e> => Boolean(e))
+      .map(e => {
+        const sortedSpaceIds = sortSpaceIdsByRank(
+          (e.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
+        );
+        return {
+          id: e.id as string,
+          name: e.name ?? null,
+          description: e.description ?? null,
+          spaces: sortedSpaceIds
+            .map(id => spaceEntityBySpaceId.get(id))
+            .filter((s): s is NonNullable<typeof s> => s !== undefined),
+          types: (e.types ?? [])
+            .filter((t): t is NonNullable<typeof t> => Boolean(t?.id))
+            .map(t => ({ id: t.id as string, name: t.name ?? null })),
+        };
+      });
+
+    return { results, offset: args.offset };
+  });
 }
 
 export type NameValueMatch = {
@@ -945,6 +1081,7 @@ const EXCLUDED_BLOCK_TYPES = [
   SystemIds.IMAGE_TYPE,
   SystemIds.VIDEO_TYPE,
   SystemIds.VIDEO_BLOCK,
+  RANKING_BLOCK_TYPE_ID,
 ];
 
 const BLOCK_TYPE_EXCLUSION_FILTER: EntityFilter = {

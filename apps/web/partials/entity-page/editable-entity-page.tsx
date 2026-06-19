@@ -4,8 +4,14 @@ import { ContentIds, IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/l
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
+import {
+  columnPropertyIdFromRelation,
+  dedupeRelationsByColumnProperty,
+  isBlockConfigRelationType,
+} from '~/core/blocks/data/shown-column-relations';
 import {
   DATA_TYPE_PROPERTY,
   FORMAT_PROPERTY,
@@ -208,7 +214,7 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
                         <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
                           {section.label}
                         </Text>
-                        <div className={`${sectionCollapsed ? '-rotate-90' : ''} transition-transform`}>
+                        <div className={cx(sectionCollapsed && '-rotate-90', 'transition-transform')}>
                           <ChevronDownSmall color="grey-04" />
                         </div>
                       </button>
@@ -462,11 +468,47 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   // @TODO: Should just read from local property store instead of querying since
   // it should already be queried in useEditableProperties
-  const { property } = useQueryProperty({ id: propertyId });
+  const { property } = useQueryProperty({ id: propertyId, spaceId });
 
-  const relations = useRelations({
+  const relationsRaw = useRelations({
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,
   });
+
+  const legacyShownColumnRelations = useRelations({
+    selector: r =>
+      ID.equals(propertyId, SystemIds.PROPERTIES) &&
+      r.fromEntity.id === id &&
+      r.spaceId === spaceId &&
+      r.type.id === SystemIds.SHOWN_COLUMNS,
+  });
+
+  const relations = React.useMemo(() => {
+    if (!isBlockConfigRelationType(propertyId)) {
+      return relationsRaw;
+    }
+    return dedupeRelationsByColumnProperty(relationsRaw);
+  }, [propertyId, relationsRaw]);
+
+  React.useEffect(() => {
+    if (!ID.equals(propertyId, SystemIds.PROPERTIES)) return;
+
+    const candidates = [...relationsRaw, ...legacyShownColumnRelations];
+    const byTarget = new Map<string, Relation[]>();
+    for (const relation of candidates) {
+      if (relation.isDeleted) continue;
+      const key = columnPropertyIdFromRelation(relation);
+      const group = byTarget.get(key) ?? [];
+      group.push(relation);
+      byTarget.set(key, group);
+    }
+
+    for (const group of byTarget.values()) {
+      if (group.length <= 1) continue;
+      for (let i = 1; i < group.length; i++) {
+        storage.relations.delete(group[i]);
+      }
+    }
+  }, [propertyId, relationsRaw, legacyShownColumnRelations, storage]);
 
   // For IMAGE properties, get the image URL from related image entities
   const imageRelation = relations.find(r => r.renderableType === 'IMAGE');
@@ -1047,7 +1089,7 @@ function RenderedValue({
   hideActions?: boolean;
 }) {
   const { storage } = useMutate();
-  const { property: queriedProperty } = useQueryProperty({ id: propertyId });
+  const { property: queriedProperty } = useQueryProperty({ id: propertyId, spaceId });
   const property = propProperty || queriedProperty;
 
   const rawValue = useValue({

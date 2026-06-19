@@ -75,10 +75,12 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
     },
     Icon: TYPE_ICONS[key],
   }));
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 180,
     gap: 8,
+    contentElement,
   });
   const onTypeMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);
@@ -105,11 +107,14 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       <DropdownPrimitive.Trigger className="text-text" asChild>
         <button
           ref={triggerRef}
-          className={`flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem] ${open ? 'border-text' : 'border-grey-02'}`}
+          className={cx(
+            'flex items-center gap-[6px] rounded-[6px] border px-[6px] text-[1rem]',
+            open ? 'border-text' : 'border-grey-02'
+          )}
         >
           <Icon color={open ? 'text' : 'grey-04'} />
           {label}
-          <div className={`${open ? '-rotate-180' : ''} transition-transform duration-300 ease-in-out`}>
+          <div className={cx(open && '-rotate-180', 'transition-transform duration-300 ease-in-out')}>
             <ChevronDownSmall />
           </div>
         </button>
@@ -123,6 +128,7 @@ export const PropertyRenderableTypeDropdown = ({ value, onChange, dataType }: Pr
       */}
       <DropdownPrimitive.Portal>
         <DropdownPrimitive.Content
+          ref={setContentElement}
           align={align}
           side={side}
           sideOffset={8}

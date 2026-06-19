@@ -204,6 +204,65 @@ describe('Properties', () => {
       expect(result).toBeNull();
     });
 
+    describe('relation value type space scoping (GEO-2168)', () => {
+      const propertyId = 'source-property-id';
+      const PERSONAL_SPACE = 'cf0e11338b33fcd6cdb032c625c85454';
+      const COMMUNITY_SPACE = 'ffffffffffffffffffffffffffffffff';
+
+      const setupRelations = (rvtSpaceIds: string[]) => {
+        mockGetValues.mockReturnValue([]);
+        mockGetRelations.mockImplementation(({ selector }) => {
+          const relations = [
+            {
+              fromEntity: { id: propertyId, name: 'Source' },
+              type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+              toEntity: { id: SystemIds.PROPERTY, name: 'Property' },
+              spaceId: COMMUNITY_SPACE,
+            },
+            {
+              fromEntity: { id: propertyId, name: 'Source' },
+              type: { id: DATA_TYPE_PROPERTY, name: 'Data Type' },
+              toEntity: { id: 'RELATION_ENTITY_ID', name: 'RELATION' },
+              spaceId: COMMUNITY_SPACE,
+            },
+            ...rvtSpaceIds.map((spaceId, i) => ({
+              fromEntity: { id: propertyId, name: 'Source' },
+              type: { id: SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE, name: 'Relation value types' },
+              toEntity: { id: `allowed-type-${i}`, name: `Allowed type ${i}` },
+              spaceId,
+            })),
+          ];
+          return relations.filter(selector);
+        });
+      };
+
+      it('does not apply relation value types from an unrelated space', () => {
+        setupRelations([COMMUNITY_SPACE]);
+
+        const result = reconstructFromStore(propertyId, mockGetValues, mockGetRelations, PERSONAL_SPACE);
+
+        expect(result?.relationValueTypes).toEqual([]);
+      });
+
+      it("applies the viewing space's own relation value types", () => {
+        setupRelations([COMMUNITY_SPACE, PERSONAL_SPACE]);
+
+        const result = reconstructFromStore(propertyId, mockGetValues, mockGetRelations, PERSONAL_SPACE);
+
+        expect(result?.relationValueTypes).toEqual([
+          { id: 'allowed-type-1', name: 'Allowed type 1', spaceId: undefined },
+        ]);
+      });
+
+      it('keeps all relation value types when no space is given', () => {
+        setupRelations([COMMUNITY_SPACE, PERSONAL_SPACE]);
+
+        const result = reconstructFromStore(propertyId, mockGetValues, mockGetRelations);
+
+        expect(result?.relationValueTypes).toHaveLength(2);
+      });
+    });
+
     it('should handle property with renderableType relation', () => {
       const propertyId = 'test-property-id';
 

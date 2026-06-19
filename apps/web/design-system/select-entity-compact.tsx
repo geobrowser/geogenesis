@@ -5,6 +5,8 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { useState } from 'react';
 
+import cx from 'classnames';
+
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
@@ -118,10 +120,12 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
     isOpen: focused,
     preferredHeight: 320,
     gap: 12,
+    contentElement,
   });
 
   useKey('Escape', () => {
@@ -233,6 +237,7 @@ export function SelectEntityCompact({
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
+          ref={setContentElement}
           side={popoverSide}
           align={popoverAlign}
           sideOffset={4}
@@ -257,9 +262,10 @@ export function SelectEntityCompact({
                     key={`${result.id}-${index}`}
                     type="button"
                     onClick={() => handleSelectResult(result)}
-                    className={`flex w-full flex-col px-3 py-2 text-left transition-colors hover:bg-grey-01 focus:outline-hidden ${
-                      index === selectedIndex ? 'bg-grey-01' : ''
-                    }`}
+                    className={cx(
+                      'flex w-full flex-col px-3 py-2 text-left transition-colors hover:bg-grey-01 focus:outline-hidden',
+                      index === selectedIndex && 'bg-grey-01'
+                    )}
                   >
                     <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                     <div className="mt-1.5 flex items-center gap-1.5">

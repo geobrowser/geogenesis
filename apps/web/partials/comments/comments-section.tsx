@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { useState } from 'react';
 
+import cx from 'classnames';
+
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
@@ -627,7 +629,11 @@ function CommentList({
           }}
         >
           <span
-            className={`${THREAD_LEVEL_BRANCH_SEGMENT} w-px shrink-0 transition-colors ${listSpineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM}`}
+            className={cx(
+              THREAD_LEVEL_BRANCH_SEGMENT,
+              'w-px shrink-0 transition-colors',
+              listSpineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
+            )}
           />
         </button>
       )}
@@ -666,7 +672,7 @@ function CommentList({
                         d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
                         strokeWidth="1"
                         fill="none"
-                        className={`${THREAD_LEVEL_BRANCH_SEGMENT} transition-colors ${pathStroke}`}
+                        className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
                       />
                     </svg>
                   </button>
@@ -681,7 +687,7 @@ function CommentList({
                       d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
                       strokeWidth="1"
                       fill="none"
-                      className={`${THREAD_LEVEL_BRANCH_SEGMENT} transition-colors ${pathStroke}`}
+                      className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
                     />
                   </svg>
                 )
@@ -699,12 +705,20 @@ function CommentList({
                   style={{ left: '-28px', top: '16px', width: '28px', height: '12px' }}
                 >
                   <span
-                    className={`${THREAD_LEVEL_BRANCH_SEGMENT} absolute top-1/2 left-0 h-px w-[28px] -translate-y-1/2 transition-colors ${spanFill}`}
+                    className={cx(
+                      THREAD_LEVEL_BRANCH_SEGMENT,
+                      'absolute top-1/2 left-0 h-px w-[28px] -translate-y-1/2 transition-colors',
+                      spanFill
+                    )}
                   />
                 </button>
               ) : (
                 <div
-                  className={`${THREAD_LEVEL_BRANCH_SEGMENT} pointer-events-none absolute h-px transition-colors ${spanFill}`}
+                  className={cx(
+                    THREAD_LEVEL_BRANCH_SEGMENT,
+                    'pointer-events-none absolute h-px transition-colors',
+                    spanFill
+                  )}
                   style={{ left: '-28px', top: '16px', width: '28px' }}
                 />
               )}
@@ -975,7 +989,7 @@ function CommentItem({
       )}
 
       {replies.length > 0 && (
-        <div className={`mt-4${hasReplies ? 'comment-replies-slot' : ''}`} ref={repliesRef}>
+        <div className={cx('mt-4', hasReplies && 'comment-replies-slot')} ref={repliesRef}>
           <CommentList
             comments={sortedReplies}
             entityId={entityId}
@@ -999,7 +1013,7 @@ function CommentItem({
   );
 
   return (
-    <div ref={commentRef} className={`relative ${!isLast ? 'mb-6' : ''}`}>
+    <div ref={commentRef} className={cx('relative', !isLast && 'mb-6')}>
       {threadCollapsed ? (
         <div className="flex min-h-8 items-center gap-3">
           <div className="flex w-8 shrink-0 items-center justify-center">
@@ -1062,7 +1076,11 @@ function CommentItem({
               }}
             >
               <span
-                className={`${THREAD_LEVEL_BRANCH_SEGMENT} w-px shrink-0 transition-colors ${parentSpineLineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM}`}
+                className={cx(
+                  THREAD_LEVEL_BRANCH_SEGMENT,
+                  'w-px shrink-0 transition-colors',
+                  parentSpineLineLit ? THREAD_SEGMENT_HI : THREAD_SEGMENT_DIM
+                )}
               />
             </button>
           )}

@@ -4,6 +4,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValue } from '~/core/sync/use-store';
@@ -29,10 +31,12 @@ export function EntityPageInlineDescription({
   entityId,
   spaceId,
   truncate = true,
+  fallbackDescription,
 }: {
   entityId: string;
   spaceId: string;
   truncate?: boolean;
+  fallbackDescription?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
@@ -42,7 +46,7 @@ export function EntityPageInlineDescription({
       v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
-  const description = rawValue?.value ?? '';
+  const description = rawValue?.value ?? fallbackDescription ?? '';
 
   if (isEditing) {
     const onChange = (next: string) => {
@@ -172,7 +176,7 @@ function TruncatedDescription({ text }: { text: string }) {
           type="button"
           onClick={() => setExpanded(true)}
           aria-expanded={false}
-          className={`absolute right-0 bottom-0 ${buttonStyle}`}
+          className={cx('absolute right-0 bottom-0', buttonStyle)}
         >
           More
         </button>

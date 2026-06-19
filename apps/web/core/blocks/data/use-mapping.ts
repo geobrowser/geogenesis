@@ -1,5 +1,5 @@
 import { GraphUri, GraphUrl, SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 import { useQueryEntitiesAsync } from '~/core/sync/use-store';
 import { Cell, Entity, Relation, Row } from '~/core/types';
@@ -57,7 +57,6 @@ export function useMapping(
     isLoading,
     isFetched,
   } = useQuery({
-    placeholderData: keepPreviousData,
     enabled: shownPropertyRelationEntityIds.length > 0,
     initialData,
     queryKey: ['mapping-shown-properties', blockRelationId, shownPropertyRelationEntityIds],
@@ -104,7 +103,8 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
    */
-  return entities.map(({ name, id, relations, description }) => {
+  return entities.map(entity => {
+    const { name, id, relations, description, values, spaces, nameTripleSpaces } = entity;
     const newSlots = slotIds.reduce(
       (acc, slotId) => {
         const cell: Cell = {
@@ -126,6 +126,12 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
             cell.collectionId = collectionRelation.fromEntity.id;
             cell.space = collectionRelation.toSpaceId;
             cell.verified = collectionRelation.verified;
+          } else {
+            const nameValue = values?.find(
+              v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
+            );
+            cell.space =
+              nameValue?.spaceId ?? nameTripleSpaces?.[0] ?? spaces?.[0] ?? cell.space;
           }
         }
 

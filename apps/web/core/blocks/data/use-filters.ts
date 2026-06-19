@@ -71,7 +71,8 @@ export function useFilters(canEdit?: boolean) {
       if (!spacesInFilter.includes(spaceId)) spacesInFilter.push(spaceId);
       return await getSchemaFromTypeIds(
         typesInFilter.map(id => ({ id })),
-        spacesInFilter
+        spacesInFilter,
+        { includeAllTypeSpaces: true }
       );
     },
   });
@@ -85,8 +86,8 @@ export function useFilters(canEdit?: boolean) {
     const base = schemaProperties ?? [];
     return base
       .filter(p => !ID.equals(p.id, SystemIds.NAME_PROPERTY))
-      .map(p => mergeRelationValueTypesFromStore(p, store));
-  }, [schemaProperties, relationsSnapshot]);
+      .map(p => mergeRelationValueTypesFromStore(p, store, spaceId));
+  }, [schemaProperties, relationsSnapshot, spaceId]);
 
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
   // Fall back to the freshly-parsed filterState until the new resolution completes.

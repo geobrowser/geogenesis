@@ -2,6 +2,7 @@ import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
 import { Relation, Value } from '~/core/types';
+import { toHexId } from '~/core/utils/hex-id';
 import { extractValueString } from '~/core/utils/value';
 
 type Options = {
@@ -21,16 +22,16 @@ export function convertOpsToRenderables(ops: Op[], options: Options): { values: 
       for (const pv of entityValues) {
         values.push({
           id: ID.createValueId({
-            entityId: String(op.id),
-            propertyId: String(pv.property),
+            entityId: toHexId(op.id),
+            propertyId: toHexId(pv.property),
             spaceId,
           }),
           entity: {
-            id: String(op.id),
+            id: toHexId(op.id),
             name: entityName ?? null,
           },
           property: {
-            id: String(pv.property),
+            id: toHexId(pv.property),
             name: null,
             dataType: 'TEXT',
           },
@@ -44,16 +45,16 @@ export function convertOpsToRenderables(ops: Op[], options: Options): { values: 
       for (const pv of entityValues) {
         values.push({
           id: ID.createValueId({
-            entityId: String(op.id),
-            propertyId: String(pv.property),
+            entityId: toHexId(op.id),
+            propertyId: toHexId(pv.property),
             spaceId,
           }),
           entity: {
-            id: String(op.id),
+            id: toHexId(op.id),
             name: entityName ?? null,
           },
           property: {
-            id: String(pv.property),
+            id: toHexId(pv.property),
             name: null,
             dataType: 'TEXT',
           },
@@ -64,26 +65,26 @@ export function convertOpsToRenderables(ops: Op[], options: Options): { values: 
       }
     } else if (op.type === 'createRelation') {
       relations.push({
-        id: String(op.id),
-        entityId: op.entity ? String(op.entity) : ID.createEntityId(),
+        id: toHexId(op.id),
+        entityId: op.entity ? toHexId(op.entity) : ID.createEntityId(),
         spaceId,
         renderableType: 'RELATION',
         type: {
-          id: String(op.relationType),
+          id: toHexId(op.relationType),
           name: null,
         },
         fromEntity: {
-          id: String(op.from),
+          id: toHexId(op.from),
           name: entityName ?? null,
         },
         toEntity: {
-          id: String(op.to),
+          id: toHexId(op.to),
           name: null,
-          value: String(op.to),
+          value: toHexId(op.to),
         },
         position: op.position ?? undefined,
         verified: undefined,
-        toSpaceId: op.toSpace ? String(op.toSpace) : undefined,
+        toSpaceId: op.toSpace ? toHexId(op.toSpace) : undefined,
       });
     }
   }

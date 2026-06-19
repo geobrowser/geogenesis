@@ -13,6 +13,7 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
+import { isRankingComposePath } from '~/core/blocks/ranking/ranking-compose-url';
 import { ROOT_SPACE } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
@@ -33,16 +34,17 @@ import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Close } from '~/design-system/icons/close';
 import { NewTab } from '~/design-system/icons/new-tab';
-import { QuestionCircle } from '~/design-system/icons/question-circle';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
 import { Upload } from '~/design-system/icons/upload';
 import { Spacer } from '~/design-system/spacer';
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
-import { Tooltip } from '~/design-system/tooltip';
 import { Truncate } from '~/design-system/truncate';
+
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
@@ -56,6 +58,8 @@ export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
+const TERMS_AND_CONDITIONS_URL =
+  'https://docs.google.com/document/d/1clBax9yApV8uI1m36gX9pEf6jrpMEslsqxmqXW2w9I4/edit?tab=t.0';
 
 const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
@@ -68,7 +72,7 @@ function filterExactNameMatches(results: SearchResult[], name: string, allowedTy
 }
 
 export const OnboardingDialog = () => {
-  const { isOnboardingVisible } = useOnboarding();
+  const { isOnboardingVisible, hideOnboarding } = useOnboarding();
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
@@ -87,13 +91,22 @@ export const OnboardingDialog = () => {
 
   const reportError = useReportError();
 
-  // Warm the router cache for the explore destination once the onboarding
+  // Flows like "Add my ranking" record where the user was headed before being
+  const [postOnboardingRedirect, setPostOnboardingRedirect] = useAtom(postOnboardingRedirectAtom);
+  const destination = postOnboardingRedirect || ONBOARDING_DESTINATION;
+
+  const dismissOnboarding = React.useCallback(() => {
+    hideOnboarding();
+    setPostOnboardingRedirect(null);
+  }, [hideOnboarding, setPostOnboardingRedirect]);
+
+  // Warm the router cache for the destination once the onboarding
   // dialog is actually visible, so the post-creation redirect lands
   // instantly. Skipping for non-onboarding tabs avoids pointless prefetch.
   useEffect(() => {
     if (!isOnboardingVisible) return;
-    router.prefetch(ONBOARDING_DESTINATION);
-  }, [isOnboardingVisible, router]);
+    router.prefetch(destination);
+  }, [isOnboardingVisible, router, destination]);
 
   // Track whether this tab ever had the onboarding dialog visible. Used
   // to scope side-effects (step resets, redirects) to the tab that was
@@ -114,6 +127,14 @@ export const OnboardingDialog = () => {
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
+  // Ranking compose skips the intro — go straight to name/avatar entry.
+  useEffect(() => {
+    if (!isOnboardingVisible) return;
+    if (step !== 'start') return;
+    if (!isRankingComposePath(postOnboardingRedirect)) return;
+    setStep('enter-profile');
+  }, [isOnboardingVisible, step, postOnboardingRedirect, setStep]);
+
   // Fire the post-creation redirect as soon as step flips to 'completed'.
   // Gated on wasOnboardingActiveRef (not the live isOnboardingVisible)
   // because usePersonalSpaceId flips isRegistered=true at this point and
@@ -126,9 +147,19 @@ export const OnboardingDialog = () => {
       setChatOpen(true);
       setHasSeenAssistant(true);
     }
-    router.push(ONBOARDING_DESTINATION);
+    router.push(destination);
+    setPostOnboardingRedirect(null);
     setStep('done');
-  }, [step, router, setStep, hasSeenAssistant, setChatOpen, setHasSeenAssistant]);
+  }, [
+    step,
+    router,
+    setStep,
+    hasSeenAssistant,
+    setChatOpen,
+    setHasSeenAssistant,
+    destination,
+    setPostOnboardingRedirect,
+  ]);
 
   const address = smartAccount?.account.address;
 
@@ -198,7 +229,11 @@ export const OnboardingDialog = () => {
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
           <ModalCard childKey="card">
-            <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
+            <StepHeader
+              onClearEntityMatches={() => setEntityMatchCandidates([])}
+              onDismiss={dismissOnboarding}
+              postOnboardingRedirect={postOnboardingRedirect}
+            />
             {effectiveStep === 'start' && <StepStart />}
             {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
@@ -247,17 +282,31 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
   );
 };
 
-const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void }) => {
+const StepHeader = ({
+  onClearEntityMatches,
+  onDismiss,
+  postOnboardingRedirect,
+}: {
+  onClearEntityMatches: () => void;
+  onDismiss: () => void;
+  postOnboardingRedirect: string | null;
+}) => {
   const [step, setStep] = useAtom(stepAtom);
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
 
   const showBack = step === 'enter-profile' || step === 'existing-entity-match';
+  const canDismiss = step !== 'create-space' && step !== 'completed';
+  const isWorkflowStep = step === 'create-space' || step === 'completed';
 
   const handleBack = () => {
     if (step === 'existing-entity-match') {
       onClearEntityMatches();
       setStep('enter-profile');
+      return;
+    }
+    if (step === 'enter-profile' && isRankingComposePath(postOnboardingRedirect)) {
+      onDismiss();
       return;
     }
     setName('');
@@ -270,10 +319,23 @@ const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
-        {showBack && (
+        {showBack ? (
           <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
+        ) : (
+          <div className="h-1 w-4" />
         )}
       </div>
+      {isWorkflowStep ? <h3 className="text-smallTitle"></h3> : null}
+      {canDismiss ? (
+        <SquareButton
+          onClick={onDismiss}
+          icon={<Close />}
+          className="border-none! bg-transparent!"
+          aria-label="Close"
+        />
+      ) : (
+        <div className="h-1 w-4" />
+      )}
     </div>
   );
 };
@@ -291,7 +353,7 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative"
+      className="relative flex grow flex-col"
     >
       {children}
     </motion.div>
@@ -437,20 +499,17 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
       </div>
       <div className="absolute inset-x-4 bottom-4 flex">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
-          <Tooltip
-            trigger={
-              <div className="inline-flex cursor-pointer items-center gap-1 text-grey-04">
-                <Text as="h3" variant="footnote" className="text-center">
-                  Personal access controls
-                </Text>
-                <div>
-                  <QuestionCircle />
-                </div>
-              </div>
-            }
-            label="A vote isn’t required to publish edits in this space"
-            position="top"
-          />
+          <Text as="p" variant="footnote" className="text-center text-grey-04">
+            All content is public. By signing up, you agree to our{' '}
+            <a
+              href={TERMS_AND_CONDITIONS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text underline decoration-text underline-offset-2"
+            >
+              Terms &amp; Conditions
+            </a>
+          </Text>
         </div>
         <Button disabled={!validName || isSearching || isUploadingAvatar} onClick={handleContinue} className="w-full">
           {isSearching ? (

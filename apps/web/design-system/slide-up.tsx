@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, type AnimationDefinition, motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
@@ -48,7 +49,7 @@ export const SlideUp = ({
       {isOpen && (
         <motion.div
           key="slide-up-root"
-          className={`fixed inset-0 ${Z_LAYER_CLASS.slideUp}`}
+          className={cx('fixed inset-0', Z_LAYER_CLASS.slideUp)}
           initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

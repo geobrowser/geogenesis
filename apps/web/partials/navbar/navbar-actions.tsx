@@ -2,10 +2,12 @@
 
 import { useLogout } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 
@@ -69,15 +71,23 @@ export function NavbarActions() {
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
   const resetOnboarding = useResetOnboarding();
+  const { setEditable } = useEditable();
+  const queryClient = useQueryClient();
 
   const { logout } = useLogout({
     onSuccess: async () => {
       loggedOut({
         personal_space_id: personalSpaceId ?? undefined,
       });
-      console.log('disconnecting');
+      // Drop out of edit mode so the flow bar / "Review edits" popup hides — on
+      // sign-out ModeToggle unmounts and can no longer reset `editable` itself.
+      setEditable(false);
       await Cookie.onConnectionChange({ type: 'disconnect' });
       resetOnboarding();
+      // Refetch the sidebar now the wallet cookie is cleared; otherwise the
+      // refetch triggered by the wagmi disconnect reads the stale cookie and the
+      // editor's spaces stay pinned under the signed-out key by `staleTime`.
+      void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
     },
   });
 
@@ -284,7 +294,7 @@ function ModeToggle() {
           <motion.div
             animate={controls}
             variants={variants}
-            className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
+            className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
           >
             <EyeSmall />
           </motion.div>
@@ -294,9 +304,10 @@ function ModeToggle() {
           <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
             <Popover.Anchor asChild>
               <div
-                className={`z-10 transition-colors duration-300 ${
+                className={cx(
+                  'z-10 transition-colors duration-300',
                   showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-                }`}
+                )}
               >
                 <BulkEdit />
               </div>

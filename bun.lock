@@ -5,7 +5,7 @@
     "": {
       "name": "geogenesis",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.19.1",
+        "@geoprotocol/geo-sdk": "0.19.4",
       },
       "devDependencies": {
         "@graphql-codegen/client-preset": "^5.2.4",
@@ -31,7 +31,7 @@
         "@effect/opentelemetry": "^0.63.0",
         "@floating-ui/dom": "^1.7.5",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.19.1",
+        "@geoprotocol/geo-sdk": "0.19.4",
         "@geoprotocol/grc-20": "^0.4.1",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.214.0",
@@ -113,6 +113,7 @@
         "react-remove-scroll": "^2.7.2",
         "react-textarea-autosize": "^8.5.9",
         "react-use-measure": "^2.1.7",
+        "sharp": "^0.34.5",
         "viem": "^2.48.1",
         "wagmi": "^3.6.2",
       },
@@ -407,7 +408,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.19.2", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-NUoykuuJ0hivza4lINa2hyiWZyKNJd0nhoopCcuCQH8/0Bx12Wr3spKctOrYNB90Ip/k6ryyktbpQG6Efo7VRA=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.19.4", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-bt7Wz0OBKguD2yOcdh5pwVwIBqvEhVCGCVk7+VlOwCnEccpVi7E8Y0fbI0fOnvXu6W7HZWenQg52aaA2UL4Prw=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.1", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww=="],
 

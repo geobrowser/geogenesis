@@ -7,7 +7,6 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
-import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -52,7 +51,6 @@ export function TableBlockBulletedListItem({
   focusRequestKey,
   collectionTypeFilters,
 }: Props) {
-  const { storage } = useMutate();
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
@@ -132,6 +130,9 @@ export function TableBlockBulletedListItem({
     <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
+        <div className="hidden md:float-right md:ml-2 md:block md:translate-y-[5px]">
+          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        </div>
         {source.type !== 'COLLECTION' ? (
           <div
             className="relative min-w-0"
@@ -142,12 +143,12 @@ export function TableBlockBulletedListItem({
               entityId={rowEntityId}
               spaceId={currentSpaceId}
               href={href}
-              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9')}
+              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9 md:pr-0')}
             >
               {name}
             </Link>
             {!isPlaceholder && isNameHovered && (
-              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center">
+              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={rowEntityId}
                   entitySpaceId={nameCell?.space ?? currentSpaceId}
@@ -177,7 +178,9 @@ export function TableBlockBulletedListItem({
           </CollectionMetadata>
         )}
       </div>
-      <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      <div className="flex shrink-0 items-center md:hidden">
+        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      </div>
     </div>
   );
 }

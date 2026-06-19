@@ -11,10 +11,14 @@ export const Z_LAYERS = {
   reviewOnboardingTip: 10000,
 
   statusBar: 10001,
+  // Strictly above statusBar: <StatusBar /> renders after <Toast /> in
+  // entry.tsx, so an equal z-index would stack the status bar over toasts.
+  toast: 10002,
 } as const;
 
 export const Z_LAYER_CLASS = {
   flowBar: 'z-1000',
   slideUp: 'z-slide-up',
   statusBar: 'z-10001',
+  toast: 'z-toast',
 } as const;

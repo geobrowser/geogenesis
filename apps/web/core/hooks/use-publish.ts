@@ -16,7 +16,7 @@ import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
-import { describeError } from '../utils/error-diagnostics';
+import { toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -143,7 +143,8 @@ export function usePublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: describeError(result.left) });
+        const { message, retry } = toUserFacingError(result.left);
+        dispatch({ type: 'ERROR', payload: message, retry });
         return;
       }
 
@@ -244,7 +245,8 @@ export function useBulkPublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: describeError(result.left) });
+        const { message, retry } = toUserFacingError(result.left);
+        dispatch({ type: 'ERROR', payload: message, retry });
         return;
       }
 
