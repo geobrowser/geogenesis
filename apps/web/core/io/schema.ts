@@ -84,7 +84,9 @@ export const Relation = Schema.Struct({
   toEntity: Schema.Struct({
     id: HexId,
     name: Schema.NullOr(Schema.String),
-    // Only `id` is consumed (v2_getRenderableEntityType); `name` is not fetched.
+    // Each type is decoded as `{ id }` only: `v2_getRenderableEntityType`
+    // consumes the type ids, so the per-type `name` is intentionally not
+    // fetched. (`toEntity.name` above *is* fetched and rendered.)
     types: Schema.Array(Schema.Struct({ id: HexId })),
     valuesList: Schema.Array(
       Schema.Struct({
