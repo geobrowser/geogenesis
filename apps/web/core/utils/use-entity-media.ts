@@ -1,10 +1,10 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { getRelationsByFromEntityId } from '~/core/io/queries';
