@@ -64,18 +64,37 @@ import { restFetch } from './rest';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
+// `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
+export const ENTITY_ID_BATCH_SIZE = 50;
+
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
 // automatically...
 //
 // We also want to merge local data as much as possible
 
-export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
+function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entitiesBatchQuery,
     decoder: data => data.entities?.map(EntityDecoder.decode).filter((e): e is Entity => e !== null) ?? [],
     variables: { filter: { id: { in: entityIds } }, spaceId },
     signal,
+  });
+}
+
+export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
+  if (entityIds.length === 0) return Effect.succeed([]);
+  if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
+
+  return Effect.gen(function* () {
+    const entities: Entity[] = [];
+
+    for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const batch = yield* getBatchEntitiesPage(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE), spaceId, signal);
+      entities.push(...batch);
+    }
+
+    return entities;
   });
 }
 

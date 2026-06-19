@@ -23,6 +23,47 @@ export function describeError(error: unknown): string {
   return String(error ?? 'Unknown error');
 }
 
+// Next.js/webpack code-split failures show up under a few different messages
+// depending on browser. `error loading dynamically imported module` is the
+// native ESM variant; the rest are webpack's.
+const CHUNK_ERROR_RE =
+  /ChunkLoadError|Loading chunk|Failed to load chunk|error loading dynamically imported module|Importing a module script failed/i;
+
+/**
+ * A code-split chunk failed to download. The loaded app is stale (a deploy
+ * usually landed while the tab was open) or the network dropped the request.
+ * Retrying the same dynamic import won't help — only a full reload fetches the
+ * new chunk manifest. Walks the cause chain since the chunk error is often
+ * wrapped (e.g. inside a `TransactionWriteFailedError`).
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (current.name === 'ChunkLoadError' || CHUNK_ERROR_RE.test(current.message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
+export const RELOAD_REQUIRED_MESSAGE =
+  'A new version of Geo was released or the connection dropped while loading. Please reload the page and try again.';
+
+/**
+ * Turn a caught error into the message + optional retry action for the global
+ * toast. Chunk-load failures get a reload prompt instead of the wrapper's
+ * label (which would otherwise blame e.g. IPFS for what is really a stale
+ * bundle); everything else falls through to the unwrapped cause chain.
+ */
+export function toUserFacingError(error: unknown, prefix = ''): { message: string; retry?: () => void } {
+  if (isChunkLoadError(error)) {
+    return {
+      message: RELOAD_REQUIRED_MESSAGE,
+      retry: typeof window !== 'undefined' ? () => window.location.reload() : undefined,
+    };
+  }
+  return { message: `${prefix}${describeError(error)}` };
+}
+
 /**
  * Diagnostics gathered when the user copies an error from the global toast.
  * Designed to be safe to share with the dev team — no wallet keys or

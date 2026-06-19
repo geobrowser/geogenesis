@@ -243,6 +243,38 @@ describe('resolvePersonalRankingShareImpl', () => {
     expect(resolved?.rankingEndDate).toBe('');
   });
 
+  it('resolves the full ordered list with display data to seed first paint', async () => {
+    const resolved = await resolvePersonalRankingShareImpl(
+      RANK_ID,
+      personalDeps({
+        fetchEntities: async ids =>
+          ids.map(id => ({
+            id,
+            name: id === 'ent-a' ? 'Alpha' : 'Beta',
+            description: id === 'ent-a' ? 'first' : null,
+            relations: [],
+            values: [],
+          })) as unknown as Entity[],
+      })
+    );
+
+    expect(resolved?.orderedEntityIds).toEqual(['ent-a', 'ent-b']);
+    expect(resolved?.entries).toEqual([
+      { entityId: 'ent-a', name: 'Alpha', description: 'first', image: null },
+      { entityId: 'ent-b', name: 'Beta', description: null, image: null },
+    ]);
+  });
+
+  it('falls back to "Untitled" entries when entity details are missing', async () => {
+    const resolved = await resolvePersonalRankingShareImpl(RANK_ID, personalDeps({ fetchEntities: async () => [] }));
+
+    expect(resolved?.orderedEntityIds).toEqual(['ent-a', 'ent-b']);
+    expect(resolved?.entries).toEqual([
+      { entityId: 'ent-a', name: 'Untitled', description: null, image: null },
+      { entityId: 'ent-b', name: 'Untitled', description: null, image: null },
+    ]);
+  });
+
   it('returns null for an invalid id', async () => {
     const resolved = await resolvePersonalRankingShareImpl('not-a-uuid', personalDeps());
     expect(resolved).toBeNull();

@@ -61,6 +61,17 @@ export type InitialGlobalRanking = {
   entries: RankingEntryDisplay[];
 };
 
+/**
+ * Server-resolved shared submission (a personal `/r/{rankEntityId}` link). Seeds
+ * the my/shared ranking list so the page paints every row with real names on
+ * first paint instead of cascading loading -> empty -> "Untitled" -> resolved.
+ */
+export type InitialSharedRanking = {
+  rankingName: string;
+  orderedEntityIds: string[];
+  entries: RankingEntryDisplay[];
+};
+
 type UseRankingBlockStateParams = {
   spaceId: string;
   rankingStartDate?: string;
@@ -71,7 +82,14 @@ type UseRankingBlockStateParams = {
   sharedOgVersion?: string;
   /** Server-resolved full ranking, seeds first paint so rows don't flash placeholders. */
   initialGlobalRanking?: InitialGlobalRanking;
+  /** Server-resolved shared submission, seeds the my/shared ranking on first paint. */
+  initialSharedRanking?: InitialSharedRanking;
 };
+
+// Stable empty fallbacks so absent SSR seeds don't produce a fresh `[]` each
+// render, which would defeat the `useMemo`s that depend on these values.
+const EMPTY_ENTITY_IDS: string[] = [];
+const EMPTY_RANKING_ENTRIES: RankingEntryDisplay[] = [];
 
 export function useRankingBlockState({
   spaceId,
@@ -82,6 +100,7 @@ export function useRankingBlockState({
   sharedAuthorSpaceId = '',
   sharedOgVersion = '',
   initialGlobalRanking,
+  initialSharedRanking,
 }: UseRankingBlockStateParams) {
   const isMobile = useIsMobileLayout();
   const router = useRouter();
@@ -108,7 +127,11 @@ export function useRankingBlockState({
     endDate: rankingEndDate,
   });
 
-  const displayName = name?.trim() || initialGlobalRanking?.rankingName?.trim() || 'Untitled ranking';
+  const displayName =
+    name?.trim() ||
+    initialGlobalRanking?.rankingName?.trim() ||
+    initialSharedRanking?.rankingName?.trim() ||
+    'Untitled ranking';
 
   const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
     useRankingSubmissions(entityId, spaceId, displayName);
@@ -129,8 +152,10 @@ export function useRankingBlockState({
 
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
 
-  const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? [];
-  const initialGlobalEntries = initialGlobalRanking?.entries ?? [];
+  const initialOrderedIds = initialGlobalRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
+  const initialGlobalEntries = initialGlobalRanking?.entries ?? EMPTY_RANKING_ENTRIES;
+  const initialSharedOrderedIds = initialSharedRanking?.orderedEntityIds ?? EMPTY_ENTITY_IDS;
+  const initialSharedEntries = initialSharedRanking?.entries ?? EMPTY_RANKING_ENTRIES;
 
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
@@ -268,8 +293,10 @@ export function useRankingBlockState({
   const myDisplayEntityIds = React.useMemo(() => {
     if (myOrderIds.length > 0) return myOrderIds;
     if (hasSavedDraft) return myOrderIds;
-    return displayedSubmission?.orderedEntityIds ?? [];
-  }, [displayedSubmission, hasSavedDraft, myOrderIds]);
+    // Fall back to the server-resolved shared order until the live submission
+    // loads client-side, so the shared view doesn't flash an empty ranking.
+    return displayedSubmission?.orderedEntityIds ?? initialSharedOrderedIds;
+  }, [displayedSubmission, hasSavedDraft, myOrderIds, initialSharedOrderedIds]);
 
   const myRankingIdsKey = myDisplayEntityIds.join('|');
 
@@ -375,6 +402,12 @@ export function useRankingBlockState({
   const myRankingEntryByEntityId = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
+    // Seed from the server-resolved shared ranking; live `rows`/`myEntries`
+    // below override with the same data once they hydrate.
+    for (const entry of initialSharedEntries) {
+      map.set(entry.entityId, entry);
+    }
+
     for (const row of rows) {
       if (!row.entityId || row.placeholder) continue;
       map.set(row.entityId, {
@@ -396,7 +429,7 @@ export function useRankingBlockState({
     }
 
     return map;
-  }, [myEntries, rows]);
+  }, [myEntries, rows, initialSharedEntries]);
 
   const resolveEntitySpaceId = React.useCallback(
     (targetEntityId: string) => {
