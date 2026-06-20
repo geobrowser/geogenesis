@@ -173,6 +173,7 @@ function RankingComposePickRow({
   entityId,
   onAdd,
   isInMyRanking,
+  pending = false,
 }: {
   rank?: number;
   name: string;
@@ -182,6 +183,7 @@ function RankingComposePickRow({
   entityId: string;
   onAdd: () => void;
   isInMyRanking: boolean;
+  pending?: boolean;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -210,6 +212,7 @@ function RankingComposePickRow({
         rank={rank}
         rankStyle="leading"
         linkToEntity={false}
+        pending={pending}
         entry={{
           entityId,
           name,
@@ -252,6 +255,7 @@ type Props = {
   canCreateNew: boolean;
   isAwaitingMembership: boolean;
   onRecheckMembership: () => void;
+  pendingEntityIds: ReadonlySet<string>;
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
@@ -286,6 +290,7 @@ export function RankingComposeGlobalRanking({
   onCreateNew,
   canCreateNew,
   isAwaitingMembership,
+  pendingEntityIds,
   onRecheckMembership,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
@@ -430,6 +435,7 @@ export function RankingComposeGlobalRanking({
         imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
+        pending={pendingEntityIds.has(id)}
       />
     );
 
@@ -467,9 +473,7 @@ export function RankingComposeGlobalRanking({
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
       {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}

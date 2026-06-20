@@ -2,14 +2,17 @@
 
 import * as React from 'react';
 
-import { useAtom, useSetAtom, useStore } from 'jotai';
+import { useQueryClient } from '@tanstack/react-query';
+import { useAtom, useSetAtom,  useStore } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { filterLocalChangesToEntitySubgraph } from '~/core/blocks/ranking/ranking-compose-create-entity';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { usePublish } from '~/core/hooks/use-publish';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { Entities } from '~/core/utils/entity';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
@@ -28,6 +31,9 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
   const [flow, setFlow] = useAtom(rankingComposeCreateEntityAtom);
   const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
   const { store } = useSyncEngine();
+  const { makeProposal } = usePublish();
+  const queryClient = useQueryClient();
+  const [isPublishing, setIsPublishing] = React.useState(false);
 
   const panelOverlayRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -80,12 +86,39 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
   }, [discardDraft, handleClose]);
 
   const handleFinish = React.useCallback(() => {
-    if (!flow) return;
+    if (!flow || isPublishing) return;
 
     jotaiStore.get(entitySidePanelPersistEditorAtom)?.();
-    handleClose();
-    onFinished(flow.entityId);
-  }, [flow, handleClose, jotaiStore, onFinished]);
+
+    const entityId = flow.entityId;
+    const publishSpaceId = flow.publishSpaceId;
+    const { values, relations } = filterLocalChangesToEntitySubgraph(entityId, localValues, localRelations);
+
+    if (values.length === 0 && relations.length === 0) {
+      handleClose();
+      onFinished(entityId);
+      return;
+    }
+
+    const entityName = Entities.name(values)?.trim();
+
+    setIsPublishing(true);
+    void makeProposal({
+      values,
+      relations,
+      spaceId: publishSpaceId,
+      name: entityName || 'New ranking entry',
+      onSuccess: () => {
+        setIsPublishing(false);
+        void queryClient.invalidateQueries({ queryKey: ['ranking-pending-proposal-data'] });
+        handleClose();
+        onFinished(entityId);
+      },
+      onError: () => {
+        setIsPublishing(false);
+      },
+    });
+  }, [flow, isPublishing, localValues, localRelations, makeProposal, queryClient, jotaiStore, handleClose, onFinished]);
 
   React.useLayoutEffect(() => {
     if (!flow) return;
@@ -123,6 +156,7 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
           onPublishSpaceIdChange={nextId => setFlow(prev => (prev ? { ...prev, publishSpaceId: nextId } : null))}
           onCancel={handleCancel}
           onFinish={handleFinish}
+          isFinishing={isPublishing}
           publishSpaceLocked
         />
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

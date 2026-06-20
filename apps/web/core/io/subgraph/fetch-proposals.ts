@@ -1,6 +1,7 @@
 import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { ID } from '~/core/id';
 import { Profile } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -22,6 +23,7 @@ export interface FetchProposalsOptions {
   signal?: AbortController['signal'];
   page?: number;
   first?: number;
+  proposedBy?: string;
   actionTypes?: string[];
   excludeActionTypes?: string[];
 }
@@ -65,6 +67,7 @@ export async function fetchProposals({
   signal,
   page = 0,
   first = 5,
+  proposedBy,
   actionTypes,
   excludeActionTypes,
 }: FetchProposalsOptions): Promise<ProposalWithoutVoters[]> {
@@ -141,6 +144,12 @@ export async function fetchProposals({
     if (!cursor) {
       return [];
     }
+  }
+
+  // Filter to a single creator client-side
+  if (proposedBy) {
+    const target = ID.uuidToHex(proposedBy);
+    proposals = proposals.filter(p => ID.uuidToHex(p.proposedBy) === target);
   }
 
   // Fetch profiles for creators
