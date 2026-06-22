@@ -132,7 +132,7 @@ async function uploadPersonalVariant({
     return { key, imageUrl, uploaded: false };
   }
 
-  const image = generateRankingOgImageResponse(data, variant);
+  const image = await generateRankingOgImageResponse(data, variant);
   const body = await imageResponseBytes(image);
   const uploaded = await putRankingOgObject(config, {
     rankEntityId,
@@ -163,7 +163,7 @@ async function uploadGlobalVariant({
     return { key, imageUrl, uploaded: false };
   }
 
-  const image = generateRankingOgImageResponse(data, variant);
+  const image = await generateRankingOgImageResponse(data, variant);
   const body = await imageResponseBytes(image);
   const uploaded = await putGlobalRankingOgObject(config, {
     blockEntityId,

@@ -182,10 +182,13 @@ function getNetValues(localValues: Value[]): Value[] {
  * can bake local edits into syncedEntities during re-sync.
  */
 function getNetRelations(localRelations: Relation[]): Relation[] {
+  // Semantic identity of a relation. toSpaceId is included so that changing only
+  // the "to space" of a relation counts as a change in the flowbar.
+  const relKey = (rel: Relation) =>
+    `${rel.fromEntity.id}:${rel.type.id}:${rel.toEntity.id}:${rel.spaceId}:${rel.toSpaceId ?? ''}`;
+
   // Build a set of semantic keys for active local relations
-  const activeKeys = new Set(
-    localRelations.filter(r => !r.isDeleted).map(r => `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`)
-  );
+  const activeKeys = new Set(localRelations.filter(r => !r.isDeleted).map(relKey));
 
   return localRelations.filter(r => {
     const remoteEntity = syncedEntities.get(r.fromEntity.id);
@@ -197,24 +200,20 @@ function getNetRelations(localRelations: Relation[]): Relation[] {
       const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
       if (!remoteRelation) return false;
 
-      // If an active local relation restores the same (fromEntity, type, toEntity, space)
+      // If an active local relation restores the same (fromEntity, type, toEntity, space, toSpace)
       // as the deleted remote relation, both cancel out — net-zero
-      const remoteKey = `${remoteRelation.fromEntity.id}:${remoteRelation.type.id}:${remoteRelation.toEntity.id}:${remoteRelation.spaceId}`;
-      if (activeKeys.has(remoteKey)) return false;
+      if (activeKeys.has(relKey(remoteRelation))) return false;
 
       return true;
     }
 
     // Active relation — skip if semantically identical to a remote relation.
     // Position is part of identity here: a pure reorder keeps the same
-    // (from, type, to, space) but must still count as a change.
+    // (from, type, to, space, toSpace) but must still count as a change.
     if (remoteEntity) {
-      const key = `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId}`;
+      const key = relKey(r);
       const matchesRemote = remoteEntity.relations.some(
-        remote =>
-          !remote.isLocal &&
-          `${remote.fromEntity.id}:${remote.type.id}:${remote.toEntity.id}:${remote.spaceId}` === key &&
-          (remote.position ?? null) === (r.position ?? null)
+        remote => !remote.isLocal && relKey(remote) === key && (remote.position ?? null) === (r.position ?? null)
       );
       if (matchesRemote) return false;
     }

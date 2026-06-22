@@ -22,7 +22,7 @@ import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
@@ -360,8 +360,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Publish failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to publish comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return null;
         }
@@ -455,8 +455,8 @@ export function useCreateComment(targetEntityId: string) {
         return commentEntityId;
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to create comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return null;
       } finally {
@@ -585,8 +585,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Edit failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to edit comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return false;
         }
@@ -600,8 +600,8 @@ export function useCreateComment(targetEntityId: string) {
         return true;
       } catch (err) {
         console.error('[useCreateComment] Error editing comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to edit comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return false;
       } finally {
