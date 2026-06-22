@@ -6,10 +6,6 @@ import { getStaleProposalVoteToastMessage } from './use-vote';
 // applied via a duplicate request) reverts on-chain. That must route to a toast
 // + refresh, not the retry error modal that re-fires the same reverting tx.
 // Genuine failures, and any decoded-but-not-stale revert, must still surface.
-//
-// Note: the Execute button intentionally has no equivalent diversion — an
-// execute revert always surfaces its decoded reason (see use-vote.ts), because
-// CanNotExecute can mean "needs more votes" rather than "already executed".
 describe('getStaleProposalVoteToastMessage', () => {
   const canNotVote = new Error('Vote failed', { cause: new Error('CanNotVote()') });
   const canNotVoteBySelector = new Error('Vote failed', { cause: new Error('reverted: 0x543ffef7') });

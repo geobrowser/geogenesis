@@ -54,12 +54,10 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
       return;
     }
 
-    // Surface the actual on-chain revert (decoded to its named selector + hint,
-    // with copy + retry) so the user — and any copied bug report — sees *why* it
-    // failed. We used to guess that a revert meant "already applied" and silently
-    // toast + refresh, but that guess is wrong for the common case (a passed
-    // editor proposal the chain still won't execute, e.g. CanNotExecute): it hid
-    // the real reason and looped on a refresh that never changed anything.
+    // Surface the decoded on-chain revert (named selector + hint, with copy +
+    // retry) so the user — and any copied report — sees why it failed. Don't
+    // assume a revert means "already applied"; for execute it usually doesn't
+    // (CanNotExecute = not enough votes, or the voting period hasn't elapsed).
     const message = error ? describeGovernanceError(error) : 'An unknown error occurred';
     reportError(`Execute failed: ${message}`, () => {
       reset();

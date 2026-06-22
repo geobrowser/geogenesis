@@ -54,7 +54,7 @@ export function isChunkLoadError(error: unknown): boolean {
 export function isUserRejection(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current instanceof Error && depth < 10; depth++) {
-    if (current.message.includes('User rejected the request') || current.name === 'UserRejectedRequestError') {
+    if (current.name === 'UserRejectedRequestError' || /user rejected/i.test(current.message)) {
       return true;
     }
     current = current.cause;
