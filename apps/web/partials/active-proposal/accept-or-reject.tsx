@@ -134,7 +134,7 @@ export function AcceptOrReject({
     }
 
     if (canExecute && smartAccount) {
-      return <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
+      return <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     }
 
     if (canExecute) {

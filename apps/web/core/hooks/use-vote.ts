@@ -16,19 +16,23 @@ import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /**
- * Some governance reverts mean the UI showed a stale proposal the chain has
- * already moved past — the render-time stale-request filter can't catch these
- * when the indexer lags. We divert them to a toast + refresh instead of the
- * retry error modal, which would loop forever (a stale write reverts the same
- * way every time). Everything else surfaces as a named error (see
+ * A vote can fail because the UI showed a stale proposal the chain has already
+ * moved past. We divert those to a toast + refresh instead of the retry error
+ * modal, which would loop forever (a stale write reverts the same way every
+ * time). Everything else surfaces as a named error (see
  * {@link decodeGovernanceRevert}) so the report tells us the real cause.
  *
  * Staleness policy, by revert:
- * - CanNotVote / CanNotExecute: the write was rejected upfront (already
- *   voted/executed, closed, not eligible). No action runs, so it's always stale.
+ * - CanNotVote: the vote was rejected upfront (already voted, closed, not
+ *   eligible). No action runs, so it's always stale.
  * - ActionReverted: an inline action reverted. For membership proposals this is
  *   almost always "already added via a duplicate request"; for other types it
  *   can be a genuine failure, so only membership proposals treat it as stale.
+ *
+ * The explicit Execute button deliberately does NOT use this: an execute revert
+ * surfaces its decoded reason directly, because CanNotExecute often means "needs
+ * more votes to pass" or "voting period not elapsed", not "already executed" —
+ * toasting "already executed" + refreshing would mislead and loop.
  */
 function isMembershipProposalType(type: ProposalType): boolean {
   return type === 'ADD_MEMBER' || type === 'REMOVE_MEMBER' || type === 'ADD_EDITOR' || type === 'REMOVE_EDITOR';
@@ -39,9 +43,6 @@ const VOTE_NOT_ACCEPTED_MESSAGE =
 
 const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
   'This change could not be applied — it has likely already been made. Refreshing to show the latest state.';
-
-const EXECUTE_NOT_POSSIBLE_MESSAGE =
-  'This proposal could not be executed — it may have already been executed. Refreshing to show the latest state.';
 
 /**
  * Toast message for a vote error caused by a stale proposal, or null when the
@@ -54,25 +55,6 @@ export function getStaleProposalVoteToastMessage(error: unknown, proposalType: P
     return VOTE_NOT_ACCEPTED_MESSAGE;
   }
   if (revert?.name === 'ActionReverted' && isMembershipProposalType(proposalType)) {
-    return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;
-  }
-  return null;
-}
-
-/**
- * Same as {@link getStaleProposalVoteToastMessage} for the explicit Execute
- * button. proposalType is optional because not every Execute call site knows it;
- * the membership-only ActionReverted case is skipped when it's undefined.
- */
-export function getStaleProposalExecuteToastMessage(
-  error: unknown,
-  proposalType: ProposalType | undefined
-): string | null {
-  const revert = decodeGovernanceRevert(error);
-  if (revert?.name === 'CanNotExecute') {
-    return EXECUTE_NOT_POSSIBLE_MESSAGE;
-  }
-  if (revert?.name === 'ActionReverted' && proposalType && isMembershipProposalType(proposalType)) {
     return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;
   }
   return null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
+import { ProposalStatus } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
@@ -19,19 +19,9 @@ interface Props {
   /** Pass `spaceId` + `proposalId` to offer an Execute button (eligible users) in place of the "Pending execution" label. */
   spaceId?: string;
   proposalId?: string;
-  /** Optional; only enables membership-specific stale-execution messaging. */
-  proposalType?: ProposalType;
 }
 
-export function GovernanceStatusChip({
-  status,
-  endTime,
-  canExecute,
-  viewerVote,
-  spaceId,
-  proposalId,
-  proposalType,
-}: Props) {
+export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, spaceId, proposalId }: Props) {
   const { smartAccount } = useSmartAccount();
   switch (status) {
     case 'ACCEPTED': {
@@ -75,13 +65,7 @@ export function GovernanceStatusChip({
         if (smartAccount && spaceId && proposalId) {
           return (
             <div className="relative z-10">
-              <Execute
-                spaceId={spaceId}
-                proposalId={proposalId}
-                proposalType={proposalType}
-                variant="small"
-                fallback={pendingExecutionLabel}
-              />
+              <Execute spaceId={spaceId} proposalId={proposalId} variant="small" fallback={pendingExecutionLabel} />
             </div>
           );
         }

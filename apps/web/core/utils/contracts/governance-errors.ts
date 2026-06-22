@@ -18,7 +18,7 @@ const REVERTS: readonly GovernanceRevert[] = [
   {
     selector: '0xdf322356',
     name: 'CanNotExecute',
-    hint: 'The proposal is not executable — it was already executed, or it never passed on-chain.',
+    hint: "The chain won't execute this proposal — it may not have enough votes to meet quorum/threshold yet, its voting period may not have fully elapsed, or it was already executed.",
   },
   {
     selector: '0x543ffef7',
@@ -28,7 +28,7 @@ const REVERTS: readonly GovernanceRevert[] = [
   {
     selector: '0x24c05f9a',
     name: 'ActionReverted',
-    hint: 'A proposal action reverted on execution — often the change was already applied (e.g. the editor was already added).',
+    hint: "A proposal action reverted during execution — a precondition wasn't met (for example the change may already be applied, e.g. the editor was already added).",
   },
   {
     selector: '0x0992f7ad',

@@ -209,7 +209,6 @@ export async function GovernanceProposalsList({
                     canExecute={p.canExecute}
                     spaceId={spaceId}
                     proposalId={p.id}
-                    proposalType={p.type}
                   />
                 </div>
               </div>
