@@ -19,9 +19,11 @@ interface Props {
   spaceId: string;
   proposalType?: ProposalType;
   variant?: 'default' | 'small';
+  /** Rendered instead of nothing while the simulation is checking or when the user can't execute. */
+  fallback?: React.ReactNode;
 }
 
-export function Execute({ proposalId, spaceId, proposalType, variant = 'default' }: Props) {
+export function Execute({ proposalId, spaceId, proposalType, variant = 'default', fallback = null }: Props) {
   const { execute, status, error, reset } = useExecuteProposal({
     spaceId,
     proposalId,
@@ -78,11 +80,11 @@ export function Execute({ proposalId, spaceId, proposalType, variant = 'default'
     );
   }
 
-  // Stay invisible until the simulation confirms execution would succeed
-  // (`undefined` = still checking, `false` = would revert) — unless the user is
-  // already mid-execute, in which case the error effect above handles it.
+  // Show the fallback (default: nothing) until the simulation confirms execution
+  // would succeed (`undefined` = still checking, `false` = would revert) — unless
+  // the user is already mid-execute, in which case the error effect handles it.
   if (canExecute !== true && status === 'idle') {
-    return null;
+    return <>{fallback}</>;
   }
 
   const ButtonComponent = variant === 'small' ? SmallButton : Button;

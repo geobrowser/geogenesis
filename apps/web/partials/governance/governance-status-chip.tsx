@@ -1,7 +1,12 @@
-import { ProposalStatus } from '~/core/io/substream-schema';
+'use client';
+
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+
+import { Execute } from '~/partials/active-proposal/execute';
 
 import { CheckSuccess } from './check-success';
 
@@ -11,9 +16,23 @@ interface Props {
   canExecute: boolean;
   /** When set while voting is still open, do not repeat the same countdown as the card footer. */
   viewerVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
+  /** Pass `spaceId` + `proposalId` to offer an Execute button (eligible users) in place of the "Pending execution" label. */
+  spaceId?: string;
+  proposalId?: string;
+  /** Optional; only enables membership-specific stale-execution messaging. */
+  proposalType?: ProposalType;
 }
 
-export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }: Props) {
+export function GovernanceStatusChip({
+  status,
+  endTime,
+  canExecute,
+  viewerVote,
+  spaceId,
+  proposalId,
+  proposalType,
+}: Props) {
+  const { smartAccount } = useSmartAccount();
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -44,9 +63,30 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }
       }
 
       if (isVotingEnded) {
-        return (
+        const pendingExecutionLabel = (
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>
         );
+
+        // Offer the Execute button so curators can unstick a passed proposal from
+        // the list instead of only from the proposal detail page. Execute()
+        // self-gates on a registered personal space + an on-chain simulation,
+        // falling back to the label while it checks or when the user can't
+        // execute — so the status is never blank.
+        if (smartAccount && spaceId && proposalId) {
+          return (
+            <div className="relative z-10">
+              <Execute
+                spaceId={spaceId}
+                proposalId={proposalId}
+                proposalType={proposalType}
+                variant="small"
+                fallback={pendingExecutionLabel}
+              />
+            </div>
+          );
+        }
+
+        return pendingExecutionLabel;
       }
 
       if (viewerVote) {
