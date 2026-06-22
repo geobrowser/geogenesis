@@ -5,11 +5,9 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useCanExecuteProposal, useExecuteProposal } from '~/core/hooks/use-execute-proposal';
-import { useToast } from '~/core/hooks/use-toast';
-import { getStaleProposalExecuteToastMessage } from '~/core/hooks/use-vote';
-import { ProposalType } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
+import { isUserRejection } from '~/core/utils/error-diagnostics';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
@@ -17,13 +15,12 @@ import { Pending } from '~/design-system/pending';
 interface Props {
   proposalId: string;
   spaceId: string;
-  proposalType?: ProposalType;
   variant?: 'default' | 'small';
   /** Rendered instead of nothing while the simulation is checking or when the user can't execute. */
   fallback?: React.ReactNode;
 }
 
-export function Execute({ proposalId, spaceId, proposalType, variant = 'default', fallback = null }: Props) {
+export function Execute({ proposalId, spaceId, variant = 'default', fallback = null }: Props) {
   const { execute, status, error, reset } = useExecuteProposal({
     spaceId,
     proposalId,
@@ -31,7 +28,6 @@ export function Execute({ proposalId, spaceId, proposalType, variant = 'default'
   const canExecute = useCanExecuteProposal({ spaceId, proposalId });
   const reportError = useReportError();
   const router = useRouter();
-  const [, setToast] = useToast();
 
   const isPending = status === 'pending';
   const isSuccess = status === 'success';
@@ -50,27 +46,24 @@ export function Execute({ proposalId, spaceId, proposalType, variant = 'default'
   React.useEffect(() => {
     if (status !== 'error') return;
 
-    // A stale membership/editor request reverts because the change was already
-    // applied via a duplicate request. Retrying would only revert again, so
-    // toast + refresh (which re-runs the granted-request filter and drops the
-    // proposal) instead of raising the looping retry error modal.
-    const staleMessage = getStaleProposalExecuteToastMessage(error, proposalType);
-    if (staleMessage) {
+    // A wallet cancel isn't a failure to investigate — reset quietly instead of
+    // firing the "Something went wrong" report, which would also bury real
+    // execute reverts in the dev team's error reports. Matches the publish flow.
+    if (isUserRejection(error)) {
       reset();
-      setToast(<span>{staleMessage}</span>);
-      router.refresh();
       return;
     }
 
-    // Surface other execution failures via the global error modal (with copy +
-    // retry) — decoded to the named on-chain revert so a copied report tells us
-    // the exact cause. After dismiss the user lands back on the Execute button.
+    // Surface the decoded on-chain revert (named selector + hint, with copy +
+    // retry) so the user — and any copied report — sees why it failed. Don't
+    // assume a revert means "already applied"; for execute it usually doesn't
+    // (CanNotExecute = not enough votes, or the voting period hasn't elapsed).
     const message = error ? describeGovernanceError(error) : 'An unknown error occurred';
     reportError(`Execute failed: ${message}`, () => {
       reset();
       execute();
     });
-  }, [status, error, proposalType, reportError, reset, execute, router, setToast]);
+  }, [status, error, reportError, reset, execute]);
 
   if (isSuccess) {
     return (
