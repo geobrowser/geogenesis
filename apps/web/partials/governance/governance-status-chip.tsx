@@ -1,7 +1,12 @@
-import { ProposalStatus } from '~/core/io/substream-schema';
+'use client';
+
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+
+import { Execute } from '~/partials/active-proposal/execute';
 
 import { CheckSuccess } from './check-success';
 
@@ -11,9 +16,22 @@ interface Props {
   canExecute: boolean;
   /** When set while voting is still open, do not repeat the same countdown as the card footer. */
   viewerVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
+  /** Pass all three to offer an Execute button (smart-account users) in place of the "Pending execution" label. */
+  spaceId?: string;
+  proposalId?: string;
+  proposalType?: ProposalType;
 }
 
-export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }: Props) {
+export function GovernanceStatusChip({
+  status,
+  endTime,
+  canExecute,
+  viewerVote,
+  spaceId,
+  proposalId,
+  proposalType,
+}: Props) {
+  const { smartAccount } = useSmartAccount();
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -44,6 +62,18 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }
       }
 
       if (isVotingEnded) {
+        // Anyone with a smart account can execute a passed proposal — surface the
+        // button here so curators can unstick it from the list instead of only
+        // from the proposal detail page. Execute() self-gates (on-chain sim) and
+        // returns null until it confirms execution would succeed.
+        if (smartAccount && spaceId && proposalId) {
+          return (
+            <div className="relative z-10">
+              <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />
+            </div>
+          );
+        }
+
         return (
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>
         );
