@@ -21,8 +21,10 @@ import {
 } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
+import { getPendingProposerSpaceIds } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
   buildShortGlobalRankingSharePath,
@@ -32,6 +34,7 @@ import {
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
@@ -363,12 +366,12 @@ export function useRankingBlockState({
     globalRankingListEntityIds
   );
 
-  const { entries: myEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
+  const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const globalRankingEntryByEntityId = React.useMemo(() => {
+  const globalRankingEntryByEntityIdBase = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
     // Seed from the server ranking; live `rows`/`globalEntries` below override with the same data.
@@ -399,7 +402,7 @@ export function useRankingBlockState({
     return map;
   }, [globalEntries, initialGlobalEntries, rows]);
 
-  const myRankingEntryByEntityId = React.useMemo(() => {
+  const myRankingEntryByEntityIdBase = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
     // Seed from the server-resolved shared ranking; live `rows`/`myEntries`
@@ -430,6 +433,62 @@ export function useRankingBlockState({
 
     return map;
   }, [myEntries, rows, initialSharedEntries]);
+
+  const pendingTargetSpaceId = React.useMemo(() => {
+    const scope = getScopeFromFilters(filterState);
+    if (scope.type !== 'SPACES') return null;
+    const spaceIds = [...new Set(scope.value.filter(Boolean))];
+    return spaceIds.length === 1 ? spaceIds[0]! : null;
+  }, [filterState]);
+
+  const entriesSettled = !isLoadingGlobalEntries && !isLoadingMyEntries;
+
+  const unresolvedRankingEntityIds = React.useMemo(() => {
+    if (!entriesSettled) return EMPTY_ENTITY_IDS;
+    const ids = new Set<string>();
+    for (const id of globalRankingListEntityIds) {
+      if (id && !globalRankingEntryByEntityIdBase.has(id)) ids.add(id);
+    }
+    for (const id of myRankingListEntityIds) {
+      if (id && !myRankingEntryByEntityIdBase.has(id)) ids.add(id);
+    }
+    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
+  }, [
+    entriesSettled,
+    globalRankingListEntityIds,
+    myRankingListEntityIds,
+    globalRankingEntryByEntityIdBase,
+    myRankingEntryByEntityIdBase,
+  ]);
+
+  const pendingProposerSpaceIds = React.useMemo(
+    () => getPendingProposerSpaceIds(aggregatedSubmitterSpaceIds),
+    [aggregatedSubmitterSpaceIds]
+  );
+
+  const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
+    targetSpaceId: pendingTargetSpaceId,
+    unresolvedEntityIds: unresolvedRankingEntityIds,
+    proposerSpaceIds: pendingProposerSpaceIds,
+  });
+
+  const globalRankingEntryByEntityId = React.useMemo(() => {
+    if (pendingEntriesByEntityId.size === 0) return globalRankingEntryByEntityIdBase;
+    const map = new Map(globalRankingEntryByEntityIdBase);
+    for (const [id, entry] of pendingEntriesByEntityId) {
+      if (!map.has(id)) map.set(id, entry);
+    }
+    return map;
+  }, [globalRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
+
+  const myRankingEntryByEntityId = React.useMemo(() => {
+    if (pendingEntriesByEntityId.size === 0) return myRankingEntryByEntityIdBase;
+    const map = new Map(myRankingEntryByEntityIdBase);
+    for (const [id, entry] of pendingEntriesByEntityId) {
+      if (!map.has(id)) map.set(id, entry);
+    }
+    return map;
+  }, [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
 
   const resolveEntitySpaceId = React.useCallback(
     (targetEntityId: string) => {
@@ -703,6 +762,7 @@ export function useRankingBlockState({
     setEmbeddedGlobalPage,
     globalEntriesById,
     globalRankingEntryByEntityId,
+    pendingEntityIds,
     isLoadingGlobalEntries,
     myDisplayEntityIds: myRankingListEntityIds,
     totalMyRankingEntityCount: myDisplayEntityIds.length,

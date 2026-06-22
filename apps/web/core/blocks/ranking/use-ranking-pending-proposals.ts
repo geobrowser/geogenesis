@@ -4,45 +4,46 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { useSpace } from '~/core/hooks/use-space';
-
-import { fetchRankingPendingProposalData } from './fetch-ranking-pending-proposals';
+import { fetchRankingPendingEntities } from './fetch-ranking-pending-proposals';
 import {
   EMPTY_RANKING_PENDING_PROPOSAL_DATA,
   type RankingPendingProposalData,
-  type RankingRelationConstraint,
 } from './ranking-pending-proposal-entries';
 
-type UseRankingPendingProposalsOptions = {
+type UseRankingPendingEntitiesOptions = {
   targetSpaceId: string | null;
-  proposedBy: string | null;
-  relationConstraints: RankingRelationConstraint[];
+  unresolvedEntityIds: string[];
+  proposerSpaceIds: string[];
 };
 
-export function useRankingPendingProposals({
+export function useRankingPendingEntities({
   targetSpaceId,
-  proposedBy,
-  relationConstraints,
-}: UseRankingPendingProposalsOptions) {
-  const { space, isLoading: isLoadingSpace } = useSpace(targetSpaceId ?? undefined);
-
-  const isDaoTarget = Boolean(targetSpaceId && space?.type === 'DAO');
-  const enabled = isDaoTarget && Boolean(proposedBy);
-
-  const constraintsKey = React.useMemo(
-    () =>
-      relationConstraints
-        .map(constraint => `${constraint.typeId}:${constraint.toEntityId}`)
-        .sort()
-        .join('|'),
-    [relationConstraints]
+  unresolvedEntityIds,
+  proposerSpaceIds,
+}: UseRankingPendingEntitiesOptions) {
+  const idsKey = React.useMemo(
+    () => [...new Set(unresolvedEntityIds.filter(Boolean))].sort().join('|'),
+    [unresolvedEntityIds]
   );
 
+  const proposersKey = React.useMemo(
+    () => [...new Set(proposerSpaceIds.filter(Boolean))].sort().join('|'),
+    [proposerSpaceIds]
+  );
+
+  const enabled = Boolean(targetSpaceId) && idsKey.length > 0 && proposersKey.length > 0;
+
   const { data } = useQuery({
-    queryKey: ['ranking-pending-proposal-data', targetSpaceId, proposedBy, constraintsKey],
+    queryKey: ['ranking-pending-entities', targetSpaceId, idsKey, proposersKey],
     enabled,
     staleTime: 30_000,
-    queryFn: ({ signal }) => fetchRankingPendingProposalData(targetSpaceId!, proposedBy!, relationConstraints, signal),
+    queryFn: ({ signal }) =>
+      fetchRankingPendingEntities({
+        spaceId: targetSpaceId!,
+        unresolvedEntityIds: idsKey ? idsKey.split('|') : [],
+        proposerSpaceIds: proposersKey ? proposersKey.split('|') : [],
+        signal,
+      }),
   });
 
   const pendingData: RankingPendingProposalData = data ?? EMPTY_RANKING_PENDING_PROPOSAL_DATA;
@@ -51,8 +52,7 @@ export function useRankingPendingProposals({
     () => ({
       pendingEntityIds: pendingData.pendingEntityIds,
       pendingEntriesByEntityId: pendingData.entriesByEntityId,
-      isLoadingPending: (enabled && !data) || (Boolean(targetSpaceId) && isLoadingSpace),
     }),
-    [pendingData, enabled, data, targetSpaceId, isLoadingSpace]
+    [pendingData]
   );
 }

@@ -110,7 +110,7 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
       name: entityName || 'New ranking entry',
       onSuccess: () => {
         setIsPublishing(false);
-        void queryClient.invalidateQueries({ queryKey: ['ranking-pending-proposal-data'] });
+        void queryClient.invalidateQueries({ queryKey: ['ranking-pending-entities'] });
         handleClose();
         onFinished(entityId);
       },

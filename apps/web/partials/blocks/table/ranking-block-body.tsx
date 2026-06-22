@@ -130,6 +130,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     hasMyRankingData,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
+    pendingEntityIds,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -246,6 +247,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entry}
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (
@@ -317,6 +319,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (

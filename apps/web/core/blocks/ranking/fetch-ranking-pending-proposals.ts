@@ -1,46 +1,69 @@
+import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
-import { fetchProposals } from '~/core/io/subgraph/fetch-proposals';
+
+import { ID } from '~/core/id';
 
 import {
   EMPTY_RANKING_PENDING_PROPOSAL_DATA,
   entityDiffToRankingEntry,
-  pendingEntityMatchesRanking,
   type RankingPendingProposalData,
-  type RankingRelationConstraint,
 } from './ranking-pending-proposal-entries';
 
-const MAX_PROPOSALS = 100;
+const MAX_PAGES_PER_PROPOSER = 3;
 
-export async function fetchRankingPendingProposalData(
-  spaceId: string,
-  proposedBy: string,
-  relationConstraints: RankingRelationConstraint[],
-  signal?: AbortController['signal']
-): Promise<RankingPendingProposalData> {
-  if (!spaceId || !proposedBy) return EMPTY_RANKING_PENDING_PROPOSAL_DATA;
+export type FetchRankingPendingEntitiesOptions = {
+  spaceId: string;
+  unresolvedEntityIds: string[];
+  proposerSpaceIds: string[];
+  signal?: AbortController['signal'];
+};
 
-  const proposals = await fetchProposals({
-    spaceId,
-    signal,
-    first: MAX_PROPOSALS,
-    proposedBy,
-    actionTypes: ['Publish'],
-  });
+export async function fetchRankingPendingEntities({
+  spaceId,
+  unresolvedEntityIds,
+  proposerSpaceIds,
+  signal,
+}: FetchRankingPendingEntitiesOptions): Promise<RankingPendingProposalData> {
+  if (!spaceId || unresolvedEntityIds.length === 0 || proposerSpaceIds.length === 0) {
+    return EMPTY_RANKING_PENDING_PROPOSAL_DATA;
+  }
 
-  const openProposals = proposals.filter(proposal => proposal.status === 'PROPOSED');
+  const wantedByHex = new Map<string, string>();
+  for (const id of unresolvedEntityIds) {
+    if (id) wantedByHex.set(ID.uuidToHex(id), id);
+  }
+  if (wantedByHex.size === 0) return EMPTY_RANKING_PENDING_PROPOSAL_DATA;
 
   const pendingEntityIds = new Set<string>();
   const entriesByEntityId = new Map<string, ReturnType<typeof entityDiffToRankingEntry>>();
 
   await Promise.all(
-    openProposals.map(async proposal => {
-      const diff = await fetchProposalDiffs(proposal.id, spaceId);
-      if (diff.status !== 'success') return;
+    [...new Set(proposerSpaceIds.filter(Boolean))].map(async proposerSpaceId => {
+      for (let page = 0; page < MAX_PAGES_PER_PROPOSER; page++) {
+        if (pendingEntityIds.size === wantedByHex.size) return;
 
-      for (const entity of diff.entities) {
-        if (!pendingEntityMatchesRanking(entity, relationConstraints)) continue;
-        pendingEntityIds.add(entity.entityId);
-        entriesByEntityId.set(entity.entityId, entityDiffToRankingEntry(entity));
+        const proposals = await fetchProposalsByUser({ proposerSpaceId, spaceId, page, signal });
+        if (proposals.length === 0) return;
+
+        const openPublishProposals = proposals.filter(
+          proposal => proposal.status === 'PROPOSED' && proposal.type === 'ADD_EDIT'
+        );
+
+        await Promise.all(
+          openPublishProposals.map(async proposal => {
+            const diff = await fetchProposalDiffs(proposal.id, proposal.space.id);
+            if (diff.status !== 'success') return;
+
+            for (const entity of diff.entities) {
+              const wantedId = wantedByHex.get(ID.uuidToHex(entity.entityId));
+              if (!wantedId || entriesByEntityId.has(wantedId)) continue;
+              pendingEntityIds.add(wantedId);
+              entriesByEntityId.set(wantedId, { ...entityDiffToRankingEntry(entity), entityId: wantedId });
+            }
+          })
+        );
+
+        if (proposals.length < 5) return;
       }
     })
   );

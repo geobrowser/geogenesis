@@ -8,12 +8,8 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
-import {
-  getRankingRelationConstraints,
-  mergePendingProposalEntityIds
-} from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
+import { getPendingProposerSpaceIds } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
@@ -32,7 +28,7 @@ import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-da
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compose-search';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
-import { useRankingPendingProposals } from '~/core/blocks/ranking/use-ranking-pending-proposals';
+import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -72,7 +68,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const displayName = name?.trim() || 'Untitled ranking';
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
-  const rankingRelationConstraints = React.useMemo(() => getRankingRelationConstraints(filterState), [filterState]);
 
   const { showOnboarding } = useOnboarding();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
@@ -130,12 +125,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     displayName
   );
 
-  const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingProposals({
-    targetSpaceId: createNewSpaceId,
-    proposedBy: personalSpaceId,
-    relationConstraints: rankingRelationConstraints,
-  });
-
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
   const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
@@ -156,10 +145,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     fetchNextPage,
   } = useRankingAccumulatedRows();
 
-  const { rankedEntityIds, unrankedEntityIds } = React.useMemo(() => {
-    const sections = splitRankableEntityIds(globalOrderedIds, accumulatedRows);
-    return mergePendingProposalEntityIds(sections, pendingEntityIds);
-  }, [globalOrderedIds, accumulatedRows, pendingEntityIds]);
+  const { rankedEntityIds, unrankedEntityIds } = React.useMemo(
+    () => splitRankableEntityIds(globalOrderedIds, accumulatedRows),
+    [globalOrderedIds, accumulatedRows]
+  );
 
   const hasRankedGlobalEntities = rankedEntityIds.length > 0;
 
@@ -171,13 +160,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
 
   const { entries: rankableEntries } = useRankingEntryEntities(spaceId, allRankableEntityIds);
-  const rankableEntriesById = React.useMemo(() => {
-    const map = new Map(rankableEntries.map(e => [e.entityId, e]));
-    for (const [entityId, entry] of pendingEntriesByEntityId) {
-      map.set(entityId, entry);
-    }
-    return map;
-  }, [rankableEntries, pendingEntriesByEntityId]);
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -254,13 +236,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasVisibleRankableEntities = filteredRankedIds.length > 0 || filteredUnrankedIds.length > 0;
 
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
-  const displayRankableEntriesById = React.useMemo(() => {
-    const map = new Map(rankableEntriesById);
-    for (const entry of searchEntries) {
-      map.set(entry.entityId, entry);
-    }
-    return map;
-  }, [rankableEntriesById, searchEntries]);
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
@@ -278,6 +253,55 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
+
+  const resolvedRankableHexIds = React.useMemo(() => {
+    const set = new Set<string>();
+    const add = (id: string) => {
+      if (id) set.add(ID.uuidToHex(id));
+    };
+    for (const entry of rankableEntries) add(entry.entityId);
+    for (const entry of myEntries) add(entry.entityId);
+    for (const entry of searchEntries) add(entry.entityId);
+    for (const row of accumulatedRows) {
+      if (row.entityId && !row.placeholder) add(row.entityId);
+    }
+    return set;
+  }, [rankableEntries, myEntries, searchEntries, accumulatedRows]);
+
+  const unresolvedRankableEntityIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of [...orderedIds, ...allRankableEntityIds]) {
+      if (id && !resolvedRankableHexIds.has(ID.uuidToHex(id))) ids.add(id);
+    }
+    return ids.size > 0 ? [...ids] : [];
+  }, [orderedIds, allRankableEntityIds, resolvedRankableHexIds]);
+
+  const pendingProposerSpaceIds = React.useMemo(
+    () => getPendingProposerSpaceIds(aggregatedSubmitterSpaceIds, personalSpaceId ? [personalSpaceId] : []),
+    [aggregatedSubmitterSpaceIds, personalSpaceId]
+  );
+
+  const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
+    targetSpaceId: createNewSpaceId,
+    unresolvedEntityIds: unresolvedRankableEntityIds,
+    proposerSpaceIds: pendingProposerSpaceIds,
+  });
+
+  const rankableEntriesById = React.useMemo(() => {
+    const map = new Map(rankableEntries.map(e => [e.entityId, e]));
+    for (const [entityId, entry] of pendingEntriesByEntityId) {
+      map.set(entityId, entry);
+    }
+    return map;
+  }, [rankableEntries, pendingEntriesByEntityId]);
+
+  const displayRankableEntriesById = React.useMemo(() => {
+    const map = new Map(rankableEntriesById);
+    for (const entry of searchEntries) {
+      map.set(entry.entityId, entry);
+    }
+    return map;
+  }, [rankableEntriesById, searchEntries]);
 
   const myRankingEntriesById = React.useMemo(() => {
     const map = new Map(myEntriesById);
