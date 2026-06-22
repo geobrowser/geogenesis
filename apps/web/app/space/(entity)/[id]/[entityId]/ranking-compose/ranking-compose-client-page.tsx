@@ -1,10 +1,8 @@
 'use client';
 
-import { useSetAtom } from 'jotai';
-
 import { useEffect } from 'react';
 
-import { navbarSpaceOverrideAtom } from '~/atoms';
+import { useSetAtom } from 'jotai';
 
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
@@ -15,6 +13,8 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
 import { RankingViewScreen } from '~/partials/blocks/table/ranking-view-screen';
 import { type InitialGlobalRanking, type InitialSharedRanking } from '~/partials/blocks/table/use-ranking-block-state';
+
+import { navbarSpaceOverrideAtom } from '~/atoms';
 
 type Props = {
   spaceId: string;

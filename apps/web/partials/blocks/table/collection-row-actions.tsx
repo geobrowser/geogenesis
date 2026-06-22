@@ -84,9 +84,7 @@ export function CollectionRowActions({
   // is mounted per row (CSS-hidden until hover), so scanning every render would be
   // O(rows × relations). Radix only mounts `Popover.Content` (where the link
   // lives) while open, so the lookup only needs to be correct for the open row.
-  const collectionItemRelation = isPopoverOpen
-    ? blockEntity?.relations.find(r => r.id === relationId)
-    : undefined;
+  const collectionItemRelation = isPopoverOpen ? blockEntity?.relations.find(r => r.id === relationId) : undefined;
   const relationEntityId = collectionItemRelation?.entityId ?? relationId;
 
   return (
@@ -157,10 +155,7 @@ export function CollectionRowActions({
                     setIsSpacePopoverOpen(false);
                   }}
                   trigger={
-                    <button
-                      type="button"
-                      className="inline-flex items-center p-1"
-                    >
+                    <button type="button" className="inline-flex items-center p-1">
                       <span className="inline-flex size-[12px] items-center justify-center rounded-sm border group-hover:border-grey-03 group-hover:text-grey-03 hover:border-text! hover:text-text!">
                         {space ? (
                           <div className="size-[8px] overflow-clip rounded-sm grayscale">

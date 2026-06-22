@@ -5,9 +5,8 @@ import { useParams } from 'next/navigation';
 
 import { useSpace } from '~/core/hooks/use-space';
 
-import { navbarSpaceOverrideAtom } from '~/atoms';
-
 import { NavbarBreadcrumb } from './navbar-breadcrumb';
+import { navbarSpaceOverrideAtom } from '~/atoms';
 
 export function NavbarSpaceMetadata() {
   const params = useParams();
