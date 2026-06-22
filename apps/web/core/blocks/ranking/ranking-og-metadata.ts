@@ -5,7 +5,6 @@ import {
   type PersonalRankingOgPreviewParams,
   buildRankingOgPreviewUrl,
 } from './ranking-og-preview-url';
-import { formatSharedRankingOwnerLabel } from './ranking-owner-label';
 import {
   RANKING_OG_VARIANT_SIZES,
   buildGlobalRankingOgObjectKey,
@@ -16,6 +15,7 @@ import {
   isRankingOgStorageConfigured,
   rankingOgObjectExists,
 } from './ranking-og-storage';
+import { formatSharedRankingOwnerLabel } from './ranking-owner-label';
 import type { ResolvedGlobalRankingShare, ResolvedPersonalRankingShare } from './resolve-ranking-share';
 
 type PersonalMetadataParts = {
