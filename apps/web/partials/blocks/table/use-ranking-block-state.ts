@@ -461,14 +461,26 @@ export function useRankingBlockState({
     myRankingEntryByEntityIdBase,
   ]);
 
-  const pendingProposerSpaceIds = React.useMemo(
-    () => getPendingProposerSpaceIds(aggregatedSubmitterSpaceIds),
-    [aggregatedSubmitterSpaceIds]
+  const ownRankingEntityIds = React.useMemo(
+    () => (isSharedRankingView || !personalSpaceId ? EMPTY_ENTITY_IDS : myRankingListEntityIds),
+    [isSharedRankingView, personalSpaceId, myRankingListEntityIds]
   );
+
+  const pendingCandidateEntityIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of ownRankingEntityIds) if (id) ids.add(id);
+    for (const id of unresolvedRankingEntityIds) if (id) ids.add(id);
+    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
+  }, [ownRankingEntityIds, unresolvedRankingEntityIds]);
+
+  const pendingProposerSpaceIds = React.useMemo(() => {
+    const submitters = unresolvedRankingEntityIds.length > 0 ? aggregatedSubmitterSpaceIds : [];
+    return getPendingProposerSpaceIds(submitters, personalSpaceId ? [personalSpaceId] : []);
+  }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId]);
 
   const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
     targetSpaceId: pendingTargetSpaceId,
-    unresolvedEntityIds: unresolvedRankingEntityIds,
+    unresolvedEntityIds: pendingCandidateEntityIds,
     proposerSpaceIds: pendingProposerSpaceIds,
   });
 

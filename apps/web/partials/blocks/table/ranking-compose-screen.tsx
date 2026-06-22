@@ -9,7 +9,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
-import { getPendingProposerSpaceIds } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
@@ -253,36 +252,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const resolvedRankableHexIds = React.useMemo(() => {
-    const set = new Set<string>();
-    const add = (id: string) => {
-      if (id) set.add(ID.uuidToHex(id));
-    };
-    for (const entry of rankableEntries) add(entry.entityId);
-    for (const entry of myEntries) add(entry.entityId);
-    for (const entry of searchEntries) add(entry.entityId);
-    for (const row of accumulatedRows) {
-      if (row.entityId && !row.placeholder) add(row.entityId);
-    }
-    return set;
-  }, [rankableEntries, myEntries, searchEntries, accumulatedRows]);
-
-  const unresolvedRankableEntityIds = React.useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of [...orderedIds, ...allRankableEntityIds]) {
-      if (id && !resolvedRankableHexIds.has(ID.uuidToHex(id))) ids.add(id);
-    }
-    return ids.size > 0 ? [...ids] : [];
-  }, [orderedIds, allRankableEntityIds, resolvedRankableHexIds]);
+  const pendingCandidateEntityIds = React.useMemo(() => [...new Set(orderedIds.filter(Boolean))], [orderedIds]);
 
   const pendingProposerSpaceIds = React.useMemo(
-    () => getPendingProposerSpaceIds(aggregatedSubmitterSpaceIds, personalSpaceId ? [personalSpaceId] : []),
-    [aggregatedSubmitterSpaceIds, personalSpaceId]
+    () => (personalSpaceId ? [personalSpaceId] : []),
+    [personalSpaceId]
   );
 
   const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
     targetSpaceId: createNewSpaceId,
-    unresolvedEntityIds: unresolvedRankableEntityIds,
+    unresolvedEntityIds: pendingCandidateEntityIds,
     proposerSpaceIds: pendingProposerSpaceIds,
   });
 
