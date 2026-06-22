@@ -23,9 +23,10 @@ import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-e
 
 type Props = {
   onFinished: (entityId: string) => void;
+  rankingName: string;
 };
 
-export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
+export function RankingComposeCreateEntityPanel({ onFinished, rankingName }: Props) {
   const isMobile = useIsMobileLayout();
   const jotaiStore = useStore();
   const [flow, setFlow] = useAtom(rankingComposeCreateEntityAtom);
@@ -100,14 +101,15 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
       return;
     }
 
-    const entityName = Entities.name(values)?.trim();
+    const entityName = Entities.name(values)?.trim() || 'Untitled';
+    const proposalName = `${rankingName.trim() || 'Ranking'} - Create new - ${entityName}`;
 
     setIsPublishing(true);
     void makeProposal({
       values,
       relations,
       spaceId: publishSpaceId,
-      name: entityName || 'New ranking entry',
+      name: proposalName,
       onSuccess: () => {
         setIsPublishing(false);
         void queryClient.invalidateQueries({ queryKey: ['ranking-pending-entities'] });
@@ -118,7 +120,18 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
         setIsPublishing(false);
       },
     });
-  }, [flow, isPublishing, localValues, localRelations, makeProposal, queryClient, jotaiStore, handleClose, onFinished]);
+  }, [
+    flow,
+    isPublishing,
+    localValues,
+    localRelations,
+    makeProposal,
+    queryClient,
+    jotaiStore,
+    handleClose,
+    onFinished,
+    rankingName,
+  ]);
 
   React.useLayoutEffect(() => {
     if (!flow) return;
@@ -178,6 +191,7 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
         <div aria-hidden className="absolute inset-0 bg-grey-04/50" />
         <aside
           data-ranking-compose-create-entity-panel
+          data-entity-side-panel
           className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex w-full flex-col overflow-hidden rounded-t-2xl bg-white"
           style={{ top: 'calc(var(--ranking-compose-top, 2.75rem) + 8rem)' }}
         >
@@ -187,6 +201,7 @@ export function RankingComposeCreateEntityPanel({ onFinished }: Props) {
     ) : (
       <aside
         data-ranking-compose-create-entity-panel
+        data-entity-side-panel
         className="shadow-2xl fixed inset-y-0 right-0 z-[201] flex w-[min(600px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white"
       >
         {panelBody}

@@ -30,7 +30,6 @@ import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compo
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
@@ -521,7 +520,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <>
-      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} />
+      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       <RankingComposeFullscreen coverNavbar={isMobile}>
         {isMobile ? (
