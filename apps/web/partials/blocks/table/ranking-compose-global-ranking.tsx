@@ -427,7 +427,7 @@ export function RankingComposeGlobalRanking({
         rank={globalRank}
         name={entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled')}
         description={entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null))}
-        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null}
+        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
       />

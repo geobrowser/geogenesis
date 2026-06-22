@@ -286,7 +286,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const getSearchResultPreview = (searchHit: SearchResult | undefined) => ({
     name: searchHit?.name?.trim() || null,
     description: searchHit?.description?.trim() || null,
-    image: searchHit?.spaces[0]?.image ?? null,
+    image: null,
     spaceId: searchHit?.spaces[0]?.spaceId ?? null,
   });
 
