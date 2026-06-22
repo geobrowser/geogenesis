@@ -51,7 +51,7 @@ export async function fetchRankingPendingEntities({
 
         await Promise.all(
           openPublishProposals.map(async proposal => {
-            const diff = await fetchProposalDiffs(proposal.id, proposal.space.id);
+            const diff = await fetchProposalDiffs(ID.uuidToHex(proposal.id), ID.uuidToHex(proposal.space.id));
             if (diff.status !== 'success') return;
 
             for (const entity of diff.entities) {
