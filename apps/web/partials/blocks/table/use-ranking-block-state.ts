@@ -21,7 +21,10 @@ import {
 } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
-import { getPendingProposerSpaceIds } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
+import {
+  getPendingProposerSpaceIds,
+  isPlaceholderRankingEntry,
+} from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
@@ -236,11 +239,6 @@ export function useRankingBlockState({
 
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
 
-  const globalRankByEntityId = React.useMemo(
-    () => new Map(globalDisplayEntityIds.map((id, index) => [id, index + 1])),
-    [globalDisplayEntityIds]
-  );
-
   const mySubmissionIdsKey = (displayedSubmission?.orderedEntityIds ?? []).join('|');
 
   const [myOrderIds, setMyOrderIds] = React.useState<string[]>([]);
@@ -447,10 +445,10 @@ export function useRankingBlockState({
     if (!entriesSettled) return EMPTY_ENTITY_IDS;
     const ids = new Set<string>();
     for (const id of globalRankingListEntityIds) {
-      if (id && !globalRankingEntryByEntityIdBase.has(id)) ids.add(id);
+      if (id && isPlaceholderRankingEntry(globalRankingEntryByEntityIdBase.get(id))) ids.add(id);
     }
     for (const id of myRankingListEntityIds) {
-      if (id && !myRankingEntryByEntityIdBase.has(id)) ids.add(id);
+      if (id && isPlaceholderRankingEntry(myRankingEntryByEntityIdBase.get(id))) ids.add(id);
     }
     return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
   }, [
@@ -475,8 +473,9 @@ export function useRankingBlockState({
 
   const pendingProposerSpaceIds = React.useMemo(() => {
     const submitters = unresolvedRankingEntityIds.length > 0 ? aggregatedSubmitterSpaceIds : [];
-    return getPendingProposerSpaceIds(submitters, personalSpaceId ? [personalSpaceId] : []);
-  }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId]);
+    const extra = [personalSpaceId, sharedAuthorSpaceId].filter(Boolean) as string[];
+    return getPendingProposerSpaceIds(submitters, extra);
+  }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId, sharedAuthorSpaceId]);
 
   const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
     targetSpaceId: pendingTargetSpaceId,
@@ -488,7 +487,7 @@ export function useRankingBlockState({
     if (pendingEntriesByEntityId.size === 0) return globalRankingEntryByEntityIdBase;
     const map = new Map(globalRankingEntryByEntityIdBase);
     for (const [id, entry] of pendingEntriesByEntityId) {
-      if (!map.has(id)) map.set(id, entry);
+      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
     }
     return map;
   }, [globalRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
@@ -497,10 +496,34 @@ export function useRankingBlockState({
     if (pendingEntriesByEntityId.size === 0) return myRankingEntryByEntityIdBase;
     const map = new Map(myRankingEntryByEntityIdBase);
     for (const [id, entry] of pendingEntriesByEntityId) {
-      if (!map.has(id)) map.set(id, entry);
+      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
     }
     return map;
   }, [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
+
+  // Pending entities are hidden from the global ranking for everyone; remaining
+  // entities renumber contiguously. My-ranking / shared lists keep them (with the
+  // "Pending approval" badge).
+  const visibleGlobalDisplayEntityIds = React.useMemo(
+    () =>
+      pendingEntityIds.size === 0
+        ? globalDisplayEntityIds
+        : globalDisplayEntityIds.filter(id => !pendingEntityIds.has(id)),
+    [globalDisplayEntityIds, pendingEntityIds]
+  );
+
+  const visibleGlobalListEntityIds = React.useMemo(
+    () =>
+      pendingEntityIds.size === 0
+        ? globalRankingListEntityIds
+        : globalRankingListEntityIds.filter(id => !pendingEntityIds.has(id)),
+    [globalRankingListEntityIds, pendingEntityIds]
+  );
+
+  const globalRankByEntityId = React.useMemo(
+    () => new Map(visibleGlobalDisplayEntityIds.map((id, index) => [id, index + 1])),
+    [visibleGlobalDisplayEntityIds]
+  );
 
   const resolveEntitySpaceId = React.useCallback(
     (targetEntityId: string) => {
@@ -764,8 +787,8 @@ export function useRankingBlockState({
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
-    globalDisplayEntityIds: globalRankingListEntityIds,
-    totalGlobalRankingEntityCount: globalDisplayEntityIds.length,
+    globalDisplayEntityIds: visibleGlobalListEntityIds,
+    totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,

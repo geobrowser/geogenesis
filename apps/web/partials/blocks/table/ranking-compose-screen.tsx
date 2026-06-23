@@ -13,6 +13,10 @@ import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/rankin
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import {
+  getPendingProposerSpaceIds,
+  isPlaceholderRankingEntry,
+} from '~/core/blocks/ranking/ranking-pending-proposal-entries';
+import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
   rankingSubmissionsOpen,
@@ -229,10 +233,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredRankedIds = isSearchActive ? searchRankedIds : browseRankedIds;
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
-  const showRankedUnrankedDivider = filteredRankedIds.length > 0 && filteredUnrankedIds.length > 0;
-
-  const hasVisibleRankableEntities = filteredRankedIds.length > 0 || filteredUnrankedIds.length > 0;
-
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
@@ -252,11 +252,25 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const pendingCandidateEntityIds = React.useMemo(() => [...new Set(orderedIds.filter(Boolean))], [orderedIds]);
+  const rankableEntriesByIdRaw = React.useMemo(() => new Map(rankableEntries.map(e => [e.entityId, e])), [rankableEntries]);
+
+  const globalUnresolvedIds = React.useMemo(
+    () => allRankableEntityIds.filter(id => id && isPlaceholderRankingEntry(rankableEntriesByIdRaw.get(id))),
+    [allRankableEntityIds, rankableEntriesByIdRaw]
+  );
+
+  const pendingCandidateEntityIds = React.useMemo(
+    () => [...new Set([...orderedIds, ...globalUnresolvedIds].filter(Boolean))],
+    [orderedIds, globalUnresolvedIds]
+  );
 
   const pendingProposerSpaceIds = React.useMemo(
-    () => (personalSpaceId ? [personalSpaceId] : []),
-    [personalSpaceId]
+    () =>
+      getPendingProposerSpaceIds(
+        globalUnresolvedIds.length > 0 ? aggregatedSubmitterSpaceIds : [],
+        personalSpaceId ? [personalSpaceId] : []
+      ),
+    [globalUnresolvedIds, aggregatedSubmitterSpaceIds, personalSpaceId]
   );
 
   const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
@@ -267,8 +281,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const rankableEntriesById = React.useMemo(() => {
     const map = new Map(rankableEntries.map(e => [e.entityId, e]));
+    // Pending names override a missing/"Untitled" base entry, never a real one.
     for (const [entityId, entry] of pendingEntriesByEntityId) {
-      map.set(entityId, entry);
+      if (isPlaceholderRankingEntry(map.get(entityId))) map.set(entityId, entry);
     }
     return map;
   }, [rankableEntries, pendingEntriesByEntityId]);
@@ -289,6 +304,30 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     }
     return map;
   }, [myEntriesById, displayRankableEntriesById, displayMyEntityIds]);
+
+  const visibleFilteredRankedIds = React.useMemo(
+    () => (pendingEntityIds.size === 0 ? filteredRankedIds : filteredRankedIds.filter(id => !pendingEntityIds.has(id))),
+    [filteredRankedIds, pendingEntityIds]
+  );
+  const visibleFilteredUnrankedIds = React.useMemo(
+    () =>
+      pendingEntityIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !pendingEntityIds.has(id)),
+    [filteredUnrankedIds, pendingEntityIds]
+  );
+  const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
+  const visibleHasVisibleRankableEntities =
+    visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
+
+  const visibleGlobalRankByEntityId = React.useMemo(() => {
+    if (pendingEntityIds.size === 0) return globalRankByEntityId;
+    const visible = globalOrderedIds.filter(id => !pendingEntityIds.has(id));
+    return new Map(visible.map((id, index) => [id, index + 1]));
+  }, [globalOrderedIds, pendingEntityIds, globalRankByEntityId]);
+
+  const revealablePendingIds = React.useMemo(
+    () => [...pendingEntityIds].filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
+    [pendingEntityIds, myRankingIdSet]
+  );
 
   const addToMyRanking = (entityId: string) => {
     setOrderedIds(prev => (prev.includes(entityId) ? prev : [...prev, entityId]));
@@ -458,14 +497,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           isMobile={isMobile}
           spaceId={spaceId}
           orderedIds={orderedIds}
-          filteredRankedIds={filteredRankedIds}
-          filteredUnrankedIds={filteredUnrankedIds}
-          globalRankByEntityId={globalRankByEntityId}
+          filteredRankedIds={visibleFilteredRankedIds}
+          filteredUnrankedIds={visibleFilteredUnrankedIds}
+          globalRankByEntityId={visibleGlobalRankByEntityId}
           rankableEntriesById={displayRankableEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
-          showRankedUnrankedDivider={showRankedUnrankedDivider}
-          hasVisibleRankableEntities={hasVisibleRankableEntities}
+          showRankedUnrankedDivider={visibleShowRankedUnrankedDivider}
+          hasVisibleRankableEntities={visibleHasVisibleRankableEntities}
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}
           isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
@@ -485,6 +524,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           isAwaitingMembership={isAwaitingMembership}
           onRecheckMembership={recheckAccess}
           pendingEntityIds={pendingEntityIds}
+          revealablePendingIds={revealablePendingIds}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
           onViewEntity={openEntitySheet}

@@ -13,6 +13,7 @@ import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-partic
 import type { Row, SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
@@ -153,6 +154,35 @@ function RankingComposeSearchListPlaceholder({ height, children }: { height: num
   );
 }
 
+/**
+ * Pending (awaiting-approval) entries are hidden from the global list by default;
+ * this collapsed disclosure lets the editor opt in to see and add them.
+ */
+function RankingComposePendingDisclosure({ count, children }: { count: number; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+
+  if (count === 0) return null;
+
+  return (
+    <div className="border-t border-grey-02">
+      <button
+        type="button"
+        onClick={() => setOpen(value => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between py-3 text-metadata text-grey-04 transition hover:text-text"
+      >
+        <span>
+          {open ? 'Hide' : 'Show'} pending ({count})
+        </span>
+        <span className={cx('flex transition-transform', open && 'rotate-180')}>
+          <ChevronDownSmall color="grey-04" />
+        </span>
+      </button>
+      {open ? children : null}
+    </div>
+  );
+}
+
 function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
   return (
     <div className="flex items-center justify-between gap-4 py-3">
@@ -256,6 +286,8 @@ type Props = {
   isAwaitingMembership: boolean;
   onRecheckMembership: () => void;
   pendingEntityIds: ReadonlySet<string>;
+  /** Pending entries the viewer can opt to reveal (not already in their ranking). */
+  revealablePendingIds: string[];
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
@@ -291,6 +323,7 @@ export function RankingComposeGlobalRanking({
   canCreateNew,
   isAwaitingMembership,
   pendingEntityIds,
+  revealablePendingIds,
   onRecheckMembership,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
@@ -467,6 +500,20 @@ export function RankingComposeGlobalRanking({
       <div ref={setMembershipSentinelEl} className="h-px" aria-hidden />
     ) : null;
 
+  // When searching, only reveal pending entries whose name matches the query.
+  const pendingPickIds = React.useMemo(() => {
+    if (revealablePendingIds.length === 0) return [];
+    const query = isSearchActive ? searchQuery.trim().toLowerCase() : '';
+    if (!query) return revealablePendingIds;
+    return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
+  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
+
+  const pendingDisclosure = (
+    <RankingComposePendingDisclosure count={pendingPickIds.length}>
+      {pendingPickIds.map(id => renderPickEntity(id))}
+    </RankingComposePendingDisclosure>
+  );
+
   const searchResultList = (
     <>
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
@@ -477,6 +524,7 @@ export function RankingComposeGlobalRanking({
       {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}
+      {pendingDisclosure}
       {membershipSentinel}
     </>
   );
@@ -490,6 +538,7 @@ export function RankingComposeGlobalRanking({
       {canLoadMore && isFetchingNextPage ? (
         <p className="py-3 text-metadata text-grey-03">Loading more…</p>
       ) : null}
+      {pendingDisclosure}
       {membershipSentinel}
     </>
   );
@@ -576,15 +625,20 @@ export function RankingComposeGlobalRanking({
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
-              <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
-              </RankingComposeSearchListPlaceholder>
+              <>
+                <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
+                  {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                </RankingComposeSearchListPlaceholder>
+                {pendingDisclosure}
+              </>
             ) : (
               searchResultList
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
-          ) : !hasVisibleRankableEntities ? null : (
+          ) : !hasVisibleRankableEntities ? (
+            pendingDisclosure
+          ) : (
             browseResultList
           )}
         </div>

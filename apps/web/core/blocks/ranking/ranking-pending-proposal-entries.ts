@@ -15,6 +15,10 @@ export const EMPTY_RANKING_PENDING_PROPOSAL_DATA: RankingPendingProposalData = {
   entriesByEntityId: new Map<string, RankingEntryDisplay>(),
 };
 
+export function isPlaceholderRankingEntry(entry: RankingEntryDisplay | undefined | null): boolean {
+  return !entry || !entry.name?.trim() || entry.name === 'Untitled';
+}
+
 export function entityDiffToRankingEntry(entity: EntityDiff): RankingEntryDisplay {
   const description = entity.values.find(value => ID.equals(value.propertyId, SystemIds.DESCRIPTION_PROPERTY))?.after;
 
