@@ -161,7 +161,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     [rankedEntityIds, unrankedEntityIds]
   );
 
-  const { entries: rankableEntries } = useRankingEntryEntities(spaceId, allRankableEntityIds);
+  const { entries: rankableEntries, isLoading: isLoadingRankableEntries } = useRankingEntryEntities(
+    spaceId,
+    allRankableEntityIds
+  );
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -254,9 +257,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const rankableEntriesByIdRaw = React.useMemo(() => new Map(rankableEntries.map(e => [e.entityId, e])), [rankableEntries]);
 
+  // Until entity entries have resolved, every id looks like a placeholder
+  // (`isPlaceholderRankingEntry(undefined)` is `true`), which would fire the
+  // pending-proposal lookup against the full list on initial load. Hold the
+  // unresolved set empty while loading so only genuinely-unresolved ids remain.
   const globalUnresolvedIds = React.useMemo(
-    () => allRankableEntityIds.filter(id => id && isPlaceholderRankingEntry(rankableEntriesByIdRaw.get(id))),
-    [allRankableEntityIds, rankableEntriesByIdRaw]
+    () =>
+      isLoadingRankableEntries
+        ? []
+        : allRankableEntityIds.filter(id => id && isPlaceholderRankingEntry(rankableEntriesByIdRaw.get(id))),
+    [isLoadingRankableEntries, allRankableEntityIds, rankableEntriesByIdRaw]
   );
 
   const pendingCandidateEntityIds = React.useMemo(
