@@ -2,17 +2,15 @@
 
 import { useLogout } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
-import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
-import { useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 
-import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
-import { Cookie } from '~/core/cookie';
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -20,6 +18,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useEditable } from '~/core/state/editable-store';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
@@ -34,8 +33,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
-import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
+import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -45,51 +43,16 @@ function useUser() {
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
 }
 
-function useResetOnboarding() {
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setDismissedHints = useSetAtom(dismissedHintsAtom);
-
-  const resetOnboarding = () => {
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-    setDismissedHints([]);
-  };
-
-  return resetOnboarding;
-}
-
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
-  const resetOnboarding = useResetOnboarding();
-  const { setEditable } = useEditable();
-  const queryClient = useQueryClient();
-
-  const { logout } = useLogout({
-    onSuccess: async () => {
-      loggedOut({
-        personal_space_id: personalSpaceId ?? undefined,
-      });
-      // Drop out of edit mode so the flow bar / "Review edits" popup hides — on
-      // sign-out ModeToggle unmounts and can no longer reset `editable` itself.
-      setEditable(false);
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      resetOnboarding();
-      // Refetch the sidebar now the wallet cookie is cleared; otherwise the
-      // refetch triggered by the wagmi disconnect reads the stale cookie and the
-      // editor's spaces stay pinned under the signed-out key by `staleTime`.
-      void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
-    },
-  });
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
+  // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
+  // only trigger the logout.
+  const { logout } = useLogout();
 
   if (isUserLoading) {
     return (
@@ -104,6 +67,16 @@ export function NavbarActions() {
     return <GeoConnectButton />;
   }
 
+  // Optimistic identity: while the personal space is being created in the
+  // background, show the avatar the user just picked and link the menu item to
+  // the navigable `pending:` page until the real spaceId resolves.
+  const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -111,8 +84,8 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            {profile?.avatarUrl ? (
-              <FallbackImage value={profile.avatarUrl} sizes="28px" className="object-cover" />
+            {avatarValue ? (
+              <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
             ) : (
               <Avatar value={address} size={28} />
             )}
@@ -123,8 +96,8 @@ export function NavbarActions() {
         sideOffset={12}
         className="max-w-[165px]"
       >
-        {personalSpaceId && (
-          <AvatarMenuItem href={NavUtils.toSpace(personalSpaceId)}>
+        {personalHref && (
+          <AvatarMenuItem href={personalHref}>
             <p className="text-button">Personal space</p>
           </AvatarMenuItem>
         )}

@@ -7,6 +7,7 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
+import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
 import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
@@ -29,6 +30,14 @@ import { PageViewTracker } from '~/app/page-view-tracker';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
+  { ssr: false }
+);
+
+const PendingPersonalSpaceRunner = dynamic(
+  () =>
+    import('~/partials/onboarding/pending-personal-space-runner').then(m => ({
+      default: m.PendingPersonalSpaceRunner,
+    })),
   { ssr: false }
 );
 
@@ -56,6 +65,9 @@ export function App({ children }: { children: React.ReactNode }) {
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
+
+  // Owns the on-logout cleanup for the whole app (see useGeoLogoutCleanup).
+  useGeoLogoutCleanup();
 
   const memoizedShortcuts = React.useMemo(
     () => [
@@ -92,6 +104,7 @@ export function App({ children }: { children: React.ReactNode }) {
       {/* Client-side rendered due to `window.localStorage` usage */}
       <ClientOnly>
         <OnboardingDialog />
+        <PendingPersonalSpaceRunner />
         <CreateSpaceDialog />
         <SignInPrompt />
         <PostAuthRedirect />

@@ -20,6 +20,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -54,6 +55,7 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 export function useCreateComment(targetEntityId: string) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -143,7 +145,13 @@ export function useCreateComment(targetEntityId: string) {
       }
 
       if (!personalSpaceId) {
-        setToast(<span>Personal space required to comment. Please complete onboarding.</span>);
+        setToast(
+          <span>
+            {isAccountSetupPending
+              ? 'Your account is still finishing setup — try again in a moment.'
+              : 'Personal space required to comment. Please complete onboarding.'}
+          </span>
+        );
         return null;
       }
 
@@ -463,7 +471,7 @@ export function useCreateComment(targetEntityId: string) {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, personalSpaceId, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
