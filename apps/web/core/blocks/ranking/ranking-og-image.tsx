@@ -644,15 +644,10 @@ const TITLE_MAX_HEIGHT_STORY = 400;
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
   const maxHeight = isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE;
-  const textFit = fitWrappedText(
-    title,
-    isStory ? 112 : 58,
-    isStory ? 58 : 34,
-    isStory ? 680 : 318,
-    5,
-    'My ranking',
-    { maxHeight, lineHeight: TITLE_LINE_HEIGHT + TITLE_BOTTOM_PADDING_RATIO }
-  );
+  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 5, 'My ranking', {
+    maxHeight,
+    lineHeight: TITLE_LINE_HEIGHT + TITLE_BOTTOM_PADDING_RATIO,
+  });
 
   return (
     <div

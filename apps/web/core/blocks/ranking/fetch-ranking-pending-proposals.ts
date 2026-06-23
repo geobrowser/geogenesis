@@ -1,12 +1,11 @@
+import { ID } from '~/core/id';
 import { fetchProposalsByUser } from '~/core/io/fetch-proposals-by-user';
 import { fetchProposalDiffs } from '~/core/io/subgraph/fetch-proposal-diffs';
 
-import { ID } from '~/core/id';
-
 import {
   EMPTY_RANKING_PENDING_PROPOSAL_DATA,
-  entityDiffToRankingEntry,
   type RankingPendingProposalData,
+  entityDiffToRankingEntry,
 } from './ranking-pending-proposal-entries';
 
 const MAX_PAGES_PER_PROPOSER = 3;

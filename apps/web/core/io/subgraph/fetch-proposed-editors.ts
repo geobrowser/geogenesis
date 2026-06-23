@@ -29,8 +29,8 @@ export async function fetchActiveEditorRequest(
 ): Promise<ActiveEditorRequest | null> {
   const config = Environment.getConfig();
 
-  // ponytail: one page (default limit) is plenty — a space has a handful of
-  // editor requests, not hundreds. Bump to cursor paging only if that changes.
+  // One page (default limit) is plenty — a space has a handful of editor
+  // requests, not hundreds. Bump to cursor paging only if that changes.
   const path = `/proposals/space/${encodePathSegment(spaceId)}/status?actionTypes=AddEditor`;
 
   const result = await Effect.runPromise(

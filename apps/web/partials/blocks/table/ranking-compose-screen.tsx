@@ -258,7 +258,10 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const rankableEntriesByIdRaw = React.useMemo(() => new Map(rankableEntries.map(e => [e.entityId, e])), [rankableEntries]);
+  const rankableEntriesByIdRaw = React.useMemo(
+    () => new Map(rankableEntries.map(e => [e.entityId, e])),
+    [rankableEntries]
+  );
 
   // Until entity entries have resolved, every id looks like a placeholder
   // (`isPlaceholderRankingEntry(undefined)` is `true`), which would fire the

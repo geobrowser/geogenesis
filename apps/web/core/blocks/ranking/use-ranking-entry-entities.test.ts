@@ -80,7 +80,10 @@ describe('pickValueBySpace', () => {
 
 describe('pickRelationBySpace', () => {
   it('returns the current-space relation when present', () => {
-    const relations = [relation(AVATAR_TYPE, ROOT_SPACE, 'ipfs://root'), relation(AVATAR_TYPE, UNRANKED_SPACE, 'ipfs://current')];
+    const relations = [
+      relation(AVATAR_TYPE, ROOT_SPACE, 'ipfs://root'),
+      relation(AVATAR_TYPE, UNRANKED_SPACE, 'ipfs://current'),
+    ];
     expect(pickRelationBySpace(relations, AVATAR_TYPE, UNRANKED_SPACE)?.spaceId).toBe(UNRANKED_SPACE);
   });
 
