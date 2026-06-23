@@ -26,6 +26,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
+import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -111,6 +112,7 @@ export const ReviewChanges = () => {
   const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
   const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isPersonalSpacePending } = usePendingPersonalSpace();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
@@ -424,6 +426,11 @@ export const ReviewChanges = () => {
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
 
   const isReadyToPublish = proposalName.length > 0;
+
+  // While the optimistic personal space is still being created on-chain there's
+  // no real space to publish into (and edits buffered under the `pending:`
+  // sentinel can't be proposed). Gate Publish until setup finishes.
+  const isPublishGatedByPendingSetup = isPersonalSpacePending || isPendingPersonalSpaceId(activeSpace);
 
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
@@ -813,6 +820,9 @@ export const ReviewChanges = () => {
             </div>
             {hasRemainingSpaces && (
               <div className="flex items-center gap-2">
+                {isPublishGatedByPendingSetup && (
+                  <span className="text-metadataMedium text-grey-04">Your space is finishing setup…</span>
+                )}
                 {activeSpaceMetadata?.type !== 'PERSONAL' && (
                   <button
                     onClick={() => setIsBountyLinkingOpen(prev => !prev)}
@@ -825,7 +835,11 @@ export const ReviewChanges = () => {
                     {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
                   </button>
                 )}
-                <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+                <Button
+                  variant="primary"
+                  onClick={handleSubmit}
+                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                >
                   <Pending isPending={isPublishing}>
                     {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
                   </Pending>

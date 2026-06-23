@@ -4,15 +4,12 @@ import { v4 as uuid } from 'uuid';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '../constants';
 import { Environment } from '../environment';
+import { ID } from '../id';
 import { deriveProposalStatus } from '../utils/utils';
 import { ProposalWithoutVoters } from './dto/proposals';
 import { mapActionTypeToProposalType } from './rest';
 import { fetchProfilesBySpaceIds } from './subgraph/fetch-profile';
 import { graphql } from './subgraph/graphql';
-
-type NetworkProposalAction = {
-  actionType: string;
-};
 
 type NetworkProposal = {
   id: string;
@@ -24,11 +21,18 @@ type NetworkProposal = {
   createdAt: string;
   createdAtBlock: string;
   executedAt: string | null;
-  proposalActions: NetworkProposalAction[];
+};
+
+type NetworkProposalActionNode = {
+  proposalId: string;
+  actionType: string;
 };
 
 const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: string) => {
-  const filters = [`proposedBy: { is: "${proposedBy}" }`, spaceId && `spaceId: { is: "${spaceId}" }`]
+  const filters = [
+    `proposedBy: { is: "${ID.hexToUuid(proposedBy)}" }`,
+    spaceId && `spaceId: { is: "${ID.hexToUuid(spaceId)}" }`,
+  ]
     .filter(Boolean)
     .join('\n        ');
 
@@ -51,9 +55,18 @@ const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: 
         createdAt
         createdAtBlock
         executedAt
-        proposalActions {
-          actionType
-        }
+      }
+    }
+  }`;
+};
+
+const getProposalActionsQuery = (proposalIds: string[]) => {
+  const ids = proposalIds.map(id => `"${ID.hexToUuid(id)}"`).join(', ');
+  return `query {
+    proposalActionsConnection(filter: { proposalId: { in: [${ids}] } }) {
+      nodes {
+        proposalId
+        actionType
       }
     }
   }`;
@@ -69,6 +82,40 @@ export type FetchUserProposalsOptions = {
 type NetworkResult = {
   proposalsConnection: { nodes: NetworkProposal[] };
 };
+
+type NetworkActionsResult = {
+  proposalActionsConnection: { nodes: NetworkProposalActionNode[] };
+};
+
+async function fetchActionTypesByProposalId(
+  proposalIds: string[],
+  signal?: AbortController['signal']
+): Promise<Map<string, string>> {
+  const byProposalId = new Map<string, string>();
+  if (proposalIds.length === 0) return byProposalId;
+
+  const result = await Effect.runPromise(
+    Effect.either(
+      graphql<NetworkActionsResult>({
+        endpoint: Environment.getConfig().api,
+        query: getProposalActionsQuery(proposalIds),
+        signal,
+      })
+    )
+  );
+
+  if (Either.isLeft(result)) {
+    if (result.left._tag === 'AbortError') throw result.left;
+    console.error('Unable to fetch proposal action types in fetchProposalsByUser:', result.left.message);
+    return byProposalId;
+  }
+
+  for (const node of result.right.proposalActionsConnection.nodes) {
+    const key = ID.uuidToHex(node.proposalId);
+    if (!byProposalId.has(key)) byProposalId.set(key, node.actionType);
+  }
+  return byProposalId;
+}
 
 export async function fetchProposalsByUser({
   proposerSpaceId,
@@ -127,7 +174,13 @@ export async function fetchProposalsByUser({
 
   const creatorIds = proposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];
-  const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
+  const [profilesForProposals, actionTypeByProposalId] = await Promise.all([
+    Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds)),
+    fetchActionTypesByProposalId(
+      proposals.map(p => p.id),
+      signal
+    ),
+  ]);
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
   return proposals.map(p => {
@@ -142,7 +195,7 @@ export async function fetchProposalsByUser({
       profileLink: null,
     };
 
-    const actionType = p.proposalActions[0]?.actionType ?? 'UNKNOWN';
+    const actionType = actionTypeByProposalId.get(ID.uuidToHex(p.id)) ?? 'UNKNOWN';
     const type = mapActionTypeToProposalType(actionType);
     const endTime = Number(p.endTime);
     const status = deriveProposalStatus(p.executedAt, endTime);

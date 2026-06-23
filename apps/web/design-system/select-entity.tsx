@@ -406,7 +406,7 @@ export const SelectEntity = ({
                 setResult(null);
               }}
               className={cx(
-                'z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                'pointer-events-auto z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
                 width === 'full' && 'max-w-[calc(100vw-24px)]'
               )}
               // Reserve space at the bottom of the viewport so the dropdown — including
