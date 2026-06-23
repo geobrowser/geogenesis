@@ -161,7 +161,7 @@ export function AcceptOrRejectMember({
     } else if (status === 'REJECTED') {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     } else if (canExecute && smartAccount) {
-      actions = <Execute spaceId={spaceId} proposalId={proposalId} proposalType={proposalType} variant="small" />;
+      actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     } else if (canExecute) {
       actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {

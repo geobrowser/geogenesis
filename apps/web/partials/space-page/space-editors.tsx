@@ -4,9 +4,9 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
-import { getHasRequestedSpaceEditorship } from './get-has-requested-space-editorship';
 import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { getIsMemberForSpace } from './get-is-member-for-space';
+import { getSpaceEditorRequest } from './get-space-editor-request';
 import { SpaceEditorsChip } from './space-editors-chip';
 import { SpaceEditorsDialogServerContainer } from './space-editors-dialog-server-container';
 import { SpaceEditorsContent } from './space-editors-popover-content';
@@ -20,10 +20,10 @@ interface Props {
 
 export async function SpaceEditors({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [isEditor, isMember, hasRequestedSpaceEditorship, space] = await Promise.all([
+  const [isEditor, isMember, editorRequest, space] = await Promise.all([
     getIsEditorForSpace(spaceId, connectedAddress),
     getIsMemberForSpace(spaceId, connectedAddress),
-    getHasRequestedSpaceEditorship(spaceId, connectedAddress),
+    getSpaceEditorRequest(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
   ]);
 
@@ -40,7 +40,7 @@ export async function SpaceEditors({ spaceId }: Props) {
       spaceId={spaceId}
       isEditor={isEditor}
       isMember={isMember}
-      hasRequestedSpaceEditorship={hasRequestedSpaceEditorship}
+      editorRequest={editorRequest}
       connectedAddress={connectedAddress ?? null}
     />
   );

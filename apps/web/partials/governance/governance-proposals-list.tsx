@@ -203,7 +203,13 @@ export async function GovernanceProposalsList({
                     />
                   </div>
 
-                  <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
+                  <GovernanceStatusChip
+                    endTime={p.endTime}
+                    status={p.status}
+                    canExecute={p.canExecute}
+                    spaceId={spaceId}
+                    proposalId={p.id}
+                  />
                 </div>
               </div>
             </ProposalListItem>
