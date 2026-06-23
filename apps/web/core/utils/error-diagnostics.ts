@@ -84,7 +84,7 @@ export function isWalletConnectionError(error: unknown): boolean {
 }
 
 export const WALLET_CONNECTION_MESSAGE =
-  'Your wallet session expired or disconnected. Please reload the page and try publishing again.';
+  'Your wallet session expired or disconnected. Please reload the page and try again.';
 
 /**
  * Turn a caught error into the message + optional retry action for the global

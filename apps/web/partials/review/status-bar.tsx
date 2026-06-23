@@ -11,12 +11,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import {
-  collectClientDiagnostics,
-  describeError,
-  formatErrorReport,
-  toUserFacingError,
-} from '~/core/utils/error-diagnostics';
+import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
 import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Button } from '~/design-system/button';
@@ -73,22 +68,6 @@ export const StatusBar = () => {
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
-
-  // ponytail: temporary preview — visit ?forceError=wallet (friendly) or ?forceError=rpc (raw chain). Remove before merge.
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const kind = new URLSearchParams(window.location.search).get('forceError');
-    if (!kind) return;
-    const synthetic = new Error('Publish failed', {
-      cause: new Error('An unknown RPC error occurred.', { cause: new Error('Unable to connect to wallet') }),
-    });
-    if (kind === 'rpc') {
-      dispatch({ type: 'ERROR', payload: describeError(synthetic) });
-    } else {
-      const { message, retry } = toUserFacingError(synthetic);
-      dispatch({ type: 'ERROR', payload: message, retry });
-    }
-  }, [dispatch]);
 
   const isError = state.reviewState === 'publish-error' && !!state.error;
 
