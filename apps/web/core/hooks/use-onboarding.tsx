@@ -7,6 +7,8 @@ import { useCallback, useEffect } from 'react';
 import { atom, useAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+
 import { usePersonalSpaceId } from './use-personal-space-id';
 
 const isOnboardingVisibleAtom = atom(false);
@@ -31,10 +33,15 @@ export function useOnboarding() {
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const [dismissedAtPath, setDismissedAtPath] = useAtom(onboardingDismissedAtPathAtom);
   const { isRegistered, isFetched, isLoading } = usePersonalSpaceId();
+  // While a brand-new account's personal space is being created in the
+  // background, the user is optimistically "logged in" — don't re-pop the
+  // onboarding dialog just because the indexer hasn't confirmed registration.
+  const { isPending } = usePendingPersonalSpace();
 
   const onboardingDismissed = dismissedAtPath !== null && dismissedAtPath === pathname;
 
-  const shouldOnboard = isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed;
+  const shouldOnboard =
+    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed && !isPending;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -61,7 +68,7 @@ export function useOnboarding() {
     onConnect(data) {
       const { address } = data;
 
-      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed) {
+      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed && !isPending) {
         setIsOnboardingVisible(true);
       }
     },

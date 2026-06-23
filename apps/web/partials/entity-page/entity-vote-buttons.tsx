@@ -15,6 +15,7 @@ import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
@@ -38,6 +39,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     objectType,
   });
   const { smartAccount } = useSmartAccount();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -193,19 +195,21 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
         onClick={handleUpvote}
-        disabled={!!smartAccount && !isConnected}
+        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? 'Sign in to vote'
-            : isConnected
-              ? upvoteActive
-                ? 'Remove upvote'
-                : 'Upvote'
-              : 'Connect wallet to vote'
+            : isAccountSetupPending
+              ? 'Finishing account setup…'
+              : isConnected
+                ? upvoteActive
+                  ? 'Remove upvote'
+                  : 'Upvote'
+                : 'Connect wallet to vote'
         }
         className={cx(
           'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
-          !!smartAccount && !isConnected && 'cursor-default opacity-50'
+          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
         <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
@@ -233,19 +237,21 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       </Popover.Root>
       <button
         onClick={handleDownvote}
-        disabled={!!smartAccount && !isConnected}
+        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? 'Sign in to vote'
-            : isConnected
-              ? downvoteActive
-                ? 'Remove downvote'
-                : 'Downvote'
-              : 'Connect wallet to vote'
+            : isAccountSetupPending
+              ? 'Finishing account setup…'
+              : isConnected
+                ? downvoteActive
+                  ? 'Remove downvote'
+                  : 'Downvote'
+                : 'Connect wallet to vote'
         }
         className={cx(
           'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
-          !!smartAccount && !isConnected && 'cursor-default opacity-50'
+          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
         <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />

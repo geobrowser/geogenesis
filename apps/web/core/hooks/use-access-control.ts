@@ -6,6 +6,7 @@ import { Effect } from 'effect';
 
 import { type SpaceAccess, normalizeSpaceId } from '~/core/access/space-access';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 
 import { useHydrated } from './use-hydrated';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -44,6 +45,13 @@ export function useAccessControl(spaceId: string): SpaceAccessState {
       Effect.runPromise(getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
     enabled: shouldCheckDaoAccess,
   });
+
+  // The optimistic personal space doesn't exist on the indexer yet, so the
+  // usual editor/owner lookups can't resolve. Its owner is whoever is sitting
+  // on the `pending:` page — grant edit so they can fill in their profile.
+  if (isPendingPersonalSpaceId(spaceId)) {
+    return { isEditor: true, isMember: true, canEdit: true, isLoading: false };
+  }
 
   if (!personalSpaceId || !hydrated || !space || isLoadingSpaceId) {
     return {

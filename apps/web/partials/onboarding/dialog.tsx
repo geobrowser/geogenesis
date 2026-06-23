@@ -1,7 +1,8 @@
 'use client';
 
+import { useLogout } from '@geogenesis/auth';
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { Content, Overlay, Portal, Root } from '@radix-ui/react-dialog';
+import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -9,32 +10,29 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useRouter } from 'next/navigation';
 
-import { isRankingComposePath } from '~/core/blocks/ranking/ranking-compose-url';
 import { ROOT_SPACE } from '~/core/constants';
-import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { queryClient } from '~/core/query-client';
+import { ID } from '~/core/id';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
-import { useReportError } from '~/core/state/status-bar-store';
+import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
-import { describeError } from '~/core/utils/error-diagnostics';
-import { NavUtils, sleep } from '~/core/utils/utils';
+import { devLog } from '~/core/utils/dev-log';
+import { NavUtils, validateEntityId } from '~/core/utils/utils';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Close } from '~/design-system/icons/close';
 import { NewTab } from '~/design-system/icons/new-tab';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { Trash } from '~/design-system/icons/trash';
@@ -53,11 +51,15 @@ export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
 type Step = 'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
 
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'start');
-
-const workflowSteps: Array<Step> = ['create-space', 'completed'];
+// 'start' and 'create-space' linger in the type only to normalize values
+// persisted by an older version — onboarding now opens straight on name/avatar
+// and runs to 'completed' with no separate create step (see effectiveStep).
+export const stepAtom = atomWithStorage<Step>('onboardingStep', 'enter-profile');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
+// How long the "Finalizing details…" animation plays before we route the user
+// onward. The personal space keeps creating in the background regardless.
+const COMPLETION_ANIMATION_MS = 3000;
 const TERMS_AND_CONDITIONS_URL =
   'https://docs.google.com/document/d/1clBax9yApV8uI1m36gX9pEf6jrpMEslsqxmqXW2w9I4/edit?tab=t.0';
 
@@ -76,20 +78,14 @@ export const OnboardingDialog = () => {
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
-  const name = useAtomValue(nameAtom);
-  const avatar = useAtomValue(avatarAtom);
-  const topicId = useAtomValue(topicIdAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setName = useSetAtom(nameAtom);
-  const { createPersonalSpace } = useCreatePersonalSpace();
-  const setSpaceId = useSetAtom(spaceIdAtom);
+  const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
-
-  const reportError = useReportError();
 
   // Flows like "Add my ranking" record where the user was headed before being
   const [postOnboardingRedirect, setPostOnboardingRedirect] = useAtom(postOnboardingRedirectAtom);
@@ -108,14 +104,6 @@ export const OnboardingDialog = () => {
     router.prefetch(destination);
   }, [isOnboardingVisible, router, destination]);
 
-  // Track whether this tab ever had the onboarding dialog visible. Used
-  // to scope side-effects (step resets, redirects) to the tab that was
-  // actually driving onboarding, not e.g. a suppressed entity-preview tab.
-  const wasOnboardingActiveRef = useRef(false);
-  useEffect(() => {
-    if (isOnboardingVisible) wasOnboardingActiveRef.current = true;
-  }, [isOnboardingVisible]);
-
   useEffect(() => {
     // Only resolve stale state on tabs where the dialog is actually
     // being shown. Otherwise a second tab (e.g. entity preview opened
@@ -127,79 +115,45 @@ export const OnboardingDialog = () => {
     }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
-  // Ranking compose skips the intro — go straight to name/avatar entry.
+  // Play the completion animation for a beat, then send the user where they were
+  // headed. Decoupling the redirect from the synchronous `setPending` (which
+  // hides the dialog via `shouldOnboard`) also makes the navigation reliable.
   useEffect(() => {
-    if (!isOnboardingVisible) return;
-    if (step !== 'start') return;
-    if (!isRankingComposePath(postOnboardingRedirect)) return;
-    setStep('enter-profile');
-  }, [isOnboardingVisible, step, postOnboardingRedirect, setStep]);
-
-  // Fire the post-creation redirect as soon as step flips to 'completed'.
-  // Gated on wasOnboardingActiveRef (not the live isOnboardingVisible)
-  // because usePersonalSpaceId flips isRegistered=true at this point and
-  // hides the dialog; a suppressed preview tab never sets the ref, so it
-  // won't auto-navigate away. Chat and redirect fire together.
-  useEffect(() => {
-    if (!wasOnboardingActiveRef.current) return;
     if (step !== 'completed') return;
-    if (!hasSeenAssistant) {
-      setChatOpen(true);
-      setHasSeenAssistant(true);
-    }
-    router.push(destination);
-    setPostOnboardingRedirect(null);
-    setStep('done');
-  }, [
-    step,
-    router,
-    setStep,
-    hasSeenAssistant,
-    setChatOpen,
-    setHasSeenAssistant,
-    destination,
-    setPostOnboardingRedirect,
-  ]);
+    const timeout = setTimeout(() => {
+      devLog('[onboarding] completion animation done → navigating to %s', destination);
+      router.push(destination);
+      setStep('done');
+      dismissOnboarding();
+    }, COMPLETION_ANIMATION_MS);
+    return () => clearTimeout(timeout);
+  }, [step, destination, router, setStep, dismissOnboarding]);
 
   const address = smartAccount?.account.address;
 
   if (!address) return null;
 
-  type CreatePersonalSpaceTopicArg = { topicIdForPublish?: string };
+  // Optimistic onboarding: stop blocking on the (30s–3min) personal-space
+  // creation chain. Pre-generate the person entity id (`topicId`), hand the
+  // job to the always-mounted PendingPersonalSpaceRunner, and let the user
+  // straight through to where they were headed. They feel logged in instantly;
+  // creation finishes in the background, then their `pending:` edits remap to
+  // the real spaceId.
+  function beginOptimisticOnboarding(matchedTopicId: string) {
+    const topicId = validateEntityId(matchedTopicId) ? matchedTopicId : ID.createEntityId();
+    devLog('[onboarding] begin optimistic onboarding, topicId=%s', topicId);
+    setTopicId(topicId);
+    // Kick off the background personal-space creation immediately.
+    setPending({ topicId, status: 'pending' });
 
-  async function createSpace(options?: CreatePersonalSpaceTopicArg) {
-    if (!address) return;
-
-    const effectiveTopicId = options?.topicIdForPublish !== undefined ? options.topicIdForPublish : topicId;
-
-    try {
-      const spaceId = await createPersonalSpace({
-        spaceName: name,
-        spaceImage: avatar,
-        topicId: effectiveTopicId || undefined,
-      });
-
-      if (!spaceId) {
-        throw new Error(`Creating space failed`);
-      }
-
-      // Forces the profile to be refetched
-      await queryClient.invalidateQueries({ queryKey: ['profile', address] });
-
-      setSpaceId(spaceId);
-      setStep('completed');
-    } catch (error) {
-      console.error(error);
-      // Drop back to the form step so the user has a recovery path even if
-      // they dismiss the global error toast — there's no close affordance
-      // on the StepComplete ("Creating space...") screen.
-      setStep('enter-profile');
-      const message = describeError(error);
-      reportError(`Space creation failed: ${message}`, () => {
-        setStep('create-space');
-        createSpace(options);
-      });
+    if (!hasSeenAssistant) {
+      setChatOpen(true);
+      setHasSeenAssistant(true);
     }
+
+    // Show the completion animation; the effect above routes the user onward
+    // once it has played.
+    setStep('completed');
   }
 
   async function onProfileContinue(exactMatches: SearchResult[]) {
@@ -209,10 +163,7 @@ export const OnboardingDialog = () => {
       setEntityMatchCandidates(exactMatches);
       setStep('existing-entity-match');
     } else {
-      setTopicId('');
-      setStep('create-space');
-      await sleep(100);
-      createSpace({ topicIdForPublish: '' });
+      beginOptimisticOnboarding('');
     }
   }
 
@@ -221,40 +172,43 @@ export const OnboardingDialog = () => {
   // 'existing-entity-match' the candidates array would be empty — render
   // StepOnboarding during that window so we don't flash an empty match
   // step for a frame before the reset effect kicks in.
-  const effectiveStep = step === 'existing-entity-match' && entityMatchCandidates.length === 0 ? 'enter-profile' : step;
+  const effectiveStep =
+    step === 'start' ||
+    step === 'create-space' ||
+    (step === 'existing-entity-match' && entityMatchCandidates.length === 0)
+      ? 'enter-profile'
+      : step;
 
   return (
-    <Root open={isOnboardingVisible}>
+    // Stay open through the completion animation — `setPending` flips
+    // `isOnboardingVisible` false, but we want the animation to finish first.
+    <Root open={isOnboardingVisible || step === 'completed'}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
-        <Content className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center">
+        <Content
+          aria-describedby={undefined}
+          // No escape: a user without a personal space who dismisses this gets
+          // stuck (can't publish). Onboarding must run to completion.
+          onEscapeKeyDown={e => e.preventDefault()}
+          onPointerDownOutside={e => e.preventDefault()}
+          onInteractOutside={e => e.preventDefault()}
+          className="fixed inset-0 z-1000 flex h-full w-full items-start justify-center"
+        >
+          <Title className="sr-only">Set up your Geo account</Title>
           <ModalCard childKey="card">
-            <StepHeader
-              onClearEntityMatches={() => setEntityMatchCandidates([])}
-              onDismiss={dismissOnboarding}
-              postOnboardingRedirect={postOnboardingRedirect}
-            />
-            {effectiveStep === 'start' && <StepStart />}
+            <StepHeader onClearEntityMatches={() => setEntityMatchCandidates([])} />
             {effectiveStep === 'enter-profile' && <StepOnboarding onProfileContinue={onProfileContinue} />}
             {effectiveStep === 'existing-entity-match' && (
               <StepExistingEntityMatch
                 candidates={entityMatchCandidates}
-                onSkip={async () => {
-                  setTopicId('');
-                  setStep('create-space');
-                  await sleep(100);
-                  createSpace({ topicIdForPublish: '' });
-                }}
-                onSelect={async (entityId, entityName) => {
-                  setTopicId(entityId);
+                onSkip={() => beginOptimisticOnboarding('')}
+                onSelect={(entityId, entityName) => {
                   if (entityName) setName(entityName);
-                  setStep('create-space');
-                  await sleep(100);
-                  createSpace({ topicIdForPublish: entityId });
+                  beginOptimisticOnboarding(entityId);
                 }}
               />
             )}
-            {workflowSteps.includes(effectiveStep) && <StepComplete />}
+            {effectiveStep === 'completed' && <StepComplete />}
           </ModalCard>
         </Content>
       </Portal>
@@ -282,59 +236,43 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
   );
 };
 
-const StepHeader = ({
-  onClearEntityMatches,
-  onDismiss,
-  postOnboardingRedirect,
-}: {
-  onClearEntityMatches: () => void;
-  onDismiss: () => void;
-  postOnboardingRedirect: string | null;
-}) => {
+const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void }) => {
   const [step, setStep] = useAtom(stepAtom);
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
+  // Cleanup runs via the app-root useGeoLogoutCleanup; this only triggers it.
+  const { logout } = useLogout();
 
-  const showBack = step === 'enter-profile' || step === 'existing-entity-match';
-  const canDismiss = step !== 'create-space' && step !== 'completed';
-  const isWorkflowStep = step === 'create-space' || step === 'completed';
-
-  const handleBack = () => {
-    if (step === 'existing-entity-match') {
-      onClearEntityMatches();
-      setStep('enter-profile');
-      return;
-    }
-    if (step === 'enter-profile' && isRankingComposePath(postOnboardingRedirect)) {
-      onDismiss();
-      return;
-    }
-    setName('');
-    setTopicId('');
-    if (step === 'enter-profile') {
-      setStep('start');
-    }
-  };
+  // Back only returns from the match step to name entry. The first step can't go
+  // back — onboarding can't be dismissed, so logout is the only way out.
+  const showBack = step === 'existing-entity-match';
+  const isCompleting = step === 'completed';
 
   return (
     <div className="relative z-20 flex items-center justify-between pb-2">
       <div className="rotate-180">
         {showBack ? (
-          <SquareButton icon={<RightArrowLongSmall />} onClick={handleBack} className="border-none! bg-transparent!" />
+          <SquareButton
+            icon={<RightArrowLongSmall />}
+            onClick={() => {
+              onClearEntityMatches();
+              setStep('enter-profile');
+            }}
+            className="border-none! bg-transparent!"
+          />
         ) : (
           <div className="h-1 w-4" />
         )}
       </div>
-      {isWorkflowStep ? <h3 className="text-smallTitle"></h3> : null}
-      {canDismiss ? (
-        <SquareButton
-          onClick={onDismiss}
-          icon={<Close />}
-          className="border-none! bg-transparent!"
-          aria-label="Close"
-        />
-      ) : (
+      {isCompleting ? <h3 className="text-smallTitle"></h3> : null}
+      {isCompleting ? (
         <div className="h-1 w-4" />
+      ) : (
+        <button
+          type="button"
+          onClick={() => logout()}
+          className="text-button text-grey-04 transition-colors hover:text-text"
+        >
+          Log out
+        </button>
       )}
     </div>
   );
@@ -359,36 +297,6 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
     </motion.div>
   );
 };
-
-function StepStart() {
-  const setStep = useSetAtom(stepAtom);
-
-  return (
-    <>
-      <div className="space-y-8">
-        <StepContents childKey="start">
-          <div className="w-full">
-            <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
-              Create your first space
-            </Text>
-            <Text as="p" variant="body" className="mx-auto mt-2 text-center text-base!">
-              This space will represent you. After, you can create spaces on any topic - including projects or groups
-              you're a part of - linked with any Geo accounts.
-            </Text>
-          </div>
-        </StepContents>
-        <div className="relative aspect-video">
-          <img src="/images/onboarding/0.png" alt="" className="inline-block h-full w-full" />
-        </div>
-      </div>
-      <div className="absolute inset-x-4 bottom-4">
-        <Button onClick={() => setStep('enter-profile')} className="w-full">
-          Start
-        </Button>
-      </div>
-    </>
-  );
-}
 
 type StepOnboardingProps = {
   onProfileContinue: (exactMatches: SearchResult[]) => void;
@@ -683,21 +591,16 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
 }
 
 function StepComplete() {
-  const step = useAtomValue(stepAtom);
-
-  const hasCompleted = step === 'completed';
-
   return (
     <>
       <StepContents childKey="start">
         <div className="flex w-full flex-col items-center pt-3">
-          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
-            {step === 'completed' ? `Finalizing details...` : `Creating space...`}
+          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
+            Finalizing details...
           </Text>
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">
@@ -707,7 +610,7 @@ function StepComplete() {
           </div>
         </div>
         <div className="relative z-0">
-          <Animation active={hasCompleted} />
+          <Animation active />
         </div>
       </div>
     </>
