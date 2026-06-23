@@ -18,7 +18,11 @@ import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { EntitySidePanelSurface } from '~/partials/entity-page/entity-side-panel';
 
 import { RankingComposeCreateEntityHeader } from './ranking-compose-create-entity-header';
-import { entitySidePanelPersistEditorAtom, rankingComposeRemoveScrollShardAtom } from '~/atoms';
+import {
+  entitySidePanelPersistEditorAtom,
+  rankingComposeRemoveScrollShardAtom,
+  rankingPendingPublishedAtAtom,
+} from '~/atoms';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
 
 type Props = {
@@ -31,6 +35,7 @@ export function RankingComposeCreateEntityPanel({ onFinished, rankingName }: Pro
   const jotaiStore = useStore();
   const [flow, setFlow] = useAtom(rankingComposeCreateEntityAtom);
   const setRemoveScrollShard = useSetAtom(rankingComposeRemoveScrollShardAtom);
+  const setRankingPendingPublishedAt = useSetAtom(rankingPendingPublishedAtAtom);
   const { store } = useSyncEngine();
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
@@ -112,6 +117,9 @@ export function RankingComposeCreateEntityPanel({ onFinished, rankingName }: Pro
       name: proposalName,
       onSuccess: () => {
         setIsPublishing(false);
+        // Signal the pending-proposal query to poll briefly: the proposal won't
+        // be indexed yet, so this single invalidation alone would miss it.
+        setRankingPendingPublishedAt(Date.now());
         void queryClient.invalidateQueries({ queryKey: ['ranking-pending-entities'] });
         handleClose();
         onFinished(entityId);
@@ -131,6 +139,7 @@ export function RankingComposeCreateEntityPanel({ onFinished, rankingName }: Pro
     handleClose,
     onFinished,
     rankingName,
+    setRankingPendingPublishedAt,
   ]);
 
   React.useLayoutEffect(() => {
