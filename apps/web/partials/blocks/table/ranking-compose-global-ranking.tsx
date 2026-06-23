@@ -625,11 +625,15 @@ export function RankingComposeGlobalRanking({
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
+              // Render the pending disclosure ABOVE the stable-height placeholder so it
+              // stays reachable at the top instead of being pushed below the reserved
+              // height (which forced a scroll, especially for non-members with no
+              // "Create new" prompt filling the placeholder).
               <>
+                {pendingDisclosure}
                 <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
                   {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
                 </RankingComposeSearchListPlaceholder>
-                {pendingDisclosure}
               </>
             ) : (
               searchResultList
