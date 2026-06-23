@@ -121,11 +121,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const submissionsOpen = rankingSubmissionsOpen(periodState);
 
-  const { submissions, mySubmission, saveMySubmission, isSaving, personalSpaceId } = useRankingSubmissions(
-    entityId,
-    spaceId,
-    displayName
-  );
+  const {
+    submissions,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isLoading: isLoadingMySubmission,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
@@ -315,24 +318,72 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     return map;
   }, [myEntriesById, displayRankableEntriesById, displayMyEntityIds]);
 
+  // An id is "display-named" when something we can actually render — the resolved
+  // entry, the data-block row, or a search hit — yields a real name. Entries and
+  // rows both fall back to "Untitled" before they resolve, so checking only the
+  // entry isn't enough.
+  const isDisplayNamed = React.useCallback(
+    (id: string) => {
+      const entry = displayRankableEntriesById.get(id);
+      if (entry && !isPlaceholderRankingEntry(entry)) return true;
+      const row = rowsByEntityId.get(id);
+      if (row) {
+        const rowName = getRowDisplayName(row).trim();
+        if (rowName && rowName !== 'Untitled') return true;
+      }
+      return Boolean(searchResultsById.get(id)?.name?.trim());
+    },
+    [displayRankableEntriesById, rowsByEntityId, searchResultsById]
+  );
+
+  // Entities hidden from the main global list:
+  //   • confirmed-pending ones (shown in the "Show pending" disclosure instead),
+  //   • still-unresolved placeholders whose pending status isn't known yet, and
+  //   • anything we can't name yet — rendering it would flash "Untitled" on a
+  //     throttled refresh until its entry/row resolves; it reappears once named.
+  // While the viewer's own submission is still loading we also withhold the
+  // browse leaderboard: those entries belong in "My ranking" once `orderedIds`
+  // arrives, and showing them here first makes them visibly jump across. This
+  // only applies to browse — in search mode `filteredRankedIds` is the search
+  // result set, which must stay visible (hiding it would flash "no results").
+  const hideRankedForSubmission = isLoadingMySubmission && !isSearchActive;
+  const hiddenGlobalIds = React.useMemo(() => {
+    const hidden = new Set<string>(pendingEntityIds);
+    for (const id of globalUnresolvedIds) hidden.add(id);
+    for (const id of filteredRankedIds) {
+      if (hideRankedForSubmission || !isDisplayNamed(id)) hidden.add(id);
+    }
+    for (const id of filteredUnrankedIds) {
+      if (!isDisplayNamed(id)) hidden.add(id);
+    }
+    return hidden;
+  }, [
+    pendingEntityIds,
+    globalUnresolvedIds,
+    filteredRankedIds,
+    filteredUnrankedIds,
+    hideRankedForSubmission,
+    isDisplayNamed,
+  ]);
+
   const visibleFilteredRankedIds = React.useMemo(
-    () => (pendingEntityIds.size === 0 ? filteredRankedIds : filteredRankedIds.filter(id => !pendingEntityIds.has(id))),
-    [filteredRankedIds, pendingEntityIds]
+    () => (hiddenGlobalIds.size === 0 ? filteredRankedIds : filteredRankedIds.filter(id => !hiddenGlobalIds.has(id))),
+    [filteredRankedIds, hiddenGlobalIds]
   );
   const visibleFilteredUnrankedIds = React.useMemo(
     () =>
-      pendingEntityIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !pendingEntityIds.has(id)),
-    [filteredUnrankedIds, pendingEntityIds]
+      hiddenGlobalIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !hiddenGlobalIds.has(id)),
+    [filteredUnrankedIds, hiddenGlobalIds]
   );
   const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
   const visibleHasVisibleRankableEntities =
     visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
 
   const visibleGlobalRankByEntityId = React.useMemo(() => {
-    if (pendingEntityIds.size === 0) return globalRankByEntityId;
-    const visible = globalOrderedIds.filter(id => !pendingEntityIds.has(id));
+    if (hiddenGlobalIds.size === 0) return globalRankByEntityId;
+    const visible = globalOrderedIds.filter(id => !hiddenGlobalIds.has(id));
     return new Map(visible.map((id, index) => [id, index + 1]));
-  }, [globalOrderedIds, pendingEntityIds, globalRankByEntityId]);
+  }, [globalOrderedIds, hiddenGlobalIds, globalRankByEntityId]);
 
   const revealablePendingIds = React.useMemo(
     () => [...pendingEntityIds].filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
@@ -464,6 +515,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const isAwaitingMembership = Boolean(createNewSpaceId) && accessStatus === 'needs-membership';
 
+  // The global list isn't ready to render real rows until both the viewer's own
+  // submission (so we know which entries are theirs) and the rankable entries (so
+  // rows have names) have resolved. Surface this as a loading state so the global
+  // column shows its skeleton during a throttled refresh instead of flashing
+  // "Untitled" rows that then jump into "My ranking".
+  const isGlobalListResolving = isLoadingMySubmission || isLoadingRankableEntries;
+
   const titleMetadata = (
     <RankingComposeTitleMetadata
       isMobile={isMobile}
@@ -518,10 +576,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}
           isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
-          isLoadingRows={isSearchActive ? isLoadingSearch : isLoadingRows && !hasRankedGlobalEntities}
+          isLoadingRows={
+            isSearchActive ? isLoadingSearch : isGlobalListResolving || (isLoadingRows && !hasRankedGlobalEntities)
+          }
           isFetchingNextPage={isSearchActive ? isFetchingNextSearchPage : isFetchingNextPage}
           hasNextPage={isSearchActive ? hasNextSearchPage : hasNextPage}
-          hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
+          hasAnyRankableEntityIds={
+            !isGlobalListResolving && (hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows)
+          }
           onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}

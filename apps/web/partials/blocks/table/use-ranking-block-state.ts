@@ -507,11 +507,17 @@ export function useRankingBlockState({
     return getPendingProposerSpaceIds(submitters, extra);
   }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId, sharedAuthorSpaceId]);
 
-  const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
+  const { pendingEntityIds, pendingEntriesByEntityId, isPendingLoading } = useRankingPendingEntities({
     targetSpaceId: pendingTargetSpaceId,
     unresolvedEntityIds: pendingCandidateEntityIds,
     proposerSpaceIds: pendingProposerSpaceIds,
   });
+
+  // An unresolved row's name may still arrive from the entity store or the
+  // pending-proposal fetch. While that's in flight, render a skeleton instead of
+  // flashing "Untitled" — on a throttled shortlink the seed can carry "Untitled"
+  // for governance-pending or cross-space entries until the live data lands.
+  const entriesResolving = isLoadingGlobalEntries || isLoadingMyEntries || isPendingLoading;
 
   const globalRankingEntryByEntityId = React.useMemo(() => {
     if (pendingEntriesByEntityId.size === 0) return globalRankingEntryByEntityIdBase;
@@ -811,6 +817,7 @@ export function useRankingBlockState({
     globalRankingEntryByEntityId,
     pendingEntityIds,
     isLoadingGlobalEntries,
+    entriesResolving,
     myDisplayEntityIds: myRankingListEntityIds,
     totalMyRankingEntityCount: myDisplayEntityIds.length,
     embeddedMyPageNumber,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useAtomValue } from 'jotai';
 
 import * as React from 'react';
@@ -44,10 +44,16 @@ export function useRankingPendingEntities({
 
   const publishedAt = useAtomValue(rankingPendingPublishedAtAtom);
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['ranking-pending-entities', targetSpaceId, idsKey, proposersKey],
     enabled,
     staleTime: 30_000,
+    // The key includes the candidate-id and proposer sets, so it changes every
+    // time the user adds/removes/reorders an entry. Without this the query drops
+    // to `undefined` on each re-key and the resolved pending names blank out to
+    // "Untitled" until the refetch lands. Hold the previous result so already-
+    // resolved pending entries stay named across re-keys.
+    placeholderData: keepPreviousData,
     // Poll only within the post-publish window; otherwise stay idle.
     refetchInterval: () =>
       publishedAt && Date.now() - publishedAt < PENDING_POLL_WINDOW_MS ? PENDING_POLL_INTERVAL_MS : false,
@@ -66,7 +72,11 @@ export function useRankingPendingEntities({
     () => ({
       pendingEntityIds: pendingData.pendingEntityIds,
       pendingEntriesByEntityId: pendingData.entriesByEntityId,
+      // True only on a cold first load (keepPreviousData keeps this false across
+      // re-keys/polls). Lets consumers skeleton an unresolved row instead of
+      // flashing "Untitled" before the pending name arrives.
+      isPendingLoading: enabled && isLoading,
     }),
-    [pendingData]
+    [pendingData, enabled, isLoading]
   );
 }
