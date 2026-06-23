@@ -95,6 +95,7 @@ type UseRankingBlockStateParams = {
 // Stable empty fallbacks so absent SSR seeds don't produce a fresh `[]` each
 // render, which would defeat the `useMemo`s that depend on these values.
 const EMPTY_ENTITY_IDS: string[] = [];
+const EMPTY_ENTITY_ID_SET: ReadonlySet<string> = new Set<string>();
 const EMPTY_RANKING_ENTRIES: RankingEntryDisplay[] = [];
 
 export function useRankingBlockState({
@@ -200,42 +201,12 @@ export function useRankingBlockState({
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
-  const globalRankingIdsKey = globalDisplayEntityIds.join('|');
 
+  // Embedded global pagination is derived from the *visible* list (pending/placeholder
+  // rows removed) further below — not here — so pages aren't sliced from the raw list
+  // and then shortened, which produced empty/short pages and inflated page counts.
+  // Only the page-number state lives here; the derived values follow the visible list.
   const [embeddedGlobalPageNumber, setEmbeddedGlobalPageNumber] = React.useState(0);
-
-  React.useEffect(() => {
-    setEmbeddedGlobalPageNumber(0);
-  }, [entityId, globalRankingIdsKey]);
-
-  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(globalDisplayEntityIds.length / PAGE_SIZE));
-
-  React.useEffect(() => {
-    setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
-  }, [embeddedGlobalTotalPages]);
-
-  const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
-    if (!paginateEmbeddedRanking) return globalDisplayEntityIds;
-    const start = embeddedGlobalPageNumber * PAGE_SIZE;
-    return globalDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedGlobalPageNumber, globalDisplayEntityIds, paginateEmbeddedRanking]);
-
-  const globalRankingListEntityIds = paginateEmbeddedRanking ? paginatedGlobalDisplayEntityIds : globalDisplayEntityIds;
-
-  const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
-  const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
-  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && globalDisplayEntityIds.length > PAGE_SIZE;
-
-  const setEmbeddedGlobalPage = React.useCallback(
-    (page: number | 'previous' | 'next') => {
-      setEmbeddedGlobalPageNumber(prev => {
-        if (page === 'previous') return Math.max(0, prev - 1);
-        if (page === 'next') return Math.min(embeddedGlobalTotalPages - 1, prev + 1);
-        return Math.max(0, Math.min(embeddedGlobalTotalPages - 1, page));
-      });
-    },
-    [embeddedGlobalTotalPages]
-  );
 
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
 
@@ -359,9 +330,13 @@ export function useRankingBlockState({
     }
   }, [activeTab, preferMyTab, showMyRankingSection]);
 
+  // Resolve the FULL global list (not just the current page) so placeholder/pending
+  // rows can be identified and removed *before* pagination. For the non-paginated
+  // compose view this list already equals the rendered list, so it's no extra work
+  // there; for embedded blocks it's one bounded, cached batch query.
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
-    globalRankingListEntityIds
+    globalDisplayEntityIds
   );
 
   const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
@@ -432,6 +407,68 @@ export function useRankingBlockState({
     return map;
   }, [myEntries, rows, initialSharedEntries]);
 
+  // Hide unresolved rows from the global leaderboard for everyone. A row is
+  // "unresolved" when the indexer returns no real name for it (placeholder) — this
+  // covers governance-pending entities (backfilled below for my-ranking + the opt-in
+  // disclosure) as well as deleted/rejected ones, so the public list never shows
+  // nameless ghost rows. Empty while entries are still loading, so nothing flickers
+  // out before names resolve.
+  const placeholderGlobalEntityIds = React.useMemo(() => {
+    if (isLoadingGlobalEntries) return EMPTY_ENTITY_ID_SET;
+    const ids = new Set<string>();
+    for (const id of globalDisplayEntityIds) {
+      if (id && isPlaceholderRankingEntry(globalRankingEntryByEntityIdBase.get(id))) ids.add(id);
+    }
+    return ids;
+  }, [isLoadingGlobalEntries, globalDisplayEntityIds, globalRankingEntryByEntityIdBase]);
+
+  // The global list everyone sees: raw order minus hidden rows, renumbered contiguously.
+  const visibleGlobalDisplayEntityIds = React.useMemo(
+    () =>
+      placeholderGlobalEntityIds.size === 0
+        ? globalDisplayEntityIds
+        : globalDisplayEntityIds.filter(id => !placeholderGlobalEntityIds.has(id)),
+    [globalDisplayEntityIds, placeholderGlobalEntityIds]
+  );
+
+  // Pagination derives from the visible list, so page counts and slices stay correct.
+  const visibleGlobalIdsKey = visibleGlobalDisplayEntityIds.join('|');
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(0);
+  }, [entityId, visibleGlobalIdsKey]);
+
+  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / PAGE_SIZE));
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
+  }, [embeddedGlobalTotalPages]);
+
+  const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
+    if (!paginateEmbeddedRanking) return visibleGlobalDisplayEntityIds;
+    const start = embeddedGlobalPageNumber * PAGE_SIZE;
+    return visibleGlobalDisplayEntityIds.slice(start, start + PAGE_SIZE);
+  }, [embeddedGlobalPageNumber, visibleGlobalDisplayEntityIds, paginateEmbeddedRanking]);
+
+  const globalRankingListEntityIds = paginateEmbeddedRanking
+    ? paginatedGlobalDisplayEntityIds
+    : visibleGlobalDisplayEntityIds;
+
+  const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
+  const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
+  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > PAGE_SIZE;
+
+  const setEmbeddedGlobalPage = React.useCallback(
+    (page: number | 'previous' | 'next') => {
+      setEmbeddedGlobalPageNumber(prev => {
+        if (page === 'previous') return Math.max(0, prev - 1);
+        if (page === 'next') return Math.min(embeddedGlobalTotalPages - 1, prev + 1);
+        return Math.max(0, Math.min(embeddedGlobalTotalPages - 1, page));
+      });
+    },
+    [embeddedGlobalTotalPages]
+  );
+
   const pendingTargetSpaceId = React.useMemo(() => {
     const scope = getScopeFromFilters(filterState);
     if (scope.type !== 'SPACES') return null;
@@ -443,21 +480,14 @@ export function useRankingBlockState({
 
   const unresolvedRankingEntityIds = React.useMemo(() => {
     if (!entriesSettled) return EMPTY_ENTITY_IDS;
-    const ids = new Set<string>();
-    for (const id of globalRankingListEntityIds) {
-      if (id && isPlaceholderRankingEntry(globalRankingEntryByEntityIdBase.get(id))) ids.add(id);
-    }
+    // Global placeholders are already computed (and hidden from the leaderboard);
+    // reuse them so their names get backfilled for the opt-in disclosure.
+    const ids = new Set<string>(placeholderGlobalEntityIds);
     for (const id of myRankingListEntityIds) {
       if (id && isPlaceholderRankingEntry(myRankingEntryByEntityIdBase.get(id))) ids.add(id);
     }
     return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
-  }, [
-    entriesSettled,
-    globalRankingListEntityIds,
-    myRankingListEntityIds,
-    globalRankingEntryByEntityIdBase,
-    myRankingEntryByEntityIdBase,
-  ]);
+  }, [entriesSettled, placeholderGlobalEntityIds, myRankingListEntityIds, myRankingEntryByEntityIdBase]);
 
   const ownRankingEntityIds = React.useMemo(
     () => (isSharedRankingView || !personalSpaceId ? EMPTY_ENTITY_IDS : myRankingListEntityIds),
@@ -501,25 +531,7 @@ export function useRankingBlockState({
     return map;
   }, [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
 
-  // Pending entities are hidden from the global ranking for everyone; remaining
-  // entities renumber contiguously. My-ranking / shared lists keep them (with the
-  // "Pending approval" badge).
-  const visibleGlobalDisplayEntityIds = React.useMemo(
-    () =>
-      pendingEntityIds.size === 0
-        ? globalDisplayEntityIds
-        : globalDisplayEntityIds.filter(id => !pendingEntityIds.has(id)),
-    [globalDisplayEntityIds, pendingEntityIds]
-  );
-
-  const visibleGlobalListEntityIds = React.useMemo(
-    () =>
-      pendingEntityIds.size === 0
-        ? globalRankingListEntityIds
-        : globalRankingListEntityIds.filter(id => !pendingEntityIds.has(id)),
-    [globalRankingListEntityIds, pendingEntityIds]
-  );
-
+  // Global ranks renumber contiguously over the visible (placeholder-free) list.
   const globalRankByEntityId = React.useMemo(
     () => new Map(visibleGlobalDisplayEntityIds.map((id, index) => [id, index + 1])),
     [visibleGlobalDisplayEntityIds]
@@ -787,7 +799,7 @@ export function useRankingBlockState({
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
-    globalDisplayEntityIds: visibleGlobalListEntityIds,
+    globalDisplayEntityIds: globalRankingListEntityIds,
     totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,
