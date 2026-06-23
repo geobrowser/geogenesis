@@ -146,8 +146,8 @@ async function backfillPendingNames(
 
   return entries.map(entry => {
     const pending = isPlaceholderRankingEntry(entry) ? entriesByEntityId.get(entry.entityId) : undefined;
-    // ponytail: the proposal diff carries name/description but not the cover, so
-    // a pending entry keeps its (null) image. Add cover backfill if product needs it.
+    // The proposal diff carries name/description but not the cover, so a pending
+    // entry keeps its (null) image.
     return pending ? { ...entry, name: pending.name, description: pending.description ?? entry.description } : entry;
   });
 }

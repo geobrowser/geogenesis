@@ -1,8 +1,9 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { useAtom, useSetAtom, useStore } from 'jotai';
 import { createPortal } from 'react-dom';
 
@@ -201,7 +202,7 @@ export function RankingComposeCreateEntityPanel({ onFinished, rankingName }: Pro
         <aside
           data-ranking-compose-create-entity-panel
           data-entity-side-panel
-          className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex w-full flex-col overflow-hidden rounded-t-2xl bg-white"
+          className="shadow-2xl rounded-t-2xl absolute inset-x-0 bottom-0 z-1 flex w-full flex-col overflow-hidden bg-white"
           style={{ top: 'calc(var(--ranking-compose-top, 2.75rem) + 8rem)' }}
         >
           {panelBody}

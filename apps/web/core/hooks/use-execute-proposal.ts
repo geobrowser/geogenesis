@@ -148,7 +148,7 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
     enabled: Boolean(
       account && personalSpaceId && isRegistered && validateSpaceId(spaceId) && validateSpaceId(proposalId)
     ),
-    // ponytail: a passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
+    // A passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
     staleTime: 30_000,
     queryFn: async (): Promise<{ state: ProposalExecutability; revert: GovernanceRevert | null }> => {
       const { calldata } = geo.daoSpaces.proposals.execute({
