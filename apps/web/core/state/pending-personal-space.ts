@@ -18,6 +18,12 @@ export const PENDING_PERSONAL_SPACE_PREFIX = 'pending:';
 export type PendingPersonalSpace = {
   /** Pre-generated person/profile entity id — also the on-chain topic id. */
   topicId: string;
+  /**
+   * Smart-account address that started onboarding. The key is global, so if the
+   * wallet switches without a logout cleanup the runner uses this to drop a
+   * record belonging to a different account rather than create against it.
+   */
+  address: string;
   status: 'pending' | 'failed';
 };
 

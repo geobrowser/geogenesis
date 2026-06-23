@@ -50,7 +50,17 @@ export function PendingPersonalSpaceRunner() {
 
   React.useEffect(() => {
     if (!address) return;
-    if (pending?.status !== 'pending') return;
+    if (!pending) return;
+
+    // Wallet switched without a logout cleanup: a record stamped with a different
+    // account would otherwise create/remap against the wrong address (or block this
+    // account's onboarding). Drop it and let this account onboard fresh.
+    if (pending.address && pending.address !== address) {
+      setPending(null);
+      return;
+    }
+
+    if (pending.status !== 'pending') return;
 
     const topicId = pending.topicId;
     if (runningRef.current === topicId) return;
@@ -88,9 +98,9 @@ export function PendingPersonalSpaceRunner() {
         // Allow a retry to re-enter the effect. The `pending:` edits stay safe
         // in IndexedDB regardless.
         runningRef.current = null;
-        setPending({ topicId, status: 'failed' });
+        setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
-          setPending({ topicId, status: 'pending' });
+          setPending({ topicId, address, status: 'pending' });
         });
       }
     })();

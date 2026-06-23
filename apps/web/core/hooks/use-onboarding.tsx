@@ -36,12 +36,15 @@ export function useOnboarding() {
   // While a brand-new account's personal space is being created in the
   // background, the user is optimistically "logged in" — don't re-pop the
   // onboarding dialog just because the indexer hasn't confirmed registration.
-  const { isPending } = usePendingPersonalSpace();
+  // Gate on the topicId (present for both 'pending' and 'failed') rather than
+  // `isPending`: on failure the user is still mid-flow and recovers via the
+  // status-bar retry, not by reopening a blank 'done'-step dialog.
+  const { topicId: pendingSetupTopicId } = usePendingPersonalSpace();
 
   const onboardingDismissed = dismissedAtPath !== null && dismissedAtPath === pathname;
 
   const shouldOnboard =
-    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed && !isPending;
+    isFetched && !isLoading && !isRegistered && user && !suppress && !onboardingDismissed && !pendingSetupTopicId;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -68,7 +71,7 @@ export function useOnboarding() {
     onConnect(data) {
       const { address } = data;
 
-      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed && !isPending) {
+      if (address && isFetched && !isRegistered && !suppress && !onboardingDismissed && !pendingSetupTopicId) {
         setIsOnboardingVisible(true);
       }
     },

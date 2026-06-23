@@ -140,11 +140,12 @@ export const OnboardingDialog = () => {
   // creation finishes in the background, then their `pending:` edits remap to
   // the real spaceId.
   function beginOptimisticOnboarding(matchedTopicId: string) {
+    if (!address) return;
     const topicId = validateEntityId(matchedTopicId) ? matchedTopicId : ID.createEntityId();
     devLog('[onboarding] begin optimistic onboarding, topicId=%s', topicId);
     setTopicId(topicId);
     // Kick off the background personal-space creation immediately.
-    setPending({ topicId, status: 'pending' });
+    setPending({ topicId, address, status: 'pending' });
 
     if (!hasSeenAssistant) {
       setChatOpen(true);

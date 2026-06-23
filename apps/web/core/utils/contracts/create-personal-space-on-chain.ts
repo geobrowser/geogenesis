@@ -38,9 +38,10 @@ const publicClient = () => createPublicClient({ chain: GEOGENESIS, transport: ht
 /**
  * Normalize the registry's `addressToSpaceId` return into the app-internal id form:
  * null for the empty/unregistered sentinel, otherwise the bare (no `0x`) lowercase id.
- * Wrong output here = wrong space, so it's covered by a unit test.
+ * Wrong output here = wrong space, so it's covered by a unit test. Accepts `string`
+ * (not `Hex`) so the casing-tolerance it guarantees at runtime can be unit-tested.
  */
-export function parseRegisteredSpaceId(hex: Hex): string | null {
+export function parseRegisteredSpaceId(hex: string): string | null {
   if (hex.toLowerCase() === EMPTY_SPACE_ID.toLowerCase()) return null;
   return hex.slice(2).toLowerCase();
 }
@@ -57,11 +58,15 @@ export async function readRegisteredSpaceId(walletAddress: string): Promise<stri
   return parseRegisteredSpaceId(hex);
 }
 
-/** Poll the chain (not the indexer) until the register userOp is mined and the id appears. */
+/**
+ * Poll the chain (not the indexer) until the register userOp is mined and the id appears.
+ * 30 × 2s = 60s ceiling — matches the prior implementation; a shorter window spuriously
+ * flips optimistic onboarding to `failed` on slow bundlers even when the tx still lands.
+ */
 async function pollRegisteredSpaceId(
   walletAddress: string,
   maxAttempts = 30,
-  intervalMs = 1_500
+  intervalMs = 2_000
 ): Promise<string | null> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const spaceId = await readRegisteredSpaceId(walletAddress);
