@@ -88,7 +88,7 @@ export default async function ProfileLayout(props: Props) {
           <div className="space-y-2">
             <EditableHeading spaceId={spaceId} entityId={entityId} />
             <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} isVoteable />
           </div>
 
           <Spacer height={40} />
