@@ -20,9 +20,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
@@ -54,6 +55,7 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 export function useCreateComment(targetEntityId: string) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -143,7 +145,13 @@ export function useCreateComment(targetEntityId: string) {
       }
 
       if (!personalSpaceId) {
-        setToast(<span>Personal space required to comment. Please complete onboarding.</span>);
+        setToast(
+          <span>
+            {isAccountSetupPending
+              ? 'Your account is still finishing setup — try again in a moment.'
+              : 'Personal space required to comment. Please complete onboarding.'}
+          </span>
+        );
         return null;
       }
 
@@ -360,8 +368,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Publish failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to publish comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return null;
         }
@@ -455,15 +463,15 @@ export function useCreateComment(targetEntityId: string) {
         return commentEntityId;
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to create comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return null;
       } finally {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, personalSpaceId, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
@@ -585,8 +593,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Edit failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to edit comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return false;
         }
@@ -600,8 +608,8 @@ export function useCreateComment(targetEntityId: string) {
         return true;
       } catch (err) {
         console.error('[useCreateComment] Error editing comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to edit comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return false;
       } finally {

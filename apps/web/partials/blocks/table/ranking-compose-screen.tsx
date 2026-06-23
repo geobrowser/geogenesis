@@ -4,12 +4,18 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
+import { resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
+import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
+import {
+  getPendingProposerSpaceIds,
+  isPlaceholderRankingEntry,
+} from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import {
   formatRankingPeriodLabel,
   getRankingPeriodState,
@@ -25,6 +31,7 @@ import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-da
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compose-search';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -45,6 +52,7 @@ import { RankingComposeMyRanking } from './ranking-compose-my-ranking';
 import Custom404 from '~/app/not-found';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeCreateEntityAtom } from '~/atoms/ranking-compose-create-entity';
+import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
 type Props = {
   spaceId: string;
@@ -58,14 +66,37 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
   const relationId = searchParams?.get('relationId') ?? '';
-  const { name, entityId, rows: _rows, filterState } = useDataBlock();
+  const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
+
+  const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
+
   const { showOnboarding } = useOnboarding();
-  const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
+  const composeAccessSpaceId = createNewSpaceId ?? spaceId;
+  const {
+    status: accessStatus,
+    canEdit: canEditCreateSpace,
+    isLoading: isLoadingCreateAccess,
+    ensureAccess,
+    recheckAccess,
+  } = useRankingComposeAccess(composeAccessSpaceId);
+
+  // Member of the target space
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
+
+  const handleBack = React.useCallback(() => {
+    if (rankingComposeReturnHref) {
+      setRankingComposeReturnHref(null);
+      router.replace(rankingComposeReturnHref);
+      return;
+    }
+
+    router.back();
+  }, [rankingComposeReturnHref, router, setRankingComposeReturnHref]);
 
   React.useEffect(() => {
     if (accessStatus === 'ready' || accessStatus === 'not-found') return;
@@ -90,11 +121,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   );
   const submissionsOpen = rankingSubmissionsOpen(periodState);
 
-  const { submissions, mySubmission, saveMySubmission, isSaving, personalSpaceId } = useRankingSubmissions(
-    entityId,
-    spaceId,
-    displayName
-  );
+  const {
+    submissions,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isLoading: isLoadingMySubmission,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
+
+  const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
   const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
     useRankingBlockRelations();
@@ -128,10 +164,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     [rankedEntityIds, unrankedEntityIds]
   );
 
-  const { entries: rankableEntries } = useRankingEntryEntities(spaceId, allRankableEntityIds);
-  const rankableEntriesById = React.useMemo(
-    () => new Map(rankableEntries.map(e => [e.entityId, e])),
-    [rankableEntries]
+  const { entries: rankableEntries, isLoading: isLoadingRankableEntries } = useRankingEntryEntities(
+    spaceId,
+    allRankableEntityIds
   );
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
@@ -204,18 +239,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredRankedIds = isSearchActive ? searchRankedIds : browseRankedIds;
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
-  const showRankedUnrankedDivider = filteredRankedIds.length > 0 && filteredUnrankedIds.length > 0;
-
-  const hasVisibleRankableEntities = filteredRankedIds.length > 0 || filteredUnrankedIds.length > 0;
-
   const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
-  const displayRankableEntriesById = React.useMemo(() => {
-    const map = new Map(rankableEntriesById);
-    for (const entry of searchEntries) {
-      map.set(entry.entityId, entry);
-    }
-    return map;
-  }, [rankableEntriesById, searchEntries]);
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
@@ -234,6 +258,57 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
+  const rankableEntriesByIdRaw = React.useMemo(() => new Map(rankableEntries.map(e => [e.entityId, e])), [rankableEntries]);
+
+  // Until entity entries have resolved, every id looks like a placeholder
+  // (`isPlaceholderRankingEntry(undefined)` is `true`), which would fire the
+  // pending-proposal lookup against the full list on initial load. Hold the
+  // unresolved set empty while loading so only genuinely-unresolved ids remain.
+  const globalUnresolvedIds = React.useMemo(
+    () =>
+      isLoadingRankableEntries
+        ? []
+        : allRankableEntityIds.filter(id => id && isPlaceholderRankingEntry(rankableEntriesByIdRaw.get(id))),
+    [isLoadingRankableEntries, allRankableEntityIds, rankableEntriesByIdRaw]
+  );
+
+  const pendingCandidateEntityIds = React.useMemo(
+    () => [...new Set([...orderedIds, ...globalUnresolvedIds].filter(Boolean))],
+    [orderedIds, globalUnresolvedIds]
+  );
+
+  const pendingProposerSpaceIds = React.useMemo(
+    () =>
+      getPendingProposerSpaceIds(
+        globalUnresolvedIds.length > 0 ? aggregatedSubmitterSpaceIds : [],
+        personalSpaceId ? [personalSpaceId] : []
+      ),
+    [globalUnresolvedIds, aggregatedSubmitterSpaceIds, personalSpaceId]
+  );
+
+  const { pendingEntityIds, pendingEntriesByEntityId } = useRankingPendingEntities({
+    targetSpaceId: createNewSpaceId,
+    unresolvedEntityIds: pendingCandidateEntityIds,
+    proposerSpaceIds: pendingProposerSpaceIds,
+  });
+
+  const rankableEntriesById = React.useMemo(() => {
+    const map = new Map(rankableEntries.map(e => [e.entityId, e]));
+    // Pending names override a missing/"Untitled" base entry, never a real one.
+    for (const [entityId, entry] of pendingEntriesByEntityId) {
+      if (isPlaceholderRankingEntry(map.get(entityId))) map.set(entityId, entry);
+    }
+    return map;
+  }, [rankableEntries, pendingEntriesByEntityId]);
+
+  const displayRankableEntriesById = React.useMemo(() => {
+    const map = new Map(rankableEntriesById);
+    for (const entry of searchEntries) {
+      map.set(entry.entityId, entry);
+    }
+    return map;
+  }, [rankableEntriesById, searchEntries]);
+
   const myRankingEntriesById = React.useMemo(() => {
     const map = new Map(myEntriesById);
     for (const id of displayMyEntityIds) {
@@ -242,6 +317,78 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     }
     return map;
   }, [myEntriesById, displayRankableEntriesById, displayMyEntityIds]);
+
+  // An id is "display-named" when something we can actually render — the resolved
+  // entry, the data-block row, or a search hit — yields a real name. Entries and
+  // rows both fall back to "Untitled" before they resolve, so checking only the
+  // entry isn't enough.
+  const isDisplayNamed = React.useCallback(
+    (id: string) => {
+      const entry = displayRankableEntriesById.get(id);
+      if (entry && !isPlaceholderRankingEntry(entry)) return true;
+      const row = rowsByEntityId.get(id);
+      if (row) {
+        const rowName = getRowDisplayName(row).trim();
+        if (rowName && rowName !== 'Untitled') return true;
+      }
+      return Boolean(searchResultsById.get(id)?.name?.trim());
+    },
+    [displayRankableEntriesById, rowsByEntityId, searchResultsById]
+  );
+
+  // Entities hidden from the main global list:
+  //   • confirmed-pending ones (shown in the "Show pending" disclosure instead),
+  //   • still-unresolved placeholders whose pending status isn't known yet, and
+  //   • anything we can't name yet — rendering it would flash "Untitled" on a
+  //     throttled refresh until its entry/row resolves; it reappears once named.
+  // While the viewer's own submission is still loading we also withhold the
+  // browse leaderboard: those entries belong in "My ranking" once `orderedIds`
+  // arrives, and showing them here first makes them visibly jump across. This
+  // only applies to browse — in search mode `filteredRankedIds` is the search
+  // result set, which must stay visible (hiding it would flash "no results").
+  const hideRankedForSubmission = isLoadingMySubmission && !isSearchActive;
+  const hiddenGlobalIds = React.useMemo(() => {
+    const hidden = new Set<string>(pendingEntityIds);
+    for (const id of globalUnresolvedIds) hidden.add(id);
+    for (const id of filteredRankedIds) {
+      if (hideRankedForSubmission || !isDisplayNamed(id)) hidden.add(id);
+    }
+    for (const id of filteredUnrankedIds) {
+      if (!isDisplayNamed(id)) hidden.add(id);
+    }
+    return hidden;
+  }, [
+    pendingEntityIds,
+    globalUnresolvedIds,
+    filteredRankedIds,
+    filteredUnrankedIds,
+    hideRankedForSubmission,
+    isDisplayNamed,
+  ]);
+
+  const visibleFilteredRankedIds = React.useMemo(
+    () => (hiddenGlobalIds.size === 0 ? filteredRankedIds : filteredRankedIds.filter(id => !hiddenGlobalIds.has(id))),
+    [filteredRankedIds, hiddenGlobalIds]
+  );
+  const visibleFilteredUnrankedIds = React.useMemo(
+    () =>
+      hiddenGlobalIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !hiddenGlobalIds.has(id)),
+    [filteredUnrankedIds, hiddenGlobalIds]
+  );
+  const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
+  const visibleHasVisibleRankableEntities =
+    visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
+
+  const visibleGlobalRankByEntityId = React.useMemo(() => {
+    if (hiddenGlobalIds.size === 0) return globalRankByEntityId;
+    const visible = globalOrderedIds.filter(id => !hiddenGlobalIds.has(id));
+    return new Map(visible.map((id, index) => [id, index + 1]));
+  }, [globalOrderedIds, hiddenGlobalIds, globalRankByEntityId]);
+
+  const revealablePendingIds = React.useMemo(
+    () => [...pendingEntityIds].filter(id => !myRankingIdSet.has(ID.uuidToHex(id))),
+    [pendingEntityIds, myRankingIdSet]
+  );
 
   const addToMyRanking = (entityId: string) => {
     setOrderedIds(prev => (prev.includes(entityId) ? prev : [...prev, entityId]));
@@ -260,7 +407,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const getSearchResultPreview = (searchHit: SearchResult | undefined) => ({
     name: searchHit?.name?.trim() || null,
     description: searchHit?.description?.trim() || null,
-    image: searchHit?.spaces[0]?.image ?? null,
+    image: null,
     spaceId: searchHit?.spaces[0]?.spaceId ?? null,
   });
 
@@ -287,20 +434,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   };
 
   const handleCreateNew = () => {
-    const publishSpaceIds = getRankingPublishSpaceIds(filterState, spaceId);
-    const publishSpaceId = publishSpaceIds[0] ?? spaceId;
+    if (!createNewSpaceId) return;
+
     const draftName = searchQuery.trim();
 
     const newEntityId = createEntityWithFilters({
       filters: filterState,
-      spaceId: publishSpaceId,
+      spaceId: createNewSpaceId,
       name: draftName || undefined,
     });
 
     setCreateEntityFlow({
       entityId: newEntityId,
-      publishSpaceId,
-      publishSpaceIds,
+      publishSpaceId: createNewSpaceId,
+      publishSpaceIds: [createNewSpaceId],
     });
   };
 
@@ -324,7 +471,28 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     });
     const published = await saveMySubmission(slots);
     if (!published) return;
+
+    const ogVersion = buildRankingOgVersion({
+      rankEntityId: published.rankEntityId,
+      orderedEntityIds: published.orderedEntityIds,
+      rankingName: displayName,
+      rankingStartDate,
+      rankingEndDate,
+      authorName: published.authorName,
+      authorAvatarUrl: published.authorAvatarUrl,
+    });
+    void generatePersonalRankingOgImages({
+      rankEntityId: published.rankEntityId,
+      authorSpaceId: published.authorSpaceId,
+      blockEntityId: entityId,
+      blockEntitySpaceId: spaceId,
+      rankingStartDate,
+      rankingEndDate,
+      ogVersion,
+    });
+
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
+    setRankingComposeReturnHref(null);
     router.replace(
       rankingComposeHref({
         spaceId,
@@ -335,12 +503,24 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         rankingEndDate,
         mode: 'view',
         tab: RANKING_COMPOSE_TAB_MY,
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        ogVersion,
       })
     );
   };
 
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
+
+  const isAwaitingMembership = Boolean(createNewSpaceId) && accessStatus === 'needs-membership';
+
+  // The global list isn't ready to render real rows until both the viewer's own
+  // submission (so we know which entries are theirs) and the rankable entries (so
+  // rows have names) have resolved. Surface this as a loading state so the global
+  // column shows its skeleton during a throttled refresh instead of flashing
+  // "Untitled" rows that then jump into "My ranking".
+  const isGlobalListResolving = isLoadingMySubmission || isLoadingRankableEntries;
 
   const titleMetadata = (
     <RankingComposeTitleMetadata
@@ -377,6 +557,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onReorder={reorderMyRanking}
           onRemove={removeFromMyRanking}
           onView={openEntitySheet}
+          pendingEntityIds={pendingEntityIds}
         />
       }
       globalRanking={
@@ -384,21 +565,25 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           isMobile={isMobile}
           spaceId={spaceId}
           orderedIds={orderedIds}
-          filteredRankedIds={filteredRankedIds}
-          filteredUnrankedIds={filteredUnrankedIds}
-          globalRankByEntityId={globalRankByEntityId}
+          filteredRankedIds={visibleFilteredRankedIds}
+          filteredUnrankedIds={visibleFilteredUnrankedIds}
+          globalRankByEntityId={visibleGlobalRankByEntityId}
           rankableEntriesById={displayRankableEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
-          showRankedUnrankedDivider={showRankedUnrankedDivider}
-          hasVisibleRankableEntities={hasVisibleRankableEntities}
+          showRankedUnrankedDivider={visibleShowRankedUnrankedDivider}
+          hasVisibleRankableEntities={visibleHasVisibleRankableEntities}
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}
           isDebouncingAfterEmptySearch={isDebouncingAfterEmptySearch}
-          isLoadingRows={isSearchActive ? isLoadingSearch : isLoadingRows && !hasRankedGlobalEntities}
+          isLoadingRows={
+            isSearchActive ? isLoadingSearch : isGlobalListResolving || (isLoadingRows && !hasRankedGlobalEntities)
+          }
           isFetchingNextPage={isSearchActive ? isFetchingNextSearchPage : isFetchingNextPage}
           hasNextPage={isSearchActive ? hasNextSearchPage : hasNextPage}
-          hasAnyRankableEntityIds={hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows}
+          hasAnyRankableEntityIds={
+            !isGlobalListResolving && (hasRankedGlobalEntities || unrankedEntityIds.length > 0 || isLoadingRows)
+          }
           onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
@@ -407,6 +592,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
           onCreateNew={handleCreateNew}
+          canCreateNew={canCreateNew}
+          isAwaitingMembership={isAwaitingMembership}
+          onRecheckMembership={recheckAccess}
+          pendingEntityIds={pendingEntityIds}
+          revealablePendingIds={revealablePendingIds}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
           onViewEntity={openEntitySheet}
@@ -421,7 +611,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <>
-      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} />
+      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       <RankingComposeFullscreen coverNavbar={isMobile}>
         {isMobile ? (
@@ -429,7 +619,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             <div className="shrink-0 bg-white px-4 py-2">
               <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                onBack={() => router.back()}
+                onBack={handleBack}
                 showPublishButton
                 canPublish={canPublish}
                 isSaving={isSaving}
@@ -452,7 +642,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
             <div className="shrink-0 py-2">
               <RankingComposePinnedToolbar
                 isMobile={isMobile}
-                onBack={() => router.back()}
+                onBack={handleBack}
                 showPublishButton={false}
                 canPublish={canPublish}
                 isSaving={isSaving}

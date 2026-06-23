@@ -58,7 +58,9 @@ export const Value = Schema.Struct({
   datetime: Schema.NullOr(Schema.String),
   date: Schema.NullOr(Schema.String),
   decimal: Schema.NullOr(Schema.String),
-  bytes: Schema.NullOr(Schema.String),
+  // `bytes` is intentionally not fetched/decoded: `getValueFromDataType` always
+  // returns null for BYTES, so it was decoded and dropped. The diff path reads
+  // bytes from a separate snapshot query (ApiVersionedValue), not this schema.
   schedule: Schema.NullOr(Schema.Unknown),
   embedding: Schema.NullOr(Schema.Unknown),
 });
@@ -69,8 +71,6 @@ export const EntityType = Schema.Struct({
   id: HexId,
   name: Schema.NullOr(Schema.String),
 });
-
-export type RemoteEntityType = Schema.Schema.Type<typeof EntityType>;
 
 export const Relation = Schema.Struct({
   id: HexId,
@@ -84,7 +84,10 @@ export const Relation = Schema.Struct({
   toEntity: Schema.Struct({
     id: HexId,
     name: Schema.NullOr(Schema.String),
-    types: Schema.Array(EntityType),
+    // Each type is decoded as `{ id }` only: `v2_getRenderableEntityType`
+    // consumes the type ids, so the per-type `name` is intentionally not
+    // fetched. (`toEntity.name` above *is* fetched and rendered.)
+    types: Schema.Array(Schema.Struct({ id: HexId })),
     valuesList: Schema.Array(
       Schema.Struct({
         spaceId: HexId,

@@ -46,10 +46,7 @@ export type QueryFromSpacesListData = {
   ordering: SpaceDropdownOrderingMeta;
 };
 
-export function canCreateEntityInSpace(
-  spaceId: string,
-  ordering: SpaceDropdownOrderingMeta | undefined
-): boolean {
+export function canCreateEntityInSpace(spaceId: string, ordering: SpaceDropdownOrderingMeta | undefined): boolean {
   if (!ordering) return false;
   return ordering.editorIds.has(spaceId) || ordering.memberIds.has(spaceId);
 }

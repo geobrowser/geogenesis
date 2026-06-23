@@ -13,6 +13,7 @@ import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
+import type { Relation } from '~/core/types';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 import { NavUtils, hasName } from '~/core/utils/utils';
 
@@ -20,7 +21,7 @@ import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 
-import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
+import { cloneEntityIntoSpace, collectSubtree } from '~/partials/versions/clone-entity-into-space';
 
 type MoveEntityToSpaceProps = {
   entityId: EntityId;
@@ -71,51 +72,48 @@ export const MoveEntityToSpace = ({
     // 1. Clone entity into target space
     cloneEntityIntoSpace(entityId, sourceSpaceId, targetSpaceId, storage);
 
-    // 2. Delete entity from source space
-    const sourceValues = getValues({
+    // 2. Delete entity from source space. The clone walked the BLOCKS/TABS
+    // subtree, so tear down the same subtree here: the root always goes, and
+    // each descendant goes unless something outside the subtree still points at
+    // it (a shared block).
+    const { entityIds: subtreeIds } = collectSubtree(entityId, sourceSpaceId);
+
+    const containmentRelationIds = new Set(
+      getRelations({
+        selector: r =>
+          subtreeIds.has(r.fromEntity.id) &&
+          r.spaceId === sourceSpaceId &&
+          (r.type.id === SystemIds.BLOCKS || r.type.id === SystemIds.TABS_PROPERTY),
+      }).map(r => r.id)
+    );
+
+    const orphanedDescendantIds = [...subtreeIds].filter(id => {
+      if (id === entityId) return false;
+      const externalRefs = getRelations({
+        selector: r => r.toEntity.id === id && !containmentRelationIds.has(r.id),
+      });
+      return externalRefs.length === 0;
+    });
+
+    const allValuesToDelete = getValues({
       selector: value => value.entity.id === entityId && value.spaceId === sourceSpaceId,
     });
-
-    const sourceRelations = getRelations({
-      selector: relation => relation.fromEntity.id === entityId && relation.spaceId === sourceSpaceId,
-    });
-
-    const blocksRelations = sourceRelations.filter(r => r.type.id === SystemIds.BLOCKS);
-    const blockIds = [...new Set(blocksRelations.map(r => r.toEntity.id))];
-
-    const orphanedBlockIds = blockIds.filter(blockId => {
-      const remainingRefs = getRelations({
-        selector: r =>
-          r.toEntity.id === blockId &&
-          !(r.fromEntity.id === entityId && r.type.id === SystemIds.BLOCKS && r.spaceId === sourceSpaceId),
-      });
-      return remainingRefs.length === 0;
-    });
-
-    const allValuesToDelete = [...sourceValues];
     const relationIds = new Set<string>();
-    const allRelationsToDelete: typeof sourceRelations = [];
+    const allRelationsToDelete: Relation[] = [];
 
-    for (const r of [
-      ...sourceRelations,
-      ...getRelations({ selector: r => r.toEntity.id === entityId && r.spaceId === sourceSpaceId }),
-    ]) {
-      if (!relationIds.has(r.id)) {
-        relationIds.add(r.id);
-        allRelationsToDelete.push(r);
-      }
-    }
+    const pushRelation = (r: Relation) => {
+      if (relationIds.has(r.id)) return;
+      relationIds.add(r.id);
+      allRelationsToDelete.push(r);
+    };
 
-    for (const blockId of orphanedBlockIds) {
-      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === blockId }));
-      for (const r of getRelations({
-        selector: r => r.fromEntity.id === blockId || r.toEntity.id === blockId,
-      })) {
-        if (!relationIds.has(r.id)) {
-          relationIds.add(r.id);
-          allRelationsToDelete.push(r);
-        }
-      }
+    getRelations({
+      selector: r => (r.fromEntity.id === entityId || r.toEntity.id === entityId) && r.spaceId === sourceSpaceId,
+    }).forEach(pushRelation);
+
+    for (const id of orphanedDescendantIds) {
+      allValuesToDelete.push(...getValues({ selector: v => v.entity.id === id }));
+      getRelations({ selector: r => r.fromEntity.id === id || r.toEntity.id === id }).forEach(pushRelation);
     }
 
     storage.values.deleteMany(allValuesToDelete);
@@ -130,7 +128,7 @@ export const MoveEntityToSpace = ({
             <ArrowLeft />
           </button>
         </div>
-        <div className="flex-4 whitespace-nowrap p-2 text-center text-button text-text">Select space to move to</div>
+        <div className="flex-4 p-2 text-center text-button whitespace-nowrap text-text">Select space to move to</div>
         <div className="flex-1"></div>
       </div>
       <div className="p-1">

@@ -207,7 +207,7 @@ export function RankingComposeSwipeableRow({
         onMouseDown={event => event.stopPropagation()}
         onClick={handleClick}
         className={cx(
-          'relative z-[1] w-full select-none transition-colors duration-150',
+          'relative z-[1] w-full transition-colors duration-150 select-none',
           isPressed ? 'bg-grey-01' : 'bg-white',
           !primaryDisabled && onPrimaryClick && 'cursor-grab active:cursor-grabbing'
         )}

@@ -32,6 +32,7 @@ type Props = {
   onReorder: (entityIds: string[]) => void;
   onRemove: (entityId: string) => void;
   onView: (entityId: string) => void;
+  pendingEntityIds: ReadonlySet<string>;
 };
 
 export function RankingComposeMyRanking({
@@ -50,6 +51,7 @@ export function RankingComposeMyRanking({
   onReorder,
   onRemove,
   onView,
+  pendingEntityIds,
 }: Props) {
   const isDesktop = !isMobile;
 
@@ -98,14 +100,14 @@ export function RankingComposeMyRanking({
                 entityId,
                 name: entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled'),
                 description: entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null)),
-                image:
-                  entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null,
+                image: entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
               };
               const entryRow = (
                 <RankingEntryRow
                   rank={index + 1}
                   rankStyle="leading"
                   linkToEntity={false}
+                  pending={pendingEntityIds.has(entityId)}
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}

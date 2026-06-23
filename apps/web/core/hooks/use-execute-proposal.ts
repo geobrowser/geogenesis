@@ -1,17 +1,25 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { type Hex, createPublicClient, http } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import {
+  ACTION_REVERTED_SELECTOR,
+  type GovernanceRevert,
+  decodeGovernanceRevert,
+} from '~/core/utils/contracts/governance-errors';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
+import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 interface UseExecuteProposalArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */
@@ -101,4 +109,80 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     error,
     reset,
   };
+}
+
+/**
+ * Whether a passed proposal can actually be executed on-chain, and if not, why.
+ *
+ * - `checking`   — still simulating (or no registered account to simulate from)
+ * - `executable` — the execute call would succeed
+ * - `dead`       — the proposal's own action reverts (ActionReverted); it can
+ *                  never execute and must be recreated (legacy malformed proposal)
+ * - `blocked`    — some other governance revert (already executed, not enough
+ *                  votes, voting period not elapsed) — transient or resolved
+ */
+export type ProposalExecutability = 'checking' | 'executable' | 'dead' | 'blocked';
+
+/**
+ * Simulate the real execute calldata against the live chain so the UI can tell a
+ * genuinely-executable proposal apart from a stale or permanently-dead one.
+ *
+ * `canExecute`, status, and the membership roster all come from the indexer,
+ * which lags the chain — it happily shows "Pending execution" for a proposal
+ * that was already executed OR for a legacy proposal whose action reverts every
+ * time. The simulation is the only ground truth that separates those.
+ *
+ * A non-revert failure (slow/unreachable RPC, unknown revert) resolves to
+ * `executable` so a flaky RPC never permanently hides a legitimate action.
+ */
+export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProposalArgs): {
+  state: ProposalExecutability;
+  revert: GovernanceRevert | null;
+} {
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const account = smartAccount?.account.address;
+
+  const { data } = useQuery({
+    queryKey: ['proposal-executability', spaceId, proposalId, account],
+    enabled: Boolean(
+      account && personalSpaceId && isRegistered && validateSpaceId(spaceId) && validateSpaceId(proposalId)
+    ),
+    // ponytail: a passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
+    staleTime: 30_000,
+    queryFn: async (): Promise<{ state: ProposalExecutability; revert: GovernanceRevert | null }> => {
+      const { calldata } = geo.daoSpaces.proposals.execute({
+        authorSpaceId: personalSpaceId!,
+        spaceId,
+        proposalId,
+      });
+
+      const publicClient = createPublicClient({ chain: GEOGENESIS, transport: http() });
+
+      try {
+        await publicClient.call({ account: account as Hex, to: SPACE_REGISTRY_ADDRESS as Hex, data: calldata });
+        return { state: 'executable', revert: null };
+      } catch (error) {
+        const revert = decodeGovernanceRevert(error);
+        // Unknown / RPC error: fail open so we never hide a valid action.
+        if (revert === null) return { state: 'executable', revert: null };
+        const state = revert.selector === ACTION_REVERTED_SELECTOR ? 'dead' : 'blocked';
+        return { state, revert };
+      }
+    },
+  });
+
+  return data ?? { state: 'checking', revert: null };
+}
+
+/**
+ * Tri-state convenience wrapper around {@link useProposalExecutability}:
+ * - `undefined` — still checking
+ * - `true`      — execution would succeed
+ * - `false`     — execution would revert (dead / blocked)
+ */
+export function useCanExecuteProposal(args: UseExecuteProposalArgs): boolean | undefined {
+  const { state } = useProposalExecutability(args);
+  if (state === 'checking') return undefined;
+  return state === 'executable';
 }

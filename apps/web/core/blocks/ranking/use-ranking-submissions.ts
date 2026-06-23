@@ -12,17 +12,27 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import { checkEntityExists } from '~/core/io/queries';
+import { ID } from '~/core/id';
+import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
+import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
+
+export type RankingSubmissionPublishResult = {
+  rankEntityId: string;
+  authorSpaceId: string;
+  orderedEntityIds: string[];
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+};
 
 function createdAtToEpochMillis(value: string): number {
   return /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) || 0;
@@ -102,11 +112,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
-    async (slots: RankingSubmissionSlot[]): Promise<boolean> => {
-      if (!personalSpaceId) return false;
+    async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
+      if (!personalSpaceId) return null;
       if (!smartAccount) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
-        return false;
+        return null;
       }
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
@@ -116,19 +126,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         value: rankingVoteWeightFromIndex(index),
       }));
 
-      if (votes.length === 0) return false;
+      if (votes.length === 0) return null;
 
       const invalidVote = votes.find(vote => !validateEntityId(vote.entityId));
       if (invalidVote) {
         console.error('[useRankingSubmissions] Invalid vote entity id:', invalidVote.entityId);
         reportError(`Failed to publish ranking: invalid entity id "${invalidVote.entityId}"`);
-        return false;
+        return null;
       }
 
       if (myRankEntity && !validateEntityId(myRankEntity.id)) {
         console.error('[useRankingSubmissions] Invalid rank entity id:', myRankEntity.id);
         reportError(`Failed to publish ranking: invalid rank id "${myRankEntity.id}"`);
-        return false;
+        return null;
       }
 
       setIsSaving(true);
@@ -154,8 +164,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankId = result.id;
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
-          reportError(`Failed to publish ranking: ${describeError(error)}`);
-          return false;
+          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+          reportError(message, retry);
+          return null;
         }
 
         const publish = Effect.gen(function* () {
@@ -202,11 +213,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         if (Either.isLeft(result)) {
           const err = result.left;
           if (err instanceof Error && err.message.includes('User rejected')) {
-            return false;
+            return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
-          reportError(`Failed to publish ranking: ${describeError(err)}`);
-          return false;
+          const { message, retry } = toUserFacingError(err, 'Failed to publish ranking: ');
+          reportError(message, retry);
+          return null;
         }
 
         clearLocalMyRankingDraft(spaceId, blockId);
@@ -216,24 +228,55 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         const POLL_INTERVAL_MS = 2000;
         const MAX_POLL_ATTEMPTS = 30;
 
+        // Poll until the indexer reflects the exact order we just submitted.
+        const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
+        const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+
         await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
           try {
-            const exists = await Effect.runPromise(checkEntityExists(rankId));
-            if (exists) break;
+            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+              break;
+            }
           } catch (e) {
-            console.error('[useRankingSubmissions] Poll for indexed rank failed:', e);
+            console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
           }
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         }
 
-        await refetchMyRanking();
-        return true;
+        try {
+          await refetchMyRanking();
+        } catch (e) {
+          console.error('[useRankingSubmissions] Refetch after publish failed:', e);
+        }
+        const authorAvatarUrl =
+          profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+
+        return {
+          rankEntityId: rankId,
+          authorSpaceId: personalSpaceId,
+          orderedEntityIds: votes.map(vote => vote.entityId),
+          authorName: profile?.name ?? null,
+          authorAvatarUrl,
+        };
       } finally {
         setIsSaving(false);
       }
     },
-    [blockId, blockName, myRankEntity, personalSpaceId, refetchMyRanking, reportError, setToast, smartAccount, spaceId]
+    [
+      blockId,
+      blockName,
+      myRankEntity,
+      personalSpaceId,
+      profile?.avatarUrl,
+      profile?.name,
+      refetchMyRanking,
+      reportError,
+      setToast,
+      smartAccount,
+      spaceId,
+    ]
   );
 
   return {

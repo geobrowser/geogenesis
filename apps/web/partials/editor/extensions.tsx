@@ -11,7 +11,6 @@ import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/prof
 
 import { CodeBlockNode } from './code-block-node';
 import { DataNode } from './data-node';
-import { RankingNode } from './ranking-node';
 import { FloatingToolbarExtension } from './floating-toolbar-extension';
 import { GraphLinkExtension, MarkdownLinkExtension } from './graph-link-extension';
 import { HeadingNode } from './heading-node';
@@ -19,6 +18,7 @@ import { ImageNode } from './image-node';
 import { InlineCode } from './inline-code';
 import { MathNode } from './math-node';
 import { ParagraphNode } from './paragraph-node';
+import { RankingNode } from './ranking-node';
 import { TrailingNode } from './trailing-node';
 import { VideoNode } from './video-node';
 import { Web2URLExtension } from './web2-url-extension';
