@@ -633,7 +633,7 @@ function EmptyRows({ variant, scale }: { variant: RankingOgVariant; scale: numbe
 
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
-  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 3, 'My ranking');
+  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 5, 'My ranking');
 
   return (
     <div
@@ -690,7 +690,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
           style={{
             color: '#111111',
             display: 'flex',
-            maxHeight: scaled(isStory ? 330 : 190, scale),
+            maxHeight: scaled(isStory ? 390 : 360, scale),
             overflow: 'hidden',
           }}
         >
