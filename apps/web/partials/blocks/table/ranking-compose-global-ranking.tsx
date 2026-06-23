@@ -25,6 +25,83 @@ const MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX = 8;
 const SEARCH_LIST_ROW_HEIGHT_PX = 88;
 const SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX = 4 * SEARCH_LIST_ROW_HEIGHT_PX;
 
+const MEMBERSHIP_RECHECK_INTERVAL_MS = 15_000;
+
+function useMembershipRecheckPolling({
+  enabled,
+  onRecheck,
+}: {
+  enabled: boolean;
+  onRecheck: () => void;
+}) {
+  const onRecheckRef = React.useRef(onRecheck);
+
+  React.useEffect(() => {
+    onRecheckRef.current = onRecheck;
+  }, [onRecheck]);
+
+  React.useEffect(() => {
+    if (!enabled) return;
+
+    onRecheckRef.current();
+    const intervalId = setInterval(() => onRecheckRef.current(), MEMBERSHIP_RECHECK_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [enabled]);
+}
+
+function useMembershipRecheckSentinel({
+  enabled,
+  onRecheck,
+  root,
+}: {
+  enabled: boolean;
+  onRecheck: () => void;
+  root: Element | null;
+}) {
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
+  const onRecheckRef = React.useRef(onRecheck);
+
+  React.useEffect(() => {
+    onRecheckRef.current = onRecheck;
+  }, [onRecheck]);
+
+  React.useEffect(() => {
+    if (!sentinelEl || !enabled) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const io = new IntersectionObserver(
+      entries => {
+        const isVisible = entries[0]?.isIntersecting ?? false;
+        if (!isVisible) {
+          stopPolling();
+          return;
+        }
+        onRecheckRef.current();
+        if (intervalId === null) {
+          intervalId = setInterval(() => onRecheckRef.current(), MEMBERSHIP_RECHECK_INTERVAL_MS);
+        }
+      },
+      { root, rootMargin: '0px' }
+    );
+    io.observe(sentinelEl);
+
+    return () => {
+      stopPolling();
+      io.disconnect();
+    };
+  }, [enabled, root, sentinelEl]);
+
+  return setSentinelEl;
+}
+
 function RankingComposeUnrankedDivider() {
   return (
     <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
@@ -75,19 +152,9 @@ function scrollMobilePageToElement(target: HTMLElement, behavior: ScrollBehavior
   return null;
 }
 
-function RankingComposeSearchListPlaceholder({
-  height,
-  children,
-}: {
-  height: number;
-  children?: React.ReactNode;
-}) {
+function RankingComposeSearchListPlaceholder({ height, children }: { height: number; children?: React.ReactNode }) {
   return (
-    <div
-      className="flex shrink-0 flex-col justify-start overflow-hidden"
-      style={{ height }}
-      aria-hidden={!children}
-    >
+    <div className="flex shrink-0 flex-col justify-start overflow-hidden" style={{ height }} aria-hidden={!children}>
       {children}
     </div>
   );
@@ -189,6 +256,9 @@ type Props = {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
+  canCreateNew: boolean;
+  isAwaitingMembership: boolean;
+  onRecheckMembership: () => void;
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
@@ -221,6 +291,9 @@ export function RankingComposeGlobalRanking({
   searchInputRef,
   onAddToMyRanking,
   onCreateNew,
+  canCreateNew,
+  isAwaitingMembership,
+  onRecheckMembership,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
   onViewEntity,
@@ -297,12 +370,8 @@ export function RankingComposeGlobalRanking({
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
-    isSearchActive &&
-    !isSearchingWithNoResults &&
-    !hasVisibleRankableEntities &&
-    (isLoadingRows || !isSearchSettled);
-  const needsSearchStablePlaceholder =
-    isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
+    isSearchActive && !isSearchingWithNoResults && !hasVisibleRankableEntities && (isLoadingRows || !isSearchSettled);
+  const needsSearchStablePlaceholder = isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
 
   React.useLayoutEffect(() => {
     if (!needsSearchStablePlaceholder) return;
@@ -320,6 +389,17 @@ export function RankingComposeGlobalRanking({
     isFetchingNextPage,
     fetchNextPage: onFetchNextPage,
     root: scrollRoot,
+  });
+
+  const setMembershipSentinelEl = useMembershipRecheckSentinel({
+    enabled: isAwaitingMembership && hasVisibleRankableEntities,
+    onRecheck: onRecheckMembership,
+    root: scrollRoot,
+  });
+
+  useMembershipRecheckPolling({
+    enabled: isAwaitingMembership && !hasVisibleRankableEntities,
+    onRecheck: onRecheckMembership,
   });
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
@@ -367,7 +447,7 @@ export function RankingComposeGlobalRanking({
         rank={globalRank}
         name={entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled')}
         description={entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null))}
-        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null}
+        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
       />
@@ -396,6 +476,11 @@ export function RankingComposeGlobalRanking({
     );
   };
 
+  const membershipSentinel =
+    isAwaitingMembership && hasVisibleRankableEntities ? (
+      <div ref={setMembershipSentinelEl} className="h-px" aria-hidden />
+    ) : null;
+
   const searchResultList = (
     <>
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
@@ -405,9 +490,10 @@ export function RankingComposeGlobalRanking({
       {canLoadMore && isFetchingNextPage ? (
         <p className="py-3 text-metadata text-grey-03">Loading more…</p>
       ) : null}
-      {isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
+      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}
+      {membershipSentinel}
     </>
   );
 
@@ -420,6 +506,7 @@ export function RankingComposeGlobalRanking({
       {canLoadMore && isFetchingNextPage ? (
         <p className="py-3 text-metadata text-grey-03">Loading more…</p>
       ) : null}
+      {membershipSentinel}
     </>
   );
 
@@ -503,7 +590,7 @@ export function RankingComposeGlobalRanking({
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
+                {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
               </RankingComposeSearchListPlaceholder>
             ) : (
               // Mobile only: pin via min-height so the chrome stays at the top of the viewport

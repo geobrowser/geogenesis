@@ -45,6 +45,23 @@ export function isChunkLoadError(error: unknown): boolean {
   return false;
 }
 
+/**
+ * Whether an error (or anything in its cause chain) is a wallet user-rejection.
+ * Callers reset quietly instead of raising the error modal — a deliberate cancel
+ * isn't a failure to surface or investigate. Walks the cause chain since the
+ * original error is nested via `{ cause }`.
+ */
+export function isUserRejection(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (current.name === 'UserRejectedRequestError' || /user rejected/i.test(current.message)) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
 export const RELOAD_REQUIRED_MESSAGE =
   'A new version of Geo was released or the connection dropped while loading. Please reload the page and try again.';
 

@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
+import { RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
@@ -52,7 +52,7 @@ function resolveToEntityName(relation: RemoteRelation): string | null {
   return nameValues.reduce((a, b) => (getSpaceRank(a.spaceId) <= getSpaceRank(b.spaceId) ? a : b)).text;
 }
 
-function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {
+function v2_getRenderableEntityType(types: readonly { id: string }[]): RenderableEntityType {
   const typeIds = types.map(type => type.id);
 
   const imageTypeHex = SystemIds.IMAGE_TYPE.replace(/-/g, '');

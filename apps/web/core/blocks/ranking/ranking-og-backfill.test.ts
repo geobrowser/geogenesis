@@ -30,6 +30,6 @@ describe('ranking OG backfill helpers', () => {
     });
 
     expect(plan).toHaveLength(1);
-    expect(plan[0]?.key).toBe('og/rankings/rank-1/v1/landscape.png');
+    expect(plan[0]?.key).toBe('og/rankings/rank-1/v1/landscape.jpg');
   });
 });

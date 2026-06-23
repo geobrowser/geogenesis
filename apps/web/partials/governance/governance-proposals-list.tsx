@@ -156,9 +156,7 @@ export async function GovernanceProposalsList({
                             value={displayProfile.address ?? displayProfile.id}
                           />
                         </div>
-                        <p className="min-w-0">
-                          {displayProfile.name ?? displayProfile.address ?? displayProfile.id}
-                        </p>
+                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
                       </Link>
                     ) : (
                       <div className="flex min-w-0 items-center gap-2">
@@ -168,9 +166,7 @@ export async function GovernanceProposalsList({
                             value={displayProfile.address ?? displayProfile.id}
                           />
                         </div>
-                        <p className="min-w-0">
-                          {displayProfile.name ?? displayProfile.address ?? displayProfile.id}
-                        </p>
+                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
                       </div>
                     )}
                     {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
@@ -207,7 +203,13 @@ export async function GovernanceProposalsList({
                     />
                   </div>
 
-                  <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
+                  <GovernanceStatusChip
+                    endTime={p.endTime}
+                    status={p.status}
+                    canExecute={p.canExecute}
+                    spaceId={spaceId}
+                    proposalId={p.id}
+                  />
                 </div>
               </div>
             </ProposalListItem>
