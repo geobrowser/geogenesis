@@ -636,12 +636,14 @@ function EmptyRows({ variant, scale }: { variant: RankingOgVariant; scale: numbe
   );
 }
 
-const TITLE_LINE_HEIGHT = 0.95;
+const TITLE_LINE_HEIGHT = 1.05;
+const TITLE_BOTTOM_PADDING_RATIO = 0.12;
 const TITLE_MAX_HEIGHT_LANDSCAPE = 440;
 const TITLE_MAX_HEIGHT_STORY = 400;
 
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
+  const maxHeight = isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE;
   const textFit = fitWrappedText(
     title,
     isStory ? 112 : 58,
@@ -649,7 +651,7 @@ function TitleText({ title, variant, scale }: { title: string; variant: RankingO
     isStory ? 680 : 318,
     5,
     'My ranking',
-    { maxHeight: isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE, lineHeight: TITLE_LINE_HEIGHT }
+    { maxHeight, lineHeight: TITLE_LINE_HEIGHT + TITLE_BOTTOM_PADDING_RATIO }
   );
 
   return (
@@ -661,6 +663,7 @@ function TitleText({ title, variant, scale }: { title: string; variant: RankingO
         fontSize: scaled(textFit.fontSize, scale),
         fontWeight: 800,
         lineHeight: TITLE_LINE_HEIGHT,
+        paddingBottom: scaled(textFit.fontSize * TITLE_BOTTOM_PADDING_RATIO, scale),
       }}
     >
       {textFit.lines.map((lineText, index) => (
