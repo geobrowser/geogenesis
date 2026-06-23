@@ -220,14 +220,19 @@ function fitWrappedText(
   minFontSize: number,
   maxWidth: number,
   maxLines: number,
-  fallback: string
+  fallback: string,
+  options: { maxHeight?: number; lineHeight?: number } = {}
 ): WrappedTextFit {
   const normalized = normalizeDisplayText(text, fallback);
+  const { maxHeight = Infinity, lineHeight = 1 } = options;
 
   for (let fontSize = targetFontSize; fontSize >= minFontSize; fontSize -= 1) {
     const lines = wrapTextToLines(normalized, fontSize, maxWidth);
     const allLinesFit = lines.every(lineText => measureTextWidth(lineText, fontSize) <= maxWidth);
-    if (lines.length <= maxLines && allLinesFit) return { fontSize, lines };
+    const totalHeight = Math.ceil(lines.length * fontSize * lineHeight);
+    if (lines.length <= maxLines && allLinesFit && totalHeight <= maxHeight) {
+      return { fontSize, lines };
+    }
   }
 
   const wrappedLines = wrapTextToLines(normalized, minFontSize, maxWidth);
@@ -631,9 +636,23 @@ function EmptyRows({ variant, scale }: { variant: RankingOgVariant; scale: numbe
   );
 }
 
+const TITLE_LINE_HEIGHT = 1.05;
+const TITLE_BOTTOM_PADDING_RATIO = 0.12;
+const TITLE_MAX_HEIGHT_LANDSCAPE = 440;
+const TITLE_MAX_HEIGHT_STORY = 400;
+
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
-  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 3, 'My ranking');
+  const maxHeight = isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE;
+  const textFit = fitWrappedText(
+    title,
+    isStory ? 112 : 58,
+    isStory ? 58 : 34,
+    isStory ? 680 : 318,
+    5,
+    'My ranking',
+    { maxHeight, lineHeight: TITLE_LINE_HEIGHT + TITLE_BOTTOM_PADDING_RATIO }
+  );
 
   return (
     <div
@@ -643,7 +662,8 @@ function TitleText({ title, variant, scale }: { title: string; variant: RankingO
         flexDirection: 'column',
         fontSize: scaled(textFit.fontSize, scale),
         fontWeight: 800,
-        lineHeight: 0.95,
+        lineHeight: TITLE_LINE_HEIGHT,
+        paddingBottom: scaled(textFit.fontSize * TITLE_BOTTOM_PADDING_RATIO, scale),
       }}
     >
       {textFit.lines.map((lineText, index) => (
@@ -690,7 +710,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
           style={{
             color: '#111111',
             display: 'flex',
-            maxHeight: scaled(isStory ? 330 : 190, scale),
+            maxHeight: scaled(isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE, scale),
             overflow: 'hidden',
           }}
         >
