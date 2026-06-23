@@ -5,7 +5,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useRouter } from 'next/navigation';
 
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -14,7 +13,6 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
-import { NavUtils } from '~/core/utils/utils';
 
 import { avatarAtom, nameAtom, spaceIdAtom } from './dialog';
 
@@ -41,7 +39,6 @@ export function PendingPersonalSpaceRunner() {
   const { createPersonalSpace } = useCreatePersonalSpace();
   const { store } = useSyncEngine();
   const queryClient = useQueryClient();
-  const router = useRouter();
   const reportError = useReportError();
 
   // Dedupe: never run two creation chains for the same topic at once (the
@@ -80,18 +77,18 @@ export function PendingPersonalSpaceRunner() {
         if (!spaceId) throw new Error('Creating space failed');
         if (cancelled) return;
 
+        // Flip every signal in one synchronous batch so the user never sees an
+        // in-between frame (registered but still "pending"). The pending page
+        // redirects itself onto the real space the moment `setPending(null)`
+        // clears the pending state, so no navigation is needed here.
         store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
         queryClient.setQueryData(['personal-space-id', address], { isRegistered: true, personalSpaceId: spaceId });
-        await queryClient.invalidateQueries({ queryKey: ['profile', address] });
-        devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
-
         setResolvedSpaceId(spaceId);
         setPending(null);
+        devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
 
-        if (window.location.pathname.startsWith(`/space/pending/${topicId}`)) {
-          devLog('[onboarding] swapping pending URL → real space %s', spaceId);
-          router.replace(NavUtils.toSpace(spaceId));
-        }
+        // Refresh the profile chip in the background — resolution shouldn't block on it.
+        void queryClient.invalidateQueries({ queryKey: ['profile', address] });
       } catch (error) {
         console.error('[PendingPersonalSpace] creation failed', error);
         if (cancelled) return;
@@ -116,7 +113,6 @@ export function PendingPersonalSpaceRunner() {
     createPersonalSpace,
     store,
     queryClient,
-    router,
     reportError,
     setPending,
     setResolvedSpaceId,
