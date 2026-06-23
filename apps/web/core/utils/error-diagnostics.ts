@@ -66,15 +66,43 @@ export const RELOAD_REQUIRED_MESSAGE =
   'A new version of Geo was released or the connection dropped while loading. Please reload the page and try again.';
 
 /**
+ * Privy's embedded wallet throws "Unable to connect to wallet" when it can't
+ * recover the session (expired token, lost iframe, long-backgrounded tab). viem
+ * then buries it under a generic `UnknownRpcError` ("An unknown RPC error
+ * occurred"), so the real reason ends up at the bottom of the cause chain where
+ * nobody reads it. Detect it anywhere in the chain so we can lead with it.
+ */
+const WALLET_CONNECTION_ERROR_RE = /unable to connect to wallet/i;
+
+export function isWalletConnectionError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (WALLET_CONNECTION_ERROR_RE.test(current.message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
+export const WALLET_CONNECTION_MESSAGE =
+  'Your wallet session expired or disconnected. Please reload the page and try publishing again.';
+
+/**
  * Turn a caught error into the message + optional retry action for the global
- * toast. Chunk-load failures get a reload prompt instead of the wrapper's
- * label (which would otherwise blame e.g. IPFS for what is really a stale
- * bundle); everything else falls through to the unwrapped cause chain.
+ * toast. Chunk-load and wallet-connection failures get a clear, actionable
+ * message instead of the wrapper's label (which would otherwise blame e.g. IPFS
+ * for a stale bundle, or bury a dead wallet session under viem's "unknown RPC
+ * error"); everything else falls through to the unwrapped cause chain.
  */
 export function toUserFacingError(error: unknown, prefix = ''): { message: string; retry?: () => void } {
   if (isChunkLoadError(error)) {
     return {
       message: RELOAD_REQUIRED_MESSAGE,
+      retry: typeof window !== 'undefined' ? () => window.location.reload() : undefined,
+    };
+  }
+  if (isWalletConnectionError(error)) {
+    return {
+      message: WALLET_CONNECTION_MESSAGE,
       retry: typeof window !== 'undefined' ? () => window.location.reload() : undefined,
     };
   }

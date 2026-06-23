@@ -11,7 +11,12 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { ReviewState } from '~/core/types';
-import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
+import {
+  collectClientDiagnostics,
+  describeError,
+  formatErrorReport,
+  toUserFacingError,
+} from '~/core/utils/error-diagnostics';
 import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Button } from '~/design-system/button';
@@ -69,6 +74,22 @@ export const StatusBar = () => {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  // ponytail: temporary preview — visit ?forceError=wallet (friendly) or ?forceError=rpc (raw chain). Remove before merge.
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const kind = new URLSearchParams(window.location.search).get('forceError');
+    if (!kind) return;
+    const synthetic = new Error('Publish failed', {
+      cause: new Error('An unknown RPC error occurred.', { cause: new Error('Unable to connect to wallet') }),
+    });
+    if (kind === 'rpc') {
+      dispatch({ type: 'ERROR', payload: describeError(synthetic) });
+    } else {
+      const { message, retry } = toUserFacingError(synthetic);
+      dispatch({ type: 'ERROR', payload: message, retry });
+    }
+  }, [dispatch]);
+
   const isError = state.reviewState === 'publish-error' && !!state.error;
 
   // ESC dismisses the error modal (matches typical modal affordance).
@@ -123,6 +144,16 @@ export const StatusBar = () => {
             >
               {isCopied ? <TickSmall /> : <Copy />}
               <span className="-mt-[2px]">{isCopied ? 'Copied' : 'Copy'}</span>
+            </button>
+            <button
+              type="button"
+              title="Reload the page"
+              aria-label="Reload the page"
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 border-l border-white/30 px-3 transition-colors hover:bg-red-01/80 focus:bg-red-01/80 focus:outline-none [&>svg]:size-4"
+            >
+              <RetrySmall />
+              <span className="-mt-[2px]">Reload</span>
             </button>
             <button
               type="button"
