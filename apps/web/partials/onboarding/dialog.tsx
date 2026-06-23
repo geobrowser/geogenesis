@@ -270,7 +270,7 @@ const StepHeader = ({ onClearEntityMatches }: { onClearEntityMatches: () => void
         <button
           type="button"
           onClick={() => logout()}
-          className="text-button text-grey-04 transition-colors hover:text-text"
+          className="text-smallButton text-grey-04 transition-colors hover:text-text"
         >
           Log out
         </button>
