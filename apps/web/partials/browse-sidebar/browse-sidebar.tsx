@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { personalSpaceViewed } from '~/core/analytics';
@@ -20,6 +20,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -28,6 +29,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { avatarAtom } from '~/partials/onboarding/dialog';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
@@ -120,12 +123,20 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
   const address = smartAccount?.account.address;
   const isSignedIn = !!address;
   const { profile } = useGeoProfile(address);
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
   const pathname = usePathname() ?? '';
 
   const isExplore = pathname === '/explore' || pathname.startsWith('/explore/');
   const isRoot = pathname === '/root';
   const isGovernance = pathname === '/home' || pathname.startsWith('/home/');
-  const personalHref = personalSpaceId ? NavUtils.toSpace(personalSpaceId) : null;
+  // Optimistic: link to the navigable `pending:` page until the real spaceId lands.
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+  const personalAvatar = profile?.avatarUrl || (isPending ? pendingAvatar : '');
   const isPersonal = !!personalHref && pathname === personalHref;
   const docHref = NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID);
   const isDoc = pathname.startsWith(`/space/${DOCUMENTATION_SPACE_ID}`);
@@ -140,22 +151,24 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         />
         <span>Explore</span>
       </Link>
-      {personalSpaceId && personalHref ? (
+      {personalHref ? (
         <Link
           href={personalHref}
           className={isPersonal ? navLinkActive : navLinkIdle}
-          onClick={() =>
-            personalSpaceViewed(personalSpaceId, {
-              navigation_source: 'browse_sidebar_primary',
-              page_path: pathname,
-            })
-          }
+          onClick={() => {
+            if (personalSpaceId) {
+              personalSpaceViewed(personalSpaceId, {
+                navigation_source: 'browse_sidebar_primary',
+                page_path: pathname,
+              });
+            }
+          }}
         >
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-            {profile?.avatarUrl ? (
-              <FallbackImage value={profile.avatarUrl} sizes="32px" className="object-cover" />
+            {personalAvatar ? (
+              <FallbackImage value={personalAvatar} sizes="32px" className="object-cover" />
             ) : (
-              <Avatar size={16} avatarUrl={null} value={address ?? personalSpaceId} square />
+              <Avatar size={16} avatarUrl={null} value={address ?? personalSpaceId ?? topicId ?? ''} square />
             )}
           </span>
           <span>Personal space</span>

@@ -10,6 +10,7 @@ const ENTITIES_SYNCED = 'entities:synced' as const;
 const DATA_TYPE_CREATED = 'datatype:created' as const;
 const LOCAL_CHANGES_CLEARED = 'local-changes:cleared' as const;
 const CHANGES_PUBLISHED = 'changes:published' as const;
+const SPACE_REMAPPED = 'space:remapped' as const;
 const HYDRATE = 'hydrate' as const;
 
 export type GeoEvent =
@@ -74,6 +75,17 @@ export type GeoEvent =
       type: typeof CHANGES_PUBLISHED;
       valueIds: string[];
       relationIds: string[];
+    }
+  // Emitted when a pending personal space's local edits are rewritten from the
+  // `pending:` sentinel spaceId to the real spaceId. Value ids bake in spaceId
+  // so they change (old id -> new row); relation ids are uuids so they stay,
+  // but their spaceId/toSpaceId change. Persistence deletes old-id rows and
+  // writes the new ones.
+  | {
+      type: typeof SPACE_REMAPPED;
+      oldValueIds: string[];
+      values: Value[];
+      relations: Relation[];
     };
 
 // Extract event types that match a specific 'type' value
@@ -103,6 +115,7 @@ export class GeoEventStream {
   static ENTITIES_SYNCED = ENTITIES_SYNCED;
   static LOCAL_CHANGES_CLEARED = LOCAL_CHANGES_CLEARED;
   static CHANGES_PUBLISHED = CHANGES_PUBLISHED;
+  static SPACE_REMAPPED = SPACE_REMAPPED;
   static HYDRATE = HYDRATE;
 
   private listeners: Record<string, Array<(event: GeoEvent) => void>> = {};

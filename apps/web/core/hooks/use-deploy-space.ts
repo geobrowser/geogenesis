@@ -1,17 +1,17 @@
 'use client';
 
-import { getCreateDaoSpaceCalldata, personalSpace } from '@geoprotocol/geo-sdk';
+import { getCreateDaoSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
 import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { Duration, Effect, Either, Schedule } from 'effect';
+import { Effect, Either } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { getSpace } from '~/core/io/queries';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { createPersonalSpaceOnChain, waitForSpaceIndexed } from '~/core/utils/contracts/create-personal-space-on-chain';
 import {
   DAO_SPACE_FACTORY_ADDRESS,
   EMPTY_SPACE_ID,
@@ -20,7 +20,6 @@ import {
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
-import { buildPersonalTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -83,7 +82,9 @@ export function useDeploySpace() {
           topicId,
         });
       } else {
-        return await createPersonalStyleSpace({
+        // Non-DAO governance types (personal, company, nonprofit, …) share onboarding's
+        // register -> publish+topic -> index flow.
+        return await createPersonalSpaceOnChain({
           smartAccount,
           walletAddress,
           type,
@@ -257,162 +258,13 @@ async function createDaoSpace({
   })) as Hex;
 
   const newSpaceId = newSpaceIdHex.slice(2).toLowerCase();
-  const hasIndexedContent = await waitForSpaceContent(newSpaceId);
-  if (!hasIndexedContent) {
-    throw new Error('Timed out waiting for DAO space content to index.');
-  }
-
-  const hasIndexedTopic = await waitForSpaceTopic(newSpaceId, resolvedTopicId);
-  if (!hasIndexedTopic) {
-    throw new Error('Timed out waiting for DAO space topic to index.');
+  // DAO deploys index slower than personal spaces; keep the original ~120s ceiling.
+  const indexed = await waitForSpaceIndexed(newSpaceId, resolvedTopicId, 40, 3_000);
+  if (!indexed) {
+    throw new Error('Timed out waiting for DAO space to index.');
   }
 
   return newSpaceId;
-}
-
-type CreatePersonalStyleSpaceParams = {
-  smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
-  walletAddress: string;
-  type: SpaceType;
-  spaceName: string;
-  spaceAvatarUri?: string;
-  spaceCoverUri?: string;
-  topicId?: string;
-};
-
-async function createPersonalStyleSpace({
-  smartAccount,
-  walletAddress,
-  type,
-  spaceName,
-  spaceAvatarUri,
-  spaceCoverUri,
-  topicId,
-}: CreatePersonalStyleSpaceParams): Promise<string> {
-  let spaceId = await getPersonalSpaceId(walletAddress);
-
-  if (!spaceId) {
-    const { to: registryTo, calldata: registryCalldata } = personalSpace.createSpace();
-    await runWriteEffect(
-      Effect.tryPromise({
-        try: () =>
-          smartAccount.sendUserOperation({
-            calls: [{ to: registryTo, value: 0n, data: registryCalldata }],
-          }),
-        catch: error => new Error('Failed to register personal-style space', { cause: error }),
-      }).pipe(
-        Effect.withSpan('web.write.createSpace.personal.register'),
-        Effect.annotateSpans({
-          'io.operation': 'create_space',
-          'space.type': 'PERSONAL',
-          'governance.action': 'space_created',
-        })
-      )
-    );
-
-    spaceId = await waitForSpaceId(walletAddress);
-    if (!spaceId) {
-      throw new Error('Timed out waiting for space ID after registration.');
-    }
-  }
-
-  const { ops, topicId: resolvedTopicId } = await generateOpsForSpaceType({
-    type,
-    spaceName,
-    spaceAvatarUri: spaceAvatarUri ? getImagePath(spaceAvatarUri) : null,
-    spaceCoverUri: spaceCoverUri ? getImagePath(spaceCoverUri) : null,
-    initialEditorAddress: walletAddress,
-    topicId,
-  });
-
-  const { to: publishTo, calldata: publishCalldata } = await runWriteEffect(
-    Effect.tryPromise({
-      try: () =>
-        personalSpace.publishEdit({
-          name: spaceName,
-          spaceId,
-          ops,
-          author: spaceId,
-          network: 'TESTNET',
-        }),
-      catch: error => new Error('Failed to build personal-style publish edit', { cause: error }),
-    }).pipe(
-      Effect.withSpan('web.write.createSpace.personal.publishEdit'),
-      Effect.annotateSpans({
-        'io.operation': 'publish_edit',
-        'io.path': 'personal',
-        'space.type': 'PERSONAL',
-        'governance.action': 'space_content_published',
-      })
-    )
-  );
-
-  await runWriteEffect(
-    Effect.tryPromise({
-      try: () =>
-        smartAccount.sendUserOperation({
-          calls: [{ to: publishTo, value: 0n, data: publishCalldata }],
-        }),
-      catch: error => new Error('Failed to submit personal-style publish transaction', { cause: error }),
-    }).pipe(
-      Effect.withSpan('web.write.createSpace.personal.submitUserOperation'),
-      Effect.annotateSpans({
-        'io.operation': 'submit_user_operation',
-        'space.type': 'PERSONAL',
-        'governance.action': 'space_content_published',
-      })
-    )
-  );
-
-  await runWriteEffect(
-    Effect.retry(
-      Effect.tryPromise({
-        try: () =>
-          smartAccount.sendUserOperation({
-            calls: [
-              {
-                to: SPACE_REGISTRY_ADDRESS_HEX,
-                value: 0n,
-                data: buildPersonalTopicDeclaredCalldata({
-                  authorSpaceId: spaceId,
-                  spaceId,
-                  topicId: resolvedTopicId,
-                }),
-              },
-            ],
-          }),
-        catch: error => new Error('Failed to declare personal-style space topic', { cause: error }),
-      }).pipe(
-        Effect.withSpan('web.write.createSpace.personal.declareTopic'),
-        Effect.annotateSpans({
-          'io.operation': 'declare_space_topic',
-          'space.type': 'PERSONAL',
-          'governance.action': 'topic_declared',
-        })
-      ),
-      topicDeclarationRetrySchedule('createSpace.personal.topic')
-    )
-  );
-
-  const hasIndexedContent = await waitForSpaceContent(spaceId);
-  if (!hasIndexedContent) {
-    throw new Error('Timed out waiting for personal-style space content to index.');
-  }
-
-  const hasIndexedTopic = await waitForSpaceTopic(spaceId, resolvedTopicId);
-  if (!hasIndexedTopic) {
-    throw new Error('Timed out waiting for personal-style space topic to index.');
-  }
-
-  return spaceId;
-}
-
-function topicDeclarationRetrySchedule(label: string) {
-  return Schedule.exponential(Duration.millis(500)).pipe(
-    Schedule.jittered,
-    Schedule.tapInput(() => Effect.sync(() => console.log(`[CREATE_SPACE][${label}] Retrying topic declaration`))),
-    Schedule.intersect(Schedule.recurs(2))
-  );
 }
 
 async function findNewDaoSpaceAddress(publicClient: any, receipt: any): Promise<Hex | null> {
@@ -440,50 +292,4 @@ async function findNewDaoSpaceAddress(publicClient: any, receipt: any): Promise<
   }
 
   return null;
-}
-
-async function waitForSpaceId(walletAddress: string, maxAttempts = 30, intervalMs = 2_000): Promise<string | null> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const spaceId = await getPersonalSpaceId(walletAddress);
-    if (spaceId) return spaceId;
-    if (attempt < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
-    }
-  }
-  return null;
-}
-
-async function waitForSpaceContent(spaceId: string, maxAttempts = 20, intervalMs = 3_000): Promise<boolean> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const space = await Effect.runPromise(getSpace(spaceId));
-      if (space?.entity?.name) return true;
-    } catch {
-      // Continue polling
-    }
-    if (attempt < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
-    }
-  }
-  return false;
-}
-
-async function waitForSpaceTopic(
-  spaceId: string,
-  topicId: string,
-  maxAttempts = 20,
-  intervalMs = 3_000
-): Promise<boolean> {
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const space = await Effect.runPromise(getSpace(spaceId));
-      if (space?.topicId === topicId) return true;
-    } catch {
-      // Continue polling
-    }
-    if (attempt < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
-    }
-  }
-  return false;
 }
