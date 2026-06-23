@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import pluralize from 'pluralize';
 
+import { type ActiveEditorRequest } from '~/core/io/subgraph/fetch-proposed-editors';
 import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
@@ -18,17 +19,11 @@ interface Props {
   spaceId: string;
   isEditor: boolean;
   isMember: boolean;
-  hasRequestedSpaceEditorship: boolean;
+  editorRequest: ActiveEditorRequest | null;
   connectedAddress: string | null;
 }
 
-export function SpaceEditorsContent({
-  spaceId,
-  isEditor,
-  isMember,
-  hasRequestedSpaceEditorship,
-  connectedAddress,
-}: Props) {
+export function SpaceEditorsContent({ spaceId, isEditor, isMember, editorRequest, connectedAddress }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
     useSpaceParticipantsInfinite({ spaceId, kind: 'editors' });
 
@@ -64,7 +59,7 @@ export function SpaceEditorsContent({
               <SpaceEditorsPopoverEditorRequestButton
                 spaceId={spaceId}
                 isMember={isMember}
-                hasRequestedSpaceEditorship={hasRequestedSpaceEditorship}
+                editorRequest={editorRequest}
               />
             ) : (
               'Sign in to join'

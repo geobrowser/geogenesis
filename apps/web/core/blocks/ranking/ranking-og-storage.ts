@@ -1,13 +1,13 @@
 import { createHash, createHmac } from 'node:crypto';
 
-export const RANKING_OG_IMAGE_CONTENT_TYPE = 'image/png';
+export const RANKING_OG_IMAGE_CONTENT_TYPE = 'image/jpeg';
 
 export const RANKING_OG_VARIANTS = ['landscape', 'story'] as const;
 
 export type RankingOgVariant = (typeof RANKING_OG_VARIANTS)[number];
 
 export const RANKING_OG_VARIANT_SIZES: Record<RankingOgVariant, { width: number; height: number }> = {
-  landscape: { width: 2400, height: 1260 },
+  landscape: { width: 1200, height: 630 },
   story: { width: 1080, height: 1920 },
 };
 
@@ -61,7 +61,7 @@ export function buildRankingOgObjectKey({ rankEntityId, version, variant }: Rank
     'rankings',
     normalizeRankingOgKeyPart(rankEntityId),
     normalizeRankingOgKeyPart(version),
-    `${variant}.png`,
+    `${variant}.jpg`,
   ].join('/');
 }
 
@@ -76,7 +76,7 @@ export function buildGlobalRankingOgObjectKey({
     'global',
     normalizeRankingOgKeyPart(blockEntityId),
     normalizeRankingOgKeyPart(version),
-    `${variant}.png`,
+    `${variant}.jpg`,
   ].join('/');
 }
 

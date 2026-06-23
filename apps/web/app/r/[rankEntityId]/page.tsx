@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+
 import { notFound } from 'next/navigation';
 
 import { buildPersonalRankingMetadata } from '~/core/blocks/ranking/ranking-og-metadata';

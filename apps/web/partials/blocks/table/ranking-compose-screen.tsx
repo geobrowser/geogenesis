@@ -8,7 +8,7 @@ import { useAtom, useSetAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
-import { getRankingPublishSpaceIds } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
+import { getRankingPublishSpaceIds, resolveRankingSingleTargetSpaceId } from '~/core/blocks/ranking/ranking-compose-publish-spaces';
 import { RANKING_COMPOSE_TAB_MY, rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { generatePersonalRankingOgImages } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
@@ -63,8 +63,20 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const relationId = searchParams?.get('relationId') ?? '';
   const { name, entityId, filterState } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
+
+  const createNewSpaceId = React.useMemo(
+    () => resolveRankingSingleTargetSpaceId(filterState),
+    [filterState]
+  );
+
   const { showOnboarding } = useOnboarding();
-  const { status: accessStatus, ensureAccess } = useRankingComposeAccess(spaceId);
+  const composeAccessSpaceId = createNewSpaceId ?? spaceId;
+  const {
+    status: accessStatus,
+    canEdit: canEditCreateSpace,
+    ensureAccess,
+    recheckAccess,
+  } = useRankingComposeAccess(composeAccessSpaceId);
   const { onClick: createEntityWithFilters } = useCreateEntityWithFilters(spaceId);
   const setCreateEntityFlow = useSetAtom(rankingComposeCreateEntityAtom);
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
@@ -274,7 +286,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const getSearchResultPreview = (searchHit: SearchResult | undefined) => ({
     name: searchHit?.name?.trim() || null,
     description: searchHit?.description?.trim() || null,
-    image: searchHit?.spaces[0]?.image ?? null,
+    image: null,
     spaceId: searchHit?.spaces[0]?.spaceId ?? null,
   });
 
@@ -380,6 +392,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasRankedByOthers = globalRankingEntityIds.length > 0 || aggregatedRankingCount > 0;
   const isEntityPreviewOpen = entitySheetTarget !== null;
 
+  const canCreateNew = Boolean(createNewSpaceId) && canEditCreateSpace;
+  const isAwaitingMembership = Boolean(createNewSpaceId) && accessStatus === 'needs-membership';
+
   const titleMetadata = (
     <RankingComposeTitleMetadata
       isMobile={isMobile}
@@ -445,6 +460,9 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
           onCreateNew={handleCreateNew}
+          canCreateNew={canCreateNew}
+          isAwaitingMembership={isAwaitingMembership}
+          onRecheckMembership={recheckAccess}
           activeSwipeRowKey={activeSwipeRowKey}
           onActiveSwipeRowKeyChange={setActiveSwipeRowKey}
           onViewEntity={openEntitySheet}

@@ -105,9 +105,7 @@ describe('buildPersonalRankingMetadataFromParts', () => {
 
     expect(meta.title).toBe('My Ranking');
     expect(meta.openGraph?.url).toBe('https://geobrowser.io/r/rank-1');
-    expect(meta.openGraph?.images).toEqual([
-      expect.objectContaining({ url: 'https://cdn.example.com/og.png' }),
-    ]);
+    expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: 'https://cdn.example.com/og.png' })]);
     expect((meta.twitter as { card?: string }).card).toBe('summary_large_image');
     expect(meta.twitter?.images).toEqual(['https://cdn.example.com/og.png']);
   });
@@ -186,9 +184,7 @@ describe('image url selection (storage configured)', () => {
     const meta = await buildPersonalRankingMetadata(personalResolved, SITE_URL, '/r/rank-1');
     const imageUrl = meta.twitter?.images as string[];
 
-    expect(imageUrl[0]).toBe(
-      'https://cdn.example.com/og/rankings/rank-1/ranking-og-v3-abcd1234/landscape.png'
-    );
+    expect(imageUrl[0]).toBe('https://cdn.example.com/og/rankings/rank-1/ranking-og-v3-abcd1234/landscape.jpg');
   });
 
   it('falls back to the live preview endpoint when the personal static object is missing', async () => {

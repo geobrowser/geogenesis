@@ -5,10 +5,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { ogImageToJpeg } from '~/core/og-jpeg';
 import { getImagePath } from '~/core/utils/utils';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
-import { RANKING_OG_IMAGE_CONTENT_TYPE, RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
+import { RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
 
 const purple = '#5B19FF';
 const ink = '#111111';
@@ -219,14 +220,19 @@ function fitWrappedText(
   minFontSize: number,
   maxWidth: number,
   maxLines: number,
-  fallback: string
+  fallback: string,
+  options: { maxHeight?: number; lineHeight?: number } = {}
 ): WrappedTextFit {
   const normalized = normalizeDisplayText(text, fallback);
+  const { maxHeight = Infinity, lineHeight = 1 } = options;
 
   for (let fontSize = targetFontSize; fontSize >= minFontSize; fontSize -= 1) {
     const lines = wrapTextToLines(normalized, fontSize, maxWidth);
     const allLinesFit = lines.every(lineText => measureTextWidth(lineText, fontSize) <= maxWidth);
-    if (lines.length <= maxLines && allLinesFit) return { fontSize, lines };
+    const totalHeight = Math.ceil(lines.length * fontSize * lineHeight);
+    if (lines.length <= maxLines && allLinesFit && totalHeight <= maxHeight) {
+      return { fontSize, lines };
+    }
   }
 
   const wrappedLines = wrapTextToLines(normalized, minFontSize, maxWidth);
@@ -630,9 +636,21 @@ function EmptyRows({ variant, scale }: { variant: RankingOgVariant; scale: numbe
   );
 }
 
+const TITLE_LINE_HEIGHT = 0.95;
+const TITLE_MAX_HEIGHT_LANDSCAPE = 440;
+const TITLE_MAX_HEIGHT_STORY = 400;
+
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
-  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 3, 'My ranking');
+  const textFit = fitWrappedText(
+    title,
+    isStory ? 112 : 58,
+    isStory ? 58 : 34,
+    isStory ? 680 : 318,
+    5,
+    'My ranking',
+    { maxHeight: isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE, lineHeight: TITLE_LINE_HEIGHT }
+  );
 
   return (
     <div
@@ -642,7 +660,7 @@ function TitleText({ title, variant, scale }: { title: string; variant: RankingO
         flexDirection: 'column',
         fontSize: scaled(textFit.fontSize, scale),
         fontWeight: 800,
-        lineHeight: 0.95,
+        lineHeight: TITLE_LINE_HEIGHT,
       }}
     >
       {textFit.lines.map((lineText, index) => (
@@ -689,7 +707,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
           style={{
             color: '#111111',
             display: 'flex',
-            maxHeight: scaled(isStory ? 330 : 190, scale),
+            maxHeight: scaled(isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE, scale),
             overflow: 'hidden',
           }}
         >
@@ -736,11 +754,10 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
 }
 
 export function generateRankingOgImageResponse(data: RankingOgCardData, variant: RankingOgVariant) {
-  return new ImageResponse(<Card data={data} variant={variant} />, {
-    ...RANKING_OG_VARIANT_SIZES[variant],
-    fonts: geistFonts,
-    headers: {
-      'Content-Type': RANKING_OG_IMAGE_CONTENT_TYPE,
-    },
-  });
+  return ogImageToJpeg(
+    new ImageResponse(<Card data={data} variant={variant} />, {
+      ...RANKING_OG_VARIANT_SIZES[variant],
+      fonts: geistFonts,
+    })
+  );
 }

@@ -13,9 +13,9 @@ import {
 } from './ranking-og-storage';
 
 describe('ranking OG storage helpers', () => {
-  it('uses high-density output dimensions for generated variants', () => {
+  it('uses X-recommended output dimensions for generated variants', () => {
     expect(RANKING_OG_VARIANT_SIZES).toEqual({
-      landscape: { width: 2400, height: 1260 },
+      landscape: { width: 1200, height: 630 },
       story: { width: 1080, height: 1920 },
     });
   });
@@ -31,7 +31,7 @@ describe('ranking OG storage helpers', () => {
         version: 'ranking-og-v1-abc123',
         variant: 'landscape',
       })
-    ).toBe('og/rankings/rank-1/ranking-og-v1-abc123/landscape.png');
+    ).toBe('og/rankings/rank-1/ranking-og-v1-abc123/landscape.jpg');
   });
 
   it('builds global variant-specific immutable object keys', () => {
@@ -41,7 +41,7 @@ describe('ranking OG storage helpers', () => {
         version: 'ranking-global-og-v1-abc123',
         variant: 'landscape',
       })
-    ).toBe('og/rankings/global/block-1/ranking-global-og-v1-abc123/landscape.png');
+    ).toBe('og/rankings/global/block-1/ranking-global-og-v1-abc123/landscape.jpg');
   });
 
   it('builds public CDN URLs', () => {

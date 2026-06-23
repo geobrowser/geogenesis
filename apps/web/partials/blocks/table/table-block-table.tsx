@@ -133,9 +133,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const relationId = nameCell?.relationId;
 
     const autofocus =
-      isNameCell &&
-      shouldAutoFocusPlaceholder &&
-      (Boolean(row.original.placeholder) || focusRowEntityId === entityId);
+      isNameCell && shouldAutoFocusPlaceholder && (Boolean(row.original.placeholder) || focusRowEntityId === entityId);
 
     if (!property) {
       return null;
@@ -160,9 +158,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
-          focusRequestKey={
-            row.original.placeholder || focusRowEntityId === entityId ? placeholderFocusKey : undefined
-          }
+          focusRequestKey={row.original.placeholder || focusRowEntityId === entityId ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
           openedWithMainViewEditing={openedWithMainViewEditing}
         />

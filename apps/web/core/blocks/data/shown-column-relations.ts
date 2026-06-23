@@ -19,11 +19,7 @@ export function isShownColumnRelation(relation: Relation): boolean {
 }
 
 export function isBlockConfigRelationType(typeId: string): boolean {
-  return (
-    typeId === SystemIds.PROPERTIES ||
-    typeId === SystemIds.SHOWN_COLUMNS ||
-    typeId === SystemIds.VIEW_PROPERTY
-  );
+  return typeId === SystemIds.PROPERTIES || typeId === SystemIds.SHOWN_COLUMNS || typeId === SystemIds.VIEW_PROPERTY;
 }
 
 /** Keep one relation per target property / view. */
@@ -39,13 +35,8 @@ export function dedupeRelationsByColumnProperty(relations: Relation[]): Relation
   return out;
 }
 
-export function relationsMatchingColumnProperty(
-  relations: Relation[],
-  propertyId: string
-): Relation[] {
+export function relationsMatchingColumnProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(
-    r =>
-      isShownColumnRelationType(r.type.id) &&
-      ID.equals(columnPropertyIdFromRelation(r), propertyId)
+    r => isShownColumnRelationType(r.type.id) && ID.equals(columnPropertyIdFromRelation(r), propertyId)
   );
 }
