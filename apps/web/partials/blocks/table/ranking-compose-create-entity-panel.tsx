@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { useAtom, useSetAtom,  useStore } from 'jotai';
+import { useAtom, useSetAtom, useStore } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { filterLocalChangesToEntitySubgraph } from '~/core/blocks/ranking/ranking-compose-create-entity';
