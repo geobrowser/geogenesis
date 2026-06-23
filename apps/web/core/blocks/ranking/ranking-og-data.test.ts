@@ -125,6 +125,67 @@ describe('getRankingOgCardData', () => {
     expect(data?.entries.map(entry => entry.entityId)).toEqual(['entry-a', 'entry-b']);
   });
 
+  it('backfills a pending (unpublished) entry name from the proposer edits instead of "Untitled"', async () => {
+    const rank = entity({
+      id: 'rank-1',
+      types: [{ id: RANK_TYPE_ID, name: 'Rank' }],
+      relations: [
+        {
+          id: 'submitted',
+          entityId: 'rank-1',
+          isDeleted: false,
+          type: { id: SUBMITTED_TO_PROPERTY_ID, name: null },
+          fromEntity: { id: 'rank-1', name: null },
+          toEntity: { id: 'block-1', name: null, value: 'block-1' },
+          renderableType: 'RELATION',
+          spaceId: 'author-space',
+        },
+        {
+          id: 'vote-a',
+          entityId: 'rank-1',
+          isDeleted: false,
+          type: { id: RANK_VOTES_RELATION_TYPE_ID, name: null },
+          fromEntity: { id: 'rank-1', name: null },
+          toEntity: { id: 'entry-pending', name: null, value: 'entry-pending' },
+          renderableType: 'RELATION',
+          spaceId: 'author-space',
+          position: '00000000000000000000000000000000',
+        },
+      ],
+    });
+
+    const data = await getRankingOgCardData(
+      {
+        rankEntityId: 'rank-1',
+        authorSpaceId: 'author-space',
+        blockEntityId: 'block-1',
+        blockEntitySpaceId: 'block-space',
+      },
+      {
+        fetchEntity: async id => (id === 'rank-1' ? rank : entity({ id: 'block-1', name: 'Top projects' })),
+        fetchEntityPage: async id => (id === 'rank-1' ? { entity: rank, relations: rank.relations } : null),
+        // The pending entity isn't in the published index, so it resolves to "Untitled".
+        fetchEntities: async () => [],
+        fetchProfile: async () => profile,
+        fetchPendingEntries: async ({ unresolvedEntityIds, proposerSpaceIds }) => {
+          expect(unresolvedEntityIds).toEqual(['entry-pending']);
+          expect(proposerSpaceIds).toEqual(['author-space']);
+          return {
+            pendingEntityIds: new Set(['entry-pending']),
+            entriesByEntityId: new Map([
+              [
+                'entry-pending',
+                { entityId: 'entry-pending', name: 'Mao: The Unknown Story', description: null, image: null },
+              ],
+            ]),
+          };
+        },
+      }
+    );
+
+    expect(data?.entries[0]?.name).toBe('Mao: The Unknown Story');
+  });
+
   it('rejects ranks that were not submitted to the requested block', async () => {
     const data = await getRankingOgCardData(
       {
