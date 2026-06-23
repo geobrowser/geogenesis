@@ -690,7 +690,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
           style={{
             color: '#111111',
             display: 'flex',
-            maxHeight: scaled(isStory ? 390 : 360, scale),
+            maxHeight: scaled(isStory ? 400 : 440, scale),
             overflow: 'hidden',
           }}
         >
