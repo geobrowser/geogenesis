@@ -14,6 +14,16 @@ import { describeError } from '~/core/utils/error-diagnostics';
  */
 export type GovernanceRevert = { selector: string; name: string; hint: string };
 
+/**
+ * The DAO wraps any revert thrown by a proposal's own action in this opaque
+ * error. For legacy editor/member proposals created before the action target was
+ * fixed, the stored action calls a method that doesn't exist on its target
+ * contract, so it reverts every time — the proposal is permanently dead and must
+ * be recreated. Used to tell a recoverable "not executable yet" state apart from
+ * a "this can never execute" one.
+ */
+export const ACTION_REVERTED_SELECTOR = '0x24c05f9a';
+
 const REVERTS: readonly GovernanceRevert[] = [
   {
     selector: '0xdf322356',
@@ -26,9 +36,9 @@ const REVERTS: readonly GovernanceRevert[] = [
     hint: 'The vote was rejected — voting has ended, you already voted, or you are not eligible.',
   },
   {
-    selector: '0x24c05f9a',
+    selector: ACTION_REVERTED_SELECTOR,
     name: 'ActionReverted',
-    hint: "A proposal action reverted during execution — a precondition wasn't met (for example the change may already be applied, e.g. the editor was already added).",
+    hint: "This proposal can't be completed — one of its on-chain actions reverts when executed. Older editor and member requests can hit this permanently and need to be recreated.",
   },
   {
     selector: '0x0992f7ad',

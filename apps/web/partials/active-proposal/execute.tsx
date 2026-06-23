@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { useCanExecuteProposal, useExecuteProposal } from '~/core/hooks/use-execute-proposal';
+import { useExecuteProposal, useProposalExecutability } from '~/core/hooks/use-execute-proposal';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 import { isUserRejection } from '~/core/utils/error-diagnostics';
@@ -25,23 +25,24 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
     spaceId,
     proposalId,
   });
-  const canExecute = useCanExecuteProposal({ spaceId, proposalId });
+  const { state: executability } = useProposalExecutability({ spaceId, proposalId });
   const reportError = useReportError();
   const router = useRouter();
 
   const isPending = status === 'pending';
   const isSuccess = status === 'success';
 
-  // An on-chain simulation confirmed this proposal would revert (already
-  // executed / stale) — refresh once so the list re-runs its filters and drops
-  // the dead card; the ref guards against a refresh loop while the indexer is
-  // still catching up.
+  // A `blocked` simulation means the indexer is stale (already executed, or
+  // votes/timing changed) — refresh once so the list re-runs its filters and
+  // drops the card. `dead` is permanent (the card stays and shows the honest
+  // status below), so don't refresh-loop on it. The ref guards against a loop
+  // while the indexer catches up.
   const hasRefreshedStale = React.useRef(false);
   React.useEffect(() => {
-    if (canExecute !== false || hasRefreshedStale.current) return;
+    if (executability !== 'blocked' || hasRefreshedStale.current) return;
     hasRefreshedStale.current = true;
     router.refresh();
-  }, [canExecute, router]);
+  }, [executability, router]);
 
   React.useEffect(() => {
     if (status !== 'error') return;
@@ -73,10 +74,24 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
     );
   }
 
+  // The proposal's own action reverts on-chain — it can never be executed and
+  // "Pending execution" would be a lie. Say so honestly. (Editors can recreate
+  // the request one click away from the Editors menu.)
+  if (executability === 'dead' && status === 'idle') {
+    return (
+      <div
+        className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01"
+        title="One of this proposal's on-chain actions reverts when executed. Older editor and member requests can hit this permanently and need to be recreated."
+      >
+        Can&apos;t be completed
+      </div>
+    );
+  }
+
   // Show the fallback (default: nothing) until the simulation confirms execution
-  // would succeed (`undefined` = still checking, `false` = would revert) — unless
-  // the user is already mid-execute, in which case the error effect handles it.
-  if (canExecute !== true && status === 'idle') {
+  // would succeed (`checking`/`blocked` keep the fallback) — unless the user is
+  // already mid-execute, in which case the error effect handles it.
+  if (executability !== 'executable' && status === 'idle') {
     return <>{fallback}</>;
   }
 
