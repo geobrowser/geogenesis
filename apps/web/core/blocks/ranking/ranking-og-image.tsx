@@ -763,8 +763,8 @@ async function fetchImageAsDataUri(url: string, timeoutMs: number): Promise<stri
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) return null;
-    const contentType = res.headers.get('content-type')?.split(';')[0]?.trim() || 'image/png';
-    if (!contentType.startsWith('image/')) return null;
+    const contentType = res.headers.get('content-type')?.split(';')[0]?.trim();
+    if (!contentType || !contentType.startsWith('image/')) return null;
     const base64 = Buffer.from(await res.arrayBuffer()).toString('base64');
     return `data:${contentType};base64,${base64}`;
   } catch {

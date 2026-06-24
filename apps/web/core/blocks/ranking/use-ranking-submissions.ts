@@ -225,11 +225,9 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         setToast(React.createElement('span', null, 'Ranking published!'));
 
         // Poll until the indexer reflects the exact order we just submitted, then
-        // return so the OG image generates against indexed data. Short upfront settle
-        // + a dense interval so we detect indexing close to when it actually lands
-        // (the old 1.5s delay + flat 2s interval overshot by up to ~2s). Bounded by an
-        // overall time budget (same ~60s worst case as before); the extra polls while
-        // waiting are light indexed reads.
+        // return so the OG image generates against indexed data. A short upfront
+        // settle plus a dense interval detects indexing close to when it lands; the
+        // extra polls are light indexed reads. Bounded by an overall time budget.
         const INITIAL_DELAY_MS = 500;
         const POLL_INTERVAL_MS = 750;
         const MAX_POLL_DURATION_MS = 60_000;
