@@ -130,10 +130,19 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
     );
 
     if (!schemaWithGroups.hasPropertyGroups) {
+      const seen = new Set<string>();
+      const ordered: string[] = [];
+      // Honor the type's property order (sorted by relation position) first,
+      // then append any visible properties not defined on the schema.
+      for (const propertyId of [...schemaWithGroups.ungroupedPropertyIds, ...visiblePropertyIds]) {
+        if (!visiblePropertyIds.has(propertyId) || seen.has(propertyId)) continue;
+        seen.add(propertyId);
+        ordered.push(propertyId);
+      }
       return {
         hasGroups: false,
         groups: [] as { id: string; label: string; propertyIds: string[] }[],
-        ungrouped: [...visiblePropertyIds.values()],
+        ungrouped: ordered,
       };
     }
 
