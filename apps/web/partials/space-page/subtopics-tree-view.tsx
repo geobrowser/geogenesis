@@ -8,6 +8,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePendingSubtopicProposals } from '~/core/hooks/use-pending-subtopic-proposals';
 import { useProposeSubtopicRelation } from '~/core/hooks/use-propose-subtopic-relation';
 import { useSubtopicChildren } from '~/core/hooks/use-subtopic-children';
+import { usePrefetchDefaultSubtopics } from '~/core/hooks/use-subtopic-search';
 import type { PendingSubtopicProposal } from '~/core/io/subgraph/fetch-pending-subtopic-proposals';
 import type { SubtopicChild } from '~/core/io/subgraph/fetch-subtopic-children';
 import { useName } from '~/core/state/entity-page-store/entity-store';
@@ -20,6 +21,7 @@ import { Context } from '~/design-system/icons/context';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
+
 import type { AddSubtopicTarget } from '~/partials/space-page/add-subtopic-search-view';
 
 interface SubtopicsTreeViewProps {
@@ -32,6 +34,13 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic }: Subt
   const { isEditor, isMember } = useAccessControl(spaceId);
   const canEdit = isEditor || isMember;
   const rootName = useName(rootEntityId, spaceId);
+  const prefetchDefaultSubtopics = usePrefetchDefaultSubtopics();
+
+  // Warm the "add a subtopic" suggestions while the user browses the tree so the
+  // search dropdown is already populated the first time they open it.
+  React.useEffect(() => {
+    if (canEdit) prefetchDefaultSubtopics();
+  }, [canEdit, prefetchDefaultSubtopics]);
   const { data: pendingProposals = [], isLoading: isPendingLoading } = usePendingSubtopicProposals(
     spaceId,
     rootEntityId,

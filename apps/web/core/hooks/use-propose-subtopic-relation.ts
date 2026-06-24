@@ -1,16 +1,16 @@
 'use client';
 
-import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
-
+import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { SUBTOPIC_RELATION_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSpace } from '~/core/hooks/use-space';
+import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
-import type { Relation } from '~/core/types';
-import { createTypeRelationForNewEntity } from '~/partials/blocks/table/change-entry';
+import type { Relation, Value } from '~/core/types';
 
 type ProposeSubtopicAddArgs = {
   parentEntityId: string;
@@ -156,20 +156,96 @@ export function useProposeSubtopicRelation(spaceId: string) {
     [invalidateSubtopics, makeProposal, space, spaceId, storage.relations]
   );
 
-  const assignTopicTypeOnCreate = React.useCallback(
-    (entity: { id: string; name: string | null; space?: string; verified?: boolean }) => {
-      createTypeRelationForNewEntity(storage, spaceId, entity, {
-        id: TOPIC_TYPE_ID,
-        name: 'Topic',
+  const proposeCreateAndAdd = React.useCallback(
+    async ({
+      parentEntityId,
+      parentName,
+      name,
+    }: {
+      parentEntityId: string;
+      parentName: string | null;
+      name: string;
+    }) => {
+      if (!space) return;
+
+      const childName = name.trim();
+      if (!childName) return;
+
+      setIsPending(true);
+
+      const childEntityId = ID.createEntityId();
+
+      // Name value for the new entity.
+      const nameValue: Value = {
+        id: ID.createValueId({ entityId: childEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId }),
+        entity: { id: childEntityId, name: childName },
+        property: { id: SystemIds.NAME_PROPERTY, name: 'Name', dataType: 'TEXT', renderableType: 'TEXT' },
+        spaceId,
+        value: childName,
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: false,
+      };
+
+      // Types relation marking the new entity as a Topic.
+      const typeRelation: Relation = {
+        id: IdUtils.generate(),
+        entityId: IdUtils.generate(),
+        spaceId,
+        position: Position.generate(),
+        renderableType: 'RELATION',
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: false,
+        type: {
+          id: SystemIds.TYPES_PROPERTY,
+          name: 'Types',
+        },
+        fromEntity: {
+          id: childEntityId,
+          name: childName,
+        },
+        toEntity: {
+          id: TOPIC_TYPE_ID,
+          name: 'Topic',
+          value: TOPIC_TYPE_ID,
+        },
+      };
+
+      // Subtopic relation linking the parent to the new entity.
+      const subtopicRelation = buildSubtopicRelation({
+        parentEntityId,
+        parentName,
+        childEntityId,
+        childName,
+        spaceId,
       });
+
+      storage.values.set(nameValue);
+      storage.relations.set(typeRelation);
+      storage.relations.set(subtopicRelation);
+
+      const proposalName = `Add subtopic: ${childName} to ${parentName ?? 'topic'}`;
+
+      try {
+        await makeProposal({
+          values: [nameValue],
+          relations: [typeRelation, subtopicRelation],
+          spaceId,
+          name: proposalName,
+          onSuccess: () => invalidateSubtopics(parentEntityId),
+        });
+      } finally {
+        setIsPending(false);
+      }
     },
-    [spaceId, storage]
+    [invalidateSubtopics, makeProposal, space, spaceId, storage]
   );
 
   return {
     proposeAdd,
     proposeRemove,
-    assignTopicTypeOnCreate,
+    proposeCreateAndAdd,
     isPending,
   };
 }

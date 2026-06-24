@@ -10,6 +10,8 @@ import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-sea
 
 import { Dots } from '~/design-system/dots';
 import { Search } from '~/design-system/icons/search';
+import { Tag } from '~/design-system/tag';
+
 import { SubtopicsDialogPopoverContext } from '~/partials/space-page/subtopics-dialog-shell';
 
 export type AddSubtopicTarget = {
@@ -26,7 +28,7 @@ interface AddSubtopicSearchViewProps {
 
 export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtopicSearchViewProps) {
   const popoverContainer = React.useContext(SubtopicsDialogPopoverContext);
-  const { proposeAdd, isPending } = useProposeSubtopicRelation(spaceId);
+  const { proposeAdd, proposeCreateAndAdd, isPending } = useProposeSubtopicRelation(spaceId);
   const { query, onQueryChange, results, isLoading } = useSubtopicSearch();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
@@ -45,12 +47,21 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
     onProposed();
   };
 
+  const handleCreate = async () => {
+    const name = query.trim();
+    if (!name || isPending) return;
+
+    await proposeCreateAndAdd({ parentEntityId, parentName, name });
+    onProposed();
+  };
+
   const visibleResults = React.useMemo(
     () => results.filter(result => !existingChildIds.has(result.id)),
     [results, existingChildIds]
   );
 
-  const isDropdownOpen = isDropdownVisible && query.trim().length > 0;
+  const isShowingSuggestions = query.trim().length === 0;
+  const isDropdownOpen = isDropdownVisible;
 
   return (
     <div className="py-1">
@@ -106,6 +117,9 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
                     <Dots />
                   </div>
                 )}
+                {!isLoading && isShowingSuggestions && visibleResults.length > 0 && (
+                  <div className="px-3 pt-2 pb-1 text-footnote text-grey-04">Suggested topics</div>
+                )}
                 {!isLoading &&
                   visibleResults.map((result, index) => (
                     <SubtopicSearchResultRow
@@ -116,8 +130,16 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
                       onPropose={() => void handlePropose(result)}
                     />
                   ))}
-                {!isLoading && visibleResults.length === 0 && (
-                  <div className="px-3 py-2 text-button text-grey-04">No results found</div>
+                {!isLoading && isShowingSuggestions && visibleResults.length === 0 && (
+                  <div className="px-3 py-2 text-button text-grey-04">No suggestions available</div>
+                )}
+                {!isLoading && !isShowingSuggestions && (
+                  <CreateSubtopicRow
+                    name={query.trim()}
+                    disabled={isPending}
+                    showDivider={visibleResults.length > 0}
+                    onCreate={() => void handleCreate()}
+                  />
                 )}
               </div>
             </Popover.Content>
@@ -142,8 +164,19 @@ function SubtopicSearchResultRow({
   return (
     <div>
       {showDivider && <div className="h-px w-full bg-divider" />}
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-        <span className="truncate text-button text-text">{result.name ?? 'Untitled'}</span>
+      <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-button text-text">{result.name ?? 'Untitled'}</span>
+          {result.types.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {result.types.slice(0, 3).map((type, index) => (
+                <Tag key={`${type.id}-${index}`}>{type.name ?? 'Untitled'}</Tag>
+              ))}
+              {result.types.length > 3 ? <Tag>{`+${result.types.length - 3}`}</Tag> : null}
+            </div>
+          )}
+          {result.description && <p className="mt-1 line-clamp-2 text-footnote text-grey-04">{result.description}</p>}
+        </div>
         <button
           type="button"
           disabled={disabled}
@@ -151,6 +184,37 @@ function SubtopicSearchResultRow({
           className="h-8 shrink-0 rounded-[8px] border border-grey-02 bg-white px-3 text-button text-text shadow-light transition hover:border-text disabled:cursor-not-allowed disabled:opacity-50"
         >
           Propose to add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateSubtopicRow({
+  name,
+  disabled,
+  showDivider,
+  onCreate,
+}: {
+  name: string;
+  disabled: boolean;
+  showDivider: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <div>
+      {showDivider && <div className="h-px w-full bg-divider" />}
+      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+        <span className="min-w-0 flex-1 truncate text-button text-grey-04">
+          Create new topic <span className="font-medium text-text">&ldquo;{name}&rdquo;</span>
+        </span>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={onCreate}
+          className="h-8 shrink-0 rounded-[8px] border border-grey-02 bg-white px-3 text-button text-text shadow-light transition hover:border-text disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Create &amp; add
         </button>
       </div>
     </div>
