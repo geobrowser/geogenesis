@@ -26,7 +26,7 @@ type SelectSpaceProps = {
   entityId: string;
   spaceId?: string;
   verified?: boolean;
-  // Collection blocks no longer facilitate verification and hide the checkbox.
+  // Hides the per-space "Verified" checkbox when false.
   showVerified?: boolean;
   containerClassName?: string;
   variant?: 'floating' | 'fixed';
