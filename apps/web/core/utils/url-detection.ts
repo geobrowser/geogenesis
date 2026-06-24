@@ -24,48 +24,35 @@ export function detectWeb2URLs(text: string): string[] {
 }
 
 export function detectWeb2URLsInMarkdown(text: string): string[] {
-  if (!text || typeof text !== 'string') {
+  if (!text || typeof text !== 'string') return [];
+
+  const BARE_DOMAIN_RE = /\b\w+\.[a-z]{2,}/i;
+  if (!text.includes('[') && !text.includes('http') && !BARE_DOMAIN_RE.test(text)) {
     return [];
   }
 
-  // Early exit if no potential markdown links or web2 URLs
-  if (!text.includes('[') && !text.includes('http')) {
-    return [];
-  }
-
-  // Check if text is already inside an anchor tag with web2-url-highlight class
   const anchorWithClassRegex = /<a[^>]*class=['"][^'"]*web2-url-highlight[^'"]*['"][^>]*>.*?<\/a>/gi;
-  if (anchorWithClassRegex.test(text)) {
-    return [];
-  }
+  if (anchorWithClassRegex.test(text)) return [];
 
   const results: string[] = [];
-
-  // First, detect markdown links with web2 URLs
-  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)\)/gi;
   const processedRanges: Array<{ start: number; end: number }> = [];
-  let markdownMatch;
 
+  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)\)/gi;
+  let markdownMatch;
   while ((markdownMatch = markdownLinkRegex.exec(text)) !== null) {
-    results.push(markdownMatch[0]); // Full markdown link
-    processedRanges.push({
-      start: markdownMatch.index,
-      end: markdownMatch.index + markdownMatch[0].length,
-    });
+    results.push(markdownMatch[0]);
+    processedRanges.push({ start: markdownMatch.index, end: markdownMatch.index + markdownMatch[0].length });
   }
 
-  // Then detect standalone URLs that aren't already part of markdown links
-  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)/gi;
+  const urlRegex =
+    /(https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/[^\s<>"{}|\\^`[\]()]*)?)/gi;
   let urlMatch;
-
   while ((urlMatch = urlRegex.exec(text)) !== null) {
     const url = urlMatch[0];
     const urlStart = urlMatch.index;
     const urlEnd = urlMatch.index + url.length;
 
-    // Check if this URL is within any processed markdown link range
-    const isWithinMarkdownLink = processedRanges.some(range => urlStart >= range.start && urlEnd <= range.end);
-
+    const isWithinMarkdownLink = processedRanges.some(r => urlStart >= r.start && urlEnd <= r.end);
     if (!isWithinMarkdownLink) {
       results.push(url);
     }
