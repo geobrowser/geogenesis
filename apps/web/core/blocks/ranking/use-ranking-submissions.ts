@@ -224,16 +224,22 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
-        const FIRST_POLL_MS = 1500;
-        const POLL_INTERVAL_MS = 2000;
-        const MAX_POLL_ATTEMPTS = 30;
+        // Poll until the indexer reflects the exact order we just submitted, then
+        // return so the OG image generates against indexed data. Short upfront settle
+        // + a dense interval so we detect indexing close to when it actually lands
+        // (the old 1.5s delay + flat 2s interval overshot by up to ~2s). Bounded by an
+        // overall time budget (same ~60s worst case as before); the extra polls while
+        // waiting are light indexed reads.
+        const INITIAL_DELAY_MS = 500;
+        const POLL_INTERVAL_MS = 750;
+        const MAX_POLL_DURATION_MS = 60_000;
 
-        // Poll until the indexer reflects the exact order we just submitted.
         const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
         const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
 
-        await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
-        for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+        const pollStartedAt = Date.now();
+        await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
+        while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
           try {
             const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
             if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
