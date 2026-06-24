@@ -26,6 +26,8 @@ type SelectSpaceProps = {
   entityId: string;
   spaceId?: string;
   verified?: boolean;
+  // Collection blocks no longer facilitate verification and hide the checkbox.
+  showVerified?: boolean;
   containerClassName?: string;
   variant?: 'floating' | 'fixed';
   width?: 'clamped' | 'full';
@@ -48,6 +50,7 @@ export const SelectSpace = ({
   entityId,
   spaceId,
   verified,
+  showVerified = true,
   width = 'clamped',
   variant = 'floating',
   containerClassName = '',
@@ -194,7 +197,7 @@ export const SelectSpace = ({
                                 </Truncate>
                               </>
                             )}
-                            {isSelected && (
+                            {isSelected && showVerified && (
                               <div className="relative z-50 mt-2 flex items-center gap-1.5">
                                 <Checkbox
                                   checked={verified ? true : false}
