@@ -147,6 +147,7 @@ export function CollectionRowActions({
                   entityId={EntityId(entityId)}
                   spaceId={spaceId}
                   verified={verified}
+                  showVerified={false}
                   open={isSpacePopoverOpen}
                   onOpenChange={setIsSpacePopoverOpen}
                   onDone={result => {
