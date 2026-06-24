@@ -5,7 +5,6 @@ import { cache } from 'react';
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { startOgTimer } from '~/core/og-timing';
 import { getAllEntities, getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import {
@@ -155,10 +154,8 @@ export async function resolvePersonalRankingShareImpl(
 ): Promise<ResolvedPersonalRankingShare | null> {
   if (!IdUtils.isValid(rankEntityId)) return null;
 
-  const timer = startOgTimer('resolve-personal-share');
-
   // 1. Resolve the rank entity unscoped to learn which space(s) it lives in.
-  const rank = await timer.span('rank-unscoped', () => deps.fetchEntity(rankEntityId));
+  const rank = await deps.fetchEntity(rankEntityId);
   if (!rank || !rank.types.some(type => type.id === RANK_TYPE_ID)) return null;
 
   // 2. Find the author space whose page actually carries the rank's SUBMITTED_TO
@@ -167,51 +164,43 @@ export async function resolvePersonalRankingShareImpl(
   let authorSpaceId = '';
   let blockEntityId = '';
   let rankRelations: Relation[] = [];
-  await timer.span('author-space-scan', async () => {
-    for (const candidate of rank.spaces ?? []) {
-      const page = await deps.fetchEntityPage(rankEntityId, candidate);
-      const relations = page?.relations?.length ? page.relations : (page?.entity.relations ?? []);
-      const submittedBlockId = getSubmittedBlockIdFromRank(relations, candidate);
-      if (submittedBlockId) {
-        authorSpaceId = candidate;
-        blockEntityId = submittedBlockId;
-        rankRelations = relations;
-        break;
-      }
+  for (const candidate of rank.spaces ?? []) {
+    const page = await deps.fetchEntityPage(rankEntityId, candidate);
+    const relations = page?.relations?.length ? page.relations : (page?.entity.relations ?? []);
+    const submittedBlockId = getSubmittedBlockIdFromRank(relations, candidate);
+    if (submittedBlockId) {
+      authorSpaceId = candidate;
+      blockEntityId = submittedBlockId;
+      rankRelations = relations;
+      break;
     }
-  });
+  }
   if (!authorSpaceId || !blockEntityId) return null;
 
   // 3. Resolve the block: its space, name, and persisted date window.
-  const { blockEntitySpaceId, blockScoped } = await timer.span('block-resolve', async () => {
-    const blockUnscoped = await deps.fetchEntity(blockEntityId);
-    const spaceId = pickPrimarySpace(blockUnscoped?.spaces);
-    if (!spaceId) return { blockEntitySpaceId: '', blockScoped: null as Entity | null };
-    const scoped = await deps.fetchEntity(blockEntityId, spaceId);
-    return { blockEntitySpaceId: spaceId, blockScoped: scoped };
-  });
+  const blockUnscoped = await deps.fetchEntity(blockEntityId);
+  const blockEntitySpaceId = pickPrimarySpace(blockUnscoped?.spaces);
   if (!blockEntitySpaceId) return null;
+  const blockScoped = await deps.fetchEntity(blockEntityId, blockEntitySpaceId);
   const rankingName = blockScoped?.name?.trim() || 'Untitled ranking';
   const rankingStartDate = readDateValue(blockScoped, RANKING_START_DATE_PROPERTY_ID, blockEntitySpaceId);
   const rankingEndDate = readDateValue(blockScoped, RANKING_END_DATE_PROPERTY_ID, blockEntitySpaceId);
 
   // 4. Build the OG card data with the resolved coordinates.
-  const cardData = await timer.span('card-data', () =>
-    deps.fetchPersonalCardData({
-      rankEntityId,
-      authorSpaceId,
-      blockEntityId,
-      blockEntitySpaceId,
-      rankingStartDate,
-      rankingEndDate,
-    })
-  );
+  const cardData = await deps.fetchPersonalCardData({
+    rankEntityId,
+    authorSpaceId,
+    blockEntityId,
+    blockEntitySpaceId,
+    rankingStartDate,
+    rankingEndDate,
+  });
   if (!cardData) return null;
 
   // 5. Recompute ogVersion mirroring the publish flow's inputs
   //    (use-ranking-block-state.ts `effectiveOgVersion`): the FULL ordered ids,
   //    the block name, and the raw profile name/avatar — not the top-5 card slice.
-  const profile = await timer.span('profile', () => deps.fetchProfile(authorSpaceId));
+  const profile = await deps.fetchProfile(authorSpaceId);
   const orderedEntityIds = getMyRankingOrderedEntityIds({ ...rank, relations: rankRelations }, authorSpaceId);
   const authorName = profile?.name?.trim() ?? '';
   const ogVersion = buildRankingOgVersion({
@@ -225,18 +214,14 @@ export async function resolvePersonalRankingShareImpl(
   });
 
   // 6. Resolve placement for back-navigation / vote / "add my ranking".
-  const { parentEntityId, relationId } = await timer.span('block-placement', () =>
-    resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId)
-  );
+  const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
 
   // 7. Resolve the full ordered ranking (names + images) server-side so the
   //    shared view paints every row immediately instead of cascading through
   //    "loading" -> "empty" -> "Untitled" -> resolved on the client. Shape
   //    matches the client's RankingEntryDisplay so seeded rows reconcile against
   //    the live query without a swap (mirrors the global resolver).
-  const rankedEntities = await timer.span('ranked-entities', () =>
-    deps.fetchEntities(orderedEntityIds, blockEntitySpaceId)
-  );
+  const rankedEntities = await deps.fetchEntities(orderedEntityIds, blockEntitySpaceId);
   const rankedEntityById = new Map(rankedEntities.map(e => [e.id, e]));
   const entries: RankingOgEntryData[] = orderedEntityIds.map(id => {
     const entity = rankedEntityById.get(id);
@@ -247,8 +232,6 @@ export async function resolvePersonalRankingShareImpl(
       image: Entities.avatar(entity?.relations) ?? Entities.cover(entity?.relations) ?? null,
     };
   });
-
-  timer.done(`resolve-personal-share entries=${entries.length}`);
 
   return {
     kind: 'personal',

@@ -6,7 +6,6 @@ import { join } from 'node:path';
 
 import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { ogImageToJpeg } from '~/core/og-jpeg';
-import { startOgTimer } from '~/core/og-timing';
 import { getImagePath } from '~/core/utils/utils';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
@@ -807,15 +806,11 @@ export async function prefetchRankingOgImages(
 }
 
 export async function generateRankingOgImageResponse(data: RankingOgCardData, variant: RankingOgVariant) {
-  const timer = startOgTimer('og-render');
-  const inlined = await timer.span('prefetch-images', () => prefetchRankingOgImages(data));
-  const response = await ogImageToJpeg(
+  const inlined = await prefetchRankingOgImages(data);
+  return ogImageToJpeg(
     new ImageResponse(<Card data={inlined} variant={variant} />, {
       ...RANKING_OG_VARIANT_SIZES[variant],
       fonts: geistFonts,
-    }),
-    timer
+    })
   );
-  timer.done(`og-render variant=${variant} entries=${data.entries.length}`);
-  return response;
 }

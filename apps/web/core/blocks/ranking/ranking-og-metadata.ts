@@ -1,7 +1,5 @@
 import type { Metadata } from 'next';
 
-import { startOgTimer } from '~/core/og-timing';
-
 import {
   type GlobalRankingOgPreviewParams,
   type PersonalRankingOgPreviewParams,
@@ -117,14 +115,11 @@ export function buildGlobalRankingMetadataFromParts({ rankingName, imageUrl, url
  * render so the card is always correct even when the ranking changed since publish.
  */
 async function rankingOgObjectExistsSafe(key: string): Promise<boolean> {
-  const timer = startOgTimer('r2-head');
   try {
     if (!isRankingOgStorageConfigured()) return false;
-    return await timer.span('r2-object-exists', () => rankingOgObjectExists(getRankingOgStorageConfig(), key));
+    return await rankingOgObjectExists(getRankingOgStorageConfig(), key);
   } catch {
     return false;
-  } finally {
-    timer.done(`r2-head key=${key}`);
   }
 }
 

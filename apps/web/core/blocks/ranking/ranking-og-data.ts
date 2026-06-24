@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { startOgTimer } from '~/core/og-timing';
 import { getAllEntities, getEntity, getEntityPage } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -163,10 +162,7 @@ export async function getRankingOgCardData(
   input: RankingOgDataInput,
   deps: RankingOgDataDeps = defaultDeps
 ): Promise<RankingOgCardData | null> {
-  const timer = startOgTimer('card-data-personal');
-  const rankPage = await timer.span('rank-resolve', () =>
-    resolveEntityRelations(deps, input.rankEntityId, input.authorSpaceId)
-  );
+  const rankPage = await resolveEntityRelations(deps, input.rankEntityId, input.authorSpaceId);
   const rankEntity = rankPage?.entity;
   if (!rankEntity || !hasRankType(rankEntity)) return null;
   if (
@@ -175,28 +171,21 @@ export async function getRankingOgCardData(
     return null;
   }
 
-  const rankingBlock = await timer.span('block-fetch', () =>
-    deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId)
-  );
+  const rankingBlock = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
   const rankingName = rankingBlock?.name?.trim() || rankEntity.name?.trim() || 'Untitled ranking';
   const orderedEntityIds = getMyRankingOrderedEntityIds(
     { ...rankEntity, relations: rankPage.relations },
     input.authorSpaceId
   ).slice(0, 5);
-  const [entities, profile] = await timer.span('entities+profile', () =>
-    Promise.all([
-      deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId),
-      deps.fetchProfile(input.authorSpaceId),
-    ])
-  );
+  const [entities, profile] = await Promise.all([
+    deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId),
+    deps.fetchProfile(input.authorSpaceId),
+  ]);
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
   const baseEntries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
   // The author is the proposer for their own pending entries; look in the block's space.
-  const entries = await timer.span('backfill-pending', () =>
-    backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, [input.authorSpaceId])
-  );
+  const entries = await backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, [input.authorSpaceId]);
   const authorName = profileName(profile, input.authorSpaceId);
-  timer.done(`card-data-personal entries=${entries.length}`);
 
   return {
     kind: 'personal',
@@ -220,10 +209,7 @@ export async function getGlobalRankingOgCardData(
   input: GlobalRankingOgDataInput,
   deps: RankingOgDataDeps = defaultDeps
 ): Promise<RankingOgCardData | null> {
-  const timer = startOgTimer('card-data-global');
-  const blockPage = await timer.span('block-resolve', () =>
-    resolveEntityRelations(deps, input.blockEntityId, input.blockEntitySpaceId)
-  );
+  const blockPage = await resolveEntityRelations(deps, input.blockEntityId, input.blockEntitySpaceId);
   if (!blockPage) return null;
 
   const orderedEntityIds = getOrderedRelationTargetIds(
@@ -232,9 +218,7 @@ export async function getGlobalRankingOgCardData(
     RANK_POSITION_PROPERTY_ID,
     input.blockEntitySpaceId
   ).slice(0, 5);
-  const [entities] = await timer.span('entities', () =>
-    Promise.all([deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId)])
-  );
+  const [entities] = await Promise.all([deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId)]);
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
   const rankingName = blockPage.entity.name?.trim() || 'Untitled ranking';
   const baseEntries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
@@ -244,10 +228,7 @@ export async function getGlobalRankingOgCardData(
     input.blockEntityId,
     input.blockEntitySpaceId
   );
-  const entries = await timer.span('backfill-pending', () =>
-    backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, submitterSpaceIds)
-  );
-  timer.done(`card-data-global entries=${entries.length}`);
+  const entries = await backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, submitterSpaceIds);
 
   return {
     kind: 'global',
