@@ -16,7 +16,7 @@ import { ID } from '~/core/id';
 import { getEntity } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
@@ -164,7 +164,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           rankId = result.id;
         } catch (error) {
           console.error('[useRankingSubmissions] Building rank ops failed:', error);
-          reportError(`Failed to publish ranking: ${describeError(error)}`);
+          const { message, retry } = toUserFacingError(error, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
@@ -215,23 +216,28 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
             return null;
           }
           console.error('[useRankingSubmissions] Publish failed:', err);
-          reportError(`Failed to publish ranking: ${describeError(err)}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish ranking: ');
+          reportError(message, retry);
           return null;
         }
 
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
-        const FIRST_POLL_MS = 1500;
-        const POLL_INTERVAL_MS = 2000;
-        const MAX_POLL_ATTEMPTS = 30;
+        // Poll until the indexer reflects the exact order we just submitted, then
+        // return so the OG image generates against indexed data. A short upfront
+        // settle plus a dense interval detects indexing close to when it lands; the
+        // extra polls are light indexed reads. Bounded by an overall time budget.
+        const INITIAL_DELAY_MS = 500;
+        const POLL_INTERVAL_MS = 750;
+        const MAX_POLL_DURATION_MS = 60_000;
 
-        // Poll until the indexer reflects the exact order we just submitted.
         const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
         const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
 
-        await new Promise(resolve => setTimeout(resolve, FIRST_POLL_MS));
-        for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+        const pollStartedAt = Date.now();
+        await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
+        while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
           try {
             const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
             if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {

@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
+import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
@@ -130,6 +131,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     hasMyRankingData,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
+    pendingEntityIds,
+    entriesResolving,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -231,8 +234,10 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (rank == null) return null;
               // Rank is known from relations/seed before the entity name/image
               // resolve — render a skeleton row so the list keeps its height
-              // instead of collapsing until entries hydrate.
-              if (!entry) {
+              // instead of collapsing until entries hydrate. Also skeleton a
+              // still-unnamed seed row while resolution is in flight so a
+              // throttled refresh doesn't flash "Untitled".
+              if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
                 return (
                   <div key={entityId} className="w-full">
                     <RankingEntryRowSkeleton rank={rank} />
@@ -246,6 +251,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entry}
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (
@@ -303,20 +309,29 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
-              const entryDisplay = myRankingEntryByEntityId.get(entityId) ?? {
-                entityId,
-                name: 'Untitled',
-                description: null,
-                image: null,
-              };
+              const rank = embeddedMyPageNumber * PAGE_SIZE + index + 1;
+              const resolvedEntry = myRankingEntryByEntityId.get(entityId);
+              // Mirror the global list: while a row's name is still resolving,
+              // show a skeleton rather than flashing "Untitled". On a shared
+              // (/r/) shortlink the seed can carry "Untitled" for pending or
+              // cross-space entries until the live data lands.
+              if (!resolvedEntry || (entriesResolving && isPlaceholderRankingEntry(resolvedEntry))) {
+                return (
+                  <div className="w-full">
+                    <RankingEntryRowSkeleton rank={rank} />
+                  </div>
+                );
+              }
+              const entryDisplay = resolvedEntry;
               const rowContent = (
                 <RankingEntryRow
-                  rank={embeddedMyPageNumber * PAGE_SIZE + index + 1}
+                  rank={rank}
                   rankStyle="leading"
                   linkToEntity={false}
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (

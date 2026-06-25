@@ -12,6 +12,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -27,6 +28,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -40,7 +42,9 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
     if (!personalSpaceId || !isRegistered) {
       dispatch({
         type: 'ERROR',
-        payload: 'You need a registered personal space ID to request membership',
+        payload: isAccountSetupPending
+          ? 'Your account is still finishing setup — try again in a moment.'
+          : 'You need a registered personal space ID to request membership',
       });
       throw new Error('User does not have a registered personal space ID');
     }
@@ -92,7 +96,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       },
       onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeMember,

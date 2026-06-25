@@ -283,10 +283,7 @@ function createMutator(store: GeoStore): Mutator {
           for (const rvt of relationValueTypes) {
             if (writtenRvtIds.has(rvt.id)) continue;
             const alreadyPresent = existingRelations.some(
-              r =>
-                r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE &&
-                r.toEntity.id === rvt.id &&
-                !r.isDeleted
+              r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE && r.toEntity.id === rvt.id && !r.isDeleted
             );
             if (alreadyPresent) {
               writtenRvtIds.add(rvt.id);

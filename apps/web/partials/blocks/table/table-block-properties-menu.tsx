@@ -25,8 +25,8 @@ import * as React from 'react';
 import { Effect, Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
-import type { Source } from '~/core/blocks/data/source';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
+import type { Source } from '~/core/blocks/data/source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { ID } from '~/core/id';
 import { Subgraph } from '~/core/io';

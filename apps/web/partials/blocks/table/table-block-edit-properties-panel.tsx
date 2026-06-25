@@ -162,7 +162,10 @@ function DefaultPropertySelector() {
       const typeFilters = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }));
       const spaceIds = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
       if (!spaceIds.includes(spaceId)) spaceIds.push(spaceId);
-      const schema = await getSchemaFromTypeIds(typeFilters, spaceIds);
+      // Union every space iteration of a multi-space type so its non-root-space
+      // properties are addable as columns too, matching the sort/filter menus
+      // (GEO-2202). Without this the column picker is Root-space only.
+      const schema = await getSchemaFromTypeIds(typeFilters, spaceIds, { includeAllTypeSpaces: true });
 
       return schema;
     },
