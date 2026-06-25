@@ -507,8 +507,8 @@ export class GeoStore {
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    // Include entity IDs that only exist locally (new/unpublished entities live in the
-    // value/relation indexes but never get a syncedEntities entry until fetched from remote).
+    // Include entity IDs that only exist locally — new/unpublished entities live in
+    // the value/relation indexes until a sync merges them into syncedEntities.
     const ids = new Set([...syncedEntities.keys(), ...getValueIndex().keys(), ...getRelationIndex().keys()]);
     return [...ids].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
   }
