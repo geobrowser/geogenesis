@@ -199,6 +199,12 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
         truncateLabel
         sortableDragHandleListeners={listeners}
         onDelete={() => storage.relations.delete(relation)}
+        onDone={result => {
+          storage.relations.update(relation, draft => {
+            draft.toSpaceId = result.space;
+            draft.verified = result.verified;
+          });
+        }}
         currentSpaceId={spaceId}
         entityId={relation.toEntity.id}
         relationId={relation.id}

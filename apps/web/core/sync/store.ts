@@ -12,6 +12,7 @@ import {
   UNIT_PROPERTY,
 } from '../constants';
 import { readTypes } from '../database/entities';
+import { createValueId } from '../id/create-id';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
@@ -883,5 +884,55 @@ export class GeoStore {
     });
 
     this.stream.emit({ type: GeoEventStream.CHANGES_PUBLISHED, valueIds, relationIds });
+  }
+
+  /**
+   * Rewrite every local value/relation written under `fromSpaceId` to
+   * `toSpaceId`. Used when an optimistic personal space (`pending:<topicId>`)
+   * resolves to its real on-chain spaceId. Value ids embed the spaceId
+   * (`${spaceId}:${entityId}:${propertyId}`) so they're recomputed; relation
+   * ids are uuids so only their `spaceId`/`toSpaceId` change. The existing
+   * publish filter (`v.spaceId === realSpaceId`) then picks the edits up
+   * naturally. Mirrors the map-over-atom pattern of `setAsPublished`.
+   */
+  public remapSpaceId(fromSpaceId: string, toSpaceId: string) {
+    const oldValueIds: string[] = [];
+    const remappedValues: Value[] = [];
+
+    reactiveValues.set(prev =>
+      prev.map(v => {
+        if (v.spaceId !== fromSpaceId) return v;
+        const next = produce(v, draft => {
+          draft.spaceId = toSpaceId;
+          draft.id = createValueId({ entityId: draft.entity.id, propertyId: draft.property.id, spaceId: toSpaceId });
+        });
+        oldValueIds.push(v.id);
+        remappedValues.push(next);
+        return next;
+      })
+    );
+
+    const remappedRelations: Relation[] = [];
+
+    reactiveRelations.set(prev =>
+      prev.map(r => {
+        if (r.spaceId !== fromSpaceId && r.toSpaceId !== fromSpaceId) return r;
+        const next = produce(r, draft => {
+          if (draft.spaceId === fromSpaceId) draft.spaceId = toSpaceId;
+          if (draft.toSpaceId === fromSpaceId) draft.toSpaceId = toSpaceId;
+        });
+        remappedRelations.push(next);
+        return next;
+      })
+    );
+
+    if (remappedValues.length === 0 && remappedRelations.length === 0) return;
+
+    this.stream.emit({
+      type: GeoEventStream.SPACE_REMAPPED,
+      oldValueIds,
+      values: remappedValues,
+      relations: remappedRelations,
+    });
   }
 }

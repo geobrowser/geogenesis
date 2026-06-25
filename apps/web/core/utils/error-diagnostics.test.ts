@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { RELOAD_REQUIRED_MESSAGE, isChunkLoadError, toUserFacingError } from './error-diagnostics';
+import {
+  RELOAD_REQUIRED_MESSAGE,
+  WALLET_CONNECTION_MESSAGE,
+  isChunkLoadError,
+  isWalletConnectionError,
+  toUserFacingError,
+} from './error-diagnostics';
 
 describe('isChunkLoadError', () => {
   it('detects a chunk error wrapped as a cause (the reported bug)', () => {
@@ -21,7 +27,28 @@ describe('isChunkLoadError', () => {
   });
 });
 
+describe('isWalletConnectionError', () => {
+  it('detects the Privy wallet error buried under viem (the reported bug)', () => {
+    const privy = new Error('Unable to connect to wallet');
+    const viem = new Error('An unknown RPC error occurred.', { cause: privy });
+    const wrapped = new Error('Publish failed', { cause: viem });
+    expect(isWalletConnectionError(wrapped)).toBe(true);
+  });
+
+  it('does not flag a genuine RPC failure', () => {
+    const wrapped = new Error('Publish failed', { cause: new Error('execution reverted: NotAMember') });
+    expect(isWalletConnectionError(wrapped)).toBe(false);
+  });
+});
+
 describe('toUserFacingError', () => {
+  it('swaps a wallet-connection error for the reconnect prompt', () => {
+    const wrapped = new Error('Publish failed', {
+      cause: new Error('An unknown RPC error occurred.', { cause: new Error('Unable to connect to wallet') }),
+    });
+    expect(toUserFacingError(wrapped).message).toBe(WALLET_CONNECTION_MESSAGE);
+  });
+
   it('swaps a chunk error for the reload prompt', () => {
     const wrapped = new Error('IPFS upload failed', { cause: new Error('Failed to load chunk x.js') });
     expect(toUserFacingError(wrapped, 'Failed to publish ranking: ').message).toBe(RELOAD_REQUIRED_MESSAGE);

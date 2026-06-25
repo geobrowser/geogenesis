@@ -65,11 +65,9 @@ function isQuotaError(err: unknown): boolean {
   );
 }
 
-// Quota-aware update for chatHistoryAtom. `update` receives the prior list
-// and returns the desired next list. Functional form so callers reading
-// chatHistory inside the same tick (after a previous setter that React hasn't
-// committed yet) still see the freshest value via `prev`. On
-// QuotaExceededError, drops the oldest archived chat and retries once.
+// Quota-aware update for chatHistoryAtom. Functional `update` form so callers
+// reading the list within the same tick see the freshest value via `prev`. On
+// quota error, evicts the oldest chats until the write succeeds.
 export function updateChatHistorySafely(
   set: (next: PersistedChat[] | ((prev: PersistedChat[]) => PersistedChat[])) => void,
   update: (prev: PersistedChat[]) => PersistedChat[]
@@ -80,13 +78,22 @@ export function updateChatHistorySafely(
       computed = update(prev);
       return computed;
     });
+    return;
   } catch (err) {
-    const captured = computed as PersistedChat[] | null;
-    if (!isQuotaError(err) || !captured || captured.length === 0) return;
+    if (!isQuotaError(err) || !computed) return;
+  }
+
+  // atomWithStorage mutates memory before the localStorage write, so a quota
+  // throw leaves the new list live but unpersisted. List is newest-first; drop
+  // from the tail so the just-archived chat (index 0) survives.
+  let trimmed = computed as PersistedChat[];
+  while (trimmed.length > 1) {
+    trimmed = trimmed.slice(0, -1);
     try {
-      set(captured.slice(0, -1));
-    } catch {
-      // Give up — in-memory state still works.
+      set(trimmed);
+      return;
+    } catch (err) {
+      if (!isQuotaError(err)) return;
     }
   }
 }

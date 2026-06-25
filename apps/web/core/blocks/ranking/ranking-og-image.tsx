@@ -220,14 +220,19 @@ function fitWrappedText(
   minFontSize: number,
   maxWidth: number,
   maxLines: number,
-  fallback: string
+  fallback: string,
+  options: { maxHeight?: number; lineHeight?: number } = {}
 ): WrappedTextFit {
   const normalized = normalizeDisplayText(text, fallback);
+  const { maxHeight = Infinity, lineHeight = 1 } = options;
 
   for (let fontSize = targetFontSize; fontSize >= minFontSize; fontSize -= 1) {
     const lines = wrapTextToLines(normalized, fontSize, maxWidth);
     const allLinesFit = lines.every(lineText => measureTextWidth(lineText, fontSize) <= maxWidth);
-    if (lines.length <= maxLines && allLinesFit) return { fontSize, lines };
+    const totalHeight = Math.ceil(lines.length * fontSize * lineHeight);
+    if (lines.length <= maxLines && allLinesFit && totalHeight <= maxHeight) {
+      return { fontSize, lines };
+    }
   }
 
   const wrappedLines = wrapTextToLines(normalized, minFontSize, maxWidth);
@@ -631,9 +636,18 @@ function EmptyRows({ variant, scale }: { variant: RankingOgVariant; scale: numbe
   );
 }
 
+const TITLE_LINE_HEIGHT = 1.05;
+const TITLE_BOTTOM_PADDING_RATIO = 0.12;
+const TITLE_MAX_HEIGHT_LANDSCAPE = 440;
+const TITLE_MAX_HEIGHT_STORY = 400;
+
 function TitleText({ title, variant, scale }: { title: string; variant: RankingOgVariant; scale: number }) {
   const isStory = variant === 'story';
-  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 3, 'My ranking');
+  const maxHeight = isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE;
+  const textFit = fitWrappedText(title, isStory ? 112 : 58, isStory ? 58 : 34, isStory ? 680 : 318, 5, 'My ranking', {
+    maxHeight,
+    lineHeight: TITLE_LINE_HEIGHT + TITLE_BOTTOM_PADDING_RATIO,
+  });
 
   return (
     <div
@@ -643,7 +657,8 @@ function TitleText({ title, variant, scale }: { title: string; variant: RankingO
         flexDirection: 'column',
         fontSize: scaled(textFit.fontSize, scale),
         fontWeight: 800,
-        lineHeight: 0.95,
+        lineHeight: TITLE_LINE_HEIGHT,
+        paddingBottom: scaled(textFit.fontSize * TITLE_BOTTOM_PADDING_RATIO, scale),
       }}
     >
       {textFit.lines.map((lineText, index) => (
@@ -690,7 +705,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
           style={{
             color: '#111111',
             display: 'flex',
-            maxHeight: scaled(isStory ? 330 : 190, scale),
+            maxHeight: scaled(isStory ? TITLE_MAX_HEIGHT_STORY : TITLE_MAX_HEIGHT_LANDSCAPE, scale),
             overflow: 'hidden',
           }}
         >
@@ -736,9 +751,64 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
   );
 }
 
-export function generateRankingOgImageResponse(data: RankingOgCardData, variant: RankingOgVariant) {
+// Satori fetches every remote <img src> synchronously while it lays the card out,
+// so a handful of slow IPFS thumbnail fetches serialize into seconds of render time.
+// Fetch them ourselves in parallel (bounded by a timeout) and inline the bytes as
+// data: URIs before handing the tree to Satori — then the render does zero network.
+const RANKING_OG_IMAGE_FETCH_TIMEOUT_MS = 2500;
+
+async function fetchImageAsDataUri(url: string, timeoutMs: number): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const contentType = res.headers.get('content-type')?.split(';')[0]?.trim();
+    if (!contentType || !contentType.startsWith('image/')) return null;
+    const base64 = Buffer.from(await res.arrayBuffer()).toString('base64');
+    return `data:${contentType};base64,${base64}`;
+  } catch {
+    // Timed out, aborted, or gateway error — fall back to placeholder/initials.
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Returns a copy of the card data with every renderable IPFS image (entry covers +
+// author avatar) replaced by an inlined data: URI. Images that fail/time out become
+// null so the existing placeholder (entries) / initials (avatar) fallbacks render.
+export async function prefetchRankingOgImages(
+  data: RankingOgCardData,
+  timeoutMs: number = RANKING_OG_IMAGE_FETCH_TIMEOUT_MS
+): Promise<RankingOgCardData> {
+  const needsFetch = (renderable: string | null): boolean => Boolean(renderable && !renderable.startsWith('data:'));
+
+  const avatarRenderable = toRenderableImageSrc(data.author.avatarUrl);
+  const entryRenderables = data.entries.map(entry => toRenderableImageSrc(entry.image));
+
+  const urls = [...new Set([avatarRenderable, ...entryRenderables].filter(needsFetch) as string[])];
+  if (urls.length === 0) return data;
+
+  const fetched = await Promise.all(urls.map(url => fetchImageAsDataUri(url, timeoutMs)));
+  const byUrl = new Map(urls.map((url, i) => [url, fetched[i]]));
+
+  // Remote url: success -> data: URI; failure -> null (drop to fallback).
+  // Non-remote (null / already a data: URI) -> leave the field untouched.
+  const inline = (renderable: string | null, original: string | null): string | null =>
+    needsFetch(renderable) ? (byUrl.get(renderable as string) ?? null) : original;
+
+  return {
+    ...data,
+    author: { ...data.author, avatarUrl: inline(avatarRenderable, data.author.avatarUrl) },
+    entries: data.entries.map((entry, i) => ({ ...entry, image: inline(entryRenderables[i], entry.image) })),
+  };
+}
+
+export async function generateRankingOgImageResponse(data: RankingOgCardData, variant: RankingOgVariant) {
+  const inlined = await prefetchRankingOgImages(data);
   return ogImageToJpeg(
-    new ImageResponse(<Card data={data} variant={variant} />, {
+    new ImageResponse(<Card data={inlined} variant={variant} />, {
       ...RANKING_OG_VARIANT_SIZES[variant],
       fonts: geistFonts,
     })

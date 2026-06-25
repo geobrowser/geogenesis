@@ -29,6 +29,7 @@ import { isUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
 import { GeoNumber, GeoPoint, sortRelations } from '~/core/utils/utils';
 
+import { SmallButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
@@ -129,10 +130,19 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
     );
 
     if (!schemaWithGroups.hasPropertyGroups) {
+      const seen = new Set<string>();
+      const ordered: string[] = [];
+      // Honor the type's property order (sorted by relation position) first,
+      // then append any visible properties not defined on the schema.
+      for (const propertyId of [...schemaWithGroups.ungroupedPropertyIds, ...visiblePropertyIds]) {
+        if (!visiblePropertyIds.has(propertyId) || seen.has(propertyId)) continue;
+        seen.add(propertyId);
+        ordered.push(propertyId);
+      }
       return {
         hasGroups: false,
         groups: [] as { id: string; label: string; propertyIds: string[] }[],
-        ungrouped: [...visiblePropertyIds.values()],
+        ungrouped: ordered,
       };
     }
 
@@ -211,7 +221,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
                     if (isRelation) {
                       return (
                         <RelationsGroup
-                          key={propertyId}
+                          key={`${spaceId}-${entityId}-${propertyId}`}
                           entityId={entityId}
                           spaceId={spaceId}
                           propertyId={propertyId}
@@ -244,7 +254,12 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
 
               if (isRelation) {
                 return (
-                  <RelationsGroup key={propertyId} entityId={entityId} spaceId={spaceId} propertyId={propertyId} />
+                  <RelationsGroup
+                    key={`${spaceId}-${entityId}-${propertyId}`}
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    propertyId={propertyId}
+                  />
                 );
               }
 
@@ -322,6 +337,11 @@ function ValuesGroup({ entityId, spaceId, propertyId }: { entityId: string; spac
   );
 }
 
+// A single property's relations can now number in the thousands (the entity
+// query drains every page). Collapse long groups to a small preview and let the
+// user expand the rest, so the page doesn't render thousands of chips at once.
+const DEFAULT_VISIBLE_RELATIONS = 10;
+
 export function RelationsGroup({
   entityId,
   spaceId,
@@ -340,6 +360,8 @@ export function RelationsGroup({
       selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId && r.type.id === propertyId,
     })
   );
+
+  const [isExpanded, setIsExpanded] = React.useState(false);
 
   if (relations.length === 0) {
     return null;
@@ -371,13 +393,19 @@ export function RelationsGroup({
   const shouldShowMap = (propertyId === ADDRESS_PROPERTY || propertyId === VENUE_PROPERTY) && relations.length > 0;
   const firstRelation = relations[0];
 
+  // Only collapse body relation groups. The metadata header reuses this
+  // component for the Types pills (in the page header, side panel, and power
+  // tools), which should always render in full.
+  const hasMoreRelations = !isMetadataHeader && relations.length > DEFAULT_VISIBLE_RELATIONS;
+  const visibleRelations = isExpanded || !hasMoreRelations ? relations : relations.slice(0, DEFAULT_VISIBLE_RELATIONS);
+
   return (
     <>
       <div key={`${propertyId}-${property.name}`} className="max-w-full min-w-0 break-words">
         {propertyId !== SystemIds.TYPES_PROPERTY && <PropertyNameLink property={property} spaceId={spaceId} />}
 
         <div className="flex w-full max-w-full min-w-0 flex-wrap gap-2">
-          {relations.map(r => {
+          {visibleRelations.map(r => {
             const linkedEntityId = r.toEntity.id;
             const linkedSpaceId = r.toSpaceId ?? r.spaceId;
             const relationName = r.toEntity.name;
@@ -426,6 +454,21 @@ export function RelationsGroup({
               </div>
             );
           })}
+          {hasMoreRelations && (
+            <div className="mt-1 max-w-full min-w-0">
+              <SmallButton
+                type="button"
+                variant="transparent"
+                aria-expanded={isExpanded}
+                onClick={() => setIsExpanded(prev => !prev)}
+              >
+                {isExpanded ? 'Show less' : `Show ${relations.length - DEFAULT_VISIBLE_RELATIONS} more`}
+                <span className={cx('inline-flex transition-transform duration-200', isExpanded && 'rotate-180')}>
+                  <ChevronDownSmall />
+                </span>
+              </SmallButton>
+            </div>
+          )}
         </div>
         {/* Show geo location map for the first Address or Venue relation */}
         {shouldShowMap && firstRelation && (
