@@ -8,6 +8,7 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { EntityId } from '~/core/io/substream-schema';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -17,11 +18,13 @@ import { AddTo } from '~/design-system/icons/add-to';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
 import { MoveSpace } from '~/design-system/icons/move-space';
+import { Plus } from '~/design-system/icons/plus';
 import { Switch } from '~/design-system/icons/switch';
 import { Trash } from '~/design-system/icons/trash';
 import { Menu } from '~/design-system/menu';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { useOpenCreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { CreateNewVersionInSpace } from '~/partials/versions/create-new-version-in-space';
 import { MoveEntityToSpace } from '~/partials/versions/move-entity-to-space';
 
@@ -31,12 +34,18 @@ type Props = {
   entityId: string;
   entityName: string;
   spaceId: string;
+  /** When true, the entity is an unclaimed topic and the "Claim topic" item is shown. */
+  canClaimTopic?: boolean;
+  /** Cover image URL on the topic entity, used as the initial cover for the new space. */
+  coverUrl?: string | null;
 };
 
-export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
+export function EntityPageContextMenu({ entityId, entityName, spaceId, canClaimTopic = false, coverUrl }: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
   const { isMember, isEditor } = useAccessControl(spaceId);
+  const { smartAccount } = useSmartAccount();
+  const openCreateSpaceDialog = useOpenCreateSpaceDialog();
 
   const { editable, setEditable } = useEditable();
 
@@ -111,6 +120,35 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
     }
   };
 
+  const onClaimTopic = () => {
+    // Guard against firing before the entity store hydrates — the auto-run
+    // path requires a non-empty name + topicId too.
+    if (!entityName) return;
+
+    setIsMenuOpen(false);
+
+    openCreateSpaceDialog({
+      topicId: entityId,
+      name: entityName,
+      image: coverUrl ?? '',
+      governanceType: 'DAO',
+      // 'default' is the Blank DAO template — no presumed entity types, just
+      // SPACE + PROJECT. Combined with step='create-space' + autoRun, the
+      // dialog fires the deploy immediately on open, skipping both the
+      // template picker and the profile-entry confirmation.
+      spaceType: 'default',
+      step: 'create-space',
+      autoRun: true,
+      // Replicate this topic's content (values + relations + blocks) into the
+      // new space's home page entity — same flow as "Clone to new space".
+      cloneFromEntity: { entityId, sourceSpaceId: spaceId },
+    });
+  };
+
+  // Only signed-in users can claim a topic — the create-space dialog
+  // short-circuits to null without an address anyway.
+  const showClaimTopic = canClaimTopic && !!smartAccount?.account.address;
+
   const [isCreatingNewVersion, setIsCreatingNewVersion] = useState<boolean>(false);
   const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
   const [duplicateToSpaceOpen, setDuplicateToSpaceOpen] = useState(false);
@@ -153,6 +191,28 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
         )}
         {!isSubMenu && (
           <>
+            {showClaimTopic && (
+              <EntityPageContextMenuItem>
+                <Tooltip
+                  position="left"
+                  variant="light"
+                  label="Create a new space from this topic and claim it as the home page"
+                  trigger={
+                    <button
+                      onClick={onClaimTopic}
+                      disabled={!entityName}
+                      aria-disabled={!entityName}
+                      className="flex h-full w-full items-center gap-2 px-2 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <div className="shrink-0">
+                        <Plus color="grey-04" />
+                      </div>
+                      Claim topic
+                    </button>
+                  }
+                />
+              </EntityPageContextMenuItem>
+            )}
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
                 <Copy color="grey-04" />

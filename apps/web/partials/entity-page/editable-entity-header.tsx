@@ -32,15 +32,18 @@ import { EntityPageContextMenu } from './entity-page-context-menu';
 export function EditableHeading({
   spaceId,
   entityId,
-  topRightSlot,
   fallbackName,
+  canClaimTopic = false,
+  coverUrl,
 }: {
   spaceId: string;
   entityId: string;
-  /** Optional action that stacks above the history/context-menu cluster on the right. */
-  topRightSlot?: React.ReactNode;
   /** Shown in browse mode when the scoped store has no name yet (e.g. ranking row preview). */
   fallbackName?: string | null;
+  /** When true, the context menu shows a "Claim topic" item for this unclaimed topic. */
+  canClaimTopic?: boolean;
+  /** Cover image URL on the topic entity, used as the initial cover for the new space. */
+  coverUrl?: string | null;
 }) {
   const { values } = useSyncEngine();
 
@@ -99,7 +102,6 @@ export function EditableHeading({
         )}
 
         <div className="flex shrink-0 items-center gap-5">
-          {topRightSlot}
           {isEditing && (
             <Link
               href={NavUtils.toEntity(spaceId, ID.createEntityId())}
@@ -140,7 +142,13 @@ export function EditableHeading({
               </div>
             )}
           </HistoryPanel>
-          <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+          <EntityPageContextMenu
+            entityId={entityId}
+            entityName={name || ''}
+            spaceId={spaceId}
+            canClaimTopic={canClaimTopic}
+            coverUrl={coverUrl}
+          />
         </div>
       </div>
 
