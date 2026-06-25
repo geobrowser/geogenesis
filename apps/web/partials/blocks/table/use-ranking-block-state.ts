@@ -771,17 +771,18 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  // Only expose the global share link once there's a populated leaderboard to
-  // share. Requiring `globalRankingEntityIds.length > 0` does double duty:
-  //  - It skips the pre-hydration window where the list is transiently empty, so
-  //    we never hand X a `?v=` built from `effectiveGlobalOgVersion`'s empty-list
-  //    hash (which wouldn't match the populated version once relations arrive).
-  //  - It intentionally hides the link for genuinely empty leaderboards, whose OG
-  //    card would have nothing to show. Empty rankings are not shareable by design.
-  const globalSharePath =
-    effectiveRelationId && globalRankingEntityIds.length > 0
-      ? buildShortGlobalRankingSharePath(entityId, effectiveGlobalOgVersion)
-      : null;
+  // Share-link visibility is unchanged: expose it whenever the block relation
+  // resolves, just as before. Only attach the `?v=` cache-buster once relations
+  // have hydrated (`globalRankingEntityIds.length > 0`) — before then
+  // `effectiveGlobalOgVersion` hashes an empty list, so we'd emit a cache-buster
+  // that wouldn't match the populated version once data arrives. With no version
+  // the builder returns the bare `/r/g/{id}` path, matching prior behavior.
+  const globalSharePath = effectiveRelationId
+    ? buildShortGlobalRankingSharePath(
+        entityId,
+        globalRankingEntityIds.length > 0 ? effectiveGlobalOgVersion : undefined
+      )
+    : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
