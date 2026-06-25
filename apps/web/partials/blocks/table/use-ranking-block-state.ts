@@ -696,8 +696,16 @@ export function useRankingBlockState({
   const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
   const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
   const effectiveOgVersion = React.useMemo(() => {
-    if (sharedOgVersion) return sharedOgVersion;
-    if (!mySubmission || !shareRankEntityId) return '';
+    // Mirror `displayedSubmission`'s precedence: when viewing our OWN ranking
+    // (even via a `/r/{id}` share link), derive the version from the live
+    // `mySubmission` so the `?v=` cache-buster tracks post-edit content. The
+    // server-seeded `sharedOgVersion` is captured once by the resolver and never
+    // updates after we edit/refetch, so preferring it here would leave the share
+    // URL stuck on the pre-edit version and X wouldn't re-scrape. For someone
+    // else's shared ranking the seeded version stays authoritative.
+    const canDeriveFromMine = Boolean(mySubmission && shareRankEntityId);
+    if (sharedOgVersion && !(isViewingOwnSharedRanking && canDeriveFromMine)) return sharedOgVersion;
+    if (!canDeriveFromMine) return sharedOgVersion;
     return buildRankingOgVersion({
       rankEntityId: shareRankEntityId,
       orderedEntityIds: mySubmission.orderedEntityIds,
@@ -707,7 +715,15 @@ export function useRankingBlockState({
       authorName: mySubmission.author.name,
       authorAvatarUrl: mySubmission.author.avatarUrl,
     });
-  }, [displayName, mySubmission, rankingEndDate, rankingStartDate, shareRankEntityId, sharedOgVersion]);
+  }, [
+    displayName,
+    isViewingOwnSharedRanking,
+    mySubmission,
+    rankingEndDate,
+    rankingStartDate,
+    shareRankEntityId,
+    sharedOgVersion,
+  ]);
   const effectiveGlobalOgVersion = React.useMemo(
     () =>
       buildGlobalRankingOgVersion({
