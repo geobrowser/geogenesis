@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
+import type { AggregatedRankingSubmitterRef } from '~/core/blocks/ranking/ranking-block-relations';
 import type { RankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import type { RankingSubmissionRecord } from '~/core/blocks/ranking/ranking-submission-types';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -18,6 +19,8 @@ import { AvatarGroup } from '~/design-system/avatar-group';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { Stars } from '~/design-system/icons/stars';
 import { Time } from '~/design-system/icons/time';
+
+import { RankingVotersPill } from './ranking-voters-pill';
 
 const VISIBLE_RANKED_BY_AVATARS = 3;
 const RANKED_BY_AVATAR_SIZE = 20;
@@ -123,16 +126,22 @@ export function RankingRankedBy({
   submissions,
   aggregatedSubmitterSpaceIds = [],
   aggregatedRankingCount = 0,
+  aggregatedSubmitterRefs = [],
+  onSelectVoter,
 }: {
   submissions: RankingSubmissionRecord[];
   aggregatedSubmitterSpaceIds?: string[];
   aggregatedRankingCount?: number;
+  aggregatedSubmitterRefs?: AggregatedRankingSubmitterRef[];
+  onSelectVoter?: (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => void;
 }) {
+  let rankedByRow: React.ReactNode = null;
+
   if (submissions.length > 0) {
     const visible = submissions.slice(0, VISIBLE_RANKED_BY_AVATARS);
     const extraCount = Math.max(submissions.length - visible.length, 0);
 
-    return (
+    rankedByRow = (
       <span className={RANKED_BY_ROW_CLASS}>
         <span className="shrink-0 text-grey-04">Ranked by</span>
         <RankingRankedByAvatarGroup
@@ -145,10 +154,8 @@ export function RankingRankedBy({
         />
       </span>
     );
-  }
-
-  if (aggregatedSubmitterSpaceIds.length > 0 || aggregatedRankingCount > 0) {
-    return (
+  } else if (aggregatedSubmitterSpaceIds.length > 0 || aggregatedRankingCount > 0) {
+    rankedByRow = (
       <span className={RANKED_BY_ROW_CLASS}>
         <span className="shrink-0 text-grey-04">Ranked by</span>
         <RankingAggregatedSubmitterAvatars
@@ -159,7 +166,21 @@ export function RankingRankedBy({
     );
   }
 
-  return null;
+  if (!rankedByRow) return null;
+
+  if (aggregatedSubmitterRefs.length > 0) {
+    return (
+      <RankingVotersPill
+        refs={aggregatedSubmitterRefs}
+        count={aggregatedRankingCount || aggregatedSubmitterRefs.length}
+        onSelectVoter={onSelectVoter}
+      >
+        {rankedByRow}
+      </RankingVotersPill>
+    );
+  }
+
+  return rankedByRow;
 }
 
 type RankingPeriodMetadataProps = {
@@ -169,6 +190,8 @@ type RankingPeriodMetadataProps = {
   submissions: RankingSubmissionRecord[];
   aggregatedSubmitterSpaceIds?: string[];
   aggregatedRankingCount?: number;
+  aggregatedSubmitterRefs?: AggregatedRankingSubmitterRef[];
+  onSelectVoter?: (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => void;
   trailing?: React.ReactNode;
   className?: string;
 };
@@ -180,6 +203,8 @@ export function RankingPeriodMetadata({
   submissions,
   aggregatedSubmitterSpaceIds = [],
   aggregatedRankingCount = 0,
+  aggregatedSubmitterRefs = [],
+  onSelectVoter,
   trailing,
   className = 'mt-1',
 }: RankingPeriodMetadataProps) {
@@ -196,6 +221,8 @@ export function RankingPeriodMetadata({
           submissions={submissions}
           aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
           aggregatedRankingCount={aggregatedRankingCount}
+          aggregatedSubmitterRefs={aggregatedSubmitterRefs}
+          onSelectVoter={onSelectVoter}
         />
       ) : null}
       {showPeriod ? (
