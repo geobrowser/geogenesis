@@ -343,7 +343,10 @@ export function useRankingBlockState({
     globalDisplayEntityIds
   );
 
-  const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
+  const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(
+    spaceId,
+    myRankingListEntityIds
+  );
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);

@@ -1,17 +1,17 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useAtomValue } from 'jotai';
 
 import * as React from 'react';
 
-import { rankingPendingPublishedAtAtom } from '~/atoms';
+import { useAtomValue } from 'jotai';
 
 import { fetchRankingPendingEntities } from './fetch-ranking-pending-proposals';
 import {
   EMPTY_RANKING_PENDING_PROPOSAL_DATA,
   type RankingPendingProposalData,
 } from './ranking-pending-proposal-entries';
+import { rankingPendingPublishedAtAtom } from '~/atoms';
 
 // After a "Create new" publish the proposal takes a few seconds to index, so we
 // poll briefly to catch it once it surfaces. The window self-terminates and the

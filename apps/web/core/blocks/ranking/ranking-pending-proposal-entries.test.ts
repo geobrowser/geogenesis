@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it } from 'vitest';
 
 import type { EntityDiff } from '~/core/utils/diff';

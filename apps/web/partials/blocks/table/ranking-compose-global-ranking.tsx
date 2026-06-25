@@ -28,13 +28,7 @@ const SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX = 4 * SEARCH_LIST_ROW_HEIGHT_PX;
 
 const MEMBERSHIP_RECHECK_INTERVAL_MS = 15_000;
 
-function useMembershipRecheckPolling({
-  enabled,
-  onRecheck,
-}: {
-  enabled: boolean;
-  onRecheck: () => void;
-}) {
+function useMembershipRecheckPolling({ enabled, onRecheck }: { enabled: boolean; onRecheck: () => void }) {
   const onRecheckRef = React.useRef(onRecheck);
 
   React.useEffect(() => {
@@ -555,9 +549,7 @@ export function RankingComposeGlobalRanking({
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
       {pendingDisclosure}
       {membershipSentinel}
     </>

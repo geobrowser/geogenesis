@@ -126,6 +126,16 @@ export const StatusBar = () => {
             </button>
             <button
               type="button"
+              title="Reload the page"
+              aria-label="Reload the page"
+              onClick={() => window.location.reload()}
+              className="flex items-center gap-1.5 border-l border-white/30 px-3 transition-colors hover:bg-red-01/80 focus:bg-red-01/80 focus:outline-none [&>svg]:size-4"
+            >
+              <RetrySmall />
+              <span className="-mt-[2px]">Reload</span>
+            </button>
+            <button
+              type="button"
               aria-label="Dismiss error"
               onClick={onDismiss}
               className="flex items-center border-l border-white/30 px-3 transition-colors hover:bg-red-01/80 focus:bg-red-01/80 focus:outline-none"

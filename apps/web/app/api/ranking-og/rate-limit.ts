@@ -9,22 +9,32 @@ export type RankingOgRateLimitResult = { ok: true } | { ok: false; retryAfter: n
 let walletLimiter: Ratelimit | null = null;
 let ipLimiter: Ratelimit | null = null;
 
-try {
-  const redis = Redis.fromEnv();
-  walletLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(300, '1 h'),
-    analytics: true,
-    prefix: 'ranking-og:wallet',
-  });
-  ipLimiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(120, '1 h'),
-    analytics: true,
-    prefix: 'ranking-og:ip',
-  });
-} catch {
-  // Env not configured — rate limiting disabled (treated as allow).
+// `Redis.fromEnv()` returns a client even when the env vars are missing; it only
+// fails once a command runs, after retrying for ~4.4s. Gate on the env so that
+// when Upstash isn't configured the limiters stay null and we fail open instantly
+// on the on-demand OG render path a social crawler hits.
+const hasUpstashEnv = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+
+if (hasUpstashEnv) {
+  try {
+    // Bound retries so a transient Upstash outage can't hang OG requests for
+    // seconds — rate limiting fails open anyway.
+    const redis = Redis.fromEnv({ retry: { retries: 1 } });
+    walletLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(300, '1 h'),
+      analytics: true,
+      prefix: 'ranking-og:wallet',
+    });
+    ipLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(120, '1 h'),
+      analytics: true,
+      prefix: 'ranking-og:ip',
+    });
+  } catch {
+    // Construction failed despite env present — rate limiting disabled (allow).
+  }
 }
 
 async function check(limiter: Ratelimit | null, identifier: string): Promise<RankingOgRateLimitResult> {

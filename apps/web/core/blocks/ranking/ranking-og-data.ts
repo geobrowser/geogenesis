@@ -8,8 +8,13 @@ import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Profile, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
+import {
+  type FetchRankingPendingEntitiesOptions,
+  fetchRankingPendingEntities,
+} from './fetch-ranking-pending-proposals';
 import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
-import { getOrderedRelationTargetIds } from './ranking-block-relations';
+import { getAggregatedRankingSubmitterSpaceIds, getOrderedRelationTargetIds } from './ranking-block-relations';
+import { type RankingPendingProposalData, isPlaceholderRankingEntry } from './ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from './ranking-period';
 
 export type RankingOgEntryData = {
@@ -59,6 +64,7 @@ type RankingOgDataDeps = {
   fetchEntityPage: (entityId: string, spaceId?: string) => Promise<{ entity: Entity; relations: Relation[] } | null>;
   fetchEntities: (entityIds: string[], spaceId?: string) => Promise<Entity[]>;
   fetchProfile: (spaceId: string) => Promise<Profile>;
+  fetchPendingEntries?: (options: FetchRankingPendingEntitiesOptions) => Promise<RankingPendingProposalData>;
 };
 
 const defaultDeps: RankingOgDataDeps = {
@@ -122,6 +128,30 @@ function entityDisplay(entity: Entity | undefined, entityId: string): RankingOgE
   };
 }
 
+// Server-side OG generation only sees the published index, so a ranked entity
+// that's still in an open proposal renders as "Untitled". Mirror the in-app
+// ranking flow and backfill placeholder names from the proposer's pending edits.
+async function backfillPendingNames(
+  deps: RankingOgDataDeps,
+  entries: RankingOgEntryData[],
+  targetSpaceId: string,
+  proposerSpaceIds: string[]
+): Promise<RankingOgEntryData[]> {
+  const unresolvedEntityIds = entries.filter(entry => isPlaceholderRankingEntry(entry)).map(entry => entry.entityId);
+  if (unresolvedEntityIds.length === 0 || proposerSpaceIds.length === 0) return entries;
+
+  const fetchPending = deps.fetchPendingEntries ?? fetchRankingPendingEntities;
+  const { entriesByEntityId } = await fetchPending({ spaceId: targetSpaceId, unresolvedEntityIds, proposerSpaceIds });
+  if (entriesByEntityId.size === 0) return entries;
+
+  return entries.map(entry => {
+    const pending = isPlaceholderRankingEntry(entry) ? entriesByEntityId.get(entry.entityId) : undefined;
+    // The proposal diff carries name/description but not the cover, so a pending
+    // entry keeps its (null) image.
+    return pending ? { ...entry, name: pending.name, description: pending.description ?? entry.description } : entry;
+  });
+}
+
 function periodLabel(startDate = '', endDate = ''): string | null {
   if (!startDate && !endDate) return null;
   const state = getRankingPeriodState(startDate, endDate);
@@ -152,7 +182,9 @@ export async function getRankingOgCardData(
     deps.fetchProfile(input.authorSpaceId),
   ]);
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-  const entries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
+  const baseEntries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
+  // The author is the proposer for their own pending entries; look in the block's space.
+  const entries = await backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, [input.authorSpaceId]);
   const authorName = profileName(profile, input.authorSpaceId);
 
   return {
@@ -189,7 +221,14 @@ export async function getGlobalRankingOgCardData(
   const [entities] = await Promise.all([deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId)]);
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
   const rankingName = blockPage.entity.name?.trim() || 'Untitled ranking';
-  const entries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
+  const baseEntries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
+  // Submitters (their `to_space`) are the proposers for the global leaderboard's pending entries.
+  const submitterSpaceIds = getAggregatedRankingSubmitterSpaceIds(
+    blockPage.relations,
+    input.blockEntityId,
+    input.blockEntitySpaceId
+  );
+  const entries = await backfillPendingNames(deps, baseEntries, input.blockEntitySpaceId, submitterSpaceIds);
 
   return {
     kind: 'global',
