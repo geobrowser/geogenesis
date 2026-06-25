@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePendingSubtopicProposals } from '~/core/hooks/use-pending-subtopic-proposals';
 import { useProposeSubtopicRelation } from '~/core/hooks/use-propose-subtopic-relation';
-import { useSubtopicChildren } from '~/core/hooks/use-subtopic-children';
+import { usePrefetchSubtopicChildren, useSubtopicChildren } from '~/core/hooks/use-subtopic-children';
 import { usePrefetchDefaultSubtopics } from '~/core/hooks/use-subtopic-search';
 import type { PendingSubtopicProposal } from '~/core/io/subgraph/fetch-pending-subtopic-proposals';
 import type { SubtopicChild } from '~/core/io/subgraph/fetch-subtopic-children';
@@ -28,9 +28,10 @@ interface SubtopicsTreeViewProps {
   spaceId: string;
   rootEntityId: string;
   onAddSubtopic: (target: AddSubtopicTarget) => void;
+  onNavigate?: () => void;
 }
 
-export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic }: SubtopicsTreeViewProps) {
+export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavigate }: SubtopicsTreeViewProps) {
   const { isEditor, isMember } = useAccessControl(spaceId);
   const canEdit = isEditor || isMember;
   const rootName = useName(rootEntityId, spaceId);
@@ -59,11 +60,15 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic }: Subt
       )}
 
       {!isPendingLoading && adds.length > 0 && (
-        <PendingSubtopicProposalsSection title="Proposed subtopics to add" proposals={adds} />
+        <PendingSubtopicProposalsSection title="Proposed subtopics to add" proposals={adds} onNavigate={onNavigate} />
       )}
 
       {!isPendingLoading && removals.length > 0 && (
-        <PendingSubtopicProposalsSection title="Proposed subtopics to remove" proposals={removals} />
+        <PendingSubtopicProposalsSection
+          title="Proposed subtopics to remove"
+          proposals={removals}
+          onNavigate={onNavigate}
+        />
       )}
 
       <div className="flex flex-col gap-2">
@@ -90,9 +95,11 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic }: Subt
 function PendingSubtopicProposalsSection({
   title,
   proposals,
+  onNavigate,
 }: {
   title: string;
   proposals: PendingSubtopicProposal[];
+  onNavigate?: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -101,14 +108,24 @@ function PendingSubtopicProposalsSection({
       </Text>
       <div className="flex flex-col gap-2">
         {proposals.map(proposal => (
-          <PendingSubtopicProposalCard key={`${proposal.proposalId}-${proposal.childEntityId}`} proposal={proposal} />
+          <PendingSubtopicProposalCard
+            key={`${proposal.proposalId}-${proposal.childEntityId}`}
+            proposal={proposal}
+            onNavigate={onNavigate}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function PendingSubtopicProposalCard({ proposal }: { proposal: PendingSubtopicProposal }) {
+function PendingSubtopicProposalCard({
+  proposal,
+  onNavigate,
+}: {
+  proposal: PendingSubtopicProposal;
+  onNavigate?: () => void;
+}) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-grey-02 px-3 py-3">
       <div className="min-w-0 flex-1">
@@ -117,6 +134,7 @@ function PendingSubtopicProposalCard({ proposal }: { proposal: PendingSubtopicPr
       </div>
       <Link
         href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        onClick={() => onNavigate?.()}
         className="shrink-0 rounded-[6px] border border-grey-02 bg-white px-[7px] py-1 text-metadata text-text shadow-light transition hover:border-text"
       >
         View
@@ -156,6 +174,14 @@ function SubtopicTreeNode({
   const [menuOpen, setMenuOpen] = React.useState(false);
   const { data: children = [], isLoading, isError } = useSubtopicChildren(entityId, spaceId, expanded);
   const { proposeRemove, isPending } = useProposeSubtopicRelation(spaceId);
+  const prefetchChildren = usePrefetchSubtopicChildren();
+
+  React.useEffect(() => {
+    if (!expanded) return;
+    for (const child of children) {
+      prefetchChildren(child.id, spaceId);
+    }
+  }, [expanded, children, spaceId, prefetchChildren]);
 
   const existingChildIds = React.useMemo(() => new Set(children.map(child => child.id)), [children]);
 

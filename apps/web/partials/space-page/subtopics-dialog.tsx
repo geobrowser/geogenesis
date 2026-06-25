@@ -55,6 +55,7 @@ export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialog
           spaceId={spaceId}
           rootEntityId={Spaces.getSpaceSubtopicRootEntityId(space)}
           onAddSubtopic={setAddTarget}
+          onNavigate={() => onOpenChange(false)}
         />
       )}
     </SubtopicsDialogShell>
