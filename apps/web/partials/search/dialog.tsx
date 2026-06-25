@@ -50,7 +50,7 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
   const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
-  const autocomplete = useSearch({ enabled: open, includeNonCanonical: !canonicalOnly });
+  const autocomplete = useSearch({ enabled: open, includeNonCanonical: canonicalOnly ? false : undefined });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
 
   const toggleCanonicalOnly = useCallback(() => {
