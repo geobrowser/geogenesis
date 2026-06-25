@@ -141,16 +141,17 @@ export async function getRankingOgCardData(
     return null;
   }
 
-  const rankingBlock = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
-  const rankingName = rankingBlock?.name?.trim() || rankEntity.name?.trim() || 'Untitled ranking';
   const orderedEntityIds = getMyRankingOrderedEntityIds(
     { ...rankEntity, relations: rankPage.relations },
     input.authorSpaceId
   ).slice(0, 5);
-  const [entities, profile] = await Promise.all([
+
+  const [rankingBlock, entities, profile] = await Promise.all([
+    deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId),
     deps.fetchEntities(orderedEntityIds, input.blockEntitySpaceId),
     deps.fetchProfile(input.authorSpaceId),
   ]);
+  const rankingName = rankingBlock?.name?.trim() || rankEntity.name?.trim() || 'Untitled ranking';
   const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
   const entries = orderedEntityIds.map(entityId => entityDisplay(entitiesById.get(entityId), entityId));
   const authorName = profileName(profile, input.authorSpaceId);

@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 
 import { Button } from '~/design-system/button';
-import { Dots } from '~/design-system/dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
@@ -75,15 +74,8 @@ function buildMyRankingActionButton(state: RankingBlockState) {
 }
 
 function buildMyRankingTabActions(state: RankingBlockState) {
-  const {
-    isSharedRankingView,
-    showEditRankingButton,
-    canSharePersonalRanking,
-    isPersonalShareReady,
-    sharePersonalRanking,
-    isSaving,
-    openRankingCompose,
-  } = state;
+  const { isSharedRankingView, showEditRankingButton, canSharePersonalRanking, sharePersonalRanking, isSaving, openRankingCompose } =
+    state;
   if (isSharedRankingView) return null;
   if (!showEditRankingButton && !canSharePersonalRanking) return null;
 
@@ -104,24 +96,13 @@ function buildMyRankingTabActions(state: RankingBlockState) {
           variant="primary"
           className={cx(
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
-            !showEditRankingButton && 'ml-auto',
-            !isPersonalShareReady && 'cursor-default opacity-60 hover:bg-text'
+            !showEditRankingButton && 'ml-auto'
           )}
-          aria-disabled={!isPersonalShareReady}
-          aria-label={isPersonalShareReady ? 'Share ranking on X' : 'Preparing share image'}
-          onClick={isPersonalShareReady ? sharePersonalRanking : undefined}
+          aria-label="Share ranking on X"
+          onClick={sharePersonalRanking}
         >
-          {isPersonalShareReady ? (
-            <>
-              Share
-              <XIcon color="white" />
-            </>
-          ) : (
-            <>
-              Preparing
-              <Dots color="bg-grey-02" />
-            </>
-          )}
+          Share
+          <XIcon color="white" />
         </Button>
       ) : null}
     </div>
