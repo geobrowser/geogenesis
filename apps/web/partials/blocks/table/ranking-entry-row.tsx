@@ -60,13 +60,16 @@ export function RankingEntryRow({
   linkToEntity = true,
   rankStyle = 'avatar-badge',
 }: Props) {
-  const { properties: cardProperties, source } = useRankingCardConfig();
+  const { properties: cardProperties, source, imageProperty } = useRankingCardConfig();
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
   const directIpfs =
     imageHint && typeof imageHint === 'string' && imageHint.startsWith('ipfs://') ? imageHint : undefined;
   const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl = imageUrlOverride ?? directIpfs ?? lookedUpFromHint ?? avatarUrl ?? coverUrl;
+  const imageUrl =
+    imageProperty === 'cover'
+      ? (imageUrlOverride ?? coverUrl ?? avatarUrl ?? directIpfs ?? lookedUpFromHint)
+      : (imageUrlOverride ?? directIpfs ?? lookedUpFromHint ?? avatarUrl ?? coverUrl);
   const avatarImageValue = imageUrl ?? PLACEHOLDER_SPACE_IMAGE;
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;

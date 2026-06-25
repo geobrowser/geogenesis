@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
@@ -27,6 +29,8 @@ type Props = {
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
   const { cardConfig, menuProps } = useRankingShownProperties();
+  
+  const isEditing = useUserIsEditing(spaceId);
   const {
     canEdit,
     filterState,
@@ -65,7 +69,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
-          {canEdit ? <TableBlockPropertiesMenu {...menuProps} /> : null}
+          {isEditing ? <TableBlockPropertiesMenu {...menuProps} /> : null}
 
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}

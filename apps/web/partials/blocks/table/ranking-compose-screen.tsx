@@ -42,7 +42,11 @@ import type { SearchResult } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
-import { RankingCardConfigProvider, selectRankingCardProperties } from './ranking-card-config';
+import {
+  RankingCardConfigProvider,
+  selectRankingCardImageProperty,
+  selectRankingCardProperties,
+} from './ranking-card-config';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -67,14 +71,18 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
   const relationId = searchParams?.get('relationId') ?? '';
-  const { name, entityId, filterState, properties, source } = useDataBlock();
+  const { name, entityId, filterState, properties, shownColumnIds, source } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
   const cardConfig = React.useMemo(
-    () => ({ properties: selectRankingCardProperties(properties), source }),
-    [properties, source]
+    () => ({
+      properties: selectRankingCardProperties(properties),
+      source,
+      imageProperty: selectRankingCardImageProperty(shownColumnIds),
+    }),
+    [properties, shownColumnIds, source]
   );
   const { showOnboarding } = useOnboarding();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
