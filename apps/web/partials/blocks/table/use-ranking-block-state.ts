@@ -705,7 +705,8 @@ export function useRankingBlockState({
     // else's shared ranking the seeded version stays authoritative.
     const canDeriveFromMine = Boolean(mySubmission && shareRankEntityId);
     if (sharedOgVersion && !(isViewingOwnSharedRanking && canDeriveFromMine)) return sharedOgVersion;
-    if (!canDeriveFromMine) return sharedOgVersion;
+    // Narrowing guard (equivalent to `!canDeriveFromMine`) so TS knows `mySubmission` is non-null below.
+    if (!mySubmission || !shareRankEntityId) return sharedOgVersion;
     return buildRankingOgVersion({
       rankEntityId: shareRankEntityId,
       orderedEntityIds: mySubmission.orderedEntityIds,
