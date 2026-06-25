@@ -60,13 +60,19 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavi
       )}
 
       {!isPendingLoading && adds.length > 0 && (
-        <PendingSubtopicProposalsSection title="Proposed subtopics to add" proposals={adds} onNavigate={onNavigate} />
+        <PendingSubtopicProposalsSection
+          title="Proposed subtopics to add"
+          proposals={adds}
+          spaceId={spaceId}
+          onNavigate={onNavigate}
+        />
       )}
 
       {!isPendingLoading && removals.length > 0 && (
         <PendingSubtopicProposalsSection
           title="Proposed subtopics to remove"
           proposals={removals}
+          spaceId={spaceId}
           onNavigate={onNavigate}
         />
       )}
@@ -95,10 +101,12 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavi
 function PendingSubtopicProposalsSection({
   title,
   proposals,
+  spaceId,
   onNavigate,
 }: {
   title: string;
   proposals: PendingSubtopicProposal[];
+  spaceId: string;
   onNavigate?: () => void;
 }) {
   return (
@@ -111,6 +119,7 @@ function PendingSubtopicProposalsSection({
           <PendingSubtopicProposalCard
             key={`${proposal.proposalId}-${proposal.childEntityId}`}
             proposal={proposal}
+            spaceId={spaceId}
             onNavigate={onNavigate}
           />
         ))}
@@ -121,9 +130,11 @@ function PendingSubtopicProposalsSection({
 
 function PendingSubtopicProposalCard({
   proposal,
+  spaceId,
   onNavigate,
 }: {
   proposal: PendingSubtopicProposal;
+  spaceId: string;
   onNavigate?: () => void;
 }) {
   return (
@@ -133,7 +144,7 @@ function PendingSubtopicProposalCard({
         <p className="mt-1 text-button font-medium text-text">{proposal.name}</p>
       </div>
       <Link
-        href={NavUtils.toProposal(proposal.spaceId, proposal.proposalId)}
+        href={NavUtils.toProposal(spaceId, proposal.proposalId)}
         onClick={() => onNavigate?.()}
         className="shrink-0 rounded-[6px] border border-grey-02 bg-white px-[7px] py-1 text-metadata text-text shadow-light transition hover:border-text"
       >
