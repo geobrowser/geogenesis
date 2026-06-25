@@ -4,12 +4,14 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { PAGE_SIZE, filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
+import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { mappingToRows } from '~/core/blocks/data/use-mapping';
 import { useView } from '~/core/blocks/data/use-view';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Row } from '~/core/types';
+
+const RANKING_BROWSE_PAGE_SIZE = 25;
 
 export type RowPage = { page: number; rows: Row[] };
 
@@ -59,7 +61,7 @@ export function useRankingAccumulatedRows() {
   const { entities, isLoading, isFetched, isPlaceholderData, endCursor, hasNextPage } = useQueryEntities({
     where,
     enabled,
-    first: PAGE_SIZE,
+    first: RANKING_BROWSE_PAGE_SIZE,
     after,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,

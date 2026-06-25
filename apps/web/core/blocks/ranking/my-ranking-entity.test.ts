@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
-import {
-  buildMyRankingEntityFilter,
-  getMyRankingOrderedEntityIds,
-  pickMostRecentlyUpdatedRankingEntity,
-} from './my-ranking-entity';
+import { getMyRankingOrderedEntityIds, pickMostRecentlyUpdatedRankingEntity } from './my-ranking-entity';
 
 function rankEntity({
   id,
@@ -27,19 +23,6 @@ function rankEntity({
     updatedAt,
   } as Entity;
 }
-
-describe('buildMyRankingEntityFilter', () => {
-  it('filters Rank entities submitted to the ranking block', () => {
-    expect(buildMyRankingEntityFilter('block-1')).toEqual({
-      relations: {
-        some: {
-          typeId: { is: SUBMITTED_TO_PROPERTY_ID },
-          toEntityId: { is: 'block-1' },
-        },
-      },
-    });
-  });
-});
 
 describe('pickMostRecentlyUpdatedRankingEntity', () => {
   it('returns the entity with the latest updatedAt', () => {
