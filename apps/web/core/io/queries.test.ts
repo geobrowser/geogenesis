@@ -39,6 +39,14 @@ describe('buildSearchPath', () => {
     expect(path).toContain('additional_space_ids=a19c345a-b986-6679-b001-d7d2138d88a1');
   });
 
+  it('adds include_non_canonical=false only when explicitly false (canonical-only search)', () => {
+    expect(buildSearchPath({ query: 'q', includeNonCanonical: false })).toBe(
+      '/search?query=q&limit=10&offset=0&include_non_canonical=false'
+    );
+    expect(buildSearchPath({ query: 'q' })).toBe('/search?query=q&limit=10&offset=0');
+    expect(buildSearchPath({ query: 'q', includeNonCanonical: true })).toBe('/search?query=q&limit=10&offset=0');
+  });
+
   it('omits additional_space_ids when space_id is set (SPACE_SINGLE scope)', () => {
     const path = buildSearchPath({
       query: 'q',
