@@ -7,9 +7,11 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { Space } from '~/core/io/dto/spaces';
+import { getSpaces } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { useQueryEntities } from '~/core/sync/use-store';
+import type { Profile } from '~/core/types';
 
 import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
 
@@ -21,6 +23,19 @@ export type RankingVoter = {
   fallbackSeed: string;
   address: string | null;
 };
+
+const SPACE_ID_REQUEST_LIMIT = 100;
+
+const EMPTY_PROFILE_MAP = new Map<string, Profile>();
+const EMPTY_SPACE_MAP = new Map<string, Space>();
+
+function chunkSpaceIds(spaceIds: string[]): string[][] {
+  const batches: string[][] = [];
+  for (let start = 0; start < spaceIds.length; start += SPACE_ID_REQUEST_LIMIT) {
+    batches.push(spaceIds.slice(start, start + SPACE_ID_REQUEST_LIMIT));
+  }
+  return batches;
+}
 
 export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
   const rankEntityIdsNeedingSpace = React.useMemo(
@@ -57,17 +72,37 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
 
   const spaceIds = React.useMemo(() => resolvedRefs.map(ref => ref.spaceId), [resolvedRefs]);
 
-  const { data: profilesBySpaceId = new Map(), isLoading: isLoadingProfiles } = useQuery({
+  const { data: profilesBySpaceId = EMPTY_PROFILE_MAP, isLoading: isLoadingProfiles } = useQuery({
     queryKey: ['ranking-voter-profiles', spaceIds],
     enabled: spaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(spaceIds));
-      return new Map(spaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
+      const batches = chunkSpaceIds(spaceIds);
+      const results = await Promise.all(batches.map(batch => Effect.runPromise(fetchProfilesBySpaceIds(batch))));
+      const map = new Map<string, Profile>();
+      for (const profiles of results) {
+        for (const profile of profiles) map.set(profile.spaceId, profile);
+      }
+      return map;
     },
   });
 
-  const { spacesById } = useSpacesByIds(spaceIds);
+  const { data: spacesById = EMPTY_SPACE_MAP } = useQuery({
+    queryKey: ['ranking-voter-spaces', spaceIds],
+    enabled: spaceIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
+      const batches = chunkSpaceIds(spaceIds);
+      const results = await Promise.all(
+        batches.map(batch => Effect.runPromise(getSpaces({ spaceIds: batch }, signal)))
+      );
+      const map = new Map<string, Space>();
+      for (const spaces of results) {
+        for (const space of spaces) map.set(space.id, space);
+      }
+      return map;
+    },
+  });
 
   const voters: RankingVoter[] = React.useMemo(
     () =>

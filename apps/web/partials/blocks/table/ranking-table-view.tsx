@@ -52,6 +52,7 @@ export function RankingTableView({
     aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
+    viewSharedRanking,
   } = state;
 
   return (
@@ -75,6 +76,7 @@ export function RankingTableView({
             aggregatedSubmitterRefs={aggregatedSubmitterRefs}
             aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
             aggregatedRankingCount={aggregatedRankingCount}
+            onSelectVoter={viewSharedRanking}
           />
         ) : null}
       </div>

@@ -127,11 +127,13 @@ export function RankingRankedBy({
   aggregatedSubmitterSpaceIds = [],
   aggregatedRankingCount = 0,
   aggregatedSubmitterRefs = [],
+  onSelectVoter,
 }: {
   submissions: RankingSubmissionRecord[];
   aggregatedSubmitterSpaceIds?: string[];
   aggregatedRankingCount?: number;
   aggregatedSubmitterRefs?: AggregatedRankingSubmitterRef[];
+  onSelectVoter?: (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => void;
 }) {
   let rankedByRow: React.ReactNode = null;
 
@@ -171,6 +173,7 @@ export function RankingRankedBy({
       <RankingVotersPill
         refs={aggregatedSubmitterRefs}
         count={aggregatedRankingCount || aggregatedSubmitterRefs.length}
+        onSelectVoter={onSelectVoter}
       >
         {rankedByRow}
       </RankingVotersPill>
@@ -188,6 +191,7 @@ type RankingPeriodMetadataProps = {
   aggregatedSubmitterSpaceIds?: string[];
   aggregatedRankingCount?: number;
   aggregatedSubmitterRefs?: AggregatedRankingSubmitterRef[];
+  onSelectVoter?: (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => void;
   trailing?: React.ReactNode;
   className?: string;
 };
@@ -200,6 +204,7 @@ export function RankingPeriodMetadata({
   aggregatedSubmitterSpaceIds = [],
   aggregatedRankingCount = 0,
   aggregatedSubmitterRefs = [],
+  onSelectVoter,
   trailing,
   className = 'mt-1',
 }: RankingPeriodMetadataProps) {
@@ -217,6 +222,7 @@ export function RankingPeriodMetadata({
           aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
           aggregatedRankingCount={aggregatedRankingCount}
           aggregatedSubmitterRefs={aggregatedSubmitterRefs}
+          onSelectVoter={onSelectVoter}
         />
       ) : null}
       {showPeriod ? (

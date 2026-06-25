@@ -143,16 +143,24 @@ export function useRankingBlockState({
   const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
     useRankingSubmissions(entityId, spaceId, displayName);
 
+  const [sharedRankOverride, setSharedRankOverride] = React.useState<{
+    rankEntityId: string;
+    authorSpaceId: string;
+    authorName?: string | null;
+  } | null>(null);
+  const activeSharedRankEntityId = sharedRankOverride?.rankEntityId || sharedRankEntityId;
+  const activeSharedAuthorSpaceId = sharedRankOverride?.authorSpaceId || sharedAuthorSpaceId;
+
   const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({
-    rankEntityId: sharedRankEntityId,
-    authorSpaceId: sharedAuthorSpaceId,
+    rankEntityId: activeSharedRankEntityId,
+    authorSpaceId: activeSharedAuthorSpaceId,
     blockEntityId: entityId,
     blockEntitySpaceId: spaceId,
   });
 
-  const hasSharedRankingUrl = Boolean(sharedRankEntityId && sharedAuthorSpaceId);
+  const hasSharedRankingUrl = Boolean(activeSharedRankEntityId && activeSharedAuthorSpaceId);
   const isViewingOwnSharedRanking = Boolean(
-    hasSharedRankingUrl && personalSpaceId && ID.equals(sharedAuthorSpaceId, personalSpaceId)
+    hasSharedRankingUrl && personalSpaceId && ID.equals(activeSharedAuthorSpaceId, personalSpaceId)
   );
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
   const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
@@ -173,14 +181,25 @@ export function useRankingBlockState({
     (profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null);
   const myAvatarSeed = sharedSubmission?.author.address ?? profile?.address ?? walletAddress ?? 'anonymous';
   const showMyRankingTab = Boolean(personalSpaceId || hasSharedRankingUrl || sharedSubmission);
+
+  const sharedAuthorName = sharedSubmission?.author.name?.trim() || sharedRankOverride?.authorName?.trim() || '';
   const myRankingTabLabel = isSharedRankingView
-    ? sharedSubmission?.author.name?.trim()
-      ? formatSharedRankingOwnerLabel(sharedSubmission.author.name)
+    ? sharedAuthorName
+      ? formatSharedRankingOwnerLabel(sharedAuthorName)
       : 'Ranking'
     : 'My ranking';
 
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<RankingTab>('global');
+
+  const viewSharedRanking = React.useCallback(
+    (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => {
+      if (!rankEntityId || !authorSpaceId) return;
+      setSharedRankOverride({ rankEntityId, authorSpaceId, authorName });
+      setActiveTab('my');
+    },
+    []
+  );
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [isMyRankingDragging, setIsMyRankingDragging] = React.useState(false);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
@@ -748,8 +767,8 @@ export function useRankingBlockState({
   );
 
   const effectiveRelationId = resolveBlockRelationId();
-  const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
-  const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
+  const shareRankEntityId = activeSharedRankEntityId || mySubmission?.id || '';
+  const shareAuthorSpaceId = activeSharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
   const effectiveOgVersion = React.useMemo(() => {
     if (sharedOgVersion) return sharedOgVersion;
     if (!mySubmission || !shareRankEntityId) return '';
@@ -914,6 +933,7 @@ export function useRankingBlockState({
     openRankingCompose,
     activeTab,
     setActiveTab,
+    viewSharedRanking,
     activeSwipeRowKey,
     setActiveSwipeRowKey,
     isMyRankingDragging,
