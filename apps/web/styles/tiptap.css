@@ -262,19 +262,15 @@
   @apply text-grey-04 underline transition-colors duration-100;
 }
 
-/* External/Invalid link highlighting */
-.ProseMirror .entity-link-invalid,
-.ProseMirror [data-web2-url] {
+/* Invalid/unresolved internal (graph) link highlighting.
+   NOTE: web2 [data-web2-url] links are intentionally NOT styled here — they
+   render their own appearance inline (a black underlined anchor in browse mode,
+   plain text in edit mode). Painting them red here caused a red/black flicker
+   whenever the link was re-rendered. */
+.ProseMirror .entity-link-invalid {
   @apply cursor-pointer rounded px-0.5 text-red-01 underline decoration-red-01 decoration-dotted;
 }
 
-/* External/Invalid link and edit mode web2 URL hover */
-.ProseMirror .entity-link-invalid:hover,
-.ProseMirror .web2-url-edit-mode:hover {
+.ProseMirror .entity-link-invalid:hover {
   @apply bg-red-03;
-}
-
-/* Edit mode web2 URL styling - avoid TipTap Underline extension interference */
-.ProseMirror .web2-url-edit-mode {
-  @apply underline decoration-red-01 decoration-dotted;
 }
