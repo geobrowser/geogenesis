@@ -54,6 +54,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
+import { selectRankingCardImageProperty } from './ranking-card-config';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
@@ -120,7 +121,8 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows } = useDataBlock();
+  const { name, entityId, relationId, rows, shownColumnIds } = useDataBlock();
+  const cardImageProperty = React.useMemo(() => selectRankingCardImageProperty(shownColumnIds), [shownColumnIds]);
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -336,12 +338,14 @@ export function useRankingBlockState({
   // there; for embedded blocks it's one bounded, cached batch query.
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
-    globalDisplayEntityIds
+    globalDisplayEntityIds,
+    cardImageProperty
   );
 
   const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(
     spaceId,
-    myRankingListEntityIds
+    myRankingListEntityIds,
+    cardImageProperty
   );
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);

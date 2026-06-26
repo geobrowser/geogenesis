@@ -66,10 +66,8 @@ export function RankingEntryRow({
   const directIpfs =
     imageHint && typeof imageHint === 'string' && imageHint.startsWith('ipfs://') ? imageHint : undefined;
   const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl =
-    imageProperty === 'cover'
-      ? (imageUrlOverride ?? coverUrl ?? avatarUrl ?? directIpfs ?? lookedUpFromHint)
-      : (imageUrlOverride ?? directIpfs ?? lookedUpFromHint ?? avatarUrl ?? coverUrl);
+  const mediaFallback = imageProperty === 'cover' ? (coverUrl ?? avatarUrl) : (avatarUrl ?? coverUrl);
+  const imageUrl = imageUrlOverride ?? directIpfs ?? lookedUpFromHint ?? mediaFallback;
   const avatarImageValue = imageUrl ?? PLACEHOLDER_SPACE_IMAGE;
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;

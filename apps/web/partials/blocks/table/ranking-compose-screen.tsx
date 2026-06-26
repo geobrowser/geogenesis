@@ -76,13 +76,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
+  const cardImageProperty = React.useMemo(() => selectRankingCardImageProperty(shownColumnIds), [shownColumnIds]);
   const cardConfig = React.useMemo(
     () => ({
       properties: selectRankingCardProperties(properties),
       source,
-      imageProperty: selectRankingCardImageProperty(shownColumnIds),
+      imageProperty: cardImageProperty,
     }),
-    [properties, shownColumnIds, source]
+    [properties, cardImageProperty, source]
   );
   const { showOnboarding } = useOnboarding();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
@@ -179,7 +180,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: rankableEntries, isLoading: isLoadingRankableEntries } = useRankingEntryEntities(
     spaceId,
-    allRankableEntityIds
+    allRankableEntityIds,
+    cardImageProperty
   );
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
@@ -252,7 +254,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredRankedIds = isSearchActive ? searchRankedIds : browseRankedIds;
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
-  const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
+  const { entries: searchEntries } = useRankingEntryEntities(
+    spaceId,
+    isSearchActive ? searchEntityIds : [],
+    cardImageProperty
+  );
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
@@ -268,7 +274,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const displayMyEntityIds = orderedIds;
 
-  const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
+  const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds, cardImageProperty);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
   const rankableEntriesByIdRaw = React.useMemo(
