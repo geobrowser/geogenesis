@@ -729,6 +729,11 @@ interface ResultsArgs {
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
+  /**
+   * The REST /search endpoint includes non-canonical entities by default. Pass
+   * `false` to restrict to the canonical graph; only `false` emits the param.
+   */
+  includeNonCanonical?: boolean;
 }
 
 /**
@@ -900,6 +905,10 @@ export function buildSearchPath(args: ResultsArgs): string {
 
   if (args.additionalSpaceIds?.length && !args.spaceId) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  }
+
+  if (args.includeNonCanonical === false) {
+    params.set('include_non_canonical', 'false');
   }
 
   return `/search?${params.toString()}`;
