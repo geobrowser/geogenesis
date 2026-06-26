@@ -33,13 +33,12 @@ function dedupePreserveOrder(ids: string[]): string[] {
 }
 
 function preferAvatarsFirst<T>(items: T[], hasAvatar: (item: T) => boolean): T[] {
-  return items
-    .map((item, index) => ({ item, index, hasAvatar: hasAvatar(item) }))
-    .sort((a, b) => {
-      if (a.hasAvatar !== b.hasAvatar) return a.hasAvatar ? -1 : 1;
-      return a.index - b.index;
-    })
-    .map(({ item }) => item);
+  const withAvatar: T[] = [];
+  const withoutAvatar: T[] = [];
+  for (const item of items) {
+    (hasAvatar(item) ? withAvatar : withoutAvatar).push(item);
+  }
+  return [...withAvatar, ...withoutAvatar];
 }
 
 export function getRankingPeriodIcon(state: RankingPeriodState) {
@@ -105,34 +104,35 @@ export function RankingAggregatedSubmitterAvatars({
   });
   const { spacesById } = useSpacesByIds(uniqueSpaceIds);
 
-  const uniqueCount = uniqueSpaceIds.length;
-  const count = totalCount ?? uniqueCount;
-
-  if (count === 0 && uniqueCount === 0) return null;
-
-  const visibleSpaceIds = React.useMemo(() => {
-    const ranked = preferAvatarsFirst(uniqueSpaceIds, spaceId => {
+  const resolveAvatarUrl = React.useCallback(
+    (spaceId: string) => {
       const profile = profilesBySpaceId.get(spaceId);
       const profileAvatarUrl =
         profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
       const spaceImage = spacesById.get(spaceId)?.entity.image;
       const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
-      return Boolean(profileAvatarUrl ?? spaceAvatarUrl);
-    });
+      return profileAvatarUrl ?? spaceAvatarUrl;
+    },
+    [profilesBySpaceId, spacesById]
+  );
+
+  const visibleSpaceIds = React.useMemo(() => {
+    const ranked = preferAvatarsFirst(uniqueSpaceIds, spaceId => Boolean(resolveAvatarUrl(spaceId)));
     return ranked.slice(0, maxVisible);
-  }, [uniqueSpaceIds, profilesBySpaceId, spacesById, maxVisible]);
+  }, [uniqueSpaceIds, resolveAvatarUrl, maxVisible]);
+
+  const uniqueCount = uniqueSpaceIds.length;
+  const count = totalCount ?? uniqueCount;
+
+  if (count === 0 && uniqueCount === 0) return null;
 
   const extraCount = Math.max(uniqueCount - visibleSpaceIds.length, 0);
 
   const avatars: RankingRankedByAvatar[] = visibleSpaceIds.map(spaceId => {
     const profile = profilesBySpaceId.get(spaceId);
-    const profileAvatarUrl =
-      profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-    const spaceImage = spacesById.get(spaceId)?.entity.image;
-    const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
     return {
       key: spaceId,
-      avatarUrl: profileAvatarUrl ?? spaceAvatarUrl,
+      avatarUrl: resolveAvatarUrl(spaceId),
       fallbackSeed: profile?.address ?? spaceId,
     };
   });
