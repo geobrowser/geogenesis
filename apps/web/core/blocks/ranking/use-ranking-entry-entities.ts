@@ -6,10 +6,10 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/substream-schema';
-import type { Relation, Value } from '~/core/types';
-import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 import { useHydrateEntities, useQueryEntities } from '~/core/sync/use-store';
+import type { Relation, Value } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
 export type RankingEntryDisplay = {
   entityId: string;
@@ -21,7 +21,7 @@ export type RankingEntryDisplay = {
 export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   const entityIdsKey = entityIds.filter(Boolean).join('|');
   const stableIds = React.useMemo(() => [...new Set(entityIdsKey ? entityIdsKey.split('|') : [])], [entityIdsKey]);
-  
+
   useHydrateEntities({ ids: stableIds, spaceId, enabled: stableIds.length > 0 });
 
   const { entities, isLoading, isFetched } = useQueryEntities({

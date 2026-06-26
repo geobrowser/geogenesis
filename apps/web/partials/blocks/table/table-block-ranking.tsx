@@ -29,7 +29,7 @@ type Props = {
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
   const { cardConfig, menuProps } = useRankingShownProperties();
-  
+
   const isEditing = useUserIsEditing(spaceId);
   const {
     canEdit,

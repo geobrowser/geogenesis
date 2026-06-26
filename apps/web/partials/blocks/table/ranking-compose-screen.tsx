@@ -627,7 +627,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   return (
     <RankingCardConfigProvider value={cardConfig}>
-      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName}/>
+      <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       <RankingComposeFullscreen coverNavbar={isMobile}>
         {isMobile ? (
