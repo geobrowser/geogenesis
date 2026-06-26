@@ -6,7 +6,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { EntityId } from '~/core/io/substream-schema';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { useHydrateEntities, useQueryEntities } from '~/core/sync/use-store';
 import type { Relation, Value } from '~/core/types';
 import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
@@ -17,9 +17,17 @@ export type RankingEntryDisplay = {
   image: string | null;
 };
 
-export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
+export type RankingImagePreference = 'avatar' | 'cover';
+
+export function useRankingEntryEntities(
+  spaceId: string,
+  entityIds: string[],
+  imageProperty: RankingImagePreference = 'avatar'
+) {
   const entityIdsKey = entityIds.filter(Boolean).join('|');
   const stableIds = React.useMemo(() => [...new Set(entityIdsKey ? entityIdsKey.split('|') : [])], [entityIdsKey]);
+
+  useHydrateEntities({ ids: stableIds, spaceId, enabled: stableIds.length > 0 });
 
   const { entities, isLoading, isFetched } = useQueryEntities({
     enabled: stableIds.length > 0,
@@ -40,11 +48,11 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
             entityId: id,
             name: pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId) ?? 'Untitled',
             description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
-            image: pickImage(entity.relations, spaceId),
+            image: pickImageByPreference(entity.relations, spaceId, imageProperty),
           };
         })
         .filter((e): e is RankingEntryDisplay => e != null),
-    [byId, stableIds, spaceId]
+    [byId, stableIds, spaceId, imageProperty]
   );
 
   return { entries, isLoading: isLoading && !isFetched };
@@ -75,23 +83,27 @@ export function pickRelationBySpace(relations: Relation[], typeId: string, curre
   );
 }
 
-/**
- * Resolve an image URL for a ranking card. Order:
- *   current-space avatar → current-space cover → ranked-space avatar → ranked-space cover.
- *
- * Relations whose target image has no URL value are skipped at every step so a
- * placeholder avatar in the current space can't mask a usable image from another space.
- */
-export function pickImage(relations: Relation[], currentSpaceId: string): string | null {
+export function pickImageByPreference(
+  relations: Relation[],
+  currentSpaceId: string,
+  preference: RankingImagePreference
+): string | null {
   const withValue = relations.filter(r => r.toEntity.value);
 
-  const avatar = pickRelationBySpace(withValue, EntityId(ContentIds.AVATAR_PROPERTY), currentSpaceId);
-  if (avatar?.spaceId === currentSpaceId) return avatar.toEntity.value;
+  const preferredType = preference === 'cover' ? SystemIds.COVER_PROPERTY : ContentIds.AVATAR_PROPERTY;
+  const otherType = preference === 'cover' ? ContentIds.AVATAR_PROPERTY : SystemIds.COVER_PROPERTY;
 
-  const cover = pickRelationBySpace(withValue, EntityId(SystemIds.COVER_PROPERTY), currentSpaceId);
-  if (cover?.spaceId === currentSpaceId) return cover.toEntity.value;
+  const preferred = pickRelationBySpace(withValue, EntityId(preferredType), currentSpaceId);
+  if (preferred?.spaceId === currentSpaceId) return preferred.toEntity.value;
 
-  if (avatar) return avatar.toEntity.value;
-  if (cover) return cover.toEntity.value;
+  const other = pickRelationBySpace(withValue, EntityId(otherType), currentSpaceId);
+  if (other?.spaceId === currentSpaceId) return other.toEntity.value;
+
+  if (preferred) return preferred.toEntity.value;
+  if (other) return other.toEntity.value;
   return null;
+}
+
+export function pickImage(relations: Relation[], currentSpaceId: string): string | null {
+  return pickImageByPreference(relations, currentSpaceId, 'avatar');
 }
