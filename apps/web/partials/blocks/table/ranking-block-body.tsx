@@ -75,14 +75,8 @@ function buildMyRankingActionButton(state: RankingBlockState) {
 }
 
 function buildMyRankingTabActions(state: RankingBlockState) {
-  const {
-    isSharedRankingView,
-    showEditRankingButton,
-    canSharePersonalRanking,
-    sharePersonalRanking,
-    isSaving,
-    openRankingCompose,
-  } = state;
+  const { isSharedRankingView, showEditRankingButton, canSharePersonalRanking, sharePersonalRanking, isSaving, openRankingCompose } =
+    state;
   if (isSharedRankingView) return null;
   if (!showEditRankingButton && !canSharePersonalRanking) return null;
 
@@ -105,6 +99,7 @@ function buildMyRankingTabActions(state: RankingBlockState) {
             'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
             !showEditRankingButton && 'ml-auto'
           )}
+          aria-label="Share ranking on X"
           onClick={sharePersonalRanking}
         >
           Share

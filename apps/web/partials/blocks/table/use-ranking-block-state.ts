@@ -771,20 +771,15 @@ export function useRankingBlockState({
     if (!personalSharePath) return;
     const shareUrl = buildAbsoluteRankingShareUrl(personalSharePath);
     const shareText = `Here's my ${name?.trim() || 'ranking'}. What's yours?`;
-    // Open X within the click's user activation — popup blockers drop window.open
-    // after an await. The OG image is pre-warmed in the background (and the share
-    // route falls back to a live preview render if the R2 object isn't ready yet),
-    // so the card still resolves even if the user posts immediately.
     shareRankingOnX(shareUrl, shareText);
     void ensurePersonalRankingOg().catch(() => {});
   }, [name, ensurePersonalRankingOg, personalSharePath]);
 
-  // Generate the personal OG image
   React.useEffect(() => {
     if (!canSharePersonalRanking || !effectiveOgVersion) return;
     const timer = window.setTimeout(() => {
       void ensurePersonalRankingOg();
-    }, 1500);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
