@@ -38,6 +38,7 @@ import {
   entityNamesQuery,
   entityPageQuery,
   entityQuery,
+  entityRelationsPageQuery,
   entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
@@ -349,11 +350,43 @@ export function getEntitiesOrderedByPropertyConnection(
 }
 
 export function getEntity(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
-  return graphql({
-    query: entityQuery,
-    decoder: data => (data.entity ? EntityDecoder.decode(data.entity) : null),
-    variables: { id: entityId, spaceId },
-    signal,
+  return Effect.gen(function* () {
+    const entity = yield* graphql({
+      query: entityQuery,
+      decoder: data => data.entity ?? null,
+      variables: { id: entityId, spaceId },
+      signal,
+    });
+
+    if (!entity) {
+      return null;
+    }
+
+    // `relations` is the paginated connection (the non-paginated `relationsList`
+    // truncates at the server's 100-row default). Drain every page so hydration
+    // is correct for entities with any number of relations, then merge the nodes
+    // into the `relationsList` shape the decoder expects.
+    const relationNodes = [...entity.relations.nodes];
+    let pageInfo = entity.relations.pageInfo;
+
+    while (pageInfo.hasNextPage && pageInfo.endCursor) {
+      const cursor = pageInfo.endCursor;
+      const nextPage = yield* graphql({
+        query: entityRelationsPageQuery,
+        decoder: data => data.entity?.relations ?? null,
+        variables: { id: entityId, spaceId, cursor },
+        signal,
+      });
+
+      if (!nextPage || nextPage.nodes.length === 0) {
+        break;
+      }
+
+      relationNodes.push(...nextPage.nodes);
+      pageInfo = nextPage.pageInfo;
+    }
+
+    return EntityDecoder.decode({ ...entity, relationsList: relationNodes });
   });
 }
 
@@ -696,6 +729,11 @@ interface ResultsArgs {
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
+  /**
+   * The REST /search endpoint includes non-canonical entities by default. Pass
+   * `false` to restrict to the canonical graph; only `false` emits the param.
+   */
+  includeNonCanonical?: boolean;
 }
 
 /**
@@ -869,6 +907,10 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 
+  if (args.includeNonCanonical === false) {
+    params.set('include_non_canonical', 'false');
+  }
+
   return `/search?${params.toString()}`;
 }
 
@@ -924,13 +966,10 @@ export function searchPropertiesPage(
       })) ?? [];
 
     const uniqueSpaceIds = [
-      ...new Set(
-        entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')
-      ),
+      ...new Set(entities.flatMap(e => e?.spaceIds ?? []).filter((id): id is string => typeof id === 'string')),
     ];
 
-    const spaces =
-      uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
+    const spaces = uniqueSpaceIds.length > 0 ? yield* getSpaces({ spaceIds: uniqueSpaceIds }, signal) : [];
 
     const spaceEntityBySpaceId = new Map(spaces.map(s => [s.id, s.entity]));
 

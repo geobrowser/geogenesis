@@ -24,6 +24,8 @@ interface SearchOptions {
   restrictToFilterTypes?: boolean;
   enabled?: boolean;
   pageSize?: number;
+  /** Pass `false` to restrict results to the canonical graph. Defaults to including everything. */
+  includeNonCanonical?: boolean;
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -70,6 +72,7 @@ export function useSearch({
   restrictToFilterTypes,
   enabled,
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
+  includeNonCanonical,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -106,6 +109,7 @@ export function useSearch({
       Boolean(restrictToFilterTypes),
       additionalSpaceIds,
       pageSize,
+      includeNonCanonical,
     ],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
@@ -148,6 +152,7 @@ export function useSearch({
           skip: pageParam,
           signal,
           additionalSpaceIds,
+          includeNonCanonical,
         });
 
         const rows = !filterByTypes?.length

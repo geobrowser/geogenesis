@@ -21,8 +21,13 @@ import {
 } from '~/core/blocks/ranking/ranking-og-generate-client';
 import { buildGlobalRankingOgVersion, buildRankingOgVersion } from '~/core/blocks/ranking/ranking-og-version';
 import { formatSharedRankingOwnerLabel } from '~/core/blocks/ranking/ranking-owner-label';
+import {
+  getPendingProposerSpaceIds,
+  isPlaceholderRankingEntry,
+} from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
   buildShortGlobalRankingSharePath,
@@ -32,6 +37,7 @@ import {
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
@@ -89,6 +95,7 @@ type UseRankingBlockStateParams = {
 // Stable empty fallbacks so absent SSR seeds don't produce a fresh `[]` each
 // render, which would defeat the `useMemo`s that depend on these values.
 const EMPTY_ENTITY_IDS: string[] = [];
+const EMPTY_ENTITY_ID_SET: ReadonlySet<string> = new Set<string>();
 const EMPTY_RANKING_ENTRIES: RankingEntryDisplay[] = [];
 
 export function useRankingBlockState({
@@ -148,7 +155,11 @@ export function useRankingBlockState({
     hasSharedRankingUrl && personalSpaceId && ID.equals(sharedAuthorSpaceId, personalSpaceId)
   );
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
-  const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
+  // When viewing our own ranking (including right after publishing) trust the live
+  // `mySubmission` query, which `saveMySubmission` refetches once the indexer reflects
+  // the new order. `sharedSubmission` has a 60s staleTime and isn't invalidated on
+  // publish, so preferring it here showed the pre-edit order until a hard refresh.
+  const displayedSubmission = isSharedRankingView ? sharedSubmission : (mySubmission ?? sharedSubmission);
 
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
 
@@ -194,49 +205,14 @@ export function useRankingBlockState({
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
-  const globalRankingIdsKey = globalDisplayEntityIds.join('|');
 
+  // Embedded global pagination is derived from the *visible* list (pending/placeholder
+  // rows removed) further below — not here — so pages aren't sliced from the raw list
+  // and then shortened, which produced empty/short pages and inflated page counts.
+  // Only the page-number state lives here; the derived values follow the visible list.
   const [embeddedGlobalPageNumber, setEmbeddedGlobalPageNumber] = React.useState(0);
 
-  React.useEffect(() => {
-    setEmbeddedGlobalPageNumber(0);
-  }, [entityId, globalRankingIdsKey]);
-
-  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(globalDisplayEntityIds.length / PAGE_SIZE));
-
-  React.useEffect(() => {
-    setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
-  }, [embeddedGlobalTotalPages]);
-
-  const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
-    if (!paginateEmbeddedRanking) return globalDisplayEntityIds;
-    const start = embeddedGlobalPageNumber * PAGE_SIZE;
-    return globalDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedGlobalPageNumber, globalDisplayEntityIds, paginateEmbeddedRanking]);
-
-  const globalRankingListEntityIds = paginateEmbeddedRanking ? paginatedGlobalDisplayEntityIds : globalDisplayEntityIds;
-
-  const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
-  const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
-  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && globalDisplayEntityIds.length > PAGE_SIZE;
-
-  const setEmbeddedGlobalPage = React.useCallback(
-    (page: number | 'previous' | 'next') => {
-      setEmbeddedGlobalPageNumber(prev => {
-        if (page === 'previous') return Math.max(0, prev - 1);
-        if (page === 'next') return Math.min(embeddedGlobalTotalPages - 1, prev + 1);
-        return Math.max(0, Math.min(embeddedGlobalTotalPages - 1, page));
-      });
-    },
-    [embeddedGlobalTotalPages]
-  );
-
   const hasRankedByOthers = globalDisplayEntityIds.length > 0 || aggregatedRankingCount > 0;
-
-  const globalRankByEntityId = React.useMemo(
-    () => new Map(globalDisplayEntityIds.map((id, index) => [id, index + 1])),
-    [globalDisplayEntityIds]
-  );
 
   const mySubmissionIdsKey = (displayedSubmission?.orderedEntityIds ?? []).join('|');
 
@@ -358,17 +334,24 @@ export function useRankingBlockState({
     }
   }, [activeTab, preferMyTab, showMyRankingSection]);
 
+  // Resolve the FULL global list (not just the current page) so placeholder/pending
+  // rows can be identified and removed *before* pagination. For the non-paginated
+  // compose view this list already equals the rendered list, so it's no extra work
+  // there; for embedded blocks it's one bounded, cached batch query.
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
-    globalRankingListEntityIds
+    globalDisplayEntityIds
   );
 
-  const { entries: myEntries } = useRankingEntryEntities(spaceId, myRankingListEntityIds);
+  const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(
+    spaceId,
+    myRankingListEntityIds
+  );
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const globalRankingEntryByEntityId = React.useMemo(() => {
+  const globalRankingEntryByEntityIdBase = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
     // Seed from the server ranking; live `rows`/`globalEntries` below override with the same data.
@@ -399,7 +382,7 @@ export function useRankingBlockState({
     return map;
   }, [globalEntries, initialGlobalEntries, rows]);
 
-  const myRankingEntryByEntityId = React.useMemo(() => {
+  const myRankingEntryByEntityIdBase = React.useMemo(() => {
     const map = new Map<string, RankingEntryDisplay>();
 
     // Seed from the server-resolved shared ranking; live `rows`/`myEntries`
@@ -430,6 +413,142 @@ export function useRankingBlockState({
 
     return map;
   }, [myEntries, rows, initialSharedEntries]);
+
+  // Hide unresolved rows from the global leaderboard for everyone. A row is
+  // "unresolved" when the indexer returns no real name for it (placeholder) — this
+  // covers governance-pending entities (backfilled below for my-ranking + the opt-in
+  // disclosure) as well as deleted/rejected ones, so the public list never shows
+  // nameless ghost rows. Empty while entries are still loading, so nothing flickers
+  // out before names resolve.
+  const placeholderGlobalEntityIds = React.useMemo(() => {
+    if (isLoadingGlobalEntries) return EMPTY_ENTITY_ID_SET;
+    const ids = new Set<string>();
+    for (const id of globalDisplayEntityIds) {
+      if (id && isPlaceholderRankingEntry(globalRankingEntryByEntityIdBase.get(id))) ids.add(id);
+    }
+    return ids;
+  }, [isLoadingGlobalEntries, globalDisplayEntityIds, globalRankingEntryByEntityIdBase]);
+
+  // The global list everyone sees: raw order minus hidden rows, renumbered contiguously.
+  const visibleGlobalDisplayEntityIds = React.useMemo(
+    () =>
+      placeholderGlobalEntityIds.size === 0
+        ? globalDisplayEntityIds
+        : globalDisplayEntityIds.filter(id => !placeholderGlobalEntityIds.has(id)),
+    [globalDisplayEntityIds, placeholderGlobalEntityIds]
+  );
+
+  // Pagination derives from the visible list, so page counts and slices stay correct.
+  const visibleGlobalIdsKey = visibleGlobalDisplayEntityIds.join('|');
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(0);
+  }, [entityId, visibleGlobalIdsKey]);
+
+  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / PAGE_SIZE));
+
+  React.useEffect(() => {
+    setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
+  }, [embeddedGlobalTotalPages]);
+
+  const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
+    if (!paginateEmbeddedRanking) return visibleGlobalDisplayEntityIds;
+    const start = embeddedGlobalPageNumber * PAGE_SIZE;
+    return visibleGlobalDisplayEntityIds.slice(start, start + PAGE_SIZE);
+  }, [embeddedGlobalPageNumber, visibleGlobalDisplayEntityIds, paginateEmbeddedRanking]);
+
+  const globalRankingListEntityIds = paginateEmbeddedRanking
+    ? paginatedGlobalDisplayEntityIds
+    : visibleGlobalDisplayEntityIds;
+
+  const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
+  const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
+  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > PAGE_SIZE;
+
+  const setEmbeddedGlobalPage = React.useCallback(
+    (page: number | 'previous' | 'next') => {
+      setEmbeddedGlobalPageNumber(prev => {
+        if (page === 'previous') return Math.max(0, prev - 1);
+        if (page === 'next') return Math.min(embeddedGlobalTotalPages - 1, prev + 1);
+        return Math.max(0, Math.min(embeddedGlobalTotalPages - 1, page));
+      });
+    },
+    [embeddedGlobalTotalPages]
+  );
+
+  const pendingTargetSpaceId = React.useMemo(() => {
+    const scope = getScopeFromFilters(filterState);
+    if (scope.type !== 'SPACES') return null;
+    const spaceIds = [...new Set(scope.value.filter(Boolean))];
+    return spaceIds.length === 1 ? spaceIds[0]! : null;
+  }, [filterState]);
+
+  const entriesSettled = !isLoadingGlobalEntries && !isLoadingMyEntries;
+
+  const unresolvedRankingEntityIds = React.useMemo(() => {
+    if (!entriesSettled) return EMPTY_ENTITY_IDS;
+    // Global placeholders are already computed (and hidden from the leaderboard);
+    // reuse them so their names get backfilled for the opt-in disclosure.
+    const ids = new Set<string>(placeholderGlobalEntityIds);
+    for (const id of myRankingListEntityIds) {
+      if (id && isPlaceholderRankingEntry(myRankingEntryByEntityIdBase.get(id))) ids.add(id);
+    }
+    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
+  }, [entriesSettled, placeholderGlobalEntityIds, myRankingListEntityIds, myRankingEntryByEntityIdBase]);
+
+  const ownRankingEntityIds = React.useMemo(
+    () => (isSharedRankingView || !personalSpaceId ? EMPTY_ENTITY_IDS : myRankingListEntityIds),
+    [isSharedRankingView, personalSpaceId, myRankingListEntityIds]
+  );
+
+  const pendingCandidateEntityIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const id of ownRankingEntityIds) if (id) ids.add(id);
+    for (const id of unresolvedRankingEntityIds) if (id) ids.add(id);
+    return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
+  }, [ownRankingEntityIds, unresolvedRankingEntityIds]);
+
+  const pendingProposerSpaceIds = React.useMemo(() => {
+    const submitters = unresolvedRankingEntityIds.length > 0 ? aggregatedSubmitterSpaceIds : [];
+    const extra = [personalSpaceId, sharedAuthorSpaceId].filter(Boolean) as string[];
+    return getPendingProposerSpaceIds(submitters, extra);
+  }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId, sharedAuthorSpaceId]);
+
+  const { pendingEntityIds, pendingEntriesByEntityId, isPendingLoading } = useRankingPendingEntities({
+    targetSpaceId: pendingTargetSpaceId,
+    unresolvedEntityIds: pendingCandidateEntityIds,
+    proposerSpaceIds: pendingProposerSpaceIds,
+  });
+
+  // An unresolved row's name may still arrive from the entity store or the
+  // pending-proposal fetch. While that's in flight, render a skeleton instead of
+  // flashing "Untitled" — on a throttled shortlink the seed can carry "Untitled"
+  // for governance-pending or cross-space entries until the live data lands.
+  const entriesResolving = isLoadingGlobalEntries || isLoadingMyEntries || isPendingLoading;
+
+  const globalRankingEntryByEntityId = React.useMemo(() => {
+    if (pendingEntriesByEntityId.size === 0) return globalRankingEntryByEntityIdBase;
+    const map = new Map(globalRankingEntryByEntityIdBase);
+    for (const [id, entry] of pendingEntriesByEntityId) {
+      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
+    }
+    return map;
+  }, [globalRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
+
+  const myRankingEntryByEntityId = React.useMemo(() => {
+    if (pendingEntriesByEntityId.size === 0) return myRankingEntryByEntityIdBase;
+    const map = new Map(myRankingEntryByEntityIdBase);
+    for (const [id, entry] of pendingEntriesByEntityId) {
+      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
+    }
+    return map;
+  }, [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
+
+  // Global ranks renumber contiguously over the visible (placeholder-free) list.
+  const globalRankByEntityId = React.useMemo(
+    () => new Map(visibleGlobalDisplayEntityIds.map((id, index) => [id, index + 1])),
+    [visibleGlobalDisplayEntityIds]
+  );
 
   const resolveEntitySpaceId = React.useCallback(
     (targetEntityId: string) => {
@@ -577,8 +696,17 @@ export function useRankingBlockState({
   const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
   const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
   const effectiveOgVersion = React.useMemo(() => {
-    if (sharedOgVersion) return sharedOgVersion;
-    if (!mySubmission || !shareRankEntityId) return '';
+    // Mirror `displayedSubmission`'s precedence: when viewing our OWN ranking
+    // (even via a `/r/{id}` share link), derive the version from the live
+    // `mySubmission` so the `?v=` cache-buster tracks post-edit content. The
+    // server-seeded `sharedOgVersion` is captured once by the resolver and never
+    // updates after we edit/refetch, so preferring it here would leave the share
+    // URL stuck on the pre-edit version and X wouldn't re-scrape. For someone
+    // else's shared ranking the seeded version stays authoritative.
+    const canDeriveFromMine = Boolean(mySubmission && shareRankEntityId);
+    if (sharedOgVersion && !(isViewingOwnSharedRanking && canDeriveFromMine)) return sharedOgVersion;
+    // Narrowing guard (equivalent to `!canDeriveFromMine`) so TS knows `mySubmission` is non-null below.
+    if (!mySubmission || !shareRankEntityId) return sharedOgVersion;
     return buildRankingOgVersion({
       rankEntityId: shareRankEntityId,
       orderedEntityIds: mySubmission.orderedEntityIds,
@@ -588,7 +716,15 @@ export function useRankingBlockState({
       authorName: mySubmission.author.name,
       authorAvatarUrl: mySubmission.author.avatarUrl,
     });
-  }, [displayName, mySubmission, rankingEndDate, rankingStartDate, shareRankEntityId, sharedOgVersion]);
+  }, [
+    displayName,
+    isViewingOwnSharedRanking,
+    mySubmission,
+    rankingEndDate,
+    rankingStartDate,
+    shareRankEntityId,
+    sharedOgVersion,
+  ]);
   const effectiveGlobalOgVersion = React.useMemo(
     () =>
       buildGlobalRankingOgVersion({
@@ -605,7 +741,7 @@ export function useRankingBlockState({
   // so the share button's visibility is unchanged.
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
-      ? buildShortPersonalRankingSharePath(shareRankEntityId)
+      ? buildShortPersonalRankingSharePath(shareRankEntityId, effectiveOgVersion)
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
@@ -652,7 +788,18 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
+  // Share-link visibility is unchanged: expose it whenever the block relation
+  // resolves, just as before. Only attach the `?v=` cache-buster once relations
+  // have hydrated (`globalRankingEntityIds.length > 0`) — before then
+  // `effectiveGlobalOgVersion` hashes an empty list, so we'd emit a cache-buster
+  // that wouldn't match the populated version once data arrives. With no version
+  // the builder returns the bare `/r/g/{id}` path, matching prior behavior.
+  const globalSharePath = effectiveRelationId
+    ? buildShortGlobalRankingSharePath(
+        entityId,
+        globalRankingEntityIds.length > 0 ? effectiveGlobalOgVersion : undefined
+      )
+    : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
@@ -694,7 +841,7 @@ export function useRankingBlockState({
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     globalDisplayEntityIds: globalRankingListEntityIds,
-    totalGlobalRankingEntityCount: globalDisplayEntityIds.length,
+    totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
@@ -703,7 +850,9 @@ export function useRankingBlockState({
     setEmbeddedGlobalPage,
     globalEntriesById,
     globalRankingEntryByEntityId,
+    pendingEntityIds,
     isLoadingGlobalEntries,
+    entriesResolving,
     myDisplayEntityIds: myRankingListEntityIds,
     totalMyRankingEntityCount: myDisplayEntityIds.length,
     embeddedMyPageNumber,

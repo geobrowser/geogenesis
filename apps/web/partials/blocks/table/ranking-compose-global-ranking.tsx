@@ -13,6 +13,7 @@ import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-partic
 import type { Row, SearchResult } from '~/core/types';
 
 import { Button } from '~/design-system/button';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
@@ -25,6 +26,77 @@ const MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX = 8;
 const SEARCH_LIST_ROW_HEIGHT_PX = 88;
 const SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX = 4 * SEARCH_LIST_ROW_HEIGHT_PX;
 
+const MEMBERSHIP_RECHECK_INTERVAL_MS = 15_000;
+
+function useMembershipRecheckPolling({ enabled, onRecheck }: { enabled: boolean; onRecheck: () => void }) {
+  const onRecheckRef = React.useRef(onRecheck);
+
+  React.useEffect(() => {
+    onRecheckRef.current = onRecheck;
+  }, [onRecheck]);
+
+  React.useEffect(() => {
+    if (!enabled) return;
+
+    onRecheckRef.current();
+    const intervalId = setInterval(() => onRecheckRef.current(), MEMBERSHIP_RECHECK_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [enabled]);
+}
+
+function useMembershipRecheckSentinel({
+  enabled,
+  onRecheck,
+  root,
+}: {
+  enabled: boolean;
+  onRecheck: () => void;
+  root: Element | null;
+}) {
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
+  const onRecheckRef = React.useRef(onRecheck);
+
+  React.useEffect(() => {
+    onRecheckRef.current = onRecheck;
+  }, [onRecheck]);
+
+  React.useEffect(() => {
+    if (!sentinelEl || !enabled) return;
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const io = new IntersectionObserver(
+      entries => {
+        const isVisible = entries[0]?.isIntersecting ?? false;
+        if (!isVisible) {
+          stopPolling();
+          return;
+        }
+        onRecheckRef.current();
+        if (intervalId === null) {
+          intervalId = setInterval(() => onRecheckRef.current(), MEMBERSHIP_RECHECK_INTERVAL_MS);
+        }
+      },
+      { root, rootMargin: '0px' }
+    );
+    io.observe(sentinelEl);
+
+    return () => {
+      stopPolling();
+      io.disconnect();
+    };
+  }, [enabled, root, sentinelEl]);
+
+  return setSentinelEl;
+}
+
 function RankingComposeUnrankedDivider() {
   return (
     <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
@@ -35,8 +107,15 @@ function RankingComposeUnrankedDivider() {
   );
 }
 
-function computeSearchListStableHeight(scrollRoot: HTMLElement, listEl: HTMLElement | null) {
-  const viewportBottom = scrollRoot.scrollTop + scrollRoot.clientHeight;
+function computeSearchListStableHeight(
+  scrollRoot: HTMLElement,
+  listEl: HTMLElement | null,
+  scrollTopOverride?: number
+) {
+  // Use the override when the caller knows the post-scroll value (the rect-based path below reads
+  // current DOM, which lags behind an in-flight scrollTo).
+  const effectiveScrollTop = scrollTopOverride ?? scrollRoot.scrollTop;
+  const viewportBottom = effectiveScrollTop + scrollRoot.clientHeight;
 
   if (!listEl) {
     return Math.max(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX, scrollRoot.clientHeight);
@@ -50,7 +129,7 @@ function computeSearchListStableHeight(scrollRoot: HTMLElement, listEl: HTMLElem
   return Math.max(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX, viewportBottom - listTop);
 }
 
-function scrollMobilePageToElement(target: HTMLElement) {
+function scrollMobilePageToElement(target: HTMLElement, behavior: ScrollBehavior = 'smooth') {
   const scrollRoot = target.closest('[data-ranking-compose-mobile-scroll]');
   if (scrollRoot instanceof HTMLElement) {
     const rootRect = scrollRoot.getBoundingClientRect();
@@ -59,29 +138,48 @@ function scrollMobilePageToElement(target: HTMLElement) {
 
     scrollRoot.scrollTo({
       top: Math.max(0, nextScrollTop),
-      behavior: 'smooth',
+      behavior,
     });
     return Math.max(0, nextScrollTop);
   }
 
-  target.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  target.scrollIntoView({ behavior, block: 'start', inline: 'nearest' });
   return null;
 }
 
-function RankingComposeSearchListPlaceholder({
-  height,
-  children,
-}: {
-  height: number;
-  children?: React.ReactNode;
-}) {
+function RankingComposeSearchListPlaceholder({ height, children }: { height: number; children?: React.ReactNode }) {
   return (
-    <div
-      className="flex shrink-0 flex-col justify-start overflow-hidden"
-      style={{ height }}
-      aria-hidden={!children}
-    >
+    <div className="flex shrink-0 flex-col justify-start overflow-hidden" style={{ height }} aria-hidden={!children}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * Pending (awaiting-approval) entries are hidden from the global list by default;
+ * this collapsed disclosure lets the editor opt in to see and add them.
+ */
+function RankingComposePendingDisclosure({ count, children }: { count: number; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+
+  if (count === 0) return null;
+
+  return (
+    <div className="border-t border-grey-02">
+      <button
+        type="button"
+        onClick={() => setOpen(value => !value)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between py-3 text-metadata text-grey-04 transition hover:text-text"
+      >
+        <span>
+          {open ? 'Hide' : 'Show'} pending ({count})
+        </span>
+        <span className={cx('flex transition-transform', open && 'rotate-180')}>
+          <ChevronDownSmall color="grey-04" />
+        </span>
+      </button>
+      {open ? children : null}
     </div>
   );
 }
@@ -106,6 +204,7 @@ function RankingComposePickRow({
   entityId,
   onAdd,
   isInMyRanking,
+  pending = false,
 }: {
   rank?: number;
   name: string;
@@ -115,6 +214,7 @@ function RankingComposePickRow({
   entityId: string;
   onAdd: () => void;
   isInMyRanking: boolean;
+  pending?: boolean;
 }) {
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (isInMyRanking) return;
@@ -143,6 +243,7 @@ function RankingComposePickRow({
         rank={rank}
         rankStyle="leading"
         linkToEntity={false}
+        pending={pending}
         entry={{
           entityId,
           name,
@@ -182,6 +283,12 @@ type Props = {
   searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
+  canCreateNew: boolean;
+  isAwaitingMembership: boolean;
+  onRecheckMembership: () => void;
+  pendingEntityIds: ReadonlySet<string>;
+  /** Pending entries the viewer can opt to reveal (not already in their ranking). */
+  revealablePendingIds: string[];
   activeSwipeRowKey: string | null;
   onActiveSwipeRowKeyChange: (key: string | null) => void;
   onViewEntity: (entityId: string) => void;
@@ -214,6 +321,11 @@ export function RankingComposeGlobalRanking({
   searchInputRef,
   onAddToMyRanking,
   onCreateNew,
+  canCreateNew,
+  isAwaitingMembership,
+  pendingEntityIds,
+  revealablePendingIds,
+  onRecheckMembership,
   activeSwipeRowKey,
   onActiveSwipeRowKeyChange,
   onViewEntity,
@@ -252,7 +364,9 @@ export function RankingComposeGlobalRanking({
       if (!pageScrollRoot) return;
 
       searchScrollTopRef.current = options?.scrollTop ?? pageScrollRoot.scrollTop;
-      setSearchListStableHeight(computeSearchListStableHeight(pageScrollRoot, listContainerRef.current));
+      setSearchListStableHeight(
+        computeSearchListStableHeight(pageScrollRoot, listContainerRef.current, options?.scrollTop)
+      );
     },
     [getPageScrollRoot]
   );
@@ -261,11 +375,22 @@ export function RankingComposeGlobalRanking({
     (value: string) => {
       const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
       if (isFirstSearchCharacter) {
-        captureSearchListLayout();
+        if (isMobile) {
+          // Defer the scroll-to-top until the first keystroke so it happens at the same
+          // moment results clear — feels like a focus change, not a page jump on icon tap.
+          // Use instant scroll so scrollTop updates synchronously before we size the
+          // placeholder; a smooth scroll would leave captureSearchListLayout reading the
+          // pre-scroll position and anchoring the placeholder below the new viewport.
+          const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
+          const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget, 'auto') : null;
+          captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
+        } else {
+          captureSearchListLayout();
+        }
       }
       onSearchQueryChange(value);
     },
-    [captureSearchListLayout, onSearchQueryChange, searchQuery]
+    [captureSearchListLayout, isMobile, onSearchQueryChange, searchQuery]
   );
 
   React.useEffect(() => {
@@ -277,12 +402,8 @@ export function RankingComposeGlobalRanking({
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
-    isSearchActive &&
-    !isSearchingWithNoResults &&
-    !hasVisibleRankableEntities &&
-    (isLoadingRows || !isSearchSettled);
-  const needsSearchStablePlaceholder =
-    isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
+    isSearchActive && !isSearchingWithNoResults && !hasVisibleRankableEntities && (isLoadingRows || !isSearchSettled);
+  const needsSearchStablePlaceholder = isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
 
   React.useLayoutEffect(() => {
     if (!needsSearchStablePlaceholder) return;
@@ -300,6 +421,17 @@ export function RankingComposeGlobalRanking({
     isFetchingNextPage,
     fetchNextPage: onFetchNextPage,
     root: scrollRoot,
+  });
+
+  const setMembershipSentinelEl = useMembershipRecheckSentinel({
+    enabled: isAwaitingMembership && hasVisibleRankableEntities,
+    onRecheck: onRecheckMembership,
+    root: scrollRoot,
+  });
+
+  useMembershipRecheckPolling({
+    enabled: isAwaitingMembership && !hasVisibleRankableEntities,
+    onRecheck: onRecheckMembership,
   });
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
@@ -347,9 +479,10 @@ export function RankingComposeGlobalRanking({
         rank={globalRank}
         name={entry?.name ?? (row ? getRowDisplayName(row) : searchHit?.name?.trim() || 'Untitled')}
         description={entry?.description ?? (row ? getRowDescription(row) : (searchHit?.description ?? null))}
-        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? searchHit?.spaces[0]?.image ?? null}
+        imageUrl={entry?.image ?? row?.columns[SystemIds.NAME_PROPERTY]?.image ?? null}
         onAdd={() => onAddToMyRanking(id)}
         isInMyRanking={isInMyRanking}
+        pending={pendingEntityIds.has(id)}
       />
     );
 
@@ -376,18 +509,37 @@ export function RankingComposeGlobalRanking({
     );
   };
 
+  const membershipSentinel =
+    isAwaitingMembership && hasVisibleRankableEntities ? (
+      <div ref={setMembershipSentinelEl} className="h-px" aria-hidden />
+    ) : null;
+
+  // When searching, only reveal pending entries whose name matches the query.
+  const pendingPickIds = React.useMemo(() => {
+    if (revealablePendingIds.length === 0) return [];
+    const query = isSearchActive ? searchQuery.trim().toLowerCase() : '';
+    if (!query) return revealablePendingIds;
+    return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
+  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
+
+  const pendingDisclosure = (
+    <RankingComposePendingDisclosure count={pendingPickIds.length}>
+      {pendingPickIds.map(id => renderPickEntity(id))}
+    </RankingComposePendingDisclosure>
+  );
+
   const searchResultList = (
     <>
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
-      {isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
         <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
       ) : null}
+      {pendingDisclosure}
+      {membershipSentinel}
     </>
   );
 
@@ -397,9 +549,9 @@ export function RankingComposeGlobalRanking({
       {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {pendingDisclosure}
+      {membershipSentinel}
     </>
   );
 
@@ -411,7 +563,7 @@ export function RankingComposeGlobalRanking({
     >
       <div
         ref={globalSearchChromeRef}
-        className="shrink-0"
+        className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div
@@ -441,9 +593,6 @@ export function RankingComposeGlobalRanking({
 
                 if (isMobile) {
                   flushSync(() => onSearchOpenChange(true));
-                  const scrollTarget = globalSearchChromeRef.current ?? globalSectionRef.current;
-                  const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget) : null;
-                  captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
                   searchInputRef.current?.focus({ preventScroll: true });
                   return;
                 }
@@ -485,15 +634,30 @@ export function RankingComposeGlobalRanking({
             showSearchLoadingPlaceholder ? (
               <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
             ) : isSearchingWithNoResults ? (
-              <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
-              </RankingComposeSearchListPlaceholder>
+              // Render the pending disclosure ABOVE the stable-height placeholder so it
+              // stays reachable at the top instead of being pushed below the reserved
+              // height (which forced a scroll, especially for non-members with no
+              // "Create new" prompt filling the placeholder).
+              <>
+                {pendingDisclosure}
+                <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
+                  {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                </RankingComposeSearchListPlaceholder>
+              </>
             ) : (
-              searchResultList
+              // Mobile only: pin via min-height so the chrome stays at the top of the viewport
+              // even when the result set is shorter than the captured placeholder — without
+              // this, scrollTop clamps down and the section slides back into view. Desktop has
+              // its own per-column scroll and a non-sticky chrome, so no min-height there.
+              <div className="flex flex-col" style={isMobile ? { minHeight: searchListStableHeight } : undefined}>
+                {searchResultList}
+              </div>
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
-          ) : !hasVisibleRankableEntities ? null : (
+          ) : !hasVisibleRankableEntities ? (
+            pendingDisclosure
+          ) : (
             browseResultList
           )}
         </div>

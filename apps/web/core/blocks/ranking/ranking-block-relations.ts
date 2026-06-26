@@ -48,9 +48,9 @@ function aggregatedRankingRelations(relations: Relation[], blockId: string, spac
     .filter(
       relation =>
         !relation.isDeleted &&
-        relation.spaceId === spaceId &&
-        relation.fromEntity.id === blockId &&
-        relation.type.id === AGGREGATED_RANKINGS_PROPERTY_ID
+        ID.equals(relation.spaceId, spaceId) &&
+        ID.equals(relation.fromEntity.id, blockId) &&
+        ID.equals(relation.type.id, AGGREGATED_RANKINGS_PROPERTY_ID)
     )
     .sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
