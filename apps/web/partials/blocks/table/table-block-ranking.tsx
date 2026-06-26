@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 
 import { IconButton } from '~/design-system/button';
@@ -20,8 +21,8 @@ import { RankingBlockBody } from './ranking-block-body';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
-import { groupFilters, TableBlockFilterGroupPill } from './table-block-filter-pill';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
+import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import { useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
@@ -32,8 +33,8 @@ type Props = {
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
+  const isEditing = useUserIsEditing(spaceId);
   const {
-    canEdit,
     filterState,
     resolvedFilterState,
     filterMode,
@@ -108,13 +109,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cx('mb-4 overflow-hidden', canEdit ? 'border-t border-divider py-4' : 'py-2')}
+            className={cx('mb-4 overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
             onMouseDown={e => e.stopPropagation()}
           >
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center gap-2">
-                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={canEdit} />
-                {canEdit && (
+                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                {isEditing && (
                   <>
                     <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
                     <TableBlockEditableFilters
@@ -122,11 +123,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                       filterState={filterState}
                       setFilterState={setFilterState}
                       filterSuggestionSpaceId={spaceId}
-                      isEditing={canEdit}
+                      isEditing={isEditing}
                     />
                   </>
                 )}
-                {!canEdit &&
+                {!isEditing &&
                   filterGroupsForToolbarPills.map(group => (
                     <TableBlockFilterGroupPill
                       key={group.columnId}
@@ -143,11 +144,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                       onClearGroup={() => {
                         setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
                       }}
-                      isEditing={canEdit}
+                      isEditing={isEditing}
                     />
                   ))}
               </div>
-              {canEdit && filterGroupsForToolbarPills.length > 0 && (
+              {isEditing && filterGroupsForToolbarPills.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2">
                   {filterGroupsForToolbarPills.map(group => (
                     <TableBlockFilterGroupPill
@@ -172,7 +173,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                           });
                         });
                       }}
-                      isEditing={canEdit}
+                      isEditing={isEditing}
                     />
                   ))}
                 </div>
