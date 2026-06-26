@@ -15,6 +15,35 @@ export function isRankSubmittedToBlock(rankEntity: Entity, authorSpaceId: string
   );
 }
 
+type BlockSubmittedToRelation = {
+  isDeleted?: boolean;
+  spaceId: string;
+  fromEntityId?: string;
+  fromEntity?: { id: string };
+  toEntityId?: string;
+  toEntity?: { id: string };
+  type?: { id: string };
+};
+
+/** SUBMITTED_TO relations loaded from the block (to-entity) side. */
+export function isRankSubmittedToBlockFromBlockLookup(
+  rankEntityId: string,
+  authorSpaceId: string,
+  blockEntityId: string,
+  submittedToRelations: BlockSubmittedToRelation[]
+): boolean {
+  return submittedToRelations.some(relation => {
+    if (relation.isDeleted) return false;
+    const fromId = relation.fromEntity?.id ?? relation.fromEntityId;
+    const toId = relation.toEntity?.id ?? relation.toEntityId;
+    if (!fromId || !toId) return false;
+    if (relation.type && !ID.equals(relation.type.id, SUBMITTED_TO_PROPERTY_ID)) return false;
+    return (
+      ID.equals(relation.spaceId, authorSpaceId) && ID.equals(fromId, rankEntityId) && ID.equals(toId, blockEntityId)
+    );
+  });
+}
+
 /**
  * Resolve the data/ranking block a rank entity was submitted to from its
  * relations. A RANK entity carries a single SUBMITTED_TO relation (scoped to the
@@ -54,11 +83,10 @@ export function pickMostRecentlyUpdatedRankingEntity(entities: Entity[]): Entity
   }, null);
 }
 
-export function getMyRankingOrderedEntityIds(rankEntity: Entity, personalSpaceId: string): string[] {
-  return getOrderedRelationTargetIds(
-    rankEntity.relations ?? [],
-    rankEntity.id,
-    RANK_VOTES_RELATION_TYPE_ID,
-    personalSpaceId
-  );
+export function getMyRankingOrderedEntityIds(
+  rankEntityId: string,
+  relations: Relation[],
+  personalSpaceId: string
+): string[] {
+  return getOrderedRelationTargetIds(relations, rankEntityId, RANK_VOTES_RELATION_TYPE_ID, personalSpaceId);
 }

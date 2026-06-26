@@ -65,6 +65,6 @@ describe('getMyRankingOrderedEntityIds', () => {
       ] as Entity['relations'],
     });
 
-    expect(getMyRankingOrderedEntityIds(entity, 'personal-1')).toEqual(['a', 'b']);
+    expect(getMyRankingOrderedEntityIds('rank-1', entity.relations ?? [], 'personal-1')).toEqual(['a', 'b']);
   });
 });

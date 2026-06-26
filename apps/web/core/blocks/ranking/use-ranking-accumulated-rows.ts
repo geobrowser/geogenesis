@@ -11,7 +11,7 @@ import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Row } from '~/core/types';
 
-const RANKING_BROWSE_PAGE_SIZE = 25;
+export const RANKING_BROWSE_PAGE_SIZE = 50;
 
 export type RowPage = { page: number; rows: Row[] };
 

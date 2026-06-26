@@ -7,11 +7,12 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getEntity, getRelationsByToEntityIds } from '~/core/io/queries';
-import { SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { getEntity, getEntityRelationsByType, getRelationsByToEntityIds } from '~/core/io/queries';
+import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
 import { getMyRankingOrderedEntityIds, pickMostRecentlyUpdatedRankingEntity } from './my-ranking-entity';
+import { mergeEntityRelationsById } from './ranking-block-relations';
 
 export function useMyRanking(blockId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -19,7 +20,7 @@ export function useMyRanking(blockId: string) {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['my-ranking-entity', personalSpaceId, blockId],
     enabled: Boolean(personalSpaceId && blockId),
-    staleTime: 30_000,
+    staleTime: 60_000,
     queryFn: async ({ signal }) => {
       if (!personalSpaceId) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
@@ -30,7 +31,9 @@ export function useMyRanking(blockId: string) {
       );
 
       const rankEntityIds = [
-        ...new Set(submittedToRelations.map(relation => relation.fromEntityId).filter((id): id is string => Boolean(id))),
+        ...new Set(
+          submittedToRelations.map(relation => relation.fromEntityId).filter((id): id is string => Boolean(id))
+        ),
       ];
 
       if (rankEntityIds.length === 0) {
@@ -46,9 +49,18 @@ export function useMyRanking(blockId: string) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
 
+      const voteRelations = await Effect.runPromise(
+        getEntityRelationsByType(rankEntity.id, personalSpaceId, RANK_VOTES_RELATION_TYPE_ID, signal)
+      );
+
+      const rankEntityWithVotes: Entity = {
+        ...rankEntity,
+        relations: mergeEntityRelationsById(rankEntity.relations ?? [], voteRelations),
+      };
+
       return {
-        rankEntity,
-        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, personalSpaceId),
+        rankEntity: rankEntityWithVotes,
+        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity.id, voteRelations, personalSpaceId),
       };
     },
   });
