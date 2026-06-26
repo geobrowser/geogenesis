@@ -33,17 +33,11 @@ export function EditableHeading({
   spaceId,
   entityId,
   fallbackName,
-  canClaimTopic = false,
-  coverUrl,
 }: {
   spaceId: string;
   entityId: string;
   /** Shown in browse mode when the scoped store has no name yet (e.g. ranking row preview). */
   fallbackName?: string | null;
-  /** When true, the context menu shows a "Claim topic" item for this unclaimed topic. */
-  canClaimTopic?: boolean;
-  /** Cover image URL on the topic entity, used as the initial cover for the new space. */
-  coverUrl?: string | null;
 }) {
   const { values } = useSyncEngine();
 
@@ -142,13 +136,7 @@ export function EditableHeading({
               </div>
             )}
           </HistoryPanel>
-          <EntityPageContextMenu
-            entityId={entityId}
-            entityName={name || ''}
-            spaceId={spaceId}
-            canClaimTopic={canClaimTopic}
-            coverUrl={coverUrl}
-          />
+          <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
         </div>
       </div>
 
