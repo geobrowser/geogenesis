@@ -13,12 +13,13 @@ import {
   EntityExistsDocument,
   type EntityExistsQuery,
   type EntityFilter,
+  EntityRelationsByTypePageDocument,
   type EntitySpacesBatchQuery,
   SortOrder,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
-import { Entity, SearchResult } from '~/core/types';
+import { Entity, Relation, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
@@ -67,6 +68,9 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
+
+/** Page size for type-filtered entity relation connections (rank positions, votes, etc.). */
+export const ENTITY_RELATIONS_BY_TYPE_PAGE_SIZE = 1000;
 
 // @TODO(migration): Can we somehow bind the querying patterns to the sync store?
 // When we querying for things on the client we want them to populate the sync store
@@ -346,6 +350,41 @@ export function getEntitiesOrderedByPropertyConnection(
       filter: normalizedFilter,
     },
     signal,
+  });
+}
+
+export function getEntityRelationsByType(
+  entityId: string,
+  spaceId: string,
+  typeId: string,
+  signal?: AbortController['signal'],
+  pageSize: number = ENTITY_RELATIONS_BY_TYPE_PAGE_SIZE
+) {
+  return Effect.gen(function* () {
+    const relationNodes: Relation[] = [];
+    let cursor: string | undefined;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const page = yield* graphql({
+        query: EntityRelationsByTypePageDocument,
+        decoder: data => data.entity?.relations ?? null,
+        variables: { id: entityId, spaceId, typeId, first: pageSize, cursor },
+        signal,
+      });
+
+      if (!page) break;
+
+      const decoded = page.nodes
+        .map(relation => RelationDecoder.decode(relation))
+        .filter((relation): relation is NonNullable<typeof relation> => relation !== null);
+      relationNodes.push(...decoded);
+
+      hasNextPage = page.pageInfo.hasNextPage && Boolean(page.pageInfo.endCursor);
+      cursor = page.pageInfo.endCursor ?? undefined;
+    }
+
+    return relationNodes;
   });
 }
 

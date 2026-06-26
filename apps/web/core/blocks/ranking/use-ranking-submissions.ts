@@ -13,7 +13,8 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
-import { getEntity } from '~/core/io/queries';
+import { getEntityRelationsByType } from '~/core/io/queries';
+import { RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -239,8 +240,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
         while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
           try {
-            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+            const voteRelations = await Effect.runPromise(
+              getEntityRelationsByType(rankId, personalSpaceId, RANK_VOTES_RELATION_TYPE_ID)
+            );
+            if (matchesExpectedOrder(getMyRankingOrderedEntityIds(rankId, voteRelations, personalSpaceId))) {
               break;
             }
           } catch (e) {

@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getAllEntities, getEntity, getEntityPage } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
-import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { RANK_TYPE_ID, RANK_VOTES_RELATION_TYPE_ID } from '~/core/ranking-block-ids';
 import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity, Profile, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -13,6 +13,7 @@ import {
   fetchRankingPendingEntities,
 } from './fetch-ranking-pending-proposals';
 import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
+import { filterEntityRelationsByType } from './ranking-block-relations';
 import { getAggregatedRankingSubmitterSpaceIds, getOrderedRelationTargetIds } from './ranking-block-relations';
 import { type RankingPendingProposalData, isPlaceholderRankingEntry } from './ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from './ranking-period';
@@ -174,7 +175,8 @@ export async function getRankingOgCardData(
   const rankingBlock = await deps.fetchEntity(input.blockEntityId, input.blockEntitySpaceId);
   const rankingName = rankingBlock?.name?.trim() || rankEntity.name?.trim() || 'Untitled ranking';
   const orderedEntityIds = getMyRankingOrderedEntityIds(
-    { ...rankEntity, relations: rankPage.relations },
+    rankEntity.id,
+    filterEntityRelationsByType(rankPage.relations, rankEntity.id, RANK_VOTES_RELATION_TYPE_ID, input.authorSpaceId),
     input.authorSpaceId
   ).slice(0, 5);
   const [entities, profile] = await Promise.all([

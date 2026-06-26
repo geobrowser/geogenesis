@@ -9,6 +9,30 @@ export type LeaderboardEntry = {
   rank: number;
 };
 
+export function filterEntityRelationsByType(
+  relations: Relation[],
+  entityId: string,
+  typeId: string,
+  spaceId: string
+): Relation[] {
+  return relations.filter(
+    relation =>
+      !relation.isDeleted &&
+      ID.equals(relation.spaceId, spaceId) &&
+      ID.equals(relation.fromEntity.id, entityId) &&
+      ID.equals(relation.type.id, typeId)
+  );
+}
+
+export function mergeEntityRelationsById(remote: Relation[], local: Relation[]): Relation[] {
+  const byId = new Map(remote.map(relation => [relation.id, relation]));
+  for (const relation of local) {
+    if (relation.isDeleted) byId.delete(relation.id);
+    else byId.set(relation.id, relation);
+  }
+  return [...byId.values()];
+}
+
 export function getOrderedRelationTargetIds(
   relations: Relation[],
   blockId: string,

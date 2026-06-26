@@ -259,6 +259,23 @@ export const entityRelationsPageQuery = graphql(/* GraphQL */ `
   }
 `);
 
+/** Type-filtered relation pages for ranking block positions, aggregated ballots, rank votes, etc. */
+export const entityRelationsByTypePageQuery = graphql(/* GraphQL */ `
+  query EntityRelationsByTypePage($id: UUID!, $spaceId: UUID!, $typeId: UUID!, $first: Int!, $cursor: Cursor) {
+    entity(id: $id) {
+      relations(first: $first, after: $cursor, filter: { spaceId: { is: $spaceId }, typeId: { is: $typeId } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          ...RelationFields
+        }
+      }
+    }
+  }
+`);
+
 export const relationFragment = graphql(/* GraphQL */ `
   fragment FullRelation on Relation {
     ...RelationFields
