@@ -886,6 +886,13 @@ export type SearchResultsPage = {
    * read as empty, not as a full page.
    */
   rawCount: number;
+  /**
+   * Raw row count in the REST response before any exclusion or canonical
+   * gating. This is the correct "did the server hand us a full page?" signal
+   * for empty-page pumping: a full server page that gates down to zero rows
+   * still means more pages may exist, so pagination must not stop on it.
+   */
+  serverCount: number;
 };
 
 export function buildSearchPath(args: ResultsArgs): string {
@@ -932,6 +939,9 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
         // actually reach the UI, not rows filtered out as block/system
         // types at this layer.
         rawCount: filtered.length,
+        // Pre-filter server page length — drives empty-page pumping so a full
+        // page gated down to zero canonical rows still fetches the next page.
+        serverCount: response.results.length,
       };
     }
   );

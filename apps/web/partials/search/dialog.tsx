@@ -191,6 +191,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   <button
                     type="button"
                     onClick={() => setIsShowingAdvanced(prev => !prev)}
+                    aria-expanded={isShowingAdvanced}
                     className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
                   >
                     <div className="inline-flex items-center gap-1">

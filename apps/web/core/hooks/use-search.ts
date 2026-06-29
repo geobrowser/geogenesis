@@ -34,11 +34,11 @@ const EMPTY_PAGE_PUMP_LIMIT = 3;
 type SearchPage = {
   rows: SearchResult[];
   offset: number;
-  rawCount: number;
+  serverCount: number;
   total: number;
 };
 
-const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, rawCount: 0, total: 0 });
+const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, serverCount: 0, total: 0 });
 
 function normalizeTypeId(id: string): string {
   return id.replace(/-/g, '');
@@ -127,7 +127,7 @@ export function useSearch({
           if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
-          return { rows: [merged], offset: pageParam, rawCount: 1, total: 1 };
+          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1 };
         }
 
         const page = await E.findFuzzyPage({
@@ -159,7 +159,7 @@ export function useSearch({
           ? page.results
           : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-        return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
+        return { rows, offset: pageParam, serverCount: page.serverCount, total: page.total };
       } catch (error) {
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
@@ -203,7 +203,7 @@ export function useSearch({
       return;
     }
 
-    if (lastPage.rawCount < pageSize || isFetchingNextPage || emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT) {
+    if (lastPage.serverCount < pageSize || isFetchingNextPage || emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT) {
       return;
     }
 
