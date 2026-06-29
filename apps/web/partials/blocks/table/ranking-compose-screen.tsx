@@ -127,7 +127,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     saveMySubmission,
     isSaving,
     personalSpaceId,
-    isLoading: isLoadingMySubmission,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;

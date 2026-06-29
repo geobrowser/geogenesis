@@ -7,12 +7,11 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getEntity, getEntityRelationsByType, getRelationsByToEntityIds } from '~/core/io/queries';
-import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { getEntity, getRelationsByToEntityIds } from '~/core/io/queries';
+import { SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 
 import { getMyRankingOrderedEntityIds, pickMostRecentlyUpdatedRankingEntity } from './my-ranking-entity';
-import { mergeEntityRelationsById } from './ranking-block-relations';
 
 export function useMyRanking(blockId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -49,18 +48,9 @@ export function useMyRanking(blockId: string) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
 
-      const voteRelations = await Effect.runPromise(
-        getEntityRelationsByType(rankEntity.id, personalSpaceId, RANK_VOTES_RELATION_TYPE_ID, signal)
-      );
-
-      const rankEntityWithVotes: Entity = {
-        ...rankEntity,
-        relations: mergeEntityRelationsById(rankEntity.relations ?? [], voteRelations),
-      };
-
       return {
-        rankEntity: rankEntityWithVotes,
-        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity.id, voteRelations, personalSpaceId),
+        rankEntity,
+        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity.id, rankEntity.relations ?? [], personalSpaceId),
       };
     },
   });
