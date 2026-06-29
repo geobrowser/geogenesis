@@ -1,9 +1,6 @@
 'use client';
 
-import * as React from 'react';
-
-import { atom, useAtom } from 'jotai';
-
+import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
@@ -15,43 +12,25 @@ type ExploreJoinSpaceButtonProps = {
   hasRequestedSpaceMembership: boolean;
   /** Render style. 'text' (default) for inline article-card use; 'button' for the chip-styled button. */
   variant?: 'text' | 'button';
+  /** CTA label for the idle state. Defaults to 'Join space'; pill use passes 'Join'. */
+  label?: string;
 };
-
-function normId(id: string): string {
-  return id.replace(/-/g, '').toLowerCase();
-}
-
-/**
- * Space IDs the user has requested membership for in this session. Shared across all
- * explore cards so every card for the same space flips to "Membership pending" after
- * one click — no need to refetch the feed.
- */
-const locallyRequestedSpaceIdsAtom = atom<Set<string>>(new Set<string>());
 
 export function ExploreJoinSpaceButton({
   spaceId,
   hasRequestedSpaceMembership,
   variant = 'text',
+  label = 'Join space',
 }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
-  const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
 
-  const normalizedId = normId(spaceId);
-  const locallyRequestedThisSpace = locallyRequested.has(normalizedId);
-
-  React.useEffect(() => {
-    if (status === 'success' && !locallyRequestedThisSpace) {
-      setLocallyRequested(prev => {
-        const next = new Set(prev);
-        next.add(normalizedId);
-        return next;
-      });
-    }
-  }, [status, normalizedId, locallyRequestedThisSpace, setLocallyRequested]);
-
-  const showPendingLabel = hasRequestedSpaceMembership || locallyRequestedThisSpace;
+  // Durable + persisted pending state so a request made anywhere (space page,
+  // the "Join spaces" pills) flips every card for this space to "Membership
+  // pending" without a refresh.
+  const isPending = useIsMembershipPending(spaceId);
+  const showPendingLabel = hasRequestedSpaceMembership || isPending;
 
   return (
     <Pending isPending={status === 'pending'} position="end">
@@ -70,7 +49,7 @@ export function ExploreJoinSpaceButton({
             requestToBeMember();
           }}
         >
-          Join space
+          {label}
         </button>
       ) : (
         <button
@@ -85,7 +64,7 @@ export function ExploreJoinSpaceButton({
             requestToBeMember();
           }}
         >
-          Join space
+          {label}
         </button>
       )}
     </Pending>
