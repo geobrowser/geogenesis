@@ -6,7 +6,7 @@ import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-s
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
+import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import {
   type RecentlyClaimedSpace,
   fetchRecentlyClaimedSpaces,
@@ -76,8 +76,9 @@ export default async function ExploreRoutePage() {
     const checks = await Promise.all(
       candidates.map(async s => {
         try {
-          const active = await hasActiveMemberProposal(s.spaceId, memberSpaceId!);
-          return active ? s.spaceId : null;
+          // Only an open vote is "pending"; a stuck request lets the Join button reappear.
+          const req = await fetchActiveMemberRequest(s.spaceId, memberSpaceId!);
+          return req != null && !req.isVotingEnded ? s.spaceId : null;
         } catch {
           return null;
         }
