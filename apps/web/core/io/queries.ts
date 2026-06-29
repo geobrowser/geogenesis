@@ -730,8 +730,10 @@ interface ResultsArgs {
   offset?: number;
   additionalSpaceIds?: string[];
   /**
-   * The REST /search endpoint includes non-canonical entities by default. Pass
-   * `false` to restrict to the canonical graph; only `false` emits the param.
+   * Pass `false` to restrict results to the canonical graph plus the user's
+   * scoped spaces (`additionalSpaceIds`). Gated client-side in `getResultsPage`
+   * via each result's `inCanonicalGraph` flag — not sent to the server, so
+   * scoped-space results are never stripped before they reach us.
    */
   includeNonCanonical?: boolean;
 }
@@ -907,10 +909,6 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 
-  if (args.includeNonCanonical === false) {
-    params.set('include_non_canonical', 'false');
-  }
-
   return `/search?${params.toString()}`;
 }
 
@@ -922,7 +920,11 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
       signal,
     }),
     (response): SearchResultsPage => {
-      const filtered = response.results.filter(shouldIncludeRestSearchResult);
+      const scopedSpaceIds = new Set((args.additionalSpaceIds ?? []).map(stripHyphens));
+      const canonicalOnly = args.includeNonCanonical === false;
+      const filtered = response.results.filter(result =>
+        shouldIncludeRestSearchResult(result, { canonicalOnly, scopedSpaceIds })
+      );
       return {
         results: groupRestResults(filtered),
         total: response.total,
@@ -1135,6 +1137,12 @@ export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): bool
   return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
 }
 
-function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !hasDefaultSearchExcludedType(result.types ?? []);
+export function shouldIncludeRestSearchResult(
+  result: RestSearchResult,
+  canonicalGate?: { canonicalOnly: boolean; scopedSpaceIds: Set<string> }
+): boolean {
+  if (hasDefaultSearchExcludedType(result.types ?? [])) return false;
+  if (!canonicalGate?.canonicalOnly) return true;
+  // Canonical-only still surfaces the user's scoped spaces, not only the canonical graph.
+  return result.inCanonicalGraph === true || canonicalGate.scopedSpaceIds.has(stripHyphens(result.space.id));
 }
