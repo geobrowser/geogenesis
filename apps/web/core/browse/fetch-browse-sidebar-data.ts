@@ -2,11 +2,13 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Environment } from '~/core/environment';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
-import { graphql } from '~/core/io/subgraph/graphql';
+import {
+  fetchPendingEditorshipSpaceIds,
+  fetchPendingMembershipSpaceIds,
+} from '~/core/io/subgraph/fetch-pending-membership-space-ids';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 import { FEATURED_BROWSE_SPACES } from './featured-spaces';
@@ -77,68 +79,13 @@ async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow
   return map;
 }
 
-type PendingSpaceIdsResult = {
-  pendingMember: { nodes: { spaceId: string }[] };
-  pendingEditor: { nodes: { spaceId: string }[] };
-};
-
-function pendingSpaceIdsQuery(memberSpaceId: string, nowSec: string): string {
-  return `query {
-    pendingMember: proposalsConnection(
-      first: 100
-      filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_MEMBER }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
-      }
-    ) {
-      nodes { spaceId }
-    }
-    pendingEditor: proposalsConnection(
-      first: 100
-      filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_EDITOR }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
-      }
-    ) {
-      nodes { spaceId }
-    }
-  }`;
-}
-
 async function fetchBrowseSidebarSources(memberSpaceId: string) {
-  const nowSec = String(Math.floor(Date.now() / 1000));
-
-  const [editorIds, memberSpaces, pendingResult] = await Promise.all([
+  const [editorIds, memberSpaces, pendingMemberIds, pendingEditorIds] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
     Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
-    Effect.runPromise(
-      Effect.either(
-        graphql<PendingSpaceIdsResult>({
-          endpoint: Environment.getConfig().api,
-          query: pendingSpaceIdsQuery(memberSpaceId, nowSec),
-        })
-      )
-    ),
+    fetchPendingMembershipSpaceIds(memberSpaceId).catch(() => [] as string[]),
+    fetchPendingEditorshipSpaceIds(memberSpaceId).catch(() => [] as string[]),
   ]);
-
-  const pendingMemberIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
-    : [];
-  const pendingEditorIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
-    : [];
 
   return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
 }

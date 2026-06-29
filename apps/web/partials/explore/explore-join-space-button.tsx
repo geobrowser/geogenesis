@@ -15,6 +15,8 @@ type ExploreJoinSpaceButtonProps = {
   hasRequestedSpaceMembership: boolean;
   /** Render style. 'text' (default) for inline article-card use; 'button' for the chip-styled button. */
   variant?: 'text' | 'button';
+  /** CTA label for the idle state. Defaults to 'Join space'; pill use passes 'Join'. */
+  label?: string;
 };
 
 function normId(id: string): string {
@@ -32,6 +34,7 @@ export function ExploreJoinSpaceButton({
   spaceId,
   hasRequestedSpaceMembership,
   variant = 'text',
+  label = 'Join space',
 }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const [locallyRequested, setLocallyRequested] = useAtom(locallyRequestedSpaceIdsAtom);
@@ -70,7 +73,7 @@ export function ExploreJoinSpaceButton({
             requestToBeMember();
           }}
         >
-          Join space
+          {label}
         </button>
       ) : (
         <button
@@ -85,7 +88,7 @@ export function ExploreJoinSpaceButton({
             requestToBeMember();
           }}
         >
-          Join space
+          {label}
         </button>
       )}
     </Pending>

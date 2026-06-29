@@ -1,5 +1,6 @@
 'use client';
 
+import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
@@ -15,6 +16,10 @@ export function SpaceMembersJoinButton({ spaceId, hasRequestedSpaceMembership }:
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
+  // OR the SSR-seeded prop with the durable + optimistic pending state so a
+  // request made anywhere (and surviving refresh) shows "Requested" here too.
+  const isPending = useIsMembershipPending(spaceId);
+  const hasRequested = hasRequestedSpaceMembership || isPending;
 
   return (
     <>
@@ -25,7 +30,7 @@ export function SpaceMembersJoinButton({ spaceId, hasRequestedSpaceMembership }:
         position="center"
         className="text-grey-04 transition-colors duration-75 hover:cursor-pointer hover:text-text"
       >
-        {!hasRequestedSpaceMembership ? (
+        {!hasRequested ? (
           <button
             onClick={() => {
               if (!smartAccount) {
