@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import pluralize from 'pluralize';
 
+import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
@@ -19,7 +20,7 @@ interface Props {
   isPublicSpace: boolean;
   isMember: boolean;
   isEditor: boolean;
-  hasRequestedSpaceMembership: boolean;
+  memberRequest: ActiveMemberRequest | null;
   connectedAddress: string | null;
 }
 
@@ -28,7 +29,7 @@ export function SpaceMembersContent({
   isPublicSpace,
   isMember,
   isEditor,
-  hasRequestedSpaceMembership,
+  memberRequest,
   connectedAddress,
 }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
@@ -62,10 +63,7 @@ export function SpaceMembersContent({
                 {connectedAddress ? 'Leave space' : 'Sign in to join'}
               </button>
             ) : isEditor ? null : connectedAddress ? (
-              <SpaceMembersPopoverMemberRequestButton
-                spaceId={spaceId}
-                hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-              />
+              <SpaceMembersPopoverMemberRequestButton spaceId={spaceId} memberRequest={memberRequest} />
             ) : (
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
                 Sign in to join

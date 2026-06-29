@@ -8,7 +8,7 @@ import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
+import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
 
 import {
@@ -368,8 +368,10 @@ export async function fetchExploreFeed(args: {
       await Promise.all(
         pendingTargets.map(async sid => {
           try {
-            const p = await hasActiveMemberProposal(sid, memberSpaceId);
-            pendingMap.set(normId(sid), p);
+            // Only an open vote is "pending"; a stuck (vote-ended) request must fall
+            // through to a clickable Join so the user can re-request.
+            const req = await fetchActiveMemberRequest(sid, memberSpaceId);
+            pendingMap.set(normId(sid), req != null && !req.isVotingEnded);
           } catch {
             pendingMap.set(normId(sid), false);
           }
