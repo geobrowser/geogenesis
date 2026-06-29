@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   RANK_POSITION_PROPERTY_ID,
@@ -32,6 +32,20 @@ const profile: Profile = {
   profileLink: null,
   address: '0x1111111111111111111111111111111111111111',
 };
+
+// The period label ("Ends in N days") is computed from the wall clock against
+// the fixtures' rankingEndDate, so freeze Date to keep these tests deterministic.
+// Without this, a hardcoded end date produces a singular "Ends in 1 day" exactly
+// one day before it, and "Ended" after — making the suite fail only on specific
+// calendar days. Fake only Date so async/real timers are unaffected.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-06-20T00:00:00.000Z'));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('isRankSubmittedToBlock', () => {
   it('requires a non-deleted submitted-to relation in the author space', () => {
