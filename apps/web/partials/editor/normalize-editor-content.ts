@@ -1,4 +1,4 @@
-import { JSONContent } from '@tiptap/react';
+import type { JSONContent } from '@tiptap/core';
 
 // Normalizes an editor JSON document for equality comparison against the store.
 //

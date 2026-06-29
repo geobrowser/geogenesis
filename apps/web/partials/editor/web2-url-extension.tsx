@@ -148,9 +148,11 @@ export const Web2URLMark = Mark.create({
         'span',
         {
           ...cleanHTMLAttributes,
-          // Keep data attributes for persistence and re-parsing
+          // Keep data attributes for persistence and re-parsing. Use the trimmed
+          // url and omit data-url entirely when empty so we never serialize a
+          // literal "null" or whitespace that would re-parse into a dirty value.
           'data-web2-url': 'true',
-          'data-url': mark.attrs.url,
+          ...(url ? { 'data-url': url } : {}),
           // Explicitly clear class and style to ensure normal text appearance
           class: '',
           style: 'color: inherit; text-decoration: none; background-color: transparent; cursor: inherit;',
