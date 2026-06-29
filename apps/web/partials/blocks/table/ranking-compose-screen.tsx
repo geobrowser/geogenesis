@@ -127,7 +127,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     saveMySubmission,
     isSaving,
     personalSpaceId,
-    isLoading: isLoadingMySubmission,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
@@ -344,30 +343,17 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   //   • still-unresolved placeholders whose pending status isn't known yet, and
   //   • anything we can't name yet — rendering it would flash "Untitled" on a
   //     throttled refresh until its entry/row resolves; it reappears once named.
-  // While the viewer's own submission is still loading we also withhold the
-  // browse leaderboard: those entries belong in "My ranking" once `orderedIds`
-  // arrives, and showing them here first makes them visibly jump across. This
-  // only applies to browse — in search mode `filteredRankedIds` is the search
-  // result set, which must stay visible (hiding it would flash "no results").
-  const hideRankedForSubmission = isLoadingMySubmission && !isSearchActive;
   const hiddenGlobalIds = React.useMemo(() => {
     const hidden = new Set<string>(pendingEntityIds);
     for (const id of globalUnresolvedIds) hidden.add(id);
     for (const id of filteredRankedIds) {
-      if (hideRankedForSubmission || !isDisplayNamed(id)) hidden.add(id);
+      if (!isDisplayNamed(id)) hidden.add(id);
     }
     for (const id of filteredUnrankedIds) {
       if (!isDisplayNamed(id)) hidden.add(id);
     }
     return hidden;
-  }, [
-    pendingEntityIds,
-    globalUnresolvedIds,
-    filteredRankedIds,
-    filteredUnrankedIds,
-    hideRankedForSubmission,
-    isDisplayNamed,
-  ]);
+  }, [pendingEntityIds, globalUnresolvedIds, filteredRankedIds, filteredUnrankedIds, isDisplayNamed]);
 
   const visibleFilteredRankedIds = React.useMemo(
     () => (hiddenGlobalIds.size === 0 ? filteredRankedIds : filteredRankedIds.filter(id => !hiddenGlobalIds.has(id))),
@@ -381,6 +367,21 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
   const visibleHasVisibleRankableEntities =
     visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
+
+  React.useEffect(() => {
+    if (isSearchActive || isLoadingRows || isFetchingNextPage || !hasNextPage) return;
+    const minVisibleUnranked = 20;
+    if (visibleFilteredUnrankedIds.length < minVisibleUnranked) {
+      fetchNextPage();
+    }
+  }, [
+    isSearchActive,
+    isLoadingRows,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    visibleFilteredUnrankedIds.length,
+  ]);
 
   const visibleGlobalRankByEntityId = React.useMemo(() => {
     if (hiddenGlobalIds.size === 0) return globalRankByEntityId;
@@ -523,7 +524,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   // rows have names) have resolved. Surface this as a loading state so the global
   // column shows its skeleton during a throttled refresh instead of flashing
   // "Untitled" rows that then jump into "My ranking".
-  const isGlobalListResolving = isLoadingMySubmission || isLoadingRankableEntries;
+  const isGlobalListResolving = isLoadingRankableEntries;
 
   const titleMetadata = (
     <RankingComposeTitleMetadata

@@ -8,11 +8,12 @@ import { Effect } from 'effect';
 
 import type { RankingSubmissionRecord } from '~/core/blocks/ranking/ranking-submission-types';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { getEntity } from '~/core/io/queries';
+import { getEntity, getEntityRelationsByType, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
+import { RANK_VOTES_RELATION_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Profile } from '~/core/types';
 
-import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
+import { getMyRankingOrderedEntityIds, isRankSubmittedToBlockFromBlockLookup } from './my-ranking-entity';
 
 type UseSharedRankingParams = {
   rankEntityId?: string;
@@ -43,9 +44,19 @@ export function useSharedRanking({
     queryKey: ['shared-ranking', rankEntityId, authorSpaceId, blockEntityId, blockEntitySpaceId],
     enabled,
     staleTime: 60_000,
-    queryFn: async (): Promise<RankingSubmissionRecord | null> => {
-      const rankEntity = await Effect.runPromise(getEntity(rankEntityId, authorSpaceId));
-      if (!rankEntity || !isRankSubmittedToBlock(rankEntity, authorSpaceId, blockEntityId)) return null;
+    queryFn: async ({ signal }): Promise<RankingSubmissionRecord | null> => {
+      const [rankEntity, submittedToBlockRelations, voteRelations] = await Promise.all([
+        Effect.runPromise(getEntity(rankEntityId, authorSpaceId, signal)),
+        Effect.runPromise(getRelationsByToEntityIds([blockEntityId], SUBMITTED_TO_PROPERTY_ID, authorSpaceId, signal)),
+        Effect.runPromise(getEntityRelationsByType(rankEntityId, authorSpaceId, RANK_VOTES_RELATION_TYPE_ID, signal)),
+      ]);
+
+      if (
+        !rankEntity ||
+        !isRankSubmittedToBlockFromBlockLookup(rankEntityId, authorSpaceId, blockEntityId, submittedToBlockRelations)
+      ) {
+        return null;
+      }
 
       const profile = await Effect.runPromise(fetchProfileBySpaceId(authorSpaceId));
 
@@ -54,7 +65,11 @@ export function useSharedRanking({
         authorSpaceId,
         targetBlockId: blockEntityId,
         targetBlockSpaceId: blockEntitySpaceId,
-        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, authorSpaceId),
+        orderedEntityIds: getMyRankingOrderedEntityIds(
+          rankEntityId,
+          voteRelations.filter((relation): relation is NonNullable<typeof relation> => relation !== null),
+          authorSpaceId
+        ),
         createdAt: String(rankEntity.updatedAt ?? rankEntity.createdAt ?? ''),
         author: authorFromProfile(profile, authorSpaceId),
       };

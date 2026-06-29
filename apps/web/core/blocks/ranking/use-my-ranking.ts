@@ -6,16 +6,12 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getAllEntities } from '~/core/io/queries';
-import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { getEntity, getRelationsByToEntityIds } from '~/core/io/queries';
+import { SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import type { Entity } from '~/core/types';
 
-import {
-  buildMyRankingEntityFilter,
-  getMyRankingOrderedEntityIds,
-  pickMostRecentlyUpdatedRankingEntity,
-} from './my-ranking-entity';
+import { getMyRankingOrderedEntityIds, pickMostRecentlyUpdatedRankingEntity } from './my-ranking-entity';
 
 export function useMyRanking(blockId: string) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -23,30 +19,38 @@ export function useMyRanking(blockId: string) {
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['my-ranking-entity', personalSpaceId, blockId],
     enabled: Boolean(personalSpaceId && blockId),
-    staleTime: 30_000,
-    queryFn: async () => {
+    staleTime: 60_000,
+    queryFn: async ({ signal }) => {
       if (!personalSpaceId) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
 
-      const { entities } = await Effect.runPromise(
-        getAllEntities({
-          spaceId: personalSpaceId,
-          typeId: RANK_TYPE_ID,
-          filter: buildMyRankingEntityFilter(blockId),
-          orderBy: [EntitiesOrderBy.UpdatedAtDesc],
-          limit: 100,
-        })
+      const submittedToRelations = await Effect.runPromise(
+        getRelationsByToEntityIds([blockId], SUBMITTED_TO_PROPERTY_ID, personalSpaceId, signal)
       );
 
-      const rankEntity = pickMostRecentlyUpdatedRankingEntity(entities);
+      const rankEntityIds = [
+        ...new Set(
+          submittedToRelations.map(relation => relation.fromEntityId).filter((id): id is string => Boolean(id))
+        ),
+      ];
+
+      if (rankEntityIds.length === 0) {
+        return { rankEntity: null, orderedEntityIds: [] as string[] };
+      }
+
+      const rankEntities = (
+        await Promise.all(rankEntityIds.map(id => Effect.runPromise(getEntity(id, personalSpaceId, signal))))
+      ).filter((entity): entity is Entity => entity !== null);
+
+      const rankEntity = pickMostRecentlyUpdatedRankingEntity(rankEntities);
       if (!rankEntity) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
 
       return {
         rankEntity,
-        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity, personalSpaceId),
+        orderedEntityIds: getMyRankingOrderedEntityIds(rankEntity.id, rankEntity.relations ?? [], personalSpaceId),
       };
     },
   });

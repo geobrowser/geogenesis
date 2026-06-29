@@ -161,7 +161,11 @@ describe('resolvePersonalRankingShareImpl', () => {
   it('recomputes ogVersion to match the publish-flow inputs (drift guard)', async () => {
     const resolved = await resolvePersonalRankingShareImpl(RANK_ID, personalDeps());
 
-    const orderedEntityIds = getMyRankingOrderedEntityIds({ ...rankEntity, relations: rankRelations }, AUTHOR_SPACE);
+    const orderedEntityIds = getMyRankingOrderedEntityIds(
+      RANK_ID,
+      rankRelations.filter(rel => rel.type?.id === RANK_VOTES_RELATION_TYPE_ID),
+      AUTHOR_SPACE
+    );
     expect(orderedEntityIds).toEqual(['ent-a', 'ent-b']);
 
     const expectedVersion = buildRankingOgVersion({

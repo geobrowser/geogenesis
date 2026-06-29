@@ -12,11 +12,13 @@ import {
   RANKING_START_DATE_PROPERTY_ID,
   RANK_POSITION_PROPERTY_ID,
   RANK_TYPE_ID,
+  RANK_VOTES_RELATION_TYPE_ID,
 } from '~/core/ranking-block-ids';
 import type { Entity, Profile, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { getMyRankingOrderedEntityIds, getSubmittedBlockIdFromRank } from './my-ranking-entity';
+import { filterEntityRelationsByType } from './ranking-block-relations';
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
 import {
   type RankingOgCardData,
@@ -201,7 +203,11 @@ export async function resolvePersonalRankingShareImpl(
   //    (use-ranking-block-state.ts `effectiveOgVersion`): the FULL ordered ids,
   //    the block name, and the raw profile name/avatar — not the top-5 card slice.
   const profile = await deps.fetchProfile(authorSpaceId);
-  const orderedEntityIds = getMyRankingOrderedEntityIds({ ...rank, relations: rankRelations }, authorSpaceId);
+  const orderedEntityIds = getMyRankingOrderedEntityIds(
+    rankEntityId,
+    filterEntityRelationsByType(rankRelations, rankEntityId, RANK_VOTES_RELATION_TYPE_ID, authorSpaceId),
+    authorSpaceId
+  );
   const authorName = profile?.name?.trim() ?? '';
   const ogVersion = buildRankingOgVersion({
     rankEntityId,
