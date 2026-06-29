@@ -50,6 +50,24 @@ function proposalsByIdQuery(proposalIds: string[]): string {
   }`;
 }
 
+// Confirming candidates is one REST call per space. Cap concurrency so a member
+// with many outstanding actions can't fan out into hundreds of simultaneous
+// requests (SSR latency / rate limits).
+const CONFIRM_CONCURRENCY = 8;
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 async function runQuery<T>(query: string, label: string): Promise<T | null> {
   const resultOrError = await Effect.runPromise(
     Effect.either(graphql<T>({ query, endpoint: Environment.getConfig().api }))
@@ -88,12 +106,10 @@ export async function fetchPendingMembershipSpaceIds(memberSpaceId: string): Pro
   const candidates = await fetchCandidateSpaceIds(memberSpaceId, 'ADD_MEMBER');
   if (candidates.length === 0) return [];
 
-  const confirmed = await Promise.all(
-    candidates.map(async spaceId => {
-      const active = await hasActiveMemberProposal(spaceId, memberSpaceId).catch(() => false);
-      return active ? spaceId : null;
-    })
-  );
+  const confirmed = await mapWithConcurrency(candidates, CONFIRM_CONCURRENCY, async spaceId => {
+    const active = await hasActiveMemberProposal(spaceId, memberSpaceId).catch(() => false);
+    return active ? spaceId : null;
+  });
   return confirmed.filter((id): id is string => id !== null);
 }
 
@@ -105,11 +121,9 @@ export async function fetchPendingEditorshipSpaceIds(memberSpaceId: string): Pro
   const candidates = await fetchCandidateSpaceIds(memberSpaceId, 'ADD_EDITOR');
   if (candidates.length === 0) return [];
 
-  const confirmed = await Promise.all(
-    candidates.map(async spaceId => {
-      const request = await fetchActiveEditorRequest(spaceId, memberSpaceId).catch(() => null);
-      return request ? spaceId : null;
-    })
-  );
+  const confirmed = await mapWithConcurrency(candidates, CONFIRM_CONCURRENCY, async spaceId => {
+    const request = await fetchActiveEditorRequest(spaceId, memberSpaceId).catch(() => null);
+    return request ? spaceId : null;
+  });
   return confirmed.filter((id): id is string => id !== null);
 }

@@ -8,7 +8,11 @@ import { useAtomValue } from 'jotai';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { fetchPendingMembershipSpaceIds } from '~/core/io/subgraph/fetch-pending-membership-space-ids';
-import { requestedMembershipIdSet, requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
+import {
+  requestedMembershipIdSet,
+  requestedMembershipSpacesAtom,
+  requestedSpacesForOwner,
+} from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
 export function pendingMembershipsQueryKey(memberSpaceId: string | null | undefined) {
@@ -40,14 +44,19 @@ export function usePendingMembershipSpaceIds() {
  * ids are normalized.
  */
 export function usePendingMembershipSet(): Set<string> {
+  const { personalSpaceId } = usePersonalSpaceId();
   const serverSet = usePendingMembershipSpaceIds();
   const requested = useAtomValue(requestedMembershipSpacesAtom);
 
   return React.useMemo(() => {
     const combined = new Set(serverSet);
-    for (const id of requestedMembershipIdSet(requested)) combined.add(id);
+    // Only this account's optimistic entries — never a signed-out user's or a
+    // prior account's leftover localStorage state.
+    for (const id of requestedMembershipIdSet(requestedSpacesForOwner(requested, personalSpaceId))) {
+      combined.add(id);
+    }
     return combined;
-  }, [serverSet, requested]);
+  }, [serverSet, requested, personalSpaceId]);
 }
 
 /** Whether the given space currently has a pending membership request for the user. */

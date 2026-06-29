@@ -21,7 +21,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { pruneRequestedMembershipSpaces, requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
+import { requestedMembershipSpacesAtom, requestedSpacesForOwner } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -302,9 +302,14 @@ export function BrowseSidebar() {
 
   // Optimistic, persisted bridge: spaces requested this session (from anywhere)
   // show under "Member of" as "Membership pending" until the server-fetched data
-  // reports them, which then wins via id dedup.
-  const requestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
+  // reports them, which then wins via id dedup. Scoped to this account so a
+  // signed-out user or a prior account never inherits the localStorage state.
+  const allRequestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
   const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
+  const requestedSpaces = React.useMemo(
+    () => requestedSpacesForOwner(allRequestedSpaces, personalSpaceId),
+    [allRequestedSpaces, personalSpaceId]
+  );
 
   const serverTrackedIds = React.useMemo(() => {
     const ids = new Set<string>();
@@ -314,10 +319,14 @@ export function BrowseSidebar() {
   }, [data?.editorOf, data?.memberOf]);
 
   // Once the server tracks a requested space (pending row, member, or editor),
-  // drop the optimistic entry so it can't linger after approval/refresh.
+  // drop this account's optimistic entry so it can't linger after approval/refresh.
   React.useEffect(() => {
-    setRequestedSpaces(prev => pruneRequestedMembershipSpaces(prev, serverTrackedIds));
-  }, [serverTrackedIds, setRequestedSpaces]);
+    if (!personalSpaceId || serverTrackedIds.size === 0) return;
+    setRequestedSpaces(prev => {
+      const next = prev.filter(s => !(s.ownerId === personalSpaceId && serverTrackedIds.has(normId(s.id))));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [serverTrackedIds, setRequestedSpaces, personalSpaceId]);
 
   const memberOfRows = React.useMemo<BrowseSpaceRow[]>(() => {
     const base = data?.memberOf ?? [];

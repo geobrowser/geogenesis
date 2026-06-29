@@ -4,6 +4,8 @@ import { normId } from '~/core/utils/norm-id';
 
 export type RequestedMembershipSpace = {
   id: string;
+  /** Personal space id of the requester — scopes the entry so it never leaks across accounts. */
+  ownerId: string;
   /** Optional display data; absent when the request originates somewhere without it (e.g. a space page). */
   name?: string;
   image?: string | null;
@@ -18,6 +20,11 @@ const STORAGE_KEY = 'geo:requested-membership-spaces';
  * the durable source of truth, and reconciliation drops entries once the server
  * reports the membership (pending or granted).
  *
+ * Each entry carries its `ownerId` (the requester's personal space id); readers
+ * MUST filter by the current personal space id via {@link requestedSpacesForOwner}
+ * so a signed-out user — or the next account in the same browser — never inherits
+ * a prior user's optimistic pending state.
+ *
  * Stored as an array (Maps don't serialize to JSON). Helpers below keep callers
  * from hand-rolling the normId dedup.
  */
@@ -28,18 +35,17 @@ export function upsertRequestedMembershipSpace(
   space: RequestedMembershipSpace
 ): RequestedMembershipSpace[] {
   const key = normId(space.id);
-  if (current.some(s => normId(s.id) === key)) return current;
+  if (current.some(s => normId(s.id) === key && s.ownerId === space.ownerId)) return current;
   return [...current, space];
 }
 
-/** Drop any requested entries whose normalized id is in `normalizedIds` (e.g. the server now tracks them). */
-export function pruneRequestedMembershipSpaces(
+/** Entries owned by the given personal space id. Empty when signed out (no owner). */
+export function requestedSpacesForOwner(
   current: RequestedMembershipSpace[],
-  normalizedIds: Set<string>
+  ownerId: string | null | undefined
 ): RequestedMembershipSpace[] {
-  if (normalizedIds.size === 0) return current;
-  const next = current.filter(s => !normalizedIds.has(normId(s.id)));
-  return next.length === current.length ? current : next;
+  if (!ownerId) return [];
+  return current.filter(s => s.ownerId === ownerId);
 }
 
 export function requestedMembershipIdSet(current: RequestedMembershipSpace[]): Set<string> {

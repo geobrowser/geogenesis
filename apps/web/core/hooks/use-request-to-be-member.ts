@@ -107,12 +107,19 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeMember,
     onSuccess: () => {
-      if (!spaceId) return;
+      // personalSpaceId is guaranteed here (the request would have thrown without
+      // it); the guard also scopes the persisted entry to this account.
+      if (!spaceId || !personalSpaceId) return;
       // Optimistic, persisted bridge so the "Membership pending" state shows
       // instantly (and survives a refresh) regardless of where the request was
       // made, while the indexer catches up.
       setRequestedSpaces(prev =>
-        upsertRequestedMembershipSpace(prev, { id: spaceId, name: space?.name, image: space?.image })
+        upsertRequestedMembershipSpace(prev, {
+          id: spaceId,
+          ownerId: personalSpaceId,
+          name: space?.name,
+          image: space?.image,
+        })
       );
       // Refetch the durable sources so every surface converges on the server state.
       queryClient.invalidateQueries({ queryKey: ['pending-memberships'] });
