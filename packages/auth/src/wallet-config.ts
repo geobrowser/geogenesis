@@ -1,11 +1,8 @@
 import { createConfig } from '@privy-io/wagmi';
 import type { Chain } from 'viem';
 import { http } from 'viem';
-import { createConfig as createWagmiConfig, type Config } from 'wagmi';
+import { type Config } from 'wagmi';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
-
-type PrivyWagmiConfig = ReturnType<typeof createConfig>;
-type PrivyCreateConfigParams = Parameters<typeof createConfig>[0];
 
 export type GeoWalletConfigParams = {
   chain: Chain;
@@ -63,33 +60,3 @@ export const createMockConfig = (chain: Chain): Config =>
       }),
     ],
   } as any) as Config;
-
-// Local-dev wagmi config: real injected (MetaMask) connector against a local chain.
-// Used when NEXT_PUBLIC_IS_LOCAL_DEV=true so users sign with their browser-extension EOA
-// instead of a Privy embedded wallet routed through the Pimlico bundler.
-//
-// Uses standard wagmi's createConfig (not @privy-io/wagmi's), because in local-dev mode the
-// Privy provider is NOT mounted — Privy's WagmiProvider/useSetActiveWallet would call useWallets
-// internally and crash without the Privy context above it. Pair with wagmi's standard
-// WagmiProvider in apps/web/core/wallet/wallet.tsx.
-export const createLocalDevConfig = ({ chain, rpcUrl }: { chain: Chain; rpcUrl: string }): Config =>
-  createWagmiConfig({
-    chains: [chain],
-    multiInjectedProviderDiscovery: true,
-    transports: {
-      [chain.id]: http(rpcUrl),
-    },
-    ssr: true,
-    connectors: [
-      injected({
-        target() {
-          return {
-            id: 'windowProvider',
-            name: 'Browser Wallet',
-            provider: w => w?.ethereum,
-          };
-        },
-        shimDisconnect: true,
-      }),
-    ],
-  });

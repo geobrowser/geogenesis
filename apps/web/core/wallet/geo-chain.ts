@@ -4,10 +4,4 @@ import { Environment } from '../environment';
 
 const config = Environment.getConfig();
 
-const networkForChain = (id: string): 'TESTNET' | 'MAINNET' | 'LOCAL' => {
-  if (Environment.variables.isLocalDev) return 'LOCAL';
-  if (id === '55516') return 'TESTNET';
-  return 'MAINNET';
-};
-
-export const GEOGENESIS = getGeoChain(networkForChain(config.chainId), config.rpc);
+export const GEOGENESIS = getGeoChain(config.chainId === '55516' ? 'TESTNET' : 'MAINNET', config.rpc);

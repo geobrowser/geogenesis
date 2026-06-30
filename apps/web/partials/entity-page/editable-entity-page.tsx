@@ -36,7 +36,6 @@ import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
 
-import { Environment } from '~/core/environment';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -462,26 +461,6 @@ type RelationsGroupProps = {
   spaceId: string;
 };
 
-// Local-dev fallback for well-known system properties when the backend's `property`
-// table is missing or incomplete. The e2e bootstrap only registers NAME/DESCRIPTION,
-// and even those without dataType / relationValueTypes — without these stubs, anything
-// that calls `useQueryProperty({ id: TYPES_PROPERTY })` etc. gets `null` and the UI
-// bails (e.g. the "+ type" placeholder in the entity header silently does nothing).
-const SYSTEM_PROPERTY_FALLBACKS: Record<string, Property> = {
-  [SystemIds.TYPES_PROPERTY]: {
-    id: SystemIds.TYPES_PROPERTY,
-    name: 'Types',
-    dataType: 'RELATION',
-    relationValueTypes: [{ id: SystemIds.SCHEMA_TYPE, name: 'Type' }],
-  },
-  [SystemIds.PROPERTIES]: {
-    id: SystemIds.PROPERTIES,
-    name: 'Properties',
-    dataType: 'RELATION',
-    relationValueTypes: [{ id: SystemIds.PROPERTY, name: 'Property' }],
-  },
-};
-
 export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps) {
   const { storage } = useMutate();
   const name = useName(id, spaceId);
@@ -490,12 +469,7 @@ export function RelationsGroup({ propertyId, id, spaceId }: RelationsGroupProps)
 
   // @TODO: Should just read from local property store instead of querying since
   // it should already be queried in useEditableProperties
-  const { property: queriedProperty } = useQueryProperty({ id: propertyId, spaceId });
-  // Fall back to a hardcoded stub for well-known system properties when the
-  // backend hasn't registered them (see SYSTEM_PROPERTY_FALLBACKS above).
-  const property =
-    queriedProperty ??
-    (Environment.variables.isLocalDev ? (SYSTEM_PROPERTY_FALLBACKS[propertyId] ?? null) : null);
+  const { property } = useQueryProperty({ id: propertyId, spaceId });
 
   const relationsRaw = useRelations({
     selector: r => r.fromEntity.id === id && r.spaceId === spaceId && r.type.id === propertyId,

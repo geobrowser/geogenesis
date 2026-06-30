@@ -1,1 +1,1 @@
-export { createGeoWalletConfig, createMockConfig, createLocalDevConfig } from './src/wallet-config.js';
+export { createGeoWalletConfig, createMockConfig } from './src/wallet-config.js';

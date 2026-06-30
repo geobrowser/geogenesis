@@ -8,7 +8,6 @@ import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
 
 import { readTypes } from '../database/entities';
-import { Environment } from '../environment';
 import {
   ENTITY_ID_BATCH_SIZE,
   getAllEntities,
@@ -518,13 +517,8 @@ export class E {
 
     const results = entities
       .map(e => {
-        // Local-dev: don't drop spaces just because their home entity has no name.
-        // The e2e bootstrap registers personal spaces without a spaceEntityId, so the
-        // indexer's space record has no name even when there's an entity with data
-        // inside the space. Without this relaxation, search hides every result whose
-        // host space hasn't been named yet.
         const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
-          .filter(s => Environment.variables.isLocalDev || hasName(s.name))
+          .filter(s => hasName(s.name))
           .sort(compareBySpaceRank(s => s.spaceId));
 
         const resolvedTypesBySpace = e.typesBySpace

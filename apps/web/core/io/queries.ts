@@ -3,7 +3,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { Environment } from '~/core/environment';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -30,10 +29,7 @@ import { RelationDecoder } from './decoders/relation';
 import { ResultDecoder } from './decoders/result';
 import { SpaceDecoder } from './decoders/space';
 import { Space } from './dto/spaces';
-import {
-  entitiesOrderedByPropertyConnectionDocument,
-  entitiesOrderedByPropertyConnectionLocalDevDocument,
-} from './entities-ordered-by-property-connection-document';
+import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
   entitiesBatchQuery,
@@ -324,27 +320,6 @@ export function getEntitiesOrderedByPropertyConnection(
 
   const topLevelTypeIds =
     nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
-
-  // The geo-migration-e2e API only exposes the singular `spaceId` arg on this
-  // resolver and has no `typeIds` arg. Type narrowing stays inside `filter`.
-  if (Environment.variables.isLocalDev) {
-    return graphql({
-      query: entitiesOrderedByPropertyConnectionLocalDevDocument,
-      decoder: (data: { entitiesOrderedByPropertyConnection?: EntitiesConnectionShape }) =>
-        decodeEntitiesConnectionPage(data.entitiesOrderedByPropertyConnection ?? null),
-      variables: {
-        propertyId,
-        sortDirection,
-        dataType,
-        spaceId: topLevelSpaceId,
-        limit,
-        after,
-        offset,
-        filter,
-      },
-      signal,
-    });
-  }
 
   let normalizedFilter = filter;
   if (topLevelSpaceId || topLevelSpaceIds) {
@@ -937,9 +912,7 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  // The local e2e API doesn't yet accept `additional_space_ids` — skip it there.
-  // On testnet/mainnet this still flows through unchanged.
-  if (args.additionalSpaceIds?.length && !args.spaceId && !Environment.variables.isLocalDev) {
+  if (args.additionalSpaceIds?.length && !args.spaceId) {
     params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
   }
 
