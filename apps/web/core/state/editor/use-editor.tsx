@@ -22,7 +22,7 @@ import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initializ
 import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
-import { RANKING_END_DATE_PROPERTY_ID, RANKING_START_DATE_PROPERTY_ID } from '../../ranking-block-ids';
+import { RANKING_END_TIME_PROPERTY_ID, RANKING_START_TIME_PROPERTY_ID } from '../../ranking-block-ids';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -281,8 +281,8 @@ export function useEditorStore() {
       value.spaceId === spaceId &&
       (value.property.id === SystemIds.NAME_PROPERTY ||
         value.property.id === SystemIds.FILTER ||
-        value.property.id === RANKING_START_DATE_PROPERTY_ID ||
-        value.property.id === RANKING_END_DATE_PROPERTY_ID),
+        value.property.id === RANKING_START_TIME_PROPERTY_ID ||
+        value.property.id === RANKING_END_TIME_PROPERTY_ID),
   });
 
   const blockTypesRelations = useRelations({
@@ -396,28 +396,14 @@ export function useEditorStore() {
             configuredFilters,
             spaceId
           );
-          const rankingStartDate =
-            RANKING_START_DATE_PROPERTY_ID != null
-              ? (getValues({
-                  mergeWith: initialBlockValues,
-                  selector: v =>
-                    v.entity.id === block.block.id &&
-                    v.property.id === RANKING_START_DATE_PROPERTY_ID &&
-                    v.spaceId === spaceId &&
-                    !v.isDeleted,
-                })[0]?.value ?? null)
-              : null;
-          const rankingEndDate =
-            RANKING_END_DATE_PROPERTY_ID != null
-              ? (getValues({
-                  mergeWith: initialBlockValues,
-                  selector: v =>
-                    v.entity.id === block.block.id &&
-                    v.property.id === RANKING_END_DATE_PROPERTY_ID &&
-                    v.spaceId === spaceId &&
-                    !v.isDeleted,
-                })[0]?.value ?? null)
-              : null;
+          const readRankingDate = (propertyId: string) =>
+            getValues({
+              mergeWith: initialBlockValues,
+              selector: v =>
+                v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
+            })[0]?.value ?? null;
+          const rankingStartDate = readRankingDate(RANKING_START_TIME_PROPERTY_ID);
+          const rankingEndDate = readRankingDate(RANKING_END_TIME_PROPERTY_ID);
 
           return [
             {

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
+  RANKING_END_TIME_PROPERTY_ID,
+  RANKING_START_TIME_PROPERTY_ID,
   RANK_POSITION_PROPERTY_ID,
   RANK_TYPE_ID,
   RANK_VOTES_RELATION_TYPE_ID,
@@ -91,7 +91,7 @@ const blockUnscoped = {
 
 const blockScoped = {
   ...blockUnscoped,
-  values: [dateValue(RANKING_START_DATE_PROPERTY_ID, START_DATE), dateValue(RANKING_END_DATE_PROPERTY_ID, END_DATE)],
+  values: [dateValue(RANKING_START_TIME_PROPERTY_ID, START_DATE), dateValue(RANKING_END_TIME_PROPERTY_ID, END_DATE)],
 } as unknown as Entity;
 
 const personalCardData: RankingOgCardData = {

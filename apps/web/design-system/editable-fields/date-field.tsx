@@ -629,7 +629,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
  * Shows all fields: date (year, month, day) and time (hour, minute, meridiem)
  * Serializes to full datetime ISO string
  */
-function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
