@@ -11,7 +11,7 @@ import { Environment } from '~/core/environment';
  *   "succeeds" as a value transfer and no event ever fires.
  * - The hardcoded testnet registry otherwise.
  */
-const TESTNET_SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
+const TESTNET_SPACE_REGISTRY_ADDRESS = '0x364231615dcEA33D13C823b13B449DD9F55381E7' as const;
 
 export const SPACE_REGISTRY_ADDRESS: `0x${string}` =
   Environment.variables.isLocalDev && Environment.variables.localContracts

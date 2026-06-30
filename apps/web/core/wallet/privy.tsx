@@ -13,6 +13,13 @@ const config: PrivyClientConfig = {
   supportedChains: [GEOGENESIS],
   loginMethods: ['email'],
   embeddedWallets: {
+    ethereum: {
+      // Auto-provision a Privy embedded EOA on email/social login if the user doesn't
+      // already have one. Required for the ZeroDev EIP-7702 flow — the embedded EOA is
+      // the signer; without it `useWalletClient` returns undefined and `useSmartAccount`
+      // never resolves, leaving the navbar stuck on "Log in".
+      createOnLogin: 'users-without-wallets',
+    },
     showWalletUIs: false,
   },
   appearance: {

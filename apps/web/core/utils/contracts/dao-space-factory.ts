@@ -6,7 +6,7 @@ import { Environment } from '~/core/environment';
  * DaoSpaceFactory address. Same pattern as SPACE_REGISTRY_ADDRESS — resolves to the local
  * stack's factory in local-dev mode, hardcoded testnet otherwise. See space-registry.ts.
  */
-const TESTNET_DAO_SPACE_FACTORY_ADDRESS = '0x19f56F9Ed2c2ED2B5884668E392DcA4396F7feBd' as const;
+const TESTNET_DAO_SPACE_FACTORY_ADDRESS = '0x322A3eD5f7f40262a95C51457f56a8c762C27226' as const;
 
 export const DAO_SPACE_FACTORY_ADDRESS: `0x${string}` =
   Environment.variables.isLocalDev && Environment.variables.localContracts

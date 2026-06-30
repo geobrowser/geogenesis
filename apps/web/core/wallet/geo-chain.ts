@@ -6,7 +6,7 @@ const config = Environment.getConfig();
 
 const networkForChain = (id: string): 'TESTNET' | 'MAINNET' | 'LOCAL' => {
   if (Environment.variables.isLocalDev) return 'LOCAL';
-  if (id === '19411') return 'TESTNET';
+  if (id === '55516') return 'TESTNET';
   return 'MAINNET';
 };
 

@@ -57,10 +57,14 @@ if (!BUNDLER_RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
 }
 
-const BUNDLER_RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_BUNDLER_RPC_TESTNET;
+// Testnet (chain 55516) goes through ZeroDev for both bundling and gas sponsorship via
+// EIP-7702. The URL embeds the ZeroDev project id in its path
+// (e.g. https://rpc.zerodev.app/api/v3/<project-id>/chain/55516) and is consumed by
+// `createGeoZeroDev7702WalletClient` in packages/auth/src/account.ts.
+const ZERODEV_RPC_URL_TESTNET = process.env.NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET;
 
-if (!BUNDLER_RPC_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_BUNDLER_RPC_TESTNET is not set');
+if (!ZERODEV_RPC_URL_TESTNET) {
+  throw new Error('NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET is not set');
 }
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
@@ -101,7 +105,7 @@ export {
   BUNDLER_RPC_ENDPOINT,
   RPC_ENDPOINT_TESTNET,
   API_ENDPOINT_TESTNET,
-  BUNDLER_RPC_ENDPOINT_TESTNET,
+  ZERODEV_RPC_URL_TESTNET,
   WALLETCONNECT_PROJECT_ID,
   ACCOUNT_ABSTRACTION_API_KEY,
   SENTRY_DSN,

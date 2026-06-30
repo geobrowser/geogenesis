@@ -25,7 +25,9 @@ export function useCreatePersonalSpace() {
 
   const mutation = useMutation({
     mutationFn: async ({ spaceName, spaceImage, topicId }: CreatePersonalSpaceArgs): Promise<string | null> => {
-      if (!smartAccount) return null;
+      if (!smartAccount) {
+        return null;
+      }
 
       const walletAddress = smartAccount.account.address;
 

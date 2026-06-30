@@ -3,7 +3,6 @@ import {
   API_ENDPOINT,
   API_ENDPOINT_TESTNET,
   BUNDLER_RPC_ENDPOINT,
-  BUNDLER_RPC_ENDPOINT_TESTNET,
   IS_LOCAL_DEV,
   LOCAL_CHAIN_ID,
   LOCAL_DAO_SPACE_FACTORY_ADDRESS,
@@ -14,9 +13,10 @@ import {
   SENTRY_DSN,
   TEST_ENV,
   WALLETCONNECT_PROJECT_ID,
+  ZERODEV_RPC_URL_TESTNET,
 } from './config';
 
-type SupportedChainId = '1337' | '31337' | '80451' | '19411';
+type SupportedChainId = '1337' | '31337' | '80451' | '55516';
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -31,7 +31,7 @@ type LocalContractAddresses = Readonly<{
 }>;
 
 type IVars = Readonly<{
-  chainId: '19411' | '80451';
+  chainId: '55516' | '80451';
   walletConnectProjectId: string;
   privyAppId: string;
   rpcEndpoint: string;
@@ -39,7 +39,7 @@ type IVars = Readonly<{
   bundlerRpcEndpoint: string;
   rpcEndpointTestnet: string;
   apiEndpointTestnet: string;
-  bundlerRpcEndpointTestnet: string;
+  zeroDevRpcUrlTestnet: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
   isLocalDev: boolean;
@@ -51,12 +51,12 @@ type IVars = Readonly<{
 const isLocalDev = IS_LOCAL_DEV === 'true';
 
 export const variables: IVars = {
-  chainId: '19411',
+  chainId: '55516',
   isTestEnv: TEST_ENV === 'true',
   isLocalDev,
   // 1337 mirrors the test geobrowser branch's geth --dev default; override with
   // NEXT_PUBLIC_LOCAL_CHAIN_ID if the e2e stack runs at a different chain id (the
-  // upstream docker-compose defaults CHAIN_ID=19411).
+  // upstream docker-compose defaults CHAIN_ID=55516).
   localChainId: (LOCAL_CHAIN_ID ?? '1337') as SupportedChainId,
   localContracts: isLocalDev
     ? {
@@ -70,32 +70,41 @@ export const variables: IVars = {
   bundlerRpcEndpoint: BUNDLER_RPC_ENDPOINT!,
   rpcEndpointTestnet: RPC_ENDPOINT_TESTNET!,
   apiEndpointTestnet: API_ENDPOINT_TESTNET!,
-  bundlerRpcEndpointTestnet: BUNDLER_RPC_ENDPOINT_TESTNET!,
+  zeroDevRpcUrlTestnet: ZERODEV_RPC_URL_TESTNET!,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   sentryDsn: SENTRY_DSN,
 };
 
 export const getConfig = (): AppConfig => {
-  // In local-dev mode we reuse the testnet env slots (rpc/api/bundler) — they point at
-  // localhost per the geobrowser.env.example template — and surface the local chain id.
+  // In local-dev mode we reuse the testnet env slots (rpc/api) — they point at localhost per
+  // the geobrowser.env.example template — and surface the local chain id. The local EOA
+  // polyfill in `use-smart-account.ts` short-circuits before `generateSmartAccount` runs, so
+  // the `bundler` field here is never read; we still pass the ZeroDev URL through for shape.
   if (variables.isLocalDev) {
     return {
       chainId: variables.localChainId,
       rpc: variables.rpcEndpointTestnet,
       api: variables.apiEndpointTestnet,
-      bundler: `${variables.bundlerRpcEndpointTestnet}?apikey=${variables.accountAbstractionApiKey}`,
+      bundler: variables.zeroDevRpcUrlTestnet,
     };
   }
 
-  const rpc = variables.chainId === '19411' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
-  const api = variables.chainId === '19411' ? variables.apiEndpointTestnet : variables.apiEndpoint;
-  const bundler = variables.chainId === '19411' ? variables.bundlerRpcEndpointTestnet : variables.bundlerRpcEndpoint;
+  const rpc = variables.chainId === '55516' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
+  const api = variables.chainId === '55516' ? variables.apiEndpointTestnet : variables.apiEndpoint;
+
+  // Testnet (55516) routes through ZeroDev: the URL is bundler + paymaster combined, with the
+  // project id embedded in the path — no `?apikey=` suffix.
+  // Mainnet (80451) routes through Pimlico, which uses the `?apikey=` query param.
+  const bundler =
+    variables.chainId === '55516'
+      ? variables.zeroDevRpcUrlTestnet
+      : `${variables.bundlerRpcEndpoint}?apikey=${variables.accountAbstractionApiKey}`;
 
   return {
     chainId: variables.chainId,
     rpc,
     api,
-    bundler: `${bundler}?apikey=${variables.accountAbstractionApiKey}`,
+    bundler,
   };
 };
