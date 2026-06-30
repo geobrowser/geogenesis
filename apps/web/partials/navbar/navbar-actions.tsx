@@ -8,11 +8,10 @@ import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
-import { useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import { useAccount, useDisconnect } from 'wagmi';
 
-import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
-import { Cookie } from '~/core/cookie';
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
 import { Environment } from '~/core/environment';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
@@ -21,6 +20,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useEditable } from '~/core/state/editable-store';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
@@ -35,8 +35,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
-import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
+import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -44,26 +43,6 @@ function useUser() {
   const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
 
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
-}
-
-function useResetOnboarding() {
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setDismissedHints = useSetAtom(dismissedHintsAtom);
-
-  const resetOnboarding = () => {
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-    setDismissedHints([]);
-  };
-
-  return resetOnboarding;
 }
 
 // Local-dev navbar — no Privy. Uses wagmi for connect state and disconnect.
@@ -102,6 +81,7 @@ function NavbarActionsLocal() {
   );
 }
 
+
 export function NavbarActions() {
   if (Environment.variables.isLocalDev) {
     return <NavbarActionsLocal />;
@@ -115,18 +95,11 @@ function NavbarActionsPrivy() {
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
-  const resetOnboarding = useResetOnboarding();
-
-  const { logout } = useLogout({
-    onSuccess: async () => {
-      loggedOut({
-        personal_space_id: personalSpaceId ?? undefined,
-      });
-      console.log('disconnecting');
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      resetOnboarding();
-    },
-  });
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
+  // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
+  // only trigger the logout.
+  const { logout } = useLogout();
 
   if (isUserLoading) {
     return (
@@ -141,6 +114,16 @@ function NavbarActionsPrivy() {
     return <GeoConnectButton />;
   }
 
+  // Optimistic identity: while the personal space is being created in the
+  // background, show the avatar the user just picked and link the menu item to
+  // the navigable `pending:` page until the real spaceId resolves.
+  const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -148,8 +131,8 @@ function NavbarActionsPrivy() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            {profile?.avatarUrl ? (
-              <FallbackImage value={profile.avatarUrl} sizes="28px" className="object-cover" />
+            {avatarValue ? (
+              <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
             ) : (
               <Avatar value={address} size={28} />
             )}
@@ -160,8 +143,8 @@ function NavbarActionsPrivy() {
         sideOffset={12}
         className="max-w-[165px]"
       >
-        {personalSpaceId && (
-          <AvatarMenuItem href={NavUtils.toSpace(personalSpaceId)}>
+        {personalHref && (
+          <AvatarMenuItem href={personalHref}>
             <p className="text-button">Personal space</p>
           </AvatarMenuItem>
         )}

@@ -7,11 +7,7 @@ import * as React from 'react';
 
 import { Duration, Effect } from 'effect';
 
-import {
-  DATA_TYPE_ENTITY_IDS,
-  DATA_TYPE_PROPERTY,
-  RENDERABLE_TYPE_PROPERTY,
-} from '~/core/constants';
+import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
 import { type EntityFilter } from '~/core/gql/graphql';
 import { searchPropertiesPage } from '~/core/io/queries';
 import type { DataType } from '~/core/types';
@@ -116,24 +112,14 @@ export function useSearchProperties({
 
   const shouldSearch = enabled ?? debouncedQuery !== '';
 
-  const {
-    data,
-    isLoading,
-    isFetching,
-    isFetchingNextPage,
-    hasNextPage,
-    fetchNextPage,
-  } = useInfiniteQuery({
+  const { data, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useInfiniteQuery({
     enabled: shouldSearch,
     queryKey: ['search-properties:filtered', filter, PAGE_SIZE],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
-      return Effect.runPromise(
-        searchPropertiesPage({ filter, limit: PAGE_SIZE, offset: pageParam }, signal)
-      );
+      return Effect.runPromise(searchPropertiesPage({ filter, limit: PAGE_SIZE, offset: pageParam }, signal));
     },
-    getNextPageParam: lastPage =>
-      lastPage.results.length < PAGE_SIZE ? undefined : lastPage.offset + PAGE_SIZE,
+    getNextPageParam: lastPage => (lastPage.results.length < PAGE_SIZE ? undefined : lastPage.offset + PAGE_SIZE),
     gcTime: Duration.toMillis(Duration.seconds(15)),
   });
 

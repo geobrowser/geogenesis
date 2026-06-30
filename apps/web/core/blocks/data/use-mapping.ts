@@ -127,11 +127,8 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
             cell.space = collectionRelation.toSpaceId;
             cell.verified = collectionRelation.verified;
           } else {
-            const nameValue = values?.find(
-              v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
-            );
-            cell.space =
-              nameValue?.spaceId ?? nameTripleSpaces?.[0] ?? spaces?.[0] ?? cell.space;
+            const nameValue = values?.find(v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted);
+            cell.space = nameValue?.spaceId ?? nameTripleSpaces?.[0] ?? spaces?.[0] ?? cell.space;
           }
         }
 

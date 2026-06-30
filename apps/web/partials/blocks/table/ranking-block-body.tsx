@@ -5,9 +5,11 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
+import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
+import { XIcon } from '~/design-system/icons/x';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import {
@@ -21,7 +23,7 @@ import {
 } from './ranking-block-ui';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
-import { RankingEntryRow } from './ranking-entry-row';
+import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -31,7 +33,8 @@ type Props = {
 };
 
 function buildMobileFullscreenEditButton(state: RankingBlockState) {
-  const { isSaving, openRankingCompose } = state;
+  const { isSaving, isSharedRankingView, openRankingCompose } = state;
+  if (isSharedRankingView) return null;
 
   return (
     <Button
@@ -71,6 +74,47 @@ function buildMyRankingActionButton(state: RankingBlockState) {
   );
 }
 
+function buildMyRankingTabActions(state: RankingBlockState) {
+  const {
+    isSharedRankingView,
+    showEditRankingButton,
+    canSharePersonalRanking,
+    sharePersonalRanking,
+    isSaving,
+    openRankingCompose,
+  } = state;
+  if (isSharedRankingView) return null;
+  if (!showEditRankingButton && !canSharePersonalRanking) return null;
+
+  return (
+    <div className="flex w-full shrink-0 items-center justify-between gap-2">
+      {showEditRankingButton ? (
+        <Button
+          variant="secondary"
+          className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
+          disabled={isSaving}
+          onClick={() => void openRankingCompose('edit')}
+        >
+          Edit
+        </Button>
+      ) : null}
+      {canSharePersonalRanking ? (
+        <Button
+          variant="primary"
+          className={cx(
+            'h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text',
+            !showEditRankingButton && 'ml-auto'
+          )}
+          onClick={sharePersonalRanking}
+        >
+          Share
+          <XIcon color="white" />
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const {
     spaceId,
@@ -79,6 +123,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     showMyRankingTab,
     showMyRankingSection,
     showAddMyRankingInGlobalHeader,
+    myRankingTabLabel,
     activeTab,
     setActiveTab,
     globalDisplayEntityIds,
@@ -86,6 +131,8 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     hasMyRankingData,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
+    pendingEntityIds,
+    entriesResolving,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -101,6 +148,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     myRankingEntryByEntityId,
     draftHydrated,
     hasMySubmission,
+    isSharedRankingView,
     reorderMyRanking,
     openEntitySheet,
     activeSwipeRowKey,
@@ -112,10 +160,16 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   } = state;
 
   const myRankingActionButton = buildMyRankingActionButton(state);
+  const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
 
-  // On mobile the action button moves below the My ranking tab as a plain "Edit" button.
-  const movesEditBelowTabs = isMobile && showMyRankingSection;
+  // On mobile fullscreen the action buttons move below the My ranking tab.
+  const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
+  const movesEditBelowTabs = isFullscreenMobile && showMyRankingSection && !isSharedRankingView;
+  const movesSharedAddBelowTabs = isFullscreenMobile && isSharedRankingView && showAddMyRankingInGlobalHeader;
+  const movesActionBelowTabs = movesEditBelowTabs || movesSharedAddBelowTabs;
+  const showMyTabActionsBelowTabs =
+    presentation === 'fullscreen' && activeTab === 'my' && showMyRankingSection && Boolean(myRankingTabActions);
 
   const wrapMobileSwipeRow = ({
     rowKey,
@@ -177,7 +231,19 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             {globalDisplayEntityIds.map(entityId => {
               const entry = globalRankingEntryByEntityId.get(entityId);
               const rank = globalRankByEntityId.get(entityId);
-              if (!entry || rank == null) return null;
+              if (rank == null) return null;
+              // Rank is known from relations/seed before the entity name/image
+              // resolve — render a skeleton row so the list keeps its height
+              // instead of collapsing until entries hydrate. Also skeleton a
+              // still-unnamed seed row while resolution is in flight so a
+              // throttled refresh doesn't flash "Untitled".
+              if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
+                return (
+                  <div key={entityId} className="w-full">
+                    <RankingEntryRowSkeleton rank={rank} />
+                  </div>
+                );
+              }
               const rowContent = (
                 <RankingEntryRow
                   rank={rank}
@@ -185,6 +251,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   entry={entry}
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (
@@ -234,7 +301,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
           <RankingMyRankingDndList
             entityIds={myDisplayEntityIds}
             onReorder={reorderMyRanking}
-            disabled={hasMySubmission || showEmbeddedMyPagination}
+            disabled={hasMySubmission || showEmbeddedMyPagination || isSharedRankingView}
             onDragStart={() => {
               setActiveSwipeRowKey(null);
               setIsMyRankingDragging(true);
@@ -242,20 +309,29 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
-              const entryDisplay = myRankingEntryByEntityId.get(entityId) ?? {
-                entityId,
-                name: 'Untitled',
-                description: null,
-                image: null,
-              };
+              const rank = embeddedMyPageNumber * PAGE_SIZE + index + 1;
+              const resolvedEntry = myRankingEntryByEntityId.get(entityId);
+              // Mirror the global list: while a row's name is still resolving,
+              // show a skeleton rather than flashing "Untitled". On a shared
+              // (/r/) shortlink the seed can carry "Untitled" for pending or
+              // cross-space entries until the live data lands.
+              if (!resolvedEntry || (entriesResolving && isPlaceholderRankingEntry(resolvedEntry))) {
+                return (
+                  <div className="w-full">
+                    <RankingEntryRowSkeleton rank={rank} />
+                  </div>
+                );
+              }
+              const entryDisplay = resolvedEntry;
               const rowContent = (
                 <RankingEntryRow
-                  rank={embeddedMyPageNumber * PAGE_SIZE + index + 1}
+                  rank={rank}
                   rankStyle="leading"
                   linkToEntity={false}
                   entry={entryDisplay}
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
+                  pending={pendingEntityIds.has(entityId)}
                 />
               );
               return (
@@ -312,14 +388,14 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       {showMyRankingSection ? (
                         <RankingTabButton
                           active={activeTab === 'my'}
-                          label="My ranking"
+                          label={myRankingTabLabel}
                           layoutId={`ranking-${presentation}-tab-underline`}
                           onClick={() => setActiveTab('my')}
                         />
                       ) : null}
                     </div>
 
-                    {!movesEditBelowTabs ? (
+                    {!movesActionBelowTabs && !showMyTabActionsBelowTabs ? (
                       <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
                     ) : null}
                   </div>
@@ -327,16 +403,18 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
                 </div>
 
-                {movesEditBelowTabs && activeTab === 'my' ? (
+                {showMyTabActionsBelowTabs ? (
+                  <div className="mb-4 flex w-full shrink-0">{myRankingTabActions}</div>
+                ) : movesSharedAddBelowTabs ? (
+                  <div className="mb-4 flex shrink-0 justify-start">{myRankingActionButton}</div>
+                ) : movesEditBelowTabs && activeTab === 'my' ? (
                   <div className="mb-4 flex shrink-0 justify-end">{buildMobileFullscreenEditButton(state)}</div>
                 ) : null}
 
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
-                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>
-                    {globalRankingBody}
-                  </div>
+                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>{globalRankingBody}</div>
                   {showMyRankingSection ? (
                     <div className={cx(activeTab !== 'my' && 'hidden')}>{myRankingBody}</div>
                   ) : null}

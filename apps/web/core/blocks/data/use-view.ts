@@ -1,9 +1,9 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
-import { useSelector } from '@xstate/store/react';
 import equal from 'fast-deep-equal';
 
 import { ID } from '~/core/id';
@@ -16,14 +16,14 @@ import { store } from '~/core/sync/use-sync-engine';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
-import { useDataBlockInstance } from './use-data-block';
-import { useMapping } from './use-mapping';
 import {
   columnPropertyIdFromRelation,
   dedupeRelationsByColumnProperty,
   isShownColumnRelation,
   relationsMatchingColumnProperty,
 } from './shown-column-relations';
+import { useDataBlockInstance } from './use-data-block';
+import { useMapping } from './use-mapping';
 
 export { columnPropertyIdFromRelation } from './shown-column-relations';
 
@@ -43,8 +43,7 @@ export function useView() {
   });
 
   const { blockRelations } = useEditorStoreLite();
-  const blocksRelationEntityId =
-    relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
+  const blocksRelationEntityId = relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
 
   // Read shown-column / view config from the reactive sync store only
   const { blockRelationRelations, blockRelationName } = useSelector(
@@ -61,10 +60,7 @@ export function useView() {
     equal
   );
 
-  const viewRelation = React.useMemo(
-    () => selectViewRelation(blockRelationRelations),
-    [blockRelationRelations]
-  );
+  const viewRelation = React.useMemo(() => selectViewRelation(blockRelationRelations), [blockRelationRelations]);
 
   const shownColumnRelations = React.useMemo(
     () => dedupeRelationsByColumnProperty(blockRelationRelations.filter(isShownColumnRelation)),
@@ -94,10 +90,7 @@ export function useView() {
     [rawMapping, allowedMappingPropertyIds]
   );
 
-  const shownColumnIds = [
-    SystemIds.NAME_PROPERTY,
-    ...orderedShownColumnRelations.map(columnPropertyIdFromRelation),
-  ];
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(columnPropertyIdFromRelation)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -120,28 +113,19 @@ export function useView() {
       );
       const primary = selectViewRelation(blockRelationRelations);
 
+      // Delete the old view relation and create a fresh one instead of mutating
+      // toEntity in place: publishing re-emits a non-deleted relation as a
+      // createRelation with its original id, so an in-place target change re-creates
+      // an already-committed relation and the backend ignores it.
       for (const rel of activeViewRelations) {
-        if (rel.id !== primary?.id) {
-          storage.relations.delete(rel);
-        }
-      }
-
-      if (primary) {
-        storage.relations.update(primary, draft => {
-          draft.toEntity = {
-            id: newView.id,
-            name: newView.name,
-            value: newView.id,
-          };
-        });
-        return;
+        storage.relations.delete(rel);
       }
 
       storage.relations.set({
         id: IdUtils.generate(),
         entityId: IdUtils.generate(),
         spaceId,
-        position: Position.generate(),
+        position: primary?.position ?? Position.generate(),
         renderableType: 'RELATION',
         type: {
           id: SystemIds.VIEW_PROPERTY,

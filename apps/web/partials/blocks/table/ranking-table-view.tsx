@@ -8,18 +8,41 @@ import { Text } from '~/design-system/text';
 
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
-import { useRankingBlockState } from './use-ranking-block-state';
+import { type InitialGlobalRanking, type InitialSharedRanking, useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
   spaceId: string;
   rankingStartDate?: string;
   rankingEndDate?: string;
+  rankEntityId?: string;
+  authorSpaceId?: string;
+  ogVersion?: string;
+  initialGlobalRanking?: InitialGlobalRanking;
+  initialSharedRanking?: InitialSharedRanking;
 };
 
 /** Fullscreen ranking browse view with compose-aligned title and metadata typography. */
-export function RankingTableView({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
+export function RankingTableView({
+  spaceId,
+  rankingStartDate = '',
+  rankingEndDate = '',
+  rankEntityId = '',
+  authorSpaceId = '',
+  ogVersion = '',
+  initialGlobalRanking,
+  initialSharedRanking,
+}: Props) {
   const isMobile = useIsMobileLayout();
-  const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate });
+  const state = useRankingBlockState({
+    spaceId,
+    rankingStartDate,
+    rankingEndDate,
+    sharedRankEntityId: rankEntityId,
+    sharedAuthorSpaceId: authorSpaceId,
+    sharedOgVersion: ogVersion,
+    initialGlobalRanking,
+    initialSharedRanking,
+  });
   const {
     displayName,
     periodState,

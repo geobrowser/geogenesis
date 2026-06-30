@@ -32,6 +32,15 @@ function dedupePreserveOrder(ids: string[]): string[] {
   });
 }
 
+function preferAvatarsFirst<T>(items: T[], hasAvatar: (item: T) => boolean): T[] {
+  const withAvatar: T[] = [];
+  const withoutAvatar: T[] = [];
+  for (const item of items) {
+    (hasAvatar(item) ? withAvatar : withoutAvatar).push(item);
+  }
+  return [...withAvatar, ...withoutAvatar];
+}
+
 export function getRankingPeriodIcon(state: RankingPeriodState) {
   return state === 'not-started' ? <Stars color="grey-04" /> : <Time color="grey-04" />;
 }
@@ -65,9 +74,9 @@ function RankingRankedByAvatarGroup({
       {extraCount > 0 ? (
         <li
           key="extra-count"
-          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] leading-none text-grey-04 tabular-nums"
+          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] text-grey-04 tabular-nums"
         >
-          +{extraCount}
+          <span className="block h-5 leading-[20px]">+{extraCount}</span>
         </li>
       ) : null}
     </AvatarGroup>
@@ -84,17 +93,33 @@ export function RankingAggregatedSubmitterAvatars({
   maxVisible?: number;
 }) {
   const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
-  const visibleSpaceIds = uniqueSpaceIds.slice(0, maxVisible);
   const { data: profilesBySpaceId = new Map() } = useQuery({
-    queryKey: ['ranking-submitter-profiles', visibleSpaceIds],
-    enabled: visibleSpaceIds.length > 0,
+    queryKey: ['ranking-submitter-profiles', uniqueSpaceIds],
+    enabled: uniqueSpaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(visibleSpaceIds));
-      return new Map(visibleSpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
+      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
+      return new Map(uniqueSpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
     },
   });
-  const { spacesById } = useSpacesByIds(visibleSpaceIds);
+  const { spacesById } = useSpacesByIds(uniqueSpaceIds);
+
+  const resolveAvatarUrl = React.useCallback(
+    (spaceId: string) => {
+      const profile = profilesBySpaceId.get(spaceId);
+      const profileAvatarUrl =
+        profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
+      const spaceImage = spacesById.get(spaceId)?.entity.image;
+      const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
+      return profileAvatarUrl ?? spaceAvatarUrl;
+    },
+    [profilesBySpaceId, spacesById]
+  );
+
+  const visibleSpaceIds = React.useMemo(() => {
+    const ranked = preferAvatarsFirst(uniqueSpaceIds, spaceId => Boolean(resolveAvatarUrl(spaceId)));
+    return ranked.slice(0, maxVisible);
+  }, [uniqueSpaceIds, resolveAvatarUrl, maxVisible]);
 
   const uniqueCount = uniqueSpaceIds.length;
   const count = totalCount ?? uniqueCount;
@@ -105,13 +130,9 @@ export function RankingAggregatedSubmitterAvatars({
 
   const avatars: RankingRankedByAvatar[] = visibleSpaceIds.map(spaceId => {
     const profile = profilesBySpaceId.get(spaceId);
-    const profileAvatarUrl =
-      profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-    const spaceImage = spacesById.get(spaceId)?.entity.image;
-    const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
     return {
       key: spaceId,
-      avatarUrl: profileAvatarUrl ?? spaceAvatarUrl,
+      avatarUrl: resolveAvatarUrl(spaceId),
       fallbackSeed: profile?.address ?? spaceId,
     };
   });
@@ -129,7 +150,10 @@ export function RankingRankedBy({
   aggregatedRankingCount?: number;
 }) {
   if (submissions.length > 0) {
-    const visible = submissions.slice(0, VISIBLE_RANKED_BY_AVATARS);
+    const visible = preferAvatarsFirst(submissions, submission => Boolean(submission.author.avatarUrl)).slice(
+      0,
+      VISIBLE_RANKED_BY_AVATARS
+    );
     const extraCount = Math.max(submissions.length - visible.length, 0);
 
     return (

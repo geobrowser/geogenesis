@@ -10,6 +10,7 @@ import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/
 import { readTypes } from '../database/entities';
 import { Environment } from '../environment';
 import {
+  ENTITY_ID_BATCH_SIZE,
   getAllEntities,
   getBatchEntities,
   getBatchEntitySpaces,
@@ -317,13 +318,17 @@ export class E {
         return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
-      const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds, spaceId],
-        queryFn: async ({ signal }) => {
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
-          return entities;
-        },
-      });
+      const remoteEntities = (
+        await Promise.all(
+          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+            return cache.fetchQuery({
+              queryKey: ['network', 'entities', batchIds, spaceId],
+              queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
+            });
+          })
+        )
+      ).flat();
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
@@ -418,6 +423,7 @@ export class E {
     skip,
     signal,
     additionalSpaceIds,
+    includeNonCanonical,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -426,7 +432,8 @@ export class E {
     skip: number;
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
-  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
+    includeNonCanonical?: boolean;
+  }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -437,7 +444,7 @@ export class E {
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const page = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds],
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds, includeNonCanonical],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(
@@ -448,6 +455,7 @@ export class E {
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
               additionalSpaceIds,
+              includeNonCanonical,
             },
             // Prefer the caller-supplied signal so React Query cancellation
             // on the hook side (query change, unmount) aborts the in-flight
@@ -541,7 +549,7 @@ export class E {
       })
       .filter(isIncludedSearchResult);
 
-    return { results, rawCount: page.rawCount, total: page.total };
+    return { results, rawCount: page.rawCount, serverCount: page.serverCount, total: page.total };
   }
 }
 

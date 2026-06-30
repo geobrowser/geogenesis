@@ -15,7 +15,6 @@ import { NEW_SPACE_DEFAULT_VOTING_SETTINGS, type VotingSettingsInput, useDeployS
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useReportError } from '~/core/state/status-bar-store';
-import { useMutate } from '~/core/sync/use-mutate';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
@@ -34,7 +33,6 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
-import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
@@ -50,8 +48,8 @@ type Step = 'select-type' | 'enter-profile' | 'configure-governance' | 'create-s
 
 export const stepAtom = atom<Step>('select-type');
 
-/** Externally controllable open state so non-trigger callers (e.g. the entity-page
- * "Claim topic" button) can preset the atoms above and open the dialog. */
+/** Externally controllable open state so non-trigger callers (e.g. the navbar
+ * "+" dropdowns) can preset the atoms above and open the dialog. */
 export const createSpaceDialogOpenAtom = atom<boolean>(false);
 
 /** When true, the dialog auto-fires `createSpaces` as soon as it opens at
@@ -60,8 +58,7 @@ export const createSpaceDialogOpenAtom = atom<boolean>(false);
 const autoRunAtom = atom<boolean>(false);
 
 /** When set, the source entity's values + relations are copied into the new
- * space after deploy succeeds. Mirrors the "Clone to new space" flow in
- * partials/entity-page/entity-to-space-dialog.tsx. */
+ * space after deploy succeeds. */
 const cloneFromEntityAtom = atom<{ entityId: string; sourceSpaceId: string } | null>(null);
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
@@ -128,7 +125,6 @@ export function CreateSpaceDialog() {
   const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
   const { deploy } = useDeploySpace();
   const reportError = useReportError();
-  const { storage } = useMutate();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
@@ -198,32 +194,18 @@ export function CreateSpaceDialog() {
         throw new Error(`Creating space failed`);
       }
 
-      // Replicate the source entity's content into the new space's home page
-      // entity (same as "Clone to new space" — entity-to-space-dialog.tsx:156).
-      // Writes to the local sync store; the substream pushes to IPFS.
-      if (cloneFromEntity) {
-        cloneEntityIntoSpace(cloneFromEntity.entityId, cloneFromEntity.sourceSpaceId, spaceId, storage);
-      }
-
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
       const message = describeError(error);
-      if (autoRun) {
-        // Auto-run flow has no useful form state to recover to — close the
-        // dialog so the user can retry from the Claim button.
-        onOpenChange(false);
-        reportError(`Space creation failed: ${message}`);
-      } else {
-        // Drop back to the form step so the user has a recovery path even if
-        // they dismiss the global error toast — StepHeader hides the close
-        // button while step is 'create-space' or 'completed'.
-        setStep('enter-profile');
-        reportError(`Space creation failed: ${message}`, () => {
-          setStep('create-space');
-          createSpaces(spaceType);
-        });
-      }
+      // Drop back to the form step so the user has a recovery path even if
+      // they dismiss the global error toast — StepHeader hides the close
+      // button while step is 'create-space' or 'completed'.
+      setStep('enter-profile');
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('create-space');
+        createSpaces(spaceType);
+      });
     }
   }
 

@@ -33,8 +33,8 @@ import { FilterableValueType } from '~/core/value-types';
 import { ResultContent, ResultsList } from '~/design-system/autocomplete/results-list';
 import { ResultItem } from '~/design-system/autocomplete/results-list';
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Divider } from '~/design-system/divider';
-import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Filter as FilterIcon } from '~/design-system/icons/filter';
@@ -1857,6 +1857,11 @@ function TableBlockEntityFilterInput({
   const multi = Boolean(onCommitEntitySelections);
   const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
   const stagingEntityIds = React.useMemo(() => new Set(stagingSelections.map(e => e.id)), [stagingSelections]);
+  const stagingSelectionsRef = React.useRef(stagingSelections);
+  stagingSelectionsRef.current = stagingSelections;
+  const commitEntitySelectionsRef = React.useRef(onCommitEntitySelections);
+  commitEntitySelectionsRef.current = onCommitEntitySelections;
+  const prevFocusedRef = React.useRef(false);
 
   const inputValue = multi ? rawQuery : rawQuery === '' ? selectedValue : rawQuery;
   const [entityDropdownEl, setEntityDropdownEl] = React.useState<HTMLDivElement | null>(null);
@@ -1907,6 +1912,13 @@ function TableBlockEntityFilterInput({
   React.useEffect(() => {
     if (!multi) return;
     onValueDropdownOpenChange?.(focused);
+    // Closing (click-out, blur) preserves the staged selection instead of
+    // discarding it, matching the type selector. Done/Clear all already commit;
+    // re-committing the same staging here is idempotent.
+    if (prevFocusedRef.current && !focused) {
+      commitEntitySelectionsRef.current?.(stagingSelectionsRef.current.map(e => ({ ...e })));
+    }
+    prevFocusedRef.current = focused;
   }, [multi, focused, onValueDropdownOpenChange]);
 
   const showDropdownFooter = multi && focused && !searchBlocked;
@@ -1982,6 +1994,7 @@ function TableBlockEntityFilterInput({
                   <ResultContent
                     onClick={() => handleEntityPick(row.result)}
                     active={stagingEntityIds.has(row.result.id)}
+                    multiSelectChecked={multi ? stagingEntityIds.has(row.result.id) : undefined}
                     alreadySelected={false}
                     result={row.result}
                   />
@@ -2073,6 +2086,11 @@ function TableBlockSpaceFilterInput({
   const multi = Boolean(onCommitSpaceSelections);
   const [stagingSelections, setStagingSelections] = React.useState<{ id: string; name: string | null }[]>([]);
   const stagingSpaceIds = React.useMemo(() => new Set(stagingSelections.map(s => s.id)), [stagingSelections]);
+  const stagingSelectionsRef = React.useRef(stagingSelections);
+  stagingSelectionsRef.current = stagingSelections;
+  const commitSpaceSelectionsRef = React.useRef(onCommitSpaceSelections);
+  commitSpaceSelectionsRef.current = onCommitSpaceSelections;
+  const prevFocusedRef = React.useRef(false);
 
   const showScopedOnlyPanel = focused && !query.trim() && defaultSpaceSuggestions.length > 0;
   const showQueryPanel = focused && Boolean(query.trim());
@@ -2157,7 +2175,7 @@ function TableBlockSpaceFilterInput({
           <Text as="li" variant="metadataMedium" ellipsize className="leading-4.5">
             {name ?? id}
           </Text>
-          {isSelected && <CheckCircleSmall color="grey-04" />}
+          {multi && <CheckboxVisual checked={isSelected} className="ml-2 self-start" />}
         </div>
         <Spacer height={4} />
         <div className="flex items-center gap-1.5 overflow-hidden">
@@ -2228,6 +2246,13 @@ function TableBlockSpaceFilterInput({
   React.useEffect(() => {
     if (!multi) return;
     onValueDropdownOpenChange?.(focused);
+    // Closing (click-out, blur) preserves the staged selection instead of
+    // discarding it, matching the type selector. Done/Clear all already commit;
+    // re-committing the same staging here is idempotent.
+    if (prevFocusedRef.current && !focused) {
+      commitSpaceSelectionsRef.current?.(stagingSelectionsRef.current.map(s => ({ ...s })));
+    }
+    prevFocusedRef.current = focused;
   }, [multi, focused, onValueDropdownOpenChange]);
 
   const showDropdownFooter = multi && focused && (showScopedOnlyPanel || showQueryPanel);

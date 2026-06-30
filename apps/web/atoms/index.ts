@@ -18,6 +18,16 @@ export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
+// Set to `Date.now()` whenever a ranking "Create new" entity is published. The
+// proposal isn't indexed the instant publish resolves, so a single refetch on
+// success misses it; the pending-proposal query reads this signal and polls for
+// a short window until the new PROPOSED proposal surfaces.
+export const rankingPendingPublishedAtAtom = atom<number | null>(null);
+
+// Short links (e.g. /r/g/[blockEntityId]) don't carry the space in the URL, so
+// pages that resolve their space publish it here for the navbar breadcrumb.
+export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);

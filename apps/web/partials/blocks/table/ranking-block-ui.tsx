@@ -134,7 +134,7 @@ export function RankingSubmitCtaBanner() {
           className="size-full object-contain object-right"
         />
       </div>
-      <div className="absolute inset-y-0 left-0 right-[140px] flex flex-col justify-center px-6 text-grey-04 [&_p]:!text-[16px]">
+      <div className="absolute inset-y-0 right-[140px] left-0 flex flex-col justify-center px-6 text-grey-04 [&_p]:!text-[16px]">
         <p>Your entries will become the starting global ranking for everyone else.</p>
         <p>Use the &ldquo;Add my ranking&rdquo; button to get started.</p>
       </div>

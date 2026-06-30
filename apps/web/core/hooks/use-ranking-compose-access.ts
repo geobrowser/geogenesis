@@ -1,11 +1,13 @@
 'use client';
 
 import { useGeoLogin } from '@geogenesis/auth';
+import { useQueryClient } from '@tanstack/react-query';
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { Either } from 'effect';
 import { useSetAtom } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import { getSpaceAccessById, normalizeSpaceId } from '~/core/access/space-access';
 import { trackPrivyAuth } from '~/core/analytics';
@@ -14,7 +16,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
+import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
@@ -31,6 +33,8 @@ export type RankingComposeAccessStatus =
 const autoRequestedMemberships = new Set<string>();
 
 export function useRankingComposeAccess(spaceId: string) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
@@ -41,9 +45,20 @@ export function useRankingComposeAccess(spaceId: string) {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const postLoginRedirectRef = useRef<string | null>(null);
 
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const postLoginRedirect = postLoginRedirectRef.current;
+      postLoginRedirectRef.current = null;
+      if (postLoginRedirect) {
+        // Logged-out compose entry goes straight to compose after auth. If the
+        // account is new, the compose screen records this URL for onboarding.
+        router.push(postLoginRedirect);
+      }
+    },
   });
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
@@ -58,14 +73,18 @@ export function useRankingComposeAccess(spaceId: string) {
     return 'ready';
   })();
 
-  const promptLogin = useCallback(() => {
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-    login();
-  }, [setName, setTopicId, setAvatar, setSpaceId, setStep, login]);
+  const promptLogin = useCallback(
+    (postLoginRedirect?: string) => {
+      postLoginRedirectRef.current = postLoginRedirect ?? null;
+      setName('');
+      setTopicId('');
+      setAvatar('');
+      setSpaceId('');
+      setStep('start');
+      login();
+    },
+    [setName, setTopicId, setAvatar, setSpaceId, setStep, login]
+  );
 
   const ensureMembership = useCallback(async (): Promise<boolean> => {
     if (!personalSpaceId) return false;
@@ -83,8 +102,11 @@ export function useRankingComposeAccess(spaceId: string) {
       const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
       if (!autoRequestedMemberships.has(requestKey) && membershipRequestStatus !== 'pending') {
         autoRequestedMemberships.add(requestKey);
-        const alreadyPending = await hasActiveMemberProposal(spaceId, personalSpaceId).catch(() => false);
-        if (!alreadyPending) {
+        // Re-request if there's no live vote — a stuck (vote-ended) request must not
+        // block a fresh one, otherwise the user is wedged out of compose access.
+        const req = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
+        const hasLiveRequest = req != null && !req.isVotingEnded;
+        if (!hasLiveRequest) {
           requestToBeMember();
         }
       }
@@ -101,5 +123,19 @@ export function useRankingComposeAccess(spaceId: string) {
     return ensureMembership();
   }, [smartAccount, isRegistered, personalSpaceId, ensureMembership]);
 
-  return { status, promptLogin, ensureAccess, isLoading };
+  const recheckAccess = useCallback(() => {
+    if (!personalSpaceId) return;
+
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+
+    void queryClient.invalidateQueries({
+      queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ['space-access-control', 'editor', normalizedSpaceId, normalizedPersonalSpaceId],
+    });
+  }, [queryClient, spaceId, personalSpaceId]);
+
+  return { status, canEdit, promptLogin, ensureAccess, recheckAccess, isLoading };
 }

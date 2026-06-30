@@ -16,7 +16,6 @@ export function hasValueData(remoteValue: RemoteValue): boolean {
     remoteValue.datetime !== null ||
     remoteValue.date !== null ||
     remoteValue.decimal !== null ||
-    remoteValue.bytes !== null ||
     remoteValue.schedule !== null
   );
 }

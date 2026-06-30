@@ -4,15 +4,39 @@ import cx from 'classnames';
 import katex from 'katex';
 import type Token from 'markdown-it/lib/token.mjs';
 
+import { isWeb2Url, normalizeWeb2Url, tokenizeWeb2Urls } from '~/core/utils/url-detection';
+
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 
 type MarkdownRenderOptions = {
   textClassName?: string;
   markClassName?: string;
   codeBlockClassName?: string;
+  // When true, raw web2 URLs in text and [label](web2url) links are rendered as
+  // clickable anchors that match the editor's web2URL rendering. Used by the
+  // browse-mode ServerContent so the server render matches the editor render and
+  // links don't visibly change ("flicker") when the editor mounts.
+  linkifyWeb2Urls?: boolean;
 };
 
 const markdownMd = createMarkdownIt();
+
+// Mirrors the editor's view-mode web2URL anchor (see web2-url-extension.tsx
+// renderHTML) so the server render and the editor render are pixel-identical.
+function Web2Anchor({ url, children }: { url: string; children?: React.ReactNode }) {
+  return (
+    <a
+      href={normalizeWeb2Url(url)}
+      data-web2-url="true"
+      data-url={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ color: '#202020', textDecoration: 'underline', cursor: 'pointer' }}
+    >
+      {children ?? url}
+    </a>
+  );
+}
 
 export function hasMarkdownSyntax(markdown: string): boolean {
   const tokens = markdownMd.parse(markdown, {});
@@ -171,7 +195,10 @@ function renderInlineTokenRange(
   tokens: Token[],
   startIndex: number,
   closeType?: string,
-  options?: MarkdownRenderOptions
+  options?: MarkdownRenderOptions,
+  // True while rendering the children of a link, so raw-URL text inside a link
+  // is not turned into a (nested, invalid) anchor.
+  insideLink = false
 ): { nodes: React.ReactNode[]; nextIndex: number } {
   const nodes: React.ReactNode[] = [];
   let index = startIndex;
@@ -184,14 +211,32 @@ function renderInlineTokenRange(
     }
 
     switch (token.type) {
-      case 'text':
-        nodes.push(
-          <span key={`text-${index}`} className={options?.textClassName}>
-            {token.content}
-          </span>
-        );
+      case 'text': {
+        const segments =
+          options?.linkifyWeb2Urls && !insideLink ? tokenizeWeb2Urls(token.content) : null;
+
+        if (segments && segments.some(segment => segment.type === 'url')) {
+          nodes.push(
+            <span key={`text-${index}`} className={options?.textClassName}>
+              {segments.map((segment, segmentIndex) =>
+                segment.type === 'url' ? (
+                  <Web2Anchor key={segmentIndex} url={segment.value} />
+                ) : (
+                  <React.Fragment key={segmentIndex}>{segment.value}</React.Fragment>
+                )
+              )}
+            </span>
+          );
+        } else {
+          nodes.push(
+            <span key={`text-${index}`} className={options?.textClassName}>
+              {token.content}
+            </span>
+          );
+        }
         index += 1;
         break;
+      }
 
       case 'softbreak':
       case 'hardbreak':
@@ -230,22 +275,37 @@ function renderInlineTokenRange(
       }
 
       case 'strong_open': {
-        const rendered = renderInlineTokenRange(tokens, index + 1, 'strong_close', options);
+        const rendered = renderInlineTokenRange(tokens, index + 1, 'strong_close', options, insideLink);
         nodes.push(<strong key={`strong-${index}`}>{rendered.nodes}</strong>);
         index = rendered.nextIndex;
         break;
       }
 
       case 'em_open': {
-        const rendered = renderInlineTokenRange(tokens, index + 1, 'em_close', options);
+        const rendered = renderInlineTokenRange(tokens, index + 1, 'em_close', options, insideLink);
         nodes.push(<em key={`em-${index}`}>{rendered.nodes}</em>);
         index = rendered.nextIndex;
         break;
       }
 
       case 'link_open': {
-        const { className, isValid, safeHref } = getRenderedLinkState(token.attrGet('href'));
-        const rendered = renderInlineTokenRange(tokens, index + 1, 'link_close', options);
+        const href = token.attrGet('href');
+        // Render the link's children without re-linkifying their text.
+        const rendered = renderInlineTokenRange(tokens, index + 1, 'link_close', options, true);
+
+        // Web2 links render as the editor's web2URL anchor so server and editor
+        // markup match.
+        if (options?.linkifyWeb2Urls && isWeb2Url(href)) {
+          nodes.push(
+            <Web2Anchor key={`link-${index}`} url={href}>
+              {rendered.nodes}
+            </Web2Anchor>
+          );
+          index = rendered.nextIndex;
+          break;
+        }
+
+        const { className, isValid, safeHref } = getRenderedLinkState(href);
 
         if (isValid && safeHref) {
           nodes.push(
