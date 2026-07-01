@@ -78,7 +78,11 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      tabs.push(...dynamicTabs.map(tab => ({ ...tab, priority: 1 as const })));
+      const visibleDynamicTabs = questionsTabEnabled
+        ? dynamicTabs.filter(tab => tab.label !== QUESTION_TAB.label)
+        : dynamicTabs;
+
+      tabs.push(...visibleDynamicTabs.map(tab => ({ ...tab, priority: 1 as const })));
     }
   }
 

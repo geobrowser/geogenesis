@@ -48,4 +48,17 @@ describe('buildSpaceTabs', () => {
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Activity']);
   });
+
+  it('keeps the system Questions route when a dynamic tab has the same label', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Questions', href: `${overviewHref}?tabId=dynamic-questions` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      questionsTabEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Governance', 'Activity']);
+    expect(tabs.find(tab => tab.label === 'Questions')?.href).toBe(`/space/${spaceId}/questions`);
+  });
 });
