@@ -5,10 +5,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { COMMUNITY_CALL_RSVP_TYPE_ID } from '~/core/explore/curator-onboarding-ids';
+import { CALL_RSVP_PROPERTY_ID } from '~/core/community-call-ids';
 import { CURATOR_ONBOARDING_STEPS, type CuratorOnboardingStepId } from '~/core/explore/curator-onboarding-steps';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getAllEntities, getSpacesWhereMember, getUserHasEntityVote } from '~/core/io/queries';
+import {
+  getAllEntities,
+  getRelationsByFromEntityId,
+  getSpacesWhereMember,
+  getUserHasEntityVote,
+} from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 
 export type CuratorOnboardingCompletion = Record<CuratorOnboardingStepId, boolean>;
@@ -32,6 +37,17 @@ async function personalSpaceHasEntityType(
   return entities.length > 0;
 }
 
+async function personalSpaceHasCallRsvp(personalSpaceId: string, signal?: AbortSignal): Promise<boolean> {
+  try {
+    const relations = await Effect.runPromise(
+      getRelationsByFromEntityId(personalSpaceId, CALL_RSVP_PROPERTY_ID, personalSpaceId, signal)
+    );
+    return relations.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function useCuratorOnboardingStatus() {
   const { personalSpaceId, isFetched: isPersonalSpaceFetched } = usePersonalSpaceId();
 
@@ -46,9 +62,7 @@ export function useCuratorOnboardingStatus() {
       const hasJoinedPublicDaoSpace = memberSpaces.some(space => space.type === 'DAO');
 
       const [hasRsvp, hasVote, hasRanking, hasComment] = await Promise.all([
-        COMMUNITY_CALL_RSVP_TYPE_ID
-          ? personalSpaceHasEntityType(personalSpaceId, COMMUNITY_CALL_RSVP_TYPE_ID, signal)
-          : Promise.resolve(false),
+        personalSpaceHasCallRsvp(personalSpaceId, signal),
         Effect.runPromise(getUserHasEntityVote(personalSpaceId, signal)),
         personalSpaceHasEntityType(personalSpaceId, RANK_TYPE_ID, signal),
         personalSpaceHasEntityType(personalSpaceId, COMMENT_TYPE_ID, signal),
