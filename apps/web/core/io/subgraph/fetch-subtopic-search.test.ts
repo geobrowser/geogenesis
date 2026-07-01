@@ -41,6 +41,11 @@ describe('fetchSubtopicSearch', () => {
             id: '00000000-0000-0000-0000-0000000000aa',
             name: 'AI',
             description: 'Systems that can reason over language and images',
+            types: [
+              { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+              { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+              { id: '00000000-0000-0000-0000-0000000000t2', name: 'Subject' },
+            ],
             relationsList: [
               {
                 typeId: AVATAR_PROPERTY_ID,
@@ -109,6 +114,10 @@ describe('fetchSubtopicSearch', () => {
         id: '00000000-0000-0000-0000-0000000000aa',
         name: 'AI',
         description: 'Systems that can reason over language and images',
+        types: [
+          { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+          { id: '00000000-0000-0000-0000-0000000000t2', name: 'Subject' },
+        ],
         image: 'ipfs://ai-avatar',
         spaces: [
           {
@@ -128,6 +137,7 @@ describe('fetchSubtopicSearch', () => {
         id: '00000000-0000-0000-0000-0000000000bb',
         name: 'Untitled',
         description: null,
+        types: [],
         image: '/placeholder.png',
         spaces: [
           {
