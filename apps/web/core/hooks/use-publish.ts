@@ -1,6 +1,5 @@
 'use client';
 
-import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
 import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
@@ -12,6 +11,7 @@ import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
+import { geo } from '../sdk/geo-client';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
@@ -324,7 +324,7 @@ function makeProposal(args: MakeProposalArgs) {
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            daoSpace.proposeEdit({
+            geo.daoSpaces.proposeEdit({
               name,
               ops,
               author,
@@ -333,7 +333,6 @@ function makeProposal(args: MakeProposalArgs) {
               daoSpaceId: `0x${space.id}`,
               votingMode,
               ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
@@ -358,12 +357,11 @@ function makeProposal(args: MakeProposalArgs) {
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            personalSpace.publishEdit({
+            geo.personalSpaces.publishEdit({
               name,
               spaceId: space.id,
               ops,
               author,
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] personalSpace.publishEdit failed:', error);

@@ -43,9 +43,7 @@ interface UseExecuteProposalArgs {
 export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleExecute = useCallback(async () => {
     if (!validateSpaceId(spaceId)) {
@@ -60,7 +58,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       throw new Error('You need a registered personal space to execute proposals');
     }
 
-    const { calldata: callData } = geo.daoSpaces.proposals.execute({
+    const { to, calldata } = geo.daoSpaces.executeProposal({
       authorSpaceId: personalSpaceId,
       spaceId,
       proposalId,
@@ -73,7 +71,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       action: 'PROPOSAL_EXECUTED',
     });
 
-    const txEffect = tx(callData).pipe(
+    const txEffect = tx({ to, data: calldata }).pipe(
       Effect.withSpan('web.write.executeProposal'),
       Effect.annotateSpans({
         'io.operation': 'execute_proposal',
@@ -151,7 +149,7 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
     // A passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
     staleTime: 30_000,
     queryFn: async (): Promise<{ state: ProposalExecutability; revert: GovernanceRevert | null }> => {
-      const { calldata } = geo.daoSpaces.proposals.execute({
+      const { calldata } = geo.daoSpaces.executeProposal({
         authorSpaceId: personalSpaceId!,
         spaceId,
         proposalId,

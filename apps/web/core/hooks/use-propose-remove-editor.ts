@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex } from 'viem';
+import type { Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -14,7 +14,6 @@ import { useSpace } from '~/core/hooks/use-space';
 import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseProposeRemoveEditorArgs {
@@ -40,9 +39,7 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleProposeRemoveEditor = useCallback(
     async ({ targetEditorSpaceId }: ProposeRemoveEditorParams) => {
@@ -88,15 +85,14 @@ export function useProposeRemoveEditor({ spaceId }: UseProposeRemoveEditorArgs) 
         targetEditorSpaceId,
       });
 
-      const { calldata: callData } = geo.daoSpaces.proposeRemoveEditor({
+      const { to, calldata } = geo.daoSpaces.proposeRemoveEditor({
         authorSpaceId: personalSpaceId,
         spaceId,
         daoSpaceAddress: space.address as Hex,
         editorToRemoveSpaceId: targetEditorSpaceId,
-        votingMode: 'SLOW',
       });
 
-      const writeTxEffect = tx(callData).pipe(
+      const writeTxEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.createProposal.removeEditor'),
         Effect.annotateSpans({
           'io.operation': 'create_proposal',

@@ -1,6 +1,5 @@
 'use client';
 
-import { daoSpace } from '@geoprotocol/geo-sdk';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
@@ -12,10 +11,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
@@ -30,9 +29,7 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleRequestToBeMember = useCallback(async () => {
     if (!smartAccount) {
@@ -71,12 +68,12 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       spaceId,
     });
 
-    const { calldata: callData } = daoSpace.proposeRequestMembership({
+    const { to, calldata } = geo.daoSpaces.proposeRequestMembership({
       authorSpaceId: personalSpaceId,
       spaceId,
     });
 
-    const writeTxEffect = tx(callData).pipe(
+    const writeTxEffect = tx({ to, data: calldata }).pipe(
       Effect.withSpan('web.write.requestMembership'),
       Effect.annotateSpans({
         'io.operation': 'request_membership',

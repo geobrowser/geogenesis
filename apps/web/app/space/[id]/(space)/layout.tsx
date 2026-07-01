@@ -28,7 +28,7 @@ import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
-import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
 
 type LayoutProps = {
@@ -135,6 +135,50 @@ const getSpaceFrontPage = async (spaceId: string) => {
       space: null,
       avatarUrl: null,
       coverUrl: null,
+    };
+  }
+
+  // Local-dev fallback: when the indexer has the space but its home entity has no id
+  // (the e2e bootstrap registers personal spaces without going through
+  // personalSpaces.create, so spaceEntityId is never assigned), reuse the spaceId as
+  // a deterministic home-entity id. We *also* fetch the entity at id=spaceId so any
+  // values we published under this synthetic id surface on the page. Without the
+  // second fetch, edits land in the indexer but the layout reads space.entity which
+  // still has empty values.
+  // Testnet/mainnet space records always have a real entity.id, so this branch is a no-op.
+  if (!entity.id) {
+    const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
+    const syntheticEntity = syntheticPage?.entity ?? null;
+
+    // eslint-disable-next-line no-console
+    console.log('[local-dev synthetic-home] spaceId=%s synthetic=%o', spaceId, {
+      gotPage: !!syntheticPage,
+      entityId: syntheticEntity?.id,
+      entityName: syntheticEntity?.name,
+      valuesCount: syntheticEntity?.values?.length ?? 0,
+      sampleValues: syntheticEntity?.values?.slice(0, 3).map(v => ({
+        propertyId: v.property?.id,
+        propertyName: v.property?.name,
+        spaceId: v.spaceId,
+        value: v.value,
+      })),
+    });
+
+    const spaceWithSyntheticEntity = syntheticEntity
+      ? { ...space, entity: { ...space.entity, ...syntheticEntity, id: spaceId, spaceId } }
+      : space;
+
+    return {
+      id: spaceId,
+      tabEntities: [],
+      tabRelations: [],
+      tabs: {},
+      blockRelations: syntheticEntity?.relations ?? [],
+      blocks: [],
+      initialCollectionItems: {},
+      space: spaceWithSyntheticEntity,
+      avatarUrl: syntheticEntity ? (Entities.avatar(syntheticEntity.relations) ?? null) : null,
+      coverUrl: syntheticEntity ? (Entities.cover(syntheticEntity.relations) ?? null) : null,
     };
   }
 

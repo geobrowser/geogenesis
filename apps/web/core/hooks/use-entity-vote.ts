@@ -5,23 +5,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import {
-  type VoteDirection,
-  type VoteObjectType,
-  encodeEntityVoteData,
-  encodeEntityVoteTopic,
-} from '~/core/utils/contracts/entity-vote';
-import {
-  EMPTY_SIGNATURE,
-  PERMISSIONLESS_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import type { VoteDirection, VoteObjectType } from '~/core/utils/contracts/entity-vote';
 import { validateSpaceId } from '~/core/utils/utils';
 
 export type { VoteDirection, VoteObjectType };
@@ -36,9 +25,7 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
   const queryClient = useQueryClient();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const castVote = useCallback(
     async (direction: VoteDirection) => {
@@ -50,29 +37,20 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
         throw new Error('You need a registered personal space to vote');
       }
 
-      const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
-      const normalizedPersonalSpaceId = personalSpaceId.replace(/-/g, '').toLowerCase();
+      const params = {
+        authorSpaceId: personalSpaceId,
+        spaceId,
+        entityId,
+      };
 
-      const action =
+      const { to, calldata } =
         direction === 'UP'
-          ? PERMISSIONLESS_ACTIONS.UPVOTED
+          ? geo.entityVotes.upvote(params)
           : direction === 'DOWN'
-            ? PERMISSIONLESS_ACTIONS.DOWNVOTED
-            : PERMISSIONLESS_ACTIONS.UNVOTED;
+            ? geo.entityVotes.downvote(params)
+            : geo.entityVotes.withdraw(params);
 
-      const topic = encodeEntityVoteTopic(entityId, objectType);
-      const data = encodeEntityVoteData(personalSpaceId, spaceId);
-
-      const fromSpaceId = `0x${normalizedPersonalSpaceId}` as Hex;
-      const toSpaceId = `0x${normalizedSpaceId}` as Hex;
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, action, topic, data, EMPTY_SIGNATURE],
-      });
-
-      const txEffect = tx(callData).pipe(
+      const txEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.entity_vote'),
         Effect.annotateSpans({
           'io.operation': 'entity_vote',
@@ -84,7 +62,11 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
 
       if (Either.isLeft(result)) {
         const error = result.left;
-        console.error(`Entity vote failed: ${error.message}`, { fromSpaceId, toSpaceId, entityId, direction }, error);
+        console.error(
+          `Entity vote failed: ${error.message}`,
+          { authorSpaceId: personalSpaceId, spaceId, entityId, direction },
+          error
+        );
         throw error;
       }
 

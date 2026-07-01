@@ -1,1 +1,1 @@
-export { generateSmartAccount } from './src/account.js';
+export { generateSmartAccount, generateZeroDevAccount, type GeoWalletClient } from './src/account.js';

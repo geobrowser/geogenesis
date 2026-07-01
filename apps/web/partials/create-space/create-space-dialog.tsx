@@ -11,7 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { NEW_SPACE_DEFAULT_VOTING_SETTINGS, type VotingSettingsInput, useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -39,9 +39,12 @@ export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
 export const nameAtom = atom<string>('');
 export const topicIdAtom = atom<string>('');
 export const imageAtom = atom<string>('');
+/** When non-null, overrides the deploy hook's default voting settings.
+ *  Only applies to DAO governance type. Reset when the dialog closes. */
+export const votingSettingsAtom = atom<VotingSettingsInput | null>(null);
 const spaceIdAtom = atom<string>('');
 
-type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'select-type' | 'enter-profile' | 'configure-governance' | 'create-space' | 'completed';
 
 export const stepAtom = atom<Step>('select-type');
 
@@ -49,7 +52,22 @@ export const stepAtom = atom<Step>('select-type');
  * "+" dropdowns) can preset the atoms above and open the dialog. */
 export const createSpaceDialogOpenAtom = atom<boolean>(false);
 
+/** When true, the dialog auto-fires `createSpaces` as soon as it opens at
+ * step='create-space'. Used by the claim flow to skip the template-picker
+ * and profile-entry steps entirely. */
+const autoRunAtom = atom<boolean>(false);
+
+/** When set, the source entity's values + relations are copied into the new
+ * space after deploy succeeds. */
+const cloneFromEntityAtom = atom<{ entityId: string; sourceSpaceId: string } | null>(null);
+
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
+
+// Module-level guard for the auto-run effect. A component-scoped `useRef`
+// would reset on React StrictMode's intentional double-mount in dev, firing
+// the deploy twice. Module scope persists across mounts; reset when the
+// dialog transitions to closed.
+let autoRunFired = false;
 
 type OpenDialogPreset = {
   name?: string;
@@ -58,6 +76,12 @@ type OpenDialogPreset = {
   governanceType?: SpaceGovernanceType | null;
   spaceType?: SpaceType | null;
   step?: Step;
+  /** Skip the template-picker / profile-entry steps and fire the deploy as
+   * soon as the dialog mounts. Requires `spaceType` to be set. */
+  autoRun?: boolean;
+  /** After deploy succeeds, copy this entity's content into the new space's
+   * home page entity. */
+  cloneFromEntity?: { entityId: string; sourceSpaceId: string };
 };
 
 /**
@@ -73,18 +97,25 @@ export function useOpenCreateSpaceDialog() {
   const setSpaceType = useSetAtom(spaceTypeAtom);
   const setStep = useSetAtom(stepAtom);
   const setOpen = useSetAtom(createSpaceDialogOpenAtom);
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
 
   return useCallback(
     (preset?: OpenDialogPreset) => {
+      // Reset the auto-run latch so a second claim attempt on a different
+      // topic (without an intervening close) doesn't silently no-op.
+      autoRunFired = false;
       setName(preset?.name ?? '');
       setImage(preset?.image ?? '');
       setTopicId(preset?.topicId ?? '');
       setGovernanceType(preset?.governanceType ?? null);
       setSpaceType(preset?.spaceType ?? null);
       setStep(preset?.step ?? 'select-type');
+      setAutoRun(preset?.autoRun ?? false);
+      setCloneFromEntity(preset?.cloneFromEntity ?? null);
       setOpen(true);
     },
-    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen]
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setCloneFromEntity]
   );
 }
 
@@ -102,6 +133,47 @@ export function CreateSpaceDialog() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
+  const autoRun = useAtomValue(autoRunAtom);
+  const cloneFromEntity = useAtomValue(cloneFromEntityAtom);
+  const votingSettings = useAtomValue(votingSettingsAtom);
+
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
+  const setVotingSettings = useSetAtom(votingSettingsAtom);
+
+  // On close: clear the auto-run guard and the transient claim-flow atoms so
+  // a subsequent open from a non-claim caller (navbar "+") doesn't inherit
+  // stale values. The OpenDialogPreset always overwrites these on open, so
+  // this is hygiene more than correctness.
+  React.useEffect(() => {
+    if (!open) {
+      autoRunFired = false;
+      setAutoRun(false);
+      setCloneFromEntity(null);
+      setVotingSettings(null);
+    }
+  }, [open, setAutoRun, setCloneFromEntity, setVotingSettings]);
+
+  // Auto-run path: when the dialog is opened directly at 'create-space' with
+  // autoRun, fire the deploy as soon as everything is in place. Guarded by a
+  // module-level flag so React StrictMode's dev double-mount, re-renders, and
+  // effect re-runs don't fire deploy twice. Declared above the early
+  // `return null` for !address so the hook count stays stable when the user
+  // signs in / out while the dialog is mounted.
+  //
+  // We require name + topicId to be non-empty before firing: the entity-page
+  // claim button sets name via the live entity store, which can be `''` on
+  // the first render before hydration completes. Without this check the
+  // deploy would go out with an empty space name.
+  React.useEffect(() => {
+    if (!open || !autoRun) return;
+    if (step !== 'create-space') return;
+    if (!spaceType || !address) return;
+    if (!name || !topicId) return;
+    if (autoRunFired) return;
+    autoRunFired = true;
+    createSpaces(spaceType);
+  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType, cloneFromEntity]);
 
   if (!address) return null;
 
@@ -115,6 +187,7 @@ export function CreateSpaceDialog() {
         spaceImage: image,
         governanceType: governanceType ?? undefined,
         topicId,
+        votingSettings: votingSettings ?? undefined,
       });
 
       if (!spaceId) {
@@ -182,6 +255,7 @@ export function CreateSpaceDialog() {
                   <StepHeader />
                   {step === 'select-type' && <StepSelectType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
+                  {step === 'configure-governance' && <StepConfigureGovernance />}
                   {workflowSteps.includes(step) && <StepComplete onDone={() => onOpenChange(false)} />}
                 </ModalCard>
               </motion.div>
@@ -216,6 +290,7 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 const headerText: Record<Step, string> = {
   'select-type': 'Select space template',
   'enter-profile': '',
+  'configure-governance': 'Advanced governance settings',
   'create-space': '',
   completed: '',
 };
@@ -225,9 +300,13 @@ const StepHeader = () => {
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
 
-  const showBack = step === 'enter-profile';
+  const showBack = step === 'enter-profile' || step === 'configure-governance';
 
   const handleBack = () => {
+    if (step === 'configure-governance') {
+      setStep('enter-profile');
+      return;
+    }
     setName('');
     setTopicId('');
     if (step === 'enter-profile') {
@@ -245,7 +324,7 @@ const StepHeader = () => {
         )}
       </div>
       <h3 className="text-smallTitle">{headerText[step]}</h3>
-      {step !== 'create-space' && step !== 'completed' ? (
+      {step !== 'create-space' && step !== 'completed' && step !== 'configure-governance' ? (
         <Dialog.Close asChild>
           <SquareButton icon={<Close color="grey-04" />} className="border-none! bg-transparent!" />
         </Dialog.Close>
@@ -366,6 +445,8 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
+  const setStep = useSetAtom(stepAtom);
+  const customVotingSettings = useAtomValue(votingSettingsAtom);
 
   const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
@@ -464,7 +545,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
           )}
         </div>
       </div>
-      <div className="absolute inset-x-4 bottom-4 flex">
+      <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
@@ -484,9 +565,234 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         <Button disabled={!validName} onClick={onNext} className="w-full">
           Create Space
         </Button>
+        {governanceType === 'DAO' && (
+          <button
+            type="button"
+            onClick={() => setStep('configure-governance')}
+            className="text-center text-metadataMedium text-grey-04 hover:text-text"
+          >
+            Advanced settings{customVotingSettings ? ' (customized)' : ''}
+          </button>
+        )}
       </div>
     </div>
   );
+}
+
+function StepConfigureGovernance() {
+  const [customSettings, setCustomSettings] = useAtom(votingSettingsAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  // Form state is initialized from the override atom if present, otherwise the
+  // deploy hook's defaults — same source of truth used at deploy time.
+  const initial = customSettings ?? NEW_SPACE_DEFAULT_VOTING_SETTINGS;
+  const initialDurationInDays =
+    'durationInDays' in initial && typeof initial.durationInDays === 'number'
+      ? initial.durationInDays
+      : 'durationInSeconds' in initial && typeof initial.durationInSeconds === 'number'
+        ? initial.durationInSeconds / 86400
+        : 1;
+
+  const [partial, setPartial] = React.useState<string>(String(initial.partialPercentageSupportThreshold));
+  const [universal, setUniversal] = React.useState<string>(String(initial.universalPercentageSupportThreshold));
+  const [flat, setFlat] = React.useState<string>(String(initial.flatSupportThreshold));
+  const [quorum, setQuorum] = React.useState<string>(String(initial.quorum));
+  const [duration, setDuration] = React.useState<string>(String(initialDurationInDays));
+  const [grace, setGrace] = React.useState<string>(String(initial.executionGracePeriodInDays));
+  const [disableFastPath, setDisableFastPath] = React.useState<boolean>(initial.disableFastPathAccessForNewMembers);
+
+  const parsed = parseSettings({
+    partial,
+    universal,
+    flat,
+    quorum,
+    duration,
+    grace,
+    disableFastPath,
+  });
+
+  const canSave = parsed.kind === 'ok';
+
+  const handleSave = () => {
+    if (parsed.kind !== 'ok') return;
+    setCustomSettings(parsed.value);
+    setStep('enter-profile');
+  };
+
+  const handleResetDefaults = () => {
+    const d = NEW_SPACE_DEFAULT_VOTING_SETTINGS;
+    setPartial(String(d.partialPercentageSupportThreshold));
+    setUniversal(String(d.universalPercentageSupportThreshold));
+    setFlat(String(d.flatSupportThreshold));
+    setQuorum(String(d.quorum));
+    setDuration(String('durationInDays' in d ? d.durationInDays : (d.durationInSeconds ?? 0) / 86400));
+    setGrace(String(d.executionGracePeriodInDays));
+    setDisableFastPath(d.disableFastPathAccessForNewMembers);
+    setCustomSettings(null);
+  };
+
+  return (
+    <StepContents childKey="configure-governance">
+      <div className="-mx-1 flex-1 space-y-3 overflow-y-auto px-1 pb-20">
+        <Text variant="footnote" color="grey-04">
+          Defaults are sensible for most spaces. See the governance page later for what each setting does.
+        </Text>
+        <GovernanceField
+          label="Voting period (days)"
+          hint="Slow-path voting window length."
+          value={duration}
+          onChange={setDuration}
+          inputMode="decimal"
+        />
+        <GovernanceField
+          label="Execution grace period (days)"
+          hint="Delay between passing and execution."
+          value={grace}
+          onChange={setGrace}
+          inputMode="decimal"
+        />
+        <GovernanceField
+          label="Partial support threshold (%)"
+          hint="Slow-path: % of YES votes among voters."
+          value={partial}
+          onChange={setPartial}
+          inputMode="decimal"
+        />
+        <GovernanceField
+          label="Universal support threshold (%)"
+          hint="Slow-path: % of YES votes among all editors."
+          value={universal}
+          onChange={setUniversal}
+          inputMode="decimal"
+        />
+        <GovernanceField
+          label="Flat threshold (editors)"
+          hint="Fast-path: editor approvals for instant execution."
+          value={flat}
+          onChange={setFlat}
+          inputMode="numeric"
+        />
+        <GovernanceField
+          label="Quorum (editors)"
+          hint="Minimum editors that must vote for slow-path validity."
+          value={quorum}
+          onChange={setQuorum}
+          inputMode="numeric"
+        />
+        <label className="flex items-start gap-2 pt-1">
+          <input
+            type="checkbox"
+            checked={disableFastPath}
+            onChange={e => setDisableFastPath(e.target.checked)}
+            className="mt-1"
+          />
+          <div>
+            <div className="text-button">Disable fast path for new members</div>
+            <div className="text-footnote text-grey-04">
+              Newly added members can&apos;t use the fast path until promoted.
+            </div>
+          </div>
+        </label>
+        {parsed.kind === 'error' && (
+          <div className="rounded bg-errorTertiary px-3 py-2 text-metadataMedium text-red-01">{parsed.message}</div>
+        )}
+      </div>
+      <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
+        <Button disabled={!canSave} onClick={handleSave} className="w-full">
+          Save settings
+        </Button>
+        <button
+          type="button"
+          onClick={handleResetDefaults}
+          className="text-center text-metadataMedium text-grey-04 hover:text-text"
+        >
+          Reset to defaults
+        </button>
+      </div>
+    </StepContents>
+  );
+}
+
+type GovernanceFieldProps = {
+  label: string;
+  hint: string;
+  value: string;
+  onChange: (next: string) => void;
+  inputMode: 'numeric' | 'decimal';
+};
+
+function GovernanceField({ label, hint, value, onChange, inputMode }: GovernanceFieldProps) {
+  return (
+    <label className="block space-y-1">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-button">{label}</span>
+      </div>
+      <input
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        inputMode={inputMode}
+        className="w-full rounded border border-grey-02 px-2 py-1.5 text-body focus:border-text focus:outline-none"
+      />
+      <div className="text-footnote text-grey-04">{hint}</div>
+    </label>
+  );
+}
+
+type ParsedSettingsInputs = {
+  partial: string;
+  universal: string;
+  flat: string;
+  quorum: string;
+  duration: string;
+  grace: string;
+  disableFastPath: boolean;
+};
+
+type ParsedSettings =
+  | { kind: 'ok'; value: VotingSettingsInput }
+  | { kind: 'error'; message: string };
+
+function parseSettings(inputs: ParsedSettingsInputs): ParsedSettings {
+  const partial = Number(inputs.partial);
+  const universal = Number(inputs.universal);
+  const flat = Number(inputs.flat);
+  const quorum = Number(inputs.quorum);
+  const duration = Number(inputs.duration);
+  const grace = Number(inputs.grace);
+
+  if (![partial, universal, flat, quorum, duration, grace].every(Number.isFinite)) {
+    return { kind: 'error', message: 'All fields must be valid numbers.' };
+  }
+  if (partial < 0 || partial > 100 || universal < 0 || universal > 100) {
+    return { kind: 'error', message: 'Support thresholds must be between 0 and 100.' };
+  }
+  if (!Number.isInteger(flat) || flat < 0) {
+    return { kind: 'error', message: 'Flat threshold must be a non-negative integer.' };
+  }
+  if (!Number.isInteger(quorum) || quorum < 1) {
+    return { kind: 'error', message: 'Quorum must be at least 1.' };
+  }
+  // SDK lower bound: MINIMUM_VOTING_DURATION_DAYS = 1/24/60 (one minute).
+  if (duration < 1 / 24 / 60) {
+    return { kind: 'error', message: 'Voting period must be at least 1 minute.' };
+  }
+  // SDK lower bound: MINIMUM_EXECUTION_GRACE_PERIOD_DAYS = 1/24 (one hour).
+  if (grace < 1 / 24) {
+    return { kind: 'error', message: 'Execution grace period must be at least 1 hour.' };
+  }
+
+  return {
+    kind: 'ok',
+    value: {
+      partialPercentageSupportThreshold: partial,
+      universalPercentageSupportThreshold: universal,
+      flatSupportThreshold: flat,
+      quorum,
+      durationInDays: duration,
+      disableFastPathAccessForNewMembers: inputs.disableFastPath,
+      executionGracePeriodInDays: grace,
+    },
+  };
 }
 
 const governanceText: Record<SpaceGovernanceType, string> = {

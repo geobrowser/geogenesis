@@ -20,7 +20,7 @@
     "clean-node-modules": "rimraf --glob \"**/node_modules\""
   },
   "dependencies": {
-    "@geoprotocol/geo-sdk": "0.19.4"
+    "@geoprotocol/geo-sdk": "^0.20.0-beta.5"
   },
   "devDependencies": {
     "@graphql-codegen/client-preset": "^5.2.4",

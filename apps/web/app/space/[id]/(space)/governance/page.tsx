@@ -106,6 +106,11 @@ function formatThreshold(ratioValue: bigint): string {
   return `${percentage.toFixed(1)}%`;
 }
 
+function formatEditorCount(value: bigint): string {
+  const count = Number(value);
+  return `${count} ${count === 1 ? 'editor' : 'editors'}`;
+}
+
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -121,22 +126,59 @@ export default async function GovernancePage(props: Props) {
   ]);
 
   const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
-  const passThreshold = votingSettings ? formatThreshold(votingSettings.slowPathPercentageThreshold) : '51%';
+  const executionGracePeriod = votingSettings ? formatDuration(votingSettings.executionGracePeriod) : null;
+  const partialSupport = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
+  const universalSupport = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '67%';
+  const flatThreshold = votingSettings ? formatEditorCount(votingSettings.flatSupportThreshold) : null;
+  const quorum = votingSettings ? formatEditorCount(votingSettings.quorum) : null;
+  const newMembersFastPathDisabled = votingSettings?.disableFastPathAccessForNewMembers ?? false;
 
   const proposalType = searchParams.proposalType;
 
   return (
     <>
       <div className="space-y-4">
-        <div className="flex items-center gap-5">
+        {votingSettings && (
+          <div className="flex items-center">
+            <span
+              className={`inline-flex items-center rounded px-3 py-1 text-metadata ${
+                newMembersFastPathDisabled ? 'bg-errorTertiary text-red-01' : 'bg-successTertiary text-green'
+              }`}
+            >
+              {newMembersFastPathDisabled ? 'New members: slow path only' : 'New members: fast path enabled'}
+            </span>
+          </div>
+        )}
+        <div className="flex items-stretch gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Voting period</h2>
             <p className="text-mediumTitle">{votingPeriod}</p>
+            <p className="text-metadataMedium text-grey-04">
+              {executionGracePeriod ? `+${executionGracePeriod} grace` : ' '}
+            </p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-            <p className="text-mediumTitle">{passThreshold}</p>
+            <h2 className="text-metadata text-grey-04">Partial support</h2>
+            <p className="text-mediumTitle">{partialSupport}</p>
+            <p className="text-metadataMedium text-grey-04">{' '}</p>
           </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Universal support</h2>
+            <p className="text-mediumTitle">{universalSupport}</p>
+            <p className="text-metadataMedium text-grey-04">{' '}</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Flat threshold</h2>
+            <p className="text-mediumTitle">{flatThreshold ?? '—'}</p>
+            <p className="text-metadataMedium text-grey-04">fast-path</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Quorum</h2>
+            <p className="text-mediumTitle">{quorum ?? '—'}</p>
+            <p className="text-metadataMedium text-grey-04">{' '}</p>
+          </GovernanceMetadataBox>
+        </div>
+        <div className="flex items-stretch gap-5">
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Active proposals</h2>
             <p className="text-mediumTitle">{activeProposals.totalCount}</p>

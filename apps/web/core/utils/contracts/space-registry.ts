@@ -1,9 +1,6 @@
 import { type Hex } from 'viem';
 
-/**
- * SpaceRegistry address (Geo Testnet)
- */
-export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
+export const SPACE_REGISTRY_ADDRESS = '0x364231615dcEA33D13C823b13B449DD9F55381E7' as const;
 
 export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
 

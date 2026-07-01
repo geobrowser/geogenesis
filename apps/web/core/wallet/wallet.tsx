@@ -14,6 +14,8 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
 
+const isTestEnv = Environment.variables.isTestEnv;
+
 const CHAIN = getGeoChain('TESTNET');
 
 const realWalletConfig = createGeoWalletConfig({
@@ -24,10 +26,9 @@ const realWalletConfig = createGeoWalletConfig({
 
 const mockConfig = createMockConfig(CHAIN);
 
-const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
-const config = (isTestEnv ? mockConfig : realWalletConfig) as unknown as React.ComponentProps<
-  typeof WagmiProvider
->['config'];
+const activeConfig = isTestEnv ? mockConfig : realWalletConfig;
+
+const config = activeConfig as unknown as React.ComponentProps<typeof WagmiProvider>['config'];
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -37,7 +38,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function GeoConnectButton() {
+function PrivyConnectButton() {
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -66,4 +67,8 @@ export function GeoConnectButton() {
   };
 
   return <Button onClick={onLogin}>Log in</Button>;
+}
+
+export function GeoConnectButton() {
+  return <PrivyConnectButton />;
 }
