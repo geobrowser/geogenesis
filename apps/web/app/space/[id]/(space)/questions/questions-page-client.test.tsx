@@ -30,6 +30,7 @@ let questions: Entity[] = [];
 let namesByEntityId = new Map<string, string>();
 let stagedRelations: Relation[] = [];
 let questionsTabEnabled = true;
+let lastQueryEntitiesOptions: unknown = null;
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
@@ -48,7 +49,10 @@ vi.mock('~/core/state/diff-store', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: questions, isLoading: false }),
+  useQueryEntities: (options: unknown) => {
+    lastQueryEntitiesOptions = options;
+    return { entities: questions, isLoading: false };
+  },
 }));
 
 vi.mock('~/core/sync/use-mutate', () => ({
@@ -93,6 +97,7 @@ beforeEach(() => {
   namesByEntityId = new Map();
   stagedRelations = [];
   questionsTabEnabled = true;
+  lastQueryEntitiesOptions = null;
   vi.clearAllMocks();
 
   mocks.nameSet.mockImplementation((entityId: string, _spaceId: string, value: string) => {
@@ -117,6 +122,18 @@ describe('QuestionsPageClient', () => {
     expect(screen.getByRole('heading', { name: 'Questions' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add question' })).toBeInTheDocument();
     expect(screen.getByText('No questions yet')).toBeInTheDocument();
+  });
+
+  it('queries questions by current space and includes unpublished local edits', () => {
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(lastQueryEntitiesOptions).toMatchObject({
+      where: {
+        spaces: [{ equals: 'space-1' }],
+        types: [{ id: { equals: QUESTION_TYPE_ID } }],
+      },
+      includeUnpublishedLocal: true,
+    });
   });
 
   it('expands and cancels the add question form', () => {

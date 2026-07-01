@@ -72,6 +72,11 @@ export function buildQuestionDraft(
     throw new Error('Two answer labels are required.');
   }
 
+  const normalizedAnswerLabels = answerLabels.map(normalizeAnswerLabel);
+  if (new Set(normalizedAnswerLabels).size !== normalizedAnswerLabels.length) {
+    throw new Error('Answer labels must be different.');
+  }
+
   const questionId = createEntityId();
   const names: QuestionDraft['names'] = [{ entityId: questionId, spaceId: input.spaceId, value: questionText }];
   const relations: Relation[] = [];

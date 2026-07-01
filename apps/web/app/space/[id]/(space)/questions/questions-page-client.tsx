@@ -81,7 +81,7 @@ function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: questions, isLoading } = useQueryEntities({
     where: {
-      space: { id: { equals: spaceId } },
+      spaces: [{ equals: spaceId }],
       types: [{ id: { equals: QUESTION_TYPE_ID } }],
     },
     first: 50,

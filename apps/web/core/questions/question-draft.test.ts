@@ -131,6 +131,24 @@ describe('question draft helpers', () => {
     ).toThrow('Two answer labels are required.');
   });
 
+  it('rejects duplicate answer labels after normalization', () => {
+    expect(() =>
+      buildQuestionDraft({
+        spaceId: 'space-1',
+        questionText: 'Ready?',
+        answerLabels: ['Yes', ' yes '],
+      })
+    ).toThrow('Answer labels must be different.');
+
+    expect(() =>
+      buildQuestionDraft({
+        spaceId: 'space-1',
+        questionText: 'Choose one?',
+        answerLabels: ['Path A', 'path   a'],
+      })
+    ).toThrow('Answer labels must be different.');
+  });
+
   it('links optional topic, person, and project relations', () => {
     const draft = buildQuestionDraft(
       {
@@ -162,4 +180,3 @@ describe('question draft helpers', () => {
     );
   });
 });
-
