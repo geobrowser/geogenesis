@@ -6,6 +6,7 @@ import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-cla
 
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
+import { ExploreCuratorWelcomeBanner } from './explore-curator-welcome-banner';
 import { ExploreSidePanel } from './explore-side-panel';
 
 type Props = {
@@ -28,6 +29,10 @@ export function ExplorePage({
   return (
     <div className="mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
       <main className="min-w-0 flex-1 pt-5">
+        <div className="mx-auto w-full max-w-[880px]">
+          <ExploreCuratorWelcomeBanner />
+          <hr className="my-4 border-t border-divider" />
+        </div>
         <EntityFeed
           apiEndpoint="/api/explore/feed"
           initialSpaceOptions={initialSpaceOptions}
