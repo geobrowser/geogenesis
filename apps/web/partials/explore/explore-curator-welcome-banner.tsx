@@ -1,16 +1,39 @@
+'use client';
+
+import * as React from 'react';
+
+import { useAtom } from 'jotai';
+
+import { useHydrated } from '~/core/hooks/use-hydrated';
+
+import { CloseSmall } from '~/design-system/icons/close-small';
+
+import { HINT_IDS, dismissedHintsAtom } from '~/atoms/dismissed-hints';
+
 const EXPLORE_CURATOR_WELCOME_CARD_BACK_SRC = '/images/explore/explore-curator-welcome-card-back.png';
 const EXPLORE_CURATOR_WELCOME_CARD_MID_SRC = '/images/explore/explore-curator-welcome-card-mid.png';
 const EXPLORE_CURATOR_WELCOME_CARD_FRONT_SRC = '/images/explore/explore-curator-welcome-card-front.png';
 
+const BANNER_HINT_ID = HINT_IDS.exploreCuratorWelcomeBanner;
+
 const CARD_IMAGE_CLASS =
   'absolute rounded-[10px] border border-white/80 object-cover shadow-[0_8px_20px_rgba(0,0,0,0.12)]';
 
-export function ExploreCuratorWelcomeBanner() {
+function ExploreCuratorWelcomeBanner({ onDismiss }: { onDismiss: () => void }) {
   return (
     <section
       aria-label="Become a curator"
       className="relative box-border h-[127px] overflow-hidden rounded-[16px] bg-[#151515]"
     >
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Dismiss curator welcome banner"
+        className="absolute top-3 right-3 z-40 flex h-6 w-6 items-center justify-center rounded-full bg-[#151515] text-white shadow-[0_2px_8px_rgba(0,0,0,0.45)] ring-1 ring-white/40 transition-colors hover:bg-[#2A2B2E]"
+      >
+        <CloseSmall color="white" />
+      </button>
+
       <div className="relative z-10 flex h-full flex-col justify-center gap-3 px-5 pr-[188px]">
         <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-white">
           👋 Welcome to Geo - Become a curator!
@@ -51,5 +74,24 @@ export function ExploreCuratorWelcomeBanner() {
         />
       </div>
     </section>
+  );
+}
+
+export function ExploreCuratorWelcomeBannerSection() {
+  const hydrated = useHydrated();
+  const [dismissedHints, setDismissedHints] = useAtom(dismissedHintsAtom);
+  const dismissed = dismissedHints.includes(BANNER_HINT_ID);
+
+  const dismiss = React.useCallback(() => {
+    setDismissedHints(prev => (prev.includes(BANNER_HINT_ID) ? prev : [...prev, BANNER_HINT_ID]));
+  }, [setDismissedHints]);
+
+  if (!hydrated || dismissed) return null;
+
+  return (
+    <>
+      <ExploreCuratorWelcomeBanner onDismiss={dismiss} />
+      <hr className="my-4 border-t border-divider" />
+    </>
   );
 }

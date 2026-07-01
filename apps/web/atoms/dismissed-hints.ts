@@ -4,6 +4,7 @@ export const HINT_IDS = {
   editModeToggle: 'geoEditModeToggleTipDismissedV1',
   reviewEdits: 'geoReviewEditsTipDismissedV1',
   proposalName: 'geoProposalNameTipDismissedV1',
+  exploreCuratorWelcomeBanner: 'geoExploreCuratorWelcomeBannerDismissedV1',
 } as const;
 
 /** Persisted list of product hint ids dismissed by the user. */
