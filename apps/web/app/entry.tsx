@@ -19,6 +19,7 @@ import { ClientOnly } from '~/design-system/client-only';
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
@@ -114,6 +115,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <StatusBar />
         <ReviewChanges />
         <ChatWidget />
+        <FeatureFlagsDialog />
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}
