@@ -15,6 +15,7 @@ import {
   type EntityFilter,
   type EntitySpacesBatchQuery,
   SortOrder,
+  UserHasEntityVoteDocument,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -1104,6 +1105,15 @@ export function getUserEntityVote(
       return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
     },
     variables: { userId, objectId: entityId, objectType, spaceId },
+    signal,
+  });
+}
+
+export function getUserHasEntityVote(userId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: UserHasEntityVoteDocument,
+    decoder: data => (data.userVotes?.length ?? 0) > 0,
+    variables: { userId },
     signal,
   });
 }
