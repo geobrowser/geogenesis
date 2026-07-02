@@ -58,9 +58,34 @@ export type AppWebhook = Node & {
   id: Scalars['UUID']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads and enables pagination through a set of `NotificationDelivery`. */
+  notificationDeliveriesByWebhookId: Array<NotificationDelivery>;
+  /** Reads and enables pagination through a set of `NotificationDelivery`. */
+  notificationDeliveriesByWebhookIdConnection: NotificationDeliveriesConnection;
   secret: Scalars['String']['output'];
   updatedAt: Scalars['Datetime']['output'];
   url: Scalars['String']['output'];
+};
+
+
+export type AppWebhookNotificationDeliveriesByWebhookIdArgs = {
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
+};
+
+
+export type AppWebhookNotificationDeliveriesByWebhookIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
 };
 
 /**
@@ -94,6 +119,10 @@ export type AppWebhookFilter = {
   id?: InputMaybe<UuidFilter>;
   /** Negates the expression. */
   not?: InputMaybe<AppWebhookFilter>;
+  /** Filter by the object’s `notificationDeliveriesByWebhookIdConnection` relation. */
+  notificationDeliveriesByWebhookIdConnection?: InputMaybe<AppWebhookToManyNotificationDeliveryFilter>;
+  /** Some related `notificationDeliveriesByWebhookIdConnection` exist. */
+  notificationDeliveriesByWebhookIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<AppWebhookFilter>>;
   /** Filter by the object’s `secret` field. */
@@ -102,6 +131,16 @@ export type AppWebhookFilter = {
   updatedAt?: InputMaybe<DatetimeFilter>;
   /** Filter by the object’s `url` field. */
   url?: InputMaybe<StringFilter>;
+};
+
+/** A filter to be used against many `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
+export type AppWebhookToManyNotificationDeliveryFilter = {
+  /** Every related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<NotificationDeliveryFilter>;
+  /** No related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<NotificationDeliveryFilter>;
+  /** Some related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<NotificationDeliveryFilter>;
 };
 
 /** A connection to a list of `AppWebhook` values. */
@@ -149,7 +188,6 @@ export type AtlasCheckpoint = Node & {
   __typename?: 'AtlasCheckpoint';
   blockNumber: Scalars['BigInt']['output'];
   cursor: Scalars['String']['output'];
-  emissionBaselineBlob?: Maybe<Scalars['String']['output']>;
   graphStateBlob: Scalars['JSON']['output'];
   graphStateVersion: Scalars['Int']['output'];
   indexerId: Scalars['String']['output'];
@@ -170,8 +208,6 @@ export type AtlasCheckpointCondition = {
   blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `cursor` field. */
   cursor?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `emissionBaselineBlob` field. */
-  emissionBaselineBlob?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `graphStateBlob` field. */
   graphStateBlob?: InputMaybe<Scalars['JSON']['input']>;
   /** Checks for equality with the object’s `graphStateVersion` field. */
@@ -244,8 +280,6 @@ export enum AtlasCheckpointsOrderBy {
   BlockNumberDesc = 'BLOCK_NUMBER_DESC',
   CursorAsc = 'CURSOR_ASC',
   CursorDesc = 'CURSOR_DESC',
-  EmissionBaselineBlobAsc = 'EMISSION_BASELINE_BLOB_ASC',
-  EmissionBaselineBlobDesc = 'EMISSION_BASELINE_BLOB_DESC',
   GraphStateBlobAsc = 'GRAPH_STATE_BLOB_ASC',
   GraphStateBlobDesc = 'GRAPH_STATE_BLOB_DESC',
   GraphStateVersionAsc = 'GRAPH_STATE_VERSION_ASC',
@@ -1338,9 +1372,13 @@ export type NotificationDelivery = Node & {
   nextRetryAt: Scalars['Datetime']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a single `NotificationOutbox` that is related to this `NotificationDelivery`. */
+  outbox?: Maybe<NotificationOutbox>;
   outboxId: Scalars['UUID']['output'];
   status: Scalars['String']['output'];
   updatedAt: Scalars['Datetime']['output'];
+  /** Reads a single `AppWebhook` that is related to this `NotificationDelivery`. */
+  webhook?: Maybe<AppWebhook>;
   webhookId: Scalars['UUID']['output'];
 };
 
@@ -1391,12 +1429,16 @@ export type NotificationDeliveryFilter = {
   not?: InputMaybe<NotificationDeliveryFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<NotificationDeliveryFilter>>;
+  /** Filter by the object’s `outbox` relation. */
+  outbox?: InputMaybe<NotificationOutboxFilter>;
   /** Filter by the object’s `outboxId` field. */
   outboxId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `status` field. */
   status?: InputMaybe<StringFilter>;
   /** Filter by the object’s `updatedAt` field. */
   updatedAt?: InputMaybe<DatetimeFilter>;
+  /** Filter by the object’s `webhook` relation. */
+  webhook?: InputMaybe<AppWebhookFilter>;
   /** Filter by the object’s `webhookId` field. */
   webhookId?: InputMaybe<UuidFilter>;
 };
@@ -1409,8 +1451,33 @@ export type NotificationOutbox = Node & {
   idempotencyKey: Scalars['String']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads and enables pagination through a set of `NotificationDelivery`. */
+  notificationDeliveriesByOutboxId: Array<NotificationDelivery>;
+  /** Reads and enables pagination through a set of `NotificationDelivery`. */
+  notificationDeliveriesByOutboxIdConnection: NotificationDeliveriesConnection;
   payload: Scalars['JSON']['output'];
   updatedAt: Scalars['Datetime']['output'];
+};
+
+
+export type NotificationOutboxNotificationDeliveriesByOutboxIdArgs = {
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
+};
+
+
+export type NotificationOutboxNotificationDeliveriesByOutboxIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<NotificationDeliveryCondition>;
+  filter?: InputMaybe<NotificationDeliveryFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
 };
 
 /**
@@ -1446,12 +1513,26 @@ export type NotificationOutboxFilter = {
   idempotencyKey?: InputMaybe<StringFilter>;
   /** Negates the expression. */
   not?: InputMaybe<NotificationOutboxFilter>;
+  /** Filter by the object’s `notificationDeliveriesByOutboxIdConnection` relation. */
+  notificationDeliveriesByOutboxIdConnection?: InputMaybe<NotificationOutboxToManyNotificationDeliveryFilter>;
+  /** Some related `notificationDeliveriesByOutboxIdConnection` exist. */
+  notificationDeliveriesByOutboxIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<NotificationOutboxFilter>>;
   /** Filter by the object’s `payload` field. */
   payload?: InputMaybe<JsonFilter>;
   /** Filter by the object’s `updatedAt` field. */
   updatedAt?: InputMaybe<DatetimeFilter>;
+};
+
+/** A filter to be used against many `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
+export type NotificationOutboxToManyNotificationDeliveryFilter = {
+  /** Every related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<NotificationDeliveryFilter>;
+  /** No related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<NotificationDeliveryFilter>;
+  /** Some related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<NotificationDeliveryFilter>;
 };
 
 /** A connection to a list of `NotificationOutbox` values. */
@@ -1653,23 +1734,61 @@ export type PropertyInfosEdge = {
 
 export type Proposal = Node & {
   __typename?: 'Proposal';
-  abstainCount: Scalars['BigInt']['output'];
   createdAt: Scalars['String']['output'];
   createdAtBlock: Scalars['String']['output'];
-  endTime: Scalars['BigInt']['output'];
+  currentVersion: Scalars['Int']['output'];
   executedAt?: Maybe<Scalars['BigInt']['output']>;
   id: Scalars['UUID']['output'];
-  name?: Maybe<Scalars['String']['output']>;
-  noCount: Scalars['BigInt']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a single `ProposalTallyQueue` that is related to this `Proposal`. */
+  proposalTallyQueue?: Maybe<ProposalTallyQueue>;
+  /**
+   * Reads and enables pagination through a set of `ProposalTallyQueue`.
+   * @deprecated Please use proposalTallyQueue instead
+   */
+  proposalTallyQueuesConnection: ProposalTallyQueuesConnection;
+  /** Reads and enables pagination through a set of `ProposalVersion`. */
+  proposalVersions: Array<ProposalVersion>;
+  /** Reads and enables pagination through a set of `ProposalVersion`. */
+  proposalVersionsConnection: ProposalVersionsConnection;
   proposedBy: Scalars['UUID']['output'];
-  quorum: Scalars['BigInt']['output'];
+  /** Reads a single `Space` that is related to this `Proposal`. */
+  space?: Maybe<Space>;
   spaceId: Scalars['UUID']['output'];
-  startTime: Scalars['BigInt']['output'];
-  threshold: Scalars['BigInt']['output'];
-  votingMode: VotingMode;
-  yesCount: Scalars['BigInt']['output'];
+};
+
+
+export type ProposalProposalTallyQueuesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalTallyQueueCondition>;
+  filter?: InputMaybe<ProposalTallyQueueFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalTallyQueuesOrderBy>>;
+};
+
+
+export type ProposalProposalVersionsArgs = {
+  condition?: InputMaybe<ProposalVersionCondition>;
+  filter?: InputMaybe<ProposalVersionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
+};
+
+
+export type ProposalProposalVersionsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVersionCondition>;
+  filter?: InputMaybe<ProposalVersionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
 };
 
 export type ProposalAction = Node & {
@@ -1677,16 +1796,24 @@ export type ProposalAction = Node & {
   actionType: ProposalActionType;
   contentId?: Maybe<Scalars['String']['output']>;
   contentUri?: Maybe<Scalars['String']['output']>;
+  disableFastPathAccessForNewMembers?: Maybe<Scalars['Boolean']['output']>;
   duration?: Maybe<Scalars['BigInt']['output']>;
+  executionGracePeriod?: Maybe<Scalars['BigInt']['output']>;
   fastThreshold?: Maybe<Scalars['BigInt']['output']>;
-  id: Scalars['UUID']['output'];
+  flatSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
+  index: Scalars['Int']['output'];
   metadata?: Maybe<Scalars['String']['output']>;
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  partialPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
   proposalId: Scalars['UUID']['output'];
+  proposalVersion: Scalars['Int']['output'];
+  /** Reads a single `ProposalVersion` that is related to this `ProposalAction`. */
+  proposalVersionByProposalIdAndProposalVersion?: Maybe<ProposalVersion>;
   quorum?: Maybe<Scalars['BigInt']['output']>;
   slowThreshold?: Maybe<Scalars['BigInt']['output']>;
   targetId?: Maybe<Scalars['UUID']['output']>;
+  universalPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
 };
 
 /**
@@ -1700,22 +1827,34 @@ export type ProposalActionCondition = {
   contentId?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `contentUri` field. */
   contentUri?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `disableFastPathAccessForNewMembers` field. */
+  disableFastPathAccessForNewMembers?: InputMaybe<Scalars['Boolean']['input']>;
   /** Checks for equality with the object’s `duration` field. */
   duration?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executionGracePeriod` field. */
+  executionGracePeriod?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `fastThreshold` field. */
   fastThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `index` field. */
+  index?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `metadata` field. */
   metadata?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `proposalId` field. */
   proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `quorum` field. */
   quorum?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `slowThreshold` field. */
   slowThreshold?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `targetId` field. */
   targetId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
 };
 
 /** A filter to be used against `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
@@ -1726,24 +1865,38 @@ export type ProposalActionFilter = {
   and?: InputMaybe<Array<ProposalActionFilter>>;
   /** Filter by the object’s `contentUri` field. */
   contentUri?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `disableFastPathAccessForNewMembers` field. */
+  disableFastPathAccessForNewMembers?: InputMaybe<BooleanFilter>;
   /** Filter by the object’s `duration` field. */
   duration?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executionGracePeriod` field. */
+  executionGracePeriod?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `fastThreshold` field. */
   fastThreshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `index` field. */
+  index?: InputMaybe<IntFilter>;
   /** Negates the expression. */
   not?: InputMaybe<ProposalActionFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalActionFilter>>;
+  /** Filter by the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `proposalVersionByProposalIdAndProposalVersion` relation. */
+  proposalVersionByProposalIdAndProposalVersion?: InputMaybe<ProposalVersionFilter>;
   /** Filter by the object’s `quorum` field. */
   quorum?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `slowThreshold` field. */
   slowThreshold?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `targetId` field. */
   targetId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
 };
 
 export enum ProposalActionType {
@@ -1823,25 +1976,37 @@ export enum ProposalActionsOrderBy {
   ContentIdDesc = 'CONTENT_ID_DESC',
   ContentUriAsc = 'CONTENT_URI_ASC',
   ContentUriDesc = 'CONTENT_URI_DESC',
+  DisableFastPathAccessForNewMembersAsc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_ASC',
+  DisableFastPathAccessForNewMembersDesc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_DESC',
   DurationAsc = 'DURATION_ASC',
   DurationDesc = 'DURATION_DESC',
+  ExecutionGracePeriodAsc = 'EXECUTION_GRACE_PERIOD_ASC',
+  ExecutionGracePeriodDesc = 'EXECUTION_GRACE_PERIOD_DESC',
   FastThresholdAsc = 'FAST_THRESHOLD_ASC',
   FastThresholdDesc = 'FAST_THRESHOLD_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
+  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
+  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
+  IndexAsc = 'INDEX_ASC',
+  IndexDesc = 'INDEX_DESC',
   MetadataAsc = 'METADATA_ASC',
   MetadataDesc = 'METADATA_DESC',
   Natural = 'NATURAL',
+  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   ProposalIdAsc = 'PROPOSAL_ID_ASC',
   ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
+  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
   QuorumAsc = 'QUORUM_ASC',
   QuorumDesc = 'QUORUM_DESC',
   SlowThresholdAsc = 'SLOW_THRESHOLD_ASC',
   SlowThresholdDesc = 'SLOW_THRESHOLD_DESC',
   TargetIdAsc = 'TARGET_ID_ASC',
-  TargetIdDesc = 'TARGET_ID_DESC'
+  TargetIdDesc = 'TARGET_ID_DESC',
+  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC'
 }
 
 /**
@@ -1849,82 +2014,62 @@ export enum ProposalActionsOrderBy {
  * for equality and combined with a logical ‘and.’
  */
 export type ProposalCondition = {
-  /** Checks for equality with the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `createdAt` field. */
   createdAt?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `createdAtBlock` field. */
   createdAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `endTime` field. */
-  endTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `currentVersion` field. */
+  currentVersion?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `executedAt` field. */
   executedAt?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `id` field. */
   id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `name` field. */
-  name?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `noCount` field. */
-  noCount?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `proposedBy` field. */
   proposedBy?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `quorum` field. */
-  quorum?: InputMaybe<Scalars['BigInt']['input']>;
   /** Checks for equality with the object’s `spaceId` field. */
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `startTime` field. */
-  startTime?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `threshold` field. */
-  threshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingMode>;
-  /** Checks for equality with the object’s `yesCount` field. */
-  yesCount?: InputMaybe<Scalars['BigInt']['input']>;
 };
 
 /** A filter to be used against `Proposal` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalFilter = {
-  /** Filter by the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<BigIntFilter>;
   /** Checks for all expressions in this list. */
   and?: InputMaybe<Array<ProposalFilter>>;
   /** Filter by the object’s `createdAt` field. */
   createdAt?: InputMaybe<StringFilter>;
   /** Filter by the object’s `createdAtBlock` field. */
   createdAtBlock?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `endTime` field. */
-  endTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `currentVersion` field. */
+  currentVersion?: InputMaybe<IntFilter>;
   /** Filter by the object’s `executedAt` field. */
   executedAt?: InputMaybe<BigIntFilter>;
   /** Filter by the object’s `id` field. */
   id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `noCount` field. */
-  noCount?: InputMaybe<BigIntFilter>;
   /** Negates the expression. */
   not?: InputMaybe<ProposalFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalFilter>>;
+  /** Filter by the object’s `proposalTallyQueue` relation. */
+  proposalTallyQueue?: InputMaybe<ProposalTallyQueueFilter>;
+  /** A related `proposalTallyQueue` exists. */
+  proposalTallyQueueExists?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposalVersionsConnection` relation. */
+  proposalVersionsConnection?: InputMaybe<ProposalToManyProposalVersionFilter>;
+  /** Some related `proposalVersionsConnection` exist. */
+  proposalVersionsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `proposedBy` field. */
   proposedBy?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `quorum` field. */
-  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `spaceId` field. */
   spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `startTime` field. */
-  startTime?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `threshold` field. */
-  threshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingModeFilter>;
-  /** Filter by the object’s `yesCount` field. */
-  yesCount?: InputMaybe<BigIntFilter>;
 };
 
 export type ProposalTallyQueue = Node & {
   __typename?: 'ProposalTallyQueue';
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a single `Proposal` that is related to this `ProposalTallyQueue`. */
+  proposal?: Maybe<Proposal>;
   proposalId: Scalars['UUID']['output'];
   queuedAt: Scalars['Datetime']['output'];
 };
@@ -1948,6 +2093,8 @@ export type ProposalTallyQueueFilter = {
   not?: InputMaybe<ProposalTallyQueueFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<ProposalTallyQueueFilter>>;
+  /** Filter by the object’s `proposal` relation. */
+  proposal?: InputMaybe<ProposalFilter>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `queuedAt` field. */
@@ -1987,6 +2134,269 @@ export enum ProposalTallyQueuesOrderBy {
   QueuedAtDesc = 'QUEUED_AT_DESC'
 }
 
+/** A filter to be used against many `ProposalVersion` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalToManyProposalVersionFilter = {
+  /** Every related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalVersionFilter>;
+  /** No related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalVersionFilter>;
+  /** Some related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalVersionFilter>;
+};
+
+export type ProposalVersion = Node & {
+  __typename?: 'ProposalVersion';
+  abstainCount: Scalars['BigInt']['output'];
+  endTime: Scalars['BigInt']['output'];
+  executeBy?: Maybe<Scalars['BigInt']['output']>;
+  flatSupportThreshold: Scalars['BigInt']['output'];
+  name?: Maybe<Scalars['String']['output']>;
+  noCount: Scalars['BigInt']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  partialPercentageSupportThreshold: Scalars['BigInt']['output'];
+  /** Reads a single `Proposal` that is related to this `ProposalVersion`. */
+  proposal?: Maybe<Proposal>;
+  /** Reads and enables pagination through a set of `ProposalAction`. */
+  proposalActionsByProposalIdAndProposalVersion: Array<ProposalAction>;
+  /** Reads and enables pagination through a set of `ProposalAction`. */
+  proposalActionsByProposalIdAndProposalVersionConnection: ProposalActionsConnection;
+  proposalId: Scalars['UUID']['output'];
+  proposalVersion: Scalars['Int']['output'];
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesByProposalIdAndProposalVersion: Array<ProposalVote>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesByProposalIdAndProposalVersionConnection: ProposalVotesConnection;
+  quorum: Scalars['BigInt']['output'];
+  startTime: Scalars['BigInt']['output'];
+  threshold: Scalars['BigInt']['output'];
+  universalPercentageSupportThreshold: Scalars['BigInt']['output'];
+  versionCreatedAt: Scalars['String']['output'];
+  versionCreatedAtBlock: Scalars['String']['output'];
+  votingMode: VotingMode;
+  yesCount: Scalars['BigInt']['output'];
+};
+
+
+export type ProposalVersionProposalActionsByProposalIdAndProposalVersionArgs = {
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+export type ProposalVersionProposalActionsByProposalIdAndProposalVersionConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalActionCondition>;
+  filter?: InputMaybe<ProposalActionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
+};
+
+
+export type ProposalVersionProposalVotesByProposalIdAndProposalVersionArgs = {
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type ProposalVersionProposalVotesByProposalIdAndProposalVersionConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+/**
+ * A condition to be used against `ProposalVersion` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type ProposalVersionCondition = {
+  /** Checks for equality with the object’s `abstainCount` field. */
+  abstainCount?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `endTime` field. */
+  endTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executeBy` field. */
+  executeBy?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `name` field. */
+  name?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `noCount` field. */
+  noCount?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `proposalId` field. */
+  proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `quorum` field. */
+  quorum?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `startTime` field. */
+  startTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `threshold` field. */
+  threshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `versionCreatedAt` field. */
+  versionCreatedAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `versionCreatedAtBlock` field. */
+  versionCreatedAtBlock?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingMode>;
+  /** Checks for equality with the object’s `yesCount` field. */
+  yesCount?: InputMaybe<Scalars['BigInt']['input']>;
+};
+
+/** A filter to be used against `ProposalVersion` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalVersionFilter = {
+  /** Filter by the object’s `abstainCount` field. */
+  abstainCount?: InputMaybe<BigIntFilter>;
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<ProposalVersionFilter>>;
+  /** Filter by the object’s `endTime` field. */
+  endTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executeBy` field. */
+  executeBy?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `name` field. */
+  name?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `noCount` field. */
+  noCount?: InputMaybe<BigIntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<ProposalVersionFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<ProposalVersionFilter>>;
+  /** Filter by the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `proposal` relation. */
+  proposal?: InputMaybe<ProposalFilter>;
+  /** Filter by the object’s `proposalActionsByProposalIdAndProposalVersionConnection` relation. */
+  proposalActionsByProposalIdAndProposalVersionConnection?: InputMaybe<ProposalVersionToManyProposalActionFilter>;
+  /** Some related `proposalActionsByProposalIdAndProposalVersionConnection` exist. */
+  proposalActionsByProposalIdAndProposalVersionConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposalId` field. */
+  proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `proposalVotesByProposalIdAndProposalVersionConnection` relation. */
+  proposalVotesByProposalIdAndProposalVersionConnection?: InputMaybe<ProposalVersionToManyProposalVoteFilter>;
+  /** Some related `proposalVotesByProposalIdAndProposalVersionConnection` exist. */
+  proposalVotesByProposalIdAndProposalVersionConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `quorum` field. */
+  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `startTime` field. */
+  startTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `threshold` field. */
+  threshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `versionCreatedAt` field. */
+  versionCreatedAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `versionCreatedAtBlock` field. */
+  versionCreatedAtBlock?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingModeFilter>;
+  /** Filter by the object’s `yesCount` field. */
+  yesCount?: InputMaybe<BigIntFilter>;
+};
+
+/** A filter to be used against many `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalVersionToManyProposalActionFilter = {
+  /** Every related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalActionFilter>;
+  /** No related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalActionFilter>;
+  /** Some related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalActionFilter>;
+};
+
+/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalVersionToManyProposalVoteFilter = {
+  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalVoteFilter>;
+  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalVoteFilter>;
+  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalVoteFilter>;
+};
+
+/** A connection to a list of `ProposalVersion` values. */
+export type ProposalVersionsConnection = {
+  __typename?: 'ProposalVersionsConnection';
+  /** A list of edges which contains the `ProposalVersion` and cursor to aid in pagination. */
+  edges: Array<ProposalVersionsEdge>;
+  /** A list of `ProposalVersion` objects. */
+  nodes: Array<ProposalVersion>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `ProposalVersion` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `ProposalVersion` edge in the connection. */
+export type ProposalVersionsEdge = {
+  __typename?: 'ProposalVersionsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `ProposalVersion` at the end of the edge. */
+  node: ProposalVersion;
+};
+
+/** Methods to use when ordering `ProposalVersion`. */
+export enum ProposalVersionsOrderBy {
+  AbstainCountAsc = 'ABSTAIN_COUNT_ASC',
+  AbstainCountDesc = 'ABSTAIN_COUNT_DESC',
+  EndTimeAsc = 'END_TIME_ASC',
+  EndTimeDesc = 'END_TIME_DESC',
+  ExecuteByAsc = 'EXECUTE_BY_ASC',
+  ExecuteByDesc = 'EXECUTE_BY_DESC',
+  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
+  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
+  NameAsc = 'NAME_ASC',
+  NameDesc = 'NAME_DESC',
+  Natural = 'NATURAL',
+  NoCountAsc = 'NO_COUNT_ASC',
+  NoCountDesc = 'NO_COUNT_DESC',
+  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  ProposalIdAsc = 'PROPOSAL_ID_ASC',
+  ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
+  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
+  QuorumAsc = 'QUORUM_ASC',
+  QuorumDesc = 'QUORUM_DESC',
+  StartTimeAsc = 'START_TIME_ASC',
+  StartTimeDesc = 'START_TIME_DESC',
+  ThresholdAsc = 'THRESHOLD_ASC',
+  ThresholdDesc = 'THRESHOLD_DESC',
+  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  VersionCreatedAtAsc = 'VERSION_CREATED_AT_ASC',
+  VersionCreatedAtBlockAsc = 'VERSION_CREATED_AT_BLOCK_ASC',
+  VersionCreatedAtBlockDesc = 'VERSION_CREATED_AT_BLOCK_DESC',
+  VersionCreatedAtDesc = 'VERSION_CREATED_AT_DESC',
+  VotingModeAsc = 'VOTING_MODE_ASC',
+  VotingModeDesc = 'VOTING_MODE_DESC',
+  YesCountAsc = 'YES_COUNT_ASC',
+  YesCountDesc = 'YES_COUNT_DESC'
+}
+
 export type ProposalVote = Node & {
   __typename?: 'ProposalVote';
   createdAt: Scalars['String']['output'];
@@ -1994,6 +2404,11 @@ export type ProposalVote = Node & {
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
   proposalId: Scalars['UUID']['output'];
+  proposalVersion: Scalars['Int']['output'];
+  /** Reads a single `ProposalVersion` that is related to this `ProposalVote`. */
+  proposalVersionByProposalIdAndProposalVersion?: Maybe<ProposalVersion>;
+  /** Reads a single `Space` that is related to this `ProposalVote`. */
+  space?: Maybe<Space>;
   spaceId: Scalars['UUID']['output'];
   vote: VoteOption;
   voterId: Scalars['UUID']['output'];
@@ -2010,6 +2425,8 @@ export type ProposalVoteCondition = {
   createdAtBlock?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `proposalId` field. */
   proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
   /** Checks for equality with the object’s `spaceId` field. */
   spaceId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `vote` field. */
@@ -2032,6 +2449,12 @@ export type ProposalVoteFilter = {
   or?: InputMaybe<Array<ProposalVoteFilter>>;
   /** Filter by the object’s `proposalId` field. */
   proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `proposalVersionByProposalIdAndProposalVersion` relation. */
+  proposalVersionByProposalIdAndProposalVersion?: InputMaybe<ProposalVersionFilter>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `spaceId` field. */
   spaceId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `vote` field. */
@@ -2073,6 +2496,8 @@ export enum ProposalVotesOrderBy {
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   ProposalIdAsc = 'PROPOSAL_ID_ASC',
   ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
+  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
   SpaceIdDesc = 'SPACE_ID_DESC',
   VoterIdAsc = 'VOTER_ID_ASC',
@@ -2094,6 +2519,222 @@ export type ProposalsConnection = {
   totalCount: Scalars['Int']['output'];
 };
 
+export type ProposalsCurrent = {
+  __typename?: 'ProposalsCurrent';
+  abstainCount?: Maybe<Scalars['BigInt']['output']>;
+  createdAt?: Maybe<Scalars['String']['output']>;
+  createdAtBlock?: Maybe<Scalars['String']['output']>;
+  currentVersion?: Maybe<Scalars['Int']['output']>;
+  endTime?: Maybe<Scalars['BigInt']['output']>;
+  executeBy?: Maybe<Scalars['BigInt']['output']>;
+  executedAt?: Maybe<Scalars['BigInt']['output']>;
+  flatSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
+  id?: Maybe<Scalars['UUID']['output']>;
+  name?: Maybe<Scalars['String']['output']>;
+  noCount?: Maybe<Scalars['BigInt']['output']>;
+  partialPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
+  proposalId?: Maybe<Scalars['UUID']['output']>;
+  proposalVersion?: Maybe<Scalars['Int']['output']>;
+  proposedBy?: Maybe<Scalars['UUID']['output']>;
+  quorum?: Maybe<Scalars['BigInt']['output']>;
+  spaceId?: Maybe<Scalars['UUID']['output']>;
+  startTime?: Maybe<Scalars['BigInt']['output']>;
+  threshold?: Maybe<Scalars['BigInt']['output']>;
+  universalPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
+  versionCreatedAt?: Maybe<Scalars['String']['output']>;
+  versionCreatedAtBlock?: Maybe<Scalars['String']['output']>;
+  votingMode?: Maybe<VotingMode>;
+  yesCount?: Maybe<Scalars['BigInt']['output']>;
+};
+
+/**
+ * A condition to be used against `ProposalsCurrent` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type ProposalsCurrentCondition = {
+  /** Checks for equality with the object’s `abstainCount` field. */
+  abstainCount?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `createdAt` field. */
+  createdAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `currentVersion` field. */
+  currentVersion?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `endTime` field. */
+  endTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executeBy` field. */
+  executeBy?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executedAt` field. */
+  executedAt?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `id` field. */
+  id?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `name` field. */
+  name?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `noCount` field. */
+  noCount?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `proposalId` field. */
+  proposalId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
+  /** Checks for equality with the object’s `proposedBy` field. */
+  proposedBy?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `quorum` field. */
+  quorum?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `startTime` field. */
+  startTime?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `threshold` field. */
+  threshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `versionCreatedAt` field. */
+  versionCreatedAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `versionCreatedAtBlock` field. */
+  versionCreatedAtBlock?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingMode>;
+  /** Checks for equality with the object’s `yesCount` field. */
+  yesCount?: InputMaybe<Scalars['BigInt']['input']>;
+};
+
+/** A filter to be used against `ProposalsCurrent` object types. All fields are combined with a logical ‘and.’ */
+export type ProposalsCurrentFilter = {
+  /** Filter by the object’s `abstainCount` field. */
+  abstainCount?: InputMaybe<BigIntFilter>;
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<ProposalsCurrentFilter>>;
+  /** Filter by the object’s `createdAt` field. */
+  createdAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `createdAtBlock` field. */
+  createdAtBlock?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `currentVersion` field. */
+  currentVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `endTime` field. */
+  endTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executeBy` field. */
+  executeBy?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executedAt` field. */
+  executedAt?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `id` field. */
+  id?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `name` field. */
+  name?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `noCount` field. */
+  noCount?: InputMaybe<BigIntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<ProposalsCurrentFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<ProposalsCurrentFilter>>;
+  /** Filter by the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `proposalId` field. */
+  proposalId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `proposalVersion` field. */
+  proposalVersion?: InputMaybe<IntFilter>;
+  /** Filter by the object’s `proposedBy` field. */
+  proposedBy?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `quorum` field. */
+  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `startTime` field. */
+  startTime?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `threshold` field. */
+  threshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `versionCreatedAt` field. */
+  versionCreatedAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `versionCreatedAtBlock` field. */
+  versionCreatedAtBlock?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `votingMode` field. */
+  votingMode?: InputMaybe<VotingModeFilter>;
+  /** Filter by the object’s `yesCount` field. */
+  yesCount?: InputMaybe<BigIntFilter>;
+};
+
+/** A connection to a list of `ProposalsCurrent` values. */
+export type ProposalsCurrentsConnection = {
+  __typename?: 'ProposalsCurrentsConnection';
+  /** A list of edges which contains the `ProposalsCurrent` and cursor to aid in pagination. */
+  edges: Array<ProposalsCurrentsEdge>;
+  /** A list of `ProposalsCurrent` objects. */
+  nodes: Array<ProposalsCurrent>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `ProposalsCurrent` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `ProposalsCurrent` edge in the connection. */
+export type ProposalsCurrentsEdge = {
+  __typename?: 'ProposalsCurrentsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `ProposalsCurrent` at the end of the edge. */
+  node: ProposalsCurrent;
+};
+
+/** Methods to use when ordering `ProposalsCurrent`. */
+export enum ProposalsCurrentsOrderBy {
+  AbstainCountAsc = 'ABSTAIN_COUNT_ASC',
+  AbstainCountDesc = 'ABSTAIN_COUNT_DESC',
+  CreatedAtAsc = 'CREATED_AT_ASC',
+  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
+  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
+  CreatedAtDesc = 'CREATED_AT_DESC',
+  CurrentVersionAsc = 'CURRENT_VERSION_ASC',
+  CurrentVersionDesc = 'CURRENT_VERSION_DESC',
+  EndTimeAsc = 'END_TIME_ASC',
+  EndTimeDesc = 'END_TIME_DESC',
+  ExecutedAtAsc = 'EXECUTED_AT_ASC',
+  ExecutedAtDesc = 'EXECUTED_AT_DESC',
+  ExecuteByAsc = 'EXECUTE_BY_ASC',
+  ExecuteByDesc = 'EXECUTE_BY_DESC',
+  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
+  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
+  IdAsc = 'ID_ASC',
+  IdDesc = 'ID_DESC',
+  NameAsc = 'NAME_ASC',
+  NameDesc = 'NAME_DESC',
+  Natural = 'NATURAL',
+  NoCountAsc = 'NO_COUNT_ASC',
+  NoCountDesc = 'NO_COUNT_DESC',
+  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  ProposalIdAsc = 'PROPOSAL_ID_ASC',
+  ProposalIdDesc = 'PROPOSAL_ID_DESC',
+  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
+  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
+  ProposedByAsc = 'PROPOSED_BY_ASC',
+  ProposedByDesc = 'PROPOSED_BY_DESC',
+  QuorumAsc = 'QUORUM_ASC',
+  QuorumDesc = 'QUORUM_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  StartTimeAsc = 'START_TIME_ASC',
+  StartTimeDesc = 'START_TIME_DESC',
+  ThresholdAsc = 'THRESHOLD_ASC',
+  ThresholdDesc = 'THRESHOLD_DESC',
+  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  VersionCreatedAtAsc = 'VERSION_CREATED_AT_ASC',
+  VersionCreatedAtBlockAsc = 'VERSION_CREATED_AT_BLOCK_ASC',
+  VersionCreatedAtBlockDesc = 'VERSION_CREATED_AT_BLOCK_DESC',
+  VersionCreatedAtDesc = 'VERSION_CREATED_AT_DESC',
+  VotingModeAsc = 'VOTING_MODE_ASC',
+  VotingModeDesc = 'VOTING_MODE_DESC',
+  YesCountAsc = 'YES_COUNT_ASC',
+  YesCountDesc = 'YES_COUNT_DESC'
+}
+
 /** A `Proposal` edge in the connection. */
 export type ProposalsEdge = {
   __typename?: 'ProposalsEdge';
@@ -2105,39 +2746,23 @@ export type ProposalsEdge = {
 
 /** Methods to use when ordering `Proposal`. */
 export enum ProposalsOrderBy {
-  AbstainCountAsc = 'ABSTAIN_COUNT_ASC',
-  AbstainCountDesc = 'ABSTAIN_COUNT_DESC',
   CreatedAtAsc = 'CREATED_AT_ASC',
   CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
   CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
   CreatedAtDesc = 'CREATED_AT_DESC',
-  EndTimeAsc = 'END_TIME_ASC',
-  EndTimeDesc = 'END_TIME_DESC',
+  CurrentVersionAsc = 'CURRENT_VERSION_ASC',
+  CurrentVersionDesc = 'CURRENT_VERSION_DESC',
   ExecutedAtAsc = 'EXECUTED_AT_ASC',
   ExecutedAtDesc = 'EXECUTED_AT_DESC',
   IdAsc = 'ID_ASC',
   IdDesc = 'ID_DESC',
-  NameAsc = 'NAME_ASC',
-  NameDesc = 'NAME_DESC',
   Natural = 'NATURAL',
-  NoCountAsc = 'NO_COUNT_ASC',
-  NoCountDesc = 'NO_COUNT_DESC',
   PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
   PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
   ProposedByAsc = 'PROPOSED_BY_ASC',
   ProposedByDesc = 'PROPOSED_BY_DESC',
-  QuorumAsc = 'QUORUM_ASC',
-  QuorumDesc = 'QUORUM_DESC',
   SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  StartTimeAsc = 'START_TIME_ASC',
-  StartTimeDesc = 'START_TIME_DESC',
-  ThresholdAsc = 'THRESHOLD_ASC',
-  ThresholdDesc = 'THRESHOLD_DESC',
-  VotingModeAsc = 'VOTING_MODE_ASC',
-  VotingModeDesc = 'VOTING_MODE_DESC',
-  YesCountAsc = 'YES_COUNT_ASC',
-  YesCountDesc = 'YES_COUNT_DESC'
+  SpaceIdDesc = 'SPACE_ID_DESC'
 }
 
 /** The root query type which gives access points into the data universe. */
@@ -2262,6 +2887,14 @@ export type Query = Node & {
   proposalTallyQueues?: Maybe<Array<ProposalTallyQueue>>;
   /** Reads and enables pagination through a set of `ProposalTallyQueue`. */
   proposalTallyQueuesConnection?: Maybe<ProposalTallyQueuesConnection>;
+  proposalVersion?: Maybe<ProposalVersion>;
+  /** Reads a single `ProposalVersion` using its globally unique `ID`. */
+  proposalVersionByNodeId?: Maybe<ProposalVersion>;
+  proposalVersionByProposalIdAndVersionCreatedAtBlock?: Maybe<ProposalVersion>;
+  /** Reads a set of `ProposalVersion`. */
+  proposalVersions?: Maybe<Array<ProposalVersion>>;
+  /** Reads and enables pagination through a set of `ProposalVersion`. */
+  proposalVersionsConnection?: Maybe<ProposalVersionsConnection>;
   proposalVote?: Maybe<ProposalVote>;
   /** Reads a single `ProposalVote` using its globally unique `ID`. */
   proposalVoteByNodeId?: Maybe<ProposalVote>;
@@ -2273,6 +2906,10 @@ export type Query = Node & {
   proposals?: Maybe<Array<Proposal>>;
   /** Reads and enables pagination through a set of `Proposal`. */
   proposalsConnection?: Maybe<ProposalsConnection>;
+  /** Reads a set of `ProposalsCurrent`. */
+  proposalsCurrents?: Maybe<Array<ProposalsCurrent>>;
+  /** Reads and enables pagination through a set of `ProposalsCurrent`. */
+  proposalsCurrentsConnection?: Maybe<ProposalsCurrentsConnection>;
   /**
    * Exposes the root query type nested one level down. This is helpful for Relay 1
    * which can only query top level fields if they are in a particular form.
@@ -2306,6 +2943,10 @@ export type Query = Node & {
   space?: Maybe<Space>;
   /** Reads a single `Space` using its globally unique `ID`. */
   spaceByNodeId?: Maybe<Space>;
+  /** Reads a set of `SpaceEditorCount`. */
+  spaceEditorCounts?: Maybe<Array<SpaceEditorCount>>;
+  /** Reads and enables pagination through a set of `SpaceEditorCount`. */
+  spaceEditorCountsConnection?: Maybe<SpaceEditorCountsConnection>;
   spaceScore?: Maybe<SpaceScore>;
   /** Reads a single `SpaceScore` using its globally unique `ID`. */
   spaceScoreByNodeId?: Maybe<SpaceScore>;
@@ -2313,6 +2954,13 @@ export type Query = Node & {
   spaceScores?: Maybe<Array<SpaceScore>>;
   /** Reads and enables pagination through a set of `SpaceScore`. */
   spaceScoresConnection?: Maybe<SpaceScoresConnection>;
+  spaceVotingSetting?: Maybe<SpaceVotingSetting>;
+  /** Reads a single `SpaceVotingSetting` using its globally unique `ID`. */
+  spaceVotingSettingByNodeId?: Maybe<SpaceVotingSetting>;
+  /** Reads a set of `SpaceVotingSetting`. */
+  spaceVotingSettings?: Maybe<Array<SpaceVotingSetting>>;
+  /** Reads and enables pagination through a set of `SpaceVotingSetting`. */
+  spaceVotingSettingsConnection?: Maybe<SpaceVotingSettingsConnection>;
   /** Reads a set of `Space`. */
   spaces?: Maybe<Array<Space>>;
   /** Reads and enables pagination through a set of `Space`. */
@@ -2906,7 +3554,9 @@ export type QueryProposalArgs = {
 
 /** The root query type which gives access points into the data universe. */
 export type QueryProposalActionArgs = {
-  id: Scalars['UUID']['input'];
+  index: Scalars['Int']['input'];
+  proposalId: Scalars['UUID']['input'];
+  proposalVersion: Scalars['Int']['input'];
 };
 
 
@@ -2981,8 +3631,52 @@ export type QueryProposalTallyQueuesConnectionArgs = {
 
 
 /** The root query type which gives access points into the data universe. */
+export type QueryProposalVersionArgs = {
+  proposalId: Scalars['UUID']['input'];
+  proposalVersion: Scalars['Int']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVersionByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVersionByProposalIdAndVersionCreatedAtBlockArgs = {
+  proposalId: Scalars['UUID']['input'];
+  versionCreatedAtBlock: Scalars['String']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVersionsArgs = {
+  condition?: InputMaybe<ProposalVersionCondition>;
+  filter?: InputMaybe<ProposalVersionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalVersionsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVersionCondition>;
+  filter?: InputMaybe<ProposalVersionFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
 export type QueryProposalVoteArgs = {
   proposalId: Scalars['UUID']['input'];
+  proposalVersion: Scalars['Int']['input'];
   voterId: Scalars['UUID']['input'];
 };
 
@@ -3036,6 +3730,29 @@ export type QueryProposalsConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalsCurrentsArgs = {
+  condition?: InputMaybe<ProposalsCurrentCondition>;
+  filter?: InputMaybe<ProposalsCurrentFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsCurrentsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QueryProposalsCurrentsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalsCurrentCondition>;
+  filter?: InputMaybe<ProposalsCurrentFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsCurrentsOrderBy>>;
 };
 
 
@@ -3182,6 +3899,29 @@ export type QuerySpaceByNodeIdArgs = {
 
 
 /** The root query type which gives access points into the data universe. */
+export type QuerySpaceEditorCountsArgs = {
+  condition?: InputMaybe<SpaceEditorCountCondition>;
+  filter?: InputMaybe<SpaceEditorCountFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceEditorCountsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceEditorCountsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SpaceEditorCountCondition>;
+  filter?: InputMaybe<SpaceEditorCountFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceEditorCountsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
 export type QuerySpaceScoreArgs = {
   spaceId: Scalars['UUID']['input'];
 };
@@ -3213,6 +3953,41 @@ export type QuerySpaceScoresConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SpaceScoresOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceVotingSettingArgs = {
+  spaceId: Scalars['UUID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceVotingSettingByNodeIdArgs = {
+  nodeId: Scalars['ID']['input'];
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceVotingSettingsArgs = {
+  condition?: InputMaybe<SpaceVotingSettingCondition>;
+  filter?: InputMaybe<SpaceVotingSettingFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
+};
+
+
+/** The root query type which gives access points into the data universe. */
+export type QuerySpaceVotingSettingsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SpaceVotingSettingCondition>;
+  filter?: InputMaybe<SpaceVotingSettingFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
 };
 
 
@@ -3642,6 +4417,7 @@ export type RelationFilter = {
 export type RelationVersion = Node & {
   __typename?: 'RelationVersion';
   contextEdgeTypeId?: Maybe<Scalars['UUID']['output']>;
+  contextLastToEntityId?: Maybe<Scalars['UUID']['output']>;
   contextRootId?: Maybe<Scalars['UUID']['output']>;
   entityId: Scalars['UUID']['output'];
   fromEntityId: Scalars['UUID']['output'];
@@ -3667,6 +4443,8 @@ export type RelationVersion = Node & {
 export type RelationVersionCondition = {
   /** Checks for equality with the object’s `contextEdgeTypeId` field. */
   contextEdgeTypeId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `contextLastToEntityId` field. */
+  contextLastToEntityId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `contextRootId` field. */
   contextRootId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `entityId` field. */
@@ -3703,6 +4481,8 @@ export type RelationVersionFilter = {
   and?: InputMaybe<Array<RelationVersionFilter>>;
   /** Filter by the object’s `contextEdgeTypeId` field. */
   contextEdgeTypeId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `contextLastToEntityId` field. */
+  contextLastToEntityId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `contextRootId` field. */
   contextRootId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `entityId` field. */
@@ -3763,6 +4543,8 @@ export type RelationVersionsEdge = {
 export enum RelationVersionsOrderBy {
   ContextEdgeTypeIdAsc = 'CONTEXT_EDGE_TYPE_ID_ASC',
   ContextEdgeTypeIdDesc = 'CONTEXT_EDGE_TYPE_ID_DESC',
+  ContextLastToEntityIdAsc = 'CONTEXT_LAST_TO_ENTITY_ID_ASC',
+  ContextLastToEntityIdDesc = 'CONTEXT_LAST_TO_ENTITY_ID_DESC',
   ContextRootIdAsc = 'CONTEXT_ROOT_ID_ASC',
   ContextRootIdDesc = 'CONTEXT_ROOT_ID_DESC',
   EntityIdAsc = 'ENTITY_ID_ASC',
@@ -3944,6 +4726,14 @@ export type Space = Node & {
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
   page?: Maybe<Entity>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotes: Array<ProposalVote>;
+  /** Reads and enables pagination through a set of `ProposalVote`. */
+  proposalVotesConnection: ProposalVotesConnection;
+  /** Reads and enables pagination through a set of `Proposal`. */
+  proposals: Array<Proposal>;
+  /** Reads and enables pagination through a set of `Proposal`. */
+  proposalsConnection: ProposalsConnection;
   /** Reads and enables pagination through a set of `Relation`. */
   relations: Array<Relation>;
   /** Reads and enables pagination through a set of `Relation`. */
@@ -3956,10 +4746,25 @@ export type Space = Node & {
   relationsByToSpaceIdConnection: RelationsConnection;
   /** Reads and enables pagination through a set of `Relation`. */
   relationsConnection: RelationsConnection;
+  /** Reads a single `SpaceVotingSetting` that is related to this `Space`. */
+  spaceVotingSetting?: Maybe<SpaceVotingSetting>;
+  /**
+   * Reads and enables pagination through a set of `SpaceVotingSetting`.
+   * @deprecated Please use spaceVotingSetting instead
+   */
+  spaceVotingSettingsConnection: SpaceVotingSettingsConnection;
   /** Reads and enables pagination through a set of `SubspaceTopic`. */
   subspaceTopics: Array<SubspaceTopic>;
   /** Reads and enables pagination through a set of `SubspaceTopic`. */
   subspaceTopicsConnection: SubspaceTopicsConnection;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByChildSpaceIdConnection: SubspacesConnection;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceId: Array<Subspace>;
+  /** Reads and enables pagination through a set of `Subspace`. */
+  subspacesByParentSpaceIdConnection: SubspacesConnection;
   /** Reads a single `Entity` that is related to this `Space`. */
   topic?: Maybe<Entity>;
   topicId?: Maybe<Scalars['UUID']['output']>;
@@ -4010,6 +4815,48 @@ export type SpaceMembersListArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<MembersOrderBy>>;
+};
+
+
+export type SpaceProposalVotesArgs = {
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type SpaceProposalVotesConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalVoteCondition>;
+  filter?: InputMaybe<ProposalVoteFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
+};
+
+
+export type SpaceProposalsArgs = {
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
+};
+
+
+export type SpaceProposalsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<ProposalCondition>;
+  filter?: InputMaybe<ProposalFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
 };
 
 
@@ -4076,6 +4923,18 @@ export type SpaceRelationsConnectionArgs = {
 };
 
 
+export type SpaceSpaceVotingSettingsConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SpaceVotingSettingCondition>;
+  filter?: InputMaybe<SpaceVotingSettingFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
+};
+
+
 export type SpaceSubspaceTopicsArgs = {
   condition?: InputMaybe<SubspaceTopicCondition>;
   filter?: InputMaybe<SubspaceTopicFilter>;
@@ -4094,6 +4953,48 @@ export type SpaceSubspaceTopicsConnectionArgs = {
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
+};
+
+
+export type SpaceSubspacesByChildSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdArgs = {
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
+};
+
+
+export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
+  after?: InputMaybe<Scalars['Cursor']['input']>;
+  before?: InputMaybe<Scalars['Cursor']['input']>;
+  condition?: InputMaybe<SubspaceCondition>;
+  filter?: InputMaybe<SubspaceFilter>;
+  first?: InputMaybe<Scalars['Int']['input']>;
+  last?: InputMaybe<Scalars['Int']['input']>;
+  offset?: InputMaybe<Scalars['Int']['input']>;
+  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
 };
 
 
@@ -4129,6 +5030,68 @@ export type SpaceCondition = {
   type?: InputMaybe<SpaceTypes>;
 };
 
+export type SpaceEditorCount = {
+  __typename?: 'SpaceEditorCount';
+  spaceId?: Maybe<Scalars['UUID']['output']>;
+  totalEditors?: Maybe<Scalars['BigInt']['output']>;
+};
+
+/**
+ * A condition to be used against `SpaceEditorCount` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type SpaceEditorCountCondition = {
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `totalEditors` field. */
+  totalEditors?: InputMaybe<Scalars['BigInt']['input']>;
+};
+
+/** A filter to be used against `SpaceEditorCount` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceEditorCountFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<SpaceEditorCountFilter>>;
+  /** Negates the expression. */
+  not?: InputMaybe<SpaceEditorCountFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<SpaceEditorCountFilter>>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `totalEditors` field. */
+  totalEditors?: InputMaybe<BigIntFilter>;
+};
+
+/** A connection to a list of `SpaceEditorCount` values. */
+export type SpaceEditorCountsConnection = {
+  __typename?: 'SpaceEditorCountsConnection';
+  /** A list of edges which contains the `SpaceEditorCount` and cursor to aid in pagination. */
+  edges: Array<SpaceEditorCountsEdge>;
+  /** A list of `SpaceEditorCount` objects. */
+  nodes: Array<SpaceEditorCount>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `SpaceEditorCount` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `SpaceEditorCount` edge in the connection. */
+export type SpaceEditorCountsEdge = {
+  __typename?: 'SpaceEditorCountsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `SpaceEditorCount` at the end of the edge. */
+  node: SpaceEditorCount;
+};
+
+/** Methods to use when ordering `SpaceEditorCount`. */
+export enum SpaceEditorCountsOrderBy {
+  Natural = 'NATURAL',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  TotalEditorsAsc = 'TOTAL_EDITORS_ASC',
+  TotalEditorsDesc = 'TOTAL_EDITORS_DESC'
+}
+
 /** A filter to be used against `Space` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceFilter = {
   /** Filter by the object’s `address` field. */
@@ -4149,6 +5112,14 @@ export type SpaceFilter = {
   not?: InputMaybe<SpaceFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<SpaceFilter>>;
+  /** Filter by the object’s `proposalVotesConnection` relation. */
+  proposalVotesConnection?: InputMaybe<SpaceToManyProposalVoteFilter>;
+  /** Some related `proposalVotesConnection` exist. */
+  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `proposalsConnection` relation. */
+  proposalsConnection?: InputMaybe<SpaceToManyProposalFilter>;
+  /** Some related `proposalsConnection` exist. */
+  proposalsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `relationsByFromSpaceIdConnection` relation. */
   relationsByFromSpaceIdConnection?: InputMaybe<SpaceToManyRelationFilter>;
   /** Some related `relationsByFromSpaceIdConnection` exist. */
@@ -4161,10 +5132,22 @@ export type SpaceFilter = {
   relationsConnection?: InputMaybe<SpaceToManyRelationFilter>;
   /** Some related `relationsConnection` exist. */
   relationsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `spaceVotingSetting` relation. */
+  spaceVotingSetting?: InputMaybe<SpaceVotingSettingFilter>;
+  /** A related `spaceVotingSetting` exists. */
+  spaceVotingSettingExists?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `subspaceTopicsConnection` relation. */
   subspaceTopicsConnection?: InputMaybe<SpaceToManySubspaceTopicFilter>;
   /** Some related `subspaceTopicsConnection` exist. */
   subspaceTopicsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspacesByChildSpaceIdConnection` relation. */
+  subspacesByChildSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByChildSpaceIdConnection` exist. */
+  subspacesByChildSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Filter by the object’s `subspacesByParentSpaceIdConnection` relation. */
+  subspacesByParentSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  /** Some related `subspacesByParentSpaceIdConnection` exist. */
+  subspacesByParentSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by the object’s `topic` relation. */
   topic?: InputMaybe<EntityFilter>;
   /** A related `topic` exists. */
@@ -4272,6 +5255,26 @@ export type SpaceToManyMemberFilter = {
   some?: InputMaybe<MemberFilter>;
 };
 
+/** A filter to be used against many `Proposal` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManyProposalFilter = {
+  /** Every related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalFilter>;
+  /** No related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalFilter>;
+  /** Some related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalFilter>;
+};
+
+/** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManyProposalVoteFilter = {
+  /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<ProposalVoteFilter>;
+  /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<ProposalVoteFilter>;
+  /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<ProposalVoteFilter>;
+};
+
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyRelationFilter = {
   /** Every related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
@@ -4280,6 +5283,16 @@ export type SpaceToManyRelationFilter = {
   none?: InputMaybe<RelationFilter>;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
   some?: InputMaybe<RelationFilter>;
+};
+
+/** A filter to be used against many `Subspace` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceToManySubspaceFilter = {
+  /** Every related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  every?: InputMaybe<SubspaceFilter>;
+  /** No related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  none?: InputMaybe<SubspaceFilter>;
+  /** Some related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
+  some?: InputMaybe<SubspaceFilter>;
 };
 
 /** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
@@ -4332,6 +5345,132 @@ export type SpaceTypesFilter = {
   /** Not included in the specified list. */
   notIn?: InputMaybe<Array<SpaceTypes>>;
 };
+
+export type SpaceVotingSetting = Node & {
+  __typename?: 'SpaceVotingSetting';
+  disableFastPathAccessForNewMembers: Scalars['Boolean']['output'];
+  duration: Scalars['BigInt']['output'];
+  executionGracePeriod: Scalars['BigInt']['output'];
+  flatSupportThreshold: Scalars['BigInt']['output'];
+  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
+  nodeId: Scalars['ID']['output'];
+  partialPercentageSupportThreshold: Scalars['BigInt']['output'];
+  quorum: Scalars['BigInt']['output'];
+  /** Reads a single `Space` that is related to this `SpaceVotingSetting`. */
+  space?: Maybe<Space>;
+  spaceId: Scalars['UUID']['output'];
+  universalPercentageSupportThreshold: Scalars['BigInt']['output'];
+  updatedAt: Scalars['String']['output'];
+  updatedAtBlock: Scalars['String']['output'];
+};
+
+/**
+ * A condition to be used against `SpaceVotingSetting` object types. All fields are
+ * tested for equality and combined with a logical ‘and.’
+ */
+export type SpaceVotingSettingCondition = {
+  /** Checks for equality with the object’s `disableFastPathAccessForNewMembers` field. */
+  disableFastPathAccessForNewMembers?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Checks for equality with the object’s `duration` field. */
+  duration?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `executionGracePeriod` field. */
+  executionGracePeriod?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `quorum` field. */
+  quorum?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `spaceId` field. */
+  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  /** Checks for equality with the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<Scalars['String']['input']>;
+  /** Checks for equality with the object’s `updatedAtBlock` field. */
+  updatedAtBlock?: InputMaybe<Scalars['String']['input']>;
+};
+
+/** A filter to be used against `SpaceVotingSetting` object types. All fields are combined with a logical ‘and.’ */
+export type SpaceVotingSettingFilter = {
+  /** Checks for all expressions in this list. */
+  and?: InputMaybe<Array<SpaceVotingSettingFilter>>;
+  /** Filter by the object’s `disableFastPathAccessForNewMembers` field. */
+  disableFastPathAccessForNewMembers?: InputMaybe<BooleanFilter>;
+  /** Filter by the object’s `duration` field. */
+  duration?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `executionGracePeriod` field. */
+  executionGracePeriod?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `flatSupportThreshold` field. */
+  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Negates the expression. */
+  not?: InputMaybe<SpaceVotingSettingFilter>;
+  /** Checks for any expressions in this list. */
+  or?: InputMaybe<Array<SpaceVotingSettingFilter>>;
+  /** Filter by the object’s `partialPercentageSupportThreshold` field. */
+  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `quorum` field. */
+  quorum?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `space` relation. */
+  space?: InputMaybe<SpaceFilter>;
+  /** Filter by the object’s `spaceId` field. */
+  spaceId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `universalPercentageSupportThreshold` field. */
+  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  /** Filter by the object’s `updatedAt` field. */
+  updatedAt?: InputMaybe<StringFilter>;
+  /** Filter by the object’s `updatedAtBlock` field. */
+  updatedAtBlock?: InputMaybe<StringFilter>;
+};
+
+/** A connection to a list of `SpaceVotingSetting` values. */
+export type SpaceVotingSettingsConnection = {
+  __typename?: 'SpaceVotingSettingsConnection';
+  /** A list of edges which contains the `SpaceVotingSetting` and cursor to aid in pagination. */
+  edges: Array<SpaceVotingSettingsEdge>;
+  /** A list of `SpaceVotingSetting` objects. */
+  nodes: Array<SpaceVotingSetting>;
+  /** Information to aid in pagination. */
+  pageInfo: PageInfo;
+  /** The count of *all* `SpaceVotingSetting` you could get from the connection. */
+  totalCount: Scalars['Int']['output'];
+};
+
+/** A `SpaceVotingSetting` edge in the connection. */
+export type SpaceVotingSettingsEdge = {
+  __typename?: 'SpaceVotingSettingsEdge';
+  /** A cursor for use in pagination. */
+  cursor?: Maybe<Scalars['Cursor']['output']>;
+  /** The `SpaceVotingSetting` at the end of the edge. */
+  node: SpaceVotingSetting;
+};
+
+/** Methods to use when ordering `SpaceVotingSetting`. */
+export enum SpaceVotingSettingsOrderBy {
+  DisableFastPathAccessForNewMembersAsc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_ASC',
+  DisableFastPathAccessForNewMembersDesc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_DESC',
+  DurationAsc = 'DURATION_ASC',
+  DurationDesc = 'DURATION_DESC',
+  ExecutionGracePeriodAsc = 'EXECUTION_GRACE_PERIOD_ASC',
+  ExecutionGracePeriodDesc = 'EXECUTION_GRACE_PERIOD_DESC',
+  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
+  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
+  Natural = 'NATURAL',
+  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
+  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
+  QuorumAsc = 'QUORUM_ASC',
+  QuorumDesc = 'QUORUM_DESC',
+  SpaceIdAsc = 'SPACE_ID_ASC',
+  SpaceIdDesc = 'SPACE_ID_DESC',
+  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
+  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
+  UpdatedAtAsc = 'UPDATED_AT_ASC',
+  UpdatedAtBlockAsc = 'UPDATED_AT_BLOCK_ASC',
+  UpdatedAtBlockDesc = 'UPDATED_AT_BLOCK_DESC',
+  UpdatedAtDesc = 'UPDATED_AT_DESC'
+}
 
 /** A connection to a list of `Space` values. */
 export type SpacesConnection = {
@@ -4450,9 +5589,13 @@ export type StringFilter = {
 
 export type Subspace = Node & {
   __typename?: 'Subspace';
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  childSpace?: Maybe<Space>;
   childSpaceId: Scalars['UUID']['output'];
   /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
   nodeId: Scalars['ID']['output'];
+  /** Reads a single `Space` that is related to this `Subspace`. */
+  parentSpace?: Maybe<Space>;
   parentSpaceId: Scalars['UUID']['output'];
   type: SubspaceType;
 };
@@ -4474,12 +5617,16 @@ export type SubspaceCondition = {
 export type SubspaceFilter = {
   /** Checks for all expressions in this list. */
   and?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `childSpace` relation. */
+  childSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `childSpaceId` field. */
   childSpaceId?: InputMaybe<UuidFilter>;
   /** Negates the expression. */
   not?: InputMaybe<SubspaceFilter>;
   /** Checks for any expressions in this list. */
   or?: InputMaybe<Array<SubspaceFilter>>;
+  /** Filter by the object’s `parentSpace` relation. */
+  parentSpace?: InputMaybe<SpaceFilter>;
   /** Filter by the object’s `parentSpaceId` field. */
   parentSpaceId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `type` field. */
@@ -4949,6 +6096,7 @@ export type ValueVersion = Node & {
   boolean?: Maybe<Scalars['Boolean']['output']>;
   bytes?: Maybe<Scalars['Bytes']['output']>;
   contextEdgeTypeId?: Maybe<Scalars['UUID']['output']>;
+  contextLastToEntityId?: Maybe<Scalars['UUID']['output']>;
   contextRootId?: Maybe<Scalars['UUID']['output']>;
   date?: Maybe<Scalars['DateString']['output']>;
   datetime?: Maybe<Scalars['DateTimeString']['output']>;
@@ -4986,6 +6134,8 @@ export type ValueVersionCondition = {
   bytes?: InputMaybe<Scalars['String']['input']>;
   /** Checks for equality with the object’s `contextEdgeTypeId` field. */
   contextEdgeTypeId?: InputMaybe<Scalars['UUID']['input']>;
+  /** Checks for equality with the object’s `contextLastToEntityId` field. */
+  contextLastToEntityId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `contextRootId` field. */
   contextRootId?: InputMaybe<Scalars['UUID']['input']>;
   /** Checks for equality with the object’s `date` field. */
@@ -5040,6 +6190,8 @@ export type ValueVersionFilter = {
   boolean?: InputMaybe<BooleanFilter>;
   /** Filter by the object’s `contextEdgeTypeId` field. */
   contextEdgeTypeId?: InputMaybe<UuidFilter>;
+  /** Filter by the object’s `contextLastToEntityId` field. */
+  contextLastToEntityId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `contextRootId` field. */
   contextRootId?: InputMaybe<UuidFilter>;
   /** Filter by the object’s `date` field. */
@@ -5120,6 +6272,8 @@ export enum ValueVersionsOrderBy {
   BytesDesc = 'BYTES_DESC',
   ContextEdgeTypeIdAsc = 'CONTEXT_EDGE_TYPE_ID_ASC',
   ContextEdgeTypeIdDesc = 'CONTEXT_EDGE_TYPE_ID_DESC',
+  ContextLastToEntityIdAsc = 'CONTEXT_LAST_TO_ENTITY_ID_ASC',
+  ContextLastToEntityIdDesc = 'CONTEXT_LAST_TO_ENTITY_ID_DESC',
   ContextRootIdAsc = 'CONTEXT_ROOT_ID_ASC',
   ContextRootIdDesc = 'CONTEXT_ROOT_ID_DESC',
   DatetimeAsc = 'DATETIME_ASC',
@@ -5714,7 +6868,7 @@ export type EntityBacklinksPageQuery = { __typename?: 'Query', entity?: { __type
 export type FullSpaceFragment = { __typename?: 'Space', id: any, type: SpaceTypes, address: string, topicId?: any | null, topic?: (
     { __typename?: 'Entity' }
     & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
-  ) | null, members: { __typename?: 'MembersConnection', totalCount: number }, membersList: Array<{ __typename?: 'Member', memberSpaceId: any }>, editors: { __typename?: 'EditorsConnection', totalCount: number }, editorsList: Array<{ __typename?: 'Editor', memberSpaceId: any }>, page?: (
+  ) | null, members: { __typename?: 'MembersConnection', totalCount: number }, membersList: Array<{ __typename?: 'Member', memberSpaceId: any }>, editors: { __typename?: 'EditorsConnection', totalCount: number }, editorsList: Array<{ __typename?: 'Editor', memberSpaceId: any }>, spaceVotingSetting?: { __typename?: 'SpaceVotingSetting', flatSupportThreshold: any } | null, page?: (
     { __typename?: 'Entity' }
     & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
   ) | null } & { ' $fragmentName'?: 'FullSpaceFragment' };
@@ -5902,7 +7056,7 @@ export const FullRelationFragmentDoc = {"kind":"Document","definitions":[{"kind"
 export const PropertyFragmentFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<PropertyFragmentFragment, unknown>;
 export const EntityValueFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}}]} as unknown as DocumentNode<EntityValueFieldsFragment, unknown>;
 export const FullEntityFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<FullEntityFragment, unknown>;
-export const FullSpaceFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}}]} as unknown as DocumentNode<FullSpaceFragment, unknown>;
+export const FullSpaceFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spaceVotingSetting"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flatSupportThreshold"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}}]} as unknown as DocumentNode<FullSpaceFragment, unknown>;
 export const AllEntitiesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AllEntities"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceIds"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUIDFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"typeIds"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUIDFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"EntitiesOrderBy"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"Variable","name":{"kind":"Name","value":"orderBy"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceIds"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceIds"}}},{"kind":"Argument","name":{"kind":"Name","value":"typeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"typeId"}}},{"kind":"Argument","name":{"kind":"Name","value":"typeIds"},"value":{"kind":"Variable","name":{"kind":"Name","value":"typeIds"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allValuesList"},"name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allRelationsList"},"name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<AllEntitiesQuery, AllEntitiesQueryVariables>;
 export const EntitiesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitiesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<EntitiesBatchQuery, EntitiesBatchQueryVariables>;
 export const EntitySpacesBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitySpacesBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","alias":{"kind":"Name","value":"allValuesList"},"name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allRelationsList"},"name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}}]}}]}}]}}]} as unknown as DocumentNode<EntitySpacesBatchQuery, EntitySpacesBatchQueryVariables>;
@@ -5917,9 +7071,9 @@ export const EntityExistsDocument = {"kind":"Document","definitions":[{"kind":"O
 export const EntityCommentReplyBacklinksPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityCommentReplyBacklinksPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"replyToTypeId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"commentTypeId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"backlinksList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"typeId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"replyToTypeId"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"fromEntity"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"typeIds"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"overlaps"},"value":{"kind":"ListValue","values":[{"kind":"Variable","name":{"kind":"Name","value":"commentTypeId"}}]}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]}}]} as unknown as DocumentNode<EntityCommentReplyBacklinksPageQuery, EntityCommentReplyBacklinksPageQueryVariables>;
 export const EntitiesBatchForCommentsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntitiesBatchForComments"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<EntitiesBatchForCommentsQuery, EntitiesBatchForCommentsQueryVariables>;
 export const EntityBacklinksPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityBacklinksPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entity"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"backlinksList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<EntityBacklinksPageQuery, EntityBacklinksPageQueryVariables>;
-export const SpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Space"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpaceQuery, SpaceQueryVariables>;
-export const SpacesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Spaces"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"SpaceFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesQuery, SpacesQueryVariables>;
-export const SpacesWhereMemberDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SpacesWhereMember"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"members"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"some"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"memberSpaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}}}]}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesWhereMemberQuery, SpacesWhereMemberQueryVariables>;
+export const SpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Space"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spaceVotingSetting"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flatSupportThreshold"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpaceQuery, SpaceQueryVariables>;
+export const SpacesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Spaces"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"SpaceFilter"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spaceVotingSetting"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flatSupportThreshold"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesQuery, SpacesQueryVariables>;
+export const SpacesWhereMemberDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SpacesWhereMember"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaces"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"members"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"some"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"memberSpaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}}}]}}]}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullSpace"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"PropertyFragment"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"PropertyInfo"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}},{"kind":"Field","name":{"kind":"Name","value":"isType"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"EntityValueFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Value"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"PropertyFragment"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAtBlock"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"EntityValueFields"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationFields"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"FullSpace"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Space"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"address"}},{"kind":"Field","name":{"kind":"Name","value":"topicId"}},{"kind":"Field","name":{"kind":"Name","value":"topic"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editors"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spaceVotingSetting"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"flatSupportThreshold"}}]}},{"kind":"Field","name":{"kind":"Name","value":"page"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FullEntity"}}]}}]}}]} as unknown as DocumentNode<SpacesWhereMemberQuery, SpacesWhereMemberQueryVariables>;
 export const IsMemberOfSpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"IsMemberOfSpace"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"membersList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"memberSpaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}}]}}]}}]} as unknown as DocumentNode<IsMemberOfSpaceQuery, IsMemberOfSpaceQueryVariables>;
 export const IsEditorOfSpaceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"IsEditorOfSpace"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"editorsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"memberSpaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"memberSpaceId"}}}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}}]}}]}}]} as unknown as DocumentNode<IsEditorOfSpaceQuery, IsEditorOfSpaceQueryVariables>;
 export const SpaceMembersPageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"SpaceMembersPage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"space"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"members"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"membersList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"memberSpaceId"}}]}}]}}]}}]} as unknown as DocumentNode<SpaceMembersPageQuery, SpaceMembersPageQueryVariables>;

@@ -175,6 +175,16 @@ export const Space = Schema.Struct({
     })
   ),
 
+  // BigInt in GraphQL is delivered as a decimal string. Null for personal
+  // spaces or when the indexer hasn't attached voting settings to a fresh DAO.
+  spaceVotingSetting: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        flatSupportThreshold: Schema.String,
+      })
+    )
+  ),
+
   topic: Schema.optional(Schema.NullOr(Schema.Unknown)),
   page: Schema.NullOr(Entity),
 });

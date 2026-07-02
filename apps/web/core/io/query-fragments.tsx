@@ -450,6 +450,14 @@ export const spaceFragment = graphql(/* GraphQL */ `
       memberSpaceId
     }
 
+    # DAO voting settings. Only populated on DAO spaces after the indexer has
+    # ingested the DAO's createDAOSpaceProxy event. flatSupportThreshold gates
+    # the fast path — if it is 0 the contract treats fast-path voting as
+    # disabled and reverts every vote on a FAST proposal with CanNotVote().
+    spaceVotingSetting {
+      flatSupportThreshold
+    }
+
     page {
       ...FullEntity
     }
