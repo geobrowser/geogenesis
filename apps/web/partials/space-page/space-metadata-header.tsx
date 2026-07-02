@@ -12,7 +12,6 @@ import { Create } from '~/design-system/icons/create';
 
 import { RelationsGroup } from '../entity-page/editable-entity-page';
 import { EntityVoteButtons } from '../entity-page/entity-vote-buttons';
-import { AddDataChip } from './add-data-panel';
 
 interface SpacePageMetadataHeaderProps {
   spaceId: string;
@@ -56,7 +55,6 @@ export function SpacePageMetadataHeader({ spaceId, membersComponent }: SpacePage
           additionalTypeChips
         )}
         {membersComponent}
-        <AddDataChip spaceId={spaceId} />
       </div>
       <EntityVoteButtons entityId={id} spaceId={spaceId} />
     </div>
