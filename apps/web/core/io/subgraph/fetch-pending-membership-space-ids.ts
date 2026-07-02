@@ -1,6 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 import { fetchActiveEditorRequest } from './fetch-proposed-editors';
@@ -54,19 +55,6 @@ function proposalsByIdQuery(proposalIds: string[]): string {
 // with many outstanding actions can't fan out into hundreds of simultaneous
 // requests (SSR latency / rate limits).
 const CONFIRM_CONCURRENCY = 8;
-
-async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let cursor = 0;
-  const worker = async () => {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return results;
-}
 
 async function runQuery<T>(query: string, label: string): Promise<T | null> {
   const resultOrError = await Effect.runPromise(

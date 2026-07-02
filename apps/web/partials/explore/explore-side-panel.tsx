@@ -48,23 +48,29 @@ export function ExploreSidePanel({
   if (!hasContent) return null;
 
   // Build only the sections that have content, then join them with dividers so
-  // an empty section never leaves a dangling <hr> (e.g. join-spaces-only).
-  const sections: React.ReactNode[] = [];
+  // an empty section never leaves a dangling <hr> (e.g. join-spaces-only). Each
+  // carries a stable key so appearing/disappearing sections don't remount others.
+  const sections: { key: string; node: React.ReactNode }[] = [];
   if (joinableSpaces.length > 0) {
-    sections.push(<JoinSpacesSection key="join-spaces" spaces={joinableSpaces} />);
+    sections.push({ key: 'join-spaces', node: <JoinSpacesSection spaces={joinableSpaces} /> });
   }
   if (unclaimedTopics.length > 0 || parentTopicOptions.length > 0) {
-    sections.push(<ClaimATopicSection key="claim" topics={unclaimedTopics} parentTopicOptions={parentTopicOptions} />);
+    sections.push({
+      key: 'claim',
+      node: <ClaimATopicSection topics={unclaimedTopics} parentTopicOptions={parentTopicOptions} />,
+    });
   }
   if (recentlyClaimedSpaces.length > 0) {
-    sections.push(
-      <RecentlyClaimedSection
-        key="recently-claimed"
-        spaces={recentlyClaimedSpaces}
-        pendingMembershipSpaceIds={pendingSet}
-        memberOrEditorSpaceIds={memberOrEditorSet}
-      />
-    );
+    sections.push({
+      key: 'recently-claimed',
+      node: (
+        <RecentlyClaimedSection
+          spaces={recentlyClaimedSpaces}
+          pendingMembershipSpaceIds={pendingSet}
+          memberOrEditorSpaceIds={memberOrEditorSet}
+        />
+      ),
+    });
   }
 
   return (
@@ -79,9 +85,9 @@ export function ExploreSidePanel({
       <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <div className="flex flex-col pt-5 pb-6">
           {sections.map((section, index) => (
-            <React.Fragment key={index}>
+            <React.Fragment key={section.key}>
               {index > 0 ? <hr className="my-6 border-t border-divider" /> : null}
-              {section}
+              {section.node}
             </React.Fragment>
           ))}
         </div>

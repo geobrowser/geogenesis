@@ -21,7 +21,11 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { requestedMembershipSpacesAtom, requestedSpacesForOwner } from '~/core/state/requested-membership';
+import {
+  activeRequestedSpacesForOwner,
+  reconcileRequestedSpaces,
+  requestedMembershipSpacesAtom,
+} from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
@@ -302,12 +306,12 @@ export function BrowseSidebar() {
 
   // Optimistic, persisted bridge: spaces requested this session (from anywhere)
   // show under "Member of" as "Membership pending" until the server-fetched data
-  // reports them, which then wins via id dedup. Scoped to this account so a
-  // signed-out user or a prior account never inherits the localStorage state.
+  // reports them, which then wins via id dedup. Scoped to this account (never
+  // leaks across accounts) and expired entries drop out.
   const allRequestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
   const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
   const requestedSpaces = React.useMemo(
-    () => requestedSpacesForOwner(allRequestedSpaces, personalSpaceId),
+    () => activeRequestedSpacesForOwner(allRequestedSpaces, personalSpaceId, Date.now()),
     [allRequestedSpaces, personalSpaceId]
   );
 
@@ -318,14 +322,10 @@ export function BrowseSidebar() {
     return ids;
   }, [data?.editorOf, data?.memberOf]);
 
-  // Once the server tracks a requested space (pending row, member, or editor),
-  // drop this account's optimistic entry so it can't linger after approval/refresh.
+  // Persist reconciliation: drop expired entries and this account's entries the
+  // server now tracks (pending row, member, or editor) so localStorage self-cleans.
   React.useEffect(() => {
-    if (!personalSpaceId || serverTrackedIds.size === 0) return;
-    setRequestedSpaces(prev => {
-      const next = prev.filter(s => !(s.ownerId === personalSpaceId && serverTrackedIds.has(normId(s.id))));
-      return next.length === prev.length ? prev : next;
-    });
+    setRequestedSpaces(prev => reconcileRequestedSpaces(prev, personalSpaceId, serverTrackedIds, Date.now()));
   }, [serverTrackedIds, setRequestedSpaces, personalSpaceId]);
 
   const memberOfRows = React.useMemo<BrowseSpaceRow[]>(() => {

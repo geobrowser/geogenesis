@@ -12,6 +12,7 @@ import {
   type RecentlyClaimedSpace,
   fetchRecentlyClaimedSpaces,
 } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExplorePage } from '~/partials/explore/explore-page';
@@ -82,17 +83,17 @@ export default async function ExploreRoutePage() {
       if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
       candidateIds.set(normalized, s.spaceId);
     }
-    const checks = await Promise.all(
-      [...candidateIds.values()].map(async spaceId => {
-        try {
-          // Only an open vote is "pending"; a stuck request lets the Join button reappear.
-          const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
-          return req != null && !req.isVotingEnded ? spaceId : null;
-        } catch {
-          return null;
-        }
-      })
-    );
+    // Cap concurrency: with up to ~60 featured + recently-claimed candidates this
+    // is one REST call each, and an unbounded fan-out would burst the indexer.
+    const checks = await mapWithConcurrency([...candidateIds.values()], 8, async spaceId => {
+      try {
+        // Only an open vote is "pending"; a stuck request lets the Join button reappear.
+        const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
+        return req != null && !req.isVotingEnded ? spaceId : null;
+      } catch {
+        return null;
+      }
+    });
     pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
   }
 

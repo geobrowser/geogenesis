@@ -117,6 +117,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
         upsertRequestedMembershipSpace(prev, {
           id: spaceId,
           ownerId: personalSpaceId,
+          requestedAt: Date.now(),
           name: space?.name,
           image: space?.image,
         })

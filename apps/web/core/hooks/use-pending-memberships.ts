@@ -9,9 +9,9 @@ import { useAtomValue } from 'jotai';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { fetchPendingMembershipSpaceIds } from '~/core/io/subgraph/fetch-pending-membership-space-ids';
 import {
+  activeRequestedSpacesForOwner,
   requestedMembershipIdSet,
   requestedMembershipSpacesAtom,
-  requestedSpacesForOwner,
 } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
@@ -50,11 +50,11 @@ export function usePendingMembershipSet(): Set<string> {
 
   return React.useMemo(() => {
     const combined = new Set(serverSet);
-    // Only this account's optimistic entries — never a signed-out user's or a
-    // prior account's leftover localStorage state.
-    for (const id of requestedMembershipIdSet(requestedSpacesForOwner(requested, personalSpaceId))) {
-      combined.add(id);
-    }
+    // Only this account's still-active optimistic entries — never a signed-out
+    // user's or prior account's leftover state, and never an expired bridge
+    // entry (so a later-rejected request stops showing as pending).
+    const active = activeRequestedSpacesForOwner(requested, personalSpaceId, Date.now());
+    for (const id of requestedMembershipIdSet(active)) combined.add(id);
     return combined;
   }, [serverSet, requested, personalSpaceId]);
 }
