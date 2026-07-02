@@ -393,7 +393,7 @@ function DebateRecordingModal({
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(180px,1fr)_auto_minmax(180px,1fr)] gap-3">
           <DebateVideoTile
             title="You"
             sideLabel={localSide ? labelForSide(localSide, debate.question.side_labels) : 'Joining'}
@@ -456,10 +456,10 @@ function DebateVideoTile({
         </span>
       </div>
 
-      <div className="h-full w-full">{children}</div>
+      <div className="absolute inset-0 z-0">{children}</div>
 
       {waiting && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
           <Text
             color="text"
             variant="bodySemibold"
