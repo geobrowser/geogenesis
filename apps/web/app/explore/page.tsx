@@ -4,6 +4,7 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
 import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -38,19 +39,22 @@ export default async function ExploreRoutePage() {
     fetchBrowseSidebarData(null).catch(() => null)
   );
   const recentlyClaimedPromise = fetchRecentlyClaimedSpaces().catch(() => [] as RecentlyClaimedSpace[]);
+  const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
   const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
   const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
 
-  const [browseRaw, recentlyClaimedSpaces, firstLevelSubtopics, parentTopicOptions, governance] = await Promise.all([
-    browsePromise,
-    recentlyClaimedPromise,
-    firstLevelSubtopicsPromise,
-    parentTopicOptionsPromise,
-    governancePromise,
-  ]);
+  const [browseRaw, recentlyClaimedSpaces, featuredSpaces, firstLevelSubtopics, parentTopicOptions, governance] =
+    await Promise.all([
+      browsePromise,
+      recentlyClaimedPromise,
+      featuredSpacesPromise,
+      firstLevelSubtopicsPromise,
+      parentTopicOptionsPromise,
+      governancePromise,
+    ]);
 
   const browse: BrowseSidebarData = browseRaw ?? {
     featured: [],
@@ -66,19 +70,24 @@ export default async function ExploreRoutePage() {
       : [memberSpaceId]
     : [];
 
-  // For recently-claimed spaces the user isn't already part of, check whether they
-  // have an active ADD_MEMBER proposal so the Join button can render "Membership
-  // pending" without a client roundtrip.
+  // For featured + recently-claimed spaces the user isn't already part of, check
+  // whether they have an active ADD_MEMBER proposal so the Join button can render
+  // "Membership pending" without a client roundtrip.
   let pendingMembershipSpaceIds: string[] = [];
-  if (memberSpaceId && recentlyClaimedSpaces.length > 0) {
+  if (memberSpaceId) {
     const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
-    const candidates = recentlyClaimedSpaces.filter(s => !memberOrEditorSet.has(normId(s.spaceId)));
+    const candidateIds = new Map<string, string>();
+    for (const s of [...featuredSpaces, ...recentlyClaimedSpaces]) {
+      const normalized = normId(s.spaceId);
+      if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
+      candidateIds.set(normalized, s.spaceId);
+    }
     const checks = await Promise.all(
-      candidates.map(async s => {
+      [...candidateIds.values()].map(async spaceId => {
         try {
           // Only an open vote is "pending"; a stuck request lets the Join button reappear.
-          const req = await fetchActiveMemberRequest(s.spaceId, memberSpaceId!);
-          return req != null && !req.isVotingEnded ? s.spaceId : null;
+          const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
+          return req != null && !req.isVotingEnded ? spaceId : null;
         } catch {
           return null;
         }
@@ -99,6 +108,7 @@ export default async function ExploreRoutePage() {
   return (
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
+      featuredSpaces={featuredSpaces}
       unclaimedTopics={firstLevelSubtopics}
       recentlyClaimedSpaces={recentlyClaimedSpaces}
       parentTopicOptions={parentTopicOptions}
