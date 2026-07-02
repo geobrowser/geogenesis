@@ -37,7 +37,11 @@ const MAX_PROPOSALS_TO_SCAN = 30;
 
 async function fetchPublishProposals(spaceId: string): Promise<readonly ApiProposalListItem[]> {
   const encodedSpaceId = encodePathSegment(spaceId);
-  const path = `/proposals/space/${encodedSpaceId}/status?actionTypes=Publish&status=PROPOSED&orderBy=end_time&orderDirection=asc&limit=${MAX_PROPOSALS_TO_SCAN}`;
+  // Order by end_time DESC so the most recently created proposals (which end
+  // furthest in the future) are always within the scan window. A just-submitted
+  // subtopic proposal would otherwise sort last under `asc` and be dropped by the
+  // limit in a space with many pending Publish proposals.
+  const path = `/proposals/space/${encodedSpaceId}/status?actionTypes=Publish&status=PROPOSED&orderBy=end_time&orderDirection=desc&limit=${MAX_PROPOSALS_TO_SCAN}`;
 
   const result = await Effect.runPromise(
     Effect.either(

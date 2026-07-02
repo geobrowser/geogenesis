@@ -28,7 +28,8 @@ interface AddSubtopicSearchViewProps {
 
 export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtopicSearchViewProps) {
   const popoverContainer = React.useContext(SubtopicsDialogPopoverContext);
-  const { proposeAdd, proposeCreateAndAdd, isPending } = useProposeSubtopicRelation(spaceId);
+  const { proposeAdd, proposeCreateAndAdd, isPending, isPersonalSpace } = useProposeSubtopicRelation(spaceId);
+  const addActionLabel = isPersonalSpace ? 'Add' : 'Propose to add';
   const { query, onQueryChange, results, isLoading } = useSubtopicSearch();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
@@ -127,6 +128,7 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
                       result={result}
                       showDivider={index > 0}
                       disabled={isPending}
+                      actionLabel={addActionLabel}
                       onPropose={() => void handlePropose(result)}
                     />
                   ))}
@@ -154,11 +156,13 @@ function SubtopicSearchResultRow({
   result,
   showDivider,
   disabled,
+  actionLabel,
   onPropose,
 }: {
   result: SubtopicSearchResult;
   showDivider: boolean;
   disabled: boolean;
+  actionLabel: string;
   onPropose: () => void;
 }) {
   return (
@@ -183,7 +187,7 @@ function SubtopicSearchResultRow({
           onClick={onPropose}
           className="h-8 shrink-0 rounded-[8px] border border-grey-02 bg-white px-3 text-button text-text shadow-light transition hover:border-text disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Propose to add
+          {actionLabel}
         </button>
       </div>
     </div>

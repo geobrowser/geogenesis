@@ -184,8 +184,11 @@ function SubtopicTreeNode({
   const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const { data: children = [], isLoading, isError } = useSubtopicChildren(entityId, spaceId, expanded);
-  const { proposeRemove, isPending } = useProposeSubtopicRelation(spaceId);
+  const { proposeRemove, isPending, isPersonalSpace } = useProposeSubtopicRelation(spaceId);
   const prefetchChildren = usePrefetchSubtopicChildren();
+
+  const addLabel = isPersonalSpace ? 'Add subtopic' : 'Propose subtopic';
+  const removeLabel = isPersonalSpace ? 'Remove subtopic' : 'Propose removal';
 
   React.useEffect(() => {
     if (!expanded) return;
@@ -258,11 +261,11 @@ function SubtopicTreeNode({
             className="min-w-[200px]"
           >
             <MenuItem onClick={openAddSearch}>
-              <span>Propose subtopic</span>
+              <span>{addLabel}</span>
             </MenuItem>
             {!isRoot && parentEntityId && relationId && (
               <MenuItem onClick={() => void handleProposeRemoval()}>
-                <span>Propose removal</span>
+                <span>{removeLabel}</span>
               </MenuItem>
             )}
           </Menu>
