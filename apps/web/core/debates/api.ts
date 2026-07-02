@@ -187,13 +187,13 @@ type GeoChatSession = {
   expires_at: string;
 };
 
-export type GetPrivyAccessToken = () => Promise<string | null | undefined>;
+export type GetPrivyIdentityToken = () => Promise<string | null | undefined>;
 
 type RequestOptions = {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
   body?: unknown;
   auth?: boolean | 'optional';
-  getPrivyAccessToken?: GetPrivyAccessToken;
+  getPrivyIdentityToken?: GetPrivyIdentityToken;
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
@@ -205,12 +205,12 @@ export function getGeoChatApiBaseUrl() {
 export async function listDebateQuestions(
   spaceId: string,
   questionIds: string[],
-  getPrivyAccessToken?: GetPrivyAccessToken
+  getPrivyIdentityToken?: GetPrivyIdentityToken
 ) {
   const query = questionIds.length > 0 ? `?question_ids=${encodeURIComponent(questionIds.join(','))}` : '';
   return geoChatRequest<DebateQuestionsResponse>(`/spaces/${spaceId}/debate-questions${query}`, {
     auth: 'optional',
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
@@ -218,103 +218,111 @@ export async function joinDebateQueue(
   spaceId: string,
   questionId: string,
   request: JoinDebateQueueRequest,
-  getPrivyAccessToken: GetPrivyAccessToken
+  getPrivyIdentityToken: GetPrivyIdentityToken
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/questions/${questionId}/debate-queue`, {
     method: 'POST',
     body: request,
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function acceptDebateMatch(matchId: string, getPrivyAccessToken: GetPrivyAccessToken, formatId?: string) {
+export async function acceptDebateMatch(
+  matchId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  formatId?: string
+) {
   return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/accept`, {
     method: 'POST',
     body: { format_id: formatId },
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function declineDebateMatch(matchId: string, getPrivyAccessToken: GetPrivyAccessToken) {
+export async function declineDebateMatch(matchId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/decline`, {
     method: 'POST',
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function listSpaceDebates(spaceId: string, getPrivyAccessToken?: GetPrivyAccessToken) {
+export async function listSpaceDebates(spaceId: string, getPrivyIdentityToken?: GetPrivyIdentityToken) {
   return geoChatRequest<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`, {
     auth: 'optional',
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function getDebate(debateId: string, getPrivyAccessToken?: GetPrivyAccessToken) {
+export async function getDebate(debateId: string, getPrivyIdentityToken?: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}`, {
     auth: 'optional',
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function getLiveKitToken(debateId: string, getPrivyAccessToken: GetPrivyAccessToken) {
+export async function getLiveKitToken(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<LiveKitJoinResponse>(`/debates/${debateId}/livekit-token`, {
     method: 'POST',
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function markDebateJoined(debateId: string, getPrivyAccessToken: GetPrivyAccessToken) {
+export async function markDebateJoined(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}/joined`, {
     method: 'POST',
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function abortDebate(debateId: string, getPrivyAccessToken: GetPrivyAccessToken) {
+export async function abortDebate(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}/abort`, {
     method: 'POST',
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
 export async function createLocalRecordingUpload(
   debateId: string,
   request: LocalRecordingUploadRequest,
-  getPrivyAccessToken: GetPrivyAccessToken
+  getPrivyIdentityToken: GetPrivyIdentityToken
 ) {
   return geoChatRequest<LocalRecordingUploadResponse>(`/debates/${debateId}/recordings/local-upload-url`, {
     method: 'POST',
     body: request,
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
 export async function completeLocalRecordingUpload(
   debateId: string,
   request: LocalRecordingCompleteRequest,
-  getPrivyAccessToken: GetPrivyAccessToken
+  getPrivyIdentityToken: GetPrivyIdentityToken
 ) {
   return geoChatRequest<RecordingCompleteResponse>(`/debates/${debateId}/recordings/local-upload-complete`, {
     method: 'POST',
     body: request,
     auth: true,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
-export async function getRecordingUrl(debateId: string, filename: string, getPrivyAccessToken?: GetPrivyAccessToken) {
+export async function getRecordingUrl(
+  debateId: string,
+  filename: string,
+  getPrivyIdentityToken?: GetPrivyIdentityToken
+) {
   return geoChatRequest<{ url: string }>(`/debates/${debateId}/recordings/url`, {
     method: 'POST',
     body: { filename },
     auth: 'optional',
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   });
 }
 
@@ -347,14 +355,14 @@ async function accessTokenForRequest(options: RequestOptions) {
   if (!options.auth) return null;
 
   try {
-    return await getGeoChatAccessToken(options.getPrivyAccessToken);
+    return await getGeoChatAccessToken(options.getPrivyIdentityToken);
   } catch (error) {
     if (options.auth === 'optional') return null;
     throw error;
   }
 }
 
-async function getGeoChatAccessToken(getPrivyAccessToken?: GetPrivyAccessToken) {
+async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityToken) {
   const stored = loadSession();
   if (stored && new Date(stored.expires_at).getTime() > Date.now() + 30_000) {
     return stored.access_token;
@@ -370,12 +378,12 @@ async function getGeoChatAccessToken(getPrivyAccessToken?: GetPrivyAccessToken) 
     }
   }
 
-  const privyToken = await getPrivyAccessToken?.();
-  if (!privyToken) {
+  const privyIdentityToken = await getPrivyIdentityToken?.();
+  if (!privyIdentityToken) {
     throw new Error('Sign in to use debates.');
   }
 
-  const session = await createGeoChatSession(privyToken);
+  const session = await createGeoChatSession(privyIdentityToken);
   saveSession(session);
   return session.access_token;
 }

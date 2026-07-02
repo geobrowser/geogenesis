@@ -3,11 +3,11 @@
 import * as React from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { usePrivy } from '@geogenesis/auth';
+import { getIdentityToken, usePrivy } from '@geogenesis/auth';
 
 import {
   type DebateSide,
-  type GetPrivyAccessToken,
+  type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -25,10 +25,6 @@ import {
   markDebateJoined,
 } from './api';
 
-type PrivyWithToken = ReturnType<typeof usePrivy> & {
-  getAccessToken?: () => Promise<string | null>;
-};
-
 export const debateQueryKeys = {
   questions: (spaceId: string, questionIds: string[]) => ['debates', 'questions', spaceId, questionIds] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
@@ -36,25 +32,22 @@ export const debateQueryKeys = {
 };
 
 export function useGeoChatAuth() {
-  const privy = usePrivy() as PrivyWithToken;
-  const getPrivyAccessToken = React.useCallback<GetPrivyAccessToken>(
-    async () => privy.getAccessToken?.() ?? null,
-    [privy]
-  );
+  const privy = usePrivy();
+  const getPrivyIdentityToken = React.useCallback<GetPrivyIdentityToken>(() => getIdentityToken(), []);
 
   return {
     ready: privy.ready,
     authenticated: privy.authenticated,
-    getPrivyAccessToken,
+    getPrivyIdentityToken,
   };
 }
 
 export function useDebateQuestions(spaceId: string, questionIds: string[], enabled: boolean) {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.questions(spaceId, questionIds),
-    queryFn: () => listDebateQuestions(spaceId, questionIds, getPrivyAccessToken),
+    queryFn: () => listDebateQuestions(spaceId, questionIds, getPrivyIdentityToken),
     enabled: enabled && questionIds.length > 0,
     refetchInterval: 5_000,
   });
@@ -62,11 +55,11 @@ export function useDebateQuestions(spaceId: string, questionIds: string[], enabl
 
 export function useJoinDebateQueue(spaceId: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ questionId, request }: { questionId: string; request: JoinDebateQueueRequest }) =>
-      joinDebateQueue(spaceId, questionId, request, getPrivyAccessToken),
+      joinDebateQueue(spaceId, questionId, request, getPrivyIdentityToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
@@ -75,11 +68,11 @@ export function useJoinDebateQueue(spaceId: string) {
 
 export function useAcceptDebateMatch(spaceId?: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ matchId, formatId }: { matchId: string; formatId?: string }) =>
-      acceptDebateMatch(matchId, getPrivyAccessToken, formatId),
+      acceptDebateMatch(matchId, getPrivyIdentityToken, formatId),
     onSuccess: result => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
       if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
@@ -92,10 +85,10 @@ export function useAcceptDebateMatch(spaceId?: string) {
 
 export function useDeclineDebateMatch(spaceId?: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: (matchId: string) => declineDebateMatch(matchId, getPrivyAccessToken),
+    mutationFn: (matchId: string) => declineDebateMatch(matchId, getPrivyIdentityToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
       if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
@@ -104,81 +97,81 @@ export function useDeclineDebateMatch(spaceId?: string) {
 }
 
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.spaceDebates(spaceId),
-    queryFn: () => listSpaceDebates(spaceId, getPrivyAccessToken),
+    queryFn: () => listSpaceDebates(spaceId, getPrivyIdentityToken),
     enabled,
     refetchInterval: 5_000,
   });
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.debate(debateId),
-    queryFn: () => getDebate(debateId, getPrivyAccessToken),
+    queryFn: () => getDebate(debateId, getPrivyIdentityToken),
     enabled,
     refetchInterval: 1_000,
   });
 }
 
 export function useLiveKitJoin(debateId: string) {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => getLiveKitToken(debateId, getPrivyAccessToken),
+    mutationFn: () => getLiveKitToken(debateId, getPrivyIdentityToken),
   });
 }
 
 export function useMarkDebateJoined(debateId: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => markDebateJoined(debateId, getPrivyAccessToken),
+    mutationFn: () => markDebateJoined(debateId, getPrivyIdentityToken),
     onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
   });
 }
 
 export function useAbortDebate(debateId: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => abortDebate(debateId, getPrivyAccessToken),
+    mutationFn: () => abortDebate(debateId, getPrivyIdentityToken),
     onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
   });
 }
 
 export function useCreateLocalRecordingUpload(debateId: string) {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: (request: LocalRecordingUploadRequest) =>
-      createLocalRecordingUpload(debateId, request, getPrivyAccessToken),
+      createLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
   });
 }
 
 export function useCompleteLocalRecordingUpload(debateId: string) {
   const queryClient = useQueryClient();
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: (request: LocalRecordingCompleteRequest) =>
-      completeLocalRecordingUpload(debateId, request, getPrivyAccessToken),
+      completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
     onSuccess: result => queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate),
   });
 }
 
 export function useRecordingUrl() {
-  const { getPrivyAccessToken } = useGeoChatAuth();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
-      getRecordingUrl(debateId, filename, getPrivyAccessToken),
+      getRecordingUrl(debateId, filename, getPrivyIdentityToken),
   });
 }
 
