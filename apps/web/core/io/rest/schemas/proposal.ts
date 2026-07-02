@@ -374,6 +374,12 @@ export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']
   }
 }
 
+export function getApiProposalCanExecute(
+  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold'>
+): boolean {
+  return proposal.canExecute && proposal.quorum.reached && proposal.threshold.reached;
+}
+
 /**
  * Convert API vote option to internal vote format.
  *

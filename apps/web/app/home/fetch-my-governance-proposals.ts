@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import {
   type ApiProposalListItem,
   convertVoteOption,
+  getApiProposalCanExecute,
   mapApiActionsToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
@@ -127,7 +128,7 @@ export async function getMyGovernanceProposals(opts: {
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status: mapProposalStatus(p.status),
-      canExecute: p.canExecute,
+      canExecute: getApiProposalCanExecute(p),
       proposalVotes: {
         totalCount: p.votes.total,
         yesCount: p.votes.yes,

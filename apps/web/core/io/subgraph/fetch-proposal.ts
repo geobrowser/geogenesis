@@ -10,6 +10,7 @@ import {
   convertVoteOption,
   encodePathSegment,
   findMembershipAction,
+  getApiProposalCanExecute,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
   mapApiActionsToProposalType,
@@ -114,7 +115,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     startTime: apiProposal.timing.startTime,
     endTime: apiProposal.timing.endTime,
     status: mapProposalStatus(apiProposal.status),
-    canExecute: apiProposal.canExecute,
+    canExecute: getApiProposalCanExecute(apiProposal),
     space: {
       id: apiProposal.spaceId,
       name: null,
