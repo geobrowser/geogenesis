@@ -7,16 +7,9 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { type DebateMatch, type DebateQuestion, type DebateSide, getCurrentGeoChatUserId } from '~/core/debates/api';
-import { DebateFormatSelector } from '~/core/debates/format-selector';
-import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from '~/core/debates/formats';
-import {
-  oppositeSide,
-  useAcceptDebateMatch,
-  useDebateQuestions,
-  useDeclineDebateMatch,
-  useJoinDebateQueue,
-} from '~/core/debates/hooks';
+import type { DebateQuestion, DebateSide } from '~/core/debates/api';
+import { oppositeSide, useDebateQuestions, useJoinDebateQueue } from '~/core/debates/hooks';
+import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import {
   ANSWERS_PROPERTY_ID,
   PERSON_TYPE_ID,
@@ -89,6 +82,7 @@ export function QuestionsPageClient({ spaceId }: QuestionsPageClientProps) {
 }
 
 function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientProps & { debatesEnabled: boolean }) {
+  const router = useRouter();
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: questions, isLoading } = useQueryEntities({
     where: {
@@ -111,6 +105,26 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
     }
     return map;
   }, [debateQuestionsQuery.data?.questions]);
+  const activeMatches = React.useMemo(
+    () =>
+      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
+        question.active_match ? [question.active_match] : []
+      ),
+    [debateQuestionsQuery.data?.questions]
+  );
+  const activeDebate = React.useMemo(
+    () =>
+      (debateQuestionsQuery.data?.questions ?? [])
+        .map(question => question.active_debate)
+        .find(debate => debate && !['complete', 'cancelled'].includes(debate.status)) ?? null,
+    [debateQuestionsQuery.data?.questions]
+  );
+
+  React.useEffect(() => {
+    if (activeDebate) {
+      router.push(`/space/${spaceId}/debates/${activeDebate.id}`);
+    }
+  }, [activeDebate, router, spaceId]);
 
   return (
     <div className="py-8">
@@ -137,6 +151,7 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
           debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
         />
       </div>
+      <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} />
     </div>
   );
 }
@@ -349,7 +364,6 @@ function QuestionListItem({
   debatesEnabled: boolean;
   debateQuestion: DebateQuestion | null;
 }) {
-  const router = useRouter();
   const answers = relationsForProperty(question.relations, ANSWERS_PROPERTY_ID);
   const topics = relationsForProperty(question.relations, TOPICS_PROPERTY_ID);
   const relatedPeople = relationsForProperty(question.relations, RELATED_PEOPLE_PROPERTY_ID);
@@ -357,25 +371,9 @@ function QuestionListItem({
   const published = isQuestionPublished(question);
   const answerLabels = answerLabelsForQuestion(answers);
   const joinQueue = useJoinDebateQueue(spaceId);
-  const acceptMatch = useAcceptDebateMatch(spaceId);
-  const declineMatch = useDeclineDebateMatch(spaceId);
   const activeMatch = debateQuestion?.active_match ?? null;
   const activeDebate = debateQuestion?.active_debate ?? null;
-  const currentUserId = getCurrentGeoChatUserId();
-  const canChooseFormat = currentUserId === activeMatch?.for.user_id;
-  const [formatId, setFormatId] = React.useState<DebateFormatId>(() => formatIdForMatch(activeMatch));
-  const mutationError =
-    joinQueue.error instanceof Error
-      ? joinQueue.error.message
-      : acceptMatch.error instanceof Error
-        ? acceptMatch.error.message
-        : declineMatch.error instanceof Error
-          ? declineMatch.error.message
-          : null;
-
-  React.useEffect(() => {
-    setFormatId(formatIdForMatch(activeMatch));
-  }, [activeMatch?.id, activeMatch?.turn_format_id]);
+  const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
 
   const joinSide = (side: DebateSide) => {
     joinQueue.mutate({
@@ -388,20 +386,6 @@ function QuestionListItem({
         against_label: answerLabels.against,
       },
     });
-  };
-
-  const handleAcceptMatch = () => {
-    if (!activeMatch) return;
-    acceptMatch.mutate(
-      { matchId: activeMatch.id, formatId: canChooseFormat ? formatId : undefined },
-      {
-        onSuccess: result => {
-          if (result.debate) {
-            router.push(`/space/${spaceId}/debates/${result.debate.id}`);
-          }
-        },
-      }
-    );
   };
 
   return (
@@ -421,31 +405,7 @@ function QuestionListItem({
 
         {debatesEnabled && (
           <div className="flex shrink-0 flex-wrap gap-2">
-            {activeDebate ? (
-              <Button
-                type="button"
-                variant="secondary"
-                small
-                onClick={() => router.push(`/space/${spaceId}/debates/${activeDebate.id}`)}
-              >
-                Enter debate
-              </Button>
-            ) : activeMatch ? (
-              <>
-                <Button type="button" small onClick={handleAcceptMatch} disabled={acceptMatch.isPending}>
-                  Accept match
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  small
-                  onClick={() => declineMatch.mutate(activeMatch.id)}
-                  disabled={declineMatch.isPending}
-                >
-                  Decline
-                </Button>
-              </>
-            ) : (
+            {activeDebate || activeMatch ? null : (
               <>
                 <Button
                   type="button"
@@ -477,18 +437,6 @@ function QuestionListItem({
           answerLabels={answerLabels}
           mutationError={mutationError}
           published={published}
-        />
-      )}
-
-      {debatesEnabled && activeMatch && !activeDebate && (
-        <DebateFormatSelector
-          value={formatId}
-          selectedFormatId={activeMatch.turn_format_id}
-          canChoose={canChooseFormat}
-          disabled={acceptMatch.isPending}
-          onChange={setFormatId}
-          name={`debate-format-${activeMatch.id}`}
-          className="mt-3 max-w-[760px]"
         />
       )}
 
@@ -602,10 +550,6 @@ function answerLabelsForQuestion(answers: Relation[]): DebateSideLabels {
 
 function labelForSide(side: DebateSide, labels: DebateSideLabels) {
   return side === 'for' ? labels.for : labels.against;
-}
-
-function formatIdForMatch(match: DebateMatch | null): DebateFormatId {
-  return debateFormatById(match?.turn_format_id)?.id ?? defaultDebateFormatId;
 }
 
 function isQuestionPublished(question: Entity): boolean {

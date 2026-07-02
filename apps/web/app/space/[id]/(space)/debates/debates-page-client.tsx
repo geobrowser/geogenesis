@@ -4,10 +4,9 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { type Debate, type DebateMatch, type DebateRecording, getCurrentGeoChatUserId } from '~/core/debates/api';
-import { DebateFormatSelector } from '~/core/debates/format-selector';
-import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from '~/core/debates/formats';
-import { useAcceptDebateMatch, useDeclineDebateMatch, useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
+import type { Debate, DebateRecording } from '~/core/debates/api';
+import { useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
+import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -69,19 +68,6 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
       )}
 
       <div className="space-y-4">
-        {matches.length > 0 && (
-          <section>
-            <Text as="h3" variant="bodySemibold" color="text" className="mb-2 block">
-              Pending matches
-            </Text>
-            <div className="space-y-3">
-              {matches.map(match => (
-                <MatchCard key={match.id} match={match} spaceId={spaceId} />
-              ))}
-            </div>
-          </section>
-        )}
-
         {debates.length > 0 && (
           <section>
             <Text as="h3" variant="bodySemibold" color="text" className="mb-2 block">
@@ -95,83 +81,8 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
           </section>
         )}
       </div>
+      <DebateMatchPrompt spaceId={spaceId} matches={matches} />
     </div>
-  );
-}
-
-function MatchCard({ match, spaceId }: { match: DebateMatch; spaceId: string }) {
-  const router = useRouter();
-  const acceptMatch = useAcceptDebateMatch(spaceId);
-  const declineMatch = useDeclineDebateMatch(spaceId);
-  const currentUserId = getCurrentGeoChatUserId();
-  const canChooseFormat = currentUserId === match.for.user_id;
-  const [formatId, setFormatId] = React.useState<DebateFormatId>(() => formatIdForMatch(match));
-  const error =
-    acceptMatch.error instanceof Error
-      ? acceptMatch.error.message
-      : declineMatch.error instanceof Error
-        ? declineMatch.error.message
-        : null;
-
-  React.useEffect(() => {
-    setFormatId(formatIdForMatch(match));
-  }, [match.id, match.turn_format_id]);
-
-  const accept = () => {
-    acceptMatch.mutate(
-      { matchId: match.id, formatId: canChooseFormat ? formatId : undefined },
-      {
-        onSuccess: result => {
-          if (result.debate) {
-            router.push(`/space/${spaceId}/debates/${result.debate.id}`);
-          }
-        },
-      }
-    );
-  };
-
-  return (
-    <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <Text as="h3" variant="bodySemibold" color="text" className="block">
-            {match.question.question}
-          </Text>
-          <Text as="p" variant="body" color="grey-04" className="mt-2">
-            {speakerLabel(match.for)} for {match.question.side_labels.for} vs {speakerLabel(match.against)} for{' '}
-            {match.question.side_labels.against}
-          </Text>
-          <DebateFormatSelector
-            value={formatId}
-            selectedFormatId={match.turn_format_id}
-            canChoose={canChooseFormat}
-            disabled={acceptMatch.isPending}
-            onChange={setFormatId}
-            name={`debate-format-${match.id}`}
-            className="mt-4 max-w-[760px]"
-          />
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <Button type="button" small onClick={accept} disabled={acceptMatch.isPending}>
-            Accept match
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            small
-            onClick={() => declineMatch.mutate(match.id)}
-            disabled={declineMatch.isPending}
-          >
-            Decline
-          </Button>
-        </div>
-      </div>
-      {error && (
-        <Text as="p" variant="body" color="red-01" className="mt-3">
-          {error}
-        </Text>
-      )}
-    </article>
   );
 }
 
@@ -244,10 +155,6 @@ function RecordingButton({ debateId, recording }: { debateId: string; recording:
 
 function speakerLabel(participant: { display_name: string | null; profile_space_id: string }) {
   return participant.display_name || participant.profile_space_id;
-}
-
-function formatIdForMatch(match: DebateMatch | null): DebateFormatId {
-  return debateFormatById(match?.turn_format_id)?.id ?? defaultDebateFormatId;
 }
 
 function statusLabel(status: Debate['status']) {
