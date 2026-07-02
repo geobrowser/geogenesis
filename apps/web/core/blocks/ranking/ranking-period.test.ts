@@ -33,6 +33,22 @@ describe('formatRankingPeriodLabel', () => {
     expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-18', now)).toMatch(/^Ends in \d+ days$/);
     expect(formatRankingPeriodLabel('ended', '2026-05-01', '2026-05-31', now)).toBe('Ended');
   });
+
+  it('formats in-progress labels in minutes when under 1 hour', () => {
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04T12:30:00.000Z', now)).toBe(
+      'Ends in 30 min'
+    );
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04T12:01:00.000Z', now)).toBe(
+      'Ends in 1 min'
+    );
+  });
+
+  it('formats in-progress labels in hours when under 1 day', () => {
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04T18:00:00.000Z', now)).toBe(
+      'Ends in 6 hrs'
+    );
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04T13:00:00.000Z', now)).toBe('Ends in 1 hr');
+  });
 });
 
 describe('rankingSubmissionsOpen', () => {

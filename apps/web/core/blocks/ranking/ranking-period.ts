@@ -45,10 +45,23 @@ export function formatRankingPeriodLabel(
     case 'in-progress': {
       const end = parseRankingDate(endDate);
       if (!end) return null;
+
+      const msRemaining = end.getTime() - now.getTime();
+      if (msRemaining <= 0) return null;
+
+      const totalMinutes = Math.ceil(msRemaining / (60 * 1000));
+      const totalHours = Math.ceil(msRemaining / (60 * 60 * 1000));
+
+      if (totalMinutes < 60) {
+        return totalMinutes === 1 ? 'Ends in 1 min' : `Ends in ${totalMinutes} mins`;
+      }
+      if (totalHours < 24) {
+        return totalHours === 1 ? 'Ends in 1 hr' : `Ends in ${totalHours} hrs`;
+      }
+
       const days = differenceInCalendarDays(end, now);
       if (days > 0) return days === 1 ? 'Ends in 1 day' : `Ends in ${days} days`;
-      if (days === 0) return 'Ends today';
-      return null;
+      return 'Ends today';
     }
     case 'ended':
       return 'Ended';
