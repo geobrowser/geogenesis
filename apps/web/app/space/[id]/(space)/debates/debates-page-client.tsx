@@ -16,16 +16,16 @@ type DebatesPageClientProps = {
 };
 
 export function DebatesPageClient({ spaceId }: DebatesPageClientProps) {
-  const debatesTabEnabled = useFeatureFlag('debatesTab');
+  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!debatesTabEnabled) {
+    if (!questionsAndDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [debatesTabEnabled, router, spaceId]);
+  }, [questionsAndDebatesEnabled, router, spaceId]);
 
-  if (!debatesTabEnabled) return null;
+  if (!questionsAndDebatesEnabled) return null;
 
   return <DebatesTabSurface spaceId={spaceId} />;
 }

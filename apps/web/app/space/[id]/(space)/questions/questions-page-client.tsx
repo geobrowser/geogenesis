@@ -71,23 +71,22 @@ const relatedFields: RelatedField[] = [
 ];
 
 export function QuestionsPageClient({ spaceId }: QuestionsPageClientProps) {
-  const questionsTabEnabled = useFeatureFlag('questionsTab');
+  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsTabEnabled) {
+    if (!questionsAndDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsTabEnabled, router, spaceId]);
+  }, [questionsAndDebatesEnabled, router, spaceId]);
 
-  if (!questionsTabEnabled) return null;
+  if (!questionsAndDebatesEnabled) return null;
 
-  return <QuestionsTabSurface spaceId={spaceId} />;
+  return <QuestionsTabSurface spaceId={spaceId} debatesEnabled={questionsAndDebatesEnabled} />;
 }
 
-function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
+function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientProps & { debatesEnabled: boolean }) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const debatesTabEnabled = useFeatureFlag('debatesTab');
   const { entities: questions, isLoading } = useQueryEntities({
     where: {
       spaces: [{ equals: spaceId }],
@@ -101,7 +100,7 @@ function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
     () => questions.filter(isQuestionPublished).map(question => question.id),
     [questions]
   );
-  const debateQuestionsQuery = useDebateQuestions(spaceId, publishedQuestionIds, debatesTabEnabled);
+  const debateQuestionsQuery = useDebateQuestions(spaceId, publishedQuestionIds, debatesEnabled);
   const debateQuestionsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateQuestion>();
     for (const question of debateQuestionsQuery.data?.questions ?? []) {
@@ -130,7 +129,7 @@ function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
           questions={questions}
           isLoading={isLoading}
           spaceId={spaceId}
-          debatesEnabled={debatesTabEnabled}
+          debatesEnabled={debatesEnabled}
           debateQuestionsByEntityId={debateQuestionsByEntityId}
           debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
         />

@@ -8,28 +8,22 @@ export const featureFlagsStorageKey = 'geo:feature-flags';
 export const featureFlagDefinitions = [
   {
     id: 'questionsTab',
-    label: 'Questions tab',
-    description: 'Show the Questions tab on spaces.',
-  },
-  {
-    id: 'debatesTab',
-    label: 'Debates tab',
-    description: 'Show the Debates tab on spaces.',
+    label: 'Questions and debates',
+    description: 'Show the Questions and Debates tabs on spaces.',
   },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
+type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>;
 
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
-  debatesTab: false,
 };
 
-export function normalizeFeatureFlags(flags: Partial<Record<FeatureFlagId, boolean>> | null | undefined): FeatureFlags {
+export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
-    ...defaultFeatureFlags,
-    ...flags,
+    questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
   };
 }
 

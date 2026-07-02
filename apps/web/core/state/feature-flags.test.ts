@@ -14,10 +14,14 @@ describe('feature flags', () => {
     window.localStorage.clear();
   });
 
-  it('defaults the Questions tab flag to disabled', () => {
+  it('defaults the Questions and debates flag to disabled', () => {
     expect(defaultFeatureFlags.questionsTab).toBe(false);
-    expect(defaultFeatureFlags.debatesTab).toBe(false);
-    expect(normalizeFeatureFlags(null)).toEqual({ questionsTab: false, debatesTab: false });
+    expect(normalizeFeatureFlags(null)).toEqual({ questionsTab: false });
+  });
+
+  it('maps the legacy Debates flag into the combined flag', () => {
+    expect(normalizeFeatureFlags({ debatesTab: true })).toEqual({ questionsTab: true });
+    expect(normalizeFeatureFlags({ questionsTab: true, debatesTab: false })).toEqual({ questionsTab: true });
   });
 
   it('persists toggled feature flag values', () => {
@@ -28,8 +32,6 @@ describe('feature flags', () => {
     );
 
     expect(store.get(featureFlagsAtom).questionsTab).toBe(true);
-    expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
-      JSON.stringify({ questionsTab: true, debatesTab: false })
-    );
+    expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(JSON.stringify({ questionsTab: true }));
   });
 });

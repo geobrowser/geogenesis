@@ -35,7 +35,6 @@ type BuildSpaceTabsParams = {
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
   questionsTabEnabled: boolean;
-  debatesTabEnabled: boolean;
 };
 
 export function buildSpaceTabs({
@@ -44,7 +43,6 @@ export function buildSpaceTabs({
   dynamicTabs,
   typeIds,
   questionsTabEnabled,
-  debatesTabEnabled,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -86,10 +84,7 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set([
-        ...(questionsTabEnabled ? [QUESTION_TAB.label] : []),
-        ...(debatesTabEnabled ? [DEBATE_TAB.label] : []),
-      ]);
+      const reservedLabels = new Set(questionsTabEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -99,9 +94,6 @@ export function buildSpaceTabs({
 
   if (questionsTabEnabled) {
     tabs.push(QUESTION_TAB);
-  }
-
-  if (debatesTabEnabled) {
     tabs.push(DEBATE_TAB);
   }
 
@@ -125,7 +117,6 @@ export function buildSpaceTabs({
 export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
   const { editable } = useEditable();
   const questionsTabEnabled = useFeatureFlag('questionsTab');
-  const debatesTabEnabled = useFeatureFlag('debatesTab');
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -165,9 +156,6 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   if (questionsTabEnabled) {
     systemTabsAfter.push({ label: 'Questions', href: `/space/${spaceId}/questions` });
-  }
-
-  if (debatesTabEnabled) {
     systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
 
@@ -203,7 +191,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     href: `${overviewHref}?tabId=${entity.id}`,
   }));
 
-  const tabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, questionsTabEnabled, debatesTabEnabled });
+  const tabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, questionsTabEnabled });
 
   return <TabGroup tabs={tabs} />;
 }

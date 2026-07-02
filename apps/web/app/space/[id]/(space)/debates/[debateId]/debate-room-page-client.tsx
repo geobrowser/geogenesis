@@ -39,16 +39,16 @@ type RoomLike = {
 };
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
-  const debatesTabEnabled = useFeatureFlag('debatesTab');
+  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!debatesTabEnabled) {
+    if (!questionsAndDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [debatesTabEnabled, router, spaceId]);
+  }, [questionsAndDebatesEnabled, router, spaceId]);
 
-  if (!debatesTabEnabled) return null;
+  if (!questionsAndDebatesEnabled) return null;
 
   return <DebateRoomSurface spaceId={spaceId} debateId={debateId} />;
 }

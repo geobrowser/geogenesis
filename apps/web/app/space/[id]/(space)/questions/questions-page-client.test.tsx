@@ -30,7 +30,6 @@ let questions: Entity[] = [];
 let namesByEntityId = new Map<string, string>();
 let stagedRelations: Relation[] = [];
 let questionsTabEnabled = true;
-let debatesTabEnabled = false;
 let lastQueryEntitiesOptions: unknown = null;
 
 vi.mock('next/navigation', () => ({
@@ -38,7 +37,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => (id === 'questionsTab' ? questionsTabEnabled : debatesTabEnabled),
+  useFeatureFlag: (id: string) => {
+    if (id !== 'questionsTab') {
+      throw new Error(`Unexpected feature flag: ${id}`);
+    }
+    return questionsTabEnabled;
+  },
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -106,7 +110,6 @@ beforeEach(() => {
   namesByEntityId = new Map();
   stagedRelations = [];
   questionsTabEnabled = true;
-  debatesTabEnabled = false;
   lastQueryEntitiesOptions = null;
   vi.clearAllMocks();
 
@@ -194,8 +197,7 @@ describe('QuestionsPageClient', () => {
     expect(answerRelations.map(relation => relation.toEntity.name)).toEqual(['Yes', 'No']);
   });
 
-  it('shows debate side controls for published questions when debates are enabled', () => {
-    debatesTabEnabled = true;
+  it('shows debate side controls for published questions when the feature flag is enabled', () => {
     questions = [
       {
         id: 'question-1',
