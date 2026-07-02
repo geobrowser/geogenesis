@@ -422,6 +422,7 @@ export class E {
     skip,
     signal,
     additionalSpaceIds,
+    includeNonCanonical,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -430,7 +431,8 @@ export class E {
     skip: number;
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
-  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
+    includeNonCanonical?: boolean;
+  }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -441,7 +443,7 @@ export class E {
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const page = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds],
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds, includeNonCanonical],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(
@@ -452,6 +454,7 @@ export class E {
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
               additionalSpaceIds,
+              includeNonCanonical,
             },
             // Prefer the caller-supplied signal so React Query cancellation
             // on the hook side (query change, unmount) aborts the in-flight
@@ -540,7 +543,7 @@ export class E {
       })
       .filter(isIncludedSearchResult);
 
-    return { results, rawCount: page.rawCount, total: page.total };
+    return { results, rawCount: page.rawCount, serverCount: page.serverCount, total: page.total };
   }
 }
 

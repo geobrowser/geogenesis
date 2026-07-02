@@ -155,7 +155,11 @@ export function useRankingBlockState({
     hasSharedRankingUrl && personalSpaceId && ID.equals(sharedAuthorSpaceId, personalSpaceId)
   );
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
-  const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
+  // When viewing our own ranking (including right after publishing) trust the live
+  // `mySubmission` query, which `saveMySubmission` refetches once the indexer reflects
+  // the new order. `sharedSubmission` has a 60s staleTime and isn't invalidated on
+  // publish, so preferring it here showed the pre-edit order until a hard refresh.
+  const displayedSubmission = isSharedRankingView ? sharedSubmission : (mySubmission ?? sharedSubmission);
 
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useRankingBlockRelations();
 
@@ -692,8 +696,17 @@ export function useRankingBlockState({
   const shareRankEntityId = sharedRankEntityId || mySubmission?.id || '';
   const shareAuthorSpaceId = sharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
   const effectiveOgVersion = React.useMemo(() => {
-    if (sharedOgVersion) return sharedOgVersion;
-    if (!mySubmission || !shareRankEntityId) return '';
+    // Mirror `displayedSubmission`'s precedence: when viewing our OWN ranking
+    // (even via a `/r/{id}` share link), derive the version from the live
+    // `mySubmission` so the `?v=` cache-buster tracks post-edit content. The
+    // server-seeded `sharedOgVersion` is captured once by the resolver and never
+    // updates after we edit/refetch, so preferring it here would leave the share
+    // URL stuck on the pre-edit version and X wouldn't re-scrape. For someone
+    // else's shared ranking the seeded version stays authoritative.
+    const canDeriveFromMine = Boolean(mySubmission && shareRankEntityId);
+    if (sharedOgVersion && !(isViewingOwnSharedRanking && canDeriveFromMine)) return sharedOgVersion;
+    // Narrowing guard (equivalent to `!canDeriveFromMine`) so TS knows `mySubmission` is non-null below.
+    if (!mySubmission || !shareRankEntityId) return sharedOgVersion;
     return buildRankingOgVersion({
       rankEntityId: shareRankEntityId,
       orderedEntityIds: mySubmission.orderedEntityIds,
@@ -703,7 +716,15 @@ export function useRankingBlockState({
       authorName: mySubmission.author.name,
       authorAvatarUrl: mySubmission.author.avatarUrl,
     });
-  }, [displayName, mySubmission, rankingEndDate, rankingStartDate, shareRankEntityId, sharedOgVersion]);
+  }, [
+    displayName,
+    isViewingOwnSharedRanking,
+    mySubmission,
+    rankingEndDate,
+    rankingStartDate,
+    shareRankEntityId,
+    sharedOgVersion,
+  ]);
   const effectiveGlobalOgVersion = React.useMemo(
     () =>
       buildGlobalRankingOgVersion({
@@ -720,7 +741,7 @@ export function useRankingBlockState({
   // so the share button's visibility is unchanged.
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
-      ? buildShortPersonalRankingSharePath(shareRankEntityId)
+      ? buildShortPersonalRankingSharePath(shareRankEntityId, effectiveOgVersion)
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
@@ -767,7 +788,18 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
+  // Share-link visibility is unchanged: expose it whenever the block relation
+  // resolves, just as before. Only attach the `?v=` cache-buster once relations
+  // have hydrated (`globalRankingEntityIds.length > 0`) — before then
+  // `effectiveGlobalOgVersion` hashes an empty list, so we'd emit a cache-buster
+  // that wouldn't match the populated version once data arrives. With no version
+  // the builder returns the bare `/r/g/{id}` path, matching prior behavior.
+  const globalSharePath = effectiveRelationId
+    ? buildShortGlobalRankingSharePath(
+        entityId,
+        globalRankingEntityIds.length > 0 ? effectiveGlobalOgVersion : undefined
+      )
+    : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
