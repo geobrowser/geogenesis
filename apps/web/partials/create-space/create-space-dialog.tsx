@@ -349,7 +349,7 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative flex grow flex-col"
+      className="relative flex min-h-0 grow flex-col"
     >
       {children}
     </motion.div>
@@ -613,6 +613,32 @@ function StepConfigureGovernance() {
 
   const canSave = parsed.kind === 'ok';
 
+  // Non-blocking warnings for settings that parse cleanly but are almost
+  // certainly a mistake or produce surprising on-chain behavior. The classic
+  // gotcha is flat === 0: the contract treats this as "fast path off" and
+  // reverts every vote on a FAST proposal with CanNotVote(), which the UI can't
+  // recover from without a redeploy. Percentages below 1 usually mean the user
+  // typed a decimal (e.g. "5.1" instead of "51").
+  const parsedFlat = Number(flat);
+  const parsedPartial = Number(partial);
+  const parsedUniversal = Number(universal);
+  const settingsWarnings: string[] = [];
+  if (Number.isFinite(parsedFlat) && parsedFlat === 0) {
+    settingsWarnings.push(
+      'Fast-path voting will be disabled. Every proposal — including your own — must wait for the full voting period to end before it can be executed.'
+    );
+  }
+  if (Number.isFinite(parsedPartial) && parsedPartial > 0 && parsedPartial < 1) {
+    settingsWarnings.push(
+      `Partial support threshold is ${parsedPartial}%. Percentages are entered as whole numbers — 50 means 50%, not 0.5. Did you mean ${Math.round(parsedPartial * 10)}%?`
+    );
+  }
+  if (Number.isFinite(parsedUniversal) && parsedUniversal > 0 && parsedUniversal < 1) {
+    settingsWarnings.push(
+      `Universal support threshold is ${parsedUniversal}%. Percentages are entered as whole numbers — 90 means 90%, not 0.9. Did you mean ${Math.round(parsedUniversal * 10)}%?`
+    );
+  }
+
   const handleSave = () => {
     if (parsed.kind !== 'ok') return;
     setCustomSettings(parsed.value);
@@ -633,7 +659,7 @@ function StepConfigureGovernance() {
 
   return (
     <StepContents childKey="configure-governance">
-      <div className="-mx-1 flex-1 space-y-3 overflow-y-auto px-1 pb-20">
+      <div className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-24">
         <Text variant="footnote" color="grey-04">
           Defaults are sensible for most spaces. See the governance page later for what each setting does.
         </Text>
@@ -653,21 +679,21 @@ function StepConfigureGovernance() {
         />
         <GovernanceField
           label="Partial support threshold (%)"
-          hint="Slow-path: % of YES votes among voters."
+          hint="Slow-path: % of YES votes among voters (e.g. 50 means 50%)."
           value={partial}
           onChange={setPartial}
           inputMode="decimal"
         />
         <GovernanceField
           label="Universal support threshold (%)"
-          hint="Slow-path: % of YES votes among all editors."
+          hint="Slow-path: % of YES votes among all editors (e.g. 90 means 90%)."
           value={universal}
           onChange={setUniversal}
           inputMode="decimal"
         />
         <GovernanceField
-          label="Flat threshold (editors)"
-          hint="Fast-path: editor approvals for instant execution."
+          label="Fast-path editor votes required"
+          hint="Number of editor YES votes for instant execution. Set to 0 to disable the fast path — proposals will only be resolvable through the slow-path voting period."
           value={flat}
           onChange={setFlat}
           inputMode="numeric"
@@ -696,6 +722,12 @@ function StepConfigureGovernance() {
         {parsed.kind === 'error' && (
           <div className="rounded bg-errorTertiary px-3 py-2 text-metadataMedium text-red-01">{parsed.message}</div>
         )}
+        {parsed.kind === 'ok' &&
+          settingsWarnings.map(warning => (
+            <div key={warning} className="rounded border border-orange px-3 py-2 text-metadataMedium text-orange">
+              {warning}
+            </div>
+          ))}
       </div>
       <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
         <Button disabled={!canSave} onClick={handleSave} className="w-full">
