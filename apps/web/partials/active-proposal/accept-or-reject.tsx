@@ -18,7 +18,11 @@ import { Button } from '~/design-system/button';
 import { Pending } from '~/design-system/pending';
 
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
-import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
+import {
+  useAddOptimisticVote,
+  useOptimisticVoteChoice,
+  useRemoveOptimisticVote,
+} from '~/partials/governance/optimistic-voted-atom';
 
 import { Execute } from './execute';
 import { useCloseProposal } from './use-close-proposal';
@@ -59,6 +63,7 @@ export function AcceptOrReject({
 
   const { smartAccount } = useSmartAccount();
   const addOptimisticVote = useAddOptimisticVote();
+  const optimisticVote = useOptimisticVoteChoice(proposalId);
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
   const [, setToast] = useToast();
@@ -74,7 +79,7 @@ export function AcceptOrReject({
   }, [userVote, proposalId, removeOptimisticVote]);
 
   const onVoteSuccess = () => {
-    router.refresh();
+    window.setTimeout(() => router.refresh(), 5_000);
   };
 
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
@@ -90,20 +95,20 @@ export function AcceptOrReject({
     }
     const message = describeGovernanceError(error);
     reportError(`Vote failed: ${message}`, () => {
-      addOptimisticVote(proposalId);
+      addOptimisticVote(proposalId, choice);
       vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
     });
   };
 
   const onApprove = () => {
     setHasApproved(true);
-    addOptimisticVote(proposalId);
+    addOptimisticVote(proposalId, 'ACCEPT');
     vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError('ACCEPT') });
   };
 
   const onReject = () => {
     setHasRejected(true);
-    addOptimisticVote(proposalId);
+    addOptimisticVote(proposalId, 'REJECT');
     vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError('REJECT') });
   };
 
@@ -152,8 +157,10 @@ export function AcceptOrReject({
     );
   }
 
-  if (userVote || hasVoted) {
-    if (userVote?.vote === 'ACCEPT' || hasApproved) {
+  const visibleVote = userVote?.vote ?? optimisticVote;
+
+  if (visibleVote || hasVoted) {
+    if (visibleVote === 'ACCEPT' || hasApproved) {
       return (
         <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">
           You accepted
