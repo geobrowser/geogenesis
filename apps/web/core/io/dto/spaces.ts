@@ -21,8 +21,7 @@ export type Space = {
 
   /** Fast-path editor votes required, from the DAO's on-chain voting settings.
    *  Null for personal spaces or when the indexer hasn't attached a
-   *  SpaceVotingSetting row yet. Zero means the DAO's fast path is disabled —
-   *  contract reverts every vote on FAST proposals with CanNotVote(). */
+   *  SpaceVotingSetting row yet. */
   flatSupportThreshold: number | null;
 };
 

@@ -614,18 +614,15 @@ function StepConfigureGovernance() {
   const canSave = parsed.kind === 'ok';
 
   // Non-blocking warnings for settings that parse cleanly but are almost
-  // certainly a mistake or produce surprising on-chain behavior. The classic
-  // gotcha is flat === 0: the contract treats this as "fast path off" and
-  // reverts every vote on a FAST proposal with CanNotVote(), which the UI can't
-  // recover from without a redeploy. Percentages below 1 usually mean the user
-  // typed a decimal (e.g. "5.1" instead of "51").
+  // certainly a mistake or produce surprising on-chain behavior. Percentages
+  // below 1 usually mean the user typed a decimal (e.g. "5.1" instead of "51").
   const parsedFlat = Number(flat);
   const parsedPartial = Number(partial);
   const parsedUniversal = Number(universal);
   const settingsWarnings: string[] = [];
   if (Number.isFinite(parsedFlat) && parsedFlat === 0) {
     settingsWarnings.push(
-      'Fast-path voting will be disabled. Every proposal — including your own — must wait for the full voting period to end before it can be executed.'
+      'Flat support threshold is 0 — fast-path proposals will not require any editor votes to reach their threshold. Make sure this is intended.'
     );
   }
   if (Number.isFinite(parsedPartial) && parsedPartial > 0 && parsedPartial < 1) {

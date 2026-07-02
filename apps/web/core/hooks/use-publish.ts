@@ -124,7 +124,6 @@ export function usePublish() {
             type: space.type,
             address: space.address,
             isEditor: spaceAccess.isEditor,
-            flatSupportThreshold: space.flatSupportThreshold,
           },
         });
 
@@ -232,7 +231,6 @@ export function useBulkPublish() {
             type: space.type,
             address: space.address,
             isEditor: spaceAccess.isEditor,
-            flatSupportThreshold: space.flatSupportThreshold,
           },
         });
       });
@@ -283,11 +281,6 @@ interface MakeProposalArgs {
     type: SpaceGovernanceType;
     address: string;
     isEditor: boolean;
-    /** Fast-path editor votes required on the DAO's on-chain voting settings.
-     *  Null on personal spaces or when the indexer hasn't published a
-     *  SpaceVotingSetting row yet. Zero means the fast path is disabled — the
-     *  contract reverts every vote on a FAST proposal with `CanNotVote()`. */
-    flatSupportThreshold: number | null;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -326,24 +319,10 @@ function makeProposal(args: MakeProposalArgs) {
 
       // Editors can use the fast path for immediate execution.
       // Members must use the slow path which requires a voting period.
-      //
-      // Guardrail: even for editors, the fast path is only usable when the
-      // DAO's on-chain flatSupportThreshold is >= 1. When set to 0 the contract
-      // reverts every vote on a FAST proposal with CanNotVote(), leaving the
-      // proposal unrecoverable. Downgrade to SLOW so the vote at least lands
-      // and the proposal can resolve through the slow-path threshold check.
-      //
-      // Null flatSupportThreshold means the indexer hasn't attached voting
-      // settings to this space yet (or personal-space path leaked into DAO
-      // branch, which shouldn't happen). Preserve historical behavior in that
-      // case rather than risk changing something we can't see.
-      const fastPathDisabled = space.flatSupportThreshold === 0;
-      if (fastPathDisabled && space.isEditor) {
-        console.warn(
-          `[PUBLISH] DAO ${space.id} has flatSupportThreshold=0 (fast path disabled). Downgrading FAST to SLOW so the proposal is voteable.`
-        );
-      }
-      const votingMode = space.isEditor && !fastPathDisabled ? 'FAST' : 'SLOW';
+      // FAST is valid even when the DAO's flatSupportThreshold is 0 — the
+      // contract accepts votes on those proposals as of the backend fix
+      // (previously they reverted with CanNotVote()).
+      const votingMode = space.isEditor ? 'FAST' : 'SLOW';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({
