@@ -1,10 +1,11 @@
 'use client';
 
-import { useProposalExecutability } from '~/core/hooks/use-execute-proposal';
 import { useRequestToBeEditor } from '~/core/hooks/use-request-to-be-editor';
 import { type ActiveEditorRequest } from '~/core/io/subgraph/fetch-proposed-editors';
 
 import { Pending } from '~/design-system/pending';
+
+import { UnderVote } from './request-status-label';
 
 type SpaceEditorsPopoverEditorRequestButtonProps = {
   spaceId: string;
@@ -19,31 +20,15 @@ export function SpaceEditorsPopoverEditorRequestButton({
 }: SpaceEditorsPopoverEditorRequestButtonProps) {
   const { requestToBeEditor, status } = useRequestToBeEditor({ spaceId });
 
-  // Only an ended-but-unexecuted request is worth simulating — an open vote is
-  // healthy and a missing request has nothing to check. The hook self-gates on
-  // an empty proposalId, so this stays a no-op otherwise.
-  const { state: executability } = useProposalExecutability({
-    spaceId,
-    proposalId: editorRequest?.isVotingEnded ? editorRequest.proposalId : '',
-  });
-
-  // A confirmed-dead (or otherwise unexecutable) prior request that the chain
-  // will never complete. Let the user send a fresh, correct one in one click.
-  const isStuck = Boolean(editorRequest?.isVotingEnded) && (executability === 'dead' || executability === 'blocked');
+  // A still-listed request whose vote has ended is busted: executed requests drop
+  // off the list, so this one can no longer execute and the vote can't be revived.
+  const isStuck = Boolean(editorRequest?.isVotingEnded);
 
   const canSubmit = isMember && status === 'idle';
 
-  // Just submitted (fresh request or re-apply) — optimistically show the vote is
-  // live before the indexer catches up, so we never flip back to "Request again".
-  if (status === 'success') {
-    return (
-      <span>
-        <UnderVote />
-      </span>
-    );
-  }
-
-  if (editorRequest && !isStuck) {
+  // Open vote, or just submitted (before the indexer catches up) — show the live
+  // vote so we never flip back to "Request again".
+  if (status === 'success' || (editorRequest && !isStuck)) {
     return (
       <span>
         <UnderVote />
@@ -79,11 +64,3 @@ const RequestButtonText = ({ status, isMember, isStuck }: RequestButtonTextProps
 
   return 'Request editorship';
 };
-
-const UnderVote = () => (
-  <div className="inline-flex items-center gap-1">
-    <span>Requested</span>
-    <span>·</span>
-    <span className="text-grey-04">Under vote</span>
-  </div>
-);

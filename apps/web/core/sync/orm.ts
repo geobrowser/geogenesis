@@ -432,7 +432,7 @@ export class E {
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
     includeNonCanonical?: boolean;
-  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
+  }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -543,7 +543,7 @@ export class E {
       })
       .filter(isIncludedSearchResult);
 
-    return { results, rawCount: page.rawCount, total: page.total };
+    return { results, rawCount: page.rawCount, serverCount: page.serverCount, total: page.total };
   }
 }
 

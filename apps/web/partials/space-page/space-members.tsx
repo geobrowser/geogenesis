@@ -6,7 +6,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
-import { getHasRequestedSpaceMembership } from '~/partials/space-page/get-has-requested-space-membership';
+import { getSpaceMemberRequest } from '~/partials/space-page/get-space-member-request';
 
 import { getIsEditorForSpace } from './get-is-editor-for-space';
 import { getIsMemberForSpace } from './get-is-member-for-space';
@@ -24,11 +24,11 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [isMember, isEditor, space, hasRequestedSpaceMembership] = await Promise.all([
+  const [isMember, isEditor, space, memberRequest] = await Promise.all([
     getIsMemberForSpace(spaceId, connectedAddress),
     getIsEditorForSpace(spaceId, connectedAddress),
     cachedFetchSpace(spaceId),
-    getHasRequestedSpaceMembership(spaceId, connectedAddress),
+    getSpaceMemberRequest(spaceId, connectedAddress),
   ]);
 
   const isPublicSpace = space?.type === 'DAO';
@@ -47,7 +47,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       isPublicSpace={isPublicSpace}
       isMember={isMember}
       isEditor={isEditor}
-      hasRequestedSpaceMembership={hasRequestedSpaceMembership}
+      memberRequest={memberRequest}
       connectedAddress={connectedAddress ?? null}
     />
   );
@@ -71,9 +71,7 @@ export async function SpaceMembers({ spaceId }: Props) {
     <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
       <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
 
-      {isPublicSpace ? (
-        <SpaceMembersJoinButton spaceId={spaceId} hasRequestedSpaceMembership={hasRequestedSpaceMembership} />
-      ) : null}
+      {isPublicSpace ? <SpaceMembersJoinButton spaceId={spaceId} memberRequest={memberRequest} /> : null}
     </div>
   );
 }

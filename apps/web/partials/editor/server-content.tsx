@@ -46,7 +46,9 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
           </div>
         );
       }
-      return <>{renderMarkdownDocument(block.markdown)}</>;
+      // linkifyWeb2Urls keeps the server render in sync with the editor's web2URL
+      // rendering, so links don't flicker from plain text to anchors on mount.
+      return <>{renderMarkdownDocument(block.markdown, { linkifyWeb2Urls: true })}</>;
     }
 
     case 'image':
