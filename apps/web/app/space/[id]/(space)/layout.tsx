@@ -22,7 +22,6 @@ import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';
-import { AddDataPanel } from '~/partials/space-page/add-data-panel';
 import { SpaceEditors } from '~/partials/space-page/space-editors';
 import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
@@ -82,8 +81,6 @@ export default async function Layout(props0: LayoutProps) {
           </div>
 
           <div className="mt-6 flex flex-col gap-6">
-            <AddDataPanel spaceId={spaceId} />
-
             {typeIds.includes(SystemIds.PERSON_TYPE) ? (
               <>
                 <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />

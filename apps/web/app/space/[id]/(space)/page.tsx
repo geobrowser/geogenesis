@@ -23,6 +23,7 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { NewsStoriesSection } from '~/partials/space-page/news-stories/news-stories-section';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -77,6 +78,8 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <>
+      <NewsStoriesSection spaceId={spaceId} />
+      <Spacer height={40} />
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
@@ -113,6 +116,8 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         initialTabs={topic.tabs}
         initialCollectionItems={topic.initialCollectionItems}
       >
+        <NewsStoriesSection spaceId={spaceId} />
+        <Spacer height={40} />
         <React.Suspense fallback={<SubtopicGallerySkeleton />}>
           <SubtopicGalleryContainer spaceId={spaceId} />
         </React.Suspense>
