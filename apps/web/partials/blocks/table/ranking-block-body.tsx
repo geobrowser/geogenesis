@@ -146,6 +146,13 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     hasEmbeddedMyNextPage,
     setEmbeddedMyPage,
     myRankingEntryByEntityId,
+    showViewerOwnTab,
+    viewerOwnDisplayEntityIds,
+    totalViewerOwnEntityCount,
+    viewerOwnEntryByEntityId,
+    shareViewerOwnRanking,
+    canShareViewerOwnRanking,
+    openRankingCompose,
     draftHydrated,
     hasMySubmission,
     isSharedRankingView,
@@ -159,9 +166,16 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     setEntitySheetTarget,
   } = state;
 
-  const myRankingActionButton = buildMyRankingActionButton(state);
+  // The standalone /r/ ranking pages (fullscreen) are for viewing/sharing
+  const hideEditMyRanking = presentation === 'fullscreen' && state.showEditRankingButton;
+  const myRankingActionButton = hideEditMyRanking ? null : buildMyRankingActionButton(state);
   const myRankingTabActions = buildMyRankingTabActions(state);
   const SectionHeader = presentation === 'fullscreen' ? RankingFullscreenSectionHeaderRow : RankingSectionHeaderRow;
+
+  // Three tabs are possible in the shared view
+  const isMyTab = showMyRankingSection && activeTab === 'my';
+  const isViewerTab = showViewerOwnTab && activeTab === 'viewer';
+  const isGlobalTab = !isMyTab && !isViewerTab;
 
   // On mobile fullscreen the action buttons move below the My ranking tab.
   const isFullscreenMobile = presentation === 'fullscreen' && isMobile;
@@ -362,6 +376,72 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     </div>
   );
 
+  const viewerRankingBody = (
+    <div className="flex flex-col gap-4">
+      <div className="flex w-full shrink-0 items-center justify-between gap-2">
+        <Button
+          variant="secondary"
+          className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-4 text-[16px] whitespace-nowrap !text-text"
+          onClick={() => void openRankingCompose('edit')}
+        >
+          Edit
+        </Button>
+        {canShareViewerOwnRanking ? (
+          <Button
+            variant="primary"
+            className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+            onClick={shareViewerOwnRanking}
+          >
+            Share
+            <XIcon color="white" />
+          </Button>
+        ) : null}
+      </div>
+      {totalViewerOwnEntityCount === 0 ? (
+        <p className="text-metadata text-grey-04">Your ranking is empty.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {viewerOwnDisplayEntityIds.map((entityId, index) => {
+            const entry = viewerOwnEntryByEntityId.get(entityId);
+            const rank = index + 1;
+            if (!entry) {
+              return (
+                <div key={entityId} className="w-full">
+                  <RankingEntryRowSkeleton rank={rank} />
+                </div>
+              );
+            }
+            const rowContent = (
+              <RankingEntryRow
+                rank={rank}
+                rankStyle="leading"
+                entry={entry}
+                spaceId={spaceId}
+                linkToEntity={!isMobile}
+              />
+            );
+            return (
+              <div key={entityId} className="w-full">
+                {isMobile ? (
+                  wrapMobileSwipeRow({
+                    rowKey: `viewer:${entityId}`,
+                    onView: () => openEntitySheet(entityId),
+                    onPrimaryClick: () => openEntitySheet(entityId),
+                    children: rowContent,
+                  })
+                ) : (
+                  <RankingGlobalDesktopRow onOpenSidePanel={() => openEntitySheet(entityId)}>
+                    {rowContent}
+                  </RankingGlobalDesktopRow>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <>
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
@@ -377,25 +457,37 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               <>
                 <div className="relative mb-4 shrink-0">
                   <div className="flex w-full min-w-0 flex-nowrap items-end justify-between gap-3">
-                    <div className="relative flex min-w-0 flex-1 items-center gap-6 overflow-hidden pb-2">
-                      <RankingTabButton
-                        active={activeTab === 'global' || !showMyRankingSection}
-                        label="Global ranking"
-                        layoutId={`ranking-${presentation}-tab-underline`}
-                        onClick={() => setActiveTab('global')}
-                      />
-
-                      {showMyRankingSection ? (
+                    <div className="relative min-w-0 flex-1 overflow-x-auto overflow-y-clip pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                      <div className="flex w-max items-center gap-6">
                         <RankingTabButton
-                          active={activeTab === 'my'}
-                          label={myRankingTabLabel}
+                          active={isGlobalTab}
+                          label="Global ranking"
                           layoutId={`ranking-${presentation}-tab-underline`}
-                          onClick={() => setActiveTab('my')}
+                          onClick={() => setActiveTab('global')}
                         />
-                      ) : null}
+
+                        {showMyRankingSection ? (
+                          <RankingTabButton
+                            active={isMyTab}
+                            label={myRankingTabLabel}
+                            layoutId={`ranking-${presentation}-tab-underline`}
+                            onClick={() => setActiveTab('my')}
+                          />
+                        ) : null}
+
+                        {showViewerOwnTab ? (
+                          <RankingTabButton
+                            active={isViewerTab}
+                            label="My ranking"
+                            layoutId={`ranking-${presentation}-tab-underline`}
+                            onClick={() => setActiveTab('viewer')}
+                          />
+                        ) : null}
+                      </div>
                     </div>
 
-                    {!movesActionBelowTabs && !showMyTabActionsBelowTabs ? (
+                    {/* The viewer tab carries its own Edit/Share actions, so hide the shared header action there. */}
+                    {!movesActionBelowTabs && !showMyTabActionsBelowTabs && !isViewerTab ? (
                       <div className="mb-2 flex shrink-0 items-center">{myRankingActionButton}</div>
                     ) : null}
                   </div>
@@ -414,9 +506,12 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 <div
                   className={cx(presentation === 'fullscreen' && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}
                 >
-                  <div className={cx(showMyRankingSection && activeTab === 'my' && 'hidden')}>{globalRankingBody}</div>
+                  <div className={cx(!isGlobalTab && 'hidden')}>{globalRankingBody}</div>
                   {showMyRankingSection ? (
-                    <div className={cx(activeTab !== 'my' && 'hidden')}>{myRankingBody}</div>
+                    <div className={cx(!isMyTab && 'hidden')}>{myRankingBody}</div>
+                  ) : null}
+                  {showViewerOwnTab ? (
+                    <div className={cx(!isViewerTab && 'hidden')}>{viewerRankingBody}</div>
                   ) : null}
                 </div>
               </>
