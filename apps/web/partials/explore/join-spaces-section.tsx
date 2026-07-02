@@ -7,8 +7,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
+import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
-import { Pending } from '~/design-system/pending';
 
 type Props = {
   // Already filtered by the side panel to spaces the user can still join.
@@ -72,20 +72,28 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
     requestToBeMember();
   };
 
+  const isPending = status === 'pending';
+
   return (
-    <Pending isPending={status === 'pending'} position="center">
-      <button
-        type="button"
-        aria-label={`Join ${space.name}`}
-        disabled={status !== 'idle'}
-        onClick={handleClick}
-        className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text disabled:cursor-default"
-      >
-        <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
-          <FallbackImage value={space.image} sizes="16px" className="object-cover" />
+    // While the request is in flight keep the icon and outline in place and swap
+    // just the name for the oscillating dots, so the pill doesn't blink out.
+    <button
+      type="button"
+      aria-label={`Join ${space.name}`}
+      disabled={status !== 'idle'}
+      onClick={handleClick}
+      className="inline-flex items-center gap-1.5 rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-text transition-colors hover:border-text disabled:cursor-default"
+    >
+      <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-full bg-grey-01">
+        <FallbackImage value={space.image} sizes="16px" className="object-cover" />
+      </span>
+      {isPending ? (
+        <span className="flex h-[18px] items-center px-1">
+          <Dots />
         </span>
+      ) : (
         <span className="truncate">{space.name}</span>
-      </button>
-    </Pending>
+      )}
+    </button>
   );
 }
