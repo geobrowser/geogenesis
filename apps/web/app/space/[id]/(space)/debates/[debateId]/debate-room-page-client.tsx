@@ -367,19 +367,19 @@ function DebateRecordingModal({
       role="dialog"
       aria-modal="true"
       aria-label="Debate recording"
-      className="fixed inset-0 z-[1000] flex h-dvh flex-col overflow-hidden bg-[#121315] text-white"
+      className="fixed inset-0 z-[1000] flex h-dvh flex-col overflow-hidden bg-bg text-text"
     >
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/15 px-4 py-3">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-grey-02 bg-white px-4 py-3 shadow-light">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Text as="h2" variant="bodySemibold" color="white">
+            <Text as="h2" variant="bodySemibold" color="text">
               {statusLabel(debate.status)}
             </Text>
-            <span className="rounded-full border border-white/20 px-2 py-0.5 text-[0.75rem] leading-4 text-white/70">
+            <span className="rounded-full border border-grey-02 bg-bg px-2 py-0.5 text-[0.75rem] leading-4 text-grey-04">
               {roomStateLabel(roomState)}
             </span>
           </div>
-          <Text as="p" variant="metadata" color="white" className="mt-1 line-clamp-2 max-w-[920px] opacity-70">
+          <Text as="p" variant="metadata" color="grey-04" className="mt-1 line-clamp-2 max-w-[920px]">
             {debate.question.question}
           </Text>
         </div>
@@ -400,7 +400,7 @@ function DebateRecordingModal({
             active={countdown.activeSide !== null && countdown.activeSide === localSide}
             countdown={countdown}
           >
-            <video ref={localVideoRef} className="h-full w-full bg-black object-contain" playsInline muted autoPlay />
+            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
           </DebateVideoTile>
 
           <DebateVideoTile
@@ -412,13 +412,13 @@ function DebateRecordingModal({
           >
             <div
               ref={remoteMediaRef}
-              className="h-full w-full bg-black [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:object-contain"
+              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-contain"
             />
           </DebateVideoTile>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-white/15 bg-white/10 px-4 py-3 backdrop-blur">
-          <Text as="p" variant="body" color="white" className="opacity-80">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light">
+          <Text as="p" variant="body" color="grey-04">
             {speakerStatus(debate)}
           </Text>
           {countdown.activeSide === null && (
@@ -429,8 +429,8 @@ function DebateRecordingModal({
         </div>
 
         {roomError && (
-          <div className="shrink-0 rounded-lg border border-red-01 bg-red-01/10 px-4 py-3">
-            <Text color="white">{roomError}</Text>
+          <div className="shrink-0 rounded-lg border border-red-01 bg-white px-4 py-3">
+            <Text color="red-01">{roomError}</Text>
           </div>
         )}
       </main>
@@ -456,15 +456,15 @@ function DebateVideoTile({
   return (
     <section
       className={cx(
-        'relative min-h-0 overflow-hidden rounded-lg border bg-black shadow-card',
-        active ? 'border-white' : 'border-white/15'
+        'relative min-h-0 overflow-hidden rounded-lg border bg-white shadow-card',
+        active ? 'border-text' : 'border-grey-02'
       )}
     >
       <div className="absolute top-3 left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2">
-        <span className="rounded-full bg-black/65 px-3 py-1 text-[0.8125rem] leading-4 font-medium text-white backdrop-blur">
+        <span className="rounded-full border border-grey-02 bg-white/90 px-3 py-1 text-[0.8125rem] leading-4 font-medium text-text shadow-light backdrop-blur">
           {title}
         </span>
-        <span className="min-w-0 truncate rounded-full bg-white/90 px-3 py-1 text-[0.8125rem] leading-4 text-text">
+        <span className="min-w-0 truncate rounded-full bg-bg px-3 py-1 text-[0.8125rem] leading-4 text-grey-04 shadow-light">
           {sideLabel}
         </span>
       </div>
@@ -474,8 +474,12 @@ function DebateVideoTile({
       <div className="h-full w-full">{children}</div>
 
       {waiting && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45">
-          <Text color="white" variant="bodySemibold" className="rounded-full bg-black/65 px-4 py-2 backdrop-blur">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+          <Text
+            color="text"
+            variant="bodySemibold"
+            className="rounded-full border border-grey-02 bg-white px-4 py-2 shadow-light"
+          >
             Waiting for video
           </Text>
         </div>
