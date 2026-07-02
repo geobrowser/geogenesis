@@ -74,6 +74,17 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const bylineProfile = proposal.targetProfile ?? proposal.createdBy;
 
   const isAddEdit = proposal.type === 'ADD_EDIT';
+  const proposalStatusLabel = isProposalEnded
+    ? proposal.status === 'ACCEPTED'
+      ? 'Accepted'
+      : proposal.status === 'REJECTED'
+        ? 'Rejected'
+        : proposal.canExecute
+          ? 'Pending execution'
+          : 'Rejected'
+    : proposal.endTime <= 0
+      ? 'Voting period open'
+      : `${hours}h ${minutes}m remaining`;
 
   const body = (
     <>
@@ -147,15 +158,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                           ·
                         </span>
                         <span className="text-text">
-                          {isProposalEnded
-                            ? proposal.status === 'ACCEPTED'
-                              ? 'Accepted'
-                              : proposal.status === 'REJECTED'
-                                ? 'Rejected'
-                                : proposal.canExecute
-                                  ? 'Pending execution'
-                                  : 'Rejected'
-                            : `${hours}h ${minutes}m remaining`}
+                          {proposalStatusLabel}
                         </span>
                       </div>
                     </div>
