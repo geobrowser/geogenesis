@@ -29,6 +29,13 @@ type ProposeSubtopicRemoveArgs = {
   relationId: string;
 };
 
+// Insert a child into a cached list, keeping it deduped and name-sorted to match
+// the ordering fetchSubtopicChildren returns.
+function addChild(list: SubtopicChild[], child: SubtopicChild): SubtopicChild[] {
+  if (list.some(existing => existing.id === child.id)) return list;
+  return [...list, child].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 function buildSubtopicRelation({
   parentEntityId,
   parentName,
@@ -77,39 +84,26 @@ export function useProposeSubtopicRelation(spaceId: string) {
   const invalidateSubtopics = React.useCallback(
     (parentEntityId: string) => {
       void queryClient.invalidateQueries({ queryKey: ['pending-subtopic-proposals', spaceId] });
-      void queryClient.invalidateQueries({ queryKey: ['subtopic-children', spaceId, parentEntityId] });
-    },
-    [queryClient, spaceId]
-  );
-
-  const optimisticallyAddChild = React.useCallback(
-    (parentEntityId: string, child: SubtopicChild): (() => void) => {
-      if (!isPersonalSpace) return () => {};
-
-      const key = ['subtopic-children', spaceId, parentEntityId];
-      const previous = queryClient.getQueryData<SubtopicChild[]>(key);
-
-      queryClient.setQueryData<SubtopicChild[]>(key, current => {
-        const list = current ?? [];
-        if (list.some(existing => existing.id === child.id)) return list;
-        return [...list, child].sort((a, b) => a.name.localeCompare(b.name));
-      });
-
-      return () => queryClient.setQueryData<SubtopicChild[]>(key, previous);
+      // For personal spaces the child list was updated optimistically; refetching
+      // now would clobber it with not-yet-indexed subgraph data. It reconciles on
+      // the next natural refetch. DAO edits are proposals, so children are unchanged.
+      if (!isPersonalSpace) {
+        void queryClient.invalidateQueries({ queryKey: ['subtopic-children', spaceId, parentEntityId] });
+      }
     },
     [isPersonalSpace, queryClient, spaceId]
   );
 
-  const optimisticallyRemoveChild = React.useCallback(
-    (parentEntityId: string, childEntityId: string): (() => void) => {
+  // Optimistically patch a parent's cached child list (personal spaces only) and
+  // return a rollback that restores the previous value if the edit fails.
+  const patchChildrenCache = React.useCallback(
+    (parentEntityId: string, update: (current: SubtopicChild[]) => SubtopicChild[]): (() => void) => {
       if (!isPersonalSpace) return () => {};
 
       const key = ['subtopic-children', spaceId, parentEntityId];
       const previous = queryClient.getQueryData<SubtopicChild[]>(key);
 
-      queryClient.setQueryData<SubtopicChild[]>(key, current =>
-        (current ?? []).filter(existing => existing.id !== childEntityId)
-      );
+      queryClient.setQueryData<SubtopicChild[]>(key, current => update(current ?? []));
 
       return () => queryClient.setQueryData<SubtopicChild[]>(key, previous);
     },
@@ -132,11 +126,9 @@ export function useProposeSubtopicRelation(spaceId: string) {
 
       storage.relations.set(relation);
 
-      const rollback = optimisticallyAddChild(parentEntityId, {
-        id: childEntityId,
-        name: childName?.trim() || PLACEHOLDER_TOPIC_NAME,
-        relationId: relation.id,
-      });
+      const rollback = patchChildrenCache(parentEntityId, list =>
+        addChild(list, { id: childEntityId, name: childName?.trim() || PLACEHOLDER_TOPIC_NAME, relationId: relation.id })
+      );
 
       const proposalName = `Add subtopic: ${childName ?? 'Untitled'} to ${parentName ?? 'topic'}`;
 
@@ -155,7 +147,7 @@ export function useProposeSubtopicRelation(spaceId: string) {
         setIsPending(false);
       }
     },
-    [invalidateSubtopics, makeProposal, optimisticallyAddChild, space, spaceId, storage.relations]
+    [invalidateSubtopics, makeProposal, patchChildrenCache, space, spaceId, storage.relations]
   );
 
   const proposeRemove = React.useCallback(
@@ -190,7 +182,7 @@ export function useProposeSubtopicRelation(spaceId: string) {
 
       storage.relations.set(relation);
 
-      const rollback = optimisticallyRemoveChild(parentEntityId, childEntityId);
+      const rollback = patchChildrenCache(parentEntityId, list => list.filter(child => child.id !== childEntityId));
 
       const proposalName = `Remove subtopic: ${childName ?? 'Untitled'} from ${parentName ?? 'topic'}`;
 
@@ -209,7 +201,7 @@ export function useProposeSubtopicRelation(spaceId: string) {
         setIsPending(false);
       }
     },
-    [invalidateSubtopics, makeProposal, optimisticallyRemoveChild, space, spaceId, storage.relations]
+    [invalidateSubtopics, makeProposal, patchChildrenCache, space, spaceId, storage.relations]
   );
 
   const proposeCreateAndAdd = React.useCallback(
@@ -281,11 +273,9 @@ export function useProposeSubtopicRelation(spaceId: string) {
       storage.relations.set(typeRelation);
       storage.relations.set(subtopicRelation);
 
-      const rollback = optimisticallyAddChild(parentEntityId, {
-        id: childEntityId,
-        name: childName,
-        relationId: subtopicRelation.id,
-      });
+      const rollback = patchChildrenCache(parentEntityId, list =>
+        addChild(list, { id: childEntityId, name: childName, relationId: subtopicRelation.id })
+      );
 
       const proposalName = `Add subtopic: ${childName} to ${parentName ?? 'topic'}`;
 
@@ -304,7 +294,7 @@ export function useProposeSubtopicRelation(spaceId: string) {
         setIsPending(false);
       }
     },
-    [invalidateSubtopics, makeProposal, optimisticallyAddChild, space, spaceId, storage]
+    [invalidateSubtopics, makeProposal, patchChildrenCache, space, spaceId, storage]
   );
 
   return {
