@@ -16,7 +16,8 @@ describe('feature flags', () => {
 
   it('defaults the Questions tab flag to disabled', () => {
     expect(defaultFeatureFlags.questionsTab).toBe(false);
-    expect(normalizeFeatureFlags(null)).toEqual({ questionsTab: false });
+    expect(defaultFeatureFlags.debatesTab).toBe(false);
+    expect(normalizeFeatureFlags(null)).toEqual({ questionsTab: false, debatesTab: false });
   });
 
   it('persists toggled feature flag values', () => {
@@ -27,6 +28,8 @@ describe('feature flags', () => {
     );
 
     expect(store.get(featureFlagsAtom).questionsTab).toBe(true);
-    expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(JSON.stringify({ questionsTab: true }));
+    expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
+      JSON.stringify({ questionsTab: true, debatesTab: false })
+    );
   });
 });

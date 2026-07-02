@@ -11,6 +11,11 @@ export const featureFlagDefinitions = [
     label: 'Questions tab',
     description: 'Show the Questions tab on spaces.',
   },
+  {
+    id: 'debatesTab',
+    label: 'Debates tab',
+    description: 'Show the Debates tab on spaces.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -18,6 +23,7 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
+  debatesTab: false,
 };
 
 export function normalizeFeatureFlags(flags: Partial<Record<FeatureFlagId, boolean>> | null | undefined): FeatureFlags {

@@ -91,6 +91,7 @@
     "intl-messageformat": "^11.2.0",
     "jotai": "^2.19.0",
     "katex": "^0.16.45",
+    "livekit-client": "^2.15.14",
     "lokijs": "^1.5.12",
     "mapbox-gl": "3.21.0",
     "markdown-it": "^14.1.1",

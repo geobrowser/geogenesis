@@ -30,6 +30,7 @@ let questions: Entity[] = [];
 let namesByEntityId = new Map<string, string>();
 let stagedRelations: Relation[] = [];
 let questionsTabEnabled = true;
+let debatesTabEnabled = false;
 let lastQueryEntitiesOptions: unknown = null;
 
 vi.mock('next/navigation', () => ({
@@ -37,7 +38,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => questionsTabEnabled,
+  useFeatureFlag: (id: string) => (id === 'questionsTab' ? questionsTabEnabled : debatesTabEnabled),
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  oppositeSide: (side: 'for' | 'against') => (side === 'for' ? 'against' : 'for'),
+  useDebateQuestions: () => ({ data: { questions: [] }, error: null }),
+  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/state/diff-store', () => ({
@@ -97,6 +106,7 @@ beforeEach(() => {
   namesByEntityId = new Map();
   stagedRelations = [];
   questionsTabEnabled = true;
+  debatesTabEnabled = false;
   lastQueryEntitiesOptions = null;
   vi.clearAllMocks();
 
@@ -182,6 +192,45 @@ describe('QuestionsPageClient', () => {
     expect(screen.getByText('Answers')).toBeInTheDocument();
     const answerRelations = stagedRelations.filter(relation => relation.type.id === ANSWERS_PROPERTY_ID);
     expect(answerRelations.map(relation => relation.toEntity.name)).toEqual(['Yes', 'No']);
+  });
+
+  it('shows debate side controls for published questions when debates are enabled', () => {
+    debatesTabEnabled = true;
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
   });
 
   it('redirects direct visits when the feature flag is disabled', async () => {

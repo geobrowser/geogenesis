@@ -19,6 +19,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
       questionsTabEnabled: false,
+      debatesTabEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Governance', 'Activity']);
@@ -31,6 +32,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
       questionsTabEnabled: true,
+      debatesTabEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Governance', 'Activity']);
@@ -44,6 +46,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
       questionsTabEnabled: true,
+      debatesTabEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Activity']);
@@ -56,9 +59,54 @@ describe('buildSpaceTabs', () => {
       dynamicTabs: [...dynamicTabs, { label: 'Questions', href: `${overviewHref}?tabId=dynamic-questions` }],
       typeIds: [SystemIds.SPACE_TYPE],
       questionsTabEnabled: true,
+      debatesTabEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Governance', 'Activity']);
     expect(tabs.find(tab => tab.label === 'Questions')?.href).toBe(`/space/${spaceId}/questions`);
+  });
+
+  it('places Debates after Questions and before Governance when enabled', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs,
+      typeIds: [SystemIds.SPACE_TYPE],
+      questionsTabEnabled: true,
+      debatesTabEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Questions',
+      'Debates',
+      'Governance',
+      'Activity',
+    ]);
+    expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`/space/${spaceId}/debates`);
+  });
+
+  it('keeps the system Debates route when a dynamic tab has the same label', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      questionsTabEnabled: true,
+      debatesTabEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Questions',
+      'Debates',
+      'Governance',
+      'Activity',
+    ]);
+    expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`/space/${spaceId}/debates`);
   });
 });

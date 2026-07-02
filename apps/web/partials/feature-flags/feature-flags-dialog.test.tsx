@@ -25,7 +25,9 @@ describe('FeatureFlagsDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Questions tab' }));
 
     await waitFor(() => {
-      expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(JSON.stringify({ questionsTab: true }));
+      expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
+        JSON.stringify({ questionsTab: true, debatesTab: false })
+      );
     });
   });
 });
