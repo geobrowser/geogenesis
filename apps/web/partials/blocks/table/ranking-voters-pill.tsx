@@ -12,6 +12,7 @@ import { useRankingVoters } from '~/core/blocks/ranking/use-ranking-voters';
 import { formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -21,6 +22,20 @@ type Props = {
   children: React.ReactNode;
   onSelectVoter?: (rankEntityId: string, authorSpaceId: string, authorName?: string | null) => void;
 };
+
+const VOTER_AVATAR_SIZE = 32;
+
+function VoterAvatar({ avatarUrl, fallbackSeed }: { avatarUrl: string | null; fallbackSeed: string }) {
+  return (
+    <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+      {avatarUrl ? (
+        <FallbackImage value={avatarUrl} sizes={`${VOTER_AVATAR_SIZE}px`} className="object-cover" />
+      ) : (
+        <Avatar size={VOTER_AVATAR_SIZE} value={fallbackSeed} />
+      )}
+    </div>
+  );
+}
 
 export function RankingVotersPill({ refs, count, children, onSelectVoter }: Props) {
   const [open, setOpen] = React.useState(false);
@@ -40,12 +55,14 @@ export function RankingVotersPill({ refs, count, children, onSelectVoter }: Prop
       </Trigger>
       <Portal>
         <Content side="bottom" align="start" sideOffset={8} avoidCollisions className="z-100 origin-top-left">
-          <RankingVotersList
-            refs={refs}
-            count={count}
-            onSelectVoter={onSelectVoter}
-            onNavigate={() => setOpen(false)}
-          />
+          {open ? (
+            <RankingVotersList
+              refs={refs}
+              count={count}
+              onSelectVoter={onSelectVoter}
+              onNavigate={() => setOpen(false)}
+            />
+          ) : null}
         </Content>
       </Portal>
     </Root>
@@ -77,9 +94,7 @@ function RankingVotersList({
             const rowClassName = 'flex items-center gap-2 p-2 transition-colors duration-75 hover:bg-grey-01';
             const inner = (
               <>
-                <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-                  <Avatar size={32} avatarUrl={voter.avatarUrl} value={voter.fallbackSeed} />
-                </div>
+                <VoterAvatar avatarUrl={voter.avatarUrl} fallbackSeed={voter.fallbackSeed} />
                 <p className="min-w-0 truncate text-metadataMedium text-text">{label}</p>
               </>
             );
