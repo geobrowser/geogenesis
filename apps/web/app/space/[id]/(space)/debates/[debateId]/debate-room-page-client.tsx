@@ -91,7 +91,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       });
 
       await room.connect(token.url, token.token);
+      roomRef.current = room;
       const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
+      localTracksRef.current = tracks;
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
       }
@@ -104,11 +106,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
 
       startLocalRecorder(stream);
-      roomRef.current = room;
-      localTracksRef.current = tracks;
       await markJoined.mutateAsync();
       setRoomState('connected');
     } catch (error) {
+      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
       setRoomState('idle');
     }
@@ -271,11 +272,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (blob.size === 0) return;
 
     const upload = await uploadMutation.mutateAsync({ side, mime_type: mimeType, started_at_ms: startedAtMs });
-    await fetch(upload.upload.url, {
+    const uploadResponse = await fetch(upload.upload.url, {
       method: upload.upload.method,
       headers: upload.upload.headers,
       body: blob,
     });
+    if (!uploadResponse.ok) {
+      throw new Error(`Recording upload failed (${uploadResponse.status})`);
+    }
     const endedAtMs = Date.now();
     await completeMutation.mutateAsync({
       filename: upload.filename,
