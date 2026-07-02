@@ -1,5 +1,6 @@
 'use client';
 
+import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
@@ -10,6 +11,7 @@ import { ExploreSidePanel } from './explore-side-panel';
 
 type Props = {
   initialSpaceOptions: SpaceOption[];
+  featuredSpaces: FeaturedSpace[];
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
   parentTopicOptions: ParentTopicOption[];
@@ -19,6 +21,7 @@ type Props = {
 
 export function ExplorePage({
   initialSpaceOptions,
+  featuredSpaces,
   unclaimedTopics,
   recentlyClaimedSpaces,
   parentTopicOptions,
@@ -42,6 +45,7 @@ export function ExplorePage({
         className="sticky top-11 h-[calc(100dvh-2.75rem)] w-px shrink-0 self-start bg-divider lg:hidden"
       />
       <ExploreSidePanel
+        featuredSpaces={featuredSpaces}
         unclaimedTopics={unclaimedTopics}
         recentlyClaimedSpaces={recentlyClaimedSpaces}
         parentTopicOptions={parentTopicOptions}
