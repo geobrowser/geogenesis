@@ -11,7 +11,15 @@ Status legend: **OPEN** = not fixed, tracked here. **RESOLVED** = addressed on t
 
 ## Major
 
-### 1. OPEN — Three v1-shaped GraphQL queries broken by the v2 endpoint switch; errors swallowed into empty data
+### 1. RESOLVED (Batch 1) — Three v1-shaped GraphQL queries broken by the v2 endpoint switch; errors swallowed into empty data
+Fixed: browse-sidebar pending indicators rewritten via `proposalActionsConnection` →
+version → proposal walk; `fetch-proposals-by-user` moved to `proposalsCurrentsConnection`
+(orderBy CREATED_AT_DESC since endTime=0 would sort fresh proposals last);
+`fetch-in-flight-subspace-proposals.ts` deleted (zero callers, and v2 has no ADD_SUBSPACE
+action type — subspaces are already served by the v2-shaped `fetch-active-subspaces.ts`).
+Audit also removed dead v1 query files with no importers: `fetch-parent-entity-id.ts`,
+`fetch-entity-type.tsx`, `fetch-spaces-where-editor.ts`, `fetch-tab.ts`,
+`fetch-subspaces.ts`, `subgraph/fragments.ts`, `dto/subspaces.ts`.
 All three verified failing live against `testnet-api-v2.geobrowser.io`:
 
 - `apps/web/core/browse/fetch-browse-sidebar-data.ts:85-118` — uses `endTime` and
@@ -105,7 +113,9 @@ testnet-only, but should be an explicit known-blocker for the actual mainnet mig
 
 ## Minor
 
-### 8. OPEN — Multi-version proposals double-count in the new counters
+### 8. RESOLVED (Batch 1) — Multi-version proposals double-count in the new counters
+Fixed: both counter queries moved to `proposalsCurrentsConnection` (proposal joined with
+its current version), so endTime filters are current-version scoped by construction.
 `apps/web/app/space/[id]/(space)/governance/page.tsx:260-292` and
 `apps/web/core/io/fetch-sidebar-counts.ts:39-73`: Active matches
 `some { endTime = 0 OR endTime > now }`, Rejected matches `some { 0 < endTime < now }` — over

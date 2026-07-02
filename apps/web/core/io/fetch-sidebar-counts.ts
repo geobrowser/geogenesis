@@ -30,27 +30,24 @@ type MyProposalStatsResult = {
 /**
  * Proposals you created — GraphQL `proposedBy` filter is supported on this API.
  *
- * v2 moved `endTime` from Proposal to ProposalVersion, so we filter through
- * `proposalVersionsConnection.some`. v2 also encodes "not-yet-voted" as
- * `endTime = 0` (voting window opens on the first vote), so a fresh proposal
- * must be counted as In Progress, not as Rejected.
+ * proposalsCurrents joins each proposal with its *current* version, so endTime
+ * is the live voting window and multi-version proposals can't land in two
+ * buckets. v2 encodes "not-yet-voted" as `endTime = 0` (voting window opens on
+ * the first vote), so a fresh proposal counts as In Progress, not Rejected.
  */
 function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string {
   return `query {
-    myInProgress: proposalsConnection(
+    myInProgress: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        or: [
-          { proposalVersionsConnection: { some: { endTime: { is: "0" } } } }
-          { proposalVersionsConnection: { some: { endTime: { greaterThan: "${nowSeconds}" } } } }
-        ]
+        or: [{ endTime: { is: "0" } }, { endTime: { greaterThan: "${nowSeconds}" } }]
       }
     ) {
       totalCount
     }
 
-    myAccepted: proposalsConnection(
+    myAccepted: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: false }
@@ -59,13 +56,11 @@ function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string 
       totalCount
     }
 
-    myRejected: proposalsConnection(
+    myRejected: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        proposalVersionsConnection: {
-          some: { endTime: { lessThan: "${nowSeconds}", greaterThan: "0" } }
-        }
+        endTime: { lessThan: "${nowSeconds}", greaterThan: "0" }
       }
     ) {
       totalCount

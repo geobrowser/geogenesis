@@ -28,6 +28,10 @@ type NetworkProposalActionNode = {
   actionType: string;
 };
 
+// proposalsCurrents joins each proposal with its current version, which is
+// where name/startTime/endTime live in v2. Order by createdAt rather than
+// endTime: v2 stamps endTime=0 until the first vote opens the window, so
+// END_TIME_DESC would sort fresh proposals last.
 const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: string) => {
   const filters = [
     `proposedBy: { is: "${ID.hexToUuid(proposedBy)}" }`,
@@ -37,10 +41,10 @@ const getFetchUserProposalsQuery = (proposedBy: string, skip: number, spaceId?: 
     .join('\n        ');
 
   return `query {
-    proposalsConnection(
+    proposalsCurrentsConnection(
       first: 5
       offset: ${skip}
-      orderBy: END_TIME_DESC
+      orderBy: CREATED_AT_DESC
       filter: {
         ${filters}
       }
@@ -80,7 +84,7 @@ export type FetchUserProposalsOptions = {
 };
 
 type NetworkResult = {
-  proposalsConnection: { nodes: NetworkProposal[] };
+  proposalsCurrentsConnection: { nodes: NetworkProposal[] };
 };
 
 type NetworkActionsResult = {
@@ -150,7 +154,7 @@ export async function fetchProposalsByUser({
             error.message
           );
           return {
-            proposalsConnection: {
+            proposalsCurrentsConnection: {
               nodes: [],
             },
           };
@@ -159,7 +163,7 @@ export async function fetchProposalsByUser({
             `${error._tag}: Unable to fetch proposals, queryId: ${queryId} proposerSpaceId: ${proposerSpaceId} page: ${page}`
           );
           return {
-            proposalsConnection: {
+            proposalsCurrentsConnection: {
               nodes: [],
             },
           };
@@ -170,7 +174,7 @@ export async function fetchProposalsByUser({
   });
 
   const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  const proposals = result.proposalsConnection.nodes;
+  const proposals = result.proposalsCurrentsConnection.nodes;
 
   const creatorIds = proposals.map(p => p.proposedBy);
   const uniqueCreatorIds = [...new Set(creatorIds)];

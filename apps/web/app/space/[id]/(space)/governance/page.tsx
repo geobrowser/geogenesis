@@ -248,8 +248,9 @@ interface NetworkResult {
 async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const nowSeconds = Math.floor(Date.now() / 1000).toString();
 
-  // v2 moved endTime from Proposal to ProposalVersion, so we filter through
-  // proposalVersionsConnection.some. v2 also encodes "not-yet-voted" as
+  // proposalsCurrents is the proposal joined with its *current* version, so
+  // endTime here is always the live voting window (multi-version proposals
+  // can't double-count across buckets). v2 encodes "not-yet-voted" as
   // endTime=0 (the voting window opens on the first vote), so an Active
   // proposal is one whose current version has endTime=0 OR endTime>now,
   // and has never been executed.
@@ -257,20 +258,17 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
     endpoint: Environment.getConfig().api,
     query: `
     query {
-      activeProposals: proposalsConnection(
+      activeProposals: proposalsCurrentsConnection(
         filter: {
           spaceId: { is: "${id}" }
           executedAt: { isNull: true }
-          or: [
-            { proposalVersionsConnection: { some: { endTime: { is: "0" } } } }
-            { proposalVersionsConnection: { some: { endTime: { greaterThan: "${nowSeconds}" } } } }
-          ]
+          or: [{ endTime: { is: "0" } }, { endTime: { greaterThan: "${nowSeconds}" } }]
         }
       ) {
         totalCount
       }
 
-      acceptedProposals: proposalsConnection(
+      acceptedProposals: proposalsCurrentsConnection(
         filter: {
           spaceId: { is: "${id}" }
           executedAt: { isNull: false }
@@ -279,13 +277,11 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
         totalCount
       }
 
-      rejectedProposals: proposalsConnection(
+      rejectedProposals: proposalsCurrentsConnection(
         filter: {
           spaceId: { is: "${id}" }
           executedAt: { isNull: true }
-          proposalVersionsConnection: {
-            some: { endTime: { lessThan: "${nowSeconds}", greaterThan: "0" } }
-          }
+          endTime: { lessThan: "${nowSeconds}", greaterThan: "0" }
         }
       ) {
         totalCount

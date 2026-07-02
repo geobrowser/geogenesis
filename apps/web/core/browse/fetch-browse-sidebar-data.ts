@@ -77,48 +77,72 @@ async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow
   return map;
 }
 
-type PendingSpaceIdsResult = {
-  pendingMember: { nodes: { spaceId: string }[] };
-  pendingEditor: { nodes: { spaceId: string }[] };
+type PendingActionNode = {
+  proposalVersion: number;
+  proposalVersionByProposalIdAndProposalVersion: {
+    endTime: string;
+    proposal: { spaceId: string; executedAt: string | null; currentVersion: number } | null;
+  } | null;
 };
 
-function pendingSpaceIdsQuery(memberSpaceId: string, nowSec: string): string {
+type PendingSpaceIdsResult = {
+  pendingMember: { nodes: PendingActionNode[] };
+  pendingEditor: { nodes: PendingActionNode[] };
+};
+
+/**
+ * v2 has no proposal-level endTime or action filter, so we start from the
+ * actions targeting this member space and walk up action → version → proposal,
+ * then decide "still pending" client-side in openProposalSpaceIds.
+ */
+function pendingSpaceIdsQuery(memberSpaceId: string): string {
+  const selection = `
+      nodes {
+        proposalVersion
+        proposalVersionByProposalIdAndProposalVersion {
+          endTime
+          proposal { spaceId executedAt currentVersion }
+        }
+      }`;
   return `query {
-    pendingMember: proposalsConnection(
+    pendingMember: proposalActionsConnection(
       first: 100
       filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_MEMBER }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
+        actionType: { is: ADD_MEMBER }
+        targetId: { is: "${memberSpaceId}" }
       }
-    ) {
-      nodes { spaceId }
+    ) {${selection}
     }
-    pendingEditor: proposalsConnection(
+    pendingEditor: proposalActionsConnection(
       first: 100
       filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_EDITOR }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
+        actionType: { is: ADD_EDITOR }
+        targetId: { is: "${memberSpaceId}" }
       }
-    ) {
-      nodes { spaceId }
+    ) {${selection}
     }
   }`;
 }
 
+function openProposalSpaceIds(nodes: PendingActionNode[] | undefined, nowSec: number): string[] {
+  const spaceIds: string[] = [];
+  for (const node of nodes ?? []) {
+    const version = node.proposalVersionByProposalIdAndProposalVersion;
+    const proposal = version?.proposal;
+    if (!version || !proposal) continue;
+    // Only the current version's window decides whether the request is live.
+    if (node.proposalVersion !== proposal.currentVersion) continue;
+    if (proposal.executedAt != null) continue;
+    const endTime = Number(version.endTime);
+    // endTime=0 means the voting window hasn't opened yet (opens on first vote).
+    if (endTime !== 0 && endTime < nowSec) continue;
+    spaceIds.push(proposal.spaceId);
+  }
+  return spaceIds;
+}
+
 async function fetchBrowseSidebarSources(memberSpaceId: string) {
-  const nowSec = String(Math.floor(Date.now() / 1000));
+  const nowSec = Math.floor(Date.now() / 1000);
 
   const [editorIds, memberSpaces, pendingResult] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
@@ -127,17 +151,21 @@ async function fetchBrowseSidebarSources(memberSpaceId: string) {
       Effect.either(
         graphql<PendingSpaceIdsResult>({
           endpoint: Environment.getConfig().api,
-          query: pendingSpaceIdsQuery(memberSpaceId, nowSec),
+          query: pendingSpaceIdsQuery(memberSpaceId),
         })
       )
     ),
   ]);
 
+  if (Either.isLeft(pendingResult)) {
+    console.error('fetchBrowseSidebarSources pending proposals query failed:', pendingResult.left);
+  }
+
   const pendingMemberIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
+    ? openProposalSpaceIds(pendingResult.right.pendingMember?.nodes, nowSec)
     : [];
   const pendingEditorIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
+    ? openProposalSpaceIds(pendingResult.right.pendingEditor?.nodes, nowSec)
     : [];
 
   return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
