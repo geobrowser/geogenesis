@@ -393,21 +393,21 @@ function DebateRecordingModal({
       </header>
 
       <main className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-        <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 lg:grid-cols-2 lg:grid-rows-1">
+        <div className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3">
           <DebateVideoTile
             title="You"
             sideLabel={localSide ? labelForSide(localSide, debate.question.side_labels) : 'Joining'}
             active={countdown.activeSide !== null && countdown.activeSide === localSide}
-            countdown={countdown}
           >
             <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
           </DebateVideoTile>
+
+          <DebateInstructionBand debate={debate} countdown={countdown} />
 
           <DebateVideoTile
             title="Other speaker"
             sideLabel={remoteSide ? labelForSide(remoteSide, debate.question.side_labels) : 'Connecting'}
             active={countdown.activeSide !== null && countdown.activeSide === remoteSide}
-            countdown={countdown}
             waiting={!remoteVideoReady}
           >
             <div
@@ -415,17 +415,6 @@ function DebateRecordingModal({
               className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-contain"
             />
           </DebateVideoTile>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light">
-          <Text as="p" variant="body" color="grey-04">
-            {speakerStatus(debate)}
-          </Text>
-          {countdown.activeSide === null && (
-            <span className="rounded-full bg-white px-4 py-2 text-smallTitle text-text shadow-card">
-              {countdown.label}
-            </span>
-          )}
         </div>
 
         {roomError && (
@@ -443,14 +432,12 @@ function DebateVideoTile({
   sideLabel,
   active,
   waiting = false,
-  countdown,
   children,
 }: {
   title: string;
   sideLabel: string;
   active: boolean;
   waiting?: boolean;
-  countdown: DebateCountdown;
   children: React.ReactNode;
 }) {
   return (
@@ -469,8 +456,6 @@ function DebateVideoTile({
         </span>
       </div>
 
-      {active && <CountdownPill countdown={countdown} />}
-
       <div className="h-full w-full">{children}</div>
 
       {waiting && (
@@ -488,19 +473,31 @@ function DebateVideoTile({
   );
 }
 
-function CountdownPill({ countdown }: { countdown: DebateCountdown }) {
+function DebateInstructionBand({ debate, countdown }: { debate: Debate; countdown: DebateCountdown }) {
   const remainingPercent = `${Math.round((1 - countdown.progress) * 100)}%`;
 
   return (
-    <div className="absolute bottom-4 left-1/2 z-20 w-[min(220px,calc(100%-2rem))] -translate-x-1/2 rounded-full bg-white px-4 py-2 text-center text-text shadow-card">
-      <Text as="div" variant="smallTitle" color="text">
-        {countdown.label}
-      </Text>
-      <div className="mt-1 h-1 overflow-hidden rounded-full bg-grey-02">
-        <div
-          className="h-full rounded-full bg-text transition-[width] duration-500"
-          style={{ width: remainingPercent }}
-        />
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light">
+      <div className="min-w-0">
+        <Text as="p" variant="bodySemibold" color="text">
+          {speakerStatus(debate)}
+        </Text>
+        <Text as="p" variant="metadata" color="grey-04" className="mt-1">
+          {countdown.activeSide
+            ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
+            : 'Get ready.'}
+        </Text>
+      </div>
+      <div className="w-[min(220px,100%)] shrink-0 rounded-full bg-bg px-4 py-2 text-center text-text shadow-inner shadow-grey-02">
+        <Text as="div" variant="smallTitle" color="text">
+          {countdown.label}
+        </Text>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-grey-02">
+          <div
+            className="h-full rounded-full bg-text transition-[width] duration-500"
+            style={{ width: remainingPercent }}
+          />
+        </div>
       </div>
     </div>
   );
