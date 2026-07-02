@@ -23,7 +23,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 
-import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
+import { DateTimeInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
@@ -147,7 +147,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }} onMouseDown={e => e.stopPropagation()}>
       <div className="flex flex-col items-center rounded-lg bg-grey-01 px-6 py-8">
-        <div className="flex w-full max-w-[420px] flex-col items-center gap-6">
+        <div className="flex w-full max-w-[1200px] flex-col items-center gap-6">
           <div className="flex w-full flex-col items-center gap-2">
             <p className="text-center text-button font-medium text-text">
               What do you want to rank? <span className="text-grey-04">(required)</span>
@@ -224,12 +224,12 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
 
           <div className="flex w-full flex-wrap items-start justify-center gap-8">
             <div className="flex flex-col items-center gap-2">
-              <p className="text-button font-medium text-text">Start date</p>
-              <DateOnlyInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
+              <p className="text-button font-medium text-text">Start time</p>
+              <DateTimeInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
             </div>
             <div className="flex flex-col items-center gap-2">
-              <p className="text-button font-medium text-text">End date</p>
-              <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
+              <p className="text-button font-medium text-text">End time</p>
+              <DateTimeInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
             </div>
           </div>
 

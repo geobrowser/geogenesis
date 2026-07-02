@@ -8,8 +8,8 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getAllEntities, getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
 import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
+  RANKING_END_TIME_PROPERTY_ID,
+  RANKING_START_TIME_PROPERTY_ID,
   RANK_POSITION_PROPERTY_ID,
   RANK_TYPE_ID,
 } from '~/core/ranking-block-ids';
@@ -183,8 +183,8 @@ export async function resolvePersonalRankingShareImpl(
   if (!blockEntitySpaceId) return null;
   const blockScoped = await deps.fetchEntity(blockEntityId, blockEntitySpaceId);
   const rankingName = blockScoped?.name?.trim() || 'Untitled ranking';
-  const rankingStartDate = readDateValue(blockScoped, RANKING_START_DATE_PROPERTY_ID, blockEntitySpaceId);
-  const rankingEndDate = readDateValue(blockScoped, RANKING_END_DATE_PROPERTY_ID, blockEntitySpaceId);
+  const rankingStartDate = readDateValue(blockScoped, RANKING_START_TIME_PROPERTY_ID, blockEntitySpaceId);
+  const rankingEndDate = readDateValue(blockScoped, RANKING_END_TIME_PROPERTY_ID, blockEntitySpaceId);
 
   // 4. Build the OG card data with the resolved coordinates.
   const cardData = await deps.fetchPersonalCardData({
@@ -267,8 +267,8 @@ export async function resolveGlobalRankingShareImpl(
   const blockScoped = page?.entity ?? (await deps.fetchEntity(blockEntityId, blockEntitySpaceId));
   const relations = page?.relations?.length ? page.relations : (blockScoped?.relations ?? []);
   const rankingName = blockScoped?.name?.trim() || 'Untitled ranking';
-  const rankingStartDate = readDateValue(blockScoped, RANKING_START_DATE_PROPERTY_ID, blockEntitySpaceId);
-  const rankingEndDate = readDateValue(blockScoped, RANKING_END_DATE_PROPERTY_ID, blockEntitySpaceId);
+  const rankingStartDate = readDateValue(blockScoped, RANKING_START_TIME_PROPERTY_ID, blockEntitySpaceId);
+  const rankingEndDate = readDateValue(blockScoped, RANKING_END_TIME_PROPERTY_ID, blockEntitySpaceId);
 
   const cardData = await deps.fetchGlobalCardData({
     blockEntityId,
