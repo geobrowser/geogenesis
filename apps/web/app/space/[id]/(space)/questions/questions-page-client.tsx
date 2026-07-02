@@ -82,7 +82,6 @@ export function QuestionsPageClient({ spaceId }: QuestionsPageClientProps) {
 }
 
 function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientProps & { debatesEnabled: boolean }) {
-  const router = useRouter();
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: questions, isLoading } = useQueryEntities({
     where: {
@@ -112,20 +111,6 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
       ),
     [debateQuestionsQuery.data?.questions]
   );
-  const activeDebate = React.useMemo(
-    () =>
-      (debateQuestionsQuery.data?.questions ?? [])
-        .map(question => question.active_debate)
-        .find(debate => debate && !['complete', 'cancelled'].includes(debate.status)) ?? null,
-    [debateQuestionsQuery.data?.questions]
-  );
-
-  React.useEffect(() => {
-    if (activeDebate) {
-      router.push(`/space/${spaceId}/debates/${activeDebate.id}`);
-    }
-  }, [activeDebate, router, spaceId]);
-
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">

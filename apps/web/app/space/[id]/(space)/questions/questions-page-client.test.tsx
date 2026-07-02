@@ -10,6 +10,7 @@ import { QuestionsPageClient } from './questions-page-client';
 
 const mocks = vi.hoisted(() => {
   const replace = vi.fn();
+  const push = vi.fn();
   const setActiveSpace = vi.fn();
   const bumpReviewVersion = vi.fn();
   const setIsReviewOpen = vi.fn();
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     replace,
+    push,
     setActiveSpace,
     bumpReviewVersion,
     setIsReviewOpen,
@@ -31,9 +33,10 @@ let namesByEntityId = new Map<string, string>();
 let stagedRelations: Relation[] = [];
 let questionsTabEnabled = true;
 let lastQueryEntitiesOptions: unknown = null;
+let debateQuestionsResponse: { questions: unknown[] } = { questions: [] };
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -47,7 +50,7 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   oppositeSide: (side: 'for' | 'against') => (side === 'for' ? 'against' : 'for'),
-  useDebateQuestions: () => ({ data: { questions: [] }, error: null }),
+  useDebateQuestions: () => ({ data: debateQuestionsResponse, error: null }),
   useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -111,6 +114,7 @@ beforeEach(() => {
   stagedRelations = [];
   questionsTabEnabled = true;
   lastQueryEntitiesOptions = null;
+  debateQuestionsResponse = { questions: [] };
   vi.clearAllMocks();
 
   mocks.nameSet.mockImplementation((entityId: string, _spaceId: string, value: string) => {
@@ -233,6 +237,56 @@ describe('QuestionsPageClient', () => {
 
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+  });
+
+  it('does not redirect to a persisted active debate from the questions page', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+    debateQuestionsResponse = {
+      questions: [
+        {
+          question_entity_id: 'question-1',
+          active_match: null,
+          active_debate: {
+            id: 'debate-1',
+            status: 'in_progress',
+          },
+        },
+      ],
+    };
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Questions' })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('redirects direct visits when the feature flag is disabled', async () => {
