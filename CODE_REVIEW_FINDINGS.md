@@ -50,6 +50,8 @@ backend team (confirmed 2026-07-02). Consequently:
   a trap.
 - The `Space.flatSupportThreshold` DTO/schema/fragment plumbing was kept (still useful metadata);
   stale CanNotVote comments were updated.
+Confirmed semantics after the fix (2026-07-02): a flat=0 FAST proposal is voteable and passes
+with a single editor vote.
 Residual watch item: existing FAST proposals created *before* the backend fix in flat=0 spaces
 — verify they are now voteable, or they remain dead on-chain.
 

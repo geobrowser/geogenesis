@@ -622,7 +622,7 @@ function StepConfigureGovernance() {
   const settingsWarnings: string[] = [];
   if (Number.isFinite(parsedFlat) && parsedFlat === 0) {
     settingsWarnings.push(
-      'Flat support threshold is 0 — fast-path proposals will not require any editor votes to reach their threshold. Make sure this is intended.'
+      'Flat support threshold is 0 — fast-path proposals pass with a single editor vote. Make sure this is intended.'
     );
   }
   if (Number.isFinite(parsedPartial) && parsedPartial > 0 && parsedPartial < 1) {
