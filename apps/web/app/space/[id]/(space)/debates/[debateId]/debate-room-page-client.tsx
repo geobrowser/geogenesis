@@ -140,6 +140,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [completeUpload, createUpload]
   );
 
+  const discardLocalRecorder = React.useCallback(async () => {
+    const recorder = recorderRef.current;
+    if (!recorder) return;
+
+    const stopped = new Promise<void>(resolve => {
+      recorder.onstop = () => resolve();
+    });
+    if (recorder.state !== 'inactive') {
+      recorder.stop();
+      await stopped;
+    }
+    recorderRef.current = null;
+    recordingChunksRef.current = [];
+    recordingStartedAtRef.current = null;
+  }, []);
+
   const connect = React.useCallback(async () => {
     setRoomError(null);
     setRoomState('connecting');
@@ -203,9 +219,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, [joinResponse?.side, stopLocalRecorderAndUpload]);
 
+  const leave = React.useCallback(async () => {
+    if (!debate) return;
+    setRoomError(null);
+    try {
+      if (['thanking', 'complete'].includes(debate.status)) {
+        await finishAndUpload();
+      } else {
+        await discardLocalRecorder();
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        setRemoteVideoReady(false);
+        setRoomState('idle');
+      }
+      router.push(`/space/${spaceId}/debates`);
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
+    }
+  }, [debate, discardLocalRecorder, finishAndUpload, router, spaceId]);
+
   const abort = React.useCallback(async () => {
     setRoomError(null);
     try {
+      await discardLocalRecorder();
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       setRemoteVideoReady(false);
       await abortDebate.mutateAsync();
@@ -213,7 +248,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not abort the debate.');
     }
-  }, [abortDebate, router, spaceId]);
+  }, [abortDebate, discardLocalRecorder, router, spaceId]);
 
   React.useEffect(() => {
     return () => {
@@ -327,7 +362,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               localVideoRef={localVideoRef}
               remoteMediaRef={remoteMediaRef}
               remoteVideoReady={remoteVideoReady}
+              onLeave={leave}
               onAbort={abort}
+              leaveDisabled={roomState === 'uploading'}
               abortDisabled={abortDebate.isPending || roomState === 'uploading'}
             />
           )}
@@ -346,7 +383,9 @@ function DebateRecordingModal({
   localVideoRef,
   remoteMediaRef,
   remoteVideoReady,
+  onLeave,
   onAbort,
+  leaveDisabled,
   abortDisabled,
 }: {
   debate: Debate;
@@ -357,7 +396,9 @@ function DebateRecordingModal({
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteMediaRef: React.RefObject<HTMLDivElement | null>;
   remoteVideoReady: boolean;
+  onLeave: () => void;
   onAbort: () => void;
+  leaveDisabled: boolean;
   abortDisabled: boolean;
 }) {
   const remoteSide = localSide ? oppositeSide(localSide) : null;
@@ -384,7 +425,10 @@ function DebateRecordingModal({
           </Text>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {!['thanking', 'complete'].includes(debate.status) && (
+          <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled}>
+            Leave
+          </Button>
+          {!['complete', 'cancelled'].includes(debate.status) && (
             <Button type="button" variant="error" onClick={onAbort} disabled={abortDisabled}>
               Abort debate
             </Button>
