@@ -44,6 +44,7 @@ export type DebateMatch = {
   against: DebateParticipantSummary;
   for_accepted: boolean;
   against_accepted: boolean;
+  turn_format_id: string | null;
   debate_id: string | null;
   created_at: string;
   updated_at: string;
@@ -200,6 +201,11 @@ const geoChatSessionStorageKey = 'geo:chat-session';
 
 export function getGeoChatApiBaseUrl() {
   return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
+}
+
+export function getCurrentGeoChatUserId() {
+  const session = loadSession();
+  return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
 export async function listDebateQuestions(
@@ -428,6 +434,20 @@ function saveSession(session: GeoChatSession) {
 function clearSession() {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(geoChatSessionStorageKey);
+  }
+}
+
+function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string } | null {
+  if (!token || typeof window === 'undefined' || typeof window.atob !== 'function') return null;
+  const payload = token.split('.')[1];
+  if (!payload) return null;
+
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
+    return JSON.parse(window.atob(padded)) as { user_id?: string };
+  } catch {
+    return null;
   }
 }
 

@@ -2,13 +2,12 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useRouter } from 'next/navigation';
-
-import { Button } from '~/design-system/button';
-import { Text } from '~/design-system/text';
 
 import type { Debate, DebateSide, LiveKitJoinResponse } from '~/core/debates/api';
 import {
+  oppositeSide,
   useAbortDebate,
   useCompleteLocalRecordingUpload,
   useCreateLocalRecordingUpload,
@@ -17,6 +16,9 @@ import {
   useMarkDebateJoined,
 } from '~/core/debates/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
+
+import { Button } from '~/design-system/button';
+import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -36,6 +38,12 @@ type RoomLike = {
     publishTrack: (track: unknown) => Promise<unknown>;
   };
   on: (event: string, callback: (track: { attach: () => HTMLElement }) => void) => void;
+};
+
+type DebateCountdown = {
+  label: string;
+  progress: number;
+  activeSide: DebateSide | null;
 };
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
@@ -64,6 +72,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
   const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'leaving'>('idle');
   const [roomError, setRoomError] = React.useState<string | null>(null);
+  const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
   const roomRef = React.useRef<RoomLike | null>(null);
@@ -72,11 +81,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingChunksRef = React.useRef<Blob[]>([]);
   const recordingStartedAtRef = React.useRef<number | null>(null);
   const debate = debateQuery.data ?? null;
-  const remaining = useDebateCountdown(debate);
+  const countdown = useDebateCountdown(debate);
 
   const connect = async () => {
     setRoomError(null);
     setRoomState('connecting');
+    setRemoteVideoReady(false);
+    remoteMediaRef.current?.replaceChildren();
 
     try {
       const token = await liveKitJoin.mutateAsync();
@@ -86,7 +97,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const room = new livekit.Room({ adaptiveStream: true, dynacast: true }) as unknown as RoomLike;
       room.on(livekit.RoomEvent.TrackSubscribed, track => {
         const element = track.attach();
-        element.className = 'max-h-[320px] w-full rounded-lg bg-text object-contain';
+        if (element instanceof HTMLVideoElement) {
+          element.className = 'h-full w-full object-contain';
+          element.playsInline = true;
+          setRemoteVideoReady(true);
+        } else if (element instanceof HTMLAudioElement) {
+          element.className = 'hidden';
+        }
         remoteMediaRef.current?.appendChild(element);
       });
 
@@ -121,6 +138,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     try {
       await stopLocalRecorderAndUpload(joinResponse?.side ?? null, createUpload, completeUpload);
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+      setRemoteVideoReady(false);
       setRoomState('idle');
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not upload the local recording.');
@@ -132,6 +150,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRoomError(null);
     try {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+      setRemoteVideoReady(false);
       await abortDebate.mutateAsync();
       router.push(`/space/${spaceId}/debates`);
     } catch (error) {
@@ -176,61 +195,66 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       )}
 
       {debate && (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <section className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border border-grey-02 bg-white p-3">
-                <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2">
-                  You
+        <>
+          <section className="rounded-lg border border-grey-02 bg-white p-5 shadow-light">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <Text as="h3" variant="bodySemibold" color="text">
+                  {statusLabel(debate.status)}
                 </Text>
-                <video ref={localVideoRef} className="aspect-video w-full rounded-lg bg-text object-cover" playsInline />
+                <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[760px]">
+                  {speakerStatus(debate)}
+                </Text>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {debate.participants.map(participant => (
+                    <span
+                      key={participant.user_id}
+                      className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
+                    >
+                      <span className="truncate">
+                        {participant.display_name || participant.profile_space_id} ·{' '}
+                        {labelForSide(participant.side, debate.question.side_labels)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
               </div>
-              <div className="rounded-lg border border-grey-02 bg-white p-3">
-                <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2">
-                  Other speaker
-                </Text>
-                <div ref={remoteMediaRef} className="min-h-[180px] space-y-2 rounded-lg bg-bg p-2" />
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {roomState === 'idle' && !['complete', 'cancelled'].includes(debate.status) && (
+                  <Button type="button" onClick={connect} disabled={liveKitJoin.isPending || markJoined.isPending}>
+                    Join room
+                  </Button>
+                )}
+                <Button type="button" variant="secondary" onClick={() => router.push(`/space/${spaceId}/debates`)}>
+                  Back to debates
+                </Button>
               </div>
             </div>
 
-            {roomError && (
-              <div className="rounded-lg border border-red-01 bg-white px-5 py-4">
+            {roomError && roomState === 'idle' && (
+              <div className="mt-4 rounded-lg border border-red-01 bg-white px-5 py-4">
                 <Text color="red-01">{roomError}</Text>
               </div>
             )}
           </section>
 
-          <aside className="rounded-lg border border-grey-02 bg-white p-4 shadow-light">
-            <Text as="h3" variant="bodySemibold" color="text">
-              {statusLabel(debate.status)}
-            </Text>
-            <Text as="p" variant="body" color="grey-04" className="mt-2">
-              {speakerStatus(debate)}
-            </Text>
-            <div className="mt-4 rounded-md border border-grey-02 bg-bg px-3 py-2">
-              <Text as="div" variant="metadataMedium" color="grey-04">
-                Time
-              </Text>
-              <Text as="div" variant="smallTitle" color="text" className="mt-1">
-                {remaining}
-              </Text>
-            </div>
-            <div className="mt-4 flex flex-col gap-2">
-              {roomState === 'idle' ? (
-                <Button type="button" onClick={connect} disabled={liveKitJoin.isPending || markJoined.isPending}>
-                  Join room
-                </Button>
-              ) : (
-                <Button type="button" onClick={leaveAndUpload} disabled={roomState === 'leaving'}>
-                  Leave and upload
-                </Button>
-              )}
-              <Button type="button" variant="secondary" onClick={abort} disabled={abortDebate.isPending}>
-                Abort debate
-              </Button>
-            </div>
-          </aside>
-        </div>
+          {roomState !== 'idle' && (
+            <DebateRecordingModal
+              debate={debate}
+              roomState={roomState}
+              roomError={roomError}
+              countdown={countdown}
+              localSide={joinResponse?.side ?? null}
+              localVideoRef={localVideoRef}
+              remoteMediaRef={remoteMediaRef}
+              remoteVideoReady={remoteVideoReady}
+              onLeave={leaveAndUpload}
+              onAbort={abort}
+              leaveDisabled={roomState === 'leaving' || createUpload.isPending || completeUpload.isPending}
+              abortDisabled={abortDebate.isPending}
+            />
+          )}
+        </>
       )}
     </div>
   );
@@ -292,6 +316,176 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }
 }
 
+function DebateRecordingModal({
+  debate,
+  roomState,
+  roomError,
+  countdown,
+  localSide,
+  localVideoRef,
+  remoteMediaRef,
+  remoteVideoReady,
+  onLeave,
+  onAbort,
+  leaveDisabled,
+  abortDisabled,
+}: {
+  debate: Debate;
+  roomState: 'connecting' | 'connected' | 'leaving';
+  roomError: string | null;
+  countdown: DebateCountdown;
+  localSide: DebateSide | null;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
+  remoteMediaRef: React.RefObject<HTMLDivElement | null>;
+  remoteVideoReady: boolean;
+  onLeave: () => void;
+  onAbort: () => void;
+  leaveDisabled: boolean;
+  abortDisabled: boolean;
+}) {
+  const remoteSide = localSide ? oppositeSide(localSide) : null;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Debate recording"
+      className="fixed inset-0 z-[1000] flex h-dvh flex-col overflow-hidden bg-[#121315] text-white"
+    >
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/15 px-4 py-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Text as="h2" variant="bodySemibold" color="white">
+              {statusLabel(debate.status)}
+            </Text>
+            <span className="rounded-full border border-white/20 px-2 py-0.5 text-[0.75rem] leading-4 text-white/70">
+              {roomStateLabel(roomState)}
+            </span>
+          </div>
+          <Text as="p" variant="metadata" color="white" className="mt-1 line-clamp-2 max-w-[920px] opacity-70">
+            {debate.question.question}
+          </Text>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled}>
+            {roomState === 'leaving' ? 'Uploading...' : 'Leave and upload'}
+          </Button>
+          <Button type="button" variant="error" onClick={onAbort} disabled={abortDisabled || roomState === 'leaving'}>
+            Abort debate
+          </Button>
+        </div>
+      </header>
+
+      <main className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
+        <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 lg:grid-cols-2 lg:grid-rows-1">
+          <DebateVideoTile
+            title="You"
+            sideLabel={localSide ? labelForSide(localSide, debate.question.side_labels) : 'Joining'}
+            active={countdown.activeSide !== null && countdown.activeSide === localSide}
+            countdown={countdown}
+          >
+            <video ref={localVideoRef} className="h-full w-full bg-black object-contain" playsInline muted autoPlay />
+          </DebateVideoTile>
+
+          <DebateVideoTile
+            title="Other speaker"
+            sideLabel={remoteSide ? labelForSide(remoteSide, debate.question.side_labels) : 'Connecting'}
+            active={countdown.activeSide !== null && countdown.activeSide === remoteSide}
+            countdown={countdown}
+            waiting={!remoteVideoReady}
+          >
+            <div
+              ref={remoteMediaRef}
+              className="h-full w-full bg-black [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:object-contain"
+            />
+          </DebateVideoTile>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-white/15 bg-white/10 px-4 py-3 backdrop-blur">
+          <Text as="p" variant="body" color="white" className="opacity-80">
+            {speakerStatus(debate)}
+          </Text>
+          {countdown.activeSide === null && (
+            <span className="rounded-full bg-white px-4 py-2 text-smallTitle text-text shadow-card">
+              {countdown.label}
+            </span>
+          )}
+        </div>
+
+        {roomError && (
+          <div className="shrink-0 rounded-lg border border-red-01 bg-red-01/10 px-4 py-3">
+            <Text color="white">{roomError}</Text>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+function DebateVideoTile({
+  title,
+  sideLabel,
+  active,
+  waiting = false,
+  countdown,
+  children,
+}: {
+  title: string;
+  sideLabel: string;
+  active: boolean;
+  waiting?: boolean;
+  countdown: DebateCountdown;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className={cx(
+        'relative min-h-0 overflow-hidden rounded-lg border bg-black shadow-card',
+        active ? 'border-white' : 'border-white/15'
+      )}
+    >
+      <div className="absolute top-3 left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2">
+        <span className="rounded-full bg-black/65 px-3 py-1 text-[0.8125rem] leading-4 font-medium text-white backdrop-blur">
+          {title}
+        </span>
+        <span className="min-w-0 truncate rounded-full bg-white/90 px-3 py-1 text-[0.8125rem] leading-4 text-text">
+          {sideLabel}
+        </span>
+      </div>
+
+      {active && <CountdownPill countdown={countdown} />}
+
+      <div className="h-full w-full">{children}</div>
+
+      {waiting && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/45">
+          <Text color="white" variant="bodySemibold" className="rounded-full bg-black/65 px-4 py-2 backdrop-blur">
+            Waiting for video
+          </Text>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CountdownPill({ countdown }: { countdown: DebateCountdown }) {
+  const remainingPercent = `${Math.round((1 - countdown.progress) * 100)}%`;
+
+  return (
+    <div className="absolute bottom-4 left-1/2 z-20 w-[min(220px,calc(100%-2rem))] -translate-x-1/2 rounded-full bg-white px-4 py-2 text-center text-text shadow-card">
+      <Text as="div" variant="smallTitle" color="text">
+        {countdown.label}
+      </Text>
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-grey-02">
+        <div
+          className="h-full rounded-full bg-text transition-[width] duration-500"
+          style={{ width: remainingPercent }}
+        />
+      </div>
+    </div>
+  );
+}
+
 function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
@@ -313,7 +507,7 @@ function disconnectRoom(
   }
 }
 
-function useDebateCountdown(debate: Debate | null) {
+function useDebateCountdown(debate: Debate | null): DebateCountdown {
   const [now, setNow] = React.useState(() => Date.now());
 
   React.useEffect(() => {
@@ -321,11 +515,59 @@ function useDebateCountdown(debate: Debate | null) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const target = debate?.turn_ends_at ?? debate?.preflight_ends_at ?? debate?.prepare_ends_at ?? null;
-  if (!target) return '00:00';
-  const remainingMs = Math.max(0, new Date(target).getTime() - now);
+  const countdownWindow = debate ? countdownWindowForDebate(debate) : null;
+  if (!countdownWindow?.target) {
+    return { label: '00:00', progress: 0, activeSide: null };
+  }
+
+  const targetMs = new Date(countdownWindow.target).getTime();
+  const startMs = countdownWindow.start ? new Date(countdownWindow.start).getTime() : null;
+  const remainingMs = Math.max(0, targetMs - now);
   const seconds = Math.ceil(remainingMs / 1_000);
-  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  const totalMs = startMs ? Math.max(1, targetMs - startMs) : 0;
+  const elapsedMs = startMs ? Math.min(totalMs, Math.max(0, now - startMs)) : 0;
+
+  return {
+    label: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
+    progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
+    activeSide: countdownWindow.activeSide,
+  };
+}
+
+function countdownWindowForDebate(debate: Debate): {
+  start: string | null;
+  target: string | null;
+  activeSide: DebateSide | null;
+} {
+  if (debate.status === 'preparing') {
+    return {
+      start: debate.prepare_started_at,
+      target: debate.prepare_ends_at,
+      activeSide: null,
+    };
+  }
+
+  if (debate.status === 'preflight') {
+    return {
+      start: debate.prepare_ends_at,
+      target: debate.preflight_ends_at,
+      activeSide: debate.first_side,
+    };
+  }
+
+  if (debate.status === 'in_progress' || debate.status === 'thanking') {
+    return {
+      start: debate.turn_started_at,
+      target: debate.turn_ends_at,
+      activeSide: debate.current_speaker_side,
+    };
+  }
+
+  return {
+    start: null,
+    target: null,
+    activeSide: null,
+  };
 }
 
 function speakerStatus(debate: Debate) {
@@ -344,6 +586,16 @@ function speakerStatus(debate: Debate) {
 
 function statusLabel(status: Debate['status']) {
   return status.replace('_', ' ');
+}
+
+function roomStateLabel(roomState: 'connecting' | 'connected' | 'leaving') {
+  if (roomState === 'connecting') return 'Connecting';
+  if (roomState === 'leaving') return 'Uploading';
+  return 'Recording';
+}
+
+function labelForSide(side: DebateSide, labels: { for: string; against: string }) {
+  return side === 'for' ? labels.for : labels.against;
 }
 
 function preferredRecordingMimeType() {

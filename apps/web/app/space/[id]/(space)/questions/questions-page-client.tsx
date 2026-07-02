@@ -1,17 +1,15 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { keepPreviousData } from '@tanstack/react-query';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { Button } from '~/design-system/button';
-import { Plus } from '~/design-system/icons/plus';
-import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
-import { Text } from '~/design-system/text';
-
-import type { DebateQuestion, DebateSide } from '~/core/debates/api';
+import { type DebateMatch, type DebateQuestion, type DebateSide, getCurrentGeoChatUserId } from '~/core/debates/api';
+import { DebateFormatSelector } from '~/core/debates/format-selector';
+import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from '~/core/debates/formats';
 import {
   oppositeSide,
   useAcceptDebateMatch,
@@ -19,7 +17,6 @@ import {
   useDeclineDebateMatch,
   useJoinDebateQueue,
 } from '~/core/debates/hooks';
-import { buildQuestionDraft } from '~/core/questions/question-draft';
 import {
   ANSWERS_PROPERTY_ID,
   PERSON_TYPE_ID,
@@ -30,11 +27,17 @@ import {
   TOPICS_PROPERTY_ID,
   TOPIC_TYPE_ID,
 } from '~/core/questions/ontology';
+import { buildQuestionDraft } from '~/core/questions/question-draft';
 import { useDiff } from '~/core/state/diff-store';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
+
+import { Button } from '~/design-system/button';
+import { Plus } from '~/design-system/icons/plus';
+import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import { Text } from '~/design-system/text';
 
 type QuestionsPageClientProps = {
   spaceId: string;
@@ -358,6 +361,9 @@ function QuestionListItem({
   const declineMatch = useDeclineDebateMatch(spaceId);
   const activeMatch = debateQuestion?.active_match ?? null;
   const activeDebate = debateQuestion?.active_debate ?? null;
+  const currentUserId = getCurrentGeoChatUserId();
+  const canChooseFormat = currentUserId === activeMatch?.for.user_id;
+  const [formatId, setFormatId] = React.useState<DebateFormatId>(() => formatIdForMatch(activeMatch));
   const mutationError =
     joinQueue.error instanceof Error
       ? joinQueue.error.message
@@ -366,6 +372,10 @@ function QuestionListItem({
         : declineMatch.error instanceof Error
           ? declineMatch.error.message
           : null;
+
+  React.useEffect(() => {
+    setFormatId(formatIdForMatch(activeMatch));
+  }, [activeMatch?.id, activeMatch?.turn_format_id]);
 
   const joinSide = (side: DebateSide) => {
     joinQueue.mutate({
@@ -383,7 +393,7 @@ function QuestionListItem({
   const handleAcceptMatch = () => {
     if (!activeMatch) return;
     acceptMatch.mutate(
-      { matchId: activeMatch.id },
+      { matchId: activeMatch.id, formatId: canChooseFormat ? formatId : undefined },
       {
         onSuccess: result => {
           if (result.debate) {
@@ -467,6 +477,18 @@ function QuestionListItem({
           answerLabels={answerLabels}
           mutationError={mutationError}
           published={published}
+        />
+      )}
+
+      {debatesEnabled && activeMatch && !activeDebate && (
+        <DebateFormatSelector
+          value={formatId}
+          selectedFormatId={activeMatch.turn_format_id}
+          canChoose={canChooseFormat}
+          disabled={acceptMatch.isPending}
+          onChange={setFormatId}
+          name={`debate-format-${activeMatch.id}`}
+          className="mt-3 max-w-[760px]"
         />
       )}
 
@@ -580,6 +602,10 @@ function answerLabelsForQuestion(answers: Relation[]): DebateSideLabels {
 
 function labelForSide(side: DebateSide, labels: DebateSideLabels) {
   return side === 'for' ? labels.for : labels.against;
+}
+
+function formatIdForMatch(match: DebateMatch | null): DebateFormatId {
+  return debateFormatById(match?.turn_format_id)?.id ?? defaultDebateFormatId;
 }
 
 function isQuestionPublished(question: Entity): boolean {

@@ -4,12 +4,14 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { Button } from '~/design-system/button';
-import { Text } from '~/design-system/text';
-
-import type { Debate, DebateMatch, DebateRecording } from '~/core/debates/api';
+import { type Debate, type DebateMatch, type DebateRecording, getCurrentGeoChatUserId } from '~/core/debates/api';
+import { DebateFormatSelector } from '~/core/debates/format-selector';
+import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from '~/core/debates/formats';
 import { useAcceptDebateMatch, useDeclineDebateMatch, useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
+
+import { Button } from '~/design-system/button';
+import { Text } from '~/design-system/text';
 
 type DebatesPageClientProps = {
   spaceId: string;
@@ -101,6 +103,9 @@ function MatchCard({ match, spaceId }: { match: DebateMatch; spaceId: string }) 
   const router = useRouter();
   const acceptMatch = useAcceptDebateMatch(spaceId);
   const declineMatch = useDeclineDebateMatch(spaceId);
+  const currentUserId = getCurrentGeoChatUserId();
+  const canChooseFormat = currentUserId === match.for.user_id;
+  const [formatId, setFormatId] = React.useState<DebateFormatId>(() => formatIdForMatch(match));
   const error =
     acceptMatch.error instanceof Error
       ? acceptMatch.error.message
@@ -108,9 +113,13 @@ function MatchCard({ match, spaceId }: { match: DebateMatch; spaceId: string }) 
         ? declineMatch.error.message
         : null;
 
+  React.useEffect(() => {
+    setFormatId(formatIdForMatch(match));
+  }, [match.id, match.turn_format_id]);
+
   const accept = () => {
     acceptMatch.mutate(
-      { matchId: match.id },
+      { matchId: match.id, formatId: canChooseFormat ? formatId : undefined },
       {
         onSuccess: result => {
           if (result.debate) {
@@ -132,6 +141,15 @@ function MatchCard({ match, spaceId }: { match: DebateMatch; spaceId: string }) 
             {speakerLabel(match.for)} for {match.question.side_labels.for} vs {speakerLabel(match.against)} for{' '}
             {match.question.side_labels.against}
           </Text>
+          <DebateFormatSelector
+            value={formatId}
+            selectedFormatId={match.turn_format_id}
+            canChoose={canChooseFormat}
+            disabled={acceptMatch.isPending}
+            onChange={setFormatId}
+            name={`debate-format-${match.id}`}
+            className="mt-4 max-w-[760px]"
+          />
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Button type="button" small onClick={accept} disabled={acceptMatch.isPending}>
@@ -178,7 +196,8 @@ function DebateCard({ debate, spaceId }: { debate: Debate; spaceId: string }) {
                 className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
               >
                 <span className="truncate">
-                  {speakerLabel(participant)} · {participant.side === 'for' ? debate.question.side_labels.for : debate.question.side_labels.against}
+                  {speakerLabel(participant)} ·{' '}
+                  {participant.side === 'for' ? debate.question.side_labels.for : debate.question.side_labels.against}
                 </span>
               </span>
             ))}
@@ -225,6 +244,10 @@ function RecordingButton({ debateId, recording }: { debateId: string; recording:
 
 function speakerLabel(participant: { display_name: string | null; profile_space_id: string }) {
   return participant.display_name || participant.profile_space_id;
+}
+
+function formatIdForMatch(match: DebateMatch | null): DebateFormatId {
+  return debateFormatById(match?.turn_format_id)?.id ?? defaultDebateFormatId;
 }
 
 function statusLabel(status: Debate['status']) {
