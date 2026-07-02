@@ -248,6 +248,11 @@ interface NetworkResult {
 async function getProposalsCount({ id }: Awaited<Props['params']>) {
   const nowSeconds = Math.floor(Date.now() / 1000).toString();
 
+  // v2 moved endTime from Proposal to ProposalVersion, so we filter through
+  // proposalVersionsConnection.some. v2 also encodes "not-yet-voted" as
+  // endTime=0 (the voting window opens on the first vote), so an Active
+  // proposal is one whose current version has endTime=0 OR endTime>now,
+  // and has never been executed.
   const graphqlFetchEffect = graphql<NetworkResult>({
     endpoint: Environment.getConfig().api,
     query: `
@@ -255,8 +260,11 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
       activeProposals: proposalsConnection(
         filter: {
           spaceId: { is: "${id}" }
-          endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
           executedAt: { isNull: true }
+          or: [
+            { proposalVersionsConnection: { some: { endTime: { is: "0" } } } }
+            { proposalVersionsConnection: { some: { endTime: { greaterThan: "${nowSeconds}" } } } }
+          ]
         }
       ) {
         totalCount
@@ -274,8 +282,10 @@ async function getProposalsCount({ id }: Awaited<Props['params']>) {
       rejectedProposals: proposalsConnection(
         filter: {
           spaceId: { is: "${id}" }
-          endTime: { lessThan: "${nowSeconds}" }
           executedAt: { isNull: true }
+          proposalVersionsConnection: {
+            some: { endTime: { lessThan: "${nowSeconds}", greaterThan: "0" } }
+          }
         }
       ) {
         totalCount

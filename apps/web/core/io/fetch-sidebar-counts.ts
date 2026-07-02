@@ -27,14 +27,24 @@ type MyProposalStatsResult = {
   myRejected: { totalCount: number };
 };
 
-/** Proposals you created — GraphQL `proposedBy` filter is supported on this API. */
+/**
+ * Proposals you created — GraphQL `proposedBy` filter is supported on this API.
+ *
+ * v2 moved `endTime` from Proposal to ProposalVersion, so we filter through
+ * `proposalVersionsConnection.some`. v2 also encodes "not-yet-voted" as
+ * `endTime = 0` (voting window opens on the first vote), so a fresh proposal
+ * must be counted as In Progress, not as Rejected.
+ */
 function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string {
   return `query {
     myInProgress: proposalsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
+        or: [
+          { proposalVersionsConnection: { some: { endTime: { is: "0" } } } }
+          { proposalVersionsConnection: { some: { endTime: { greaterThan: "${nowSeconds}" } } } }
+        ]
       }
     ) {
       totalCount
@@ -53,7 +63,9 @@ function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string 
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        endTime: { lessThan: "${nowSeconds}" }
+        proposalVersionsConnection: {
+          some: { endTime: { lessThan: "${nowSeconds}", greaterThan: "0" } }
+        }
       }
     ) {
       totalCount
