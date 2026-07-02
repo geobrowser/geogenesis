@@ -53,7 +53,7 @@ export function formatRankingPeriodLabel(
       const totalHours = Math.ceil(msRemaining / (60 * 60 * 1000));
 
       if (totalMinutes < 60) {
-        return totalMinutes === 1 ? 'Ends in 1 min' : `Ends in ${totalMinutes} mins`;
+        return `Ends in ${totalMinutes} min`;
       }
       if (totalHours < 24) {
         return totalHours === 1 ? 'Ends in 1 hr' : `Ends in ${totalHours} hrs`;
