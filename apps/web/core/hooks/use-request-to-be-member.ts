@@ -1,11 +1,12 @@
 'use client';
 
 import { daoSpace } from '@geoprotocol/geo-sdk';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
+import { useSetAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -13,6 +14,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
@@ -21,14 +23,18 @@ import { validateSpaceId } from '~/core/utils/utils';
 interface UseRequestToBeMemberArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to join */
   spaceId: string | null;
+  /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
+  space?: { name?: string; image?: string | null };
 }
 
-export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
+export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArgs) {
   const { dispatch } = useStatusBar();
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const queryClient = useQueryClient();
+  const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
 
   const tx = useSmartAccountTransaction({
     address: SPACE_REGISTRY_ADDRESS,
@@ -100,6 +106,26 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeMember,
+    onSuccess: () => {
+      // personalSpaceId is guaranteed here (the request would have thrown without
+      // it); the guard also scopes the persisted entry to this account.
+      if (!spaceId || !personalSpaceId) return;
+      // Optimistic, persisted bridge so the "Membership pending" state shows
+      // instantly (and survives a refresh) regardless of where the request was
+      // made, while the indexer catches up.
+      setRequestedSpaces(prev =>
+        upsertRequestedMembershipSpace(prev, {
+          id: spaceId,
+          ownerId: personalSpaceId,
+          requestedAt: Date.now(),
+          name: space?.name,
+          image: space?.image,
+        })
+      );
+      // Refetch the durable sources so every surface converges on the server state.
+      queryClient.invalidateQueries({ queryKey: ['pending-memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+    },
   });
 
   return {

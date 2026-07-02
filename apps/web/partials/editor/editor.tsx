@@ -23,6 +23,7 @@ import { createEntityMentionExtension, entityMentionPluginKey } from './entity-m
 import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
+import { normalizeEditorContent } from './normalize-editor-content';
 import { ServerContent } from './server-content';
 import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
@@ -472,24 +473,3 @@ const useSuppressFlushSyncWarning = () => {
   }, []);
 };
 
-function normalizeEditorContent(content: JSONContent): JSONContent {
-  const normalizedAttrs = content.attrs
-    ? Object.fromEntries(
-        Object.entries(content.attrs).filter(([key, value]) => {
-          if (value === null || value === undefined) return false;
-          return key !== 'spaceId' && key !== 'relationId';
-        })
-      )
-    : undefined;
-
-  return {
-    ...content,
-    ...(normalizedAttrs && Object.keys(normalizedAttrs).length > 0 ? { attrs: normalizedAttrs } : {}),
-    ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
-    ...(content.content
-      ? {
-          content: content.content.map(child => normalizeEditorContent(child)),
-        }
-      : {}),
-  };
-}
