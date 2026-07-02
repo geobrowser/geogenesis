@@ -28,6 +28,8 @@ export const rankingPendingPublishedAtAtom = atom<number | null>(null);
 // pages that resolve their space publish it here for the navbar breadcrumb.
 export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
+export const rankingFullscreenActiveAtom = atom<boolean>(false);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);
