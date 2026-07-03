@@ -35,6 +35,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
   const debatesQuery = useSpaceDebates(spaceId, true);
   const matches = debatesQuery.data?.matches ?? [];
   const debates = debatesQuery.data?.debates ?? [];
+  const recordedDebates = debates.filter(debate => debate.status === 'complete' && debate.recordings.length > 0);
 
   return (
     <div className="py-8">
@@ -44,7 +45,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
         </Text>
       </div>
 
-      {debatesQuery.isLoading && matches.length === 0 && debates.length === 0 && (
+      {debatesQuery.isLoading && matches.length === 0 && recordedDebates.length === 0 && (
         <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
           <Text color="grey-04">Loading debates...</Text>
         </div>
@@ -56,7 +57,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
         </div>
       )}
 
-      {!debatesQuery.isLoading && matches.length === 0 && debates.length === 0 && (
+      {!debatesQuery.isLoading && matches.length === 0 && recordedDebates.length === 0 && (
         <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
           <Text as="h3" variant="bodySemibold" color="text">
             No debates yet
@@ -68,14 +69,14 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
       )}
 
       <div className="space-y-4">
-        {debates.length > 0 && (
+        {recordedDebates.length > 0 && (
           <section>
             <Text as="h3" variant="bodySemibold" color="text" className="mb-2 block">
               Space debates
             </Text>
             <div className="space-y-3">
-              {debates.map(debate => (
-                <DebateCard key={debate.id} debate={debate} spaceId={spaceId} />
+              {recordedDebates.map(debate => (
+                <DebateCard key={debate.id} debate={debate} />
               ))}
             </div>
           </section>
@@ -86,10 +87,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
   );
 }
 
-function DebateCard({ debate, spaceId }: { debate: Debate; spaceId: string }) {
-  const router = useRouter();
-  const isLive = !['complete', 'cancelled'].includes(debate.status);
-
+function DebateCard({ debate }: { debate: Debate }) {
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -114,11 +112,6 @@ function DebateCard({ debate, spaceId }: { debate: Debate; spaceId: string }) {
             ))}
           </div>
         </div>
-        {isLive && (
-          <Button type="button" small onClick={() => router.push(`/space/${spaceId}/debates/${debate.id}`)}>
-            Enter debate
-          </Button>
-        )}
       </div>
 
       {debate.recordings.length > 0 && (

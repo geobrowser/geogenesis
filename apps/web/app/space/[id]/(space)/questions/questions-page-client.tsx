@@ -139,6 +139,7 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
           isLoading={isLoading}
           spaceId={spaceId}
           debatesEnabled={debatesEnabled}
+          debateJoinBlocked={activeMatches.length > 0}
           debateQuestionsByEntityId={debateQuestionsByEntityId}
           debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
         />
@@ -294,6 +295,7 @@ function QuestionsList({
   isLoading,
   spaceId,
   debatesEnabled,
+  debateJoinBlocked,
   debateQuestionsByEntityId,
   debateStatus,
 }: {
@@ -301,6 +303,7 @@ function QuestionsList({
   isLoading: boolean;
   spaceId: string;
   debatesEnabled: boolean;
+  debateJoinBlocked: boolean;
   debateQuestionsByEntityId: Map<string, DebateQuestion>;
   debateStatus: string | null;
 }) {
@@ -338,6 +341,7 @@ function QuestionsList({
           question={question}
           spaceId={spaceId}
           debatesEnabled={debatesEnabled}
+          debateJoinBlocked={debateJoinBlocked}
           debateQuestion={debateQuestionsByEntityId.get(question.id) ?? null}
         />
       ))}
@@ -349,11 +353,13 @@ function QuestionListItem({
   question,
   spaceId,
   debatesEnabled,
+  debateJoinBlocked,
   debateQuestion,
 }: {
   question: Entity;
   spaceId: string;
   debatesEnabled: boolean;
+  debateJoinBlocked: boolean;
   debateQuestion: DebateQuestion | null;
 }) {
   const answers = relationsForProperty(question.relations, ANSWERS_PROPERTY_ID);
@@ -397,7 +403,7 @@ function QuestionListItem({
       <AnswerChipGroup
         relations={answers}
         debatesEnabled={debatesEnabled}
-        canJoinDebate={published && !activeDebate && !activeMatch}
+        canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
         pendingSide={debateQuestion?.viewer_waiting_side ?? null}
         joinPending={joinQueue.isPending}
         onJoinSide={joinSide}

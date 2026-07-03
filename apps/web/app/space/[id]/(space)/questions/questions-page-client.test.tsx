@@ -290,6 +290,61 @@ describe('QuestionsPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Maybe' })).not.toBeInTheDocument();
   });
 
+  it('does not allow starting another queue while a match prompt is active', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+    debateQuestionsResponse = {
+      questions: [
+        {
+          question_entity_id: 'question-1',
+          active_match: {
+            id: 'match-1',
+            question: { id: 'debate-question-1' },
+            for: { user_id: 'user-for' },
+            against: { user_id: 'user-against' },
+            for_accepted: false,
+            against_accepted: false,
+            debate_id: null,
+          },
+          active_debate: null,
+        },
+      ],
+    };
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'No' })).toBeDisabled();
+  });
+
   it('does not redirect to a persisted active debate from the questions page', () => {
     questions = [
       {

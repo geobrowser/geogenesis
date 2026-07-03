@@ -76,7 +76,19 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
     }
   }, [currentUserId, debates, matches, navigateToDebate, waitingQuestionIds]);
 
-  const activeMatch = matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null;
+  const waitingMatch =
+    matches.find(match => {
+      if (!currentUserId || dismissedMatchIds.includes(match.id)) return false;
+      const side = sideForUser(match, currentUserId);
+      return (
+        acceptedMatchIds.includes(match.id) ||
+        waitingQuestionIds.includes(match.question.id) ||
+        (side ? acceptedForSide(match, side) : false)
+      );
+    }) ?? null;
+  const activeMatch =
+    waitingMatch ??
+    (waitingQuestionIds.length === 0 ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null) : null);
   const minimizedMatch = activeMatch && minimizedMatchIds.includes(activeMatch.id) ? activeMatch : null;
 
   if (!activeMatch || !currentUserId) return null;
