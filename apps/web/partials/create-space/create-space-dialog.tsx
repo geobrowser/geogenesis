@@ -1,5 +1,6 @@
 'use client';
 
+import { validateVotingSettingsInput } from '@geoprotocol/geo-sdk';
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -57,10 +58,6 @@ export const createSpaceDialogOpenAtom = atom<boolean>(false);
  * and profile-entry steps entirely. */
 const autoRunAtom = atom<boolean>(false);
 
-/** When set, the source entity's values + relations are copied into the new
- * space after deploy succeeds. */
-const cloneFromEntityAtom = atom<{ entityId: string; sourceSpaceId: string } | null>(null);
-
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
 
 // Module-level guard for the auto-run effect. A component-scoped `useRef`
@@ -79,9 +76,6 @@ type OpenDialogPreset = {
   /** Skip the template-picker / profile-entry steps and fire the deploy as
    * soon as the dialog mounts. Requires `spaceType` to be set. */
   autoRun?: boolean;
-  /** After deploy succeeds, copy this entity's content into the new space's
-   * home page entity. */
-  cloneFromEntity?: { entityId: string; sourceSpaceId: string };
 };
 
 /**
@@ -98,7 +92,7 @@ export function useOpenCreateSpaceDialog() {
   const setStep = useSetAtom(stepAtom);
   const setOpen = useSetAtom(createSpaceDialogOpenAtom);
   const setAutoRun = useSetAtom(autoRunAtom);
-  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
+  const setVotingSettings = useSetAtom(votingSettingsAtom);
 
   return useCallback(
     (preset?: OpenDialogPreset) => {
@@ -112,10 +106,12 @@ export function useOpenCreateSpaceDialog() {
       setSpaceType(preset?.spaceType ?? null);
       setStep(preset?.step ?? 'select-type');
       setAutoRun(preset?.autoRun ?? false);
-      setCloneFromEntity(preset?.cloneFromEntity ?? null);
+      // Re-opening while already open skips the close-effect cleanup, so any
+      // custom voting settings from the previous session must be cleared here.
+      setVotingSettings(null);
       setOpen(true);
     },
-    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setCloneFromEntity]
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setVotingSettings]
   );
 }
 
@@ -134,11 +130,9 @@ export function CreateSpaceDialog() {
   const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
   const autoRun = useAtomValue(autoRunAtom);
-  const cloneFromEntity = useAtomValue(cloneFromEntityAtom);
   const votingSettings = useAtomValue(votingSettingsAtom);
 
   const setAutoRun = useSetAtom(autoRunAtom);
-  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
   const setVotingSettings = useSetAtom(votingSettingsAtom);
 
   // On close: clear the auto-run guard and the transient claim-flow atoms so
@@ -149,10 +143,9 @@ export function CreateSpaceDialog() {
     if (!open) {
       autoRunFired = false;
       setAutoRun(false);
-      setCloneFromEntity(null);
       setVotingSettings(null);
     }
-  }, [open, setAutoRun, setCloneFromEntity, setVotingSettings]);
+  }, [open, setAutoRun, setVotingSettings]);
 
   // Auto-run path: when the dialog is opened directly at 'create-space' with
   // autoRun, fire the deploy as soon as everything is in place. Guarded by a
@@ -173,7 +166,7 @@ export function CreateSpaceDialog() {
     if (autoRunFired) return;
     autoRunFired = true;
     createSpaces(spaceType);
-  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType, cloneFromEntity]);
+  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType]);
 
   if (!address) return null;
 
@@ -782,6 +775,13 @@ type ParsedSettings =
   | { kind: 'error'; message: string };
 
 function parseSettings(inputs: ParsedSettingsInputs): ParsedSettings {
+  // Number('') and Number('  ') are 0, so blank fields must be rejected before
+  // conversion or they silently become 0 (e.g. a 0% support threshold).
+  const rawValues = [inputs.partial, inputs.universal, inputs.flat, inputs.quorum, inputs.duration, inputs.grace];
+  if (rawValues.some(v => v.trim() === '')) {
+    return { kind: 'error', message: 'All fields are required.' };
+  }
+
   const partial = Number(inputs.partial);
   const universal = Number(inputs.universal);
   const flat = Number(inputs.flat);
@@ -810,18 +810,28 @@ function parseSettings(inputs: ParsedSettingsInputs): ParsedSettings {
     return { kind: 'error', message: 'Execution grace period must be at least 1 hour.' };
   }
 
-  return {
-    kind: 'ok',
-    value: {
-      partialPercentageSupportThreshold: partial,
-      universalPercentageSupportThreshold: universal,
-      flatSupportThreshold: flat,
-      quorum,
-      durationInDays: duration,
-      disableFastPathAccessForNewMembers: inputs.disableFastPath,
-      executionGracePeriodInDays: grace,
-    },
+  const value: VotingSettingsInput = {
+    partialPercentageSupportThreshold: partial,
+    universalPercentageSupportThreshold: universal,
+    flatSupportThreshold: flat,
+    quorum,
+    durationInDays: duration,
+    disableFastPathAccessForNewMembers: inputs.disableFastPath,
+    executionGracePeriodInDays: grace,
   };
+
+  // Run the SDK's own validation with the deploy-time editor count (the
+  // creator is the only initial editor — see useDeploySpace's
+  // initialEditorSpaceIds). Without this, e.g. quorum=3 saves fine and then
+  // every deploy attempt fails inside getCreateDaoSpaceCalldata after the
+  // IPFS publish has already run.
+  const NEW_SPACE_INITIAL_EDITOR_COUNT = 1;
+  const sdkError = validateVotingSettingsInput(value, NEW_SPACE_INITIAL_EDITOR_COUNT);
+  if (sdkError) {
+    return { kind: 'error', message: sdkError };
+  }
+
+  return { kind: 'ok', value };
 }
 
 const governanceText: Record<SpaceGovernanceType, string> = {
