@@ -24,6 +24,7 @@ import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
+import { TopQuestionsSectionContainer } from '~/partials/space-page/top-questions/top-questions-section-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
@@ -77,6 +78,9 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <>
+      <React.Suspense fallback={null}>
+        <TopQuestionsSectionContainer spaceId={spaceId} />
+      </React.Suspense>
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
@@ -113,6 +117,9 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         initialTabs={topic.tabs}
         initialCollectionItems={topic.initialCollectionItems}
       >
+        <React.Suspense fallback={null}>
+          <TopQuestionsSectionContainer spaceId={spaceId} />
+        </React.Suspense>
         <React.Suspense fallback={<SubtopicGallerySkeleton />}>
           <SubtopicGalleryContainer spaceId={spaceId} />
         </React.Suspense>
