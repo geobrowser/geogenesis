@@ -1,19 +1,28 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+import { produce } from 'immer';
+
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
+import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
+import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
+import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import { useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
@@ -24,11 +33,15 @@ type Props = {
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
+  const isEditing = useUserIsEditing(spaceId);
   const {
-    canEdit,
     filterState,
+    resolvedFilterState,
+    filterMode,
     setFilterState,
+    setFilterMode,
     source,
+    setSource,
     isFilterOpen,
     setIsFilterOpen,
     displayName,
@@ -42,6 +55,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     globalSharePath,
     ensureGlobalRankingOg,
   } = state;
+
+  const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
+
+  const filterGroupsForToolbarPills = React.useMemo(
+    () => groupFilters(resolvedFilterState).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
+    [resolvedFilterState]
+  );
 
   return (
     <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
@@ -89,15 +109,76 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cx('mb-4 overflow-hidden', canEdit ? 'border-t border-divider py-4' : 'py-2')}
+            className={cx('mb-4 overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
             onMouseDown={e => e.stopPropagation()}
           >
-            <TableBlockEditableFilters
-              filterState={filterState}
-              setFilterState={setFilterState}
-              filterSuggestionSpaceId={spaceId}
-              isEditing={canEdit}
-            />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                {isEditing && (
+                  <>
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    <TableBlockEditableFilters
+                      ref={filterPromptRef}
+                      filterState={filterState}
+                      setFilterState={setFilterState}
+                      filterSuggestionSpaceId={spaceId}
+                      isEditing={isEditing}
+                    />
+                  </>
+                )}
+                {!isEditing &&
+                  filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.columnId}
+                      group={group}
+                      mode={filterMode}
+                      onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+              </div>
+              {isEditing && filterGroupsForToolbarPills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.columnId}
+                      group={group}
+                      mode={filterMode}
+                      onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                      }}
+                      onAddSimilar={anchorEl => {
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                          });
+                        });
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         </AnimatePresence>
       )}
