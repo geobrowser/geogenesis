@@ -46,6 +46,9 @@ type DebateCountdown = {
   activeSide: DebateSide | null;
 };
 
+const localRecordingUploadMaxAttempts = 3;
+const localRecordingUploadRetryDelayMs = 1_000;
+
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
   const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
@@ -116,6 +119,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         recorder.onstop = () => resolve();
       });
       if (recorder.state !== 'inactive') {
+        recorder.requestData();
         recorder.stop();
         await stopped;
       }
@@ -124,18 +128,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const blob = new Blob(recordingChunksRef.current, { type: mimeType });
       if (blob.size === 0) return;
 
-      const upload = await createUpload.mutateAsync({ side, mime_type: mimeType, started_at_ms: startedAtMs });
-      const uploadResponse = await fetch(upload.upload.url, {
-        method: upload.upload.method,
-        headers: upload.upload.headers,
-        body: blob,
-      });
-      if (!uploadResponse.ok) {
-        throw new Error(`Recording upload failed (${uploadResponse.status})`);
+      let uploadedFilename: string | null = null;
+      for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
+        try {
+          const upload = await createUpload.mutateAsync({ side, mime_type: mimeType, started_at_ms: startedAtMs });
+          const headers = new Headers(upload.upload.headers);
+          headers.set('Content-Type', mimeType);
+          const uploadResponse = await fetch(upload.upload.url, {
+            method: upload.upload.method,
+            headers,
+            body: blob,
+          });
+          if (!uploadResponse.ok) {
+            throw new Error(`Recording upload failed (${uploadResponse.status})`);
+          }
+          uploadedFilename = upload.filename;
+          break;
+        } catch (error) {
+          if (attempt >= localRecordingUploadMaxAttempts) {
+            throw error;
+          }
+          await delay(localRecordingUploadRetryDelayMs * attempt);
+        }
       }
+      if (!uploadedFilename) throw new Error('Recording upload failed.');
+
       const endedAtMs = Date.now();
       await completeUpload.mutateAsync({
-        filename: upload.filename,
+        filename: uploadedFilename,
         mime_type: mimeType,
         started_at_ms: startedAtMs,
         ended_at_ms: endedAtMs,
@@ -727,6 +747,10 @@ function roomStateLabel(roomState: 'connecting' | 'connected' | 'uploading') {
 
 function labelForSide(side: DebateSide, labels: { for: string; against: string }) {
   return side === 'for' ? labels.for : labels.against;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 function preferredRecordingMimeType() {
