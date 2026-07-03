@@ -54,11 +54,11 @@ describe('DebateMatchPrompt', () => {
     expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
     expect(screen.getByText('Bri wants to debate')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('45/45 20/20'));
+    fireEvent.click(screen.getByText('45/45 30/30'));
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
-      { matchId: 'match-1', formatId: 'extended-open' },
+      { matchId: 'match-1', formatId: 'extended-standard' },
       expect.any(Object)
     );
   });

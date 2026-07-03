@@ -5,20 +5,18 @@ import { debateFormatById, debateFormats, debateTimingSummary, defaultDebateForm
 describe('debate formats', () => {
   it('matches the prototype format catalog', () => {
     expect(debateFormats.map(format => [format.id, format.label, format.turnDurationsMs])).toEqual([
-      ['standard', '30/30 20/20', [30_000, 30_000, 20_000, 20_000]],
-      ['extended-open', '45/45 20/20', [45_000, 45_000, 20_000, 20_000]],
+      ['dev-short', '7/7 4/4', [7_000, 7_000, 4_000, 4_000]],
+      ['standard', '1/1 45/45', [60_000, 60_000, 45_000, 45_000]],
       ['extended-standard', '45/45 30/30', [45_000, 45_000, 30_000, 30_000]],
-      ['minute-double', '1/1 1/1 20/20', [60_000, 60_000, 60_000, 60_000, 20_000, 20_000]],
-      ['triple-standard', '30/30 30/30 30/30 20/20', [30_000, 30_000, 30_000, 30_000, 30_000, 30_000, 20_000, 20_000]],
-      ['dev-short', '5/5 2/2', [5_000, 5_000, 2_000, 2_000]],
+      ['triple-standard', '45/45 30/30 30/30', [45_000, 45_000, 30_000, 30_000, 30_000, 30_000]],
     ]);
   });
 
   it('formats round summaries', () => {
-    const format = debateFormatById('minute-double');
+    const format = debateFormatById('triple-standard');
 
     expect(format).not.toBeNull();
-    expect(debateTimingSummary(format!)).toBe('1m / 1m · 1m / 1m · 20s / 20s');
+    expect(debateTimingSummary(format!)).toBe('45s / 45s · 30s / 30s · 30s / 30s');
   });
 
   it('defaults to a configured format id', () => {

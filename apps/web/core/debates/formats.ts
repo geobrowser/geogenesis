@@ -1,12 +1,10 @@
 'use client';
 
 export type DebateFormatId =
+  | 'dev-short'
   | 'standard'
-  | 'extended-open'
   | 'extended-standard'
-  | 'minute-double'
-  | 'triple-standard'
-  | 'dev-short';
+  | 'triple-standard';
 
 export type DebateFormat = {
   id: DebateFormatId;
@@ -17,14 +15,15 @@ export type DebateFormat = {
 
 export const debateFormats: DebateFormat[] = [
   {
-    id: 'standard',
-    label: '30/30 20/20',
-    turnDurationsMs: [30_000, 30_000, 20_000, 20_000],
+    id: 'dev-short',
+    label: '7/7 4/4',
+    turnDurationsMs: [7_000, 7_000, 4_000, 4_000],
+    developmentOnly: true,
   },
   {
-    id: 'extended-open',
-    label: '45/45 20/20',
-    turnDurationsMs: [45_000, 45_000, 20_000, 20_000],
+    id: 'standard',
+    label: '1/1 45/45',
+    turnDurationsMs: [60_000, 60_000, 45_000, 45_000],
   },
   {
     id: 'extended-standard',
@@ -32,20 +31,9 @@ export const debateFormats: DebateFormat[] = [
     turnDurationsMs: [45_000, 45_000, 30_000, 30_000],
   },
   {
-    id: 'minute-double',
-    label: '1/1 1/1 20/20',
-    turnDurationsMs: [60_000, 60_000, 60_000, 60_000, 20_000, 20_000],
-  },
-  {
     id: 'triple-standard',
-    label: '30/30 30/30 30/30 20/20',
-    turnDurationsMs: [30_000, 30_000, 30_000, 30_000, 30_000, 30_000, 20_000, 20_000],
-  },
-  {
-    id: 'dev-short',
-    label: '5/5 2/2',
-    turnDurationsMs: [5_000, 5_000, 2_000, 2_000],
-    developmentOnly: true,
+    label: '45/45 30/30 30/30',
+    turnDurationsMs: [45_000, 45_000, 30_000, 30_000, 30_000, 30_000],
   },
 ];
 
