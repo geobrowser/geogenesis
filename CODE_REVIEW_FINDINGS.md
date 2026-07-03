@@ -12,8 +12,10 @@ Status legend: **OPEN** = not fixed, tracked here. **RESOLVED** = addressed on t
 ## Major
 
 ### 1. RESOLVED (Batch 1) — Three v1-shaped GraphQL queries broken by the v2 endpoint switch; errors swallowed into empty data
-Fixed: browse-sidebar pending indicators rewritten via `proposalActionsConnection` →
-version → proposal walk; `fetch-proposals-by-user` moved to `proposalsCurrentsConnection`
+Fixed: browse-sidebar pending indicators now use upstream's v2-correct
+`fetch-pending-membership-space-ids.ts` helper (adopted during the 2026-07-02
+upstream/master merge; it supersedes the interim inline rewrite and REST-confirms each
+candidate space); `fetch-proposals-by-user` moved to `proposalsCurrentsConnection`
 (orderBy CREATED_AT_DESC since endTime=0 would sort fresh proposals last);
 `fetch-in-flight-subspace-proposals.ts` deleted (zero callers, and v2 has no ADD_SUBSPACE
 action type — subspaces are already served by the v2-shaped `fetch-active-subspaces.ts`).
