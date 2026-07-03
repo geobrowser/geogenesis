@@ -15,11 +15,24 @@ type Floater = { id: string; emoji: string; left: number };
 /** Floating emoji reactions over the call grid — LiveKit's unreliable data channel, lossy by design. */
 export function useReactions() {
   const [floaters, setFloaters] = React.useState<Floater[]>([]);
+  const timeoutIdsRef = React.useRef(new Set<ReturnType<typeof setTimeout>>());
+
+  React.useEffect(() => {
+    const timeoutIds = timeoutIdsRef.current;
+    return () => {
+      timeoutIds.forEach(clearTimeout);
+      timeoutIds.clear();
+    };
+  }, []);
 
   const addFloater = React.useCallback((emoji: string) => {
     const id = `${Date.now()}-${Math.random()}`;
     setFloaters(prev => [...prev, { id, emoji, left: 10 + Math.random() * 80 }]);
-    setTimeout(() => setFloaters(prev => prev.filter(f => f.id !== id)), REACTION_TTL_MS);
+    const timeoutId = setTimeout(() => {
+      timeoutIdsRef.current.delete(timeoutId);
+      setFloaters(prev => prev.filter(f => f.id !== id));
+    }, REACTION_TTL_MS);
+    timeoutIdsRef.current.add(timeoutId);
   }, []);
 
   const { send } = useDataChannel(REACTIONS_TOPIC, msg => {

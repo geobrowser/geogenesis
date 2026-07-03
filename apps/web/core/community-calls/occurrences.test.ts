@@ -20,6 +20,13 @@ describe('getOccurrences', () => {
     for (const o of occ) expect(new Date(o.startMs).getUTCDay()).toBe(4); // Thursday
   });
 
+  it('never emits a BYDAY occurrence before DTSTART', () => {
+    // DTSTART is a Thursday; BYDAY includes Monday, which falls earlier in the same week.
+    const occ = getOccurrences('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,TH', NOW);
+    const baseStart = Date.UTC(2026, 2, 5, 17, 0);
+    for (const o of occ) expect(o.startMs).toBeGreaterThanOrEqual(baseStart);
+  });
+
   it('respects a bi-weekly interval', () => {
     const occ = getOccurrences('DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;INTERVAL=2', NOW);
     expect(occ[1].startMs - occ[0].startMs).toBe(14 * 24 * 60 * 60 * 1000);

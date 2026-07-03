@@ -20,10 +20,14 @@ export function RecordingPlayer({ recordings }: { recordings: Recording[] }) {
     setUrl(null);
 
     (async () => {
-      const token = await getToken();
-      if (!token) return;
-      const { url: signedUrl } = await getRecordingUrl({ filename: active.filename }, token);
-      if (!cancelled) setUrl(signedUrl);
+      try {
+        const token = await getToken();
+        if (!token) return;
+        const { url: signedUrl } = await getRecordingUrl({ filename: active.filename }, token);
+        if (!cancelled) setUrl(signedUrl);
+      } catch {
+        // best-effort — keep the loading state if signing fails
+      }
     })();
 
     return () => {

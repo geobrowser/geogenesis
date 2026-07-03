@@ -267,7 +267,7 @@ function RoomBody({
   // zero, converging on the same disconnect + navigate-away cleanup as the manual
   // leave dialog. No recording-stop confirmation on this path — the call ends
   // regardless of whether a recording is still running.
-  const handleTimeUp = useCallTimeUp(room, onLeave);
+  const handleTimeUp = useCallTimeUp(onLeave);
 
   const onStopRecordingAndLeave = async () => {
     if (endCallBusy) return;

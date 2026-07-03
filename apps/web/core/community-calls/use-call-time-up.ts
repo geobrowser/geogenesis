@@ -1,15 +1,12 @@
 import * as React from 'react';
 
-import { Room } from 'livekit-client';
-
 /**
- * Disconnects the room and hands off to `onLeave` when the call-end countdown
- * (`CallEndTimer`) reaches zero. Shared so the forced-timeout path and the
- * manual-leave path converge on the same cleanup.
+ * Hands off to `onLeave` when the call-end countdown (`CallEndTimer`) reaches
+ * zero. Shared so the forced-timeout path and the manual-leave path converge
+ * on the same cleanup — `onLeave` itself disconnects the room.
  */
-export function useCallTimeUp(room: Room, onLeave: () => void) {
+export function useCallTimeUp(onLeave: () => void) {
   return React.useCallback(() => {
-    room.disconnect();
     onLeave();
-  }, [room, onLeave]);
+  }, [onLeave]);
 }

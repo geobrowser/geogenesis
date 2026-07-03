@@ -32,7 +32,9 @@
     "web": "workspace:*"
   },
   "overrides": {
-    "permissionless": "^0.3.4"
+    "permissionless": "^0.3.4",
+    "@tanstack/react-query": "^5.101.1",
+    "prosemirror-model": "^1.25.9"
   },
   "private": true,
   "workspaces": [

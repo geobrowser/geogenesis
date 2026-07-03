@@ -47,6 +47,7 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
 
   const starts: number[] = [];
   const push = (startMs: number) => {
+    if (startMs < baseStart) return;
     if (startMs + duration >= windowStart && startMs <= windowEnd) starts.push(startMs);
   };
 
