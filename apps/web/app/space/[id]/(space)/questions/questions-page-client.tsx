@@ -375,46 +375,27 @@ function QuestionListItem({
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <Text as="h3" variant="bodySemibold" color="text" className="block">
-            {question.name ?? question.id}
+      <div className="min-w-0">
+        <Text as="h3" variant="bodySemibold" color="text" className="block">
+          {question.name ?? question.id}
+        </Text>
+
+        {!published && debatesEnabled && (
+          <Text as="p" variant="body" color="grey-04" className="mt-2">
+            Publish this question before starting a debate.
           </Text>
-
-          {!published && debatesEnabled && (
-            <Text as="p" variant="body" color="grey-04" className="mt-2">
-              Publish this question before starting a debate.
-            </Text>
-          )}
-        </div>
-
-        {debatesEnabled && (
-          <div className="flex shrink-0 flex-wrap gap-2">
-            {activeDebate || activeMatch ? null : (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  small
-                  onClick={() => joinSide('for')}
-                  disabled={!published || joinQueue.isPending || debateQuestion?.viewer_waiting_side === 'for'}
-                >
-                  {answerLabels.for}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  small
-                  onClick={() => joinSide('against')}
-                  disabled={!published || joinQueue.isPending || debateQuestion?.viewer_waiting_side === 'against'}
-                >
-                  {answerLabels.against}
-                </Button>
-              </>
-            )}
-          </div>
         )}
       </div>
+
+      <AnswerChipGroup
+        relations={answers}
+        debatesEnabled={debatesEnabled}
+        canJoinDebate={published && !activeDebate && !activeMatch}
+        pendingSide={debateQuestion?.viewer_waiting_side ?? null}
+        joinPending={joinQueue.isPending}
+        onJoinSide={joinSide}
+        className="mt-3"
+      />
 
       {debatesEnabled && (
         <QuestionDebateStatus
@@ -425,8 +406,6 @@ function QuestionListItem({
         />
       )}
 
-      <RelationChipGroup label="Answers" relations={answers} className="mt-3" />
-
       {(topics.length > 0 || relatedPeople.length > 0 || relatedProjects.length > 0) && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">
           <RelationChipGroup label="Topics" relations={topics} />
@@ -435,6 +414,63 @@ function QuestionListItem({
         </div>
       )}
     </article>
+  );
+}
+
+function AnswerChipGroup({
+  relations,
+  debatesEnabled,
+  canJoinDebate,
+  pendingSide,
+  joinPending,
+  onJoinSide,
+  className,
+}: {
+  relations: Relation[];
+  debatesEnabled: boolean;
+  canJoinDebate: boolean;
+  pendingSide: DebateSide | null;
+  joinPending: boolean;
+  onJoinSide: (side: DebateSide) => void;
+  className?: string;
+}) {
+  if (relations.length === 0) return null;
+
+  return (
+    <div className={className}>
+      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
+        Answers
+      </Text>
+      <div className="flex flex-wrap gap-1.5">
+        {relations.map((relation, index) => {
+          const side = debateSideForAnswerIndex(index);
+          const label = relation.toEntity.name ?? relation.toEntity.id;
+          if (debatesEnabled && side) {
+            return (
+              <Button
+                key={relation.id}
+                type="button"
+                variant="secondary"
+                small
+                onClick={() => onJoinSide(side)}
+                disabled={!canJoinDebate || joinPending || pendingSide === side}
+              >
+                {label}
+              </Button>
+            );
+          }
+
+          return (
+            <span
+              key={relation.id}
+              className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
+            >
+              <span className="truncate">{label}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -531,6 +567,12 @@ function answerLabelsForQuestion(answers: Relation[]): DebateSideLabels {
     for: answers[0]?.toEntity.name ?? 'For',
     against: answers[1]?.toEntity.name ?? 'Against',
   };
+}
+
+function debateSideForAnswerIndex(index: number): DebateSide | null {
+  if (index === 0) return 'for';
+  if (index === 1) return 'against';
+  return null;
 }
 
 function labelForSide(side: DebateSide, labels: DebateSideLabels) {

@@ -239,6 +239,57 @@ describe('QuestionsPageClient', () => {
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
   });
 
+  it('renders answers once and only makes the first two debate choices clickable', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Which answer should be debated?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-3',
+            entityId: 'answer-3',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'maybe', name: 'Maybe', value: 'Maybe' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getAllByText('Yes')).toHaveLength(1);
+    expect(screen.getAllByText('No')).toHaveLength(1);
+    expect(screen.getAllByText('Maybe')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Maybe' })).not.toBeInTheDocument();
+  });
+
   it('does not redirect to a persisted active debate from the questions page', () => {
     questions = [
       {
