@@ -189,7 +189,7 @@ type TurnState = {
 } | null;
 
 function DebatePlayback({ debate }: { debate: Debate }) {
-  const { mutateAsync: getRecordingPlaybackUrl } = useRecordingUrl();
+  const recordingUrlMutation = useRecordingUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ for: null, against: null });
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
@@ -200,6 +200,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
   const forVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const againstVideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
+  const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
   const turnDurations = React.useMemo(
     () => normalizeTurnDurationsMs(debate.turn_durations_ms),
     [debate.turn_durations_ms]
@@ -211,21 +212,25 @@ function DebatePlayback({ debate }: { debate: Debate }) {
   );
   const forParticipant = debate.participants.find(participant => participant.side === 'for');
   const againstParticipant = debate.participants.find(participant => participant.side === 'against');
+  const forRecordingFilename = debate.recordings.find(recording => recording.side === 'for')?.filename ?? null;
+  const againstRecordingFilename = debate.recordings.find(recording => recording.side === 'against')?.filename ?? null;
+
+  React.useEffect(() => {
+    getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
+  }, [recordingUrlMutation.mutateAsync]);
 
   React.useEffect(() => {
     let cancelled = false;
-    const forRecording = debate.recordings.find(recording => recording.side === 'for') ?? null;
-    const againstRecording = debate.recordings.find(recording => recording.side === 'against') ?? null;
     setUrls({ for: null, against: null });
     setError(null);
-    if (!forRecording || !againstRecording) {
+    if (!forRecordingFilename || !againstRecordingFilename) {
       setError('This debate needs both recordings before it can be watched.');
       return;
     }
 
     Promise.all([
-      getRecordingPlaybackUrl({ debateId: debate.id, filename: forRecording.filename }),
-      getRecordingPlaybackUrl({ debateId: debate.id, filename: againstRecording.filename }),
+      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: forRecordingFilename }),
+      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: againstRecordingFilename }),
     ])
       .then(([forResult, againstResult]) => {
         if (!cancelled) setUrls({ for: forResult.url, against: againstResult.url });
@@ -237,7 +242,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
     return () => {
       cancelled = true;
     };
-  }, [debate.id, debate.recordings, getRecordingPlaybackUrl]);
+  }, [againstRecordingFilename, debate.id, forRecordingFilename]);
 
   const videos = React.useCallback(
     () => [forVideoRef.current, againstVideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
