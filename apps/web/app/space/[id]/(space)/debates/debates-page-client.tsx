@@ -341,17 +341,23 @@ function DebatePlayback({ debate }: { debate: Debate }) {
     [debate.first_side, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
   );
 
+  const ready = Boolean(urls.for && urls.against);
+  const playbackEnded = ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - 0.05;
+
   const togglePlayback = () => {
     if (playing) {
       pauseBoth();
       return;
     }
+    if (playbackEnded) {
+      void playFromStart();
+      return;
+    }
     void resumeBoth();
   };
 
-  const ready = Boolean(urls.for && urls.against);
   const showStartOverlay = ready && !playing && !userPaused && playheadSeconds === 0;
-  const showPausedOverlay = ready && userPaused && !playing;
+  const showPausedOverlay = ready && !playing && (userPaused || playbackEnded) && !showStartOverlay;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col bg-bg">
@@ -397,10 +403,10 @@ function DebatePlayback({ debate }: { debate: Debate }) {
           <button
             type="button"
             className="absolute inset-0 z-30 grid place-items-center bg-white/10 text-white"
-            onClick={() => void resumeBoth()}
+            onClick={togglePlayback}
           >
             <span className="inline-flex min-h-12 items-center justify-center rounded-full border border-white/35 bg-text/60 px-5 text-[0.9375rem] leading-5 font-semibold shadow-card backdrop-blur-md">
-              Play
+              {playbackEnded ? 'Play again' : 'Play'}
             </span>
           </button>
         )}
@@ -434,7 +440,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
               {mutedByUser ? 'Unmute' : 'Mute'}
             </Button>
             <Button type="button" small disabled={!ready} onClick={showStartOverlay ? playFromStart : togglePlayback}>
-              {playing ? 'Pause' : playheadSeconds > 0 ? 'Play' : 'Play debate'}
+              {playing ? 'Pause' : playbackEnded ? 'Play again' : playheadSeconds > 0 ? 'Play' : 'Play debate'}
             </Button>
           </div>
           <div className="mt-2">
