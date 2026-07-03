@@ -355,7 +355,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
 
   return (
     <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto] bg-bg">
-      <div className="relative grid min-h-0 place-items-center content-start gap-2 overflow-hidden px-2 py-3">
+      <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
         <PlaybackPane
           side="for"
           label={debate.question.side_labels.for}
@@ -369,37 +369,6 @@ function DebatePlayback({ debate }: { debate: Debate }) {
           onPlaybackTick={updateTurnState}
           onClick={togglePlayback}
         />
-        <div className="relative w-[min(100%,386px)] rounded-lg border border-grey-02 bg-white px-3 py-2 shadow-light">
-          <div className="flex items-center justify-between gap-3">
-            <Text as="span" variant="metadataMedium" color="text">
-              {turnState ? `${labelForSide(turnState.side, debate.question.side_labels)} speaking` : 'Debate playback'}
-            </Text>
-            <Text as="span" variant="metadataMedium" color="text">
-              {formatSeconds(playheadSeconds)} / {formatSeconds(timelineSeconds)}
-            </Text>
-          </div>
-          <FeedScrubber
-            currentTime={playheadSeconds}
-            duration={timelineSeconds}
-            segments={turnSegments}
-            disabled={!ready}
-            onSeek={seekBoth}
-          />
-          <div className="mt-2 flex flex-wrap justify-end gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              small
-              disabled={!ready}
-              onClick={() => setMutedByUser(current => !current)}
-            >
-              {mutedByUser ? 'Unmute' : 'Mute'}
-            </Button>
-            <Button type="button" small disabled={!ready} onClick={showStartOverlay ? playFromStart : togglePlayback}>
-              {playing ? 'Pause' : playheadSeconds > 0 ? 'Play' : 'Play debate'}
-            </Button>
-          </div>
-        </div>
         <PlaybackPane
           side="against"
           label={debate.question.side_labels.against}
@@ -438,13 +407,46 @@ function DebatePlayback({ debate }: { debate: Debate }) {
       </div>
 
       <div className="border-t border-grey-02 bg-white px-4 py-3">
-        {error ? (
-          <Text color="red-01">{error}</Text>
-        ) : !ready ? (
-          <Text color="grey-04">Loading recordings...</Text>
-        ) : (
-          <Text color="grey-04">Tap a video to pause or resume. Drag the timeline to seek.</Text>
-        )}
+        <div className="mx-auto w-[min(100%,386px)]">
+          <div className="flex items-center justify-between gap-3">
+            <Text as="span" variant="metadataMedium" color="text">
+              {turnState ? `${labelForSide(turnState.side, debate.question.side_labels)} speaking` : 'Debate playback'}
+            </Text>
+            <Text as="span" variant="metadataMedium" color="text">
+              {formatSeconds(playheadSeconds)} / {formatSeconds(timelineSeconds)}
+            </Text>
+          </div>
+          <FeedScrubber
+            currentTime={playheadSeconds}
+            duration={timelineSeconds}
+            segments={turnSegments}
+            disabled={!ready}
+            onSeek={seekBoth}
+          />
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              small
+              disabled={!ready}
+              onClick={() => setMutedByUser(current => !current)}
+            >
+              {mutedByUser ? 'Unmute' : 'Mute'}
+            </Button>
+            <Button type="button" small disabled={!ready} onClick={showStartOverlay ? playFromStart : togglePlayback}>
+              {playing ? 'Pause' : playheadSeconds > 0 ? 'Play' : 'Play debate'}
+            </Button>
+          </div>
+          <div className="mt-2">
+            {error ? (
+              <Text color="red-01">{error}</Text>
+            ) : !ready ? (
+              <Text color="grey-04">Loading recordings...</Text>
+            ) : (
+              <Text color="grey-04">Tap a video to pause or resume. Drag the timeline to seek.</Text>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -478,7 +480,7 @@ function PlaybackPane({
   return (
     <button
       type="button"
-      className={`relative grid aspect-[4/3] w-[min(100%,386px)] overflow-hidden rounded-lg border bg-grey-01 text-left text-white shadow-light ${
+      className={`relative grid h-full min-h-0 w-[min(100%,386px)] overflow-hidden rounded-lg border bg-grey-01 text-left text-white shadow-light ${
         countdown ? 'border-ctaPrimary' : 'border-grey-02'
       }`}
       onClick={onClick}
