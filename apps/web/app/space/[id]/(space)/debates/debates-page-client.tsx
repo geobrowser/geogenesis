@@ -155,7 +155,7 @@ function DebatePlaybackDialog({ debate, onClose }: { debate: Debate; onClose: ()
         role="dialog"
         aria-modal="true"
         aria-labelledby="debate-playback-title"
-        className="max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none grid max-h-[calc(100dvh-2rem)] w-[min(460px,100%)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-card"
+        className="max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none flex h-[min(760px,calc(100dvh-2rem))] max-h-[calc(100dvh-2rem)] w-[min(520px,100%)] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-card"
       >
         <header className="flex min-w-0 items-start justify-between gap-3 border-b border-grey-02 px-4 py-3">
           <div className="min-w-0">
@@ -354,8 +354,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
   const showPausedOverlay = ready && userPaused && !playing;
 
   return (
-    <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto] bg-bg">
-      <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
+    <div className="relative flex min-h-0 flex-1 flex-col bg-bg">
+      <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
         <PlaybackPane
           side="for"
           label={debate.question.side_labels.for}
