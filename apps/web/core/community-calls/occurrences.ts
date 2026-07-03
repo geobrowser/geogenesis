@@ -93,6 +93,16 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
         default:
           startMs = baseStart;
       }
+      // Date.UTC rolls an out-of-range day into the next month/year (e.g. Jan 31 + 1
+      // month -> early March) instead of skipping it. Per RFC 5545, such instances
+      // must be dropped rather than shifted, so skip any date whose day-of-month
+      // doesn't match the series' anchor day.
+      if (
+        (parsed.freq === 'MONTHLY' || parsed.freq === 'YEARLY') &&
+        new Date(startMs).getUTCDate() !== base.getUTCDate()
+      ) {
+        continue;
+      }
       if (startMs > windowEnd) break;
       push(startMs);
     }

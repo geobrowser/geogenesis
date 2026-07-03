@@ -7,8 +7,9 @@
  * token in the Authorization header is the user's own; the LiveKit token is minted
  * by curator-backend and returned through here unchanged.
  *
- * Defaults to the staging curator-backend; set CURATOR_BACKEND_URL (server-only)
- * to point at another deploy.
+ * Defaults to the staging curator-backend in dev; set CURATOR_BACKEND_URL (server-only)
+ * to point at another deploy. Required in production — the route throws rather than
+ * silently falling back to staging.
  */
 
 const DEFAULT_CURATOR_BACKEND_URL = 'https://curator-api-staging-testnet.up.railway.app';
@@ -27,6 +28,9 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
 ]);
 
 async function proxy(req: Request, path: string[]): Promise<Response> {
+  if (process.env.NODE_ENV === 'production' && !process.env.CURATOR_BACKEND_URL) {
+    throw new Error('CURATOR_BACKEND_URL must be set in production');
+  }
   const base = process.env.CURATOR_BACKEND_URL || DEFAULT_CURATOR_BACKEND_URL;
 
   const { search } = new URL(req.url);

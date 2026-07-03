@@ -86,7 +86,8 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
       const token = await getCommunityCallToken({ spaceId, callId }, identity);
       setJoined({ kind: 'participant', token, settings });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not join the call.');
+      console.error(e);
+      setError('Could not join the call. Please try again.');
     } finally {
       setJoining(false);
     }
@@ -99,7 +100,10 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
     setJoining(true);
     getViewerToken({ spaceId, callId })
       .then(token => setJoined({ kind: 'viewer', token }))
-      .catch(e => setError(e instanceof Error ? e.message : 'Could not join the call.'))
+      .catch(e => {
+        console.error(e);
+        setError('Could not join the call. Please try again.');
+      })
       .finally(() => setJoining(false));
   }, [error, joined, joining, confirmedNonMember, canParticipate, liveOccurrence, spaceId, callId]);
 
