@@ -73,6 +73,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'uploading'>('idle');
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
+  const [audioMuted, setAudioMuted] = React.useState(false);
+  const [videoEnabled, setVideoEnabled] = React.useState(true);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
   const roomRef = React.useRef<RoomLike | null>(null);
@@ -84,6 +86,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const finalizedDebateRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
   const countdown = useDebateCountdown(debate);
+
+  React.useEffect(() => {
+    setLocalTrackPreferences(localTracksRef.current, { audioMuted, videoEnabled });
+  }, [audioMuted, videoEnabled]);
 
   const startLocalRecorder = React.useCallback((stream: MediaStream) => {
     if (typeof MediaRecorder === 'undefined') return;
@@ -184,6 +190,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       roomRef.current = room;
       const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
       localTracksRef.current = tracks;
+      setLocalTrackPreferences(tracks, { audioMuted, videoEnabled });
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
       }
@@ -203,7 +210,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
       setRoomState('idle');
     }
-  }, [liveKitJoin, markJoined, startLocalRecorder]);
+  }, [audioMuted, liveKitJoin, markJoined, startLocalRecorder, videoEnabled]);
+
+  const toggleAudioMuted = React.useCallback(() => {
+    setAudioMuted(current => !current);
+  }, []);
+
+  const toggleVideoEnabled = React.useCallback(() => {
+    setVideoEnabled(current => !current);
+  }, []);
 
   const finishAndUpload = React.useCallback(async () => {
     setRoomError(null);
@@ -354,6 +369,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               localVideoRef={localVideoRef}
               remoteMediaRef={remoteMediaRef}
               remoteVideoReady={remoteVideoReady}
+              audioMuted={audioMuted}
+              videoEnabled={videoEnabled}
+              onToggleAudioMuted={toggleAudioMuted}
+              onToggleVideoEnabled={toggleVideoEnabled}
               onLeave={leave}
               leaveDisabled={abortDebate.isPending || roomState === 'uploading'}
             />
@@ -373,6 +392,10 @@ function DebateRecordingModal({
   localVideoRef,
   remoteMediaRef,
   remoteVideoReady,
+  audioMuted,
+  videoEnabled,
+  onToggleAudioMuted,
+  onToggleVideoEnabled,
   onLeave,
   leaveDisabled,
 }: {
@@ -384,6 +407,10 @@ function DebateRecordingModal({
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteMediaRef: React.RefObject<HTMLDivElement | null>;
   remoteVideoReady: boolean;
+  audioMuted: boolean;
+  videoEnabled: boolean;
+  onToggleAudioMuted: () => void;
+  onToggleVideoEnabled: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
@@ -411,6 +438,12 @@ function DebateRecordingModal({
           </Text>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" variant="secondary" onClick={onToggleAudioMuted} disabled={roomState === 'uploading'}>
+            {audioMuted ? 'Unmute' : 'Mute'}
+          </Button>
+          <Button type="button" variant="secondary" onClick={onToggleVideoEnabled} disabled={roomState === 'uploading'}>
+            {videoEnabled ? 'Stop video' : 'Start video'}
+          </Button>
           <Button
             type="button"
             variant={['complete', 'cancelled'].includes(debate.status) ? 'secondary' : 'error'}
@@ -428,6 +461,7 @@ function DebateRecordingModal({
             title="You"
             sideLabel={localSide ? labelForSide(localSide, debate.question.side_labels) : 'Joining'}
             active={countdown.activeSide !== null && countdown.activeSide === localSide}
+            overlayText={videoEnabled ? null : 'Camera off'}
           >
             <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
           </DebateVideoTile>
@@ -438,7 +472,7 @@ function DebateRecordingModal({
             title="Other speaker"
             sideLabel={remoteSide ? labelForSide(remoteSide, debate.question.side_labels) : 'Connecting'}
             active={countdown.activeSide !== null && countdown.activeSide === remoteSide}
-            waiting={!remoteVideoReady}
+            overlayText={remoteVideoReady ? null : 'Waiting for video'}
           >
             <div
               ref={remoteMediaRef}
@@ -461,13 +495,13 @@ function DebateVideoTile({
   title,
   sideLabel,
   active,
-  waiting = false,
+  overlayText,
   children,
 }: {
   title: string;
   sideLabel: string;
   active: boolean;
-  waiting?: boolean;
+  overlayText?: string | null;
   children: React.ReactNode;
 }) {
   return (
@@ -488,14 +522,14 @@ function DebateVideoTile({
 
       <div className="absolute inset-0 z-0">{children}</div>
 
-      {waiting && (
+      {overlayText && (
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
           <Text
             color="text"
             variant="bodySemibold"
             className="rounded-full border border-grey-02 bg-white px-4 py-2 shadow-light"
           >
-            Waiting for video
+            {overlayText}
           </Text>
         </div>
       )}
@@ -531,6 +565,20 @@ function DebateInstructionBand({ debate, countdown }: { debate: Debate; countdow
       </div>
     </div>
   );
+}
+
+function setLocalTrackPreferences(
+  tracks: LocalTrackLike[],
+  preferences: { audioMuted: boolean; videoEnabled: boolean }
+) {
+  for (const track of tracks) {
+    if (track.mediaStreamTrack.kind === 'audio') {
+      track.mediaStreamTrack.enabled = !preferences.audioMuted;
+    }
+    if (track.mediaStreamTrack.kind === 'video') {
+      track.mediaStreamTrack.enabled = preferences.videoEnabled;
+    }
+  }
 }
 
 function disconnectRoom(
