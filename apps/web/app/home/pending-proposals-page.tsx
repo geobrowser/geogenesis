@@ -157,6 +157,7 @@ async function PendingMembershipProposal({
     <AcceptOrRejectMember
       spaceId={proposal.space.id}
       proposalId={proposal.id}
+      proposalVersion={proposal.version}
       proposalName={proposalName}
       proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
@@ -334,6 +335,7 @@ async function PendingContentProposal({
         <AcceptOrRejectEditor
           spaceId={proposal.space.id}
           proposalId={proposal.id}
+          proposalVersion={proposal.version}
           isProposalEnded={isProposalEnded}
           canExecute={proposal.canExecute}
           status={proposal.status}

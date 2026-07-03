@@ -32,6 +32,9 @@ export type SpaceTopicProposalDetails = {
 
 export type Proposal = {
   id: string;
+  /** Proposal version this data describes (REST `proposalVersion`). Votes must
+   *  target it; undefined when the source doesn't expose versions. */
+  version?: number;
   editId: string;
   type: ProposalType;
   name: string | null;

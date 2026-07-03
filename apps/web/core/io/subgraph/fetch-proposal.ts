@@ -107,6 +107,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     id: apiProposal.proposalId,
+    version: apiProposal.proposalVersion,
     editId: '',
     name: apiProposal.name,
     type: proposalType,

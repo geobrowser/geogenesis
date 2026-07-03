@@ -66,6 +66,12 @@ interface UseVoteArgs {
   spaceId: string;
   /** The proposal ID (bytes16 hex without 0x prefix) */
   proposalId: string;
+  /** The proposal version to vote on (REST `proposalVersion`). The vote
+   *  calldata is (proposalId, versionId, voteOption) — the SDK defaults
+   *  versionId to 1 when omitted, which targets the superseded version for
+   *  any proposal updated via PROPOSAL_UPDATED. Pass the version shown to
+   *  the user; omit only when the source genuinely doesn't have it. */
+  proposalVersion?: number;
 }
 
 /**
@@ -78,7 +84,7 @@ interface UseVoteArgs {
  * - topic: The proposal ID (as bytes32)
  * - data: Encoded (proposalId, voteOption)
  */
-export function useVote({ spaceId, proposalId }: UseVoteArgs) {
+export function useVote({ spaceId, proposalId, proposalVersion }: UseVoteArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
   const tx = useSmartAccountTransaction();
@@ -103,6 +109,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         authorSpaceId: personalSpaceId,
         spaceId,
         proposalId,
+        versionId: proposalVersion,
         vote,
       });
 
@@ -110,6 +117,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         authorSpaceId: personalSpaceId,
         spaceId,
         proposalId,
+        proposalVersion,
         vote,
         action: 'PROPOSAL_VOTED',
       });
@@ -144,7 +152,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       return result.right;
     },
-    [personalSpaceId, isRegistered, spaceId, proposalId, tx]
+    [personalSpaceId, isRegistered, spaceId, proposalId, proposalVersion, tx]
   );
 
   const { mutate, status, error } = useMutation({

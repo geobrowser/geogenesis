@@ -30,6 +30,7 @@ function percentageFromCounts(count: number, total: number): number {
 export type MyGovernanceProposalCardProps = {
   spaceId: string;
   proposalId: string;
+  proposalVersion?: number;
   displayTitle: string;
   spaceName: string;
   spaceImage: string;
@@ -56,6 +57,7 @@ export type MyGovernanceProposalCardProps = {
 export function MyGovernanceProposalCard({
   spaceId,
   proposalId,
+  proposalVersion,
   displayTitle,
   spaceName,
   spaceImage,
@@ -154,6 +156,7 @@ export function MyGovernanceProposalCard({
           <AcceptOrRejectEditor
             spaceId={spaceId}
             proposalId={proposalId}
+            proposalVersion={proposalVersion}
             isProposalEnded={votingEnded}
             canExecute={canExecute}
             status={status}

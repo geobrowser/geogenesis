@@ -40,7 +40,11 @@ Same failure class as the governance-counter bug fixed in `1bd6570fa`: endpoint 
 queries didn't, Effect fallbacks convert schema errors into empty results with only a
 server-side `console.error`.
 
-### 2. OPEN — Votes never pass the proposal version; everything votes on version 1
+### 2. RESOLVED (Batch 2) — Votes never pass the proposal version; everything votes on version 1
+Fixed: `ApiProposalBaseFields` decodes `proposalVersion` (optional for older API deploys);
+threaded through the Proposal DTO / home-row mappers / all three vote components into
+`useVote`, which now passes `versionId` to `geo.daoSpaces.voteProposal`. When the REST
+payload omits it, behavior falls back to the SDK default (1) — same as before.
 `apps/web/core/hooks/use-vote.ts:101` calls `geo.daoSpaces.voteProposal({ authorSpaceId, spaceId,
 proposalId, vote })`. SDK v0.20 vote calldata is `(bytes16 proposalId, uint8 versionId, uint8 voteOption)`
 and the SDK defaults `versionId` to **1** when omitted (`dist/src/client/dao-spaces.js:514-520`).
@@ -65,7 +69,10 @@ with a single editor vote.
 Residual watch item: existing FAST proposals created *before* the backend fix in flat=0 spaces
 — verify they are now voteable, or they remain dead on-chain.
 
-### 4. OPEN — Create-space advanced settings can deploy misconfigured DAOs or guarantee deploy failure
+### 4. RESOLVED (Batch 3) — Create-space advanced settings can deploy misconfigured DAOs or guarantee deploy failure
+Fixed: `parseSettings` rejects blank/whitespace fields before Number() conversion, and runs
+the SDK's `validateVotingSettingsInput(settings, 1)` (1 = the creator, matching deploy-time
+`initialEditorSpaceIds`) so quorum/flat values the deploy would reject fail at save time.
 `apps/web/partials/create-space/create-space-dialog.tsx:787-828` (`parseSettings`):
 - **No upper bound vs initial editor count.** SDK's `validateVotingSettingsInput` throws for
   `flatSupportThreshold > 1` or `quorum > 1` with 1 initial editor
@@ -146,7 +153,10 @@ unmount (harmless refresh, tiny leak).
 window attach to a synthetic entity id (`id = spaceId`) that diverges from the real home entity
 once indexed.
 
-### 12. OPEN — Create-space dialog state leaks / dead code
+### 12. RESOLVED (Batch 3) — Create-space dialog state leaks / dead code
+Fixed: `useOpenCreateSpaceDialog` now resets `votingSettingsAtom` on every open; the
+unimplemented `cloneFromEntity` preset/atom was deleted (`autoRun` kept — its mechanism is
+fully implemented, just awaiting the claim-flow caller).
 `apps/web/partials/create-space/create-space-dialog.tsx`:
 - `useOpenCreateSpaceDialog` (103-119) resets every preset atom except `votingSettingsAtom`;
   re-opening via preset while already open (close-effect at 148-155 never fires) silently

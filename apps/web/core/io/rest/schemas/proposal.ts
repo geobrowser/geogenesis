@@ -97,6 +97,11 @@ const ApiProposalBaseFields = {
   spaceId: Schema.String,
   name: Schema.NullOr(Schema.String),
   proposedBy: Schema.String,
+  /** Version of the proposal this payload describes. Votes must target it —
+   *  the vote calldata is (proposalId, versionId, voteOption) and the SDK
+   *  defaults versionId to 1, which is wrong for updated proposals. Optional
+   *  because older API deployments may not send it. */
+  proposalVersion: Schema.optional(Schema.Number),
   status: Schema.Union(
     Schema.Literal('PROPOSED'),
     Schema.Literal('EXECUTABLE'),

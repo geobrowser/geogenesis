@@ -99,6 +99,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
+            proposalVersion={proposal.version}
             isProposalEnded={isProposalEnded}
             status={proposal.status}
             canExecute={proposal.canExecute}

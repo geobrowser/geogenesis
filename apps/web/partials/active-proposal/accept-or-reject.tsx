@@ -36,6 +36,7 @@ interface Props {
 
   userVote: SubstreamVote | undefined;
   proposalId: string;
+  proposalVersion?: number;
 }
 
 export function AcceptOrReject({
@@ -46,12 +47,14 @@ export function AcceptOrReject({
   proposalType,
   userVote,
   proposalId,
+  proposalVersion,
 }: Props) {
   const router = useRouter();
   const { isEditor } = useAccessControl(spaceId);
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
+    proposalVersion,
   });
 
   const [hasApproved, setHasApproved] = useState<boolean>(false);

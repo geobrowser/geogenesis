@@ -29,6 +29,8 @@ function sameMemberSpaceId(a: string, b: string): boolean {
 
 export type MyGovernanceProposalRow = {
   id: string;
+  /** Proposal version this row describes (REST `proposalVersion`); votes must target it. */
+  version?: number;
   spaceId: string;
   name: string | null;
   displayTitle: string;
@@ -121,6 +123,7 @@ export async function getMyGovernanceProposals(opts: {
 
     proposals.push({
       id: p.proposalId,
+      version: p.proposalVersion,
       spaceId: p.spaceId,
       name: p.name,
       displayTitle,
