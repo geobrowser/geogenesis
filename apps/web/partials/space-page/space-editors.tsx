@@ -1,9 +1,8 @@
 import { cookies } from 'next/headers';
 
+import { getSpaceAccessForRequest } from '~/core/access/get-space-access-for-request';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { getSpaceEditorsBootstrap } from '~/core/space-members/get-space-editors-bootstrap';
-import { getSpaceMembersBootstrap } from '~/core/space-members/get-space-members-bootstrap';
-import { SpaceParticipantsCacheSeed } from '~/core/space-members/space-participants-cache-seed';
+import { getCachedSpaceParticipantsPage } from '~/core/space-members/get-cached-space-participants-page';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -21,16 +20,8 @@ interface Props {
 
 export async function SpaceEditors({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [editorsBootstrap, membersBootstrap, editorRequest, space] = await Promise.all([
-    getSpaceEditorsBootstrap(spaceId, connectedAddress),
-    getSpaceMembersBootstrap(spaceId, connectedAddress),
-    getSpaceEditorRequest(spaceId, connectedAddress),
-    cachedFetchSpace(spaceId),
-  ]);
 
-  const { isEditor, firstThreeEditors, totalEditors, initialParticipantsPage: initialEditorsPage } =
-    editorsBootstrap;
-  const { isMember } = membersBootstrap;
+  const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     return null;
@@ -40,25 +31,16 @@ export async function SpaceEditors({ spaceId }: Props) {
     return null;
   }
 
-  const chip = (
-    <SpaceEditorsChip firstThreeEditors={firstThreeEditors} totalEditors={totalEditors} />
-  );
+  const [access, editorsPage, editorRequest] = await Promise.all([
+    getSpaceAccessForRequest(spaceId, connectedAddress),
+    getCachedSpaceParticipantsPage(spaceId, 'editors', 0),
+    getSpaceEditorRequest(spaceId, connectedAddress),
+  ]);
 
-  const editorsCacheSeed = (
-    <SpaceParticipantsCacheSeed
-      spaceId={spaceId}
-      kind="editors"
-      page={initialEditorsPage}
-    />
-  );
+  const { isEditor, isMember } = access;
+  const firstThreeEditors = editorsPage.participants.slice(0, 3);
 
-  const membersCacheSeed = (
-    <SpaceParticipantsCacheSeed
-      spaceId={spaceId}
-      kind="members"
-      page={membersBootstrap.initialParticipantsPage}
-    />
-  );
+  const chip = <SpaceEditorsChip firstThreeEditors={firstThreeEditors} totalEditors={editorsPage.totalCount} />;
 
   const popoverContent = (
     <SpaceEditorsContent
@@ -67,25 +49,20 @@ export async function SpaceEditors({ spaceId }: Props) {
       isMember={isMember}
       editorRequest={editorRequest}
       connectedAddress={connectedAddress ?? null}
-      initialParticipantsPage={initialEditorsPage}
+      initialParticipantsPage={editorsPage}
     />
   );
 
   if (isEditor) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-        {editorsCacheSeed}
-        {membersCacheSeed}
         <SpaceMembersPopover trigger={chip} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
 
         <SpaceMembersMenu
           trigger={<ChevronDownSmall color="grey-04" />}
           manageMembersComponent={
-            <SpaceEditorsDialogServerContainer
-              spaceId={spaceId}
-              initialParticipantsPage={initialEditorsPage}
-            />
+            <SpaceEditorsDialogServerContainer spaceId={spaceId} initialParticipantsPage={editorsPage} />
           }
         />
       </div>
@@ -94,8 +71,6 @@ export async function SpaceEditors({ spaceId }: Props) {
 
   return (
     <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-      {editorsCacheSeed}
-      {membersCacheSeed}
       <SpaceMembersPopover trigger={chip} content={popoverContent} />
     </div>
   );

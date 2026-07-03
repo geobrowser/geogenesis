@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -10,15 +10,18 @@ import {
   type SpaceParticipantProfile,
   type SpaceParticipantsPage,
 } from './fetch-space-participants-page';
-import {
-  getCachedParticipantsPage,
-  spaceParticipantsQueryKey,
-  type SpaceParticipantsInfiniteData,
-  writeParticipantsPageToCache,
-} from './space-participants-cache';
 
 export type { SpaceParticipantProfile, ParticipantKind } from './fetch-space-participants-page';
-export { spaceParticipantsQueryKey, seedSpaceParticipantsCache } from './space-participants-cache';
+
+export function spaceParticipantsQueryKey(
+  spaceId: string,
+  kind: ParticipantKind,
+  pageSize: number = SPACE_PARTICIPANTS_PAGE_SIZE
+) {
+  return ['space-participants', spaceId, kind, pageSize] as const;
+}
+
+type SpaceParticipantsInfiniteData = InfiniteData<SpaceParticipantsPage, number>;
 
 async function fetchPageFromApi({
   spaceId,
@@ -64,23 +67,12 @@ export function useSpaceParticipantsInfinite({
 }: UseSpaceParticipantsInfiniteArgs) {
   const queryClient = useQueryClient();
   const queryKey = spaceParticipantsQueryKey(spaceId, kind, pageSize);
-  const hasServerPage = Boolean(initialPage);
 
   const query = useInfiniteQuery({
     enabled,
     queryKey,
-    queryFn: async ({ pageParam, signal }) => {
-      const offset = pageParam as number;
-
-      const cached = getCachedParticipantsPage(queryClient, spaceId, kind, offset, pageSize);
-      if (cached) {
-        return cached;
-      }
-
-      const page = await fetchPageFromApi({ spaceId, kind, offset, limit: pageSize, signal });
-      writeParticipantsPageToCache(queryClient, { spaceId, kind, page, offset, pageSize });
-      return page;
-    },
+    queryFn: ({ pageParam, signal }) =>
+      fetchPageFromApi({ spaceId, kind, offset: pageParam as number, limit: pageSize, signal }),
     initialPageParam: 0,
     getNextPageParam: last => last.nextOffset ?? undefined,
     // Bootstrap from the server-rendered page 0 without mutating the cache during
@@ -92,11 +84,8 @@ export function useSpaceParticipantsInfinite({
       if (initialPage) return { pages: [initialPage], pageParams: [0] };
       return undefined;
     },
-    staleTime: hasServerPage ? Number.POSITIVE_INFINITY : 0,
+    staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
     retry: 2,
     retryDelay: attempt => Math.min(1000 * 2 ** attempt, 8000),
   });
@@ -107,12 +96,12 @@ export function useSpaceParticipantsInfinite({
     return flat;
   }, [query.data?.pages]);
 
-  const totalCount = query.data?.pages[0]?.totalCount ?? initialPage?.totalCount ?? 0;
+  const totalCount = query.data?.pages[0]?.totalCount ?? 0;
 
   return {
     participants,
     totalCount,
-    isLoading: query.isLoading && !query.data,
+    isLoading: query.isLoading,
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: query.hasNextPage,
     fetchNextPage: query.fetchNextPage,
