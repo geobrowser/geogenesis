@@ -81,7 +81,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
           </section>
         )}
       </div>
-      <DebateMatchPrompt spaceId={spaceId} matches={matches} />
+      <DebateMatchPrompt spaceId={spaceId} matches={matches} debates={debates} />
     </div>
   );
 }

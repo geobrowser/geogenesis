@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import { type DebateMatch, type DebateSide, getCurrentGeoChatUserId } from './api';
+import { type Debate, type DebateMatch, type DebateSide, getCurrentGeoChatUserId } from './api';
 import { DebateFormatSelector } from './format-selector';
 import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from './formats';
 import { useAcceptDebateMatch, useDeclineDebateMatch } from './hooks';
@@ -15,17 +15,29 @@ import { useAcceptDebateMatch, useDeclineDebateMatch } from './hooks';
 type DebateMatchPromptProps = {
   spaceId: string;
   matches: DebateMatch[];
+  debates?: Debate[];
 };
 
-export function DebateMatchPrompt({ spaceId, matches }: DebateMatchPromptProps) {
+export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatchPromptProps) {
   const router = useRouter();
   const acceptMatch = useAcceptDebateMatch(spaceId);
   const declineMatch = useDeclineDebateMatch(spaceId);
   const currentUserId = getCurrentGeoChatUserId();
   const [selectedFormatIds, setSelectedFormatIds] = React.useState<Record<string, DebateFormatId>>({});
   const [acceptedMatchIds, setAcceptedMatchIds] = React.useState<string[]>([]);
+  const [waitingQuestionIds, setWaitingQuestionIds] = React.useState<string[]>([]);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
+  const navigatedDebateIdRef = React.useRef<string | null>(null);
+
+  const navigateToDebate = React.useCallback(
+    (debateId: string) => {
+      if (navigatedDebateIdRef.current === debateId) return;
+      navigatedDebateIdRef.current = debateId;
+      router.push(`/space/${spaceId}/debates/${debateId}`);
+    },
+    [router, spaceId]
+  );
 
   React.useEffect(() => {
     const activeIds = new Set(matches.map(match => match.id));
@@ -41,6 +53,29 @@ export function DebateMatchPrompt({ spaceId, matches }: DebateMatchPromptProps) 
     );
   }, [matches]);
 
+  React.useEffect(() => {
+    if (!currentUserId) return;
+
+    const debateIdFromMatch = matches.find(match => match.debate_id && sideForUser(match, currentUserId))?.debate_id;
+    if (debateIdFromMatch) {
+      navigateToDebate(debateIdFromMatch);
+      return;
+    }
+
+    const waitingQuestionIdSet = new Set(waitingQuestionIds);
+    if (waitingQuestionIdSet.size === 0) return;
+
+    const debate = debates.find(
+      debate =>
+        waitingQuestionIdSet.has(debate.question.id) &&
+        debate.participants.some(participant => participant.user_id === currentUserId) &&
+        !['complete', 'cancelled'].includes(debate.status)
+    );
+    if (debate) {
+      navigateToDebate(debate.id);
+    }
+  }, [currentUserId, debates, matches, navigateToDebate, waitingQuestionIds]);
+
   const activeMatch = matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null;
   const minimizedMatch = activeMatch && minimizedMatchIds.includes(activeMatch.id) ? activeMatch : null;
 
@@ -48,7 +83,10 @@ export function DebateMatchPrompt({ spaceId, matches }: DebateMatchPromptProps) 
 
   const selectedFormatId = selectedFormatIds[activeMatch.id] ?? formatIdForMatch(activeMatch);
   const mySide = sideForUser(activeMatch, currentUserId);
-  const waiting = acceptedMatchIds.includes(activeMatch.id) || (mySide ? acceptedForSide(activeMatch, mySide) : false);
+  const waiting =
+    acceptedMatchIds.includes(activeMatch.id) ||
+    waitingQuestionIds.includes(activeMatch.question.id) ||
+    (mySide ? acceptedForSide(activeMatch, mySide) : false);
   const error =
     acceptMatch.error instanceof Error
       ? acceptMatch.error.message
@@ -70,11 +108,13 @@ export function DebateMatchPrompt({ spaceId, matches }: DebateMatchPromptProps) 
       {
         onSuccess: result => {
           setMinimizedMatchIds(current => current.filter(id => id !== activeMatch.id));
-          if (result.debate) {
-            router.push(`/space/${spaceId}/debates/${result.debate.id}`);
+          const debateId = result.debate?.id ?? result.match.debate_id;
+          if (debateId) {
+            navigateToDebate(debateId);
             return;
           }
           setAcceptedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
+          setWaitingQuestionIds(current => Array.from(new Set([...current, activeMatch.question.id])));
         },
       }
     );
@@ -82,6 +122,8 @@ export function DebateMatchPrompt({ spaceId, matches }: DebateMatchPromptProps) 
 
   const decline = () => {
     setDismissedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
+    setAcceptedMatchIds(current => current.filter(id => id !== activeMatch.id));
+    setWaitingQuestionIds(current => current.filter(id => id !== activeMatch.question.id));
     setMinimizedMatchIds(current => current.filter(id => id !== activeMatch.id));
     declineMatch.mutate(activeMatch.id, {
       onError: () => {

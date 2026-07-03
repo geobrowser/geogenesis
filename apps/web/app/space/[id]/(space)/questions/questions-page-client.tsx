@@ -111,6 +111,13 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
       ),
     [debateQuestionsQuery.data?.questions]
   );
+  const activeDebates = React.useMemo(
+    () =>
+      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
+        question.active_debate ? [question.active_debate] : []
+      ),
+    [debateQuestionsQuery.data?.questions]
+  );
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -136,7 +143,7 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
           debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
         />
       </div>
-      <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} />
+      <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} debates={activeDebates} />
     </div>
   );
 }
