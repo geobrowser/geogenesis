@@ -17,7 +17,7 @@ import {
 } from '~/core/debates/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
-import { Button } from '~/design-system/button';
+import { Button, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -438,12 +438,24 @@ function DebateRecordingModal({
           </Text>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={onToggleAudioMuted} disabled={roomState === 'uploading'}>
-            {audioMuted ? 'Unmute' : 'Mute'}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onToggleVideoEnabled} disabled={roomState === 'uploading'}>
-            {videoEnabled ? 'Stop video' : 'Start video'}
-          </Button>
+          <SquareButton
+            type="button"
+            aria-label={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+            title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+            icon={<MicrophoneIcon muted={audioMuted} />}
+            isActive={audioMuted}
+            onClick={onToggleAudioMuted}
+            disabled={roomState === 'uploading'}
+          />
+          <SquareButton
+            type="button"
+            aria-label={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+            title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+            icon={<CameraIcon disabled={!videoEnabled} />}
+            isActive={!videoEnabled}
+            onClick={onToggleVideoEnabled}
+            disabled={roomState === 'uploading'}
+          />
           <Button
             type="button"
             variant={['complete', 'cancelled'].includes(debate.status) ? 'secondary' : 'error'}
@@ -564,6 +576,28 @@ function DebateInstructionBand({ debate, countdown }: { debate: Debate; countdow
         </div>
       </div>
     </div>
+  );
+}
+
+function MicrophoneIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 14a4 4 0 0 0 4-4V6a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Z" />
+      <path d="M5 10a7 7 0 0 0 14 0" />
+      <path d="M12 17v4" />
+      <path d="M9 21h6" />
+      {muted && <path d="M4 4l16 16" />}
+    </svg>
+  );
+}
+
+function CameraIcon({ disabled }: { disabled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
+      <path d="M16 10l5-3v10l-5-3" />
+      {disabled && <path d="M3 3l18 18" />}
+    </svg>
   );
 }
 
