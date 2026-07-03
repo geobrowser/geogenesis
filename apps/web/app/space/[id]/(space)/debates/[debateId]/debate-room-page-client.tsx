@@ -442,6 +442,7 @@ function DebateRecordingModal({
             type="button"
             aria-label={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+            className="h-[34px] w-[34px] shrink-0"
             icon={<MicrophoneIcon muted={audioMuted} />}
             isActive={audioMuted}
             onClick={onToggleAudioMuted}
@@ -451,6 +452,7 @@ function DebateRecordingModal({
             type="button"
             aria-label={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+            className="h-[34px] w-[34px] shrink-0"
             icon={<CameraIcon disabled={!videoEnabled} />}
             isActive={!videoEnabled}
             onClick={onToggleVideoEnabled}
