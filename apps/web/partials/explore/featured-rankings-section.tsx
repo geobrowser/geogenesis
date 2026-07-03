@@ -66,7 +66,10 @@ function FeaturedRankingCard({ ranking }: { ranking: FeaturedRanking }) {
     mode: 'view',
   });
 
-  const hasRankedBy = ranking.submissionCount > 0 || ranking.submitterSpaceIds.length > 0;
+  // Gate on resolved submitter spaces, not the raw count: when submitters exist
+  // but none resolve to a space, the avatar group renders nothing, and keying off
+  // the count alone would leave a dangling "Ranked by" label with no avatars.
+  const hasRankedBy = ranking.submitterSpaceIds.length > 0;
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-grey-02 px-4 py-3">
@@ -85,6 +88,7 @@ function FeaturedRankingCard({ ranking }: { ranking: FeaturedRanking }) {
 
       <Link
         href={href}
+        aria-label={`Vote on ${ranking.name}`}
         className="flex h-8 shrink-0 items-center rounded-lg border border-grey-02 px-3 text-[16px] leading-[18px] text-text shadow-button transition-colors hover:border-text"
       >
         Vote

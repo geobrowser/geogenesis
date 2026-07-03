@@ -180,7 +180,11 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
         submitterSpaceIds,
         submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
       } satisfies FeaturedRanking;
-    } catch {
+    } catch (error) {
+      // Best-effort per ranking: a single block that fails to resolve is skipped
+      // rather than failing the whole section, but log it so silently-missing
+      // featured rankings stay debuggable in production.
+      console.error(`Unable to resolve featured ranking (block ${blockEntityId}, space ${spaceId})`, error);
       return null;
     }
   });
