@@ -46,17 +46,27 @@ function parseICalDate(value: string): Date | null {
 // Evaluated at the wall-clock instant, so it can be off by 1h for the single
 // hour straddling a DST transition — fine for listing/display; the curator
 // token endpoint enforces the real join window server-side.
+//
+// Schedule strings are graph data and can be published by any client, so a
+// non-IANA TZID (e.g. a Windows zone name from an Outlook-exported ICS) is
+// untrusted input — Intl.DateTimeFormat throws RangeError for those, so treat
+// an invalid tz as "no offset" rather than crashing the caller.
 function tzOffsetMs(tz: string, utcMs: number): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  let dtf: Intl.DateTimeFormat;
+  try {
+    dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return 0;
+  }
   const p: Record<string, number> = {};
   for (const part of dtf.formatToParts(new Date(utcMs))) {
     if (part.type !== 'literal') p[part.type] = Number(part.value);

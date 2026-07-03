@@ -282,7 +282,13 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
                 label: 'Copy link',
                 value: 'copy',
                 disabled: false,
-                onClick: () => navigator.clipboard?.writeText(window.location.href),
+                onClick: () =>
+                  navigator.clipboard?.writeText(
+                    new URL(
+                      agendaHref(row.call.spaceId, row.call.callId, row.occ.startMs, row.occ.endMs),
+                      window.location.origin
+                    ).toString()
+                  ),
               },
               ...(isEditor
                 ? [

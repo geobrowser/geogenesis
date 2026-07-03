@@ -1,17 +1,12 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { keepPreviousData } from '@tanstack/react-query';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { Button } from '~/design-system/button';
-import { Plus } from '~/design-system/icons/plus';
-import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
-import { Text } from '~/design-system/text';
-
-import { buildQuestionDraft } from '~/core/questions/question-draft';
 import {
   ANSWERS_PROPERTY_ID,
   PERSON_TYPE_ID,
@@ -22,11 +17,17 @@ import {
   TOPICS_PROPERTY_ID,
   TOPIC_TYPE_ID,
 } from '~/core/questions/ontology';
+import { buildQuestionDraft } from '~/core/questions/question-draft';
 import { useDiff } from '~/core/state/diff-store';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
+
+import { Button } from '~/design-system/button';
+import { Plus } from '~/design-system/icons/plus';
+import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
+import { Text } from '~/design-system/text';
 
 type QuestionsPageClientProps = {
   spaceId: string;

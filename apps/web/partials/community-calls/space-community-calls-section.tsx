@@ -79,7 +79,7 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
         </p>
       </div>
 
-      {highlight === null ? (
+      {now === null ? null : highlight === null ? (
         <p className="text-[16px] leading-[20px] text-grey-04">No live or upcoming calls.</p>
       ) : highlight.isLive ? (
         <LiveCard spaceId={spaceId} row={highlight.row} />
