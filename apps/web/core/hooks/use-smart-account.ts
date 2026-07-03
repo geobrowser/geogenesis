@@ -20,7 +20,7 @@ export function useSmartAccount() {
   // usable signAuthorization method.
   const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
 
-  const { data: smartAccount, isLoading } = useQuery({
+  const { data: smartAccount, isLoading, error } = useQuery({
     queryKey: ['smart-account', walletClient?.account.address, embeddedWallet?.address, cookies.walletAddress],
     queryFn: async () => {
       const config = Environment.getConfig();
@@ -49,23 +49,79 @@ export function useSmartAccount() {
           signer: signer as Parameters<typeof generateZeroDevAccount>[0]['signer'],
         });
 
-        // Wrap sendUserOperation to wait for inclusion before returning. The kernel client's
-        // default returns on bundler-accept; firing the next UserOp before the previous one
-        // has advanced the on-chain nonce causes the bundler simulator to reject with AA25
-        // ("invalid account nonce"). Waiting for the receipt makes each call submit + confirm.
+        // Two failure modes to defend against here:
+        //
+        // 1. AA25 nonce races: the kernel client computes the nonce at submit time,
+        //    so two overlapping sends (a vote fired while a publish is pending, two
+        //    sequential UserOps where the first is bundler-accepted but not yet
+        //    included) compute the same nonce and the bundler simulator rejects the
+        //    second. Fix: serialize every send — sendTransaction and
+        //    sendUserOperation alike — through a single in-flight queue, and hold
+        //    each sendUserOperation slot until its receipt confirms inclusion.
+        //    (kernel sendTransaction already waits for its receipt internally.)
+        //
+        // 2. Duplicate submissions on retry: callers wrap sends in Effect.retry
+        //    (~10s windows). Once the bundler has accepted a UserOp, a failure
+        //    thrown from this wrapper makes those retries RE-SUBMIT an op that may
+        //    already be landing — duplicate edit/comment/proposal on-chain. So
+        //    after submission we only ever retry the receipt *wait*, and if the
+        //    receipt still hasn't arrived we keep waiting until well past every
+        //    caller's retry window before surfacing the failure (with the hash, so
+        //    it's diagnosable). Submission is at-most-once by construction.
         const kernel = zeroDevAccount as unknown as {
           waitForUserOperationReceipt: (a: { hash: `0x${string}` }) => Promise<unknown>;
         };
+
+        // Serialization queue. A failed send must not block the next one, so the
+        // chained continuation swallows the error (the caller still sees it via
+        // the returned promise).
+        let sendChain: Promise<unknown> = Promise.resolve();
+        const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
+          const run = sendChain.then(task, task);
+          sendChain = run.catch(() => undefined);
+          return run;
+        };
+
+        // Longer than every caller retry window (max 10s today) plus slack, so a
+        // surfaced receipt failure can't trigger a re-submission.
+        const RECEIPT_DEADLINE_MS = 90_000;
+
+        const confirmInclusion = async (hash: `0x${string}`) => {
+          const startedAt = Date.now();
+          let lastError: unknown;
+          // waitForUserOperationReceipt polls internally but rejects on transient
+          // RPC errors mid-poll. Retry the wait — never the submission.
+          for (;;) {
+            try {
+              await kernel.waitForUserOperationReceipt({ hash });
+              return;
+            } catch (error) {
+              lastError = error;
+              if (Date.now() - startedAt >= RECEIPT_DEADLINE_MS) {
+                throw new Error(
+                  `UserOperation ${hash} was submitted but its receipt did not arrive within ${
+                    RECEIPT_DEADLINE_MS / 1000
+                  }s. It may still land on-chain — do not resubmit blindly.`,
+                  { cause: lastError }
+                );
+              }
+              await new Promise(resolve => setTimeout(resolve, 2_000));
+            }
+          }
+        };
+
         const wrapped = {
           account: zeroDevAccount.account,
-          sendTransaction: zeroDevAccount.sendTransaction.bind(zeroDevAccount),
-          sendUserOperation: async (args: {
+          sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
+            enqueue(() => zeroDevAccount.sendTransaction(...args)),
+          sendUserOperation: (args: {
             calls: ReadonlyArray<{ to: `0x${string}`; data: `0x${string}`; value?: bigint }>;
-          }) => {
-            const hash = await zeroDevAccount.sendUserOperation(args);
-            await kernel.waitForUserOperationReceipt({ hash });
-            return hash;
-          },
+          }) =>
+            enqueue(async () => {
+              const hash = await zeroDevAccount.sendUserOperation(args);
+              await confirmInclusion(hash);
+              return hash;
+            }),
         };
 
         if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {
@@ -104,5 +160,12 @@ export function useSmartAccount() {
     },
   });
 
-  return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet };
+  if (error) {
+    // Without this, an init failure (Privy signing, ZeroDev RPC, 7702 kernel
+    // setup) leaves consumers with smartAccount=null / isLoading=false —
+    // indistinguishable from logged-out — and nothing in the logs.
+    console.error('[SMART-ACCOUNT] initialization failed:', error);
+  }
+
+  return { smartAccount: smartAccount ?? null, isLoading: isLoading || isLoadingWallet, error: error ?? null };
 }

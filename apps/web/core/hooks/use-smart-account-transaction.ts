@@ -11,9 +11,13 @@ type SendTxArgs = {
 
 /**
  * Returns an Effect-returning function that signs and submits a transaction via the
- * smart account (or local-dev EOA polyfill). Each caller provides the destination `to`
- * and `data` per call, which lets us forward the `to` the SDK already returns rather
- * than pinning a contract address at hook setup.
+ * smart account. Each caller provides the destination `to` and `data` per call, which
+ * lets us forward the `to` the SDK already returns rather than pinning a contract
+ * address at hook setup.
+ *
+ * Sends are serialized with all other smart-account writes (see useSmartAccount), so
+ * this call may queue behind a pending publish before it submits. The 45s timeout
+ * below covers queue time + submission.
  */
 export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
