@@ -14,9 +14,17 @@
 const DEFAULT_CURATOR_BACKEND_URL = 'https://curator-api-staging-testnet.up.railway.app';
 
 // Hop-by-hop headers must not be forwarded (RFC 7230 §6.1) plus content-length /
-// host which the runtime recomputes for the upstream request/response.
-const STRIPPED_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length']);
-const STRIPPED_RESPONSE_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection']);
+// host which the runtime recomputes for the upstream request/response. Cookies are
+// also stripped both ways — the curator backend doesn't need geogenesis session
+// cookies, and shouldn't be able to set cookies on the geogenesis domain.
+const STRIPPED_REQUEST_HEADERS = new Set(['host', 'connection', 'content-length', 'cookie']);
+const STRIPPED_RESPONSE_HEADERS = new Set([
+  'content-encoding',
+  'content-length',
+  'transfer-encoding',
+  'connection',
+  'set-cookie',
+]);
 
 async function proxy(req: Request, path: string[]): Promise<Response> {
   const base = process.env.CURATOR_BACKEND_URL || DEFAULT_CURATOR_BACKEND_URL;

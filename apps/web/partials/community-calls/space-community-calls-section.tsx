@@ -47,9 +47,14 @@ function pickHighlight(series: CallSeries[], now: number): { row: Row; isLive: b
  * stays reachable.
  */
 export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: string; series: CallSeries[] }) {
-  // Bucket after mount so SSR/CSR clock splits can't diverge (hydration-safe).
+  // Bucket after mount so SSR/CSR clock splits can't diverge (hydration-safe), then
+  // keep refreshing so a call transitions live/upcoming while the page stays open.
   const [now, setNow] = React.useState<number | null>(null);
-  React.useEffect(() => setNow(Date.now()), []);
+  React.useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const { isMember, isLoading: accessLoading } = useAccessControl(spaceId);
 

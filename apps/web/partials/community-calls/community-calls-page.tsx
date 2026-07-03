@@ -60,9 +60,14 @@ export function CommunityCallsPage({
   spaceName: string;
   series: CallSeries[];
 }) {
-  // Compute "now" after mount so SSR/CSR time bucketing can't diverge (hydration-safe).
+  // Compute "now" after mount so SSR/CSR time bucketing can't diverge (hydration-safe),
+  // then keep refreshing so calls transition between sections without a full reload.
   const [now, setNow] = React.useState<number | null>(null);
-  React.useEffect(() => setNow(Date.now()), []);
+  React.useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   // Past occurrences paginate after 10, same as data blocks.
   const PAST_PAGE = 10;
@@ -107,9 +112,11 @@ export function CommunityCallsPage({
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h3 className="text-smallTitle">Upcoming</h3>
-          <Link href={`/space/${spaceId}/community/new`} aria-label="Schedule a call">
-            <Plus />
-          </Link>
+          {isEditor && (
+            <Link href={`/space/${spaceId}/community/new`} aria-label="Schedule a call">
+              <Plus />
+            </Link>
+          )}
         </div>
         {buckets.upcoming.length === 0 ? (
           <p className="text-metadata text-grey-04">No upcoming calls scheduled.</p>

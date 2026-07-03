@@ -36,9 +36,14 @@ type Props = {
 
 /** Condensed cross-space digest of live + upcoming calls in the explore side panel. */
 export function ExploreCommunityCallsSection({ calls, memberOrEditorSpaceIds, pendingMembershipSpaceIds }: Props) {
-  // Bucket after mount so SSR/CSR time splits can't diverge (hydration-safe).
+  // Bucket after mount so SSR/CSR time splits can't diverge (hydration-safe), then
+  // keep refreshing so the LIVE badge and ordering stay correct while the panel is open.
   const [now, setNow] = React.useState<number | null>(null);
-  React.useEffect(() => setNow(Date.now()), []);
+  React.useEffect(() => {
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const [spaceFilter, setSpaceFilter] = React.useState('all');
 

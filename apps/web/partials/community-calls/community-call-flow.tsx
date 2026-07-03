@@ -95,13 +95,13 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
   // Non-members (including signed-out visitors) skip the device-preview step
   // entirely and auto-connect watch-only.
   React.useEffect(() => {
-    if (joined || joining || !confirmedNonMember || canParticipate || !liveOccurrence) return;
+    if (error || joined || joining || !confirmedNonMember || canParticipate || !liveOccurrence) return;
     setJoining(true);
     getViewerToken({ spaceId, callId })
       .then(token => setJoined({ kind: 'viewer', token }))
       .catch(e => setError(e instanceof Error ? e.message : 'Could not join the call.'))
       .finally(() => setJoining(false));
-  }, [joined, joining, confirmedNonMember, canParticipate, liveOccurrence, spaceId, callId]);
+  }, [error, joined, joining, confirmedNonMember, canParticipate, liveOccurrence, spaceId, callId]);
 
   if (joined?.kind === 'participant') {
     return (
