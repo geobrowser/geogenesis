@@ -435,3 +435,28 @@ To be added once edit mode works. Will document the env vars needed to point geo
 
 - `mainnet-migration-v020-backup-<timestamp>` × 2 (created before each rebase attempt during Phase 0). Find them with `git branch | grep backup`.
 - `stash@{0}` — `geo-sdk 0.20-beta.0 bump` from an earlier reset; redundant now but kept until the working state is committed.
+
+---
+
+## Mainnet blockers (added 2026-07-02, from branch code review)
+
+`environment.ts` retains a full mainnet (chainId `80451`) branch, but flipping the env
+var today would produce a broken mixed-network app. Everything below must land before
+mainnet is real; until then treat `chainId=80451` as unsupported:
+
+- [ ] **Contract addresses** — `core/utils/contracts/space-registry.ts` and
+      `dao-space-factory.ts` hardcode the testnet-55516 deployments unconditionally.
+      Needs a per-network switch once mainnet v2 contracts are deployed.
+- [ ] **Geo client** — `core/sdk/geo-client.ts` hardcodes `GeoTestnetConfig`. v0.20 has
+      no built-in MAINNET network; needs `defineGeoNetworkConfig({ id: 'MAINNET', ... })`.
+- [ ] **Wallet chain pin** — `core/wallet/wallet.tsx` pins wagmi to `getGeoChain('TESTNET')`
+      regardless of `Environment.variables.chainId`, while `privy.tsx`/`geo-chain.ts`
+      follow the env → mixed-chain signatures if the env flips.
+- [ ] **Smart-account path** — the ZeroDev EIP-7702 kernel flow only exists for 55516;
+      mainnet still assumes the old Safe+Pimlico path. Decide the mainnet AA story.
+- [ ] **GraphQL codegen** — `codegen.ts` generates from the testnet v2 schema
+      (`testnet-api-v2.geobrowser.io`); mainnet currently serves v1. All hand-written
+      queries in the app are now v2-shaped and would fail against a v1 mainnet API.
+- [ ] **ZeroDev sponsorship policy** — confirm origin/contract policies on the ZeroDev
+      dashboard for whichever project id ships (the project id is client-exposed via
+      `NEXT_PUBLIC_ZERODEV_RPC_URL_*`).

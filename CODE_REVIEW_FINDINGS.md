@@ -84,7 +84,14 @@ the SDK's `validateVotingSettingsInput(settings, 1)` (1 = the creator, matching 
   end. Whitespace-only input behaves the same; the "must be valid numbers" error can never fire
   for empty strings.
 
-### 5. OPEN — Receipt-wait wrapper makes retried publishes double-submit-capable
+### 5. RESOLVED (Batch 4) — Receipt-wait wrapper makes retried publishes double-submit-capable
+Fixed in `use-smart-account.ts`: every send (`sendTransaction` and `sendUserOperation`)
+now goes through one serialization queue (closes the AA25 race for governance writes
+too), and after submission only the receipt *wait* is retried — failures are held until
+90s (past every caller's 10s Effect.retry window) before surfacing with the userOp hash,
+so caller retries can no longer re-submit an op that already landed. Note: a write can
+now queue behind a pending publish; the 45s timeout in useSmartAccountTransaction covers
+queue + submit.
 `apps/web/core/hooks/use-smart-account.ts:59-68` wraps `sendUserOperation` to await
 `waitForUserOperationReceipt` (viem default 120s timeout; rejects on transient RPC errors while
 polling). Failure can now occur *after* the bundler accepted the userOp. Callers wrap it in
@@ -95,7 +102,11 @@ on-chain. Also: only `sendUserOperation` is serialized; `sendTransaction` (all g
 via `useSmartAccountTransaction`) is unwrapped, so a vote fired during a pending publish can
 still hit the AA25 nonce race the wrapper was added for.
 
-### 6. OPEN — Legacy users without a Privy embedded wallet are silently bricked
+### 6. RESOLVED (Batch 4) — Legacy users without a Privy embedded wallet are silently bricked
+Fixed: `privy.tsx` uses `createOnLogin: 'all-users'` (users with only a linked external
+wallet now get an embedded wallet — takes effect on their next login), and
+`useSmartAccount` exposes + logs the init `error` so failures are distinguishable from
+logged-out. Consumers can adopt the error state incrementally.
 `apps/web/core/hooks/use-smart-account.ts:32-35` requires a wallet with
 `walletClientType === 'privy'`, but `createOnLogin: 'users-without-wallets'`
 (`apps/web/core/wallet/privy.tsx:21`) doesn't create an embedded wallet for users who already
@@ -105,7 +116,11 @@ surfaced. Related: `useQuery`'s `error` is never read anywhere in the hook, so *
 failure (Privy signing, bad ZeroDev URL, 7702 kernel setup) is silent.
 Consider `createOnLogin: 'all-users'` + an explicit error state.
 
-### 7. OPEN (posture, partly pre-existing) — Mainnet (80451) configuration is incoherent
+### 7. OPEN (tracked) — Mainnet (80451) configuration is incoherent
+Not fixable until mainnet v2 API + contracts exist. A "Mainnet blockers" checklist was
+added to `V020_MIGRATION_LOG.md` (2026-07-02) covering: contract-address switch, MAINNET
+geo-client config, wagmi chain pin, AA path decision, codegen/v1-API mismatch, ZeroDev
+policy check.
 `environment.ts` keeps a full mainnet branch implying support, but:
 - `apps/web/core/utils/contracts/space-registry.ts:4` / `dao-space-factory.ts:3` hardcode
   testnet-55516 deployments unconditionally.
@@ -132,20 +147,29 @@ its current version), so endTime filters are current-version scoped by construct
 buckets. Latent (zero multi-version proposals on testnet today). Correct filter scopes the
 version row to `proposalVersion = currentVersion`.
 
-### 9. OPEN — `use-entity-vote.ts` `objectType` param is dead
+### 9. RESOLVED (Batch 5) — `use-entity-vote.ts` `objectType` param is dead
+Fixed: the param was removed from `useEntityVote` and `EntityVoteButtons`; reads pin the
+same object type 0 the SDK hardcodes for writes (constant + comment). The
+`contracts/entity-vote.ts` encoders remain as documented reference for the topic layout.
 `apps/web/core/hooks/use-entity-vote.ts:21-51`: the SDK hardcodes object type `00000000` in the
 vote topic (`client/entity-votes.js`), but the hook still accepts `objectType` and keys
 read-queries (`entity-vote-count`, `user-entity-vote`) and telemetry by it. All current callers
 pass 0; a future `objectType: 1` caller writes type-0 votes while reading type-1 tallies.
 Either drop the param or fail loudly on non-zero.
 
-### 10. OPEN — One-shot 5s vote refresh; timer not cancelled
+### 10. RESOLVED (Batch 5) — One-shot 5s vote refresh; timer not cancelled
+Fixed: `accept-or-reject.tsx` refreshes on a backoff (3s/7s/15s/30s) so slower indexer
+lag still converges, and all pending timers are cancelled on unmount.
 `apps/web/partials/active-proposal/accept-or-reject.tsx:81-83`: `onVoteSuccess` schedules a
 single `router.refresh()` at +5s. Indexer lag > 5s (common) → tallies/percentages and the
 first-vote-stamped endTime stay stale until manual navigation. Timeout also fires after
 unmount (harmless refresh, tiny leak).
 
-### 11. OPEN — "local-dev" synthetic-home fallback runs in production
+### 11. RESOLVED (Batch 5) — "local-dev" synthetic-home fallback runs in production
+Fixed: both fallbacks (space layout + page) are gated on
+`NEXT_PUBLIC_IS_TEST_ENV === 'true'` — the same flag that gates the mock wallet. On
+testnet/mainnet a fresh space now renders its (empty) real entity during indexer lag
+instead of adopting a synthetic id that diverges once indexed.
 `apps/web/app/space/[id]/(space)/layout.tsx:149-183` and `page.tsx:231-241`: triggers whenever
 `space.entity.id` is empty, which happens for any fresh space during the indexer-lag window
 (not just e2e bootstrap). Effects: extra `cachedFetchEntityPage` per render, verbose
@@ -164,7 +188,10 @@ fully implemented, just awaiting the claim-flow caller).
 - `cloneFromEntity` (60-62, 82-84) is documented ("copy entity content after deploy") but
   nothing implements it; `autoRun` and `cloneFromEntity` currently have zero callers.
 
-### 13. OPEN — Mock/test wallet config can no longer produce a smart account
+### 13. OPEN (comment fixed) — Mock/test wallet config can no longer produce a smart account
+The stale "local-dev EOA polyfill" comment in `use-smart-account-transaction.ts` was
+corrected (Batch 4). The substantive question remains: if E2E transaction coverage is
+wanted, the 55516 path needs a test-env signer; otherwise remove `createMockConfig`.
 `apps/web/core/wallet/wallet.tsx:27-29` + `use-smart-account.ts:32-35`: with
 `NEXT_PUBLIC_IS_TEST_ENV=true` the mock wagmi walletClient is ignored — the 55516 path requires
 a Privy embedded wallet, which never exists in test env → `smartAccount` always null; any

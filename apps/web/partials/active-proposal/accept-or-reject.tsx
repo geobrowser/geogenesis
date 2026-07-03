@@ -81,8 +81,21 @@ export function AcceptOrReject({
     }
   }, [userVote, proposalId, removeOptimisticVote]);
 
+  // Indexer lag after a vote is variable — a single delayed refresh often lands
+  // before the vote is indexed and then nothing updates the tallies. Refresh on
+  // a short backoff instead; the userVote effect above stops mattering once the
+  // server data catches up, and pending timers are cancelled on unmount.
+  const refreshTimers = React.useRef<number[]>([]);
+  React.useEffect(() => {
+    return () => {
+      for (const id of refreshTimers.current) window.clearTimeout(id);
+    };
+  }, []);
+
   const onVoteSuccess = () => {
-    window.setTimeout(() => router.refresh(), 5_000);
+    for (const delayMs of [3_000, 7_000, 15_000, 30_000]) {
+      refreshTimers.current.push(window.setTimeout(() => router.refresh(), delayMs));
+    }
   };
 
   const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {

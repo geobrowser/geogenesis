@@ -145,8 +145,13 @@ const getSpaceFrontPage = async (spaceId: string) => {
   // values we published under this synthetic id surface on the page. Without the
   // second fetch, edits land in the indexer but the layout reads space.entity which
   // still has empty values.
-  // Testnet/mainnet space records always have a real entity.id, so this branch is a no-op.
-  if (!entity.id) {
+  //
+  // Gated to the e2e/test environment: on testnet/mainnet a fresh space can also
+  // have an empty entity.id during the indexer-lag window, and handing out the
+  // synthetic id there attaches edits to an entity that permanently diverges from
+  // the real home entity once it indexes. Outside test env we render the empty
+  // entity and let the next request pick up the indexed one.
+  if (!entity.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
     const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
     const syntheticEntity = syntheticPage?.entity ?? null;
 

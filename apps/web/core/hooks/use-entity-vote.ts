@@ -15,13 +15,15 @@ import { validateSpaceId } from '~/core/utils/utils';
 
 export type { VoteDirection, VoteObjectType };
 
+// The SDK's entityVotes.upvote/downvote/withdraw hardcode object type 0 in the
+// vote topic, so this hook deliberately has no objectType parameter — accepting
+// one would let a caller read type-N tallies while writing type-0 votes.
 interface UseEntityVoteArgs {
   entityId: string;
   spaceId: string;
-  objectType?: VoteObjectType;
 }
 
-export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVoteArgs) {
+export function useEntityVote({ entityId, spaceId }: UseEntityVoteArgs) {
   const queryClient = useQueryClient();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
@@ -55,7 +57,7 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
         Effect.annotateSpans({
           'io.operation': 'entity_vote',
           'vote.direction': direction,
-          'vote.objectType': String(objectType),
+          'vote.objectType': '0',
         })
       );
       const result = await runEffectEither(txEffect);
@@ -72,12 +74,12 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
 
       return result.right;
     },
-    [personalSpaceId, isRegistered, spaceId, entityId, objectType, tx]
+    [personalSpaceId, isRegistered, spaceId, entityId, tx]
   );
 
   const onSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ['entity-vote-count', entityId, objectType] });
-    queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, objectType] });
+    queryClient.invalidateQueries({ queryKey: ['entity-vote-count', entityId, 0] });
+    queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, 0] });
   };
 
   const { mutate: upvote } = useMutation({
