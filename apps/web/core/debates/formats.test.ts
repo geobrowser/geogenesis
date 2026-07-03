@@ -7,6 +7,7 @@ describe('debate formats', () => {
     expect(debateFormats.map(format => [format.id, format.label, format.turnDurationsMs])).toEqual([
       ['standard', '30/30 20/20', [30_000, 30_000, 20_000, 20_000]],
       ['extended-open', '45/45 20/20', [45_000, 45_000, 20_000, 20_000]],
+      ['extended-standard', '45/45 30/30', [45_000, 45_000, 30_000, 30_000]],
       ['minute-double', '1/1 1/1 20/20', [60_000, 60_000, 60_000, 60_000, 20_000, 20_000]],
       ['triple-standard', '30/30 30/30 30/30 20/20', [30_000, 30_000, 30_000, 30_000, 30_000, 30_000, 20_000, 20_000]],
       ['dev-short', '5/5 2/2', [5_000, 5_000, 2_000, 2_000]],

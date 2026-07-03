@@ -1,6 +1,12 @@
 'use client';
 
-export type DebateFormatId = 'standard' | 'extended-open' | 'minute-double' | 'triple-standard' | 'dev-short';
+export type DebateFormatId =
+  | 'standard'
+  | 'extended-open'
+  | 'extended-standard'
+  | 'minute-double'
+  | 'triple-standard'
+  | 'dev-short';
 
 export type DebateFormat = {
   id: DebateFormatId;
@@ -19,6 +25,11 @@ export const debateFormats: DebateFormat[] = [
     id: 'extended-open',
     label: '45/45 20/20',
     turnDurationsMs: [45_000, 45_000, 20_000, 20_000],
+  },
+  {
+    id: 'extended-standard',
+    label: '45/45 30/30',
+    turnDurationsMs: [45_000, 45_000, 30_000, 30_000],
   },
   {
     id: 'minute-double',
