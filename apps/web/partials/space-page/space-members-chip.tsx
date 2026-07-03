@@ -15,12 +15,12 @@ export function SpaceMembersChip({ firstThreeMembers, totalMembers }: Props) {
   return (
     <div className="flex items-center gap-1">
       <AvatarGroup>
-        {firstThreeMembers.map(editor => (
-          <AvatarGroup.Item key={editor.id}>
-            {editor.avatarUrl ? (
-              <FallbackImage value={editor.avatarUrl} sizes="12px" className="object-cover" priority />
+        {firstThreeMembers.map(member => (
+          <AvatarGroup.Item key={member.id}>
+            {member.avatarUrl ? (
+              <FallbackImage value={member.avatarUrl} sizes="12px" className="object-cover" priority />
             ) : (
-              <Avatar size={12} value={editor.address} />
+              <Avatar size={12} value={member.address} />
             )}
           </AvatarGroup.Item>
         ))}
