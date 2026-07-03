@@ -299,7 +299,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
       return;
     }
-    if (!['thanking', 'complete'].includes(debate.status)) return;
+    if (debate.status !== 'complete') return;
     if (finalizedDebateRef.current === debate.id) return;
     finalizedDebateRef.current = debate.id;
     void finishAndUpload();
@@ -581,9 +581,11 @@ function DebateInstructionBand({ debate, countdown }: { debate: Debate; countdow
           {speakerStatus(debate)}
         </Text>
         <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-          {countdown.activeSide
-            ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
-            : 'Get ready.'}
+          {debate.status === 'thanking'
+            ? 'Both speakers can talk during the wrap-up.'
+            : countdown.activeSide
+              ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
+              : 'Get ready.'}
         </Text>
       </div>
       <div className="w-[min(220px,100%)] shrink-0 rounded-full bg-bg px-4 py-2 text-center text-text shadow-inner shadow-grey-02">
@@ -706,11 +708,19 @@ function countdownWindowForDebate(debate: Debate): {
     };
   }
 
-  if (debate.status === 'in_progress' || debate.status === 'thanking') {
+  if (debate.status === 'in_progress') {
     return {
       start: debate.turn_started_at,
       target: debate.turn_ends_at,
       activeSide: debate.current_speaker_side,
+    };
+  }
+
+  if (debate.status === 'thanking') {
+    return {
+      start: debate.turn_started_at,
+      target: debate.turn_ends_at,
+      activeSide: null,
     };
   }
 
@@ -729,7 +739,7 @@ function speakerStatus(debate: Debate) {
       debate.current_speaker_side === 'for' ? debate.question.side_labels.for : debate.question.side_labels.against;
     return `${label} is speaking.`;
   }
-  if (debate.status === 'thanking') return 'Wrap-up is running.';
+  if (debate.status === 'thanking') return 'Wrap-up is running. Both speakers can thank each other.';
   if (debate.status === 'complete') return 'Debate complete.';
   if (debate.status === 'cancelled') return 'Debate cancelled.';
   return 'Waiting for both speakers to join.';
