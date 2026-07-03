@@ -1,5 +1,6 @@
 'use client';
 
+import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
@@ -17,6 +18,7 @@ type Props = {
   parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
+  communityCalls: ExploreCall[];
 };
 
 export function ExplorePage({
@@ -27,6 +29,7 @@ export function ExplorePage({
   parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
+  communityCalls,
 }: Props) {
   return (
     <div className="mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
@@ -40,10 +43,7 @@ export function ExplorePage({
           feedTopSpacingClassName=""
         />
       </main>
-      <div
-        aria-hidden
-        className="sticky top-11 h-[calc(100dvh-2.75rem)] w-px shrink-0 self-start bg-divider lg:hidden"
-      />
+      <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
       <ExploreSidePanel
         featuredSpaces={featuredSpaces}
         unclaimedTopics={unclaimedTopics}
@@ -51,6 +51,7 @@ export function ExplorePage({
         parentTopicOptions={parentTopicOptions}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+        communityCalls={communityCalls}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
+import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
 import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
@@ -43,19 +44,28 @@ export default async function ExploreRoutePage() {
   const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
   const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
   const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
+  const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
 
-  const [browseRaw, recentlyClaimedSpaces, featuredSpaces, firstLevelSubtopics, parentTopicOptions, governance] =
-    await Promise.all([
-      browsePromise,
-      recentlyClaimedPromise,
-      featuredSpacesPromise,
-      firstLevelSubtopicsPromise,
-      parentTopicOptionsPromise,
-      governancePromise,
-    ]);
+  const [
+    browseRaw,
+    recentlyClaimedSpaces,
+    featuredSpaces,
+    firstLevelSubtopics,
+    parentTopicOptions,
+    communityCalls,
+    governance,
+  ] = await Promise.all([
+    browsePromise,
+    recentlyClaimedPromise,
+    featuredSpacesPromise,
+    firstLevelSubtopicsPromise,
+    parentTopicOptionsPromise,
+    communityCallsPromise,
+    governancePromise,
+  ]);
 
   const browse: BrowseSidebarData = browseRaw ?? {
     featured: [],
@@ -115,6 +125,7 @@ export default async function ExploreRoutePage() {
       parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+      communityCalls={communityCalls}
     />
   );
 }

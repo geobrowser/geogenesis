@@ -27,7 +27,14 @@ const COVER_PLACEHOLDER_HEIGHT = 120;
 const AVATAR_OVERFLOW = 40;
 const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
 
-// maxWidth is always 1192 so the wrapper never animates horizontally.
+// The cover renders with `rounded-lg` (--radius-lg in styles.css). Content below it
+// insets by 6x that radius on each side's rounded corner pair, so the text column
+// reads as sitting just inside the cover's curve instead of floating independently.
+export const COVER_MAX_WIDTH = 1192;
+export const COVER_BORDER_RADIUS = 12;
+export const CONTENT_MAX_WIDTH = COVER_MAX_WIDTH - 6 * COVER_BORDER_RADIUS;
+
+// maxWidth is always COVER_MAX_WIDTH so the wrapper never animates horizontally.
 // When there's no cover the extra width is invisible (height is 0 or 40).
 function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boolean) {
   return {
@@ -38,7 +45,7 @@ function computeLayout(hasCover: boolean, hasCoverImage: boolean, hasAvatar: boo
       : hasAvatar
         ? AVATAR_OVERFLOW
         : 0,
-    maxWidth: 1192,
+    maxWidth: COVER_MAX_WIDTH,
     marginBottom: hasCover ? (hasAvatar ? 80 : 32) : hasAvatar ? 64 : 0,
     marginTop: hasCover ? -24 : 0,
   };
@@ -128,8 +135,8 @@ export const EditableCoverAvatarHeader = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="absolute right-0 left-0 mx-auto flex max-w-[880px] justify-start"
-            style={{ bottom: -AVATAR_OVERFLOW }}
+            className="absolute right-0 left-0 mx-auto flex justify-start"
+            style={{ bottom: -AVATAR_OVERFLOW, maxWidth: CONTENT_MAX_WIDTH }}
           >
             <div className="flex h-20 w-20 items-center justify-center rounded-lg">
               <AvatarCoverInput

@@ -42,6 +42,36 @@ function parseICalDate(value: string): Date | null {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
 }
 
+// Offset (ms) of `tz` from UTC at `utcMs`: positive when the zone is ahead.
+// Evaluated at the wall-clock instant, so it can be off by 1h for the single
+// hour straddling a DST transition — fine for listing/display; the curator
+// token endpoint enforces the real join window server-side.
+function tzOffsetMs(tz: string, utcMs: number): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const p: Record<string, number> = {};
+  for (const part of dtf.formatToParts(new Date(utcMs))) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value);
+  }
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - utcMs;
+}
+
+// Parse an iCal date, honoring a TZID parameter. A trailing `Z` (or no zone) is
+// already UTC / floating; a TZID means the wall-clock is in that zone → convert.
+function parseICalDateTz(value: string, tzid?: string): Date | null {
+  const d = parseICalDate(value);
+  if (!d || !tzid || value.endsWith('Z')) return d;
+  return new Date(d.getTime() - tzOffsetMs(tzid, d.getTime()));
+}
+
 function isValidICalDate(value: string): boolean {
   const match = value.match(ICAL_DATE_RE);
   if (!match) return false;
@@ -237,14 +267,20 @@ export function parseSchedule(schedule: string): ParsedSchedule {
 
   const lines = schedule.split('\n');
   const props: Record<string, string> = {};
+  const tzids: Record<string, string> = {};
   for (const line of lines) {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
-    props[line.substring(0, colonIdx).trim()] = line.substring(colonIdx + 1).trim();
+    // Key may carry iCal params, e.g. `DTSTART;TZID=America/Santiago`.
+    const rawKey = line.substring(0, colonIdx).trim();
+    const name = rawKey.split(';')[0];
+    const tzid = rawKey.match(/TZID=([^;]+)/)?.[1];
+    if (tzid) tzids[name] = tzid;
+    props[name] = line.substring(colonIdx + 1).trim();
   }
 
   if (props.DTSTART) {
-    const d = parseICalDate(props.DTSTART);
+    const d = parseICalDateTz(props.DTSTART, tzids.DTSTART);
     if (d) {
       const y = d.getUTCFullYear().toString().padStart(4, '0');
       const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -255,7 +291,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
   }
 
   if (props.DTEND) {
-    const d = parseICalDate(props.DTEND);
+    const d = parseICalDateTz(props.DTEND, tzids.DTEND);
     if (d) {
       result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
     }
