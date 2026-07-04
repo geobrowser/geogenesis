@@ -513,7 +513,7 @@ function DebateRecordingModal({
             <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
           </DebateVideoTile>
 
-          <DebateInstructionBand debate={debate} countdown={countdown} />
+          <DebateInstructionBand debate={debate} countdown={countdown} roomState={roomState} />
 
           <DebateVideoTile
             title="Other speaker"
@@ -584,32 +584,56 @@ function DebateVideoTile({
   );
 }
 
-function DebateInstructionBand({ debate, countdown }: { debate: Debate; countdown: DebateCountdown }) {
-  const remainingPercent = `${Math.round((1 - countdown.progress) * 100)}%`;
+function DebateInstructionBand({
+  debate,
+  countdown,
+  roomState,
+}: {
+  debate: Debate;
+  countdown: DebateCountdown;
+  roomState: 'connecting' | 'connected' | 'uploading';
+}) {
+  const isComplete = debate.status === 'complete';
+  const remainingRatio = isComplete ? 0 : Math.max(0, Math.min(1, 1 - countdown.progress));
+  const remainingDegrees = Math.round(remainingRatio * 360);
+  const statusText =
+    isComplete && roomState === 'uploading' ? 'Debate complete and uploading the video.' : speakerStatus(debate);
+  const helperText = isComplete
+    ? 'Keep this window open until the upload finishes.'
+    : debate.status === 'thanking'
+      ? 'Both speakers can talk during the wrap-up.'
+      : countdown.activeSide
+        ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
+        : 'Get ready.';
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light">
-      <div className="min-w-0">
+    <div
+      className={cx(
+        'flex shrink-0 gap-4 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light',
+        isComplete
+          ? 'flex-col items-center justify-center text-center'
+          : 'flex-wrap items-center justify-between text-left'
+      )}
+    >
+      <div className={cx('min-w-0', isComplete && 'flex flex-col items-center')}>
         <Text as="p" variant="bodySemibold" color="text">
-          {speakerStatus(debate)}
+          {statusText}
         </Text>
         <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-          {debate.status === 'thanking'
-            ? 'Both speakers can talk during the wrap-up.'
-            : countdown.activeSide
-              ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
-              : 'Get ready.'}
+          {helperText}
         </Text>
       </div>
-      <div className="w-[min(220px,100%)] shrink-0 rounded-full bg-bg px-4 py-2 text-center text-text shadow-inner shadow-grey-02">
-        <Text as="div" variant="smallTitle" color="text">
-          {countdown.label}
-        </Text>
-        <div className="mt-1 h-1 overflow-hidden rounded-full bg-grey-02">
-          <div
-            className="h-full rounded-full bg-text transition-[width] duration-500"
-            style={{ width: remainingPercent }}
-          />
+      <div
+        className="relative size-20 shrink-0 rounded-full transition-[background] duration-500"
+        style={{
+          background: `conic-gradient(var(--color-text) ${remainingDegrees}deg, var(--color-grey-02) 0deg)`,
+        }}
+        aria-label={`Time remaining ${countdown.label}`}
+      >
+        <div className="absolute inset-1 flex items-center justify-center rounded-full bg-white shadow-inner shadow-grey-02">
+          <Text as="div" variant="metadataMedium" color="text">
+            {countdown.label}
+          </Text>
         </div>
       </div>
     </div>
