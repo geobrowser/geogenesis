@@ -89,6 +89,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const finalizedDebateRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
   const countdown = useDebateCountdown(debate);
+  const questionsPath = `/space/${spaceId}/questions`;
 
   React.useEffect(() => {
     setLocalTrackPreferences(localTracksRef.current, { audioMuted, videoEnabled });
@@ -248,9 +249,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       setRemoteVideoReady(false);
       setRoomState('idle');
+      return true;
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not upload the local recording.');
       setRoomState('connected');
+      return false;
     }
   }, [joinResponse?.side, stopLocalRecorderAndUpload]);
 
@@ -259,7 +262,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRoomError(null);
     try {
       if (debate.status === 'complete') {
-        await finishAndUpload();
+        const uploaded = await finishAndUpload();
+        if (!uploaded) return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -271,11 +275,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      router.push(`/space/${spaceId}/debates`);
+      router.push(debate.status === 'complete' ? questionsPath : `/space/${spaceId}/debates`);
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
-  }, [abortDebate, debate, discardLocalRecorder, finishAndUpload, router, spaceId]);
+  }, [abortDebate, debate, discardLocalRecorder, finishAndUpload, questionsPath, router, spaceId]);
 
   React.useEffect(() => {
     return () => {
@@ -292,7 +296,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [connect, debate, roomState]);
 
   React.useEffect(() => {
-    if (!debate || roomState === 'idle') return;
+    if (!debate) return;
+    if (debate.status === 'complete' && roomState === 'idle') {
+      router.replace(questionsPath);
+      return;
+    }
+    if (roomState === 'idle') return;
     if (debate.status === 'cancelled') {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       setRemoteVideoReady(false);
@@ -302,8 +311,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (debate.status !== 'complete') return;
     if (finalizedDebateRef.current === debate.id) return;
     finalizedDebateRef.current = debate.id;
-    void finishAndUpload();
-  }, [debate, finishAndUpload, roomState]);
+    void finishAndUpload().then(uploaded => {
+      if (uploaded) router.replace(questionsPath);
+    });
+  }, [debate, finishAndUpload, questionsPath, roomState, router]);
+
+  if (debate?.status === 'complete' && roomState === 'idle') return null;
 
   return (
     <div className="py-8">
