@@ -14,6 +14,8 @@ import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurr
 import { Occurrence } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useToast } from '~/core/hooks/use-toast';
+import { useReportError } from '~/core/state/status-bar-store';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { normId } from '~/core/utils/norm-id';
 
 import { Avatar } from '~/design-system/avatar';
@@ -157,9 +159,12 @@ function CardAction({
 }
 
 function RsvpButton({ call }: { call: ExploreCall }) {
+  'use no memo';
+
   const { identityToken, getToken } = useCommunityCallIdentityToken();
   const { user } = usePrivy();
   const [, setToast] = useToast();
+  const notifyStatusBarError = useReportError();
   const [busy, setBusy] = React.useState(false);
 
   const onRsvp = async () => {
@@ -173,8 +178,8 @@ function RsvpButton({ call }: { call: ExploreCall }) {
       if (!token) return setToast(<>Sign in to RSVP.</>);
       await subscribeToCall({ spaceId: call.spaceId, callId: call.callId, email }, token);
       setToast(<>RSVP sent — we’ll email you the invite.</>);
-    } catch {
-      setToast(<>Couldn’t RSVP right now.</>);
+    } catch (err) {
+      notifyStatusBarError(toUserFacingError(err, "Couldn't RSVP: ").message);
     } finally {
       setBusy(false);
     }

@@ -18,6 +18,8 @@ import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identi
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
+import { useReportError } from '~/core/state/status-bar-store';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
@@ -186,11 +188,14 @@ function LiveCallCard({ spaceId, row }: { spaceId: string; row: Row }) {
 }
 
 function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
+  'use no memo';
+
   const router = useRouter();
   const { identityToken, getToken } = useCommunityCallIdentityToken();
   const { user } = usePrivy();
   const { makeProposal } = usePublish();
   const [, setToast] = useToast();
+  const notifyStatusBarError = useReportError();
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
@@ -203,8 +208,9 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
       if (!token) return setToast(<>Sign in to RSVP.</>);
       await subscribeToCall({ spaceId: row.call.spaceId, callId: row.call.callId, email }, token);
       setToast(<>RSVP sent — check your email for the invite.</>);
-    } catch {
-      setToast(<>Couldn’t RSVP right now.</>);
+    } catch (err) {
+      const { message } = toUserFacingError(err, "Couldn't RSVP: ");
+      notifyStatusBarError(message);
     }
   };
 
