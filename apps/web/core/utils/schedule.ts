@@ -205,14 +205,14 @@ export function validateSchedule(
   if (!props.DTSTART) {
     errors.push('DTSTART is required');
   } else if (!isValidICalDate(props.DTSTART)) {
-    errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSSZ`);
+    errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
   } else if (options?.requireFutureStart && parseICalDate(props.DTSTART)!.getTime() <= Date.now()) {
     errors.push('Start time must be in the future');
   }
 
   if (props.DTEND) {
     if (!isValidICalDate(props.DTEND)) {
-      errors.push(`Invalid DTEND date "${props.DTEND}". Expected format: YYYYMMDDTHHmmSSZ`);
+      errors.push(`Invalid DTEND date "${props.DTEND}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
     } else if (props.DTSTART && isValidICalDate(props.DTSTART)) {
       const start = parseICalDate(props.DTSTART)!;
       const end = parseICalDate(props.DTEND)!;
