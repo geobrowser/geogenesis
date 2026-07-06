@@ -142,7 +142,7 @@ export type DebateMediaArtifactUrlResponse = {
   upload: ObjectStoreUpload;
 };
 
-export type TranscriptFormat = 'json' | 'srt' | 'vtt';
+export type TranscriptFormat = 'json' | 'srt' | 'vtt' | 'ass';
 
 export type DebateTranscriptSegment = {
   id: string;
