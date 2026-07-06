@@ -78,6 +78,91 @@ export type DebateRecording = {
   video_bits_per_second: number | null;
 };
 
+export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type DebateMediaArtifactKind =
+  | 'final_video'
+  | 'transcript_json'
+  | 'subtitle_srt'
+  | 'subtitle_vtt'
+  | 'subtitle_ass'
+  | 'render_metadata';
+
+export type DebateMediaRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type DebateMediaRenderLayout = {
+  output_width: number;
+  output_height: number;
+  slot_1: DebateMediaRegion;
+  subtitles: DebateMediaRegion;
+  slot_2: DebateMediaRegion;
+};
+
+export type DebateMediaJobSummary = {
+  id: string;
+  status: DebateMediaJobStatus;
+  attempt_count: number;
+  locked_at: string | null;
+  locked_by: string | null;
+  available_at: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export type DebateMediaArtifact = {
+  id: string;
+  kind: DebateMediaArtifactKind;
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DebateMediaResponse = {
+  job: DebateMediaJobSummary | null;
+  artifacts: DebateMediaArtifact[];
+  transcript_segment_count: number;
+  layout: DebateMediaRenderLayout;
+  whisper_model_id: string;
+};
+
+export type DebateMediaArtifactUrlRequest = {
+  kind?: DebateMediaArtifactKind;
+  filename?: string;
+};
+
+export type DebateMediaArtifactUrlResponse = {
+  upload: ObjectStoreUpload;
+};
+
+export type TranscriptFormat = 'json' | 'srt' | 'vtt';
+
+export type DebateTranscriptSegment = {
+  id: string;
+  participant_slot: ParticipantSlot;
+  answer: DebateAnswer;
+  sequence_index: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DebateTranscriptResponse = {
+  format: TranscriptFormat;
+  model_id: string;
+  segments: DebateTranscriptSegment[];
+  body?: string;
+};
+
 export type Debate = {
   id: string;
   question: DebateQuestionSummary;
@@ -332,6 +417,48 @@ export async function getRecordingUrl(
     auth: 'optional',
     getPrivyIdentityToken,
   });
+}
+
+export async function getDebateMedia(debateId: string, getPrivyIdentityToken?: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateMediaResponse>(`/debates/${debateId}/media`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+  });
+}
+
+export async function requestDebateMediaProcessing(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateMediaResponse>(`/debates/${debateId}/media/process`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateMediaArtifactUrl(
+  debateId: string,
+  request: DebateMediaArtifactUrlRequest,
+  getPrivyIdentityToken?: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateMediaArtifactUrlResponse>(`/debates/${debateId}/media/artifacts/url`, {
+    method: 'POST',
+    body: request,
+    auth: 'optional',
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateTranscript(
+  debateId: string,
+  format: TranscriptFormat = 'json',
+  getPrivyIdentityToken?: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateTranscriptResponse>(
+    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}`,
+    {
+      auth: 'optional',
+      getPrivyIdentityToken,
+    }
+  );
 }
 
 async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {

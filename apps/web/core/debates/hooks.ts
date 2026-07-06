@@ -1,33 +1,41 @@
 'use client';
 
+import { getIdentityToken, usePrivy } from '@geogenesis/auth';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getIdentityToken, usePrivy } from '@geogenesis/auth';
-
 import {
+  type DebateMediaArtifactUrlRequest,
   type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
+  type TranscriptFormat,
   abortDebate,
   acceptDebateMatch,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
   declineDebateMatch,
   getDebate,
+  getDebateMedia,
+  getDebateMediaArtifactUrl,
+  getDebateTranscript,
   getLiveKitToken,
   getRecordingUrl,
   joinDebateQueue,
   listDebateQuestions,
   listSpaceDebates,
   markDebateJoined,
+  requestDebateMediaProcessing,
 } from './api';
 
 export const debateQueryKeys = {
   questions: (spaceId: string, questionIds: string[]) => ['debates', 'questions', spaceId, questionIds] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
+  media: (debateId: string) => ['debates', 'media', debateId] as const,
+  transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
 };
 
 export function useGeoChatAuth() {
@@ -161,7 +169,10 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
   return useMutation({
     mutationFn: (request: LocalRecordingCompleteRequest) =>
       completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
-    onSuccess: result => queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate),
+    onSuccess: result => {
+      queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(result.debate.id) });
+    },
   });
 }
 
@@ -171,5 +182,45 @@ export function useRecordingUrl() {
   return useMutation({
     mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
       getRecordingUrl(debateId, filename, getPrivyIdentityToken),
+  });
+}
+
+export function useDebateMedia(debateId: string, enabled: boolean) {
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    queryKey: debateQueryKeys.media(debateId),
+    queryFn: () => getDebateMedia(debateId, getPrivyIdentityToken),
+    enabled,
+    refetchInterval: 5_000,
+  });
+}
+
+export function useRequestDebateMediaProcessing(debateId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: () => requestDebateMediaProcessing(debateId, getPrivyIdentityToken),
+    onSuccess: media => queryClient.setQueryData(debateQueryKeys.media(debateId), media),
+  });
+}
+
+export function useDebateMediaArtifactUrl() {
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ debateId, request }: { debateId: string; request: DebateMediaArtifactUrlRequest }) =>
+      getDebateMediaArtifactUrl(debateId, request, getPrivyIdentityToken),
+  });
+}
+
+export function useDebateTranscript(debateId: string, format: TranscriptFormat = 'json', enabled = true) {
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    queryKey: debateQueryKeys.transcript(debateId, format),
+    queryFn: () => getDebateTranscript(debateId, format, getPrivyIdentityToken),
+    enabled,
   });
 }
