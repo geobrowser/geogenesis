@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { usePendingMembershipSet } from '~/core/hooks/use-pending-memberships';
+import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
@@ -13,11 +14,13 @@ import { normId } from '~/core/utils/norm-id';
 import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
 
 import { ClaimATopicSection } from './claim-a-topic-section';
+import { FeaturedRankingsSection } from './featured-rankings-section';
 import { JoinSpacesSection } from './join-spaces-section';
 import { RecentlyClaimedSection } from './recently-claimed-section';
 
 export type ExploreSidePanelProps = {
   featuredSpaces: FeaturedSpace[];
+  featuredRankings: FeaturedRanking[];
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
   parentTopicOptions: ParentTopicOption[];
@@ -28,6 +31,7 @@ export type ExploreSidePanelProps = {
 
 export function ExploreSidePanel({
   featuredSpaces,
+  featuredRankings,
   unclaimedTopics,
   recentlyClaimedSpaces,
   parentTopicOptions,
@@ -51,6 +55,7 @@ export function ExploreSidePanel({
 
   const hasContent =
     joinableSpaces.length > 0 ||
+    featuredRankings.length > 0 ||
     unclaimedTopics.length > 0 ||
     recentlyClaimedSpaces.length > 0 ||
     communityCalls.length > 0;
@@ -62,6 +67,9 @@ export function ExploreSidePanel({
   const sections: { key: string; node: React.ReactNode }[] = [];
   if (joinableSpaces.length > 0) {
     sections.push({ key: 'join-spaces', node: <JoinSpacesSection spaces={joinableSpaces} /> });
+  }
+  if (featuredRankings.length > 0) {
+    sections.push({ key: 'featured-rankings', node: <FeaturedRankingsSection rankings={featuredRankings} /> });
   }
   if (unclaimedTopics.length > 0 || parentTopicOptions.length > 0) {
     sections.push({

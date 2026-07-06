@@ -1,6 +1,7 @@
 'use client';
 
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
+import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
@@ -13,6 +14,7 @@ import { ExploreSidePanel } from './explore-side-panel';
 type Props = {
   initialSpaceOptions: SpaceOption[];
   featuredSpaces: FeaturedSpace[];
+  featuredRankings: FeaturedRanking[];
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
   parentTopicOptions: ParentTopicOption[];
@@ -24,6 +26,7 @@ type Props = {
 export function ExplorePage({
   initialSpaceOptions,
   featuredSpaces,
+  featuredRankings,
   unclaimedTopics,
   recentlyClaimedSpaces,
   parentTopicOptions,
@@ -46,6 +49,7 @@ export function ExplorePage({
       <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
       <ExploreSidePanel
         featuredSpaces={featuredSpaces}
+        featuredRankings={featuredRankings}
         unclaimedTopics={unclaimedTopics}
         recentlyClaimedSpaces={recentlyClaimedSpaces}
         parentTopicOptions={parentTopicOptions}

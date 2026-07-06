@@ -5,6 +5,7 @@ import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
 import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
@@ -42,6 +43,7 @@ export default async function ExploreRoutePage() {
   );
   const recentlyClaimedPromise = fetchRecentlyClaimedSpaces().catch(() => [] as RecentlyClaimedSpace[]);
   const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+  const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
   const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
   const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
   const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
@@ -53,6 +55,7 @@ export default async function ExploreRoutePage() {
     browseRaw,
     recentlyClaimedSpaces,
     featuredSpaces,
+    featuredRankings,
     firstLevelSubtopics,
     parentTopicOptions,
     communityCalls,
@@ -61,6 +64,7 @@ export default async function ExploreRoutePage() {
     browsePromise,
     recentlyClaimedPromise,
     featuredSpacesPromise,
+    featuredRankingsPromise,
     firstLevelSubtopicsPromise,
     parentTopicOptionsPromise,
     communityCallsPromise,
@@ -120,6 +124,7 @@ export default async function ExploreRoutePage() {
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
       featuredSpaces={featuredSpaces}
+      featuredRankings={featuredRankings}
       unclaimedTopics={firstLevelSubtopics}
       recentlyClaimedSpaces={recentlyClaimedSpaces}
       parentTopicOptions={parentTopicOptions}
