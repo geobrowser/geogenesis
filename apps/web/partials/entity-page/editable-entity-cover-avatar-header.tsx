@@ -32,7 +32,7 @@ const TRANSITION = { duration: 0.15, ease: 'easeInOut' as const };
 // reads as sitting just inside the cover's curve instead of floating independently.
 export const COVER_MAX_WIDTH = 1192;
 export const COVER_BORDER_RADIUS = 12;
-export const CONTENT_MAX_WIDTH = COVER_MAX_WIDTH - 6 * COVER_BORDER_RADIUS;
+export const CONTENT_MAX_WIDTH = COVER_MAX_WIDTH - 4 * COVER_BORDER_RADIUS;
 
 // maxWidth is always COVER_MAX_WIDTH so the wrapper never animates horizontally.
 // When there's no cover the extra width is invisible (height is 0 or 40).
