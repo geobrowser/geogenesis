@@ -55,6 +55,8 @@ describe('fetchPendingSubtopicProposals', () => {
     restFetchMock.mockImplementation(({ path }: { path: string }) => {
       expect(path).toContain('actionTypes=Publish');
       expect(path).toContain('status=PROPOSED');
+      // Newest-first so a just-created proposal is never dropped by the scan limit.
+      expect(path).toContain('orderDirection=desc');
 
       return Effect.succeed({
         proposals: [

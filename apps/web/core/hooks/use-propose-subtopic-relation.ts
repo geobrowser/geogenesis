@@ -105,7 +105,14 @@ export function useProposeSubtopicRelation(spaceId: string) {
 
       queryClient.setQueryData<SubtopicChild[]>(key, current => update(current ?? []));
 
-      return () => queryClient.setQueryData<SubtopicChild[]>(key, previous);
+      return () => {
+        if (previous === undefined) {
+          // setQueryData(key, undefined) is a no-op, so drop the entry we created.
+          queryClient.removeQueries({ queryKey: key });
+        } else {
+          queryClient.setQueryData<SubtopicChild[]>(key, previous);
+        }
+      };
     },
     [isPersonalSpace, queryClient, spaceId]
   );
@@ -133,16 +140,15 @@ export function useProposeSubtopicRelation(spaceId: string) {
       const proposalName = `Add subtopic: ${childName ?? 'Untitled'} to ${parentName ?? 'topic'}`;
 
       try {
+        // makeProposal reports failures via onError (and the status bar) instead of throwing.
         await makeProposal({
           values: [],
           relations: [relation],
           spaceId,
           name: proposalName,
           onSuccess: () => invalidateSubtopics(parentEntityId),
+          onError: rollback,
         });
-      } catch (error) {
-        rollback();
-        throw error;
       } finally {
         setIsPending(false);
       }
@@ -193,10 +199,8 @@ export function useProposeSubtopicRelation(spaceId: string) {
           spaceId,
           name: proposalName,
           onSuccess: () => invalidateSubtopics(parentEntityId),
+          onError: rollback,
         });
-      } catch (error) {
-        rollback();
-        throw error;
       } finally {
         setIsPending(false);
       }
@@ -286,10 +290,8 @@ export function useProposeSubtopicRelation(spaceId: string) {
           spaceId,
           name: proposalName,
           onSuccess: () => invalidateSubtopics(parentEntityId),
+          onError: rollback,
         });
-      } catch (error) {
-        rollback();
-        throw error;
       } finally {
         setIsPending(false);
       }
