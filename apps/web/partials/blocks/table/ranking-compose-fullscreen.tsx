@@ -3,13 +3,13 @@
 import * as React from 'react';
 import type { CSSProperties } from 'react';
 
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { RemoveScroll } from 'react-remove-scroll';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
-import { rankingComposeRemoveScrollShardAtom } from '~/atoms';
+import { rankingComposeRemoveScrollShardAtom, rankingFullscreenActiveAtom } from '~/atoms';
 
 type Props = {
   children: React.ReactNode;
@@ -22,6 +22,12 @@ export function RankingComposeFullscreen({ children, style, coverNavbar = false 
   const removeScrollShard = useAtomValue(rankingComposeRemoveScrollShardAtom);
   const removeScrollShards = React.useMemo(() => (removeScrollShard ? [removeScrollShard] : []), [removeScrollShard]);
   const lockScroll = isMobile;
+
+  const setRankingFullscreenActive = useSetAtom(rankingFullscreenActiveAtom);
+  React.useEffect(() => {
+    setRankingFullscreenActive(true);
+    return () => setRankingFullscreenActive(false);
+  }, [setRankingFullscreenActive]);
 
   React.useLayoutEffect(() => {
     if (!coverNavbar) return;
