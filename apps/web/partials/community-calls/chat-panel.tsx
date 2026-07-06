@@ -5,6 +5,7 @@ import * as React from 'react';
 import Textarea from 'react-textarea-autosize';
 
 import { formatRelativeTime } from '~/core/community-calls/format';
+import { formatChatMessageLinks } from '~/core/community-calls/format-chat-links';
 import { ChatEntry } from '~/core/community-calls/use-persistent-chat';
 
 import { Avatar } from '~/design-system/avatar';
@@ -114,7 +115,9 @@ function ChatRow({ entry, showHeader }: { entry: ChatEntry; showHeader: boolean 
             <span className="text-footnote text-grey-03">{formatRelativeTime(entry.timestamp)}</span>
           </div>
         )}
-        <p className="text-metadata break-words whitespace-pre-wrap text-text">{entry.content}</p>
+        <p className="text-metadata break-words whitespace-pre-wrap text-text">
+          {formatChatMessageLinks(entry.content)}
+        </p>
       </div>
     </li>
   );

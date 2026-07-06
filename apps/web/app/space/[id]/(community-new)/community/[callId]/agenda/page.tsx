@@ -3,6 +3,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 import { notFound } from 'next/navigation';
 
+import { CALL_SCHEMA } from '~/core/community-calls/constants';
 import { getEntity } from '~/core/io/queries';
 
 import { AgendaEditor } from '~/partials/community-calls/agenda-editor';
@@ -31,12 +32,17 @@ export default async function CommunityCallAgendaPage(props: Props) {
     notFound();
   }
 
+  const autoPublishAheadValue = entity.values.find(
+    v => v.property.id === CALL_SCHEMA.AUTO_PUBLISH_AHEAD_PROPERTY
+  )?.value;
+
   return (
     <AgendaEditor
       spaceId={params.id}
       callId={params.callId}
       seriesName={entity.name ?? 'Untitled call'}
       occurrence={{ startMs, endMs }}
+      autoPublishAhead={autoPublishAheadValue ? Number(autoPublishAheadValue) : 0}
     />
   );
 }

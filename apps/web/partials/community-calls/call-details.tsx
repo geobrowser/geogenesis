@@ -4,10 +4,22 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { deleteRecording, getCallAttendees, getCallChat, listRecordings } from '~/core/community-calls/api';
+import {
+  deleteRecording,
+  getCallAttendees,
+  getCallChat,
+  getCallTranscript,
+  listRecordings,
+} from '~/core/community-calls/api';
 import { OCCURRENCE_MATCH_TOLERANCE_MS, parseRoomName } from '~/core/community-calls/constants';
 import { formatDateTime, formatDuration, formatFullDate, formatTimeRange } from '~/core/community-calls/format';
-import { CallAttendee, CallChatLogMessage, Occurrence, Recording } from '~/core/community-calls/types';
+import {
+  CallAttendee,
+  CallChatLogMessage,
+  Occurrence,
+  Recording,
+  TranscriptSegment,
+} from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { normId } from '~/core/utils/norm-id';
@@ -91,6 +103,13 @@ export function CallDetails({
   const chat = chatMessages.filter(m => m.senderIdentity !== SYSTEM_SENDER_IDENTITY);
   const callLog = chatMessages.filter(m => m.senderIdentity === SYSTEM_SENDER_IDENTITY);
 
+  const { data: transcriptData } = useQuery({
+    queryKey: ['community-call-details-transcript', spaceId, callId, occurrence.startMs],
+    queryFn: () => getCallTranscript({ spaceId, callId, occurrenceStart: occurrence.startMs }),
+    enabled: ended,
+  });
+  const transcriptSegments = transcriptData?.segments ?? [];
+
   if (accessLoading) {
     return <p className="p-8 text-metadata text-grey-04">Loading…</p>;
   }
@@ -134,6 +153,7 @@ export function CallDetails({
         <OverviewTab
           recordingsCount={recordings.length}
           attendeesCount={attendees.length}
+          transcriptCount={transcriptSegments.length}
           chatCount={chat.length}
           callLogCount={callLog.length}
         />
@@ -142,9 +162,9 @@ export function CallDetails({
         <RecordingsTab recordings={recordings} getToken={getToken} onChanged={refetchRecordings} />
       )}
       {tab === 'attendees' && <AttendeesTab attendees={attendees} />}
-      {tab === 'transcript' && <TranscriptTab />}
+      {tab === 'transcript' && <TranscriptTab segments={transcriptSegments} />}
       {tab === 'chat' && <ChatLogTab messages={chat} empty="No chat messages for this occurrence." />}
-      {tab === 'call-log' && <ChatLogTab messages={callLog} empty="No call log entries for this occurrence." />}
+      {tab === 'call-log' && <CallLogTab messages={callLog} />}
     </div>
   );
 }
@@ -152,11 +172,13 @@ export function CallDetails({
 function OverviewTab({
   recordingsCount,
   attendeesCount,
+  transcriptCount,
   chatCount,
   callLogCount,
 }: {
   recordingsCount: number;
   attendeesCount: number;
+  transcriptCount: number;
   chatCount: number;
   callLogCount: number;
 }) {
@@ -164,7 +186,7 @@ function OverviewTab({
     { label: 'Call ended', ready: true },
     { label: `${recordingsCount} recording${recordingsCount === 1 ? '' : 's'}`, ready: recordingsCount > 0 },
     { label: `${attendeesCount} attendee${attendeesCount === 1 ? '' : 's'}`, ready: attendeesCount > 0 },
-    { label: 'Transcript', ready: false },
+    { label: `${transcriptCount} transcript segment${transcriptCount === 1 ? '' : 's'}`, ready: transcriptCount > 0 },
     { label: `${chatCount} chat message${chatCount === 1 ? '' : 's'}`, ready: chatCount > 0 },
     { label: `${callLogCount} call log ${callLogCount === 1 ? 'entry' : 'entries'}`, ready: callLogCount > 0 },
   ];
@@ -278,11 +300,23 @@ function AttendeesTab({ attendees }: { attendees: CallAttendee[] }) {
   );
 }
 
-function TranscriptTab() {
+function TranscriptTab({ segments }: { segments: TranscriptSegment[] }) {
+  if (segments.length === 0) {
+    return <p className="text-metadata text-grey-04">No transcript for this occurrence.</p>;
+  }
+
   return (
-    <p className="text-metadata text-grey-04">
-      Transcripts aren’t available yet — they’re served by a separate service this app doesn’t have a route to.
-    </p>
+    <ul className="flex flex-col gap-2">
+      {segments.map(s => (
+        <li key={s.id} className="flex flex-col gap-0.5 rounded-lg border border-grey-02 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-metadataMedium text-text">{s.speakerName}</span>
+            <span className="text-footnote text-grey-04">{formatDateTime(s.timestamp)}</span>
+          </div>
+          <span className="text-metadata text-grey-04">{s.text}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -300,6 +334,26 @@ function ChatLogTab({ messages, empty }: { messages: CallChatLogMessage[]; empty
             <span className="text-footnote text-grey-04">{formatDateTime(m.timestamp)}</span>
           </div>
           <span className="text-metadata text-grey-04">{m.content}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** System events (join/leave/mute/etc.) rendered as a compact log line with the actor bolded inline. */
+function CallLogTab({ messages }: { messages: CallChatLogMessage[] }) {
+  if (messages.length === 0) {
+    return <p className="text-metadata text-grey-04">No call log entries for this occurrence.</p>;
+  }
+
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {messages.map(m => (
+        <li key={m.id} className="flex items-center justify-between gap-2 rounded-lg border border-grey-02 px-3 py-2">
+          <span className="text-metadata text-grey-04">
+            <span className="text-metadataMedium text-text">{m.senderName}</span> {m.content}
+          </span>
+          <span className="shrink-0 text-footnote text-grey-04">{formatDateTime(m.timestamp)}</span>
         </li>
       ))}
     </ul>

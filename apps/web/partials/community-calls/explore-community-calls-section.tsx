@@ -22,6 +22,7 @@ import { Select } from '~/design-system/select';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
 
+import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
 
 type Row = { call: ExploreCall; occ: Occurrence };
@@ -215,9 +216,20 @@ function UpcomingCard({ row, isMember, pending }: { row: Row; isMember: boolean;
         <Title row={row} />
         <CardAction call={row.call} isMember={isMember} pending={pending} showRsvp />
       </div>
-      <div className="mt-6 flex items-center justify-between gap-2">
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
         <span className="shrink-0 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
-        <SpaceChip call={row.call} />
+        <div className="flex items-center gap-2">
+          <AddToCalendarMenu
+            spaceId={row.call.spaceId}
+            callId={row.call.callId}
+            name={row.call.name}
+            description={row.call.description}
+            startMs={row.occ.startMs}
+            endMs={row.occ.endMs}
+            schedule={row.call.schedule}
+          />
+          <SpaceChip call={row.call} />
+        </div>
       </div>
     </CardShell>
   );

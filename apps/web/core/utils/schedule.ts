@@ -30,6 +30,10 @@ const ICAL_DATE_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/;
 
 const KNOWN_PROPS = new Set(['DTSTART', 'DTEND', 'RRULE']);
 
+/** Matches curator's bounds (`community-call-form/validation.ts`) for a single occurrence's length. */
+export const MIN_CALL_DURATION_MINUTES = 15;
+export const MAX_CALL_DURATION_MINUTES = 150;
+
 export interface ScheduleValidationResult {
   valid: boolean;
   errors: string[];
@@ -158,8 +162,15 @@ function validateRRule(rrule: string): string[] {
 /**
  * Validates an iCalendar schedule string.
  * Requires at least a DTSTART line. DTEND and RRULE are optional.
+ *
+ * `requireFutureStart` should only be set for brand-new calls — an existing recurring
+ * series' DTSTART is its first-ever occurrence and can legitimately be in the past while
+ * still producing valid future occurrences, so edits must not fail this check.
  */
-export function validateSchedule(schedule: string): ScheduleValidationResult {
+export function validateSchedule(
+  schedule: string,
+  options?: { requireFutureStart?: boolean }
+): ScheduleValidationResult {
   const errors: string[] = [];
 
   if (!schedule.trim()) {
@@ -195,6 +206,8 @@ export function validateSchedule(schedule: string): ScheduleValidationResult {
     errors.push('DTSTART is required');
   } else if (!isValidICalDate(props.DTSTART)) {
     errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSSZ`);
+  } else if (options?.requireFutureStart && parseICalDate(props.DTSTART)!.getTime() <= Date.now()) {
+    errors.push('Start time must be in the future');
   }
 
   if (props.DTEND) {
@@ -205,6 +218,15 @@ export function validateSchedule(schedule: string): ScheduleValidationResult {
       const end = parseICalDate(props.DTEND)!;
       if (end <= start) {
         errors.push('DTEND must be after DTSTART');
+      } else {
+        const durationMinutes = (end.getTime() - start.getTime()) / 60_000;
+        if (durationMinutes < MIN_CALL_DURATION_MINUTES) {
+          errors.push(`Call must be at least ${MIN_CALL_DURATION_MINUTES} minutes long`);
+        } else if (durationMinutes > MAX_CALL_DURATION_MINUTES) {
+          const h = Math.floor(MAX_CALL_DURATION_MINUTES / 60);
+          const m = MAX_CALL_DURATION_MINUTES % 60;
+          errors.push(`Call can't be longer than ${h}h${m ? ` ${m}m` : ''}`);
+        }
       }
     }
   }
@@ -251,6 +273,18 @@ function parseRRule(rrule: string): { freq?: string; byDay?: string[]; interval?
   }
 
   return result;
+}
+
+/** Raw `RRULE:` value from a schedule string (e.g. "FREQ=WEEKLY;BYDAY=TH"), for callers that
+ *  need to pass it through verbatim (e.g. Google Calendar's `recur` deep-link param) rather
+ *  than the decomposed fields `parseSchedule` returns. */
+export function extractRawRRule(schedule: string): string | undefined {
+  for (const line of schedule.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    if (line.slice(0, colonIdx).trim() === 'RRULE') return line.slice(colonIdx + 1).trim();
+  }
+  return undefined;
 }
 
 export interface ParsedSchedule {

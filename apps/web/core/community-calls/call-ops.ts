@@ -248,6 +248,43 @@ export function buildDeleteCallOps({
   ];
 }
 
+/** Unsets a published occurrence event's core fields, effectively deleting it from listings (not a hard delete). */
+export function buildDeleteOccurrenceOps({
+  entityId,
+  spaceId,
+  name,
+}: {
+  entityId: string;
+  spaceId: string;
+  name: string;
+}): Value[] {
+  const entityRef = { id: entityId, name };
+
+  return [
+    buildUnsetValue({
+      entityRef,
+      spaceId,
+      propertyId: SystemIds.NAME_PROPERTY,
+      propertyName: 'Name',
+      dataType: 'TEXT',
+    }),
+    buildUnsetValue({
+      entityRef,
+      spaceId,
+      propertyId: EVENT_SCHEMA.START_TIME_PROPERTY,
+      propertyName: 'Start time',
+      dataType: 'DATETIME',
+    }),
+    buildUnsetValue({
+      entityRef,
+      spaceId,
+      propertyId: EVENT_SCHEMA.END_TIME_PROPERTY,
+      propertyName: 'End time',
+      dataType: 'DATETIME',
+    }),
+  ];
+}
+
 /**
  * Mints (or updates) a `Community call event` entity for one occurrence: Name/Start
  * time/End time, a `Community call parent` relation back to the series (create only —

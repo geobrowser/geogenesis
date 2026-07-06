@@ -11,7 +11,7 @@ import { useRouter } from 'next/navigation';
 import { listRecordings, notifyCommunityCallCancel, subscribeToCall } from '~/core/community-calls/api';
 import { buildDeleteCallOps } from '~/core/community-calls/call-ops';
 import { agendaHref, buildRoomName, detailsHref, liveCallHref } from '~/core/community-calls/constants';
-import { buildIcsHref, formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
+import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
 import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurrences';
 import { CallSeries, Occurrence, Recording } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
@@ -26,6 +26,7 @@ import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Plus } from '~/design-system/icons/plus';
 import { Time } from '~/design-system/icons/time';
 
+import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { RecordingPlayer } from './recording-player';
 
 type Row = { call: CallSeries; occ: Occurrence };
@@ -210,19 +211,22 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
   const onDelete = async () => {
     setDeleting(true);
     const values = buildDeleteCallOps({ entityId: row.call.callId, spaceId: row.call.spaceId, name: row.call.name });
+
+    // Fire before the on-chain write starts, not in onSuccess — curator-backend needs to
+    // read the pre-delete `meetingTime` to send the cancellation, and that value may
+    // already be gone by the time a post-publish callback runs.
+    const notifyToken = await getToken();
+    if (notifyToken)
+      await notifyCommunityCallCancel({ spaceId: row.call.spaceId, callId: row.call.callId }, notifyToken).catch(
+        () => {}
+      );
+
     await makeProposal({
       values,
       relations: [],
       spaceId: row.call.spaceId,
       name: `Delete ${row.call.name}`,
-      onSuccess: async () => {
-        const token = await getToken();
-        if (token)
-          await notifyCommunityCallCancel({ spaceId: row.call.spaceId, callId: row.call.callId }, token).catch(
-            () => {}
-          );
-        router.refresh();
-      },
+      onSuccess: () => router.refresh(),
       onError: () => {
         setDeleting(false);
         setConfirmingDelete(false);
@@ -254,19 +258,16 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
       <div className="flex items-start justify-between">
         <CallTitle row={row} />
         <div className="flex items-center gap-2">
-          <a
-            href={buildIcsHref({
-              callId: row.call.callId,
-              name: row.call.name,
-              description: row.call.description,
-              startMs: row.occ.startMs,
-              endMs: row.occ.endMs,
-            })}
-            download={`${row.call.name}.ics`}
-          >
-            <SmallButton>Add to calendar</SmallButton>
-          </a>
-          <SmallButton onClick={onRsvp}>RSVP via email</SmallButton>
+          <AddToCalendarMenu
+            spaceId={row.call.spaceId}
+            callId={row.call.callId}
+            name={row.call.name}
+            description={row.call.description}
+            startMs={row.occ.startMs}
+            endMs={row.occ.endMs}
+            schedule={row.call.schedule}
+          />
+          <SmallButton onClick={onRsvp}>RSVP</SmallButton>
           <Dropdown
             trigger={<Ellipsis />}
             align="end"

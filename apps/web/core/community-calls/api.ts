@@ -13,6 +13,7 @@ import {
   OccurrenceDraft,
   Recording,
   SubscriptionStatus,
+  TranscriptSegment,
   ViewerToken,
 } from './types';
 
@@ -242,5 +243,21 @@ export function getLiveParticipants(args: {
 }): Promise<{ participants: CallParticipant[]; isEnded: boolean }> {
   return call(`community-call/participants/${args.spaceId}/${args.callId}/${args.occurrenceStart}`, {
     method: 'GET',
+  });
+}
+
+/**
+ * Speaker-attributed transcript for one occurrence, served by rapporteur — a
+ * separate upstream from curator-backend, so this bypasses `call()` (which
+ * always targets curator-backend) and hits the dedicated proxy route directly.
+ */
+export function getCallTranscript(args: {
+  spaceId: string;
+  callId: string;
+  occurrenceStart: number;
+}): Promise<{ segments: TranscriptSegment[] }> {
+  return fetch(`/api/community-call/transcripts/${args.spaceId}/${args.callId}/${args.occurrenceStart}`).then(res => {
+    if (!res.ok) throw new Error(`transcripts fetch failed (${res.status})`);
+    return res.json();
   });
 }

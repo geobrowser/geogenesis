@@ -122,6 +122,23 @@ export type OccurrenceAgendaBlock = {
   position: string;
 };
 
+/**
+ * Speaker-attributed transcript segment, served by rapporteur — a separate service
+ * from curator-backend (GET /transcripts/:spaceId/:callId/:occurrenceStart, proxied
+ * via `app/api/community-call/transcripts/[spaceId]/[callId]/[occurrenceStart]`).
+ */
+export type TranscriptSegment = {
+  id: string;
+  roomName: string;
+  speakerIdentity: string;
+  speakerName: string;
+  text: string;
+  /** Call-relative offset in seconds. */
+  startTime: number;
+  /** Absolute epoch ms. */
+  timestamp: number;
+};
+
 /** Neo4j-backed pre-publish agenda draft (GET/PUT/DELETE /community-call/occurrence-draft). */
 export type OccurrenceDraft = {
   spaceId: string;

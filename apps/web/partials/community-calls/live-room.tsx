@@ -18,7 +18,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
-import { Track } from 'livekit-client';
+import { RoomEvent, Track } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import {
@@ -30,12 +30,15 @@ import {
   stopRecording,
 } from '~/core/community-calls/api';
 import { LAST_EDITOR_CONFIRM_DELAY_MS } from '~/core/community-calls/constants';
+import { ExtendedReconnectPolicy } from '~/core/community-calls/extended-reconnect-policy';
+import { formatDuration } from '~/core/community-calls/format';
 import { Recording, parseParticipantMetadata } from '~/core/community-calls/types';
 import { useCallTimeUp } from '~/core/community-calls/use-call-time-up';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persistent-chat';
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
+import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
 import { Avatar } from '~/design-system/avatar';
@@ -85,6 +88,11 @@ export function LiveRoom({
   video,
   backHref,
 }: Props) {
+  // The default LiveKit reconnect policy gives up after ~37s; ours retries for up to
+  // 3 minutes to ride out transient server issues (e.g. deploys) or brief network drops.
+  // Memoized so `<LiveKitRoom>` doesn't tear down/recreate its Room on every re-render.
+  const roomOptions = React.useMemo(() => ({ reconnectPolicy: new ExtendedReconnectPolicy() }), []);
+
   return (
     <LiveKitRoom
       token={token}
@@ -92,6 +100,7 @@ export function LiveRoom({
       connect
       audio={audio}
       video={video}
+      options={roomOptions}
       data-lk-theme="default"
       // @livekit/components-styles ships its own `.lk-room-container { height: ... }`
       // rule that otherwise wins the cascade over this plain Tailwind class (it's
@@ -171,10 +180,34 @@ function RoomBody({
 
   const room = useRoomContext();
   const { getToken } = useCommunityCallIdentityToken();
-  const [recording, setRecording] = React.useState(false);
-  const [egressId, setEgressId] = React.useState<string | null>(null);
+  // Synced from LiveKit room metadata (curator-backend's egress webhook handler writes
+  // it) rather than local-only state, so every participant — editors and viewers alike,
+  // including one who joins mid-recording — sees an accurate indicator.
+  const { recording, egressId, recordingStartedAt, markRecordingStarted, markRecordingStopped } =
+    useRecordingMetadataSync(room);
   const isActiveEditor = isEditor && !isViewer;
   const canControlRecording = isActiveEditor && Boolean(egressId);
+
+  // Moderation's "stop screen share" only mutes the track server-side, which doesn't
+  // stop the browser's own capture (its "you're sharing your screen" indicator stays
+  // up) — the moderator's client also sends this data message so the sharer's own
+  // client can fully release the capture via `setScreenShareEnabled(false)`.
+  React.useEffect(() => {
+    const onDataReceived = (payload: Uint8Array) => {
+      try {
+        const message = JSON.parse(new TextDecoder().decode(payload));
+        if (message.type === 'stop-screen-share') {
+          room.localParticipant.setScreenShareEnabled(false);
+        }
+      } catch {
+        // Ignore non-JSON messages
+      }
+    };
+    room.on(RoomEvent.DataReceived, onDataReceived);
+    return () => {
+      room.off(RoomEvent.DataReceived, onDataReceived);
+    };
+  }, [room]);
 
   const [leaveDialogOpen, setLeaveDialogOpen] = React.useState(false);
   const [endCallBusy, setEndCallBusy] = React.useState(false);
@@ -276,8 +309,7 @@ function RoomBody({
       const token = await getToken();
       if (token && egressId) {
         await stopRecording({ egressId, room: roomName }, token).catch(() => {});
-        setRecording(false);
-        setEgressId(null);
+        markRecordingStopped();
       }
       onLeave();
     } finally {
@@ -378,16 +410,24 @@ function RoomBody({
 
       <div className="flex flex-wrap items-center justify-between gap-y-2 border-t border-grey-02 px-4 py-3">
         <div className="flex items-center gap-2">
-          {isActiveEditor && (
+          {isActiveEditor ? (
             <RecordButton
               roomName={roomName}
               recording={recording}
               egressId={egressId}
+              recordingStartedAt={recordingStartedAt}
               onRecordingChange={(next, nextEgressId) => {
-                setRecording(next);
-                setEgressId(nextEgressId);
+                if (next && nextEgressId) markRecordingStarted(nextEgressId);
+                else markRecordingStopped();
               }}
             />
+          ) : (
+            recording && (
+              <span className="flex items-center gap-1.5 text-metadata text-red-01">
+                <span className="size-2 animate-pulse rounded-full bg-red-01" />
+                Recording in progress
+              </span>
+            )
           )}
         </div>
         {!isViewer && (
@@ -420,7 +460,11 @@ function RoomBody({
           </DisconnectButton>
         )}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-metadata text-grey-04">
+          <button
+            onClick={() => openSidebarTab('people')}
+            aria-label="Show participants"
+            className="flex items-center gap-2 text-metadata text-grey-04"
+          >
             <div className="flex -space-x-1.5">
               {participants.slice(0, 4).map(p => (
                 <span key={p.identity} className="size-5 overflow-hidden rounded-full ring-1 ring-white">
@@ -429,7 +473,7 @@ function RoomBody({
               ))}
             </div>
             {speakers} participants · {watchers} watchers
-          </div>
+          </button>
           <button
             onClick={() => openSidebarTab(sidebarTab ? null : 'chat')}
             aria-label={
@@ -573,30 +617,65 @@ function RecordButton({
   roomName,
   recording,
   egressId,
+  recordingStartedAt,
   onRecordingChange,
 }: {
   roomName: string;
-  // Lifted to RoomBody (not room-metadata-synced — other clients won't see the
-  // recording flag flip) so the leave-call dialog can offer "stop & leave".
+  // Lifted to RoomBody, synced from LiveKit room metadata so the leave-call dialog
+  // can offer "stop & leave" and other participants see the same state.
   recording: boolean;
   egressId: string | null;
+  recordingStartedAt: number | null;
   onRecordingChange: (recording: boolean, egressId: string | null) => void;
 }) {
   const { identityToken, getToken } = useCommunityCallIdentityToken();
   const [busy, setBusy] = React.useState(false);
   const [roomRecordings, setRoomRecordings] = React.useState<Recording[]>([]);
+  const [elapsedSec, setElapsedSec] = React.useState(0);
+  const [processing, setProcessing] = React.useState(false);
 
   const loadRecordings = React.useCallback(async () => {
-    if (!identityToken) return;
+    if (!identityToken) return [] as Recording[];
     const token = await getToken();
-    if (!token) return;
+    if (!token) return [] as Recording[];
     const { recordings } = await listRecordings(token);
-    setRoomRecordings(recordings.filter(r => r.roomName === roomName));
+    const matched = recordings.filter(r => r.roomName === roomName);
+    setRoomRecordings(matched);
+    return matched;
   }, [identityToken, getToken, roomName]);
 
   React.useEffect(() => {
     loadRecordings();
   }, [loadRecordings]);
+
+  // Live duration ticker while recording.
+  React.useEffect(() => {
+    if (!recording || recordingStartedAt === null) {
+      setElapsedSec(0);
+      return;
+    }
+    const id = window.setInterval(() => setElapsedSec(Math.floor((Date.now() - recordingStartedAt) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, [recording, recordingStartedAt]);
+
+  // Egress finalization isn't instant — poll until the just-stopped recording actually
+  // shows up in the list (matched by count, since `Recording` carries no egress id), with
+  // a hard attempt cap so a slow/failed egress doesn't spin the indicator forever.
+  const pollUntilFinalized = React.useCallback(
+    (countBefore: number) => {
+      setProcessing(true);
+      let attempts = 0;
+      const id = window.setInterval(async () => {
+        attempts++;
+        const matched = await loadRecordings();
+        if (matched.length > countBefore || attempts >= 20) {
+          window.clearInterval(id);
+          setProcessing(false);
+        }
+      }, 3000);
+    },
+    [loadRecordings]
+  );
 
   const toggle = async () => {
     if (!identityToken || busy) return;
@@ -605,9 +684,10 @@ function RecordButton({
       const token = await getToken();
       if (!token) return;
       if (recording && egressId) {
+        const countBefore = roomRecordings.length;
         await stopRecording({ egressId, room: roomName }, token);
         onRecordingChange(false, null);
-        await loadRecordings();
+        pollUntilFinalized(countBefore);
       } else {
         const { egressId: newEgressId } = await startRecording({ room: roomName }, token);
         onRecordingChange(true, newEgressId);
@@ -622,6 +702,10 @@ function RecordButton({
       <Button variant={recording ? 'error' : 'secondary'} disabled={busy} onClick={toggle}>
         {recording ? 'Stop recording' : 'Record'}
       </Button>
+      {recording && recordingStartedAt !== null && (
+        <span className="text-metadata text-grey-04 tabular-nums">{formatDuration(elapsedSec)}</span>
+      )}
+      {processing && <span className="text-metadata text-grey-04">Processing…</span>}
       {!recording && roomRecordings.length > 0 && (
         <Dialog
           trigger={<Button variant="secondary">Review</Button>}

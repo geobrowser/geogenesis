@@ -1,29 +1,59 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import Textarea from 'react-textarea-autosize';
 
 import { parseAgendaText, serializeAgendaBlocks } from '~/core/community-calls/agenda';
-import { deleteOccurrenceDraft, getOccurrenceDraft, upsertOccurrenceDraft } from '~/core/community-calls/api';
-import { buildPublishOccurrenceOps } from '~/core/community-calls/call-ops';
+import {
+  deleteOccurrenceDraft,
+  getOccurrenceDraft,
+  reconcileAutoPublish,
+  upsertOccurrenceDraft,
+} from '~/core/community-calls/api';
+import { buildDeleteOccurrenceOps, buildPublishOccurrenceOps } from '~/core/community-calls/call-ops';
 import { LIVE_MEETING_GRACE_MINUTES } from '~/core/community-calls/constants';
 import { fetchOccurrenceEvent } from '~/core/community-calls/fetch-occurrence-event';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
-import { Occurrence } from '~/core/community-calls/types';
+import { Occurrence, OccurrenceAgendaBlock } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { MAX_CALL_DURATION_MINUTES, MIN_CALL_DURATION_MINUTES } from '~/core/utils/schedule';
 
-import { Button } from '~/design-system/button';
+import { Button, SmallButton } from '~/design-system/button';
 
 type Status = 'predicted' | 'draft' | 'published' | 'unpublished';
 
 const SAVE_DEBOUNCE_MS = 1000;
 const DELETE_DRAFT_RETRIES = 2;
+
+/** UTC `YYYY-MM-DD` for a `<input type="date">`. */
+function msToDateInput(ms: number): string {
+  const d = new Date(ms);
+  const y = d.getUTCFullYear().toString().padStart(4, '0');
+  const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = d.getUTCDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** UTC `HH:MM` for a `<input type="time">`. */
+function msToTimeInput(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+}
+
+function dateTimeInputToMs(dateStr: string, timeStr: string): number | null {
+  if (!dateStr || !timeStr) return null;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const [h, min] = timeStr.split(':').map(Number);
+  if (![y, m, d, h, min].every(Number.isFinite)) return null;
+  return Date.UTC(y, m - 1, d, h, min);
+}
 
 async function deleteDraftBestEffort(
   args: { spaceId: string; callId: string; occurrenceStart: number },
@@ -44,23 +74,34 @@ export function AgendaEditor({
   callId,
   seriesName,
   occurrence,
+  autoPublishAhead,
 }: {
   spaceId: string;
   callId: string;
   seriesName: string;
   occurrence: Occurrence;
+  /** Series' `Auto publish ahead` setting — a republish nudge is only useful when it's > 0. */
+  autoPublishAhead: number;
 }) {
   const { isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
   const { identityToken, getToken } = useCommunityCallIdentityToken();
   const { makeProposal } = usePublish();
   const [, setToast] = useToast();
+  const queryClient = useQueryClient();
 
-  const locked = Date.now() > occurrence.endMs + LIVE_MEETING_GRACE_MINUTES * 60 * 1000;
+  const pastGrace = Date.now() > occurrence.endMs + LIVE_MEETING_GRACE_MINUTES * 60 * 1000;
+  const notYetStarted = Date.now() < occurrence.startMs;
 
+  const eventQueryKey = ['community-call-occurrence-event', spaceId, callId, occurrence.startMs];
   const { data: publishedEvent, isFetched: publishedFetched } = useQuery({
-    queryKey: ['community-call-occurrence-event', spaceId, callId, occurrence.startMs],
+    queryKey: eventQueryKey,
     queryFn: () => fetchOccurrenceEvent(callId, spaceId, occurrence.startMs),
   });
+
+  // Only lock once a draft is both past grace AND already published — otherwise an
+  // occurrence that never got published becomes permanently unsavable/unpublishable the
+  // moment grace elapses, with no way to recover it. Matches curator's own lock condition.
+  const locked = pastGrace && Boolean(publishedEvent);
 
   // Drafts only exist for an editor composing an unpublished/in-progress occurrence — everyone
   // else (locked occurrences, non-editors, or before access-control resolves) has no draft to
@@ -78,9 +119,34 @@ export function AgendaEditor({
   });
 
   const [text, setText] = React.useState<string | null>(null);
+  const [startOverride, setStartOverride] = React.useState<number | null>(null);
+  const [endOverride, setEndOverride] = React.useState<number | null>(null);
   const [publishing, setPublishing] = React.useState(false);
   const [savingDraft, setSavingDraft] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const initializedRef = React.useRef(false);
+
+  const effectiveStart = startOverride ?? occurrence.startMs;
+  const effectiveEnd = endOverride ?? occurrence.endMs;
+  const rescheduled = startOverride !== null || endOverride !== null;
+
+  // Curator enforces the same bounds inline and disables Save/Publish on violation —
+  // only relevant once the occurrence has actually been rescheduled away from its
+  // predicted RRULE slot, which is already duration-valid by construction.
+  const rescheduleError = React.useMemo(() => {
+    if (!rescheduled) return null;
+    if (effectiveStart <= Date.now()) return 'Start time must be in the future.';
+    const durationMinutes = (effectiveEnd - effectiveStart) / 60_000;
+    if (durationMinutes < MIN_CALL_DURATION_MINUTES)
+      return `Call must be at least ${MIN_CALL_DURATION_MINUTES} minutes long.`;
+    if (durationMinutes > MAX_CALL_DURATION_MINUTES) {
+      const h = Math.floor(MAX_CALL_DURATION_MINUTES / 60);
+      const m = MAX_CALL_DURATION_MINUTES % 60;
+      return `Call can't be longer than ${h}h${m ? ` ${m}m` : ''}.`;
+    }
+    return null;
+  }, [rescheduled, effectiveStart, effectiveEnd]);
 
   const publishedText = React.useCallback(() => {
     if (!publishedEvent) return '';
@@ -100,6 +166,8 @@ export function AgendaEditor({
     if (draftEnabled && !draftFetched) return;
     const draftText = draft?.agendaBlocks?.length ? serializeAgendaBlocks(draft.agendaBlocks) : '';
     setText(draftText || publishedText());
+    setStartOverride(draft?.startOverride ?? null);
+    setEndOverride(draft?.endOverride ?? null);
     initializedRef.current = true;
   }, [draft, draftFetched, draftEnabled, accessLoading, publishedFetched, publishedText]);
 
@@ -112,27 +180,107 @@ export function AgendaEditor({
   }, [text, publishedEvent, publishedText]);
 
   const saveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The last debounced-but-not-yet-sent payload — read by the unmount/beforeunload
+  // guards below so an in-app navigation or tab close can't silently drop it.
+  const pendingPayloadRef = React.useRef<{
+    agendaBlocks: OccurrenceAgendaBlock[];
+    startOverride: number | null;
+    endOverride: number | null;
+  } | null>(null);
 
-  const onChangeText = (next: string) => {
-    setText(next);
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
+  const flushSave = React.useCallback(
+    async (payload: {
+      agendaBlocks: OccurrenceAgendaBlock[];
+      startOverride: number | null;
+      endOverride: number | null;
+    }) => {
       const token = await getToken();
       if (!token) return;
       setSavingDraft(true);
-      await upsertOccurrenceDraft(
-        {
-          spaceId,
-          callId,
-          occurrenceStart: occurrence.startMs,
-          agendaBlocks: parseAgendaText(next),
-          startOverride: null,
-          endOverride: null,
-        },
-        token
-      ).catch(() => {});
+      await upsertOccurrenceDraft({ spaceId, callId, occurrenceStart: occurrence.startMs, ...payload }, token).catch(
+        () => {}
+      );
       setSavingDraft(false);
-    }, SAVE_DEBOUNCE_MS);
+      pendingPayloadRef.current = null;
+    },
+    [spaceId, callId, occurrence.startMs, getToken]
+  );
+
+  const scheduleSave = (args: { text: string; startOverride: number | null; endOverride: number | null }) => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    const payload = {
+      agendaBlocks: parseAgendaText(args.text),
+      startOverride: args.startOverride,
+      endOverride: args.endOverride,
+    };
+    pendingPayloadRef.current = payload;
+    saveTimerRef.current = setTimeout(() => flushSave(payload), SAVE_DEBOUNCE_MS);
+  };
+
+  // Curator blocks in-app navigation outright on unsaved changes via `useBlocker` +
+  // `beforeunload`; Next.js App Router has no equivalent route-block hook. Instead of
+  // literally replicating the block, close the same data-loss window: flush any pending
+  // debounced save immediately when this page unmounts (no state updates here, the
+  // component is already gone), and warn on tab-close/refresh while a save is pending.
+  React.useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      const payload = pendingPayloadRef.current;
+      if (!payload) return;
+      getToken().then(token => {
+        if (!token) return;
+        upsertOccurrenceDraft({ spaceId, callId, occurrenceStart: occurrence.startMs, ...payload }, token).catch(
+          () => {}
+        );
+      });
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!pendingPayloadRef.current) return;
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, []);
+
+  const onChangeText = (next: string) => {
+    setText(next);
+    scheduleSave({ text: next, startOverride, endOverride });
+  };
+
+  // Changing the start date/time shifts the end by the same amount, keeping duration
+  // fixed — the end time can then be adjusted independently.
+  const onChangeStartDate = (dateStr: string) => {
+    const nextStart = dateTimeInputToMs(dateStr, msToTimeInput(effectiveStart));
+    if (nextStart === null) return;
+    const duration = effectiveEnd - effectiveStart;
+    setStartOverride(nextStart);
+    setEndOverride(nextStart + duration);
+    scheduleSave({ text: text ?? '', startOverride: nextStart, endOverride: nextStart + duration });
+  };
+
+  const onChangeStartTime = (timeStr: string) => {
+    const nextStart = dateTimeInputToMs(msToDateInput(effectiveStart), timeStr);
+    if (nextStart === null) return;
+    const duration = effectiveEnd - effectiveStart;
+    setStartOverride(nextStart);
+    setEndOverride(nextStart + duration);
+    scheduleSave({ text: text ?? '', startOverride: nextStart, endOverride: nextStart + duration });
+  };
+
+  const onChangeEndTime = (timeStr: string) => {
+    const nextEnd = dateTimeInputToMs(msToDateInput(effectiveEnd), timeStr);
+    if (nextEnd === null || nextEnd <= effectiveStart) return;
+    setEndOverride(nextEnd);
+    scheduleSave({ text: text ?? '', startOverride, endOverride: nextEnd });
+  };
+
+  const clearReschedule = () => {
+    setStartOverride(null);
+    setEndOverride(null);
+    scheduleSave({ text: text ?? '', startOverride: null, endOverride: null });
   };
 
   const onPublish = async () => {
@@ -142,8 +290,8 @@ export function AgendaEditor({
       spaceId,
       seriesId: callId,
       seriesName,
-      occurrenceStart: occurrence.startMs,
-      occurrenceEnd: occurrence.endMs,
+      occurrenceStart: effectiveStart,
+      occurrenceEnd: effectiveEnd,
       agendaBlocks: parseAgendaText(text),
       existingEventId: publishedEvent?.entityId ?? null,
       existingBlockRelations: publishedEvent?.blockRelations ?? [],
@@ -159,10 +307,42 @@ export function AgendaEditor({
         if (token) await deleteDraftBestEffort({ spaceId, callId, occurrenceStart: occurrence.startMs }, token);
         setToast(<>Agenda published.</>);
         setPublishing(false);
+        queryClient.invalidateQueries({ queryKey: eventQueryKey });
       },
       onError: () => {
         setPublishing(false);
         setToast(<>Couldn’t publish the agenda right now.</>);
+      },
+    });
+  };
+
+  const onDeleteOccurrence = async () => {
+    if (!publishedEvent) return;
+    setDeleting(true);
+    const values = buildDeleteOccurrenceOps({
+      entityId: publishedEvent.entityId,
+      spaceId,
+      name: `${seriesName} — ${formatDateLabel(occurrence.startMs)}`,
+    });
+
+    await makeProposal({
+      values,
+      relations: [],
+      spaceId,
+      name: `Delete occurrence of ${seriesName}`,
+      onSuccess: async () => {
+        if (autoPublishAhead > 0) {
+          const token = await getToken();
+          if (token) await reconcileAutoPublish({ spaceId, callId }, token).catch(() => {});
+        }
+        setToast(<>Occurrence deleted.</>);
+        setDeleting(false);
+        setConfirmingDelete(false);
+        queryClient.invalidateQueries({ queryKey: eventQueryKey });
+      },
+      onError: () => {
+        setDeleting(false);
+        setConfirmingDelete(false);
       },
     });
   };
@@ -174,11 +354,73 @@ export function AgendaEditor({
       <div className="flex flex-col gap-1">
         <span className="text-smallTitle">{seriesName} — Agenda</span>
         <span className="text-metadata text-grey-04">
-          {formatDateLabel(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
+          {formatDateLabel(effectiveStart)} · {formatTimeRange(effectiveStart, effectiveEnd)}
         </span>
+        {rescheduled && (
+          <span className="text-footnote text-grey-03">
+            Originally {formatDateLabel(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
+          </span>
+        )}
       </div>
 
       <StatusPill status={status} locked={locked} />
+
+      {publishedEvent && isEditor && (
+        <div className="flex items-center gap-2">
+          {confirmingDelete ? (
+            <>
+              <span className="text-metadata text-text">Delete this published occurrence?</span>
+              <SmallButton onClick={() => setConfirmingDelete(false)} disabled={deleting}>
+                Cancel
+              </SmallButton>
+              <SmallButton onClick={onDeleteOccurrence} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete occurrence'}
+              </SmallButton>
+            </>
+          ) : (
+            <SmallButton onClick={() => setConfirmingDelete(true)}>Delete published occurrence</SmallButton>
+          )}
+        </div>
+      )}
+
+      {!readOnly && notYetStarted && (
+        <div className="flex flex-col gap-3 rounded-lg border border-grey-02 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-metadataMedium">Reschedule this occurrence</span>
+            {rescheduled && <SmallButton onClick={clearReschedule}>Reset to scheduled time</SmallButton>}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <label className="flex flex-col gap-1 text-metadata text-grey-04">
+              Start date
+              <input
+                type="date"
+                value={msToDateInput(effectiveStart)}
+                onChange={e => onChangeStartDate(e.target.value)}
+                className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-metadata text-grey-04">
+              Start time (UTC)
+              <input
+                type="time"
+                value={msToTimeInput(effectiveStart)}
+                onChange={e => onChangeStartTime(e.target.value)}
+                className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-metadata text-grey-04">
+              End time (UTC)
+              <input
+                type="time"
+                value={msToTimeInput(effectiveEnd)}
+                onChange={e => onChangeEndTime(e.target.value)}
+                className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
+              />
+            </label>
+          </div>
+          {rescheduleError && <span className="text-footnote text-red-01">{rescheduleError}</span>}
+        </div>
+      )}
 
       {readOnly ? (
         <ReadOnlyAgenda text={text} accessLoading={accessLoading} locked={locked} />
@@ -193,7 +435,11 @@ export function AgendaEditor({
           />
           <div className="flex items-center justify-between">
             <span className="text-footnote text-grey-03">{savingDraft ? 'Saving draft…' : ' '}</span>
-            <Button variant="primary" disabled={publishing || !text?.trim()} onClick={onPublish}>
+            <Button
+              variant="primary"
+              disabled={publishing || !text?.trim() || Boolean(rescheduleError)}
+              onClick={onPublish}
+            >
               {publishing ? 'Publishing…' : publishedEvent ? 'Republish agenda' : 'Publish agenda'}
             </Button>
           </div>
@@ -244,9 +490,9 @@ function ReadOnlyAgenda({
         .map(block => block.trim())
         .filter(Boolean)
         .map((block, i) => (
-          <p key={i} className="text-body whitespace-pre-wrap text-text">
-            {block}
-          </p>
+          <div key={i} className="text-body text-text">
+            {renderMarkdownDocument(block)}
+          </div>
         ))}
     </div>
   );

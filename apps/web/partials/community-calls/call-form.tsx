@@ -25,6 +25,15 @@ const REPEAT_OPTIONS = [
 
 const fieldClass = 'rounded-md border border-grey-02 px-3 py-2 text-metadata';
 
+/** UTC `YYYY-MM-DD` for today, used as the `<input type="date">` floor on new calls. */
+function todayUtcDateInput(): string {
+  const d = new Date();
+  const y = d.getUTCFullYear().toString().padStart(4, '0');
+  const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+  const day = d.getUTCDate().toString().padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export type CallFormInitial = {
   name: string;
   description: string;
@@ -77,7 +86,7 @@ export function CallForm(props: Props) {
     if (!name.trim()) return setToast(<>Add a call name.</>);
 
     const schedule = buildSchedule();
-    const validation = validateSchedule(schedule);
+    const validation = validateSchedule(schedule, { requireFutureStart: props.mode === 'create' });
     if (!validation.valid) return setToast(<>{validation.errors[0]}</>);
 
     setSubmitting(true);
@@ -92,10 +101,16 @@ export function CallForm(props: Props) {
         spaceId,
         name: `Update ${name}`,
         onSuccess: async () => {
-          const token = await getToken();
-          if (token) {
-            await notifyCommunityCallUpdate({ spaceId, callId }, token).catch(() => {});
-            if (autoPublishAhead > 0) await reconcileAutoPublish({ spaceId, callId }, token).catch(() => {});
+          // Fire after the write, not before: the update replaces `meetingTime` rather than
+          // unsetting it, so curator-backend must read the entity post-write to resend an
+          // invite with the *new* schedule — firing earlier would notify subscribers with the
+          // stale pre-edit time.
+          const notifyToken = await getToken();
+          if (notifyToken) await notifyCommunityCallUpdate({ spaceId, callId }, notifyToken).catch(() => {});
+
+          if (autoPublishAhead > 0) {
+            const token = await getToken();
+            if (token) await reconcileAutoPublish({ spaceId, callId }, token).catch(() => {});
           }
           router.push(backHref);
         },
@@ -154,7 +169,13 @@ export function CallForm(props: Props) {
         <h3 className="text-smallTitle">Meeting Time</h3>
 
         <Field label="Start date" chip="Ab">
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className={fieldClass} />
+          <input
+            type="date"
+            value={startDate}
+            onChange={e => setStartDate(e.target.value)}
+            min={props.mode === 'create' ? todayUtcDateInput() : undefined}
+            className={fieldClass}
+          />
         </Field>
 
         <div className="flex gap-3">

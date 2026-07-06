@@ -1,6 +1,6 @@
 'use client';
 
-import { useParticipants } from '@livekit/components-react';
+import { useMaybeRoomContext, useParticipants } from '@livekit/components-react';
 
 import * as React from 'react';
 
@@ -25,6 +25,7 @@ type Props = {
 /** Participant list + editor-only moderation (mute / disable camera / stop screen share / remove). */
 export function ParticipantsPanel({ roomName, livekitToken, canModerate }: Props) {
   const participants = useParticipants();
+  const room = useMaybeRoomContext();
   const { getToken } = useCommunityCallIdentityToken();
   const [busyIdentity, setBusyIdentity] = React.useState<string | null>(null);
 
@@ -38,19 +39,34 @@ export function ParticipantsPanel({ roomName, livekitToken, canModerate }: Props
     }
   };
 
-  const onMuteTrack = (
+  const onMuteTrack = async (
     participant: Participant,
     source: Track.Source,
     trackType: 'microphone' | 'camera' | 'screen_share'
   ) => {
     const publication = participant.getTrackPublication(source);
     if (!publication) return;
-    return runModeration(participant.identity, token =>
+    await runModeration(participant.identity, token =>
       muteParticipant(
         { room: roomName, identity: participant.identity, trackSid: publication.trackSid, muted: true, trackType },
         token
       )
     );
+
+    // Muting the track server-side stops it publishing, but the participant's browser
+    // keeps capturing (their OS/browser "you're sharing your screen" indicator stays
+    // up) until they explicitly stop the capture — nudge their client to do that.
+    if (trackType === 'screen_share' && room) {
+      try {
+        const data = new TextEncoder().encode(JSON.stringify({ type: 'stop-screen-share' }));
+        await room.localParticipant.publishData(data, {
+          reliable: true,
+          destinationIdentities: [participant.identity],
+        });
+      } catch {
+        // Best-effort — the track is already muted server-side.
+      }
+    }
   };
 
   const onRemove = (participant: Participant) =>
