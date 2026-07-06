@@ -43,6 +43,10 @@ now with `?selfFunded=true`).
       rpc + sponsorship to `localhost:8545` via the now-optional
       `NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET`. Boot the local stack and publish once to
       confirm the override path works.
+      ⚠ Gotcha (hit 2026-07-06): Next.js loads `apps/web/.env` as a base layer in ALL
+      modes, so `.env.local` must keep `NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET=` (present
+      but EMPTY) to blank the localhost value on testnet — otherwise publishes try to
+      reach `localhost:8545`. `environment.ts` treats empty as "no override".
 
 ## B. Batch 2 — proposalVersion threading + vote refresh (untested)
 

@@ -51,7 +51,9 @@ export const variables: IVars = {
   bundlerRpcEndpoint: BUNDLER_RPC_ENDPOINT!,
   rpcEndpointTestnet: RPC_ENDPOINT_TESTNET!,
   apiEndpointTestnet: API_ENDPOINT_TESTNET!,
-  zeroDevRpcUrlTestnet: ZERODEV_RPC_URL_TESTNET,
+  // `|| undefined` so an empty-string shadow (e.g. .env.local blanking the localhost
+  // value from the .env local-stack template) reads as "no override".
+  zeroDevRpcUrlTestnet: ZERODEV_RPC_URL_TESTNET || undefined,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   sentryDsn: SENTRY_DSN,
