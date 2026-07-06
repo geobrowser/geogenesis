@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSchedule, parseSchedule, serializeSchedule, validateSchedule } from './schedule';
+import {
+  MAX_CALL_DURATION_MINUTES,
+  MIN_CALL_DURATION_MINUTES,
+  formatSchedule,
+  parseSchedule,
+  serializeSchedule,
+  validateSchedule,
+} from './schedule';
 
 describe('validateSchedule', () => {
   it('accepts a valid schedule with DTSTART only', () => {
@@ -54,6 +61,46 @@ describe('validateSchedule', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T170000Z');
     expect(result.valid).toBe(false);
     expect(result.errors).toContain('DTEND must be after DTSTART');
+  });
+
+  it('rejects a call shorter than the minimum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T170500Z');
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(`Call must be at least ${MIN_CALL_DURATION_MINUTES} minutes long`);
+  });
+
+  it('accepts a call exactly at the minimum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T171500Z');
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a call longer than the maximum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T200100Z');
+    expect(result.valid).toBe(false);
+    const h = Math.floor(MAX_CALL_DURATION_MINUTES / 60);
+    const m = MAX_CALL_DURATION_MINUTES % 60;
+    expect(result.errors).toContain(`Call can't be longer than ${h}h${m ? ` ${m}m` : ''}`);
+  });
+
+  it('accepts a call exactly at the maximum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T193000Z');
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a past DTSTART when requireFutureStart is set', () => {
+    const result = validateSchedule('DTSTART:20000101T000000Z', { requireFutureStart: true });
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('Start time must be in the future');
+  });
+
+  it('accepts a future DTSTART when requireFutureStart is set', () => {
+    const result = validateSchedule('DTSTART:20990101T000000Z', { requireFutureStart: true });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a past DTSTART when requireFutureStart is not set', () => {
+    const result = validateSchedule('DTSTART:20000101T000000Z');
+    expect(result.valid).toBe(true);
   });
 
   it('rejects an invalid RRULE frequency', () => {

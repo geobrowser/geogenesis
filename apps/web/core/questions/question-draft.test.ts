@@ -41,9 +41,7 @@ describe('question draft helpers', () => {
     );
 
     expect(draft.questionId).toBe('id-1');
-    expect(draft.names).toEqual([
-      { entityId: 'id-1', spaceId: 'space-1', value: 'Should we publish this?' },
-    ]);
+    expect(draft.names).toEqual([{ entityId: 'id-1', spaceId: 'space-1', value: 'Should we publish this?' }]);
     expect(draft.relations[0]).toMatchObject({
       id: 'id-2',
       entityId: 'id-3',

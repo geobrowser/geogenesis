@@ -358,9 +358,7 @@ export const Web2URLExtension = Extension.create({
                         // Early exit if no text content or no potential markdown/URL syntax
                         if (
                           !blockText ||
-                          (!blockText.includes('[') &&
-                            !blockText.includes('http') &&
-                            !blockText.includes('www.'))
+                          (!blockText.includes('[') && !blockText.includes('http') && !blockText.includes('www.'))
                         ) {
                           return;
                         }

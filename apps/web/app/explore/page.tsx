@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
+import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
@@ -45,6 +46,7 @@ export default async function ExploreRoutePage() {
   const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
   const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
   const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
+  const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
@@ -56,6 +58,7 @@ export default async function ExploreRoutePage() {
     featuredRankings,
     firstLevelSubtopics,
     parentTopicOptions,
+    communityCalls,
     governance,
   ] = await Promise.all([
     browsePromise,
@@ -64,6 +67,7 @@ export default async function ExploreRoutePage() {
     featuredRankingsPromise,
     firstLevelSubtopicsPromise,
     parentTopicOptionsPromise,
+    communityCallsPromise,
     governancePromise,
   ]);
 
@@ -126,6 +130,7 @@ export default async function ExploreRoutePage() {
       parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+      communityCalls={communityCalls}
     />
   );
 }

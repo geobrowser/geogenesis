@@ -2,6 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+
 import { DebatesPageClient } from './debates-page-client';
 
 interface Props {
@@ -15,5 +17,9 @@ export default async function DebatesPage(props: Props) {
     notFound();
   }
 
-  return <DebatesPageClient spaceId={params.id} />;
+  return (
+    <EntityPageContentContainer>
+      <DebatesPageClient spaceId={params.id} />
+    </EntityPageContentContainer>
+  );
 }

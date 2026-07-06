@@ -107,7 +107,11 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
       </div>
       <dl className="max-md:grid max-md:min-w-0 max-md:grid-cols-2 max-md:justify-stretch max-md:gap-x-4 max-md:gap-y-3 m-0 flex min-w-[280px] flex-1 items-center justify-end gap-3">
         {participants.map(participant => (
-          <ParticipantTerm key={participant.user_id} label={participant.answer.label} name={speakerLabel(participant)} />
+          <ParticipantTerm
+            key={participant.user_id}
+            label={participant.answer.label}
+            name={speakerLabel(participant)}
+          />
         ))}
         <div className="grid min-w-[76px] gap-0.5">
           <dt className="text-xs text-grey-04">Recordings</dt>

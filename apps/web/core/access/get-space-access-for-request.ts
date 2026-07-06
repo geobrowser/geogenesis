@@ -4,10 +4,9 @@ import { Effect } from 'effect';
 
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
 
+import { type SpaceAccess, getSpaceAccess, noSpaceAccess } from './space-access';
 import { Telemetry } from '~/app/api/telemetry';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
-
-import { type SpaceAccess, getSpaceAccess, noSpaceAccess } from './space-access';
 
 const getCachedPersonalSpaceId = cache(async (walletAddress: string) => getPersonalSpaceId(walletAddress));
 

@@ -12,12 +12,10 @@ const isDev = process.env.NODE_ENV === 'development';
 const turbopackOptimizations =
   isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
     ? {
-        turbopackInferModuleSideEffects: false,
-        turbopackInputSourceMaps: false,
+        turbopackTreeShaking: false,
         turbopackRemoveUnusedExports: false,
         turbopackRemoveUnusedImports: false,
-        turbopackSourceMaps: false,
-        turbopackTreeShaking: false,
+        turbopackInferModuleSideEffects: false,
       }
     : {};
 
@@ -37,6 +35,7 @@ const nextConfig: NextConfig = {
       }
     : undefined,
   experimental: {
+    turbopackRustReactCompiler: true,
     ...turbopackOptimizations,
     optimizePackageImports,
   },

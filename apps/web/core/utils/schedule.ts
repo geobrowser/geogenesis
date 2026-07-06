@@ -30,6 +30,10 @@ const ICAL_DATE_RE = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/;
 
 const KNOWN_PROPS = new Set(['DTSTART', 'DTEND', 'RRULE']);
 
+/** Matches curator's bounds (`community-call-form/validation.ts`) for a single occurrence's length. */
+export const MIN_CALL_DURATION_MINUTES = 15;
+export const MAX_CALL_DURATION_MINUTES = 150;
+
 export interface ScheduleValidationResult {
   valid: boolean;
   errors: string[];
@@ -40,6 +44,46 @@ function parseICalDate(value: string): Date | null {
   if (!match) return null;
   const [, year, month, day, hour, minute, second] = match;
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
+}
+
+// Offset (ms) of `tz` from UTC at `utcMs`: positive when the zone is ahead.
+// Evaluated at the wall-clock instant, so it can be off by 1h for the single
+// hour straddling a DST transition — fine for listing/display; the curator
+// token endpoint enforces the real join window server-side.
+//
+// Schedule strings are graph data and can be published by any client, so a
+// non-IANA TZID (e.g. a Windows zone name from an Outlook-exported ICS) is
+// untrusted input — Intl.DateTimeFormat throws RangeError for those, so treat
+// an invalid tz as "no offset" rather than crashing the caller.
+function tzOffsetMs(tz: string, utcMs: number): number {
+  let dtf: Intl.DateTimeFormat;
+  try {
+    dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  } catch {
+    return 0;
+  }
+  const p: Record<string, number> = {};
+  for (const part of dtf.formatToParts(new Date(utcMs))) {
+    if (part.type !== 'literal') p[part.type] = Number(part.value);
+  }
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - utcMs;
+}
+
+// Parse an iCal date, honoring a TZID parameter. A trailing `Z` (or no zone) is
+// already UTC / floating; a TZID means the wall-clock is in that zone → convert.
+function parseICalDateTz(value: string, tzid?: string): Date | null {
+  const d = parseICalDate(value);
+  if (!d || !tzid || value.endsWith('Z')) return d;
+  return new Date(d.getTime() - tzOffsetMs(tzid, d.getTime()));
 }
 
 function isValidICalDate(value: string): boolean {
@@ -118,8 +162,15 @@ function validateRRule(rrule: string): string[] {
 /**
  * Validates an iCalendar schedule string.
  * Requires at least a DTSTART line. DTEND and RRULE are optional.
+ *
+ * `requireFutureStart` should only be set for brand-new calls — an existing recurring
+ * series' DTSTART is its first-ever occurrence and can legitimately be in the past while
+ * still producing valid future occurrences, so edits must not fail this check.
  */
-export function validateSchedule(schedule: string): ScheduleValidationResult {
+export function validateSchedule(
+  schedule: string,
+  options?: { requireFutureStart?: boolean }
+): ScheduleValidationResult {
   const errors: string[] = [];
 
   if (!schedule.trim()) {
@@ -154,17 +205,28 @@ export function validateSchedule(schedule: string): ScheduleValidationResult {
   if (!props.DTSTART) {
     errors.push('DTSTART is required');
   } else if (!isValidICalDate(props.DTSTART)) {
-    errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSSZ`);
+    errors.push(`Invalid DTSTART date "${props.DTSTART}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
+  } else if (options?.requireFutureStart && parseICalDate(props.DTSTART)!.getTime() <= Date.now()) {
+    errors.push('Start time must be in the future');
   }
 
   if (props.DTEND) {
     if (!isValidICalDate(props.DTEND)) {
-      errors.push(`Invalid DTEND date "${props.DTEND}". Expected format: YYYYMMDDTHHmmSSZ`);
+      errors.push(`Invalid DTEND date "${props.DTEND}". Expected format: YYYYMMDDTHHmmSS (optionally ending with Z)`);
     } else if (props.DTSTART && isValidICalDate(props.DTSTART)) {
       const start = parseICalDate(props.DTSTART)!;
       const end = parseICalDate(props.DTEND)!;
       if (end <= start) {
         errors.push('DTEND must be after DTSTART');
+      } else {
+        const durationMinutes = (end.getTime() - start.getTime()) / 60_000;
+        if (durationMinutes < MIN_CALL_DURATION_MINUTES) {
+          errors.push(`Call must be at least ${MIN_CALL_DURATION_MINUTES} minutes long`);
+        } else if (durationMinutes > MAX_CALL_DURATION_MINUTES) {
+          const h = Math.floor(MAX_CALL_DURATION_MINUTES / 60);
+          const m = MAX_CALL_DURATION_MINUTES % 60;
+          errors.push(`Call can't be longer than ${h}h${m ? ` ${m}m` : ''}`);
+        }
       }
     }
   }
@@ -213,6 +275,18 @@ function parseRRule(rrule: string): { freq?: string; byDay?: string[]; interval?
   return result;
 }
 
+/** Raw `RRULE:` value from a schedule string (e.g. "FREQ=WEEKLY;BYDAY=TH"), for callers that
+ *  need to pass it through verbatim (e.g. Google Calendar's `recur` deep-link param) rather
+ *  than the decomposed fields `parseSchedule` returns. */
+export function extractRawRRule(schedule: string): string | undefined {
+  for (const line of schedule.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    if (line.slice(0, colonIdx).trim() === 'RRULE') return line.slice(colonIdx + 1).trim();
+  }
+  return undefined;
+}
+
 export interface ParsedSchedule {
   startDate: string; // YYYY-MM-DD
   startTime: string; // HH:MM (24h UTC)
@@ -237,14 +311,20 @@ export function parseSchedule(schedule: string): ParsedSchedule {
 
   const lines = schedule.split('\n');
   const props: Record<string, string> = {};
+  const tzids: Record<string, string> = {};
   for (const line of lines) {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
-    props[line.substring(0, colonIdx).trim()] = line.substring(colonIdx + 1).trim();
+    // Key may carry iCal params, e.g. `DTSTART;TZID=America/Santiago`.
+    const rawKey = line.substring(0, colonIdx).trim();
+    const name = rawKey.split(';')[0];
+    const tzid = rawKey.match(/TZID=([^;]+)/)?.[1];
+    if (tzid) tzids[name] = tzid;
+    props[name] = line.substring(colonIdx + 1).trim();
   }
 
   if (props.DTSTART) {
-    const d = parseICalDate(props.DTSTART);
+    const d = parseICalDateTz(props.DTSTART, tzids.DTSTART);
     if (d) {
       const y = d.getUTCFullYear().toString().padStart(4, '0');
       const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -255,7 +335,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
   }
 
   if (props.DTEND) {
-    const d = parseICalDate(props.DTEND);
+    const d = parseICalDateTz(props.DTEND, tzids.DTEND);
     if (d) {
       result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
     }

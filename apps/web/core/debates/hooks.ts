@@ -1,9 +1,9 @@
 'use client';
 
-import * as React from 'react';
-
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getIdentityToken, usePrivy } from '@geogenesis/auth';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
 
 import {
   type GetPrivyIdentityToken,

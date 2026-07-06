@@ -163,6 +163,8 @@ function convertToGrc20Value(value: Value): PropertyValueParam | null {
         value: val,
         ...(value.options?.language && { language: value.options.language }),
       };
+    case 'SCHEDULE':
+      return { property, type: 'schedule', value: val };
     case 'BOOLEAN':
       return { property, type: 'boolean', value: val === '1' || val === 'true' };
     case 'INTEGER':

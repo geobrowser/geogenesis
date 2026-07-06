@@ -4,10 +4,7 @@ import { EntityId } from '~/core/io/substream-schema';
 import { Relation } from '~/core/types';
 
 type BlockTypeId =
-  | typeof SystemIds.TEXT_BLOCK
-  | typeof SystemIds.IMAGE_TYPE
-  | typeof SystemIds.DATA_BLOCK
-  | typeof SystemIds.VIDEO_TYPE;
+  typeof SystemIds.TEXT_BLOCK | typeof SystemIds.IMAGE_TYPE | typeof SystemIds.DATA_BLOCK | typeof SystemIds.VIDEO_TYPE;
 
 const BLOCK_TYPE_NAMES: Record<BlockTypeId, string> = {
   [SystemIds.TEXT_BLOCK]: 'Text Block',
