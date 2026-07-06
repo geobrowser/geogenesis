@@ -65,6 +65,57 @@ describe('space-access', () => {
     );
   });
 
+  it('derives DAO access from the participant lists without queries when the lists are complete', async () => {
+    const access = await Effect.runPromise(
+      getSpaceAccess(
+        {
+          id: 'dao-space-id',
+          type: 'DAO',
+          members: ['MEMBER-SPACE-ID', 'other-member'],
+          totalMembers: 2,
+          editors: ['other-editor'],
+          totalEditors: 1,
+        } as any,
+        'member-space-id'
+      )
+    );
+
+    expect(access).toEqual({
+      isEditor: false,
+      isMember: true,
+      canEdit: true,
+    });
+    expect(queries.getIsMemberOfSpace).not.toHaveBeenCalled();
+    expect(queries.getIsEditorOfSpace).not.toHaveBeenCalled();
+  });
+
+  it('falls back to server-filtered queries when a participant list is truncated', async () => {
+    queries.getIsMemberOfSpace.mockReturnValue(Effect.succeed(true));
+
+    const access = await Effect.runPromise(
+      getSpaceAccess(
+        {
+          id: 'dao-space-id',
+          type: 'DAO',
+          // Truncated: more members exist than were loaded, so a scan can't be trusted.
+          members: ['other-member'],
+          totalMembers: 150,
+          editors: ['editor-space-id'],
+          totalEditors: 1,
+        } as any,
+        'member-space-id'
+      )
+    );
+
+    expect(queries.getIsMemberOfSpace).toHaveBeenCalledWith('daospaceid', 'memberspaceid', undefined);
+    expect(queries.getIsEditorOfSpace).not.toHaveBeenCalled();
+    expect(access).toEqual({
+      isEditor: false,
+      isMember: true,
+      canEdit: true,
+    });
+  });
+
   it('resolves editor badges from server-filtered access checks', async () => {
     queries.getIsEditorOfSpace.mockImplementation((_spaceId: string, memberSpaceId: string) =>
       Effect.succeed(memberSpaceId === 'editorspaceid')

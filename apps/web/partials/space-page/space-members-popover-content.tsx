@@ -5,6 +5,7 @@ import * as React from 'react';
 import pluralize from 'pluralize';
 
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
   useInfiniteScrollSentinel,
   useSpaceParticipantsInfinite,
@@ -22,6 +23,7 @@ interface Props {
   isEditor: boolean;
   memberRequest: ActiveMemberRequest | null;
   connectedAddress: string | null;
+  initialParticipantsPage?: SpaceParticipantsPage;
 }
 
 export function SpaceMembersContent({
@@ -31,9 +33,14 @@ export function SpaceMembersContent({
   isEditor,
   memberRequest,
   connectedAddress,
+  initialParticipantsPage,
 }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useSpaceParticipantsInfinite({ spaceId, kind: 'members' });
+    useSpaceParticipantsInfinite({
+      spaceId,
+      kind: 'members',
+      initialPage: initialParticipantsPage,
+    });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 

@@ -24,7 +24,7 @@ export function SpaceMembersPopover({ trigger, content }: Props) {
           avoidCollisions
           className="z-100 origin-top-left"
         >
-          {content}
+          {open ? content : null}
         </Content>
       </Portal>
     </Root>
