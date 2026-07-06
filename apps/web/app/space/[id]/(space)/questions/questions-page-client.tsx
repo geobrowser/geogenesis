@@ -407,11 +407,7 @@ function QuestionListItem({
       />
 
       {debatesEnabled && (
-        <QuestionDebateStatus
-          debateQuestion={debateQuestion}
-          mutationError={mutationError}
-          published={published}
-        />
+        <QuestionDebateStatus debateQuestion={debateQuestion} mutationError={mutationError} published={published} />
       )}
 
       {(topics.length > 0 || relatedPeople.length > 0 || relatedProjects.length > 0) && (

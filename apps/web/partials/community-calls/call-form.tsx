@@ -42,8 +42,7 @@ export type CallFormInitial = {
 };
 
 type Props =
-  | { mode: 'create'; spaceId: string }
-  | { mode: 'edit'; spaceId: string; callId: string; initial: CallFormInitial };
+  { mode: 'create'; spaceId: string } | { mode: 'edit'; spaceId: string; callId: string; initial: CallFormInitial };
 
 /** Repeat-select value ('none'/'DAILY'/'WEEKLY'/'BIWEEKLY'/'MONTHLY') for a parsed freq+interval. */
 function repeatFromSchedule(freq: string, interval: number): string {

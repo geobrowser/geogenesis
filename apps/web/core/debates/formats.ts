@@ -1,10 +1,6 @@
 'use client';
 
-export type DebateFormatId =
-  | 'dev-short'
-  | 'standard'
-  | 'extended-standard'
-  | 'triple-standard';
+export type DebateFormatId = 'dev-short' | 'standard' | 'extended-standard' | 'triple-standard';
 
 export type DebateFormat = {
   id: DebateFormatId;

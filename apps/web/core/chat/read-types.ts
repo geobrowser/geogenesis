@@ -98,8 +98,7 @@ export type ResearchSource = {
 };
 
 export type ResearchOutput =
-  | { summary: string; sources: ResearchSource[] }
-  | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
+  { summary: string; sources: ResearchSource[] } | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
 
 export type WebFetchInput = {
   url: string;
@@ -127,5 +126,4 @@ export type SearchImagesResult = {
 };
 
 export type SearchImagesOutput =
-  | { images: SearchImagesResult[] }
-  | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };
+  { images: SearchImagesResult[] } | { error: 'not_signed_in' | 'rate_limited' | 'lookup_failed' };

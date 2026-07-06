@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 
 import { CommunityCallsPage } from '~/partials/community-calls/community-calls-page';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
 
@@ -21,5 +22,9 @@ export default async function CommunityCalls(props: Props) {
 
   const [space, series] = await Promise.all([cachedFetchSpace(params.id), fetchCommunityCalls(params.id)]);
 
-  return <CommunityCallsPage spaceId={params.id} spaceName={space?.entity?.name ?? 'this space'} series={series} />;
+  return (
+    <EntityPageContentContainer>
+      <CommunityCallsPage spaceId={params.id} spaceName={space?.entity?.name ?? 'this space'} series={series} />
+    </EntityPageContentContainer>
+  );
 }
