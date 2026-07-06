@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { usePendingMembershipSet } from '~/core/hooks/use-pending-memberships';
+import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
@@ -10,11 +11,13 @@ import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-cla
 import { normId } from '~/core/utils/norm-id';
 
 import { ClaimATopicSection } from './claim-a-topic-section';
+import { FeaturedRankingsSection } from './featured-rankings-section';
 import { JoinSpacesSection } from './join-spaces-section';
 import { RecentlyClaimedSection } from './recently-claimed-section';
 
 export type ExploreSidePanelProps = {
   featuredSpaces: FeaturedSpace[];
+  featuredRankings: FeaturedRanking[];
   unclaimedTopics: RootTopicChip[];
   recentlyClaimedSpaces: RecentlyClaimedSpace[];
   parentTopicOptions: ParentTopicOption[];
@@ -24,6 +27,7 @@ export type ExploreSidePanelProps = {
 
 export function ExploreSidePanel({
   featuredSpaces,
+  featuredRankings,
   unclaimedTopics,
   recentlyClaimedSpaces,
   parentTopicOptions,
@@ -44,7 +48,11 @@ export function ExploreSidePanel({
     return !memberOrEditorSet.has(normalized) && !pendingSet.has(normalized) && !dynamicPendingSet.has(normalized);
   });
 
-  const hasContent = joinableSpaces.length > 0 || unclaimedTopics.length > 0 || recentlyClaimedSpaces.length > 0;
+  const hasContent =
+    joinableSpaces.length > 0 ||
+    featuredRankings.length > 0 ||
+    unclaimedTopics.length > 0 ||
+    recentlyClaimedSpaces.length > 0;
   if (!hasContent) return null;
 
   // Build only the sections that have content, then join them with dividers so
@@ -53,6 +61,9 @@ export function ExploreSidePanel({
   const sections: { key: string; node: React.ReactNode }[] = [];
   if (joinableSpaces.length > 0) {
     sections.push({ key: 'join-spaces', node: <JoinSpacesSection spaces={joinableSpaces} /> });
+  }
+  if (featuredRankings.length > 0) {
+    sections.push({ key: 'featured-rankings', node: <FeaturedRankingsSection rankings={featuredRankings} /> });
   }
   if (unclaimedTopics.length > 0 || parentTopicOptions.length > 0) {
     sections.push({
