@@ -126,6 +126,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await stopped;
       }
 
+      const endedAtMs = Date.now();
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
       const blob = new Blob(recordingChunksRef.current, { type: mimeType });
       if (blob.size === 0) return;
@@ -155,7 +156,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       if (!uploadedFilename) throw new Error('Recording upload failed.');
 
-      const endedAtMs = Date.now();
       await completeUpload.mutateAsync({
         filename: uploadedFilename,
         mime_type: mimeType,
