@@ -198,11 +198,18 @@ a Privy embedded wallet, which never exists in test env → `smartAccount` alway
 E2E flow exercising transactions via the mock connector is dead. The "local-dev EOA polyfill"
 comment in `use-smart-account-transaction.ts:14` is stale (fallback was removed in `500f4f659`).
 
-### 14. OPEN (confirm externally) — ZeroDev project id is client-exposed
+### 14. RESOLVED (geo-sdk beta.8, 2026-07-06) — ZeroDev project id is client-exposed
 `apps/web/.env.example:14` / `config.ts:44`: `NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET` embeds the
 ZeroDev project id in a client bundle URL. Same exposure class as the pre-existing
 `NEXT_PUBLIC_PIMLICO_API_KEY` — acceptable only if the ZeroDev dashboard enforces
 origin/contract sponsorship policies. Action: verify project policy settings.
+
+**Resolution:** geo-sdk 0.20.0-beta.8 bakes the sponsorship endpoint into
+`GeoTestnetConfig.sponsorship.rpcUrl` — the same project id we had in `.env.local`, i.e. it was
+Geo's shared project all along and its dashboard policy is theirs to manage. The env var is now
+an optional local-anvil override only (`config.ts` no longer throws, `.env.local` value removed);
+`generateZeroDevAccount` defaults to the SDK config. The Pimlico key exposure remains a
+mainnet-path concern (see V020_MIGRATION_LOG mainnet blockers).
 
 ---
 

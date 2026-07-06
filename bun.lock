@@ -5,7 +5,7 @@
     "": {
       "name": "geogenesis",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.5",
+        "@geoprotocol/geo-sdk": "^0.20.0-beta.8",
       },
       "devDependencies": {
         "@graphql-codegen/client-preset": "^5.2.4",
@@ -31,7 +31,7 @@
         "@effect/opentelemetry": "^0.63.0",
         "@floating-ui/dom": "^1.7.5",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.5",
+        "@geoprotocol/geo-sdk": "^0.20.0-beta.8",
         "@geoprotocol/grc-20": "^0.4.1",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.214.0",
@@ -159,7 +159,7 @@
       "name": "@geogenesis/auth",
       "version": "1.0.0",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.5",
+        "@geoprotocol/geo-sdk": "^0.20.0-beta.8",
         "@privy-io/react-auth": "^3.21.0",
         "@privy-io/wagmi": "^4.0.4",
         "@rhinestone/module-sdk": "^0.4.0",
@@ -409,7 +409,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.20.0-beta.5", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "@zerodev/sdk": "^5.5.10", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "permissionless": "^0.2.35", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-YbYqhAyyU0sXXqK4S/UPX+un9FnYi2FysA0xaxAhy/RYjTUJLFbo+uDp4T+jhBYVe2VSNSk8oPpIORgEN5vfqg=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.20.0-beta.8", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "@zerodev/sdk": "^5.5.10", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-xzrbuIfNSPwTE1a+5O1pnh0/yRjBAWkFOreaov0BoWMGnIo/t6Tedmr+LdA4O2uezuQ3vEmG7orCAxxZQHrDfw=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.1", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww=="],
 

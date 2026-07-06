@@ -1,4 +1,4 @@
-import { createGeoZeroDev7702WalletClient } from '@geoprotocol/geo-sdk';
+import { createGeoWalletClient, defineGeoNetworkConfig, GeoTestnetConfig } from '@geoprotocol/geo-sdk';
 import { getOwnableValidator, getSmartSessionsValidator, RHINESTONE_ATTESTER_ADDRESS } from '@rhinestone/module-sdk';
 import { createSmartAccountClient } from 'permissionless';
 import { type ToSafeSmartAccountParameters, toSafeSmartAccount } from 'permissionless/accounts';
@@ -42,23 +42,37 @@ export type GeoWalletClient = {
 // ──────────────────────────────────────────────────────────────────────────────
 
 type GenerateZeroDevAccountParams = {
-  chain: Chain;
-  rpcUrl: string;
-  zeroDevRpcUrl: string;
   signer: Account;
+  /**
+   * Chain RPC override. Only needed for the local-anvil e2e environment; on real
+   * testnet the SDK's built-in GeoTestnetConfig RPC is used when omitted.
+   */
+  rpcUrl?: string;
+  /**
+   * Sponsorship (combined bundler + paymaster) RPC override. Only needed for the
+   * local-anvil e2e environment; the SDK's GeoTestnetConfig ships the Geo-managed
+   * ZeroDev sponsorship endpoint, so production/testnet callers omit this.
+   */
+  sponsorshipRpcUrl?: string;
 };
 
 export async function generateZeroDevAccount({
-  chain,
-  rpcUrl,
-  zeroDevRpcUrl,
   signer,
+  rpcUrl,
+  sponsorshipRpcUrl,
 }: GenerateZeroDevAccountParams): Promise<GeoWalletClient> {
-  const kernelClient = await createGeoZeroDev7702WalletClient({
-    signer: signer as Parameters<typeof createGeoZeroDev7702WalletClient>[0]['signer'],
-    chain,
-    zeroDevRpcUrl,
-    rpcUrl,
+  const network =
+    rpcUrl || sponsorshipRpcUrl
+      ? defineGeoNetworkConfig({
+          ...GeoTestnetConfig,
+          chain: { ...GeoTestnetConfig.chain!, ...(rpcUrl ? { rpcUrl } : {}) },
+          sponsorship: sponsorshipRpcUrl ? { rpcUrl: sponsorshipRpcUrl } : GeoTestnetConfig.sponsorship,
+        })
+      : GeoTestnetConfig;
+
+  const kernelClient = await createGeoWalletClient({
+    signer: signer as Parameters<typeof createGeoWalletClient>[0]['signer'],
+    network,
   });
 
   return kernelClient as unknown as GeoWalletClient;

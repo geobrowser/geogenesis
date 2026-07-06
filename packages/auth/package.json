@@ -22,7 +22,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@geoprotocol/geo-sdk": "^0.20.0-beta.5",
+    "@geoprotocol/geo-sdk": "^0.20.0-beta.8",
     "@privy-io/react-auth": "^3.21.0",
     "@privy-io/wagmi": "^4.0.4",
     "@rhinestone/module-sdk": "^0.4.0",

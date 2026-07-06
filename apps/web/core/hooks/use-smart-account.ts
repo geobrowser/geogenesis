@@ -37,10 +37,12 @@ export function useSmartAccount() {
         const signer = await toViemAccount({ wallet: embeddedWallet });
 
         const { generateZeroDevAccount } = await import('@geogenesis/auth/account');
+        // Since geo-sdk beta.8 the chain + sponsorship endpoints ship inside the SDK's
+        // GeoTestnetConfig. rpcUrl/sponsorshipRpcUrl are overrides for the local-anvil
+        // e2e env; on real testnet `sponsorship` is undefined and the SDK default applies.
         const zeroDevAccount = await generateZeroDevAccount({
-          chain: GEOGENESIS,
           rpcUrl: config.rpc,
-          zeroDevRpcUrl: config.bundler,
+          sponsorshipRpcUrl: config.sponsorship,
           // Cast: @privy-io/react-auth pins viem ^2.47.4 while apps/web pins ^2.48.1,
           // so the LocalAccount type identities don't match across the workspace boundary
           // even though the runtime shape is identical. Adding `viem` to the root overrides

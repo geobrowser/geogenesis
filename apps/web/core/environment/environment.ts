@@ -18,7 +18,13 @@ export type AppConfig = {
   chainId: SupportedChainId;
   rpc: string;
   api: string;
+  /** Mainnet (80451) Pimlico bundler URL. Unused on testnet since geo-sdk beta.8. */
   bundler: string;
+  /**
+   * Testnet sponsorship RPC override (local-anvil e2e only). When undefined the
+   * geo-sdk's built-in Geo-managed ZeroDev endpoint is used.
+   */
+  sponsorship?: string;
 };
 
 type IVars = Readonly<{
@@ -30,7 +36,7 @@ type IVars = Readonly<{
   bundlerRpcEndpoint: string;
   rpcEndpointTestnet: string;
   apiEndpointTestnet: string;
-  zeroDevRpcUrlTestnet: string;
+  zeroDevRpcUrlTestnet?: string;
   accountAbstractionApiKey: string;
   isTestEnv: boolean;
   sentryDsn?: string;
@@ -45,7 +51,7 @@ export const variables: IVars = {
   bundlerRpcEndpoint: BUNDLER_RPC_ENDPOINT!,
   rpcEndpointTestnet: RPC_ENDPOINT_TESTNET!,
   apiEndpointTestnet: API_ENDPOINT_TESTNET!,
-  zeroDevRpcUrlTestnet: ZERODEV_RPC_URL_TESTNET!,
+  zeroDevRpcUrlTestnet: ZERODEV_RPC_URL_TESTNET,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   accountAbstractionApiKey: ACCOUNT_ABSTRACTION_API_KEY!,
   sentryDsn: SENTRY_DSN,
@@ -55,18 +61,16 @@ export const getConfig = (): AppConfig => {
   const rpc = variables.chainId === '55516' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
   const api = variables.chainId === '55516' ? variables.apiEndpointTestnet : variables.apiEndpoint;
 
-  // Testnet (55516) routes through ZeroDev: the URL is bundler + paymaster combined, with the
-  // project id embedded in the path — no `?apikey=` suffix.
   // Mainnet (80451) routes through Pimlico, which uses the `?apikey=` query param.
-  const bundler =
-    variables.chainId === '55516'
-      ? variables.zeroDevRpcUrlTestnet
-      : `${variables.bundlerRpcEndpoint}?apikey=${variables.accountAbstractionApiKey}`;
+  // Testnet (55516) sponsorship lives inside geo-sdk's GeoTestnetConfig since beta.8;
+  // `sponsorship` is only populated as a local-dev override (e.g. anvil).
+  const bundler = `${variables.bundlerRpcEndpoint}?apikey=${variables.accountAbstractionApiKey}`;
 
   return {
     chainId: variables.chainId,
     rpc,
     api,
     bundler,
+    sponsorship: variables.zeroDevRpcUrlTestnet,
   };
 };

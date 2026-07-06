@@ -457,6 +457,70 @@ mainnet is real; until then treat `chainId=80451` as unsupported:
 - [ ] **GraphQL codegen** — `codegen.ts` generates from the testnet v2 schema
       (`testnet-api-v2.geobrowser.io`); mainnet currently serves v1. All hand-written
       queries in the app are now v2-shaped and would fail against a v1 mainnet API.
-- [ ] **ZeroDev sponsorship policy** — confirm origin/contract policies on the ZeroDev
-      dashboard for whichever project id ships (the project id is client-exposed via
-      `NEXT_PUBLIC_ZERODEV_RPC_URL_*`).
+- [x] **ZeroDev sponsorship policy** — resolved for testnet by geo-sdk beta.8: the
+      sponsorship endpoint (Geo's own ZeroDev project) ships inside `GeoTestnetConfig`,
+      so its dashboard policy is Geo's to manage. Remaining mainnet analog: the
+      Pimlico key (`NEXT_PUBLIC_PIMLICO_API_KEY`) is still client-exposed on the
+      Safe path — revisit with the "mainnet AA story" above.
+
+---
+
+## IMPLEMENTED 2026-07-06: geo-sdk 0.20.0-beta.8 — SDK-owned gas sponsorship
+
+All steps below landed as planned (plus the root `package.json` also pinned beta.5 and
+was bumped, so a single hoisted SDK copy resolves everywhere). `tsc` clean in
+`packages/auth` and `apps/web`; 1,156 unit tests pass — notably with the
+`NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET` dummy removed from `vite.config.js`, proving the
+var is genuinely optional now. Manual regression pass pending — see `RETEST_CHECKLIST.md`
+(section A) at the repo root, which also consolidates the untested Batch 2–5 items.
+
+beta.8 removes the old smart-account surface and ships sponsorship inside the SDK.
+Verified against the published tarball (`npm pack @geoprotocol/geo-sdk@0.20.0-beta.8`):
+
+- **Removed exports**: `getSmartAccountWalletClient`, `getWalletClient`, `TESTNET_RPC_URL`
+  (smart-wallet.js) and `createGeoZeroDev7702WalletClient` (zero-dev.js).
+- **New export**: `createGeoWalletClient({ signer, network, publicClient? })` →
+  `KernelAccountClient`. The implementation is the *same* kernel setup as the old
+  7702 client (entryPoint 0.7, KERNEL_V3_3, `eip7702Account: signer`, ZeroDev
+  paymaster) — only the URL plumbing moved into the network config. Behavior is
+  unchanged: `sendUserOperation` still returns at bundler-accept, and
+  `waitForUserOperationReceipt` still exists, so the serialization/at-most-once
+  wrapper in `use-smart-account.ts` stays as-is.
+- **`GeoTestnetConfig.sponsorship.rpcUrl`** is baked in:
+  `https://rpc.zerodev.app/api/v3/d26c96b9-.../chain/55516?selfFunded=true` — the
+  SAME ZeroDev project id we ship in `.env.local` today. Sponsorship becomes
+  Geo/SDK-owned, which retires review finding #14 (client-exposed project id) as
+  "theirs to manage".
+- Everything else beta.5 → beta.8 is additive/benign: new SystemIds
+  (SYSTEM_TYPE, PROPOSAL_TYPE, DAO_SPACE_TYPE, …), `permissionless` dropped from
+  the SDK's lite path, e2e-wallet ported to network configs. No other top-level
+  export changed.
+
+### Migration steps
+
+1. Bump `@geoprotocol/geo-sdk` to `^0.20.0-beta.8` in `apps/web/package.json` and
+   `packages/auth/package.json`; install.
+2. `packages/auth/src/account.ts` — `generateZeroDevAccount`:
+   - import `createGeoWalletClient, GeoTestnetConfig, defineGeoNetworkConfig`;
+   - params become `{ signer, rpcUrl?, sponsorshipRpcUrl? }` (drop `chain` +
+     required `zeroDevRpcUrl`);
+   - when overrides are absent use `GeoTestnetConfig` verbatim; when present build
+     `defineGeoNetworkConfig({ ...GeoTestnetConfig, chain: { ...chain, rpcUrl },
+     sponsorship: { rpcUrl: sponsorshipRpcUrl } })`. Overrides exist ONLY for the
+     local-anvil e2e env (`apps/web/.env` routes sponsorship to localhost:8545).
+3. `apps/web/core/hooks/use-smart-account.ts` — stop passing `chain: GEOGENESIS`
+   and `zeroDevRpcUrl: config.bundler`; pass the env override only when set.
+   Wrapper (queue + confirmInclusion) unchanged.
+4. Env cleanup: `NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET` becomes OPTIONAL —
+   remove the throw in `core/environment/config.ts`, keep reading it as an
+   override; delete the value from `.env.local` (prod-like testnet now uses the
+   SDK default), keep it in `.env` for local anvil; drop the dummy from
+   `vite.config.js` if tests pass without it.
+5. Docs/log: mark finding #14 resolved-by-SDK in CODE_REVIEW_FINDINGS.md; update
+   the "ZeroDev sponsorship policy" mainnet blocker to point at the SDK config.
+6. Verify: `tsc`, unit tests, then manual testnet pass: login (7702 kernel init),
+   publish an edit, vote, create a space — all sponsored ops.
+
+Mainnet note: beta.8 still has only a TESTNET built-in; the Safe+Pimlico mainnet
+branch in `packages/auth` is untouched by this migration and remains the open
+"mainnet AA story" blocker above.

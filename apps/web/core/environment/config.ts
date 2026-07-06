@@ -37,15 +37,11 @@ if (!BUNDLER_RPC_ENDPOINT) {
   throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
 }
 
-// Testnet (chain 55516) goes through ZeroDev for both bundling and gas sponsorship via
-// EIP-7702. The URL embeds the ZeroDev project id in its path
-// (e.g. https://rpc.zerodev.app/api/v3/<project-id>/chain/55516) and is consumed by
-// `createGeoZeroDev7702WalletClient` in packages/auth/src/account.ts.
+// OPTIONAL override for the testnet sponsorship (combined bundler + paymaster) RPC.
+// Since geo-sdk 0.20.0-beta.8 the Geo-managed ZeroDev sponsorship endpoint ships inside
+// the SDK's GeoTestnetConfig, so this is only set in the local-anvil e2e environment
+// (apps/web/.env points it at localhost). Leave unset on real testnet.
 const ZERODEV_RPC_URL_TESTNET = process.env.NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET;
-
-if (!ZERODEV_RPC_URL_TESTNET) {
-  throw new Error('NEXT_PUBLIC_ZERODEV_RPC_URL_TESTNET is not set');
-}
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
