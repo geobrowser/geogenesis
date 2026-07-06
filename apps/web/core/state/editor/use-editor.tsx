@@ -16,6 +16,7 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { DEFAULT_BLOCK_SHOWN_PROPERTIES } from '../../blocks/data/default-block-shown-properties';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
@@ -713,7 +714,7 @@ export function useEditorStore() {
         entityPageId: activeEntityId,
       });
 
-      // New collection data blocks: persist Types + Description as shown columns (with Name)
+      // New collection data blocks: persist default shown columns (with Name)
       for (const node of addedBlocks) {
         if (node.type !== 'tableNode') continue;
         if (node.attrs?.initialDataSource === 'QUERY') continue;
@@ -758,8 +759,9 @@ export function useEditorStore() {
           });
         };
 
-        addShownProperty(SystemIds.TYPES_PROPERTY, 'Types');
-        addShownProperty(SystemIds.DESCRIPTION_PROPERTY, 'Description');
+        for (const { id, name } of DEFAULT_BLOCK_SHOWN_PROPERTIES) {
+          addShownProperty(id, name);
+        }
       }
 
       /**

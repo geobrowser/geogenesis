@@ -4,10 +4,7 @@ import { ID } from '~/core/id';
 import type { Mutator } from '~/core/sync/use-mutate';
 import type { Relation } from '~/core/types';
 
-const DEFAULT_SHOWN_COLUMNS: { id: string; name: string }[] = [
-  { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
-  { id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description' },
-];
+import { DEFAULT_BLOCK_SHOWN_PROPERTIES } from '../data/default-block-shown-properties';
 
 export function ensureRankingShownColumns({
   storage,
@@ -36,7 +33,7 @@ export function ensureRankingShownColumns({
 
   let nextPosition = lastStr;
 
-  for (const { id: propertyId, name: propertyName } of DEFAULT_SHOWN_COLUMNS) {
+  for (const { id: propertyId, name: propertyName } of DEFAULT_BLOCK_SHOWN_PROPERTIES) {
     if (existingShown.some(r => ID.equals(r.toEntity.id, propertyId))) continue;
 
     const position = Position.generateBetween(nextPosition, null) ?? Position.generate();

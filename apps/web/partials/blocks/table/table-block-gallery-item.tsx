@@ -6,7 +6,9 @@ import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { useView } from '~/core/blocks/data/use-view';
+import { PLACEHOLDER_SPACE_IMAGE, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -64,6 +66,8 @@ export function TableBlockGalleryItem({
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
+  const { shownColumnIds } = useView();
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -108,7 +112,8 @@ export function TableBlockGalleryItem({
     c =>
       c.slotId !== SystemIds.NAME_PROPERTY &&
       c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY
+      c.slotId !== SystemIds.COVER_PROPERTY &&
+      c.slotId !== SCORE_SYSTEM_PROPERTY
   );
 
   /**
@@ -309,7 +314,7 @@ export function TableBlockGalleryItem({
                 )}
               </div>
             )}
-            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+            {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
           </div>
         </div>
         {description && propertyDataHasDescription && (

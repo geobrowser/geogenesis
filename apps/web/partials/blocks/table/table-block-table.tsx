@@ -16,6 +16,7 @@ import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
 import { Source } from '~/core/blocks/data/source';
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -228,6 +229,7 @@ export const TableBlockTable = ({
   onSort,
 }: TableBlockTableProps) => {
   const isEditing = useUserIsEditing(space);
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
 
@@ -324,7 +326,7 @@ export const TableBlockTable = ({
                   </th>
                 );
               })}
-              {!isEditing && <th className="w-px p-[10px]" />}
+              {!isEditing && showVoteButtons ? <th className="w-px p-[10px]" /> : null}
             </tr>
           </thead>
           <tbody>
@@ -343,11 +345,11 @@ export const TableBlockTable = ({
                       </TableCell>
                     );
                   })}
-                  {!isEditing && (
+                  {!isEditing && showVoteButtons ? (
                     <TableCell isShown={true} isEditMode={false}>
                       <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
                     </TableCell>
-                  )}
+                  ) : null}
                 </tr>
               );
             })}
