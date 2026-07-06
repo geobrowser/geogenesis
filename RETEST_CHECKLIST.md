@@ -36,7 +36,9 @@ now with `?selfFunded=true`).
       is the flow that depends on `sendUserOperation` + `waitForUserOperationReceipt`
       still behaving the same on the beta.8 client.
       ⚠ Known watch item (pre-existing): a vote queued behind a slow publish can hit
-      the 45 s timeout in `useSmartAccountTransaction`.
+      the 45 s timeout in `useSmartAccountTransaction` — now logged as
+      CODE_REVIEW_FINDINGS #16 (and #15: a window-focus refetch mid-publish creates a
+      second client instance with its own queue, re-opening the AA25 race).
 - [ ] **A7. Membership / editorship request** — request membership in a space you're
       not in; optimistic "requested" state shows and survives refresh.
 - [ ] **A8. (local-dev only) anvil e2e env** — `apps/web/.env` still routes

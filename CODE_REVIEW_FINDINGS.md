@@ -213,6 +213,120 @@ mainnet-path concern (see V020_MIGRATION_LOG mainnet blockers).
 
 ---
 
+## Round 2 — geo-sdk behavior review vs upstream/master (2026-07-06)
+
+Four-way parallel subagent review of the full branch diff (upstream pins geo-sdk 0.19.4;
+branch is on 0.20.0-beta.8). Every SDK call shape was verified against the installed
+beta.8 dist. The beta.8 wallet-client migration itself came back clean — findings below
+are in surrounding code, most pre-dating the SDK bump.
+
+### 15. OPEN — Major — Serialization queue is per-queryFn instance; react-query refetches defeat the AA25 protection
+`use-smart-account.ts:80`: `sendChain` lives inside `queryFn`, but the app uses a default
+`new QueryClient()` (staleTime 0, refetchOnWindowFocus true) and the queryKey includes
+`cookies.walletAddress` — which the queryFn itself writes. Any refetch (window focus,
+cookie write during login) builds a NEW wrapped client with a fresh empty queue while
+closures from earlier renders still hold the old one. Scenario: publish in flight on the
+old instance's queue → tab away/back → vote goes through the new instance's empty queue →
+parallel submission, same kernel nonce → AA25. Fix: hoist the queue (module-level, keyed
+by EOA address) so all client instances for one signer share it.
+
+### 16. OPEN — Major — 45s tx timeout races the 90s queue hold; a timed-out call still submits later
+`use-smart-account-transaction.ts:53-56`: `Effect.timeoutFail(45s)` wraps
+`smartAccount.sendTransaction`, which is `enqueue(...)`. Effect interruption does not
+dequeue the task — once enqueued it always runs when the queue drains. A queued
+`sendUserOperation` ahead of it can hold the queue up to 90s (`RECEIPT_DEADLINE_MS`), so
+the file's comment ("45s covers queue time + submission") is wrong. Scenario: slow publish
+holds the queue >45s → user's vote/membership request errors "Transaction timed out" →
+user retries → BOTH queued txs eventually execute → duplicate op on-chain. This is the
+formalization of the RETEST_CHECKLIST A6 watch item. Fix: timeout > worst-case queue hold,
+or make enqueued tasks abortable before submission.
+
+### 17. VERIFY — Minor — Personal-space creation emits `TOPIC_DECLARED` while set-topic migrated to the SDK's `TOPIC_SET`
+`create-personal-space-on-chain.ts:171` (via `buildPersonalTopicDeclaredCalldata`,
+`space-topic.ts:33,56`) still emits `keccak('GOVERNANCE.TOPIC_DECLARED')`; the migrated
+`use-space-topic.ts:88` uses `geo.personalSpaces.setTopic` → `GOVERNANCE.TOPIC_SET`
+(beta.8 has no TOPIC_DECLARED anywhere). Mitigation: the v2 REST schema lists BOTH
+`SET_TOPIC` and `TOPIC_DECLARED` as action types (`dto/proposals.ts:29`,
+`rest/validation.ts:86`), so the indexer likely accepts both — but if it ever drops the
+legacy name, personal-space deploys hang in `waitForSpaceIndexed`. Action: confirm with
+the API team which names the v2 indexer consumes; converge the three sites.
+
+### 18. OPEN — Minor — Mainnet chain's native currency silently changed ETH → GEO
+`packages/auth/src/chain.ts:16`: upstream declared `{name:'Ethereum', symbol:'ETH'}` for
+both networks; the branch declares GEO for both. Correct for testnet 55516, but the
+mainnet (80451) entry changed too, outside the stated migration — wallets prompted via
+`wallet_addEthereumChain` and balance/fee formatting would label mainnet gas "GEO".
+Confirm 80451's actual gas token before the mainnet flip (fold into finding #7).
+
+### 19. OPEN — Minor (latent) — `generateSmartAccount` lost its chain-id guard
+`packages/auth/src/account.ts:95-115`: upstream branched on chain id with
+testnet-specific Safe addresses; the new code applies canonical Safe addresses to
+whatever chain is passed. A misrouted 55516 call now fails opaquely at first send
+instead of loudly at init. Not reachable today (use-smart-account routes 55516 to
+ZeroDev first) — add a `chain.id === mainnet` assertion when touching this next.
+
+### 20. OPEN — Minor — `rpcUrl: config.rpc` always overrides the SDK's built-in chain RPC
+`use-smart-account.ts:44`: the in-code comment says "on real testnet the SDK default
+applies", but that's only true for sponsorship — `NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET` is
+required non-null, so the SDK's built-in 55516 RPC is never used. The env var name
+survived the 19411→55516 chain move, so a stale deployment env (Vercel preview) silently
+yields a kernel client whose transport serves the wrong chain. Options: pass `rpcUrl`
+only alongside the local-anvil sponsorship override, or assert `eth_chainId` at init.
+
+### 21. OPEN — Minor — Logged-in testnet users briefly read as logged-out while Privy wallets load
+`use-smart-account.ts:23-35`: the testnet path gates on `embeddedWallet` from Privy's
+`useWallets`, but `isLoading` only tracks the wagmi `useWalletClient`. If wagmi settles
+first, consumers momentarily see `smartAccount === null, isLoading === false` — mount-time
+logic treating that as "logged out" (hidden write UI, redirects) misfires. Consult
+`useWallets().ready` in the loading signal.
+
+### 22. OPEN — Minor — Stale optimistic vote choice if the vote tx fails after unmount
+`accept-or-reject.tsx:69,176-192`: `addOptimisticVote` is set at click; removal relies on
+the mutation `onError` (doesn't fire after unmount) or the server `userVote` effect.
+Close the review slide-over while the tx is pending and let it revert → "You accepted"
+renders for the rest of the session with the vote buttons hidden. Clear the atom from a
+mutation-scoped callback that survives unmount (e.g. mutation cache subscription), or
+re-validate the atom against `userVote === null` after votingEnded/refetch.
+
+### 23. OPEN — Minor — Outcome footer renders the Unix epoch for terminal endTime=0 proposals
+`my-governance-proposal-card.tsx:88-98`, `pending-proposals-page.tsx:247-256`: the new
+`endTime <= 0` guard covers only the not-ended branch; the
+ACCEPTED/REJECTED/votingEnded branch formats `endTime` unconditionally → "January 1,
+1970" if a proposal can reach a terminal state without the window opening. Cheap
+`endTime > 0` guard on that branch.
+
+### 24. NOTE — versionId silently defaults to 1 when the API omits `proposalVersion`
+`use-vote.ts:112`: all three voting surfaces thread `proposal.version` correctly, but the
+REST schema marks it optional — an API row missing the field degrades to voting on
+version 1 with no stale-toast. Residual of resolved #2. Consider failing loudly (or
+refetching) when a DAO-space proposal arrives without a version.
+
+### Round-2 verified clean (for the record)
+
+- **beta.8 wallet-client migration**: `createGeoWalletClient` / `defineGeoNetworkConfig`
+  / `GeoTestnetConfig` usage verified against installed dist; the spread-merge preserves
+  all required fields; the `GeoWalletClient` casts are runtime-sound (KernelAccountClient
+  provides account/sendTransaction/sendUserOperation/waitForUserOperationReceipt);
+  mainnet Safe+Pimlico body byte-for-byte upstream's else-branch.
+- **Env plumbing**: `config.bundler` and `config.sponsorship` each consumed by exactly
+  one chain branch; empty-string-as-unset works; `NEXT_PUBLIC_BUNDLER_RPC_TESTNET` has
+  zero stale references; signer path safe (only the Privy embedded wallet, whose
+  `toViemAccount` result has `signAuthorization`, ever reaches the 7702 client).
+- **Write-path encodings**: proposeEdit/publishEdit, voteProposal (bytes16 + uint8 + uint8),
+  entity votes (arg order + `PERMISSIONLESS.UPVOTED` hash + objectType 0), executeProposal,
+  membership/editor proposals (SLOW default safe), create-DAO 7-field VotingSettings and
+  validator mirror deploy-time editor count; factory/registry addresses byte-for-byte match
+  SDK beta.8 TESTNET constants.
+- **v2 data model**: governance counter bucketing exhaustive and non-overlapping vs the
+  generated schema; DTO decoders null-safe on real payloads; proposalVersion threaded
+  end-to-end; deleted v1 modules have no dangling importers; `formatThreshold` /100000
+  correct for SDK RATIO_BASE 1e7; synthetic-home gating strictly test-env.
+- Two agent claims were already answered by earlier live-API checks (see Verified clean
+  below): `desc`-ordered lists return endTime-0 rows first, and `getApiProposalCanExecute`
+  held up against live samples (FAST-proposal spot-check still worthwhile).
+
+---
+
 ## Verified clean (for the record)
 
 - `createGeoZeroDev7702WalletClient` usage matches beta.5 typings exactly; lockfile resolves
