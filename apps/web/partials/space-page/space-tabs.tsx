@@ -26,7 +26,7 @@ type SpaceTabsProps = {
 type BuiltSpaceTab = {
   label: string;
   href: string;
-  priority: 1 | 2 | 3 | 4;
+  priority: 1 | 2 | 3 | 4 | 5;
 };
 
 type BuildSpaceTabsParams = {
@@ -60,27 +60,33 @@ export function buildSpaceTabs({
     priority: 2,
   };
 
+  const DEBATE_TAB: BuiltSpaceTab = {
+    label: 'Debates',
+    href: `/space/${spaceId}/debates`,
+    priority: 3,
+  };
+
   const SOME_SPACES_TABS: BuiltSpaceTab[] = [
     {
       label: 'Governance',
       href: `/space/${spaceId}/governance`,
-      priority: 3,
+      priority: 4,
     },
   ];
 
   const ACTIVITY_TAB: BuiltSpaceTab = {
     label: 'Activity',
     href: `/space/${spaceId}/activity`,
-    priority: 4,
+    priority: 5,
   };
 
   tabs.push(...ALL_SPACES_TABS);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const visibleDynamicTabs = questionsTabEnabled
-        ? dynamicTabs.filter(tab => tab.label !== QUESTION_TAB.label)
-        : dynamicTabs;
+      const reservedLabels = new Set(questionsTabEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []);
+      const visibleDynamicTabs =
+        reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
       tabs.push(...visibleDynamicTabs.map(tab => ({ ...tab, priority: 1 as const })));
     }
@@ -88,6 +94,7 @@ export function buildSpaceTabs({
 
   if (questionsTabEnabled) {
     tabs.push(QUESTION_TAB);
+    tabs.push(DEBATE_TAB);
   }
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
@@ -157,6 +164,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   if (questionsTabEnabled) {
     systemTabsAfter.push({ label: 'Questions', href: `/space/${spaceId}/questions` });
+    systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });

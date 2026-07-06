@@ -7,6 +7,9 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
+import type { DebateQuestion } from '~/core/debates/api';
+import { useDebateQuestions, useJoinDebateQueue } from '~/core/debates/hooks';
+import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import {
   ANSWERS_PROPERTY_ID,
   PERSON_TYPE_ID,
@@ -64,21 +67,21 @@ const relatedFields: RelatedField[] = [
 ];
 
 export function QuestionsPageClient({ spaceId }: QuestionsPageClientProps) {
-  const questionsTabEnabled = useFeatureFlag('questionsTab');
+  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsTabEnabled) {
+    if (!questionsAndDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsTabEnabled, router, spaceId]);
+  }, [questionsAndDebatesEnabled, router, spaceId]);
 
-  if (!questionsTabEnabled) return null;
+  if (!questionsAndDebatesEnabled) return null;
 
-  return <QuestionsTabSurface spaceId={spaceId} />;
+  return <QuestionsTabSurface spaceId={spaceId} debatesEnabled={questionsAndDebatesEnabled} />;
 }
 
-function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
+function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientProps & { debatesEnabled: boolean }) {
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: questions, isLoading } = useQueryEntities({
     where: {
@@ -89,7 +92,32 @@ function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
     placeholderData: keepPreviousData,
     includeUnpublishedLocal: true,
   });
-
+  const publishedQuestionIds = React.useMemo(
+    () => questions.filter(isQuestionPublished).map(question => question.id),
+    [questions]
+  );
+  const debateQuestionsQuery = useDebateQuestions(spaceId, publishedQuestionIds, debatesEnabled);
+  const debateQuestionsByEntityId = React.useMemo(() => {
+    const map = new Map<string, DebateQuestion>();
+    for (const question of debateQuestionsQuery.data?.questions ?? []) {
+      map.set(question.question_entity_id, question);
+    }
+    return map;
+  }, [debateQuestionsQuery.data?.questions]);
+  const activeMatches = React.useMemo(
+    () =>
+      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
+        question.active_match ? [question.active_match] : []
+      ),
+    [debateQuestionsQuery.data?.questions]
+  );
+  const activeDebates = React.useMemo(
+    () =>
+      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
+        question.active_debate ? [question.active_debate] : []
+      ),
+    [debateQuestionsQuery.data?.questions]
+  );
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -106,8 +134,17 @@ function QuestionsTabSurface({ spaceId }: QuestionsPageClientProps) {
       {formOpen && <AddQuestionForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
       <div className={cx(formOpen && 'mt-6')}>
-        <QuestionsList questions={questions} isLoading={isLoading} />
+        <QuestionsList
+          questions={questions}
+          isLoading={isLoading}
+          spaceId={spaceId}
+          debatesEnabled={debatesEnabled}
+          debateJoinBlocked={activeMatches.length > 0}
+          debateQuestionsByEntityId={debateQuestionsByEntityId}
+          debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
+        />
       </div>
+      <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} debates={activeDebates} />
     </div>
   );
 }
@@ -253,7 +290,23 @@ function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () 
   );
 }
 
-function QuestionsList({ questions, isLoading }: { questions: Entity[]; isLoading: boolean }) {
+function QuestionsList({
+  questions,
+  isLoading,
+  spaceId,
+  debatesEnabled,
+  debateJoinBlocked,
+  debateQuestionsByEntityId,
+  debateStatus,
+}: {
+  questions: Entity[];
+  isLoading: boolean;
+  spaceId: string;
+  debatesEnabled: boolean;
+  debateJoinBlocked: boolean;
+  debateQuestionsByEntityId: Map<string, DebateQuestion>;
+  debateStatus: string | null;
+}) {
   if (isLoading && questions.length === 0) {
     return (
       <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
@@ -277,26 +330,89 @@ function QuestionsList({ questions, isLoading }: { questions: Entity[]; isLoadin
 
   return (
     <div className="space-y-3">
+      {debateStatus && debatesEnabled && (
+        <div className="rounded-lg border border-red-01 bg-white px-5 py-3">
+          <Text color="red-01">{debateStatus}</Text>
+        </div>
+      )}
       {questions.map(question => (
-        <QuestionListItem key={question.id} question={question} />
+        <QuestionListItem
+          key={question.id}
+          question={question}
+          spaceId={spaceId}
+          debatesEnabled={debatesEnabled}
+          debateJoinBlocked={debateJoinBlocked}
+          debateQuestion={debateQuestionsByEntityId.get(question.id) ?? null}
+        />
       ))}
     </div>
   );
 }
 
-function QuestionListItem({ question }: { question: Entity }) {
+function QuestionListItem({
+  question,
+  spaceId,
+  debatesEnabled,
+  debateJoinBlocked,
+  debateQuestion,
+}: {
+  question: Entity;
+  spaceId: string;
+  debatesEnabled: boolean;
+  debateJoinBlocked: boolean;
+  debateQuestion: DebateQuestion | null;
+}) {
   const answers = relationsForProperty(question.relations, ANSWERS_PROPERTY_ID);
   const topics = relationsForProperty(question.relations, TOPICS_PROPERTY_ID);
   const relatedPeople = relationsForProperty(question.relations, RELATED_PEOPLE_PROPERTY_ID);
   const relatedProjects = relationsForProperty(question.relations, RELATED_PROJECTS_PROPERTY_ID);
+  const published = isQuestionPublished(question);
+  const joinQueue = useJoinDebateQueue(spaceId);
+  const activeMatch = debateQuestion?.active_match ?? null;
+  const activeDebate = debateQuestion?.active_debate ?? null;
+  const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
+
+  const joinAnswer = (answer: { entityId: string; label: string }) => {
+    joinQueue.mutate({
+      questionId: question.id,
+      request: {
+        answer_entity_id: answer.entityId,
+        answer_label: answer.label,
+      },
+    });
+  };
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <Text as="h3" variant="bodySemibold" color="text" className="block">
-        {question.name ?? question.id}
-      </Text>
+      <div className="min-w-0">
+        <Text as="h3" variant="bodySemibold" color="text" className="block">
+          {question.name ?? question.id}
+        </Text>
 
-      <RelationChipGroup label="Answers" relations={answers} className="mt-3" />
+        {!published && debatesEnabled && (
+          <Text as="p" variant="body" color="grey-04" className="mt-2">
+            Publish this question before starting a debate.
+          </Text>
+        )}
+      </div>
+
+      <AnswerChipGroup
+        relations={answers}
+        debatesEnabled={debatesEnabled}
+        canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
+        pendingAnswerEntityId={debateQuestion?.viewer_waiting_answer_entity_id ?? null}
+        joinPending={joinQueue.isPending}
+        onJoinAnswer={joinAnswer}
+        className="mt-3"
+      />
+
+      {debatesEnabled && (
+        <QuestionDebateStatus
+          debateQuestion={debateQuestion}
+          mutationError={mutationError}
+          published={published}
+        />
+      )}
 
       {(topics.length > 0 || relatedPeople.length > 0 || relatedProjects.length > 0) && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -307,6 +423,108 @@ function QuestionListItem({ question }: { question: Entity }) {
       )}
     </article>
   );
+}
+
+function AnswerChipGroup({
+  relations,
+  debatesEnabled,
+  canJoinDebate,
+  pendingAnswerEntityId,
+  joinPending,
+  onJoinAnswer,
+  className,
+}: {
+  relations: Relation[];
+  debatesEnabled: boolean;
+  canJoinDebate: boolean;
+  pendingAnswerEntityId: string | null;
+  joinPending: boolean;
+  onJoinAnswer: (answer: { entityId: string; label: string }) => void;
+  className?: string;
+}) {
+  if (relations.length === 0) return null;
+
+  return (
+    <div className={className}>
+      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
+        Answers
+      </Text>
+      <div className="flex flex-wrap gap-1.5">
+        {relations.map(relation => {
+          const label = relation.toEntity.name ?? relation.toEntity.id;
+          if (debatesEnabled) {
+            return (
+              <Button
+                key={relation.id}
+                type="button"
+                variant="secondary"
+                small
+                onClick={() => onJoinAnswer({ entityId: relation.toEntity.id, label })}
+                disabled={!canJoinDebate || joinPending || pendingAnswerEntityId === relation.toEntity.id}
+              >
+                {label}
+              </Button>
+            );
+          }
+
+          return (
+            <span
+              key={relation.id}
+              className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
+            >
+              <span className="truncate">{label}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function QuestionDebateStatus({
+  debateQuestion,
+  mutationError,
+  published,
+}: {
+  debateQuestion: DebateQuestion | null;
+  mutationError: string | null;
+  published: boolean;
+}) {
+  if (mutationError) {
+    return (
+      <Text as="p" variant="body" color="red-01" className="mt-3">
+        {mutationError}
+      </Text>
+    );
+  }
+
+  if (!published) return null;
+
+  if (debateQuestion?.active_debate) {
+    return (
+      <Text as="p" variant="body" color="grey-04" className="mt-3">
+        Debate {debateQuestion.active_debate.status.replace('_', ' ')}
+      </Text>
+    );
+  }
+
+  if (debateQuestion?.active_match) {
+    return (
+      <Text as="p" variant="body" color="grey-04" className="mt-3">
+        Match found. Both speakers need to accept.
+      </Text>
+    );
+  }
+
+  if (debateQuestion?.viewer_waiting_answer_entity_id) {
+    return (
+      <Text as="p" variant="body" color="grey-04" className="mt-3">
+        Waiting for someone with a different answer.
+      </Text>
+    );
+  }
+
+  return null;
 }
 
 function RelationChipGroup({
@@ -341,4 +559,8 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
+}
+
+function isQuestionPublished(question: Entity): boolean {
+  return !question.relations.some(relation => relation.isLocal && relation.hasBeenPublished !== true);
 }
