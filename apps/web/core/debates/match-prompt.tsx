@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import { type Debate, type DebateMatch, type DebateSide, getCurrentGeoChatUserId } from './api';
+import { type Debate, type DebateMatch, type DebateMatchParticipant, getCurrentGeoChatUserId } from './api';
 import { DebateFormatSelector } from './format-selector';
 import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from './formats';
 import { useAcceptDebateMatch, useDeclineDebateMatch } from './hooks';
@@ -56,7 +56,8 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   React.useEffect(() => {
     if (!currentUserId) return;
 
-    const debateIdFromMatch = matches.find(match => match.debate_id && sideForUser(match, currentUserId))?.debate_id;
+    const debateIdFromMatch = matches.find(match => match.debate_id && participantForUser(match, currentUserId))
+      ?.debate_id;
     if (debateIdFromMatch) {
       navigateToDebate(debateIdFromMatch);
       return;
@@ -79,11 +80,11 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const waitingMatch =
     matches.find(match => {
       if (!currentUserId || dismissedMatchIds.includes(match.id)) return false;
-      const side = sideForUser(match, currentUserId);
+      const participant = participantForUser(match, currentUserId);
       return (
         acceptedMatchIds.includes(match.id) ||
         waitingQuestionIds.includes(match.question.id) ||
-        (side ? acceptedForSide(match, side) : false)
+        participant?.accepted === true
       );
     }) ?? null;
   const activeMatch =
@@ -94,11 +95,11 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   if (!activeMatch || !currentUserId) return null;
 
   const selectedFormatId = selectedFormatIds[activeMatch.id] ?? formatIdForMatch(activeMatch);
-  const mySide = sideForUser(activeMatch, currentUserId);
+  const myParticipant = participantForUser(activeMatch, currentUserId);
   const waiting =
     acceptedMatchIds.includes(activeMatch.id) ||
     waitingQuestionIds.includes(activeMatch.question.id) ||
-    (mySide ? acceptedForSide(activeMatch, mySide) : false);
+    myParticipant?.accepted === true;
   const error =
     acceptMatch.error instanceof Error
       ? acceptMatch.error.message
@@ -115,7 +116,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
     acceptMatch.mutate(
       {
         matchId: activeMatch.id,
-        formatId: currentUserId === activeMatch.for.user_id ? selectedFormatId : undefined,
+        formatId: myParticipant?.participant_slot === 1 ? selectedFormatId : undefined,
       },
       {
         onSuccess: result => {
@@ -194,8 +195,8 @@ function MatchDialog({
   onFormatChange: (formatId: DebateFormatId) => void;
   onMinimize: () => void;
 }) {
-  const mySide = sideForUser(match, currentUserId);
-  const canChooseFormat = currentUserId === match.for.user_id && !waiting;
+  const myParticipant = participantForUser(match, currentUserId);
+  const canChooseFormat = myParticipant?.participant_slot === 1 && !waiting;
   const other = otherParticipant(match, currentUserId);
 
   return (
@@ -228,12 +229,11 @@ function MatchDialog({
           </Text>
 
           <div className="grid grid-cols-2 gap-2">
-            {(['for', 'against'] as const).map(side => {
-              const participant = side === 'for' ? match.for : match.against;
+            {orderedParticipants(match).map(participant => {
               return (
-                <div key={side} className="min-w-0 rounded-lg border border-grey-02 bg-bg p-3">
+                <div key={participant.user_id} className="min-w-0 rounded-lg border border-grey-02 bg-bg p-3">
                   <Text as="div" variant="metadataMedium" color="ctaPrimary" className="truncate">
-                    {labelForSide(side, match)}
+                    {participant.answer.label}
                   </Text>
                   <Text as="div" variant="bodySemibold" color="text" className="mt-1 truncate">
                     {speakerLabel(participant)}
@@ -256,9 +256,9 @@ function MatchDialog({
             />
           )}
 
-          {mySide && (
+          {myParticipant && (
             <Text as="p" variant="metadata" color="grey-04" className="mt-3">
-              You are arguing for {labelForSide(mySide, match)}.
+              You chose {myParticipant.answer.label}.
             </Text>
           )}
 
@@ -307,7 +307,7 @@ function MinimizedMatchPrompt({
   onOpen: () => void;
 }) {
   const other = otherParticipant(match, currentUserId);
-  const mySide = sideForUser(match, currentUserId);
+  const myParticipant = participantForUser(match, currentUserId);
 
   return (
     <aside className="max-sm:right-3 max-sm:bottom-3 max-sm:left-3 max-sm:w-auto fixed right-6 bottom-6 z-[1100] grid w-[min(360px,calc(100vw-48px))] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 text-text shadow-card">
@@ -316,7 +316,7 @@ function MinimizedMatchPrompt({
           {waiting ? `${speakerLabel(other)} is waiting` : `Match found: ${speakerLabel(other)}`}
         </Text>
         <Text as="span" variant="metadata" color="grey-04" className="truncate">
-          {mySide ? `${labelForSide(mySide, match)} · ` : ''}
+          {myParticipant ? `${myParticipant.answer.label} · ` : ''}
           {match.question.question}
         </Text>
       </span>
@@ -327,26 +327,20 @@ function MinimizedMatchPrompt({
   );
 }
 
-function acceptedForSide(match: DebateMatch, side: DebateSide) {
-  return side === 'for' ? match.for_accepted : match.against_accepted;
+function participantForUser(match: DebateMatch, userId: string): DebateMatchParticipant | null {
+  return match.participants.find(participant => participant.user_id === userId) ?? null;
 }
 
-function sideForUser(match: DebateMatch, userId: string): DebateSide | null {
-  if (match.for.user_id === userId) return 'for';
-  if (match.against.user_id === userId) return 'against';
-  return null;
+function otherParticipant(match: DebateMatch, userId: string): DebateMatchParticipant {
+  return match.participants.find(participant => participant.user_id !== userId) ?? match.participants[0]!;
 }
 
-function otherParticipant(match: DebateMatch, userId: string) {
-  return match.for.user_id === userId ? match.against : match.for;
+function orderedParticipants(match: DebateMatch) {
+  return [...match.participants].sort((a, b) => a.participant_slot - b.participant_slot);
 }
 
 function speakerLabel(participant: { display_name: string | null; profile_space_id: string }) {
   return participant.display_name || participant.profile_space_id;
-}
-
-function labelForSide(side: DebateSide, match: DebateMatch) {
-  return side === 'for' ? match.question.side_labels.for : match.question.side_labels.against;
 }
 
 function formatIdForMatch(match: DebateMatch): DebateFormatId {

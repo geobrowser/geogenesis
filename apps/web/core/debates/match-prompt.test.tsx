@@ -48,7 +48,7 @@ afterEach(() => {
 });
 
 describe('DebateMatchPrompt', () => {
-  it('opens a match modal and lets the for side choose a format before accepting', () => {
+  it('opens a match modal and lets the first participant choose a format before accepting', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
     expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
@@ -87,7 +87,15 @@ describe('DebateMatchPrompt', () => {
 
   it('moves the first accepter into the debate once polling shows it exists', () => {
     mocks.acceptMutate.mockImplementation((_variables, options) => {
-      options.onSuccess({ match: { ...match(), for_accepted: true }, debate: null });
+      options.onSuccess({
+        match: {
+          ...match(),
+          participants: match().participants.map(participant =>
+            participant.user_id === 'user-for' ? { ...participant, accepted: true } : participant
+          ),
+        },
+        debate: null,
+      });
     });
 
     const { rerender } = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
@@ -112,22 +120,31 @@ function match(): DebateMatch {
       question_entity_id: 'question-entity-1',
       question: 'Should the protocol ship debates?',
       description: null,
-      side_labels: { for: 'Yes', against: 'No' },
+      answer_options: [
+        { entity_id: 'answer-yes', label: 'Yes' },
+        { entity_id: 'answer-no', label: 'No' },
+      ],
     },
-    for: {
-      user_id: 'user-for',
-      profile_space_id: 'profile-for',
-      display_name: 'Alex',
-      avatar_cid: null,
-    },
-    against: {
-      user_id: 'user-against',
-      profile_space_id: 'profile-against',
-      display_name: 'Bri',
-      avatar_cid: null,
-    },
-    for_accepted: false,
-    against_accepted: false,
+    participants: [
+      {
+        user_id: 'user-for',
+        profile_space_id: 'profile-for',
+        display_name: 'Alex',
+        avatar_cid: null,
+        participant_slot: 1,
+        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        accepted: false,
+      },
+      {
+        user_id: 'user-against',
+        profile_space_id: 'profile-against',
+        display_name: 'Bri',
+        avatar_cid: null,
+        participant_slot: 2,
+        answer: { entity_id: 'answer-no', label: 'No' },
+        accepted: false,
+      },
+    ],
     turn_format_id: null,
     debate_id: null,
     created_at: '2026-07-02T00:00:00.000Z',
@@ -144,13 +161,16 @@ function debate(): Debate {
       question_entity_id: 'question-entity-1',
       question: 'Should the protocol ship debates?',
       description: null,
-      side_labels: { for: 'Yes', against: 'No' },
+      answer_options: [
+        { entity_id: 'answer-yes', label: 'Yes' },
+        { entity_id: 'answer-no', label: 'No' },
+      ],
     },
     status: 'ready',
     room_name: 'geo-debate-debate-1',
-    first_side: 'for',
+    first_participant_slot: 1,
     current_turn_index: 0,
-    current_speaker_side: null,
+    current_speaker_slot: null,
     prepare_started_at: null,
     prepare_ends_at: null,
     turn_started_at: null,
@@ -167,7 +187,8 @@ function debate(): Debate {
         profile_space_id: 'profile-for',
         display_name: 'Alex',
         avatar_cid: null,
-        side: 'for',
+        participant_slot: 1,
+        answer: { entity_id: 'answer-yes', label: 'Yes' },
         joined_at: null,
       },
       {
@@ -175,7 +196,8 @@ function debate(): Debate {
         profile_space_id: 'profile-against',
         display_name: 'Bri',
         avatar_cid: null,
-        side: 'against',
+        participant_slot: 2,
+        answer: { entity_id: 'answer-no', label: 'No' },
         joined_at: null,
       },
     ],

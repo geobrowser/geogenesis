@@ -5,9 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import type { Debate, DebateSide, LiveKitJoinResponse } from '~/core/debates/api';
+import type { Debate, LiveKitJoinResponse, ParticipantSlot } from '~/core/debates/api';
 import {
-  oppositeSide,
   useAbortDebate,
   useCompleteLocalRecordingUpload,
   useCreateLocalRecordingUpload,
@@ -43,7 +42,7 @@ type RoomLike = {
 type DebateCountdown = {
   label: string;
   progress: number;
-  activeSide: DebateSide | null;
+  activeSlot: ParticipantSlot | null;
 };
 
 const localRecordingUploadMaxAttempts = 3;
@@ -111,10 +110,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, []);
 
   const stopLocalRecorderAndUpload = React.useCallback(
-    async (side: DebateSide | null) => {
+    async () => {
       const recorder = recorderRef.current;
       const startedAtMs = recordingStartedAtRef.current;
-      if (!recorder || !startedAtMs || !side) return;
+      if (!recorder || !startedAtMs || !joinResponse) return;
 
       const stopped = new Promise<void>(resolve => {
         recorder.onstop = () => resolve();
@@ -132,7 +131,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       let uploadedFilename: string | null = null;
       for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
         try {
-          const upload = await createUpload.mutateAsync({ side, mime_type: mimeType, started_at_ms: startedAtMs });
+          const upload = await createUpload.mutateAsync({ mime_type: mimeType, started_at_ms: startedAtMs });
           const headers = new Headers(upload.upload.headers);
           headers.set('Content-Type', mimeType);
           const uploadResponse = await fetch(upload.upload.url, {
@@ -164,7 +163,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         byte_size: blob.size,
       });
     },
-    [completeUpload, createUpload]
+    [completeUpload, createUpload, joinResponse]
   );
 
   const discardLocalRecorder = React.useCallback(async () => {
@@ -245,7 +244,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRoomError(null);
     setRoomState('uploading');
     try {
-      await stopLocalRecorderAndUpload(joinResponse?.side ?? null);
+      await stopLocalRecorderAndUpload();
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       setRemoteVideoReady(false);
       setRoomState('idle');
@@ -255,7 +254,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('connected');
       return false;
     }
-  }, [joinResponse?.side, stopLocalRecorderAndUpload]);
+  }, [stopLocalRecorderAndUpload]);
 
   const leave = React.useCallback(async () => {
     if (!debate) return;
@@ -366,8 +365,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                       className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
                     >
                       <span className="truncate">
-                        {participant.display_name || participant.profile_space_id} ·{' '}
-                        {labelForSide(participant.side, debate.question.side_labels)}
+                        {participant.display_name || participant.profile_space_id} · {participant.answer.label}
                       </span>
                     </span>
                   ))}
@@ -398,7 +396,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               roomState={roomState}
               roomError={roomError}
               countdown={countdown}
-              localSide={joinResponse?.side ?? null}
+              localSlot={joinResponse?.participant_slot ?? null}
               localVideoRef={localVideoRef}
               remoteMediaRef={remoteMediaRef}
               remoteVideoReady={remoteVideoReady}
@@ -421,7 +419,7 @@ function DebateRecordingModal({
   roomState,
   roomError,
   countdown,
-  localSide,
+  localSlot,
   localVideoRef,
   remoteMediaRef,
   remoteVideoReady,
@@ -436,7 +434,7 @@ function DebateRecordingModal({
   roomState: 'connecting' | 'connected' | 'uploading';
   roomError: string | null;
   countdown: DebateCountdown;
-  localSide: DebateSide | null;
+  localSlot: ParticipantSlot | null;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   remoteMediaRef: React.RefObject<HTMLDivElement | null>;
   remoteVideoReady: boolean;
@@ -447,7 +445,12 @@ function DebateRecordingModal({
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
-  const remoteSide = localSide ? oppositeSide(localSide) : null;
+  const localParticipant = localSlot
+    ? (debate.participants.find(participant => participant.participant_slot === localSlot) ?? null)
+    : null;
+  const remoteParticipant = localSlot
+    ? (debate.participants.find(participant => participant.participant_slot !== localSlot) ?? null)
+    : null;
 
   return (
     <div
@@ -506,8 +509,8 @@ function DebateRecordingModal({
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(180px,1fr)_auto_minmax(180px,1fr)] gap-3">
           <DebateVideoTile
             title="You"
-            sideLabel={localSide ? labelForSide(localSide, debate.question.side_labels) : 'Joining'}
-            active={countdown.activeSide !== null && countdown.activeSide === localSide}
+            answerLabel={localParticipant?.answer.label ?? 'Joining'}
+            active={countdown.activeSlot !== null && countdown.activeSlot === localSlot}
             overlayText={videoEnabled ? null : 'Camera off'}
           >
             <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
@@ -517,8 +520,8 @@ function DebateRecordingModal({
 
           <DebateVideoTile
             title="Other speaker"
-            sideLabel={remoteSide ? labelForSide(remoteSide, debate.question.side_labels) : 'Connecting'}
-            active={countdown.activeSide !== null && countdown.activeSide === remoteSide}
+            answerLabel={remoteParticipant?.answer.label ?? 'Connecting'}
+            active={countdown.activeSlot !== null && countdown.activeSlot === remoteParticipant?.participant_slot}
             overlayText={remoteVideoReady ? null : 'Waiting for video'}
           >
             <div
@@ -540,13 +543,13 @@ function DebateRecordingModal({
 
 function DebateVideoTile({
   title,
-  sideLabel,
+  answerLabel,
   active,
   overlayText,
   children,
 }: {
   title: string;
-  sideLabel: string;
+  answerLabel: string;
   active: boolean;
   overlayText?: string | null;
   children: React.ReactNode;
@@ -563,7 +566,7 @@ function DebateVideoTile({
           {title}
         </span>
         <span className="min-w-0 truncate rounded-full bg-bg px-3 py-1 text-[0.8125rem] leading-4 text-grey-04 shadow-light">
-          {sideLabel}
+          {answerLabel}
         </span>
       </div>
 
@@ -602,8 +605,8 @@ function DebateInstructionBand({
     ? 'Keep this window open until the upload finishes.'
     : debate.status === 'thanking'
       ? 'Both speakers can talk during the wrap-up.'
-      : countdown.activeSide
-        ? `${labelForSide(countdown.activeSide, debate.question.side_labels)} has the floor.`
+      : countdown.activeSlot
+        ? `${labelForSlot(debate, countdown.activeSlot)} has the floor.`
         : 'Get ready.';
 
   return (
@@ -707,7 +710,7 @@ function useDebateCountdown(debate: Debate | null): DebateCountdown {
 
   const countdownWindow = debate ? countdownWindowForDebate(debate) : null;
   if (!countdownWindow?.target) {
-    return { label: '00:00', progress: 0, activeSide: null };
+    return { label: '00:00', progress: 0, activeSlot: null };
   }
 
   const targetMs = new Date(countdownWindow.target).getTime();
@@ -720,20 +723,20 @@ function useDebateCountdown(debate: Debate | null): DebateCountdown {
   return {
     label: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
-    activeSide: countdownWindow.activeSide,
+    activeSlot: countdownWindow.activeSlot,
   };
 }
 
 function countdownWindowForDebate(debate: Debate): {
   start: string | null;
   target: string | null;
-  activeSide: DebateSide | null;
+  activeSlot: ParticipantSlot | null;
 } {
   if (debate.status === 'preparing') {
     return {
       start: debate.prepare_started_at,
       target: debate.prepare_ends_at,
-      activeSide: null,
+      activeSlot: null,
     };
   }
 
@@ -741,7 +744,7 @@ function countdownWindowForDebate(debate: Debate): {
     return {
       start: debate.prepare_ends_at,
       target: debate.preflight_ends_at,
-      activeSide: debate.first_side,
+      activeSlot: debate.first_participant_slot,
     };
   }
 
@@ -749,7 +752,7 @@ function countdownWindowForDebate(debate: Debate): {
     return {
       start: debate.turn_started_at,
       target: debate.turn_ends_at,
-      activeSide: debate.current_speaker_side,
+      activeSlot: debate.current_speaker_slot,
     };
   }
 
@@ -757,24 +760,22 @@ function countdownWindowForDebate(debate: Debate): {
     return {
       start: debate.turn_started_at,
       target: debate.turn_ends_at,
-      activeSide: null,
+      activeSlot: null,
     };
   }
 
   return {
     start: null,
     target: null,
-    activeSide: null,
+    activeSlot: null,
   };
 }
 
 function speakerStatus(debate: Debate) {
   if (debate.status === 'preparing') return 'Both speakers joined. Preparation is running.';
   if (debate.status === 'preflight') return 'Get ready. The first turn is about to start.';
-  if (debate.status === 'in_progress' && debate.current_speaker_side) {
-    const label =
-      debate.current_speaker_side === 'for' ? debate.question.side_labels.for : debate.question.side_labels.against;
-    return `${label} is speaking.`;
+  if (debate.status === 'in_progress' && debate.current_speaker_slot) {
+    return `${labelForSlot(debate, debate.current_speaker_slot)} is speaking.`;
   }
   if (debate.status === 'thanking') return 'Wrap-up is running. Both speakers can thank each other.';
   if (debate.status === 'complete') return 'Debate complete.';
@@ -792,8 +793,8 @@ function roomStateLabel(roomState: 'connecting' | 'connected' | 'uploading') {
   return 'Recording';
 }
 
-function labelForSide(side: DebateSide, labels: { for: string; against: string }) {
-  return side === 'for' ? labels.for : labels.against;
+function labelForSlot(debate: Debate, slot: ParticipantSlot) {
+  return debate.participants.find(participant => participant.participant_slot === slot)?.answer.label ?? 'Answer';
 }
 
 function delay(ms: number): Promise<void> {

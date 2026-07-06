@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getIdentityToken, usePrivy } from '@geogenesis/auth';
 
 import {
-  type DebateSide,
   type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
@@ -173,8 +172,4 @@ export function useRecordingUrl() {
     mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
       getRecordingUrl(debateId, filename, getPrivyIdentityToken),
   });
-}
-
-export function oppositeSide(side: DebateSide) {
-  return side === 'for' ? 'against' : 'for';
 }

@@ -49,7 +49,6 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  oppositeSide: (side: 'for' | 'against') => (side === 'for' ? 'against' : 'for'),
   useDebateQuestions: () => ({ data: debateQuestionsResponse, error: null }),
   useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -201,7 +200,7 @@ describe('QuestionsPageClient', () => {
     expect(answerRelations.map(relation => relation.toEntity.name)).toEqual(['Yes', 'No']);
   });
 
-  it('shows debate side controls for published questions when the feature flag is enabled', () => {
+  it('shows debate answer controls for published questions when the feature flag is enabled', () => {
     questions = [
       {
         id: 'question-1',
@@ -239,7 +238,7 @@ describe('QuestionsPageClient', () => {
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
   });
 
-  it('renders answers once and only makes the first two debate choices clickable', () => {
+  it('renders answers once and makes every debate answer choice clickable', () => {
     questions = [
       {
         id: 'question-1',
@@ -287,7 +286,7 @@ describe('QuestionsPageClient', () => {
     expect(screen.getAllByText('Maybe')).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Maybe' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Maybe' })).toBeInTheDocument();
   });
 
   it('does not allow starting another queue while a match prompt is active', () => {
@@ -325,13 +324,40 @@ describe('QuestionsPageClient', () => {
       questions: [
         {
           question_entity_id: 'question-1',
+          answer_options: [
+            { entity_id: 'yes', label: 'Yes' },
+            { entity_id: 'no', label: 'No' },
+          ],
           active_match: {
             id: 'match-1',
-            question: { id: 'debate-question-1' },
-            for: { user_id: 'user-for' },
-            against: { user_id: 'user-against' },
-            for_accepted: false,
-            against_accepted: false,
+            question: {
+              id: 'debate-question-1',
+              question: 'Should we debate this?',
+              answer_options: [
+                { entity_id: 'yes', label: 'Yes' },
+                { entity_id: 'no', label: 'No' },
+              ],
+            },
+            participants: [
+              {
+                user_id: 'user-for',
+                profile_space_id: 'profile-for',
+                display_name: 'Alex',
+                avatar_cid: null,
+                participant_slot: 1,
+                answer: { entity_id: 'yes', label: 'Yes' },
+                accepted: false,
+              },
+              {
+                user_id: 'user-against',
+                profile_space_id: 'profile-against',
+                display_name: 'Bri',
+                avatar_cid: null,
+                participant_slot: 2,
+                answer: { entity_id: 'no', label: 'No' },
+                accepted: false,
+              },
+            ],
             debate_id: null,
           },
           active_debate: null,
@@ -380,6 +406,10 @@ describe('QuestionsPageClient', () => {
       questions: [
         {
           question_entity_id: 'question-1',
+          answer_options: [
+            { entity_id: 'yes', label: 'Yes' },
+            { entity_id: 'no', label: 'No' },
+          ],
           active_match: null,
           active_debate: {
             id: 'debate-1',

@@ -1,13 +1,13 @@
 'use client';
 
-export type DebateSide = 'for' | 'against';
+export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'egress' | 'local';
 
-export type DebateSideLabels = {
-  for: string;
-  against: string;
+export type DebateAnswer = {
+  entity_id: string;
+  label: string;
 };
 
 export type DebateWaiter = {
@@ -16,7 +16,7 @@ export type DebateWaiter = {
   profile_space_id: string;
   display_name: string | null;
   avatar_cid: string | null;
-  side: DebateSide;
+  answer: DebateAnswer;
   joined_at: string;
 };
 
@@ -33,31 +33,36 @@ export type DebateQuestionSummary = {
   question_entity_id: string;
   question: string;
   description: string | null;
-  side_labels: DebateSideLabels;
+  answer_options: DebateAnswer[];
 };
 
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
   question: DebateQuestionSummary;
-  for: DebateParticipantSummary;
-  against: DebateParticipantSummary;
-  for_accepted: boolean;
-  against_accepted: boolean;
+  participants: DebateMatchParticipant[];
   turn_format_id: string | null;
   debate_id: string | null;
   created_at: string;
   updated_at: string;
 };
 
+export type DebateMatchParticipant = DebateParticipantSummary & {
+  participant_slot: ParticipantSlot;
+  answer: DebateAnswer;
+  accepted: boolean;
+};
+
 export type DebateParticipant = DebateParticipantSummary & {
-  side: DebateSide;
+  participant_slot: ParticipantSlot;
+  answer: DebateAnswer;
   joined_at: string | null;
 };
 
 export type DebateRecording = {
   id: string;
-  side: DebateSide;
+  participant_slot: ParticipantSlot;
+  answer: DebateAnswer;
   user_id: string;
   object_key: string;
   filename: string;
@@ -78,9 +83,9 @@ export type Debate = {
   question: DebateQuestionSummary;
   status: DebateStatus;
   room_name: string;
-  first_side: DebateSide;
+  first_participant_slot: ParticipantSlot;
   current_turn_index: number;
-  current_speaker_side: DebateSide | null;
+  current_speaker_slot: ParticipantSlot | null;
   prepare_started_at: string | null;
   prepare_ends_at: string | null;
   turn_started_at: string | null;
@@ -102,8 +107,8 @@ export type DebateQuestion = {
   question_entity_id: string;
   question: string;
   description: string | null;
-  side_labels: DebateSideLabels;
-  viewer_waiting_side: DebateSide | null;
+  answer_options: DebateAnswer[];
+  viewer_waiting_answer_entity_id: string | null;
   waiters: DebateWaiter[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
@@ -123,11 +128,8 @@ export type DebateQuestionsResponse = {
 };
 
 export type JoinDebateQueueRequest = {
-  side: DebateSide;
-  question: string;
-  description?: string | null;
-  for_label: string;
-  against_label: string;
+  answer_entity_id: string;
+  answer_label: string;
 };
 
 export type JoinDebateQueueResponse = {
@@ -150,11 +152,11 @@ export type LiveKitJoinResponse = {
   url: string;
   room_name: string;
   role: string;
-  side: DebateSide;
+  participant_slot: ParticipantSlot;
+  answer: DebateAnswer;
 };
 
 export type LocalRecordingUploadRequest = {
-  side: DebateSide;
   mime_type: string;
   started_at_ms: number;
 };

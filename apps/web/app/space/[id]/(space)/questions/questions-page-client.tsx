@@ -7,8 +7,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import type { DebateQuestion, DebateSide } from '~/core/debates/api';
-import { oppositeSide, useDebateQuestions, useJoinDebateQueue } from '~/core/debates/hooks';
+import type { DebateQuestion } from '~/core/debates/api';
+import { useDebateQuestions, useJoinDebateQueue } from '~/core/debates/hooks';
 import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import {
   ANSWERS_PROPERTY_ID,
@@ -367,21 +367,17 @@ function QuestionListItem({
   const relatedPeople = relationsForProperty(question.relations, RELATED_PEOPLE_PROPERTY_ID);
   const relatedProjects = relationsForProperty(question.relations, RELATED_PROJECTS_PROPERTY_ID);
   const published = isQuestionPublished(question);
-  const answerLabels = answerLabelsForQuestion(answers);
   const joinQueue = useJoinDebateQueue(spaceId);
   const activeMatch = debateQuestion?.active_match ?? null;
   const activeDebate = debateQuestion?.active_debate ?? null;
   const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
 
-  const joinSide = (side: DebateSide) => {
+  const joinAnswer = (answer: { entityId: string; label: string }) => {
     joinQueue.mutate({
       questionId: question.id,
       request: {
-        side,
-        question: question.name ?? question.id,
-        description: question.description,
-        for_label: answerLabels.for,
-        against_label: answerLabels.against,
+        answer_entity_id: answer.entityId,
+        answer_label: answer.label,
       },
     });
   };
@@ -404,16 +400,15 @@ function QuestionListItem({
         relations={answers}
         debatesEnabled={debatesEnabled}
         canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
-        pendingSide={debateQuestion?.viewer_waiting_side ?? null}
+        pendingAnswerEntityId={debateQuestion?.viewer_waiting_answer_entity_id ?? null}
         joinPending={joinQueue.isPending}
-        onJoinSide={joinSide}
+        onJoinAnswer={joinAnswer}
         className="mt-3"
       />
 
       {debatesEnabled && (
         <QuestionDebateStatus
           debateQuestion={debateQuestion}
-          answerLabels={answerLabels}
           mutationError={mutationError}
           published={published}
         />
@@ -434,17 +429,17 @@ function AnswerChipGroup({
   relations,
   debatesEnabled,
   canJoinDebate,
-  pendingSide,
+  pendingAnswerEntityId,
   joinPending,
-  onJoinSide,
+  onJoinAnswer,
   className,
 }: {
   relations: Relation[];
   debatesEnabled: boolean;
   canJoinDebate: boolean;
-  pendingSide: DebateSide | null;
+  pendingAnswerEntityId: string | null;
   joinPending: boolean;
-  onJoinSide: (side: DebateSide) => void;
+  onJoinAnswer: (answer: { entityId: string; label: string }) => void;
   className?: string;
 }) {
   if (relations.length === 0) return null;
@@ -455,18 +450,17 @@ function AnswerChipGroup({
         Answers
       </Text>
       <div className="flex flex-wrap gap-1.5">
-        {relations.map((relation, index) => {
-          const side = debateSideForAnswerIndex(index);
+        {relations.map(relation => {
           const label = relation.toEntity.name ?? relation.toEntity.id;
-          if (debatesEnabled && side) {
+          if (debatesEnabled) {
             return (
               <Button
                 key={relation.id}
                 type="button"
                 variant="secondary"
                 small
-                onClick={() => onJoinSide(side)}
-                disabled={!canJoinDebate || joinPending || pendingSide === side}
+                onClick={() => onJoinAnswer({ entityId: relation.toEntity.id, label })}
+                disabled={!canJoinDebate || joinPending || pendingAnswerEntityId === relation.toEntity.id}
               >
                 {label}
               </Button>
@@ -489,12 +483,10 @@ function AnswerChipGroup({
 
 function QuestionDebateStatus({
   debateQuestion,
-  answerLabels,
   mutationError,
   published,
 }: {
   debateQuestion: DebateQuestion | null;
-  answerLabels: DebateSideLabels;
   mutationError: string | null;
   published: boolean;
 }) {
@@ -524,11 +516,10 @@ function QuestionDebateStatus({
     );
   }
 
-  if (debateQuestion?.viewer_waiting_side) {
-    const waitingFor = labelForSide(oppositeSide(debateQuestion.viewer_waiting_side), answerLabels);
+  if (debateQuestion?.viewer_waiting_answer_entity_id) {
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Waiting for someone to take {waitingFor}.
+        Waiting for someone with a different answer.
       </Text>
     );
   }
@@ -568,28 +559,6 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
-}
-
-type DebateSideLabels = {
-  for: string;
-  against: string;
-};
-
-function answerLabelsForQuestion(answers: Relation[]): DebateSideLabels {
-  return {
-    for: answers[0]?.toEntity.name ?? 'For',
-    against: answers[1]?.toEntity.name ?? 'Against',
-  };
-}
-
-function debateSideForAnswerIndex(index: number): DebateSide | null {
-  if (index === 0) return 'for';
-  if (index === 1) return 'against';
-  return null;
-}
-
-function labelForSide(side: DebateSide, labels: DebateSideLabels) {
-  return side === 'for' ? labels.for : labels.against;
 }
 
 function isQuestionPublished(question: Entity): boolean {

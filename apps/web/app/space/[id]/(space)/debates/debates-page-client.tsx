@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import type { Debate, DebateSide } from '~/core/debates/api';
+import type { Debate, ParticipantSlot } from '~/core/debates/api';
 import { useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
 import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -65,7 +65,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
             No debates yet
           </Text>
           <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-            Start from a published question by choosing one side on the Questions tab.
+            Start from a published question by choosing an answer on the Questions tab.
           </Text>
         </div>
       )}
@@ -91,8 +91,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
 }
 
 function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }) {
-  const forParticipant = debate.participants.find(participant => participant.side === 'for');
-  const againstParticipant = debate.participants.find(participant => participant.side === 'against');
+  const participants = orderedParticipants(debate);
 
   return (
     <article className="max-md:grid max-md:grid-cols-1 max-md:items-stretch flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-light">
@@ -107,14 +106,9 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
         </div>
       </div>
       <dl className="max-md:grid max-md:min-w-0 max-md:grid-cols-2 max-md:justify-stretch max-md:gap-x-4 max-md:gap-y-3 m-0 flex min-w-[280px] flex-1 items-center justify-end gap-3">
-        <ParticipantTerm
-          label={debate.question.side_labels.for}
-          name={forParticipant ? speakerLabel(forParticipant) : debate.question.side_labels.for}
-        />
-        <ParticipantTerm
-          label={debate.question.side_labels.against}
-          name={againstParticipant ? speakerLabel(againstParticipant) : debate.question.side_labels.against}
-        />
+        {participants.map(participant => (
+          <ParticipantTerm key={participant.user_id} label={participant.answer.label} name={speakerLabel(participant)} />
+        ))}
         <div className="grid min-w-[76px] gap-0.5">
           <dt className="text-xs text-grey-04">Recordings</dt>
           <dd className="m-0 text-xs text-text">{debate.recordings.length}</dd>
@@ -178,27 +172,27 @@ function DebatePlaybackDialog({ debate, onClose }: { debate: Debate; onClose: ()
 }
 
 type PlaybackUrls = {
-  for: string | null;
-  against: string | null;
+  slot1: string | null;
+  slot2: string | null;
 };
 
 type TurnState = {
-  side: DebateSide;
+  slot: ParticipantSlot;
   progress: number;
   seconds: number;
 } | null;
 
 function DebatePlayback({ debate }: { debate: Debate }) {
   const recordingUrlMutation = useRecordingUrl();
-  const [urls, setUrls] = React.useState<PlaybackUrls>({ for: null, against: null });
+  const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
   const [mutedByUser, setMutedByUser] = React.useState(false);
   const [playheadSeconds, setPlayheadSeconds] = React.useState(0);
   const [turnState, setTurnState] = React.useState<TurnState>(null);
-  const forVideoRef = React.useRef<HTMLVideoElement | null>(null);
-  const againstVideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
+  const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
   const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
   const turnDurations = React.useMemo(
@@ -207,13 +201,15 @@ function DebatePlayback({ debate }: { debate: Debate }) {
   );
   const timelineSeconds = React.useMemo(() => timelineSecondsFor(turnDurations), [turnDurations]);
   const turnSegments = React.useMemo(
-    () => turnSegmentsFor(debate.first_side, turnDurations),
-    [debate.first_side, turnDurations]
+    () => turnSegmentsFor(debate.first_participant_slot, turnDurations),
+    [debate.first_participant_slot, turnDurations]
   );
-  const forParticipant = debate.participants.find(participant => participant.side === 'for');
-  const againstParticipant = debate.participants.find(participant => participant.side === 'against');
-  const forRecordingFilename = debate.recordings.find(recording => recording.side === 'for')?.filename ?? null;
-  const againstRecordingFilename = debate.recordings.find(recording => recording.side === 'against')?.filename ?? null;
+  const slot1Participant = debate.participants.find(participant => participant.participant_slot === 1);
+  const slot2Participant = debate.participants.find(participant => participant.participant_slot === 2);
+  const slot1RecordingFilename =
+    debate.recordings.find(recording => recording.participant_slot === 1)?.filename ?? null;
+  const slot2RecordingFilename =
+    debate.recordings.find(recording => recording.participant_slot === 2)?.filename ?? null;
 
   React.useEffect(() => {
     getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
@@ -221,19 +217,19 @@ function DebatePlayback({ debate }: { debate: Debate }) {
 
   React.useEffect(() => {
     let cancelled = false;
-    setUrls({ for: null, against: null });
+    setUrls({ slot1: null, slot2: null });
     setError(null);
-    if (!forRecordingFilename || !againstRecordingFilename) {
+    if (!slot1RecordingFilename || !slot2RecordingFilename) {
       setError('This debate needs both recordings before it can be watched.');
       return;
     }
 
     Promise.all([
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: forRecordingFilename }),
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: againstRecordingFilename }),
+      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
+      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
     ])
-      .then(([forResult, againstResult]) => {
-        if (!cancelled) setUrls({ for: forResult.url, against: againstResult.url });
+      .then(([slot1Result, slot2Result]) => {
+        if (!cancelled) setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
       })
       .catch(caught => {
         if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
@@ -242,10 +238,10 @@ function DebatePlayback({ debate }: { debate: Debate }) {
     return () => {
       cancelled = true;
     };
-  }, [againstRecordingFilename, debate.id, forRecordingFilename]);
+  }, [debate.id, slot1RecordingFilename, slot2RecordingFilename]);
 
   const videos = React.useCallback(
-    () => [forVideoRef.current, againstVideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
+    () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
     []
   );
 
@@ -288,8 +284,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
       return;
     }
 
-    setTurnState(turnStateForTime(debate.first_side, turnDurations, currentTime));
-  }, [debate.first_side, seekVideosTo, timelineSeconds, turnDurations, videos]);
+    setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, currentTime));
+  }, [debate.first_participant_slot, seekVideosTo, timelineSeconds, turnDurations, videos]);
 
   const pauseBoth = React.useCallback(() => {
     for (const video of videos()) video.pause();
@@ -335,13 +331,13 @@ function DebatePlayback({ debate }: { debate: Debate }) {
       pendingSeekSecondsRef.current = nextTime;
       if (seekVideosTo(nextTime)) pendingSeekSecondsRef.current = null;
       setPlayheadSeconds(nextTime);
-      setTurnState(turnStateForTime(debate.first_side, turnDurations, nextTime));
+      setTurnState(turnStateForTime(debate.first_participant_slot, turnDurations, nextTime));
       window.requestAnimationFrame(updateTurnState);
     },
-    [debate.first_side, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
+    [debate.first_participant_slot, seekVideosTo, timelineSeconds, turnDurations, updateTurnState]
   );
 
-  const ready = Boolean(urls.for && urls.against);
+  const ready = Boolean(urls.slot1 && urls.slot2);
   const playbackEnded = ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - 0.05;
 
   const togglePlayback = () => {
@@ -363,27 +359,27 @@ function DebatePlayback({ debate }: { debate: Debate }) {
     <div className="relative flex min-h-0 flex-1 flex-col bg-bg">
       <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
         <PlaybackPane
-          side="for"
-          label={debate.question.side_labels.for}
-          name={forParticipant ? speakerLabel(forParticipant) : debate.question.side_labels.for}
-          src={urls.for}
-          countdown={turnState?.side === 'for' ? turnState : null}
-          mutedByTurn={playing && turnState?.side === 'against'}
+          slot={1}
+          label={slot1Participant?.answer.label ?? 'Answer'}
+          name={slot1Participant ? speakerLabel(slot1Participant) : 'Answer'}
+          src={urls.slot1}
+          countdown={turnState?.slot === 1 ? turnState : null}
+          mutedByTurn={playing && turnState?.slot === 2}
           mutedByUser={mutedByUser}
-          videoRef={forVideoRef}
+          videoRef={slot1VideoRef}
           onEnded={updateTurnState}
           onPlaybackTick={updateTurnState}
           onClick={togglePlayback}
         />
         <PlaybackPane
-          side="against"
-          label={debate.question.side_labels.against}
-          name={againstParticipant ? speakerLabel(againstParticipant) : debate.question.side_labels.against}
-          src={urls.against}
-          countdown={turnState?.side === 'against' ? turnState : null}
-          mutedByTurn={playing && turnState?.side === 'for'}
+          slot={2}
+          label={slot2Participant?.answer.label ?? 'Answer'}
+          name={slot2Participant ? speakerLabel(slot2Participant) : 'Answer'}
+          src={urls.slot2}
+          countdown={turnState?.slot === 2 ? turnState : null}
+          mutedByTurn={playing && turnState?.slot === 1}
           mutedByUser={mutedByUser}
-          videoRef={againstVideoRef}
+          videoRef={slot2VideoRef}
           onEnded={updateTurnState}
           onPlaybackTick={updateTurnState}
           onClick={togglePlayback}
@@ -416,7 +412,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
         <div className="mx-auto w-[min(100%,386px)]">
           <div className="flex items-center justify-between gap-3">
             <Text as="span" variant="metadataMedium" color="text">
-              {turnState ? `${labelForSide(turnState.side, debate.question.side_labels)} speaking` : 'Debate playback'}
+              {turnState ? `${labelForSlot(debate, turnState.slot)} speaking` : 'Debate playback'}
             </Text>
             <Text as="span" variant="metadataMedium" color="text">
               {formatSeconds(playheadSeconds)} / {formatSeconds(timelineSeconds)}
@@ -459,7 +455,7 @@ function DebatePlayback({ debate }: { debate: Debate }) {
 }
 
 function PlaybackPane({
-  side,
+  slot,
   label,
   name,
   src,
@@ -471,7 +467,7 @@ function PlaybackPane({
   onPlaybackTick,
   onClick,
 }: {
-  side: DebateSide;
+  slot: ParticipantSlot;
   label: string;
   name: string;
   src: string | null;
@@ -510,14 +506,14 @@ function PlaybackPane({
       )}
       {mutedByTurn && <div className="pointer-events-none absolute inset-0 z-[2] bg-white/15" aria-hidden="true" />}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-[90px] bg-linear-to-b from-black/0 to-black opacity-90" />
-      {countdown && <CountdownBadge progress={countdown.progress} seconds={countdown.seconds} side={side} />}
+      {countdown && <CountdownBadge progress={countdown.progress} seconds={countdown.seconds} slot={slot} />}
       <div className="absolute right-4 bottom-4 left-4 z-[4] flex min-w-0 items-center gap-2">
         <span className="block min-w-0 truncate text-sm font-medium [text-shadow:0_1px_2px_rgba(0,0,0,0.55)]">
           {name}
         </span>
         <span
           className={`inline-flex min-h-6 shrink-0 items-center rounded-full px-2 text-xs font-medium text-text ${
-            side === 'for' ? 'bg-[#5be28b]' : 'bg-[#ff6b6b]'
+            slot === 1 ? 'bg-[#5be28b]' : 'bg-[#ff6b6b]'
           }`}
         >
           {label}
@@ -527,9 +523,9 @@ function PlaybackPane({
   );
 }
 
-function CountdownBadge({ progress, seconds, side }: { progress: number; seconds: number; side: DebateSide }) {
+function CountdownBadge({ progress, seconds, slot }: { progress: number; seconds: number; slot: ParticipantSlot }) {
   const degrees = Math.max(0, Math.min(1, progress)) * 360;
-  const color = side === 'for' ? '#5be28b' : '#ff6b6b';
+  const color = slot === 1 ? '#5be28b' : '#ff6b6b';
   return (
     <div
       className="absolute top-3 right-3 z-[5] grid size-12 place-items-center rounded-full bg-text/65 text-sm font-semibold text-white shadow-card"
@@ -567,13 +563,13 @@ function FeedScrubber({
           elapsedSeconds += segment.durationSeconds;
           return (
             <span
-              key={`${segment.side}-${segment.index}`}
+              key={`${segment.slot}-${segment.index}`}
               className="relative h-[var(--track-height)] min-w-2.5 basis-0 overflow-hidden rounded-full bg-divider"
               style={{ flexGrow: segment.durationSeconds }}
             >
               <span
                 className={`absolute inset-y-0 left-0 rounded-[inherit] ${
-                  segment.side === 'for' ? 'bg-[#5be28b]' : 'bg-[#ff6b6b]'
+                  segment.slot === 1 ? 'bg-[#5be28b]' : 'bg-[#ff6b6b]'
                 }`}
                 style={{ width: `${segmentProgress}%` }}
               />
@@ -602,7 +598,7 @@ function FeedScrubber({
 }
 
 type TurnSegment = {
-  side: DebateSide;
+  slot: ParticipantSlot;
   index: number;
   durationSeconds: number;
 };
@@ -610,8 +606,8 @@ type TurnSegment = {
 function isWatchableDebate(debate: Debate) {
   return (
     debate.status === 'complete' &&
-    debate.recordings.some(recording => recording.side === 'for') &&
-    debate.recordings.some(recording => recording.side === 'against')
+    debate.recordings.some(recording => recording.participant_slot === 1) &&
+    debate.recordings.some(recording => recording.participant_slot === 2)
   );
 }
 
@@ -624,15 +620,15 @@ function timelineSecondsFor(turnDurationsMs: number[]) {
   return turnDurationsMs.reduce((sum, value) => sum + value / 1_000, 0);
 }
 
-function turnSegmentsFor(firstSide: DebateSide, turnDurationsMs: number[]): TurnSegment[] {
+function turnSegmentsFor(firstSlot: ParticipantSlot, turnDurationsMs: number[]): TurnSegment[] {
   return turnDurationsMs.map((durationMs, index) => ({
-    side: turnSide(firstSide, index),
+    slot: turnSlot(firstSlot, index),
     index,
     durationSeconds: Math.max(0, durationMs / 1_000),
   }));
 }
 
-function turnStateForTime(firstSide: DebateSide, turnDurationsMs: number[], seconds: number): TurnState {
+function turnStateForTime(firstSlot: ParticipantSlot, turnDurationsMs: number[], seconds: number): TurnState {
   let elapsedBoundary = 0;
   for (let index = 0; index < turnDurationsMs.length; index += 1) {
     const segmentSeconds = turnDurationsMs[index] / 1_000;
@@ -640,7 +636,7 @@ function turnStateForTime(firstSide: DebateSide, turnDurationsMs: number[], seco
     if (seconds < nextBoundary || index === turnDurationsMs.length - 1) {
       const elapsedInSegment = Math.max(0, seconds - elapsedBoundary);
       return {
-        side: turnSide(firstSide, index),
+        slot: turnSlot(firstSlot, index),
         progress: Math.max(0, Math.min(1, elapsedInSegment / Math.max(1, segmentSeconds))),
         seconds: Math.max(0, nextBoundary - seconds),
       };
@@ -650,8 +646,8 @@ function turnStateForTime(firstSide: DebateSide, turnDurationsMs: number[], seco
   return null;
 }
 
-function turnSide(firstSide: DebateSide, index: number): DebateSide {
-  return index % 2 === 0 ? firstSide : firstSide === 'for' ? 'against' : 'for';
+function turnSlot(firstSlot: ParticipantSlot, index: number): ParticipantSlot {
+  return index % 2 === 0 ? firstSlot : firstSlot === 1 ? 2 : 1;
 }
 
 function clampSeconds(value: number, duration: number) {
@@ -669,8 +665,12 @@ function formatSeconds(seconds: number) {
   return `${minutes}:${remainingSeconds}`;
 }
 
-function labelForSide(side: DebateSide, labels: { for: string; against: string }) {
-  return side === 'for' ? labels.for : labels.against;
+function labelForSlot(debate: Debate, slot: ParticipantSlot) {
+  return debate.participants.find(participant => participant.participant_slot === slot)?.answer.label ?? 'Answer';
+}
+
+function orderedParticipants(debate: Debate) {
+  return [...debate.participants].sort((a, b) => a.participant_slot - b.participant_slot);
 }
 
 function speakerLabel(participant: { display_name: string | null; profile_space_id: string }) {
