@@ -79,7 +79,7 @@ export default async function SpacePage(props0: Props) {
   const props = await getSpaceFrontPage(space);
 
   return (
-    <EntityPageContentContainer wide>
+    <EntityPageContentContainer>
       <div className="flex items-start">
         <div className="min-w-0 flex-1">
           <React.Suspense fallback={<SubtopicGallerySkeleton />}>
