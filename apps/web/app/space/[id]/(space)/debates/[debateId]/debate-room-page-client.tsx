@@ -89,10 +89,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const debate = debateQuery.data ?? null;
   const countdown = useDebateCountdown(debate);
   const questionsPath = `/space/${spaceId}/questions`;
+  const localSlot = joinResponse?.participant_slot ?? null;
+  const localAudioEnabled = shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted);
 
   React.useEffect(() => {
-    setLocalTrackPreferences(localTracksRef.current, { audioMuted, videoEnabled });
-  }, [audioMuted, videoEnabled]);
+    setLocalTrackPreferences(localTracksRef.current, { audioEnabled: localAudioEnabled, videoEnabled });
+  }, [localAudioEnabled, videoEnabled]);
 
   const startLocalRecorder = React.useCallback((stream: MediaStream) => {
     if (typeof MediaRecorder === 'undefined') return;
@@ -210,7 +212,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       roomRef.current = room;
       const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
       localTracksRef.current = tracks;
-      setLocalTrackPreferences(tracks, { audioMuted, videoEnabled });
+      setLocalTrackPreferences(tracks, {
+        audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, token.participant_slot, audioMuted),
+        videoEnabled,
+      });
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
       }
@@ -230,7 +235,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
       setRoomState('idle');
     }
-  }, [audioMuted, liveKitJoin, markJoined, startLocalRecorder, videoEnabled]);
+  }, [audioMuted, countdown.activeSlot, debate, liveKitJoin, markJoined, startLocalRecorder, videoEnabled]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
@@ -667,16 +672,27 @@ function CameraIcon({ disabled }: { disabled: boolean }) {
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioMuted: boolean; videoEnabled: boolean }
+  preferences: { audioEnabled: boolean; videoEnabled: boolean }
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
-      track.mediaStreamTrack.enabled = !preferences.audioMuted;
+      track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {
       track.mediaStreamTrack.enabled = preferences.videoEnabled;
     }
   }
+}
+
+function shouldEnableLocalAudio(
+  debate: Debate | null,
+  activeSlot: ParticipantSlot | null,
+  localSlot: ParticipantSlot | null,
+  audioMuted: boolean
+) {
+  if (audioMuted || !debate || !localSlot) return false;
+  if (debate.status === 'thanking') return true;
+  return debate.status === 'in_progress' && activeSlot === localSlot;
 }
 
 function disconnectRoom(
