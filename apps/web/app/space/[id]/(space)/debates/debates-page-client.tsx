@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 
 import type { Debate, ParticipantSlot } from '~/core/debates/api';
-import { useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
+import { useDebateMedia, useDebateMediaArtifactUrl, useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
 import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -92,6 +92,25 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
 
 function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }) {
   const participants = orderedParticipants(debate);
+  const mediaQuery = useDebateMedia(debate.id, debate.status === 'complete');
+  const mediaArtifactUrlMutation = useDebateMediaArtifactUrl();
+  const [processedVideoError, setProcessedVideoError] = React.useState<string | null>(null);
+  const hasProcessedVideo =
+    mediaQuery.data?.artifacts.some(artifact => artifact.kind === 'final_video' && artifact.filename.length > 0) ??
+    false;
+
+  const openProcessedVideo = async () => {
+    setProcessedVideoError(null);
+    try {
+      const result = await mediaArtifactUrlMutation.mutateAsync({
+        debateId: debate.id,
+        request: { kind: 'final_video' },
+      });
+      window.open(result.upload.url, '_blank', 'noopener,noreferrer');
+    } catch (caught) {
+      setProcessedVideoError(caught instanceof Error ? caught.message : 'Could not open processed video.');
+    }
+  };
 
   return (
     <article className="max-md:grid max-md:grid-cols-1 max-md:items-stretch flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-light">
@@ -107,7 +126,11 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
       </div>
       <dl className="max-md:grid max-md:min-w-0 max-md:grid-cols-2 max-md:justify-stretch max-md:gap-x-4 max-md:gap-y-3 m-0 flex min-w-[280px] flex-1 items-center justify-end gap-3">
         {participants.map(participant => (
-          <ParticipantTerm key={participant.user_id} label={participant.answer.label} name={speakerLabel(participant)} />
+          <ParticipantTerm
+            key={participant.user_id}
+            label={participant.answer.label}
+            name={speakerLabel(participant)}
+          />
         ))}
         <div className="grid min-w-[76px] gap-0.5">
           <dt className="text-xs text-grey-04">Recordings</dt>
@@ -118,9 +141,28 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
           <dd className="m-0 text-xs text-text">{debate.turn_durations_ms.length} turns</dd>
         </div>
       </dl>
-      <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
-        Watch
-      </Button>
+      <div className="max-md:w-full grid gap-1">
+        <div className="max-md:grid max-md:grid-cols-2 flex items-center justify-end gap-2">
+          <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
+            Watch
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            small
+            className="max-md:w-full"
+            disabled={!hasProcessedVideo || mediaArtifactUrlMutation.isPending}
+            onClick={openProcessedVideo}
+          >
+            {mediaArtifactUrlMutation.isPending ? 'Opening...' : 'Processed video'}
+          </Button>
+        </div>
+        {processedVideoError && (
+          <Text as="p" variant="metadata" color="red-01" className="text-right">
+            {processedVideoError}
+          </Text>
+        )}
+      </div>
     </article>
   );
 }
