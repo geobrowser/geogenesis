@@ -5,6 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 
 import { useProposeSubtopicRelation } from '~/core/hooks/use-propose-subtopic-relation';
+import { useSubtopicChildren } from '~/core/hooks/use-subtopic-children';
 import { useSubtopicSearch } from '~/core/hooks/use-subtopic-search';
 import type { SubtopicSearchResult } from '~/core/io/subgraph/fetch-subtopic-search';
 
@@ -17,7 +18,6 @@ import { SubtopicsDialogPopoverContext } from '~/partials/space-page/subtopics-d
 export type AddSubtopicTarget = {
   parentEntityId: string;
   parentName: string;
-  existingChildIds: Set<string>;
 };
 
 interface AddSubtopicSearchViewProps {
@@ -34,10 +34,18 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [isDropdownVisible, setIsDropdownVisible] = React.useState(false);
 
-  const { parentEntityId, parentName, existingChildIds } = target;
+  const { parentEntityId, parentName } = target;
+
+  // Fetch the parent's children here (rather than trusting a set passed from the
+  // tree) so dedup is authoritative even when the node was never expanded, and so
+  // we can block proposing until the list has loaded. Shares the tree's cache key,
+  // so it's instant when the node is already expanded.
+  const { data: children = [], isLoading: isChildrenLoading } = useSubtopicChildren(parentEntityId, spaceId, true);
+  const existingChildIds = React.useMemo(() => new Set(children.map(child => child.id)), [children]);
+  const canPropose = !isPending && !isChildrenLoading;
 
   const handlePropose = async (result: { id: string; name: string | null }) => {
-    if (existingChildIds.has(result.id) || isPending) return;
+    if (!canPropose || existingChildIds.has(result.id)) return;
 
     await proposeAdd({
       parentEntityId,
@@ -66,7 +74,8 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
 
   return (
     <div className="py-1">
-      <Popover.Root open={isDropdownOpen}>
+      {/* onOpenChange lets Radix dismiss the dropdown on Escape / internal close. */}
+      <Popover.Root open={isDropdownOpen} onOpenChange={setIsDropdownVisible}>
         <Popover.Anchor asChild>
           <div className="relative w-full">
             <div className="absolute top-0 bottom-0 left-3 z-10 flex items-center">
@@ -127,7 +136,7 @@ export function AddSubtopicSearchView({ spaceId, target, onProposed }: AddSubtop
                       key={result.id}
                       result={result}
                       showDivider={index > 0}
-                      disabled={isPending}
+                      disabled={!canPropose}
                       actionLabel={addActionLabel}
                       onPropose={() => void handlePropose(result)}
                     />

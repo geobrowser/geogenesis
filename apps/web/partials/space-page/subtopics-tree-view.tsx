@@ -117,7 +117,7 @@ function PendingSubtopicProposalsSection({
       <div className="flex flex-col gap-2">
         {proposals.map(proposal => (
           <PendingSubtopicProposalCard
-            key={`${proposal.proposalId}-${proposal.childEntityId}`}
+            key={`${proposal.proposalId}-${proposal.parentEntityId}-${proposal.childEntityId}`}
             proposal={proposal}
             spaceId={spaceId}
             onNavigate={onNavigate}
@@ -197,14 +197,11 @@ function SubtopicTreeNode({
     }
   }, [expanded, children, spaceId, prefetchChildren]);
 
-  const existingChildIds = React.useMemo(() => new Set(children.map(child => child.id)), [children]);
-
   const openAddSearch = () => {
     setMenuOpen(false);
     onAddSubtopic({
       parentEntityId: entityId,
       parentName: name,
-      existingChildIds,
     });
   };
 

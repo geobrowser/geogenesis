@@ -12,7 +12,7 @@ import { useDebouncedValue } from './use-debounced-value';
 
 const RESULTS_CACHE_TIME = Duration.toMillis(Duration.minutes(5));
 
-// Shared so the live query and the prefetch hook stay
+// Shared so the live query and the prefetch hook stay on the same cache key and options.
 function defaultSubtopicsQueryOptions() {
   return {
     queryKey: ['subtopic-default-suggestions'] as const,
