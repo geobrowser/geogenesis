@@ -7,13 +7,7 @@ import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/communit
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
-import { type RootTopicChip, fetchFirstLevelSubtopics } from '~/core/io/subgraph/fetch-first-level-subtopics';
-import { type ParentTopicOption, fetchParentTopicOptions } from '~/core/io/subgraph/fetch-parent-topic-options';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
-import {
-  type RecentlyClaimedSpace,
-  fetchRecentlyClaimedSpaces,
-} from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
@@ -31,42 +25,20 @@ export default async function ExploreRoutePage() {
     memberSpaceId = null;
   }
 
-  // Fire every fetch in parallel. Each branch handles its own failure so one
-  // degraded indexer call doesn't drop the whole page.
-  //
-  // - recentlyClaimedPromise: spaces that recently claimed a curated topic.
-  // - firstLevelSubtopicsPromise: powers "Any topic" — a parent → subtopic
-  //   traversal that's not bounded by the global curated-topics page size.
-  // - parentTopicOptionsPromise: dropdown options.
   const browsePromise = fetchBrowseSidebarData(memberSpaceId).catch(() =>
     fetchBrowseSidebarData(null).catch(() => null)
   );
-  const recentlyClaimedPromise = fetchRecentlyClaimedSpaces().catch(() => [] as RecentlyClaimedSpace[]);
   const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
   const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
-  const firstLevelSubtopicsPromise = fetchFirstLevelSubtopics().catch(() => [] as RootTopicChip[]);
-  const parentTopicOptionsPromise = fetchParentTopicOptions().catch(() => [] as ParentTopicOption[]);
   const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
   const governancePromise = memberSpaceId
     ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
     : Promise.resolve(null);
 
-  const [
-    browseRaw,
-    recentlyClaimedSpaces,
-    featuredSpaces,
-    featuredRankings,
-    firstLevelSubtopics,
-    parentTopicOptions,
-    communityCalls,
-    governance,
-  ] = await Promise.all([
+  const [browseRaw, featuredSpaces, featuredRankings, communityCalls, governance] = await Promise.all([
     browsePromise,
-    recentlyClaimedPromise,
     featuredSpacesPromise,
     featuredRankingsPromise,
-    firstLevelSubtopicsPromise,
-    parentTopicOptionsPromise,
     communityCallsPromise,
     governancePromise,
   ]);
@@ -93,16 +65,13 @@ export default async function ExploreRoutePage() {
   if (memberSpaceId) {
     const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
     const candidateIds = new Map<string, string>();
-    for (const s of [...featuredSpaces, ...recentlyClaimedSpaces]) {
+    for (const s of featuredSpaces) {
       const normalized = normId(s.spaceId);
       if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
       candidateIds.set(normalized, s.spaceId);
     }
-    // Cap concurrency: with up to ~60 featured + recently-claimed candidates this
-    // is one REST call each, and an unbounded fan-out would burst the indexer.
     const checks = await mapWithConcurrency([...candidateIds.values()], 8, async spaceId => {
       try {
-        // Only an open vote is "pending"; a stuck request lets the Join button reappear.
         const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
         return req != null && !req.isVotingEnded ? spaceId : null;
       } catch {
@@ -126,9 +95,6 @@ export default async function ExploreRoutePage() {
       initialSpaceOptions={initialSpaceOptions}
       featuredSpaces={featuredSpaces}
       featuredRankings={featuredRankings}
-      unclaimedTopics={firstLevelSubtopics}
-      recentlyClaimedSpaces={recentlyClaimedSpaces}
-      parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
       editorSpaceIds={editorSpaceIds}

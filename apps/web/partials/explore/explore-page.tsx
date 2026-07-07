@@ -3,9 +3,6 @@
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
-import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
-import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
-import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
@@ -16,9 +13,6 @@ type Props = {
   initialSpaceOptions: SpaceOption[];
   featuredSpaces: FeaturedSpace[];
   featuredRankings: FeaturedRanking[];
-  unclaimedTopics: RootTopicChip[];
-  recentlyClaimedSpaces: RecentlyClaimedSpace[];
-  parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
   editorSpaceIds: string[];
@@ -29,9 +23,6 @@ export function ExplorePage({
   initialSpaceOptions,
   featuredSpaces,
   featuredRankings,
-  unclaimedTopics,
-  recentlyClaimedSpaces,
-  parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
   editorSpaceIds,
@@ -56,9 +47,6 @@ export function ExplorePage({
       <ExploreSidePanel
         featuredSpaces={featuredSpaces}
         featuredRankings={featuredRankings}
-        unclaimedTopics={unclaimedTopics}
-        recentlyClaimedSpaces={recentlyClaimedSpaces}
-        parentTopicOptions={parentTopicOptions}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
         editorSpaceIds={editorSpaceIds}
