@@ -3,7 +3,7 @@
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
-export type DebateRecordingSource = 'egress' | 'local';
+export type DebateRecordingSource = 'local';
 
 export type DebateAnswer = {
   entity_id: string;
