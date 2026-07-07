@@ -70,22 +70,6 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     [resolvedFilterState]
   );
 
-  if (isGalleryView) {
-    return (
-      <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
-        <div className="mb-3 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-mediumTitle text-text">{displayName}</h4>
-          </div>
-          <div className="flex shrink-0 items-center gap-5">
-            <DataBlockViewMenu activeView={stateView} isLoading={false} />
-          </div>
-        </div>
-        <RankingGalleryView state={state} />
-      </div>
-    );
-  }
-
   return (
     <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
       <div className="mb-2 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
@@ -105,8 +89,6 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
-          <DataBlockViewMenu activeView={stateView} isLoading={false} />
-
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
@@ -119,6 +101,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             color="grey-04"
             aria-label="Open fullscreen ranking"
           />
+
+          <DataBlockViewMenu activeView={stateView} isLoading={false} />
 
           <TableBlockContextMenu
             sourceType={source.type}
@@ -208,7 +192,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </AnimatePresence>
       )}
 
-      <RankingBlockBody state={state} presentation="embedded" />
+      {isGalleryView ? <RankingGalleryView state={state} /> : <RankingBlockBody state={state} presentation="embedded" />}
     </div>
   );
 }

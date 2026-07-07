@@ -120,7 +120,7 @@ export function RankingGalleryView({ state }: Props) {
         <p className="text-metadata text-grey-04">No published items yet</p>
       ) : null}
 
-      <div className="flex w-full items-end justify-between gap-3">
+      <div className="mt-1 flex w-full items-end justify-between gap-3">
         <RankingPeriodMetadata
           className="mt-0"
           periodState={periodState}
@@ -132,7 +132,7 @@ export function RankingGalleryView({ state }: Props) {
         />
 
         {showEmbeddedGlobalPagination ? (
-          <div className="[&_div]:!mt-0 [&_div]:!mb-0 [&_div]:!justify-end">
+          <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
               pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
