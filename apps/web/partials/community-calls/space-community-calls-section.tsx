@@ -169,7 +169,8 @@ function CardAction({
   accessLoading: boolean;
 }) {
   if (accessLoading) return null;
-  if (isMember) return isEditor ? <RsvpButton call={call} /> : null;
+  if (isEditor) return <RsvpButton call={call} />;
+  if (isMember) return null;
   return (
     <div className="shrink-0 whitespace-nowrap">
       <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={false} variant="text" />

@@ -65,20 +65,24 @@ function foldICSLine(line: string): string {
   const encoder = new TextEncoder();
   if (encoder.encode(line).length <= 75) return line;
 
+  // Split into code points, not UTF-16 code units, so a surrogate pair (e.g. an
+  // emoji) is never treated as two separate characters and folded mid-pair.
+  const chars = Array.from(line);
   const segments: string[] = [];
   let start = 0;
   let budget = 75;
-  while (start < line.length) {
+  while (start < chars.length) {
     let end = start;
     let len = 0;
-    while (end < line.length) {
-      const charLen = encoder.encode(line[end]).length;
+    while (end < chars.length) {
+      const charLen = encoder.encode(chars[end]).length;
       if (len + charLen > budget) break;
       len += charLen;
       end++;
     }
-    segments.push(line.slice(start, Math.max(end, start + 1)));
-    start = Math.max(end, start + 1);
+    end = Math.max(end, start + 1);
+    segments.push(chars.slice(start, end).join(''));
+    start = end;
     budget = 74; // continuation lines reserve 1 octet for the mandatory leading space
   }
   return segments.map((seg, i) => (i === 0 ? seg : ` ${seg}`)).join('\r\n');
