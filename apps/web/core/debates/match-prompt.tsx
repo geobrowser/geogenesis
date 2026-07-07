@@ -56,8 +56,9 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   React.useEffect(() => {
     if (!currentUserId) return;
 
-    const debateIdFromMatch = matches.find(match => match.debate_id && participantForUser(match, currentUserId))
-      ?.debate_id;
+    const debateIdFromMatch = matches.find(
+      match => match.debate_id && participantForUser(match, currentUserId)
+    )?.debate_id;
     if (debateIdFromMatch) {
       navigateToDebate(debateIdFromMatch);
       return;

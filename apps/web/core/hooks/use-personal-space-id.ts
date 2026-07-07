@@ -10,7 +10,7 @@ import { useSmartAccount } from './use-smart-account';
 
 /** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
 
   const { data, isLoading, isFetched } = useQuery({
@@ -33,7 +33,10 @@ export function usePersonalSpaceId() {
   return {
     personalSpaceId: data?.personalSpaceId ?? null,
     isRegistered: data?.isRegistered ?? false,
-    isLoading,
+    // TanStack's isLoading can read false for a tick after the query becomes enabled but
+    // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched
+    // doesn't lag: it stays false until a fetch for this queryKey actually completes.
+    isLoading: isLoadingSmartAccount || (!!address && !isFetched) || isLoading,
     isFetched,
   };
 }

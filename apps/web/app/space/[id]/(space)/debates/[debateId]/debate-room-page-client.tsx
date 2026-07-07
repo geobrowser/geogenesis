@@ -111,62 +111,59 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recorderRef.current = recorder;
   }, []);
 
-  const stopLocalRecorderAndUpload = React.useCallback(
-    async () => {
-      const recorder = recorderRef.current;
-      const startedAtMs = recordingStartedAtRef.current;
-      if (!recorder || !startedAtMs || !joinResponse) return;
+  const stopLocalRecorderAndUpload = React.useCallback(async () => {
+    const recorder = recorderRef.current;
+    const startedAtMs = recordingStartedAtRef.current;
+    if (!recorder || !startedAtMs || !joinResponse) return;
 
-      const stopped = new Promise<void>(resolve => {
-        recorder.onstop = () => resolve();
-      });
-      if (recorder.state !== 'inactive') {
-        recorder.requestData();
-        recorder.stop();
-        await stopped;
-      }
+    const stopped = new Promise<void>(resolve => {
+      recorder.onstop = () => resolve();
+    });
+    if (recorder.state !== 'inactive') {
+      recorder.requestData();
+      recorder.stop();
+      await stopped;
+    }
 
-      const endedAtMs = Date.now();
-      const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-      if (blob.size === 0) return;
+    const endedAtMs = Date.now();
+    const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
+    const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+    if (blob.size === 0) return;
 
-      let uploadedFilename: string | null = null;
-      for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
-        try {
-          const upload = await createUpload.mutateAsync({ mime_type: mimeType, started_at_ms: startedAtMs });
-          const headers = new Headers(upload.upload.headers);
-          headers.set('Content-Type', mimeType);
-          const uploadResponse = await fetch(upload.upload.url, {
-            method: upload.upload.method,
-            headers,
-            body: blob,
-          });
-          if (!uploadResponse.ok) {
-            throw new Error(`Recording upload failed (${uploadResponse.status})`);
-          }
-          uploadedFilename = upload.filename;
-          break;
-        } catch (error) {
-          if (attempt >= localRecordingUploadMaxAttempts) {
-            throw error;
-          }
-          await delay(localRecordingUploadRetryDelayMs * attempt);
+    let uploadedFilename: string | null = null;
+    for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
+      try {
+        const upload = await createUpload.mutateAsync({ mime_type: mimeType, started_at_ms: startedAtMs });
+        const headers = new Headers(upload.upload.headers);
+        headers.set('Content-Type', mimeType);
+        const uploadResponse = await fetch(upload.upload.url, {
+          method: upload.upload.method,
+          headers,
+          body: blob,
+        });
+        if (!uploadResponse.ok) {
+          throw new Error(`Recording upload failed (${uploadResponse.status})`);
         }
+        uploadedFilename = upload.filename;
+        break;
+      } catch (error) {
+        if (attempt >= localRecordingUploadMaxAttempts) {
+          throw error;
+        }
+        await delay(localRecordingUploadRetryDelayMs * attempt);
       }
-      if (!uploadedFilename) throw new Error('Recording upload failed.');
+    }
+    if (!uploadedFilename) throw new Error('Recording upload failed.');
 
-      await completeUpload.mutateAsync({
-        filename: uploadedFilename,
-        mime_type: mimeType,
-        started_at_ms: startedAtMs,
-        ended_at_ms: endedAtMs,
-        duration_seconds: Math.max(1, Math.round((endedAtMs - startedAtMs) / 1_000)),
-        byte_size: blob.size,
-      });
-    },
-    [completeUpload, createUpload, joinResponse]
-  );
+    await completeUpload.mutateAsync({
+      filename: uploadedFilename,
+      mime_type: mimeType,
+      started_at_ms: startedAtMs,
+      ended_at_ms: endedAtMs,
+      duration_seconds: Math.max(1, Math.round((endedAtMs - startedAtMs) / 1_000)),
+      byte_size: blob.size,
+    });
+  }, [completeUpload, createUpload, joinResponse]);
 
   const discardLocalRecorder = React.useCallback(async () => {
     const recorder = recorderRef.current;

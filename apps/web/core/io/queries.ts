@@ -453,15 +453,13 @@ export function getEntityTiebreakerBatch(entityIds: string[], signal?: AbortCont
   return graphql({
     query: entityTiebreakerBatchQuery,
     decoder: data =>
-      (data.entities ?? []).map(
-        (e): EntityTiebreakerData => ({
-          id: e.id,
-          createdAt: e.createdAt,
-          backlinksCount: e.backlinks?.totalCount ?? 0,
-          relationsCount: e.relations?.totalCount ?? 0,
-          valuesCount: e.values?.totalCount ?? 0,
-        })
-      ),
+      (data.entities ?? []).map((e): EntityTiebreakerData => ({
+        id: e.id,
+        createdAt: e.createdAt,
+        backlinksCount: e.backlinks?.totalCount ?? 0,
+        relationsCount: e.relations?.totalCount ?? 0,
+        valuesCount: e.values?.totalCount ?? 0,
+      })),
     variables: { filter: { id: { in: entityIds } } },
     signal,
   });

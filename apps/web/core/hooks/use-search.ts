@@ -203,7 +203,11 @@ export function useSearch({
       return;
     }
 
-    if (lastPage.serverCount < pageSize || isFetchingNextPage || emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT) {
+    if (
+      lastPage.serverCount < pageSize ||
+      isFetchingNextPage ||
+      emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT
+    ) {
       return;
     }
 
