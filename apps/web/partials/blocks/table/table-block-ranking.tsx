@@ -8,7 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
-import { RANKING_VIEW_GALLERY_ID } from '~/core/ranking-block-ids';
+import { RANKING_VIEW_GALLERY_ID, RANKING_VIEW_LIST_ID } from '~/core/ranking-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 
@@ -21,6 +21,7 @@ import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingGalleryView } from './ranking-gallery-view';
+import { RankingListView } from './ranking-list-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -62,6 +63,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   } = state;
 
   const isGalleryView = Boolean(stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_GALLERY_ID));
+  const isListView = Boolean(stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_LIST_ID));
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -192,7 +194,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </AnimatePresence>
       )}
 
-      {isGalleryView ? <RankingGalleryView state={state} /> : <RankingBlockBody state={state} presentation="embedded" />}
+      {isGalleryView ? (
+        <RankingGalleryView state={state} />
+      ) : isListView ? (
+        <RankingListView state={state} />
+      ) : (
+        <RankingBlockBody state={state} presentation="embedded" />
+      )}
     </div>
   );
 }
