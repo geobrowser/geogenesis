@@ -24,6 +24,7 @@ const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
+  agentRules: false,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   turbopack: isDev
     ? {
