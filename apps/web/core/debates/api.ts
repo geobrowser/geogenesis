@@ -133,6 +133,10 @@ export type DebateMediaResponse = {
   whisper_model_id: string;
 };
 
+export type DebateMediaProcessRequest = {
+  force?: boolean;
+};
+
 export type DebateMediaArtifactUrlRequest = {
   kind?: DebateMediaArtifactKind;
   filename?: string;
@@ -426,9 +430,14 @@ export async function getDebateMedia(debateId: string, getPrivyIdentityToken?: G
   });
 }
 
-export async function requestDebateMediaProcessing(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+export async function requestDebateMediaProcessing(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  request: DebateMediaProcessRequest = {}
+) {
   return geoChatRequest<DebateMediaResponse>(`/debates/${debateId}/media/process`, {
     method: 'POST',
+    body: request,
     auth: true,
     getPrivyIdentityToken,
   });

@@ -7,6 +7,7 @@ import * as React from 'react';
 
 import {
   type DebateMediaArtifactUrlRequest,
+  type DebateMediaProcessRequest,
   type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
@@ -201,7 +202,8 @@ export function useRequestDebateMediaProcessing(debateId: string) {
   const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => requestDebateMediaProcessing(debateId, getPrivyIdentityToken),
+    mutationFn: (request?: DebateMediaProcessRequest) =>
+      requestDebateMediaProcessing(debateId, getPrivyIdentityToken, request),
     onSuccess: media => queryClient.setQueryData(debateQueryKeys.media(debateId), media),
   });
 }

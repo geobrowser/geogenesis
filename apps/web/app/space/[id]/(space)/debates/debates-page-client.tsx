@@ -4,8 +4,14 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import type { Debate, ParticipantSlot } from '~/core/debates/api';
-import { useDebateMedia, useDebateMediaArtifactUrl, useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
+import { type Debate, type ParticipantSlot, getCurrentGeoChatUserId } from '~/core/debates/api';
+import {
+  useDebateMedia,
+  useDebateMediaArtifactUrl,
+  useRecordingUrl,
+  useRequestDebateMediaProcessing,
+  useSpaceDebates,
+} from '~/core/debates/hooks';
 import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -94,10 +100,17 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
   const participants = orderedParticipants(debate);
   const mediaQuery = useDebateMedia(debate.id, debate.status === 'complete');
   const mediaArtifactUrlMutation = useDebateMediaArtifactUrl();
+  const reprocessMediaMutation = useRequestDebateMediaProcessing(debate.id);
+  const currentUserId = getCurrentGeoChatUserId();
   const [processedVideoError, setProcessedVideoError] = React.useState<string | null>(null);
+  const [reprocessError, setReprocessError] = React.useState<string | null>(null);
   const hasProcessedVideo =
     mediaQuery.data?.artifacts.some(artifact => artifact.kind === 'final_video' && artifact.filename.length > 0) ??
     false;
+  const mediaJobStatus = mediaQuery.data?.job?.status ?? null;
+  const isMediaProcessing = mediaJobStatus === 'queued' || mediaJobStatus === 'running';
+  const isParticipant =
+    !!currentUserId && debate.participants.some(participant => participant.user_id === currentUserId);
 
   const openProcessedVideo = async () => {
     setProcessedVideoError(null);
@@ -109,6 +122,15 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
       window.open(result.upload.url, '_blank', 'noopener,noreferrer');
     } catch (caught) {
       setProcessedVideoError(caught instanceof Error ? caught.message : 'Could not open processed video.');
+    }
+  };
+
+  const reprocessVideo = async () => {
+    setReprocessError(null);
+    try {
+      await reprocessMediaMutation.mutateAsync({ force: true });
+    } catch (caught) {
+      setReprocessError(caught instanceof Error ? caught.message : 'Could not reprocess video.');
     }
   };
 
@@ -142,7 +164,7 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
         </div>
       </dl>
       <div className="max-md:w-full grid gap-1">
-        <div className="max-md:grid max-md:grid-cols-2 flex items-center justify-end gap-2">
+        <div className="max-md:grid max-md:grid-cols-1 flex items-center justify-end gap-2">
           <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
             Watch
           </Button>
@@ -156,10 +178,27 @@ function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }
           >
             {mediaArtifactUrlMutation.isPending ? 'Opening...' : 'Processed video'}
           </Button>
+          {isParticipant && (
+            <Button
+              type="button"
+              variant="secondary"
+              small
+              className="max-md:w-full"
+              disabled={isMediaProcessing || reprocessMediaMutation.isPending}
+              onClick={reprocessVideo}
+            >
+              {isMediaProcessing || reprocessMediaMutation.isPending ? 'Processing...' : 'Reprocess'}
+            </Button>
+          )}
         </div>
         {processedVideoError && (
           <Text as="p" variant="metadata" color="red-01" className="text-right">
             {processedVideoError}
+          </Text>
+        )}
+        {reprocessError && (
+          <Text as="p" variant="metadata" color="red-01" className="text-right">
+            {reprocessError}
           </Text>
         )}
       </div>
