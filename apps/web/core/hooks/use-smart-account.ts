@@ -8,6 +8,7 @@ import { useCookies } from 'react-cookie';
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { Environment } from '../environment';
 import { GEOGENESIS } from '../wallet/geo-chain';
+import { MAX_QUEUE_WAIT_MS, enqueueFor } from './smart-account-send-queue';
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
@@ -51,14 +52,15 @@ export function useSmartAccount() {
           signer: signer as Parameters<typeof generateZeroDevAccount>[0]['signer'],
         });
 
-        // Two failure modes to defend against here:
+        // Two failure modes to defend against here (the shared per-EOA queue in
+        // ./smart-account-send-queue is the mechanism):
         //
         // 1. AA25 nonce races: the kernel client computes the nonce at submit time,
         //    so two overlapping sends (a vote fired while a publish is pending, two
         //    sequential UserOps where the first is bundler-accepted but not yet
         //    included) compute the same nonce and the bundler simulator rejects the
         //    second. Fix: serialize every send — sendTransaction and
-        //    sendUserOperation alike — through a single in-flight queue, and hold
+        //    sendUserOperation alike — through the per-EOA queue, and hold
         //    each sendUserOperation slot until its receipt confirms inclusion.
         //    (kernel sendTransaction already waits for its receipt internally.)
         //
@@ -74,15 +76,7 @@ export function useSmartAccount() {
           waitForUserOperationReceipt: (a: { hash: `0x${string}` }) => Promise<unknown>;
         };
 
-        // Serialization queue. A failed send must not block the next one, so the
-        // chained continuation swallows the error (the caller still sees it via
-        // the returned promise).
-        let sendChain: Promise<unknown> = Promise.resolve();
-        const enqueue = <T,>(task: () => Promise<T>): Promise<T> => {
-          const run = sendChain.then(task, task);
-          sendChain = run.catch(() => undefined);
-          return run;
-        };
+        const eoaAddress = zeroDevAccount.account.address;
 
         // Longer than every caller retry window (max 10s today) plus slack, so a
         // surfaced receipt failure can't trigger a re-submission.
@@ -114,12 +108,20 @@ export function useSmartAccount() {
 
         const wrapped = {
           account: zeroDevAccount.account,
+          // Queue-wait bounded: sendTransaction callers sit under
+          // useSmartAccountTransaction's timeout, and the bound is what guarantees a
+          // timed-out call never submits later (see QueuedSendTimeoutError).
           sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-            enqueue(() => zeroDevAccount.sendTransaction(...args)),
+            enqueueFor(eoaAddress, () => zeroDevAccount.sendTransaction(...args), {
+              maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
+            }),
+          // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
+          // outer timeout, only error-triggered retries, so a long queue wait should
+          // block-and-succeed rather than fail.
           sendUserOperation: (args: {
             calls: ReadonlyArray<{ to: `0x${string}`; data: `0x${string}`; value?: bigint }>;
           }) =>
-            enqueue(async () => {
+            enqueueFor(eoaAddress, async () => {
               const hash = await zeroDevAccount.sendUserOperation(args);
               await confirmInclusion(hash);
               return hash;

@@ -220,17 +220,22 @@ branch is on 0.20.0-beta.8). Every SDK call shape was verified against the insta
 beta.8 dist. The beta.8 wallet-client migration itself came back clean — findings below
 are in surrounding code, most pre-dating the SDK bump.
 
-### 15. OPEN — Major — Serialization queue is per-queryFn instance; react-query refetches defeat the AA25 protection
+### 15. RESOLVED (2026-07-06) — Major — Serialization queue is per-queryFn instance; react-query refetches defeat the AA25 protection
 `use-smart-account.ts:80`: `sendChain` lives inside `queryFn`, but the app uses a default
 `new QueryClient()` (staleTime 0, refetchOnWindowFocus true) and the queryKey includes
 `cookies.walletAddress` — which the queryFn itself writes. Any refetch (window focus,
 cookie write during login) builds a NEW wrapped client with a fresh empty queue while
 closures from earlier renders still hold the old one. Scenario: publish in flight on the
 old instance's queue → tab away/back → vote goes through the new instance's empty queue →
-parallel submission, same kernel nonce → AA25. Fix: hoist the queue (module-level, keyed
-by EOA address) so all client instances for one signer share it.
+parallel submission, same kernel nonce → AA25.
 
-### 16. OPEN — Major — 45s tx timeout races the 90s queue hold; a timed-out call still submits later
+**Resolution:** queue extracted to `core/hooks/smart-account-send-queue.ts` at module
+scope, keyed by EOA address (`sendChainByAddress`), so every wrapped-client instance for
+one signer shares a single queue. Cross-instance serialization is unit-tested
+(`smart-account-send-queue.test.ts`). Manual re-test: RETEST_CHECKLIST A6 with a
+tab-switch mid-publish.
+
+### 16. RESOLVED (2026-07-06) — Major — 45s tx timeout races the 90s queue hold; a timed-out call still submits later
 `use-smart-account-transaction.ts:53-56`: `Effect.timeoutFail(45s)` wraps
 `smartAccount.sendTransaction`, which is `enqueue(...)`. Effect interruption does not
 dequeue the task — once enqueued it always runs when the queue drains. A queued
@@ -238,8 +243,17 @@ dequeue the task — once enqueued it always runs when the queue drains. A queue
 the file's comment ("45s covers queue time + submission") is wrong. Scenario: slow publish
 holds the queue >45s → user's vote/membership request errors "Transaction timed out" →
 user retries → BOTH queued txs eventually execute → duplicate op on-chain. This is the
-formalization of the RETEST_CHECKLIST A6 watch item. Fix: timeout > worst-case queue hold,
-or make enqueued tasks abortable before submission.
+formalization of the RETEST_CHECKLIST A6 watch item.
+
+**Resolution:** two layers. (1) `sendTransaction` sends are enqueued with
+`maxQueueWaitMs: 45s` — a send whose turn arrives after that is abandoned WITHOUT running
+and rejects with `QueuedSendTimeoutError` ("Nothing was submitted — it is safe to
+retry"), so a timed-out queued send can never execute later (unit-tested invariant).
+(2) The hook's outer timeout was raised 45s → 150s (above worst-case queue-guard +
+90s receipt deadline) so it acts only as a hung-submission backstop, with a message that
+warns the op may have been submitted. `sendUserOperation` (publish/comment/deploy) keeps
+an unbounded queue wait deliberately — those callers have no outer timeout, only
+error-triggered retries, so a long wait should block-and-succeed rather than fail.
 
 ### 17. VERIFY — Minor — Personal-space creation emits `TOPIC_DECLARED` while set-topic migrated to the SDK's `TOPIC_SET`
 `create-personal-space-on-chain.ts:171` (via `buildPersonalTopicDeclaredCalldata`,

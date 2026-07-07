@@ -35,10 +35,13 @@ now with `?selfFunded=true`).
       duplicate ops. The serialization/at-most-once wrapper was NOT changed, but this
       is the flow that depends on `sendUserOperation` + `waitForUserOperationReceipt`
       still behaving the same on the beta.8 client.
-      ⚠ Known watch item (pre-existing): a vote queued behind a slow publish can hit
-      the 45 s timeout in `useSmartAccountTransaction` — now logged as
-      CODE_REVIEW_FINDINGS #16 (and #15: a window-focus refetch mid-publish creates a
-      second client instance with its own queue, re-opening the AA25 race).
+      FIXED 2026-07-06 (findings #15/#16): the send queue is now module-level per EOA
+      (survives react-query refetches), and a vote stuck >45 s in the queue fails with
+      a "Nothing was submitted — safe to retry" error instead of a misleading timeout
+      that later double-submits. Re-test additions: (a) do A6 with a tab-switch away
+      and back mid-publish — the follow-up vote must still queue, not AA25; (b) queue a
+      vote behind a deliberately slow publish — if it errors, the message must be the
+      retry-safe one and retrying must not produce a duplicate vote.
 - [ ] **A7. Membership / editorship request** — request membership in a space you're
       not in; optimistic "requested" state shows and survives refresh.
 - [ ] **A8. (local-dev only) anvil e2e env** — `apps/web/.env` still routes
