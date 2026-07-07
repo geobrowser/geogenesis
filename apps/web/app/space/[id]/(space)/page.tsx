@@ -214,6 +214,12 @@ type SubtopicGalleryContainerProps = {
 };
 
 const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
+  const space = await cachedFetchSpace(spaceId);
+
+  if (!space) {
+    return null;
+  }
+
   const subtopics = await fetchSubtopics(spaceId);
 
   if (subtopics.length === 0) {
