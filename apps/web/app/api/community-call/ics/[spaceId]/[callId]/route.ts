@@ -8,12 +8,12 @@
 import { Effect } from 'effect';
 
 import { CALL_SCHEMA } from '~/core/community-calls/constants';
-import { buildSeriesIcsBody } from '~/core/community-calls/format';
+import { buildCallJoinUrl, buildSeriesIcsBody } from '~/core/community-calls/format';
 import { getEntity } from '~/core/io/queries';
 
 type Ctx = { params: Promise<{ spaceId: string; callId: string }> };
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   const { spaceId, callId } = await ctx.params;
 
   const entity = await Effect.runPromise(getEntity(callId, spaceId)).catch(() => null);
@@ -26,8 +26,8 @@ export async function GET(_req: Request, ctx: Ctx) {
   const body = buildSeriesIcsBody({
     callId,
     name: entity.name ?? 'Community call',
-    description: entity.description,
     schedule,
+    joinUrl: buildCallJoinUrl({ origin: new URL(req.url).origin, spaceId, callId }),
   });
 
   return new Response(body, {

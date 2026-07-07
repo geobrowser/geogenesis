@@ -1,8 +1,16 @@
 /**
  * Utilities for parsing and validating iCalendar/RRULE schedule strings.
  *
- * Schedule format example:
+ * Schedule format example (UTC, legacy):
  *   "DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH"
+ *
+ * Schedule format example (IANA timezone, DST-aware):
+ *   "DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000\nRRULE:FREQ=WEEKLY;BYDAY=TH"
+ *
+ * When a TZID param is present, the DTSTART/DTEND digits are the organizer's local
+ * wall clock in that zone (not UTC) — no trailing `Z`. Reads of legacy no-TZID
+ * schedules are unaffected; only new writes (`serializeSchedule`) add TZID going
+ * forward.
  */
 
 const DAY_NAMES: Record<string, string> = {
@@ -46,16 +54,15 @@ function parseICalDate(value: string): Date | null {
   return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second)));
 }
 
-// Offset (ms) of `tz` from UTC at `utcMs`: positive when the zone is ahead.
-// Evaluated at the wall-clock instant, so it can be off by 1h for the single
-// hour straddling a DST transition — fine for listing/display; the curator
-// token endpoint enforces the real join window server-side.
+// Offset (ms) of `tz` from UTC at the real UTC instant `utcMs`: positive when the
+// zone is ahead. Callers converting a *local* wall clock to UTC should not sample
+// this directly at the naive (local-digits-as-UTC) value — see `localToUtcMs`.
 //
 // Schedule strings are graph data and can be published by any client, so a
 // non-IANA TZID (e.g. a Windows zone name from an Outlook-exported ICS) is
 // untrusted input — Intl.DateTimeFormat throws RangeError for those, so treat
 // an invalid tz as "no offset" rather than crashing the caller.
-function tzOffsetMs(tz: string, utcMs: number): number {
+export function tzOffsetMs(tz: string, utcMs: number): number {
   let dtf: Intl.DateTimeFormat;
   try {
     dtf = new Intl.DateTimeFormat('en-US', {
@@ -78,12 +85,47 @@ function tzOffsetMs(tz: string, utcMs: number): number {
   return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) - utcMs;
 }
 
-// Parse an iCal date, honoring a TZID parameter. A trailing `Z` (or no zone) is
-// already UTC / floating; a TZID means the wall-clock is in that zone → convert.
-function parseICalDateTz(value: string, tzid?: string): Date | null {
-  const d = parseICalDate(value);
-  if (!d || !tzid || value.endsWith('Z')) return d;
-  return new Date(d.getTime() - tzOffsetMs(tzid, d.getTime()));
+/**
+ * Converts a "naive" ms value (local wall-clock digits stamped as if UTC) in `tz` to
+ * the true UTC instant. A single `tzOffsetMs` sample taken at the naive value can
+ * land on the wrong side of a DST transition — e.g. "09:00 America/Los_Angeles" on
+ * the spring-forward day, read as a UTC instant, falls in the pre-transition early
+ * morning hours and would wrongly report the *old* (PST) offset. Re-sampling at the
+ * resulting estimate resolves this for all but a vanishing window exactly at a
+ * transition instant.
+ */
+export function localToUtcMs(naiveMs: number, tz: string): number {
+  const estimate = naiveMs - tzOffsetMs(tz, naiveMs);
+  return naiveMs - tzOffsetMs(tz, estimate);
+}
+
+/** Whether `tz` resolves as a real IANA timezone name (vs. e.g. a Windows zone name). */
+export function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Short zone abbreviation (e.g. "PDT") for `tz` at the instant `utcMs`. */
+export function tzAbbreviation(tz: string, utcMs: number): string {
+  try {
+    return (
+      new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'short' })
+        .formatToParts(new Date(utcMs))
+        .find(part => part.type === 'timeZoneName')?.value ?? tz
+    );
+  } catch {
+    return tz;
+  }
+}
+
+/** Splits an iCal property key from its optional TZID param, e.g. `DTSTART;TZID=America/Santiago`
+ *  -> `{ key: 'DTSTART', tzid: 'America/Santiago' }`. */
+function parseKey(rawKey: string): { key: string; tzid?: string } {
+  return { key: rawKey.split(';')[0], tzid: rawKey.match(/TZID=([^;]+)/)?.[1] };
 }
 
 function isValidICalDate(value: string): boolean {
@@ -186,7 +228,9 @@ export function validateSchedule(
       errors.push(`Invalid line: "${line}" (missing ":")`);
       continue;
     }
-    const key = line.substring(0, colonIdx).trim();
+    // Key may carry iCal params, e.g. `DTSTART;TZID=America/Santiago` — strip
+    // them before checking against KNOWN_PROPS, which only tracks bare names.
+    const { key, tzid } = parseKey(line.substring(0, colonIdx).trim());
     const value = line.substring(colonIdx + 1).trim();
 
     if (!KNOWN_PROPS.has(key)) {
@@ -196,6 +240,11 @@ export function validateSchedule(
 
     if (key in props) {
       errors.push(`Duplicate property "${key}"`);
+      continue;
+    }
+
+    if (tzid && !isValidTimeZone(tzid)) {
+      errors.push(`Invalid timezone "${tzid}" on ${key}`);
       continue;
     }
 
@@ -289,11 +338,13 @@ export function extractRawRRule(schedule: string): string | undefined {
 
 export interface ParsedSchedule {
   startDate: string; // YYYY-MM-DD
-  startTime: string; // HH:MM (24h UTC)
-  endTime: string; // HH:MM (24h UTC) or ''
+  startTime: string; // HH:MM (24h) — in `timezone` if set, else UTC
+  endTime: string; // HH:MM (24h) or '' — in `timezone` if set, else UTC
   freq: string; // DAILY, WEEKLY, MONTHLY, YEARLY, or ''
   byDay: string[]; // e.g. ['MO', 'WE', 'FR']
   interval: number; // 1 = default
+  /** IANA zone the schedule was authored in (e.g. "America/Los_Angeles"), or unset for legacy UTC schedules. */
+  timezone?: string;
 }
 
 /** Parse an iCalendar schedule string into structured fields. */
@@ -316,15 +367,18 @@ export function parseSchedule(schedule: string): ParsedSchedule {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
     // Key may carry iCal params, e.g. `DTSTART;TZID=America/Santiago`.
-    const rawKey = line.substring(0, colonIdx).trim();
-    const name = rawKey.split(';')[0];
-    const tzid = rawKey.match(/TZID=([^;]+)/)?.[1];
+    const { key: name, tzid } = parseKey(line.substring(0, colonIdx).trim());
     if (tzid) tzids[name] = tzid;
     props[name] = line.substring(colonIdx + 1).trim();
   }
 
+  // A TZID-qualified value's digits are already the local wall clock in that zone
+  // — no conversion needed, just read them back with the UTC-labeled accessors
+  // `parseICalDate` produces. A bare/`Z`-suffixed value is genuinely UTC.
+  if (tzids.DTSTART) result.timezone = tzids.DTSTART;
+
   if (props.DTSTART) {
-    const d = parseICalDateTz(props.DTSTART, tzids.DTSTART);
+    const d = parseICalDate(props.DTSTART);
     if (d) {
       const y = d.getUTCFullYear().toString().padStart(4, '0');
       const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -335,7 +389,7 @@ export function parseSchedule(schedule: string): ParsedSchedule {
   }
 
   if (props.DTEND) {
-    const d = parseICalDateTz(props.DTEND, tzids.DTEND);
+    const d = parseICalDate(props.DTEND);
     if (d) {
       result.endTime = `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
     }
@@ -351,20 +405,28 @@ export function parseSchedule(schedule: string): ParsedSchedule {
   return result;
 }
 
-/** Serialize structured schedule fields into an iCalendar string. */
+/**
+ * Serialize structured schedule fields into an iCalendar string. When `timezone`
+ * is set, `startTime`/`endTime` are treated as local wall-clock in that zone and
+ * written as `DTSTART;TZID=...`/`DTEND;TZID=...` (no trailing `Z`) — DST-aware on
+ * read via `parseSchedule`/`tzOffsetMs`. Omitting `timezone` keeps the legacy
+ * UTC-`Z` behavior, unchanged for every existing caller.
+ */
 export function serializeSchedule(parsed: ParsedSchedule): string {
   if (!parsed.startDate) return '';
 
   const [year, month, day] = parsed.startDate.split('-');
   const [startH, startM] = parsed.startTime.split(':');
-  const dtstart = `${year}${month}${day}T${startH}${startM}00Z`;
+  const tzSuffix = parsed.timezone ? `;TZID=${parsed.timezone}` : '';
+  const zSuffix = parsed.timezone ? '' : 'Z';
+  const dtstart = `${year}${month}${day}T${startH}${startM}00${zSuffix}`;
 
-  const lines = [`DTSTART:${dtstart}`];
+  const lines = [`DTSTART${tzSuffix}:${dtstart}`];
 
   if (parsed.endTime) {
     const [endH, endM] = parsed.endTime.split(':');
-    const dtend = `${year}${month}${day}T${endH}${endM}00Z`;
-    lines.push(`DTEND:${dtend}`);
+    const dtend = `${year}${month}${day}T${endH}${endM}00${zSuffix}`;
+    lines.push(`DTEND${tzSuffix}:${dtend}`);
   }
 
   if (parsed.freq) {
@@ -384,12 +446,14 @@ export function serializeSchedule(parsed: ParsedSchedule): string {
 export function formatSchedule(schedule: string): string {
   const lines = schedule.split('\n');
   const props: Record<string, string> = {};
+  let tzid: string | undefined;
 
   for (const line of lines) {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) continue;
-    const key = line.substring(0, colonIdx).trim();
+    const { key, tzid: keyTzid } = parseKey(line.substring(0, colonIdx).trim());
     const value = line.substring(colonIdx + 1).trim();
+    if (key === 'DTSTART') tzid = keyTzid;
     props[key] = value;
   }
 
@@ -419,14 +483,19 @@ export function formatSchedule(schedule: string): string {
     }
   }
 
-  // Time range
+  // Time range. Note: when `tzid` is set, DTSTART/DTEND's digits are already the
+  // local wall clock in that zone (per the format's write side, `serializeSchedule`),
+  // so `parseICalDate`'s UTC-labeled accessors already read back the right numbers —
+  // only the trailing zone label needs to reflect the real zone instead of "UTC".
   const startDate = props.DTSTART ? parseICalDate(props.DTSTART) : null;
   const endDate = props.DTEND ? parseICalDate(props.DTEND) : null;
 
+  const zoneLabel = tzid && startDate ? tzAbbreviation(tzid, localToUtcMs(startDate.getTime(), tzid)) : 'UTC';
+
   if (startDate && endDate) {
-    parts.push(`${formatTime(startDate)} – ${formatTime(endDate)} UTC`);
+    parts.push(`${formatTime(startDate)} – ${formatTime(endDate)} ${zoneLabel}`);
   } else if (startDate) {
-    parts.push(`${formatTime(startDate)} UTC`);
+    parts.push(`${formatTime(startDate)} ${zoneLabel}`);
   }
 
   // Starting date
