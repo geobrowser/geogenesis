@@ -20,6 +20,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
@@ -179,6 +180,9 @@ function LiveCallCard({ spaceId, row }: { spaceId: string; row: Row }) {
           <Link href={agendaHref(spaceId, row.call.callId, row.occ.startMs, row.occ.endMs)}>
             <SmallButton>Agenda</SmallButton>
           </Link>
+          <Link href={NavUtils.toEntity(spaceId, row.call.callId)}>
+            <SmallButton>Entity</SmallButton>
+          </Link>
           <Link href={liveCallHref(spaceId, row.call.callId)}>
             <Button variant="primary">Join call</Button>
           </Link>
@@ -276,6 +280,12 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
                   router.push(agendaHref(row.call.spaceId, row.call.callId, row.occ.startMs, row.occ.endMs)),
               },
               {
+                label: 'Entity',
+                value: 'entity',
+                disabled: false,
+                onClick: () => router.push(NavUtils.toEntity(row.call.spaceId, row.call.callId)),
+              },
+              {
                 label: 'Copy link',
                 value: 'copy',
                 disabled: false,
@@ -354,6 +364,9 @@ function PastRow({
               <SmallButton>Details</SmallButton>
             </Link>
           )}
+          <Link href={NavUtils.toEntity(spaceId, row.call.callId)}>
+            <SmallButton>Entity</SmallButton>
+          </Link>
         </div>
       </div>
     </RowShell>
