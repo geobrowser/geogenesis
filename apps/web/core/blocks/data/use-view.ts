@@ -277,7 +277,7 @@ export function useView() {
   }, [blockRelationRelations, storage]);
 
   /**
-   * Persist the ordering of the block's shown columns. Only repositions columns
+ pr   * Persist the ordering of the block's shown columns. Only repositions columns
    * that are already shown — reordering never adds or removes columns. This lets
    * surfaces that display every property (e.g. the Power Tool) reorder columns
    * without materializing shown-column relations for hidden properties, which
