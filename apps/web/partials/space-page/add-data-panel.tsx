@@ -119,25 +119,18 @@ export function AddDataPanel({ spaceId }: Props) {
         <ChevronUpBig />
       </button>
 
-      <h2 className="absolute top-[1.5rem] left-[1.5rem] text-smallTitle tracking-[-0.5px] text-[#151515]">
-        Add data and we&rsquo;ll extract and organize it for you
+      <h2 className="absolute top-[2.5rem] left-[1.5rem] text-smallTitle tracking-[-0.5px] text-[#151515]">
+        Link a news story and we&rsquo;ll extract and organize it for you
       </h2>
-
-      <div className="absolute top-[4.3125rem] left-[1.5rem] flex items-center gap-4 text-[1rem] leading-[22px] font-medium tracking-[-0.32px]">
-        <span className="text-[#2A2B2E]">Import from URL</span>
-        <span aria-disabled="true" title="Coming soon" className="cursor-not-allowed text-[#606060]">
-          Upload files
-        </span>
-      </div>
 
       <form
         onSubmit={handleSubmit}
-        className="absolute top-[5.9375rem] left-[1.5rem] flex h-[2.5625rem] w-[34.375rem] max-w-[calc(100%-3rem)] items-center justify-between rounded-full bg-white/80 pr-[0.40625rem] pl-3"
+        className="absolute top-[5rem] left-[1.5rem] flex h-[2.5625rem] w-[34.375rem] max-w-[calc(100%-3rem)] items-center justify-between rounded-full bg-white/80 pr-[0.40625rem] pl-3"
       >
         <input
           value={url}
           onChange={event => setUrl(event.target.value)}
-          placeholder="URL…"
+          placeholder="Paste news, podcast, tweet, blog URLs…"
           inputMode="url"
           className="w-full bg-transparent text-[1.125rem] tracking-[-0.36px] text-text outline-none placeholder:text-[#B6B6B6]"
         />
