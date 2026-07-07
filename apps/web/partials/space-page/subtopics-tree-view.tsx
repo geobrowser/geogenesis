@@ -24,6 +24,11 @@ import { Text } from '~/design-system/text';
 
 import type { AddSubtopicTarget } from '~/partials/space-page/add-subtopic-search-view';
 
+// Warm only the first N children's grandchildren on expand. A node can have up to
+// MAX_SUBTOPIC_CHILDREN (500) children; prefetching every one would fan out into
+// hundreds of requests and saturate the client. The rest fetch on demand when expanded.
+const PREFETCH_CHILDREN_LIMIT = 10;
+
 interface SubtopicsTreeViewProps {
   spaceId: string;
   rootEntityId: string;
@@ -192,7 +197,7 @@ function SubtopicTreeNode({
 
   React.useEffect(() => {
     if (!expanded) return;
-    for (const child of children) {
+    for (const child of children.slice(0, PREFETCH_CHILDREN_LIMIT)) {
       prefetchChildren(child.id, spaceId);
     }
   }, [expanded, children, spaceId, prefetchChildren]);

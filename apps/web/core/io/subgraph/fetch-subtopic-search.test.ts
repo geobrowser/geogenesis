@@ -1,7 +1,11 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchSubtopicSearch } from './fetch-subtopic-search';
+import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+
+import { fetchDefaultSubtopics, fetchSubtopicSearch } from './fetch-subtopic-search';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from './space-image';
 
 const graphqlMock = vi.fn();
@@ -155,5 +159,80 @@ describe('fetchSubtopicSearch', () => {
     await expect(fetchSubtopicSearch('   ')).resolves.toEqual([]);
 
     expect(graphqlMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchDefaultSubtopics', () => {
+  beforeEach(() => {
+    graphqlMock.mockReset();
+  });
+
+  it('queries curated Topic entities and maps/dedupes suggestions', async () => {
+    graphqlMock.mockImplementation(({ query }: { query: string }) => {
+      // Scoped to curated Topics: Types → Topic AND Tag → Curated topic tag.
+      expect(query).toContain('entitiesConnection');
+      expect(query).toContain(SystemIds.TYPES_PROPERTY);
+      expect(query).toContain(TOPIC_TYPE_ID);
+      expect(query).toContain(TAG_PROPERTY_ID);
+      expect(query).toContain(CURATED_TOPIC_TAG_ID);
+      expect(query).toContain('first: 10');
+
+      return Effect.succeed({
+        entitiesConnection: {
+          nodes: [
+            {
+              id: '00000000-0000-0000-0000-0000000000aa',
+              name: 'AI',
+              description: 'Machine reasoning systems',
+              types: [
+                { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+                { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+                { id: '00000000-0000-0000-0000-0000000000t2', name: 'Subject' },
+              ],
+            },
+            {
+              id: '00000000-0000-0000-0000-0000000000bb',
+              name: null,
+              description: null,
+              types: null,
+            },
+            // No id — should be filtered out.
+            { id: '', name: 'Ghost', description: null, types: [] },
+          ],
+        },
+      });
+    });
+
+    const result = await fetchDefaultSubtopics();
+
+    expect(result).toEqual([
+      {
+        id: '00000000-0000-0000-0000-0000000000aa',
+        name: 'AI',
+        description: 'Machine reasoning systems',
+        types: [
+          { id: '00000000-0000-0000-0000-0000000000t1', name: 'Topic' },
+          { id: '00000000-0000-0000-0000-0000000000t2', name: 'Subject' },
+        ],
+        image: '',
+        spaces: [],
+        spacesCount: 0,
+      },
+      {
+        id: '00000000-0000-0000-0000-0000000000bb',
+        name: 'Untitled',
+        description: null,
+        types: [],
+        image: '',
+        spaces: [],
+        spacesCount: 0,
+      },
+    ]);
+  });
+
+  it('returns an empty list on network error', async () => {
+    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'HttpError' }));
+
+    await expect(fetchDefaultSubtopics()).resolves.toEqual([]);
   });
 });
