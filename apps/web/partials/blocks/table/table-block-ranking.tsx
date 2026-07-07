@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { RANKING_VIEW_GALLERY_ID } from '~/core/ranking-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 
@@ -17,7 +18,9 @@ import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
+import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -54,7 +57,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     openRankingCompose,
     globalSharePath,
     ensureGlobalRankingOg,
+    stateView,
+    stateViewRelation,
   } = state;
+
+  const isGalleryView = Boolean(stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_GALLERY_ID));
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -62,6 +69,22 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     () => groupFilters(resolvedFilterState).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
     [resolvedFilterState]
   );
+
+  if (isGalleryView) {
+    return (
+      <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
+        <div className="mb-3 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
+          <div className="min-w-0 flex-1">
+            <h4 className="text-mediumTitle text-text">{displayName}</h4>
+          </div>
+          <div className="flex shrink-0 items-center gap-5">
+            <DataBlockViewMenu activeView={stateView} isLoading={false} />
+          </div>
+        </div>
+        <RankingGalleryView state={state} />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
@@ -82,6 +105,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
+          <DataBlockViewMenu activeView={stateView} isLoading={false} />
+
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}

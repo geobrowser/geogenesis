@@ -120,7 +120,7 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows, pageSize } = useDataBlock();
+  const { name, entityId, relationId, rows, pageSize,  view: stateView, viewRelation: stateViewRelation } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -840,6 +840,8 @@ export function useRankingBlockState({
     submissions,
     periodState,
     periodLabel,
+    view: stateView,
+    viewRelation: stateViewRelation,
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
@@ -897,6 +899,8 @@ export function useRankingBlockState({
     openEntitySheet,
     hasMyRankingData,
     hasGlobalRankingData,
+    stateView,
+    stateViewRelation,
   };
 }
 
