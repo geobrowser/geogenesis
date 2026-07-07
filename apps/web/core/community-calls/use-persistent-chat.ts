@@ -15,6 +15,8 @@ export type ChatEntry = {
   senderAvatarCid: string | null;
   content: string;
   timestamp: number;
+  /** Ephemeral — sent over LiveKit's data channel only, never persisted to chat history. */
+  attachedFiles?: File[];
 };
 
 const HISTORY_POLL_MS = 15_000;
@@ -108,6 +110,7 @@ export function usePersistentChat(args: {
     senderAvatarCid: parseParticipantMetadata(m.from?.metadata).avatarCid ?? null,
     content: m.message,
     timestamp: m.timestamp,
+    attachedFiles: m.attachedFiles,
   }));
 
   const liveIds = new Set(live.map(m => m.id));
@@ -137,8 +140,10 @@ export function usePersistentChat(args: {
   }, [latestId, isChatVisible, roomName, userIdentity, onNewMessage]);
 
   const send = React.useCallback(
-    async (content: string) => {
-      const sent = await sendLive(content);
+    async (content: string, files?: File[]) => {
+      // Attachments are ephemeral (LiveKit's native data-channel `attachments` option) —
+      // only the text is persisted to chat history, matching curator-backend's schema.
+      const sent = await sendLive(content, files?.length ? { attachments: files } : undefined);
       const token = await getToken();
       if (token) {
         sendChatMessage(

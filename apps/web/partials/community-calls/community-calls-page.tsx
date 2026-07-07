@@ -1,14 +1,15 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { listRecordings, notifyCommunityCallCancel, subscribeToCall } from '~/core/community-calls/api';
+import { listRecordings, notifyCommunityCallCancel } from '~/core/community-calls/api';
 import { buildDeleteCallOps } from '~/core/community-calls/call-ops';
 import { agendaHref, buildRoomName, detailsHref, liveCallHref } from '~/core/community-calls/constants';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
@@ -17,9 +18,8 @@ import { CallSeries, Occurrence, Recording } from '~/core/community-calls/types'
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useToast } from '~/core/hooks/use-toast';
-import { useReportError } from '~/core/state/status-bar-store';
-import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { getRelationsByFromEntityId } from '~/core/io/queries';
+import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 
 import { Button, SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
@@ -30,6 +30,7 @@ import { Time } from '~/design-system/icons/time';
 
 import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { RecordingPlayer } from './recording-player';
+import { RsvpButton } from './rsvp-button';
 
 type Row = { call: CallSeries; occ: Occurrence };
 
@@ -191,32 +192,22 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
   'use no memo';
 
   const router = useRouter();
-  const { identityToken, getToken } = useCommunityCallIdentityToken();
-  const { user } = usePrivy();
+  const { getToken } = useCommunityCallIdentityToken();
   const { makeProposal } = usePublish();
-  const [, setToast] = useToast();
-  const notifyStatusBarError = useReportError();
   const [confirmingDelete, setConfirmingDelete] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);
 
-  const onRsvp = async () => {
-    if (!identityToken) return setToast(<>Sign in to RSVP.</>);
-    const email = user?.email?.address;
-    if (!email) return setToast(<>Add an email to your account to RSVP.</>);
-    try {
-      const token = await getToken();
-      if (!token) return setToast(<>Sign in to RSVP.</>);
-      await subscribeToCall({ spaceId: row.call.spaceId, callId: row.call.callId, email }, token);
-      setToast(<>RSVP sent — check your email for the invite.</>);
-    } catch (err) {
-      const { message } = toUserFacingError(err, "Couldn't RSVP: ");
-      notifyStatusBarError(message);
-    }
-  };
-
   const onDelete = async () => {
     setDeleting(true);
-    const values = buildDeleteCallOps({ entityId: row.call.callId, spaceId: row.call.spaceId, name: row.call.name });
+    const existingBlockRelations = await Effect.runPromise(
+      getRelationsByFromEntityId(row.call.callId, SystemIds.BLOCKS, row.call.spaceId)
+    ).catch(() => []);
+    const { values, relations } = buildDeleteCallOps({
+      entityId: row.call.callId,
+      spaceId: row.call.spaceId,
+      name: row.call.name,
+      existingBlockRelations,
+    });
 
     // Fire before the on-chain write starts, not in onSuccess — curator-backend needs to
     // read the pre-delete `meetingTime` to send the cancellation, and that value may
@@ -229,7 +220,7 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
 
     await makeProposal({
       values,
-      relations: [],
+      relations,
       spaceId: row.call.spaceId,
       name: `Delete ${row.call.name}`,
       onSuccess: () => router.refresh(),
@@ -268,12 +259,11 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
             spaceId={row.call.spaceId}
             callId={row.call.callId}
             name={row.call.name}
-            description={row.call.description}
             startMs={row.occ.startMs}
             endMs={row.occ.endMs}
             schedule={row.call.schedule}
           />
-          <SmallButton onClick={onRsvp}>RSVP</SmallButton>
+          {isEditor && <RsvpButton call={row.call} />}
           <Dropdown
             trigger={<Ellipsis />}
             align="end"
@@ -317,7 +307,9 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
           />
         </div>
       </div>
-      {row.call.description && <p className="mt-2 text-metadata text-grey-04">{row.call.description}</p>}
+      {row.call.description && (
+        <div className="mt-2 text-metadata text-grey-04">{renderMarkdownDocument(row.call.description)}</div>
+      )}
     </RowShell>
   );
 }
@@ -342,7 +334,9 @@ function PastRow({
         <div>
           <div className="mb-2 text-metadata text-grey-04">{formatDateLabel(row.occ.startMs)}</div>
           <CallTitle row={row} />
-          {row.call.description && <p className="mt-2 text-metadata text-grey-04">{row.call.description}</p>}
+          {row.call.description && (
+            <div className="mt-2 text-metadata text-grey-04">{renderMarkdownDocument(row.call.description)}</div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {occRecordings.length > 0 && (

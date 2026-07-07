@@ -84,6 +84,7 @@ export default async function ExploreRoutePage() {
       ? [...new Set([...governance.editorIds, ...governance.myProposalSpaceIds, memberSpaceId])]
       : [memberSpaceId]
     : [];
+  const editorSpaceIds: string[] = governance ? governance.editorIds : [];
 
   // For featured + recently-claimed spaces the user isn't already part of, check
   // whether they have an active ADD_MEMBER proposal so the Join button can render
@@ -130,6 +131,7 @@ export default async function ExploreRoutePage() {
       parentTopicOptions={parentTopicOptions}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+      editorSpaceIds={editorSpaceIds}
       communityCalls={communityCalls}
     />
   );

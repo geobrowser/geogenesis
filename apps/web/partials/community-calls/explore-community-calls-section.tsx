@@ -1,31 +1,25 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import Link from 'next/link';
 
-import { subscribeToCall } from '~/core/community-calls/api';
 import { liveCallHref } from '~/core/community-calls/constants';
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
 import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurrences';
 import { Occurrence } from '~/core/community-calls/types';
-import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
-import { useToast } from '~/core/hooks/use-toast';
-import { useReportError } from '~/core/state/status-bar-store';
-import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { normId } from '~/core/utils/norm-id';
 
 import { Avatar } from '~/design-system/avatar';
-import { Button, SmallButton } from '~/design-system/button';
+import { Button } from '~/design-system/button';
 import { Select } from '~/design-system/select';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
 
 import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
+import { RsvpButton } from './rsvp-button';
 
 type Row = { call: ExploreCall; occ: Occurrence };
 
@@ -33,12 +27,20 @@ type Props = {
   calls: ExploreCall[];
   /** Spaces the viewer already belongs to — no Join space button for these. */
   memberOrEditorSpaceIds: Set<string>;
+  /** Spaces the viewer is an editor of — gates the RSVP button (curator's
+   *  `isCreator`/editor-only gate on "RSVP via email"). */
+  editorSpaceIds: Set<string>;
   /** Spaces with an in-flight membership request — render "Membership pending". */
   pendingMembershipSpaceIds: Set<string>;
 };
 
 /** Condensed cross-space digest of live + upcoming calls in the explore side panel. */
-export function ExploreCommunityCallsSection({ calls, memberOrEditorSpaceIds, pendingMembershipSpaceIds }: Props) {
+export function ExploreCommunityCallsSection({
+  calls,
+  memberOrEditorSpaceIds,
+  editorSpaceIds,
+  pendingMembershipSpaceIds,
+}: Props) {
   // Bucket after mount so SSR/CSR time splits can't diverge (hydration-safe), then
   // keep refreshing so the LIVE badge and ordering stay correct while the panel is open.
   const [now, setNow] = React.useState<number | null>(null);
@@ -76,6 +78,7 @@ export function ExploreCommunityCallsSection({ calls, memberOrEditorSpaceIds, pe
   // each card offers Join space when they're not already a member/editor.
   const membership = (spaceId: string) => ({
     isMember: memberOrEditorSpaceIds.has(normId(spaceId)),
+    isEditor: editorSpaceIds.has(normId(spaceId)),
     pending: pendingMembershipSpaceIds.has(normId(spaceId)),
   });
 
@@ -135,22 +138,26 @@ function SpaceChip({ call }: { call: ExploreCall }) {
 }
 
 /**
- * Per-card action. Members get an RSVP button (upcoming cards only — `showRsvp`); everyone
- * else gets the "Join space" / "Membership pending" text link. A member viewing a live card
- * has nothing to do (they just Join call), so the action collapses.
+ * Per-card action. Editors get an RSVP button (upcoming cards only — `showRsvp`;
+ * curator's `isCreator`/editor-only gate on "RSVP via email" — regular members never
+ * see it); everyone else gets the "Join space" / "Membership pending" text link. A
+ * member viewing a live card has nothing to do (they just Join call), so the action
+ * collapses.
  */
 function CardAction({
   call,
   isMember,
+  isEditor,
   pending,
   showRsvp = false,
 }: {
   call: ExploreCall;
   isMember: boolean;
+  isEditor: boolean;
   pending: boolean;
   showRsvp?: boolean;
 }) {
-  if (isMember) return showRsvp ? <RsvpButton call={call} /> : null;
+  if (isMember) return showRsvp && isEditor ? <RsvpButton call={call} /> : null;
   return (
     <div className="shrink-0 whitespace-nowrap">
       <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={pending} variant="text" />
@@ -158,41 +165,17 @@ function CardAction({
   );
 }
 
-function RsvpButton({ call }: { call: ExploreCall }) {
-  'use no memo';
-
-  const { identityToken, getToken } = useCommunityCallIdentityToken();
-  const { user } = usePrivy();
-  const [, setToast] = useToast();
-  const notifyStatusBarError = useReportError();
-  const [busy, setBusy] = React.useState(false);
-
-  const onRsvp = async () => {
-    if (busy) return;
-    if (!identityToken) return setToast(<>Sign in to RSVP.</>);
-    const email = user?.email?.address;
-    if (!email) return setToast(<>Add an email to your account to RSVP.</>);
-    setBusy(true);
-    try {
-      const token = await getToken();
-      if (!token) return setToast(<>Sign in to RSVP.</>);
-      await subscribeToCall({ spaceId: call.spaceId, callId: call.callId, email }, token);
-      setToast(<>RSVP sent — we’ll email you the invite.</>);
-    } catch (err) {
-      notifyStatusBarError(toUserFacingError(err, "Couldn't RSVP: ").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <SmallButton className="shrink-0" disabled={busy} onClick={onRsvp}>
-      RSVP
-    </SmallButton>
-  );
-}
-
-function LiveCard({ row, isMember, pending }: { row: Row; isMember: boolean; pending: boolean }) {
+function LiveCard({
+  row,
+  isMember,
+  isEditor,
+  pending,
+}: {
+  row: Row;
+  isMember: boolean;
+  isEditor: boolean;
+  pending: boolean;
+}) {
   return (
     <CardShell>
       <div className="mb-3 flex items-center justify-between">
@@ -208,18 +191,28 @@ function LiveCard({ row, isMember, pending }: { row: Row; isMember: boolean; pen
       <ParticipantAvatarStrip spaceId={row.call.spaceId} callId={row.call.callId} occurrenceStart={row.occ.startMs} />
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-grey-02 pt-3">
         <SpaceChip call={row.call} />
-        <CardAction call={row.call} isMember={isMember} pending={pending} />
+        <CardAction call={row.call} isMember={isMember} isEditor={isEditor} pending={pending} />
       </div>
     </CardShell>
   );
 }
 
-function UpcomingCard({ row, isMember, pending }: { row: Row; isMember: boolean; pending: boolean }) {
+function UpcomingCard({
+  row,
+  isMember,
+  isEditor,
+  pending,
+}: {
+  row: Row;
+  isMember: boolean;
+  isEditor: boolean;
+  pending: boolean;
+}) {
   return (
     <CardShell>
       <div className="flex items-start justify-between gap-2">
         <Title row={row} />
-        <CardAction call={row.call} isMember={isMember} pending={pending} showRsvp />
+        <CardAction call={row.call} isMember={isMember} isEditor={isEditor} pending={pending} showRsvp />
       </div>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
         <span className="shrink-0 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
@@ -228,7 +221,6 @@ function UpcomingCard({ row, isMember, pending }: { row: Row; isMember: boolean;
             spaceId={row.call.spaceId}
             callId={row.call.callId}
             name={row.call.name}
-            description={row.call.description}
             startMs={row.occ.startMs}
             endMs={row.occ.endMs}
             schedule={row.call.schedule}

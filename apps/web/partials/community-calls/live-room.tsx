@@ -13,6 +13,7 @@ import {
   useRoomContext,
   useTracks,
 } from '@livekit/components-react';
+import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 import '@livekit/components-styles';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
@@ -180,6 +181,13 @@ function RoomBody({
 
   const room = useRoomContext();
   const { getToken } = useCommunityCallIdentityToken();
+
+  // Viewers never publish a microphone track, so there's nothing for Krisp to filter.
+  const { setNoiseFilterEnabled } = useKrispNoiseFilter();
+  React.useEffect(() => {
+    if (!isViewer) setNoiseFilterEnabled(true);
+  }, [isViewer, setNoiseFilterEnabled]);
+
   // Synced from LiveKit room metadata (curator-backend's egress webhook handler writes
   // it) rather than local-only state, so every participant — editors and viewers alike,
   // including one who joins mid-recording — sees an accurate indicator.
@@ -530,7 +538,7 @@ function SidebarContent({
   hasUnreadMessages: boolean;
   openSidebarTab: (tab: SidebarTab | null) => void;
   chatMessages: ChatEntry[];
-  sendChat: (content: string) => Promise<void>;
+  sendChat: (content: string, files?: File[]) => Promise<void>;
   isViewer: boolean;
   roomName: string;
   livekitToken: string;

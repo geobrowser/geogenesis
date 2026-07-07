@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { formatInTimeZone } from 'date-fns-tz';
 import Textarea from 'react-textarea-autosize';
 
 import { parseAgendaText, serializeAgendaBlocks } from '~/core/community-calls/agenda';
@@ -14,7 +15,7 @@ import {
   upsertOccurrenceDraft,
 } from '~/core/community-calls/api';
 import { buildDeleteOccurrenceOps, buildPublishOccurrenceOps } from '~/core/community-calls/call-ops';
-import { LIVE_MEETING_GRACE_MINUTES } from '~/core/community-calls/constants';
+import { LIVE_MEETING_GRACE_MINUTES, agendaHref } from '~/core/community-calls/constants';
 import { fetchOccurrenceEvent } from '~/core/community-calls/fetch-occurrence-event';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
 import { Occurrence, OccurrenceAgendaBlock } from '~/core/community-calls/types';
@@ -23,36 +24,39 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
-import { MAX_CALL_DURATION_MINUTES, MIN_CALL_DURATION_MINUTES } from '~/core/utils/schedule';
+import {
+  MAX_CALL_DURATION_MINUTES,
+  MIN_CALL_DURATION_MINUTES,
+  localToUtcMs,
+  tzAbbreviation,
+} from '~/core/utils/schedule';
 
 import { Button, SmallButton } from '~/design-system/button';
+
+import { OccurrenceSelector } from './occurrence-selector';
 
 type Status = 'predicted' | 'draft' | 'published' | 'unpublished';
 
 const SAVE_DEBOUNCE_MS = 1000;
 const DELETE_DRAFT_RETRIES = 2;
 
-/** UTC `YYYY-MM-DD` for a `<input type="date">`. */
-function msToDateInput(ms: number): string {
-  const d = new Date(ms);
-  const y = d.getUTCFullYear().toString().padStart(4, '0');
-  const m = (d.getUTCMonth() + 1).toString().padStart(2, '0');
-  const day = d.getUTCDate().toString().padStart(2, '0');
-  return `${y}-${m}-${day}`;
+/** `YYYY-MM-DD` for a `<input type="date">`, in `tz`. */
+function msToDateInput(ms: number, tz: string): string {
+  return formatInTimeZone(ms, tz, 'yyyy-MM-dd');
 }
 
-/** UTC `HH:MM` for a `<input type="time">`. */
-function msToTimeInput(ms: number): string {
-  const d = new Date(ms);
-  return `${d.getUTCHours().toString().padStart(2, '0')}:${d.getUTCMinutes().toString().padStart(2, '0')}`;
+/** `HH:MM` for a `<input type="time">`, in `tz`. */
+function msToTimeInput(ms: number, tz: string): string {
+  return formatInTimeZone(ms, tz, 'HH:mm');
 }
 
-function dateTimeInputToMs(dateStr: string, timeStr: string): number | null {
+/** Local wall-clock digits in `tz` to a true UTC instant — DST-aware, see `localToUtcMs`. */
+function dateTimeInputToMs(dateStr: string, timeStr: string, tz: string): number | null {
   if (!dateStr || !timeStr) return null;
   const [y, m, d] = dateStr.split('-').map(Number);
   const [h, min] = timeStr.split(':').map(Number);
   if (![y, m, d, h, min].every(Number.isFinite)) return null;
-  return Date.UTC(y, m - 1, d, h, min);
+  return localToUtcMs(Date.UTC(y, m - 1, d, h, min), tz);
 }
 
 async function deleteDraftBestEffort(
@@ -75,6 +79,7 @@ export function AgendaEditor({
   seriesName,
   occurrence,
   autoPublishAhead,
+  schedule,
 }: {
   spaceId: string;
   callId: string;
@@ -82,12 +87,15 @@ export function AgendaEditor({
   occurrence: Occurrence;
   /** Series' `Auto publish ahead` setting — a republish nudge is only useful when it's > 0. */
   autoPublishAhead: number;
+  schedule: string;
 }) {
   const { isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
   const { identityToken, getToken } = useCommunityCallIdentityToken();
   const { makeProposal } = usePublish();
   const [, setToast] = useToast();
   const queryClient = useQueryClient();
+  const browserTimezone = React.useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const zoneLabel = React.useMemo(() => tzAbbreviation(browserTimezone, Date.now()), [browserTimezone]);
 
   const pastGrace = Date.now() > occurrence.endMs + LIVE_MEETING_GRACE_MINUTES * 60 * 1000;
   const notYetStarted = Date.now() < occurrence.startMs;
@@ -253,7 +261,7 @@ export function AgendaEditor({
   // Changing the start date/time shifts the end by the same amount, keeping duration
   // fixed — the end time can then be adjusted independently.
   const onChangeStartDate = (dateStr: string) => {
-    const nextStart = dateTimeInputToMs(dateStr, msToTimeInput(effectiveStart));
+    const nextStart = dateTimeInputToMs(dateStr, msToTimeInput(effectiveStart, browserTimezone), browserTimezone);
     if (nextStart === null) return;
     const duration = effectiveEnd - effectiveStart;
     setStartOverride(nextStart);
@@ -262,7 +270,7 @@ export function AgendaEditor({
   };
 
   const onChangeStartTime = (timeStr: string) => {
-    const nextStart = dateTimeInputToMs(msToDateInput(effectiveStart), timeStr);
+    const nextStart = dateTimeInputToMs(msToDateInput(effectiveStart, browserTimezone), timeStr, browserTimezone);
     if (nextStart === null) return;
     const duration = effectiveEnd - effectiveStart;
     setStartOverride(nextStart);
@@ -271,7 +279,7 @@ export function AgendaEditor({
   };
 
   const onChangeEndTime = (timeStr: string) => {
-    const nextEnd = dateTimeInputToMs(msToDateInput(effectiveEnd), timeStr);
+    const nextEnd = dateTimeInputToMs(msToDateInput(effectiveEnd, browserTimezone), timeStr, browserTimezone);
     if (nextEnd === null || nextEnd <= effectiveStart) return;
     setEndOverride(nextEnd);
     scheduleSave({ text: text ?? '', startOverride, endOverride: nextEnd });
@@ -351,16 +359,23 @@ export function AgendaEditor({
 
   return (
     <div className="mx-auto flex max-w-[820px] flex-col gap-4 px-4 py-8">
-      <div className="flex flex-col gap-1">
-        <span className="text-smallTitle">{seriesName} — Agenda</span>
-        <span className="text-metadata text-grey-04">
-          {formatDateLabel(effectiveStart)} · {formatTimeRange(effectiveStart, effectiveEnd)}
-        </span>
-        {rescheduled && (
-          <span className="text-footnote text-grey-03">
-            Originally {formatDateLabel(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-smallTitle">{seriesName} — Agenda</span>
+          <span className="text-metadata text-grey-04">
+            {formatDateLabel(effectiveStart)} · {formatTimeRange(effectiveStart, effectiveEnd)}
           </span>
-        )}
+          {rescheduled && (
+            <span className="text-footnote text-grey-03">
+              Originally {formatDateLabel(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
+            </span>
+          )}
+        </div>
+        <OccurrenceSelector
+          schedule={schedule}
+          selectedStartMs={occurrence.startMs}
+          hrefFor={(startMs, endMs) => agendaHref(spaceId, callId, startMs, endMs)}
+        />
       </div>
 
       <StatusPill status={status} locked={locked} />
@@ -394,25 +409,25 @@ export function AgendaEditor({
               Start date
               <input
                 type="date"
-                value={msToDateInput(effectiveStart)}
+                value={msToDateInput(effectiveStart, browserTimezone)}
                 onChange={e => onChangeStartDate(e.target.value)}
                 className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
               />
             </label>
             <label className="flex flex-col gap-1 text-metadata text-grey-04">
-              Start time (UTC)
+              Start time ({zoneLabel})
               <input
                 type="time"
-                value={msToTimeInput(effectiveStart)}
+                value={msToTimeInput(effectiveStart, browserTimezone)}
                 onChange={e => onChangeStartTime(e.target.value)}
                 className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
               />
             </label>
             <label className="flex flex-col gap-1 text-metadata text-grey-04">
-              End time (UTC)
+              End time ({zoneLabel})
               <input
                 type="time"
-                value={msToTimeInput(effectiveEnd)}
+                value={msToTimeInput(effectiveEnd, browserTimezone)}
                 onChange={e => onChangeEndTime(e.target.value)}
                 className="rounded-md border border-grey-02 px-3 py-2 text-metadata"
               />

@@ -44,6 +44,21 @@ describe('getOccurrences', () => {
     expect(first.startMs).toBe(Date.UTC(2026, 3, 8, 17, 0)); // 13:00 -04:00 → 17:00 UTC
     for (const o of occ) expect(new Date(o.startMs).getUTCDay()).toBe(3); // Wednesday
   });
+
+  it('preserves the local wall-clock time across a US spring-forward DST transition', () => {
+    // US DST starts 2026-03-08 (2nd Sunday of March). A recurring 09:00 America/Los_Angeles
+    // call must land at 17:00 UTC (PST, UTC-8) before the transition and 16:00 UTC (PDT,
+    // UTC-7) after it — the local hour (9am) stays fixed; the UTC instant shifts.
+    const mid = Date.UTC(2026, 2, 10, 12, 0);
+    const occ = getOccurrences(
+      'DTSTART;TZID=America/Los_Angeles:20260301T090000\nDTEND;TZID=America/Los_Angeles:20260301T100000\nRRULE:FREQ=WEEKLY;BYDAY=SU',
+      mid
+    );
+    const beforeDst = occ.find(o => new Date(o.startMs).getUTCMonth() === 2 && new Date(o.startMs).getUTCDate() === 1);
+    const afterDst = occ.find(o => new Date(o.startMs).getUTCMonth() === 2 && new Date(o.startMs).getUTCDate() === 8);
+    expect(beforeDst?.startMs).toBe(Date.UTC(2026, 2, 1, 17, 0));
+    expect(afterDst?.startMs).toBe(Date.UTC(2026, 2, 8, 16, 0));
+  });
 });
 
 describe('bucketOccurrences', () => {

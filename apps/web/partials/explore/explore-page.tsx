@@ -20,6 +20,7 @@ type Props = {
   parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
+  editorSpaceIds: string[];
   communityCalls: ExploreCall[];
 };
 
@@ -32,6 +33,7 @@ export function ExplorePage({
   parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
+  editorSpaceIds,
   communityCalls,
 }: Props) {
   return (
@@ -55,6 +57,7 @@ export function ExplorePage({
         parentTopicOptions={parentTopicOptions}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+        editorSpaceIds={editorSpaceIds}
         communityCalls={communityCalls}
       />
     </div>
