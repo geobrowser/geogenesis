@@ -132,8 +132,13 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
-  const { globalRankingEntityIds, globalLeaderboard, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
-    useRankingBlockRelations();
+  const {
+    globalRankingEntityIds,
+    globalLeaderboard,
+    aggregatedSubmitterRefs,
+    aggregatedSubmitterSpaceIds,
+    aggregatedRankingCount,
+  } = useRankingBlockRelations();
 
   const globalOrderedIds = globalRankingEntityIds;
 
@@ -534,6 +539,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       periodLabel={periodLabel}
       hasRankedByOthers={hasRankedByOthers}
       submissions={submissions}
+      aggregatedSubmitterRefs={aggregatedSubmitterRefs}
       aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
       aggregatedRankingCount={aggregatedRankingCount}
     />
