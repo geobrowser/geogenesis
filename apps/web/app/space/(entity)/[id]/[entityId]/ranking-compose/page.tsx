@@ -63,6 +63,7 @@ function hasValidPersonalRankingOgParams({
 }): boolean {
   return IdUtils.isValid(rankEntityId) && IdUtils.isValid(authorSpaceId) && isSafeOgVersion(ogVersion);
 }
+// test
 
 function hasValidGlobalRankingOgParams({
   blockEntityId,
