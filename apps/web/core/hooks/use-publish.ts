@@ -22,6 +22,9 @@ import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
+/** Fast path (instant execution for editors) vs review/slow path (voting period). */
+export type ProposalVotingMode = 'FAST' | 'SLOW';
+
 interface MakeProposalOptions {
   values: Value[];
   relations: Relation[];
@@ -29,6 +32,11 @@ interface MakeProposalOptions {
   name: string;
   /** Optional proposal ID (Geo entity ID format). For DAO spaces this is forwarded to daoSpace.proposeEdit. */
   proposalId?: string;
+  /**
+   * Editor-chosen path for DAO proposals (design 62501-94092). Ignored for non-editors
+   * and personal spaces — members can only ever use the slow path.
+   */
+  votingMode?: ProposalVotingMode;
   onSuccess?: () => void;
   onError?: () => void;
 }
@@ -54,6 +62,7 @@ export function usePublish() {
       name,
       spaceId,
       proposalId,
+      votingMode,
       onSuccess,
       onError,
     }: MakeProposalOptions) => {
@@ -112,6 +121,7 @@ export function usePublish() {
           name,
           author: personalSpaceId,
           proposalId,
+          votingMode,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -275,6 +285,8 @@ interface MakeProposalArgs {
   ops: Op[];
   /** Optional proposal ID (Geo entity ID format, 32 hex chars). Forwarded to daoSpace.proposeEdit as `0x${proposalId}`. */
   proposalId?: string;
+  /** Editor-chosen path for DAO proposals; only honored when the caller is an editor. */
+  votingMode?: ProposalVotingMode;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
@@ -300,7 +312,8 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, proposalId, smartAccount, space, onChangePublishState } = args;
+  const { name, author, ops, proposalId, votingMode: requestedVotingMode, smartAccount, space, onChangePublishState } =
+    args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -317,12 +330,14 @@ function makeProposal(args: MakeProposalArgs) {
       // `author` is the caller's personal space ID, already validated as non-null
       // by the guard in usePublish/useBulkPublish before makeProposal is called.
 
-      // Editors can use the fast path for immediate execution.
-      // Members must use the slow path which requires a voting period.
-      // FAST is valid even when the DAO's flatSupportThreshold is 0 — the
-      // contract accepts votes on those proposals as of the backend fix
-      // (previously they reverted with CanNotVote()).
-      const votingMode = space.isEditor ? 'FAST' : 'SLOW';
+      // Editors can use the fast path for immediate execution and now choose it
+      // explicitly via the review-screen selector (design 62501-94092); absent a
+      // choice they default to FAST. Members can only ever use the slow path (a
+      // voting period), so a stray FAST request from a non-editor is ignored.
+      // FAST is valid even when the DAO's flatSupportThreshold is 0 — the contract
+      // accepts votes on those proposals as of the backend fix (previously they
+      // reverted with CanNotVote()).
+      const votingMode: ProposalVotingMode = space.isEditor ? (requestedVotingMode ?? 'FAST') : 'SLOW';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({

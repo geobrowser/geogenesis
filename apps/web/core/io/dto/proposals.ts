@@ -30,6 +30,19 @@ export type SpaceTopicProposalDetails = {
   targetTopicId: string;
 };
 
+/**
+ * Proposed new voting settings for an `UPDATE_VOTING_SETTINGS` proposal. Values are raw
+ * from the API action: `slowThreshold` is a contract ratio (1e7 = 100%), `duration` is in
+ * seconds, and `fastThreshold`/`quorum` are editor counts. The API only carries these four
+ * user-facing fields (not universal support / grace period / new-member fast-path).
+ */
+export type VotingSettingsProposalDetails = {
+  slowThreshold?: number;
+  fastThreshold?: number;
+  quorum?: number;
+  durationSeconds?: number;
+};
+
 export type Proposal = {
   id: string;
   /** Proposal version this data describes (REST `proposalVersion`). Votes must
@@ -52,6 +65,8 @@ export type Proposal = {
   };
   subspaceDetails?: SubspaceProposalDetails;
   spaceTopicDetails?: SpaceTopicProposalDetails;
+  /** Proposed new voting settings, for `UPDATE_VOTING_SETTINGS` proposals. */
+  votingSettingsDetails?: VotingSettingsProposalDetails;
   /** The person being added/removed, for membership proposals. */
   targetProfile?: Profile;
 };

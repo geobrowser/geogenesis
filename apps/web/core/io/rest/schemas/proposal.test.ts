@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSpaceTopicProposalDetails, getSubspaceProposalDetails } from './proposal';
+import {
+  getSpaceTopicProposalDetails,
+  getSubspaceProposalDetails,
+  getVotingSettingsProposalDetails,
+  mapApiActionsToProposalType,
+} from './proposal';
 
 describe('getSubspaceProposalDetails', () => {
   it('maps verified add actions', () => {
@@ -115,5 +120,40 @@ describe('getSpaceTopicProposalDetails', () => {
     expect(
       getSpaceTopicProposalDetails([{ actionType: 'SUBSPACE_TOPIC_DECLARED', targetTopicId: 'topic-id' }])
     ).toBeNull();
+  });
+});
+
+describe('getVotingSettingsProposalDetails', () => {
+  it('extracts the proposed new values from an update-voting-settings action', () => {
+    expect(
+      getVotingSettingsProposalDetails([
+        { actionType: 'UPDATE_VOTING_SETTINGS', slowThreshold: 5100000, fastThreshold: 2, quorum: 3, duration: 86400 },
+      ])
+    ).toEqual({ slowThreshold: 5100000, fastThreshold: 2, quorum: 3, durationSeconds: 86400 });
+  });
+
+  it('returns null when there is no update-voting-settings action', () => {
+    expect(getVotingSettingsProposalDetails([{ actionType: 'PUBLISH', contentUri: 'ipfs://cid' }])).toBeNull();
+  });
+
+  it('returns null when the action carries none of the settings values', () => {
+    expect(getVotingSettingsProposalDetails([{ actionType: 'UPDATE_VOTING_SETTINGS' }])).toBeNull();
+  });
+});
+
+describe('mapApiActionsToProposalType — voting settings', () => {
+  it('classifies a lone update-voting-settings action (not ADD_EDIT)', () => {
+    expect(mapApiActionsToProposalType([{ actionType: 'UPDATE_VOTING_SETTINGS', quorum: 1 }])).toBe(
+      'UPDATE_VOTING_SETTINGS'
+    );
+  });
+
+  it('still prefers ADD_EDIT when a PUBLISH action is also present', () => {
+    expect(
+      mapApiActionsToProposalType([
+        { actionType: 'UPDATE_VOTING_SETTINGS', quorum: 1 },
+        { actionType: 'PUBLISH', contentUri: 'ipfs://cid' },
+      ])
+    ).toBe('ADD_EDIT');
   });
 });

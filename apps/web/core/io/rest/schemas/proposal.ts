@@ -11,6 +11,7 @@ import type {
   SubspaceEdgeProposalDetails,
   SubspaceProposalDetails,
   SubspaceTopicProposalDetails,
+  VotingSettingsProposalDetails,
 } from '../../dto/proposals';
 import { ProposalStatus, ProposalType } from '../../substream-schema';
 
@@ -318,6 +319,30 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
 }
 
 /**
+ * Extract the proposed new voting settings from an `UPDATE_VOTING_SETTINGS` action. The API
+ * carries the new values (`slowThreshold`, `fastThreshold`, `quorum`, `duration`) directly on
+ * the action; returns null if there's no such action or it carries none of them.
+ */
+export function getVotingSettingsProposalDetails(
+  actions: readonly ApiAction[]
+): VotingSettingsProposalDetails | null {
+  const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');
+  if (!action) {
+    return null;
+  }
+
+  const details: VotingSettingsProposalDetails = {
+    slowThreshold: action.slowThreshold,
+    fastThreshold: action.fastThreshold,
+    quorum: action.quorum,
+    durationSeconds: action.duration,
+  };
+
+  const hasAnyValue = Object.values(details).some(value => value !== undefined);
+  return hasAnyValue ? details : null;
+}
+
+/**
  * Map REST `actions` to a single {@link ProposalType}. Action order from the API is not
  * guaranteed, so the first action alone can mis-classify multi-action proposals: any
  * `PUBLISH` action means a content edit proposal (`ADD_EDIT`), then a membership action
@@ -330,6 +355,9 @@ export function mapApiActionsToProposalType(actions: readonly ApiAction[]): Prop
   const membershipAction = findMembershipAction(actions);
   if (membershipAction) {
     return mapActionTypeToProposalType(membershipAction.actionType);
+  }
+  if (actions.some(a => a.actionType === 'UPDATE_VOTING_SETTINGS')) {
+    return 'UPDATE_VOTING_SETTINGS';
   }
   return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
 }
@@ -359,6 +387,8 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
     case 'SET_TOPIC':
     case 'UNSET_TOPIC':
       return 'SET_TOPIC';
+    case 'UPDATE_VOTING_SETTINGS':
+      return 'UPDATE_VOTING_SETTINGS';
     default:
       return 'ADD_EDIT';
   }

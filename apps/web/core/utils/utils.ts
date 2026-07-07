@@ -543,6 +543,8 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
       return `Remove space from ${proposal.space.name}`;
     case 'SET_TOPIC':
       return `Set topic for ${proposal.space.name}`;
+    case 'UPDATE_VOTING_SETTINGS':
+      return `Update governance settings for ${proposal.space.name}`;
   }
 }
 

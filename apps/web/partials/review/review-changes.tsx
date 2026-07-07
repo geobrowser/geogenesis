@@ -12,6 +12,7 @@ import { useSetAtom, useStore } from 'jotai';
 
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -19,8 +20,9 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePublish } from '~/core/hooks/use-publish';
+import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
@@ -44,6 +46,7 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
+import { ProposalPathSelector } from '~/partials/governance/proposal-path-selector';
 import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';
 
 import {
@@ -446,6 +449,22 @@ export const ReviewChanges = () => {
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
+  // Fast/slow path selection (design 62501-94092). Only editors of a DAO space get a
+  // choice; members are always on the slow path, and personal spaces don't vote at all.
+  const activeSpaceAccess = useAccessControl(activeSpace);
+  const canChoosePath = activeSpaceMetadata?.type === 'DAO' && activeSpaceAccess.isEditor;
+  const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(
+    activeSpaceMetadata?.address,
+    canChoosePath
+  );
+  const [votingMode, setVotingMode] = React.useState<ProposalVotingMode>('FAST');
+
+  // Reset to the default fast path whenever the active space changes so a slow-path
+  // choice for one space doesn't silently carry over to the next.
+  React.useEffect(() => {
+    setVotingMode('FAST');
+  }, [activeSpace]);
+
   const { settled: slideUpEnterSettled, onEnterAnimationComplete: onSlideUpEnterAnimationComplete } =
     useEnterAnimationSettled(isReviewOpen);
 
@@ -557,6 +576,7 @@ export const ReviewChanges = () => {
         spaceId: activeSpace,
         name: proposalName,
         proposalId: proposalEntityId,
+        votingMode: canChoosePath ? votingMode : undefined,
         onSuccess: () => {
           setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
           settle(true);
@@ -710,6 +730,8 @@ export const ReviewChanges = () => {
     relationsFromSpace,
     proposalName,
     activeSpaceMetadata?.type,
+    canChoosePath,
+    votingMode,
     selectedBountyIds,
     personalSpaceId,
     bountiesById,
@@ -834,6 +856,13 @@ export const ReviewChanges = () => {
                     <Gem color="purple" />
                     {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
                   </button>
+                )}
+                {canChoosePath && (
+                  <ProposalPathSelector
+                    votingMode={votingMode}
+                    onChange={setVotingMode}
+                    votingSettings={activeSpaceVotingSettings}
+                  />
                 )}
                 <Button
                   variant="primary"

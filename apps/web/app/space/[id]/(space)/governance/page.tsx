@@ -5,26 +5,24 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
 import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { createPublicClient, http } from 'viem';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { Environment } from '~/core/environment';
 import { cachedFetchProposal } from '~/core/io/subgraph';
-import { graphql } from '~/core/io/subgraph/graphql';
 import { getMembershipProposalDisplayName } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import { EditGovernanceSettings } from '~/partials/governance/edit-governance-settings';
 import {
   type GovernanceProposalType,
   GovernanceProposalTypeFilter,
 } from '~/partials/governance/governance-proposal-type-filter';
 import { GovernanceProposalsList } from '~/partials/governance/governance-proposals-list';
 import { GovernanceProposalsListInfiniteScroll } from '~/partials/governance/governance-proposals-list-infinite-scroll';
+import type { VotingSettingsSnapshot } from '~/partials/governance/voting-settings';
 
 import { cachedFetchSpace } from '../../cached-fetch-space';
 
@@ -106,11 +104,6 @@ function formatThreshold(ratioValue: bigint): string {
   return `${percentage.toFixed(1)}%`;
 }
 
-function formatEditorCount(value: bigint): string {
-  const count = Number(value);
-  return `${count} ${count === 1 ? 'editor' : 'editors'}`;
-}
-
 export default async function GovernancePage(props: Props) {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -120,79 +113,64 @@ export default async function GovernancePage(props: Props) {
   }
 
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [{ acceptedProposals, rejectedProposals, activeProposals }, votingSettings] = await Promise.all([
-    getProposalsCount({ id: params.id }),
-    fetchVotingSettings(params.id),
-  ]);
+  const [votingSettings, space] = await Promise.all([fetchVotingSettings(params.id), cachedFetchSpace(params.id)]);
 
+  // The four settings the governance design surfaces (design 62569-13445).
   const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
-  const executionGracePeriod = votingSettings ? formatDuration(votingSettings.executionGracePeriod) : null;
-  const partialSupport = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
-  const universalSupport = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '67%';
-  const flatThreshold = votingSettings ? formatEditorCount(votingSettings.flatSupportThreshold) : null;
-  const quorum = votingSettings ? formatEditorCount(votingSettings.quorum) : null;
-  const newMembersFastPathDisabled = votingSettings?.disableFastPathAccessForNewMembers ?? false;
+  const passThreshold = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
+  const fastPassThreshold = votingSettings ? String(Number(votingSettings.flatSupportThreshold)) : '—';
+  const quorum = votingSettings ? String(Number(votingSettings.quorum)) : '—';
+
+  // Plain, serializable copy of the on-chain settings for the (client) edit modal — the
+  // raw struct is all bigints, which can't cross the server/client boundary. RATIO_BASE
+  // is 1e7 on-chain, so a ratio / 100000 is its percentage (see formatThreshold).
+  const votingSettingsSnapshot: VotingSettingsSnapshot | null = votingSettings
+    ? {
+        partialPercent: Number(votingSettings.partialPercentageSupportThreshold) / 100000,
+        universalPercent: Number(votingSettings.universalPercentageSupportThreshold) / 100000,
+        flat: Number(votingSettings.flatSupportThreshold),
+        quorum: Number(votingSettings.quorum),
+        durationSeconds: Number(votingSettings.duration),
+        graceDays: Number(votingSettings.executionGracePeriod) / 86400,
+        disableFastPathForNewMembers: votingSettings.disableFastPathAccessForNewMembers,
+      }
+    : null;
+
+  const canEditGovernance = space?.type === 'DAO' && Boolean(space.address) && votingSettingsSnapshot !== null;
 
   const proposalType = searchParams.proposalType;
 
   return (
     <>
       <div className="space-y-4">
-        {votingSettings && (
-          <div className="flex items-center">
-            <span
-              className={`inline-flex items-center rounded px-3 py-1 text-metadata ${
-                newMembersFastPathDisabled ? 'bg-errorTertiary text-red-01' : 'bg-successTertiary text-green'
-              }`}
-            >
-              {newMembersFastPathDisabled ? 'New members: slow path only' : 'New members: fast path enabled'}
-            </span>
-          </div>
-        )}
         <div className="flex items-stretch gap-5">
           <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Voting period</h2>
+            <h2 className="text-metadata text-grey-04">Vote duration</h2>
             <p className="text-mediumTitle">{votingPeriod}</p>
-            <p className="text-metadataMedium text-grey-04">
-              {executionGracePeriod ? `+${executionGracePeriod} grace` : ' '}
-            </p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Partial support</h2>
-            <p className="text-mediumTitle">{partialSupport}</p>
-            <p className="text-metadataMedium text-grey-04">{' '}</p>
+            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
+            <p className="text-mediumTitle">{passThreshold}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Universal support</h2>
-            <p className="text-mediumTitle">{universalSupport}</p>
-            <p className="text-metadataMedium text-grey-04">{' '}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Flat threshold</h2>
-            <p className="text-mediumTitle">{flatThreshold ?? '—'}</p>
-            <p className="text-metadataMedium text-grey-04">fast-path</p>
+            <h2 className="text-metadata text-grey-04">Fast pass threshold</h2>
+            <p className="text-mediumTitle">{fastPassThreshold}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Quorum</h2>
-            <p className="text-mediumTitle">{quorum ?? '—'}</p>
-            <p className="text-metadataMedium text-grey-04">{' '}</p>
+            <p className="text-mediumTitle">{quorum}</p>
           </GovernanceMetadataBox>
         </div>
-        <div className="flex items-stretch gap-5">
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Active proposals</h2>
-            <p className="text-mediumTitle">{activeProposals.totalCount}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
-            <div className="flex items-center gap-3 text-mediumTitle">
-              <span>{acceptedProposals.totalCount}</span>
-              <div className="h-4 w-px bg-grey-02" />
-              <span>{rejectedProposals.totalCount}</span>
-            </div>
-          </GovernanceMetadataBox>
+        <div className="flex items-center justify-between">
+          <GovernanceProposalTypeFilter spaceId={params.id} />
+          {canEditGovernance && space?.address && votingSettingsSnapshot && (
+            <EditGovernanceSettings
+              spaceId={params.id}
+              daoSpaceAddress={space.address}
+              snapshot={votingSettingsSnapshot}
+            />
+          )}
         </div>
-        <GovernanceProposalTypeFilter spaceId={params.id} />
         <React.Suspense fallback="Loading initial...">
           <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
         </React.Suspense>
@@ -231,108 +209,4 @@ async function InitialGovernanceProposals({
       )}
     </>
   );
-}
-
-interface NetworkResult {
-  activeProposals: {
-    totalCount: number;
-  };
-  acceptedProposals: {
-    totalCount: number;
-  };
-  rejectedProposals: {
-    totalCount: number;
-  };
-}
-
-async function getProposalsCount({ id }: Awaited<Props['params']>) {
-  const nowSeconds = Math.floor(Date.now() / 1000).toString();
-
-  // proposalsCurrents is the proposal joined with its *current* version, so
-  // endTime here is always the live voting window (multi-version proposals
-  // can't double-count across buckets). v2 encodes "not-yet-voted" as
-  // endTime=0 (the voting window opens on the first vote), so an Active
-  // proposal is one whose current version has endTime=0 OR endTime>now,
-  // and has never been executed.
-  const graphqlFetchEffect = graphql<NetworkResult>({
-    endpoint: Environment.getConfig().api,
-    query: `
-    query {
-      activeProposals: proposalsCurrentsConnection(
-        filter: {
-          spaceId: { is: "${id}" }
-          executedAt: { isNull: true }
-          or: [{ endTime: { is: "0" } }, { endTime: { greaterThan: "${nowSeconds}" } }]
-        }
-      ) {
-        totalCount
-      }
-
-      acceptedProposals: proposalsCurrentsConnection(
-        filter: {
-          spaceId: { is: "${id}" }
-          executedAt: { isNull: false }
-        }
-      ) {
-        totalCount
-      }
-
-      rejectedProposals: proposalsCurrentsConnection(
-        filter: {
-          spaceId: { is: "${id}" }
-          executedAt: { isNull: true }
-          endTime: { lessThan: "${nowSeconds}", greaterThan: "0" }
-        }
-      ) {
-        totalCount
-      }
-    }`,
-  });
-
-  const graphqlFetchWithErrorFallbacks = Effect.gen(function* (awaited) {
-    const resultOrError = yield* awaited(Effect.either(graphqlFetchEffect));
-
-    if (Either.isLeft(resultOrError)) {
-      const error = resultOrError.left;
-
-      switch (error._tag) {
-        case 'AbortError':
-          // Right now we re-throw AbortErrors and let the callers handle it. Eventually we want
-          // the caller to consume the error channel as an effect. We throw here the typical JS
-          // way so we don't infect more of the codebase with the effect runtime.
-          throw error;
-        case 'GraphqlRuntimeError':
-          console.error(`Encountered runtime graphql error in governance/page. spaceId: ${id}`, error.message);
-          return {
-            activeProposals: {
-              totalCount: 0,
-            },
-            acceptedProposals: {
-              totalCount: 0,
-            },
-            rejectedProposals: {
-              totalCount: 0,
-            },
-          };
-        default:
-          console.error(`${error._tag}: Unable to fetch proposals count, spaceId: ${id}`);
-          return {
-            activeProposals: {
-              totalCount: 0,
-            },
-            acceptedProposals: {
-              totalCount: 0,
-            },
-            rejectedProposals: {
-              totalCount: 0,
-            },
-          };
-      }
-    }
-
-    return resultOrError.right;
-  });
-
-  const result = await Effect.runPromise(graphqlFetchWithErrorFallbacks);
-  return result;
 }

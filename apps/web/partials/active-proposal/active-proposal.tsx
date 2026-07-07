@@ -27,6 +27,7 @@ import { ProposalBountiesProvider, ProposalBountyHeadButton, ProposalBountyPanel
 import { ProposalVoteRow } from './proposal-vote-row';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
+import { VotingSettingsProposal } from './voting-settings-proposal';
 
 interface Props {
   proposalId?: string;
@@ -66,11 +67,15 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
   const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
+  const isVotingSettingsProposal = proposal.type === 'UPDATE_VOTING_SETTINGS';
   // Membership proposals are about the target person, not the proposer (which
   // for join requests is the DAO space itself) — show them in title and byline.
   const proposalTitle = proposal.targetProfile
     ? getMembershipProposalDisplayName(proposal.type, proposal.targetProfile)
-    : (proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space }));
+    : (proposal.name ??
+      (isVotingSettingsProposal
+        ? 'Governance settings update'
+        : getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space })));
   const bylineProfile = proposal.targetProfile ?? proposal.createdBy;
 
   const isAddEdit = proposal.type === 'ADD_EDIT';
@@ -179,6 +184,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
               {isAddEdit && <ContentProposal proposal={proposal} spaceId={spaceId} />}
               {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
               {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
+              {isVotingSettingsProposal && <VotingSettingsProposal proposal={proposal} spaceId={spaceId} />}
             </div>
           </div>
         </div>

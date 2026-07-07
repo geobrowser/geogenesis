@@ -1,6 +1,5 @@
 'use client';
 
-import { validateVotingSettingsInput } from '@geoprotocol/geo-sdk';
 import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
@@ -12,7 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { NEW_SPACE_DEFAULT_VOTING_SETTINGS, type VotingSettingsInput, useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { type VotingSettingsInput, useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -34,6 +33,16 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
+import {
+  DEFAULT_VOTING_SETTINGS_SNAPSHOT,
+  type VotingSettingsFormState,
+  parseVotingSettingsForm,
+  snapshotToFormState,
+  snapshotToHidden,
+  votingSettingsInputToSnapshot,
+  votingSettingsWarnings,
+} from '~/partials/governance/voting-settings';
+import { VotingSettingsFields } from '~/partials/governance/voting-settings-fields';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
@@ -576,58 +585,23 @@ function StepConfigureGovernance() {
   const [customSettings, setCustomSettings] = useAtom(votingSettingsAtom);
   const setStep = useSetAtom(stepAtom);
 
-  // Form state is initialized from the override atom if present, otherwise the
-  // deploy hook's defaults — same source of truth used at deploy time.
-  const initial = customSettings ?? NEW_SPACE_DEFAULT_VOTING_SETTINGS;
-  const initialDurationInDays =
-    'durationInDays' in initial && typeof initial.durationInDays === 'number'
-      ? initial.durationInDays
-      : 'durationInSeconds' in initial && typeof initial.durationInSeconds === 'number'
-        ? initial.durationInSeconds / 86400
-        : 1;
+  // The creator is the only initial editor, so the SDK validates flat/quorum against 1.
+  const NEW_SPACE_INITIAL_EDITOR_COUNT = 1;
 
-  const [partial, setPartial] = React.useState<string>(String(initial.partialPercentageSupportThreshold));
-  const [universal, setUniversal] = React.useState<string>(String(initial.universalPercentageSupportThreshold));
-  const [flat, setFlat] = React.useState<string>(String(initial.flatSupportThreshold));
-  const [quorum, setQuorum] = React.useState<string>(String(initial.quorum));
-  const [duration, setDuration] = React.useState<string>(String(initialDurationInDays));
-  const [grace, setGrace] = React.useState<string>(String(initial.executionGracePeriodInDays));
-  const [disableFastPath, setDisableFastPath] = React.useState<boolean>(initial.disableFastPathAccessForNewMembers);
+  // Prefill from the override atom if the user already customized settings, otherwise the
+  // create-time defaults — the same source of truth used at deploy time.
+  const initialSnapshot = customSettings
+    ? votingSettingsInputToSnapshot(customSettings)
+    : DEFAULT_VOTING_SETTINGS_SNAPSHOT;
 
-  const parsed = parseSettings({
-    partial,
-    universal,
-    flat,
-    quorum,
-    duration,
-    grace,
-    disableFastPath,
-  });
+  const [state, setState] = React.useState<VotingSettingsFormState>(() => snapshotToFormState(initialSnapshot));
+  // Universal support, grace period, and the new-member fast-path toggle aren't in the
+  // design's form; carry whatever the draft started with through unchanged.
+  const hidden = React.useMemo(() => snapshotToHidden(initialSnapshot), [initialSnapshot]);
 
+  const parsed = parseVotingSettingsForm(state, hidden, NEW_SPACE_INITIAL_EDITOR_COUNT);
+  const warnings = parsed.kind === 'ok' ? votingSettingsWarnings(state) : [];
   const canSave = parsed.kind === 'ok';
-
-  // Non-blocking warnings for settings that parse cleanly but are almost
-  // certainly a mistake or produce surprising on-chain behavior. Percentages
-  // below 1 usually mean the user typed a decimal (e.g. "5.1" instead of "51").
-  const parsedFlat = Number(flat);
-  const parsedPartial = Number(partial);
-  const parsedUniversal = Number(universal);
-  const settingsWarnings: string[] = [];
-  if (Number.isFinite(parsedFlat) && parsedFlat === 0) {
-    settingsWarnings.push(
-      'Flat support threshold is 0 — fast-path proposals pass with a single editor vote. Make sure this is intended.'
-    );
-  }
-  if (Number.isFinite(parsedPartial) && parsedPartial > 0 && parsedPartial < 1) {
-    settingsWarnings.push(
-      `Partial support threshold is ${parsedPartial}%. Percentages are entered as whole numbers — 50 means 50%, not 0.5. Did you mean ${Math.round(parsedPartial * 10)}%?`
-    );
-  }
-  if (Number.isFinite(parsedUniversal) && parsedUniversal > 0 && parsedUniversal < 1) {
-    settingsWarnings.push(
-      `Universal support threshold is ${parsedUniversal}%. Percentages are entered as whole numbers — 90 means 90%, not 0.9. Did you mean ${Math.round(parsedUniversal * 10)}%?`
-    );
-  }
 
   const handleSave = () => {
     if (parsed.kind !== 'ok') return;
@@ -636,88 +610,25 @@ function StepConfigureGovernance() {
   };
 
   const handleResetDefaults = () => {
-    const d = NEW_SPACE_DEFAULT_VOTING_SETTINGS;
-    setPartial(String(d.partialPercentageSupportThreshold));
-    setUniversal(String(d.universalPercentageSupportThreshold));
-    setFlat(String(d.flatSupportThreshold));
-    setQuorum(String(d.quorum));
-    setDuration(String('durationInDays' in d ? d.durationInDays : (d.durationInSeconds ?? 0) / 86400));
-    setGrace(String(d.executionGracePeriodInDays));
-    setDisableFastPath(d.disableFastPathAccessForNewMembers);
+    setState(snapshotToFormState(DEFAULT_VOTING_SETTINGS_SNAPSHOT));
     setCustomSettings(null);
   };
 
   return (
     <StepContents childKey="configure-governance">
-      <div className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-24">
+      <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-24">
         <Text variant="footnote" color="grey-04">
           Defaults are sensible for most spaces. See the governance page later for what each setting does.
         </Text>
-        <GovernanceField
-          label="Voting period (days)"
-          hint="Slow-path voting window length."
-          value={duration}
-          onChange={setDuration}
-          inputMode="decimal"
-        />
-        <GovernanceField
-          label="Execution grace period (days)"
-          hint="Delay between passing and execution."
-          value={grace}
-          onChange={setGrace}
-          inputMode="decimal"
-        />
-        <GovernanceField
-          label="Partial support threshold (%)"
-          hint="Slow-path: % of YES votes among voters (e.g. 50 means 50%)."
-          value={partial}
-          onChange={setPartial}
-          inputMode="decimal"
-        />
-        <GovernanceField
-          label="Universal support threshold (%)"
-          hint="Slow-path: % of YES votes among all editors (e.g. 90 means 90%)."
-          value={universal}
-          onChange={setUniversal}
-          inputMode="decimal"
-        />
-        <GovernanceField
-          label="Fast-path editor votes required"
-          hint="Number of editor YES votes for instant execution. Set to 0 to disable the fast path — proposals will only be resolvable through the slow-path voting period."
-          value={flat}
-          onChange={setFlat}
-          inputMode="numeric"
-        />
-        <GovernanceField
-          label="Quorum (editors)"
-          hint="Minimum editors that must vote for slow-path validity."
-          value={quorum}
-          onChange={setQuorum}
-          inputMode="numeric"
-        />
-        <label className="flex items-start gap-2 pt-1">
-          <input
-            type="checkbox"
-            checked={disableFastPath}
-            onChange={e => setDisableFastPath(e.target.checked)}
-            className="mt-1"
-          />
-          <div>
-            <div className="text-button">Disable fast path for new members</div>
-            <div className="text-footnote text-grey-04">
-              Newly added members can&apos;t use the fast path until promoted.
-            </div>
-          </div>
-        </label>
+        <VotingSettingsFields state={state} onChange={setState} />
         {parsed.kind === 'error' && (
           <div className="rounded bg-errorTertiary px-3 py-2 text-metadataMedium text-red-01">{parsed.message}</div>
         )}
-        {parsed.kind === 'ok' &&
-          settingsWarnings.map(warning => (
-            <div key={warning} className="rounded border border-orange px-3 py-2 text-metadataMedium text-orange">
-              {warning}
-            </div>
-          ))}
+        {warnings.map(warning => (
+          <div key={warning} className="rounded border border-orange px-3 py-2 text-metadataMedium text-orange">
+            {warning}
+          </div>
+        ))}
       </div>
       <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
         <Button disabled={!canSave} onClick={handleSave} className="w-full">
@@ -733,105 +644,6 @@ function StepConfigureGovernance() {
       </div>
     </StepContents>
   );
-}
-
-type GovernanceFieldProps = {
-  label: string;
-  hint: string;
-  value: string;
-  onChange: (next: string) => void;
-  inputMode: 'numeric' | 'decimal';
-};
-
-function GovernanceField({ label, hint, value, onChange, inputMode }: GovernanceFieldProps) {
-  return (
-    <label className="block space-y-1">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-button">{label}</span>
-      </div>
-      <input
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        inputMode={inputMode}
-        className="w-full rounded border border-grey-02 px-2 py-1.5 text-body focus:border-text focus:outline-none"
-      />
-      <div className="text-footnote text-grey-04">{hint}</div>
-    </label>
-  );
-}
-
-type ParsedSettingsInputs = {
-  partial: string;
-  universal: string;
-  flat: string;
-  quorum: string;
-  duration: string;
-  grace: string;
-  disableFastPath: boolean;
-};
-
-type ParsedSettings =
-  | { kind: 'ok'; value: VotingSettingsInput }
-  | { kind: 'error'; message: string };
-
-function parseSettings(inputs: ParsedSettingsInputs): ParsedSettings {
-  // Number('') and Number('  ') are 0, so blank fields must be rejected before
-  // conversion or they silently become 0 (e.g. a 0% support threshold).
-  const rawValues = [inputs.partial, inputs.universal, inputs.flat, inputs.quorum, inputs.duration, inputs.grace];
-  if (rawValues.some(v => v.trim() === '')) {
-    return { kind: 'error', message: 'All fields are required.' };
-  }
-
-  const partial = Number(inputs.partial);
-  const universal = Number(inputs.universal);
-  const flat = Number(inputs.flat);
-  const quorum = Number(inputs.quorum);
-  const duration = Number(inputs.duration);
-  const grace = Number(inputs.grace);
-
-  if (![partial, universal, flat, quorum, duration, grace].every(Number.isFinite)) {
-    return { kind: 'error', message: 'All fields must be valid numbers.' };
-  }
-  if (partial < 0 || partial > 100 || universal < 0 || universal > 100) {
-    return { kind: 'error', message: 'Support thresholds must be between 0 and 100.' };
-  }
-  if (!Number.isInteger(flat) || flat < 0) {
-    return { kind: 'error', message: 'Flat threshold must be a non-negative integer.' };
-  }
-  if (!Number.isInteger(quorum) || quorum < 1) {
-    return { kind: 'error', message: 'Quorum must be at least 1.' };
-  }
-  // SDK lower bound: MINIMUM_VOTING_DURATION_DAYS = 1/24/60 (one minute).
-  if (duration < 1 / 24 / 60) {
-    return { kind: 'error', message: 'Voting period must be at least 1 minute.' };
-  }
-  // SDK lower bound: MINIMUM_EXECUTION_GRACE_PERIOD_DAYS = 1/24 (one hour).
-  if (grace < 1 / 24) {
-    return { kind: 'error', message: 'Execution grace period must be at least 1 hour.' };
-  }
-
-  const value: VotingSettingsInput = {
-    partialPercentageSupportThreshold: partial,
-    universalPercentageSupportThreshold: universal,
-    flatSupportThreshold: flat,
-    quorum,
-    durationInDays: duration,
-    disableFastPathAccessForNewMembers: inputs.disableFastPath,
-    executionGracePeriodInDays: grace,
-  };
-
-  // Run the SDK's own validation with the deploy-time editor count (the
-  // creator is the only initial editor — see useDeploySpace's
-  // initialEditorSpaceIds). Without this, e.g. quorum=3 saves fine and then
-  // every deploy attempt fails inside getCreateDaoSpaceCalldata after the
-  // IPFS publish has already run.
-  const NEW_SPACE_INITIAL_EDITOR_COUNT = 1;
-  const sdkError = validateVotingSettingsInput(value, NEW_SPACE_INITIAL_EDITOR_COUNT);
-  if (sdkError) {
-    return { kind: 'error', message: sdkError };
-  }
-
-  return { kind: 'ok', value };
 }
 
 const governanceText: Record<SpaceGovernanceType, string> = {

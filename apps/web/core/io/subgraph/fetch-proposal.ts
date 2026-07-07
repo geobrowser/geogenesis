@@ -13,6 +13,7 @@ import {
   getApiProposalCanExecute,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
+  getVotingSettingsProposalDetails,
   mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
@@ -89,6 +90,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const proposalType = mapApiActionsToProposalType(apiProposal.actions);
   const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
   const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
+  const votingSettingsDetails = getVotingSettingsProposalDetails(apiProposal.actions);
 
   // Convert votes to internal format
   const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
@@ -129,6 +131,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     },
     subspaceDetails: subspaceDetails ?? undefined,
     spaceTopicDetails: spaceTopicDetails ?? undefined,
+    votingSettingsDetails: votingSettingsDetails ?? undefined,
     targetProfile,
   };
 }
