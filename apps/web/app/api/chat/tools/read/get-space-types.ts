@@ -22,7 +22,7 @@ type GetSpaceTypesOutput = { types: GetSpaceTypesResult[] } | { error: 'invalid_
 
 export const getSpaceTypes = tool({
   description:
-    'List the entity Types defined in a space — the space\'s ontology. Call this whenever the user names a kind of thing tied to a space ("news stories in Crypto", "movies in my space", "products in this space") so you can match their colloquial phrasing to the actual type name and id used in that space (e.g. `News Story` not `Article`). Returns `{ id, name, description }` per type. Use the returned id directly as `typeId` for `searchGraph`, `setDataBlockFilters`, `createEntity`, etc. — do not re-search for it.',
+    'List the entity Types defined in a space — the space\'s ontology. Call this whenever the user names a kind of thing tied to a space ("the news stories here", "the products in this space") so you can match their colloquial phrasing to the actual type name and id used in that space (a space might type its posts `News Story` rather than the generic `Article`). Returns `{ id, name, description }` per type. Use the returned id directly as `typeId` for `searchGraph`, `setDataBlockFilters`, `createEntity`, etc. — do not re-search for it.',
   inputSchema: jsonSchema<GetSpaceTypesInput>({
     type: 'object',
     properties: {
