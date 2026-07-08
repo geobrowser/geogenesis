@@ -8,7 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
-import { RANKING_VIEW_GALLERY_ID, RANKING_VIEW_LIST_ID } from '~/core/ranking-block-ids';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 
@@ -22,6 +22,7 @@ import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingListView } from './ranking-list-view';
+import { RankingPillView } from './ranking-pill-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -62,8 +63,15 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     stateViewRelation,
   } = state;
 
-  const isGalleryView = Boolean(stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_GALLERY_ID));
-  const isListView = Boolean(stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_LIST_ID));
+  const isGalleryView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
+  );
+  const isListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  );
+  const isPillView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
+  );
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -107,7 +115,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             aria-label="Open fullscreen ranking"
           />
 
-          <DataBlockViewMenu activeView={stateView} isLoading={false} />
+          <DataBlockViewMenu activeView={stateView} isLoading={false} includeRankingViews />
 
           <TableBlockContextMenu
             sourceType={source.type}
@@ -201,6 +209,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         <RankingGalleryView state={state} />
       ) : isListView ? (
         <RankingListView state={state} />
+      ) : isPillView ? (
+        <RankingPillView state={state} />
       ) : (
         <RankingBlockBody state={state} presentation="embedded" />
       )}

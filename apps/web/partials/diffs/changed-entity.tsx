@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { getBatchEntities } from '~/core/io/queries';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -900,6 +901,7 @@ const VIEW_NAMES: Record<string, string> = {
   [SystemIds.LIST_VIEW]: 'List view',
   [SystemIds.GALLERY_VIEW]: 'Gallery view',
   [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
+  [RANKING_VIEW_PILL_ID]: 'Pill view',
 };
 
 function isUuidForEntityBatch(id: string): boolean {
@@ -1209,6 +1211,8 @@ const DataBlockCollectionItems = ({ relations, side, viewEntityId }: DataBlockCo
       return <CollectionListItems items={items} />;
     case SystemIds.BULLETED_LIST_VIEW:
       return <CollectionBulletedListItems items={items} />;
+    case RANKING_VIEW_PILL_ID:
+      return <CollectionPillItems items={items} />;
     case SystemIds.TABLE_VIEW:
     default:
       return <CollectionTableItems items={items} />;
@@ -1289,6 +1293,25 @@ const CollectionBulletedListItems = ({ items }: { items: CollectionItem[] }) => 
       <div key={i} className="flex gap-2 rounded-md px-1 py-0.5">
         <div className="mt-0.5 shrink-0 text-xl leading-none text-text">&bull;</div>
         <span className={cx('rounded text-body text-text', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}>
+          {item.entityName ?? item.entityId}
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
+const CollectionPillItems = ({ items }: { items: CollectionItem[] }) => (
+  <div className="flex flex-wrap gap-2">
+    {items.map((item, i) => (
+      <div
+        key={i}
+        className={cx(
+          'inline-flex h-8 items-center gap-2 rounded-full border border-grey-02 bg-white p-2',
+          item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType]
+        )}
+      >
+        <div className="h-4 w-4 shrink-0 rounded-full bg-grey-02" />
+        <span className="text-[16px] leading-[13px] tracking-[-0.35px] text-text">
           {item.entityName ?? item.entityId}
         </span>
       </div>
@@ -1428,6 +1451,17 @@ const DataBlockViewSkeleton = ({ viewEntityId }: { viewEntityId: string | null }
             <div key={i} className="flex gap-2">
               <div className="mt-1 shrink-0 text-xl leading-none text-grey-03">&bull;</div>
               <div className="h-5 w-48 rounded-sm bg-grey-02" />
+            </div>
+          ))}
+        </div>
+      );
+    case RANKING_VIEW_PILL_ID:
+      return (
+        <div className="flex flex-wrap gap-2 opacity-60">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="inline-flex h-8 items-center gap-2 rounded-full border border-grey-02 bg-white p-2">
+              <div className="h-4 w-4 shrink-0 rounded-full bg-grey-02" />
+              <div className="h-3 w-14 rounded-sm bg-grey-02" />
             </div>
           ))}
         </div>
