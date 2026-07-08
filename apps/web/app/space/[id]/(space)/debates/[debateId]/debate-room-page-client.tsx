@@ -344,7 +344,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      router.push(debate.status === 'complete' ? claimsPath : `/space/${spaceId}/debates`);
+      router.push(`/space/${spaceId}/debates`);
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }

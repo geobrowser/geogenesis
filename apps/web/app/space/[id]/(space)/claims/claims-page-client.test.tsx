@@ -106,7 +106,7 @@ describe('ClaimsPageClient', () => {
     fireEvent.submit(screen.getByRole('button', { name: 'Open proposal' }).closest('form')!);
 
     expect(mocks.nameSet).toHaveBeenCalledWith(expect.any(String), 'space-1', 'Public transit should be free');
-    const relationTypes = mocks.relationSet.mock.calls.map(([relation]: [Relation]) => relation.type.id);
+    const relationTypes = mocks.relationSet.mock.calls.map(call => (call[0] as Relation).type.id);
     expect(relationTypes).toContain(SystemIds.TYPES_PROPERTY);
     expect(relationTypes).not.toContain('73609ae8644c4463a50a90a3ee585746');
     expect(relationTypes).not.toContain(TOPICS_PROPERTY_ID);
