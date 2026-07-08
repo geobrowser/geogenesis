@@ -1,0 +1,133 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Debate } from '~/core/debates/api';
+
+import { DebateRoomPageClient } from './debate-room-page-client';
+
+const mocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  replace: vi.fn(),
+  joinMutate: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: () => true,
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useCompleteLocalRecordingUpload: () => ({ mutateAsync: vi.fn() }),
+  useCreateLocalRecordingUpload: () => ({ mutateAsync: vi.fn() }),
+  useDebate: () => ({ data: completedDebate(), isLoading: false, error: null }),
+  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
+  useLiveKitJoin: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useMarkDebateJoined: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+beforeEach(() => {
+  mocks.push.mockReset();
+  mocks.replace.mockReset();
+  mocks.joinMutate.mockReset();
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe('DebateRoomPageClient', () => {
+  it('shows a continuation prompt after a completed debate and can leave unselected', async () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Continue debating this question?')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+  });
+
+  it('rejoins the queue with the chosen answer from the completed debate prompt', async () => {
+    mocks.joinMutate.mockImplementation((_variables, options) => {
+      options.onSuccess();
+    });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Yes' }));
+
+    expect(mocks.joinMutate).toHaveBeenCalledWith(
+      {
+        questionId: 'question-entity-1',
+        request: {
+          answer_entity_id: 'answer-yes',
+          answer_label: 'Yes',
+        },
+      },
+      expect.any(Object)
+    );
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+    });
+  });
+});
+
+function completedDebate(): Debate {
+  return {
+    id: 'debate-1',
+    question: {
+      id: 'debate-question-1',
+      space_id: 'space-1',
+      question_entity_id: 'question-entity-1',
+      question: 'Should the protocol ship debates?',
+      description: null,
+      answer_options: [
+        { entity_id: 'answer-yes', label: 'Yes' },
+        { entity_id: 'answer-no', label: 'No' },
+      ],
+    },
+    status: 'complete',
+    room_name: 'geo-debate-debate-1',
+    first_participant_slot: 1,
+    current_turn_index: 0,
+    current_speaker_slot: null,
+    prepare_started_at: null,
+    prepare_ends_at: null,
+    turn_started_at: null,
+    turn_ends_at: null,
+    preflight_ends_at: null,
+    turn_format_id: 'standard',
+    turn_durations_ms: [30_000, 30_000],
+    created_at: '2026-07-02T00:00:00.000Z',
+    started_at: '2026-07-02T00:00:10.000Z',
+    completed_at: '2026-07-02T00:01:10.000Z',
+    participants: [
+      {
+        user_id: 'user-a',
+        profile_space_id: 'profile-a',
+        display_name: 'Alex',
+        avatar_cid: null,
+        participant_slot: 1,
+        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        joined_at: '2026-07-02T00:00:00.000Z',
+      },
+      {
+        user_id: 'user-b',
+        profile_space_id: 'profile-b',
+        display_name: 'Bri',
+        avatar_cid: null,
+        participant_slot: 2,
+        answer: { entity_id: 'answer-no', label: 'No' },
+        joined_at: '2026-07-02T00:00:00.000Z',
+      },
+    ],
+    recordings: [],
+    recording_error: null,
+  };
+}

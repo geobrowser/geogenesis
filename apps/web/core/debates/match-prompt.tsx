@@ -276,13 +276,13 @@ function MatchDialog({
                 Waiting for the other person to say yes.
               </Text>
               <Button type="button" variant="secondary" onClick={onDecline} disabled={busy}>
-                Cancel and skip
+                Cancel
               </Button>
             </>
           ) : (
             <>
               <Button type="button" variant="secondary" onClick={onDecline} disabled={busy}>
-                Skip this person for 10 min
+                Reject
               </Button>
               <Button type="button" onClick={onAccept} disabled={busy}>
                 Yes

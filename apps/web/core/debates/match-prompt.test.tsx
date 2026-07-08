@@ -76,10 +76,10 @@ describe('DebateMatchPrompt', () => {
     expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
   });
 
-  it('skips the matched person for ten minutes', () => {
+  it('rejects the matched person for the question', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skip this person for 10 min' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
 
     expect(mocks.declineMutate).toHaveBeenCalledWith('match-1', expect.any(Object));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
