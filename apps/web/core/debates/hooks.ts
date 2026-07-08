@@ -25,14 +25,14 @@ import {
   getLiveKitToken,
   getRecordingUrl,
   joinDebateQueue,
-  listDebateQuestions,
+  listDebateClaims,
   listSpaceDebates,
   markDebateJoined,
   requestDebateMediaProcessing,
 } from './api';
 
 export const debateQueryKeys = {
-  questions: (spaceId: string, questionIds: string[]) => ['debates', 'questions', spaceId, questionIds] as const,
+  claims: (spaceId: string, claimIds: string[]) => ['debates', 'claims', spaceId, claimIds] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
@@ -50,13 +50,13 @@ export function useGeoChatAuth() {
   };
 }
 
-export function useDebateQuestions(spaceId: string, questionIds: string[], enabled: boolean) {
+export function useDebateClaims(spaceId: string, claimIds: string[], enabled: boolean) {
   const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
-    queryKey: debateQueryKeys.questions(spaceId, questionIds),
-    queryFn: () => listDebateQuestions(spaceId, questionIds, getPrivyIdentityToken),
-    enabled: enabled && questionIds.length > 0,
+    queryKey: debateQueryKeys.claims(spaceId, claimIds),
+    queryFn: () => listDebateClaims(spaceId, claimIds, getPrivyIdentityToken),
+    enabled: enabled && claimIds.length > 0,
     refetchInterval: 5_000,
   });
 }
@@ -66,8 +66,8 @@ export function useJoinDebateQueue(spaceId: string) {
   const { getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ questionId, request }: { questionId: string; request: JoinDebateQueueRequest }) =>
-      joinDebateQueue(spaceId, questionId, request, getPrivyIdentityToken),
+    mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
+      joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },

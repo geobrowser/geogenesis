@@ -5,18 +5,14 @@ export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'local';
 
-export type DebateAnswer = {
-  entity_id: string;
-  label: string;
-};
-
 export type DebateWaiter = {
   id: string;
   user_id: string;
   profile_space_id: string;
   display_name: string | null;
   avatar_cid: string | null;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   joined_at: string;
 };
 
@@ -27,19 +23,18 @@ export type DebateParticipantSummary = {
   avatar_cid: string | null;
 };
 
-export type DebateQuestionSummary = {
+export type DebateClaimSummary = {
   id: string;
   space_id: string;
-  question_entity_id: string;
-  question: string;
+  claim_entity_id: string;
+  claim: string;
   description: string | null;
-  answer_options: DebateAnswer[];
 };
 
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
-  question: DebateQuestionSummary;
+  claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
   debate_id: string | null;
@@ -49,20 +44,23 @@ export type DebateMatch = {
 
 export type DebateMatchParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   accepted: boolean;
 };
 
 export type DebateParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   joined_at: string | null;
 };
 
 export type DebateRecording = {
   id: string;
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   user_id: string;
   object_key: string;
   filename: string;
@@ -151,7 +149,8 @@ export type TranscriptFormat = 'json' | 'srt' | 'vtt' | 'ass';
 export type DebateTranscriptSegment = {
   id: string;
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   sequence_index: number;
   start_ms: number;
   end_ms: number;
@@ -169,7 +168,7 @@ export type DebateTranscriptResponse = {
 
 export type Debate = {
   id: string;
-  question: DebateQuestionSummary;
+  claim: DebateClaimSummary;
   status: DebateStatus;
   room_name: string;
   first_participant_slot: ParticipantSlot;
@@ -190,14 +189,13 @@ export type Debate = {
   recording_error: string | null;
 };
 
-export type DebateQuestion = {
+export type DebateClaim = {
   id: string;
   space_id: string;
-  question_entity_id: string;
-  question: string;
+  claim_entity_id: string;
+  claim: string;
   description: string | null;
-  answer_options: DebateAnswer[];
-  viewer_waiting_answer_entity_id: string | null;
+  viewer_waiting_position: boolean | null;
   waiters: DebateWaiter[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
@@ -212,17 +210,16 @@ export type ObjectStoreUpload = {
   expires_at: string;
 };
 
-export type DebateQuestionsResponse = {
-  questions: DebateQuestion[];
+export type DebateClaimsResponse = {
+  claims: DebateClaim[];
 };
 
 export type JoinDebateQueueRequest = {
-  answer_entity_id: string;
-  answer_label: string;
+  position: boolean;
 };
 
 export type JoinDebateQueueResponse = {
-  question: DebateQuestion;
+  claim: DebateClaim;
   match: DebateMatch | null;
 };
 
@@ -242,7 +239,8 @@ export type LiveKitJoinResponse = {
   room_name: string;
   role: string;
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
 };
 
 export type LocalRecordingUploadRequest = {
@@ -299,13 +297,13 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
-export async function listDebateQuestions(
+export async function listDebateClaims(
   spaceId: string,
-  questionIds: string[],
+  claimIds: string[],
   getPrivyIdentityToken?: GetPrivyIdentityToken
 ) {
-  const query = questionIds.length > 0 ? `?question_ids=${encodeURIComponent(questionIds.join(','))}` : '';
-  return geoChatRequest<DebateQuestionsResponse>(`/spaces/${spaceId}/debate-questions${query}`, {
+  const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
+  return geoChatRequest<DebateClaimsResponse>(`/spaces/${spaceId}/debate-claims${query}`, {
     auth: 'optional',
     getPrivyIdentityToken,
   });
@@ -313,11 +311,11 @@ export async function listDebateQuestions(
 
 export async function joinDebateQueue(
   spaceId: string,
-  questionId: string,
+  claimId: string,
   request: JoinDebateQueueRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken
 ) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/questions/${questionId}/debate-queue`, {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
     body: request,
     auth: true,

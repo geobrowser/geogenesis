@@ -78,7 +78,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
             No debates yet
           </Text>
           <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-            Start from a published question by choosing an answer on the Questions tab.
+            Start from a published claim by choosing Yes or No on the Claims tab.
           </Text>
         </div>
       )}
@@ -163,7 +163,7 @@ function DebateCard({
       <div className="max-md:min-w-0 grid min-w-[220px] gap-1">
         <div className="min-w-0">
           <Text as="h3" variant="bodySemibold" color="text" className="block">
-            {debate.question.question}
+            {debate.claim.claim}
           </Text>
           <Text as="p" variant="metadata" color="grey-04" className="mt-1">
             {statusLabel(debate.status)} · {formatDate(debate.completed_at ?? debate.started_at ?? debate.created_at)}
@@ -174,7 +174,7 @@ function DebateCard({
         {participants.map(participant => (
           <ParticipantTerm
             key={participant.user_id}
-            label={participant.answer.label}
+            label={participant.position_label}
             name={speakerLabel(participant)}
           />
         ))}
@@ -275,7 +275,7 @@ function DebatePlaybackDialog({ debate, onClose }: { debate: Debate; onClose: ()
               id="debate-playback-title"
               className="mt-1 block truncate text-[0.9375rem] leading-5 font-semibold text-text"
             >
-              {debate.question.question}
+              {debate.claim.claim}
             </h2>
           </div>
           <SquareButton type="button" icon={<Close />} aria-label="Close playback" onClick={onClose} />
@@ -316,7 +316,7 @@ function DebateTranscriptDialog({ debate, onClose }: { debate: Debate; onClose: 
               id="debate-transcript-title"
               className="mt-1 block truncate text-[0.9375rem] leading-5 font-semibold text-text"
             >
-              {debate.question.question}
+              {debate.claim.claim}
             </h2>
           </div>
           <SquareButton type="button" icon={<Close />} aria-label="Close transcript" onClick={onClose} />
@@ -349,7 +349,7 @@ function DebateTranscriptDialog({ debate, onClose }: { debate: Debate; onClose: 
                     <Text as="h3" variant="metadataMedium" color="grey-04">
                       Turn {section.index + 1} · {formatTranscriptRange(section.startMs, section.endMs)}
                     </Text>
-                    <span className="rounded-full bg-bg px-2 py-0.5 text-xs text-grey-04">{section.answerLabel}</span>
+                    <span className="rounded-full bg-bg px-2 py-0.5 text-xs text-grey-04">{section.positionLabel}</span>
                   </div>
                   <p className="m-0 text-sm leading-6 whitespace-pre-wrap text-text">
                     <span className="font-semibold">{section.speakerName}:</span>{' '}
@@ -554,8 +554,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
       <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
         <PlaybackPane
           slot={1}
-          label={slot1Participant?.answer.label ?? 'Answer'}
-          name={slot1Participant ? speakerLabel(slot1Participant) : 'Answer'}
+          label={slot1Participant?.position_label ?? 'Position'}
+          name={slot1Participant ? speakerLabel(slot1Participant) : 'Position'}
           src={urls.slot1}
           countdown={turnState?.slot === 1 ? turnState : null}
           mutedByTurn={playing && turnState?.slot === 2}
@@ -567,8 +567,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
         />
         <PlaybackPane
           slot={2}
-          label={slot2Participant?.answer.label ?? 'Answer'}
-          name={slot2Participant ? speakerLabel(slot2Participant) : 'Answer'}
+          label={slot2Participant?.position_label ?? 'Position'}
+          name={slot2Participant ? speakerLabel(slot2Participant) : 'Position'}
           src={urls.slot2}
           countdown={turnState?.slot === 2 ? turnState : null}
           mutedByTurn={playing && turnState?.slot === 1}
@@ -801,7 +801,7 @@ type TranscriptSection = {
   index: number;
   slot: ParticipantSlot;
   speakerName: string;
-  answerLabel: string;
+  positionLabel: string;
   startMs: number;
   endMs: number;
   text: string;
@@ -855,7 +855,7 @@ function transcriptSectionsFor(debate: Debate, segments: DebateTranscriptSegment
       index,
       slot,
       speakerName: participant ? speakerLabel(participant) : `Speaker ${slot}`,
-      answerLabel: participant?.answer.label ?? 'Answer',
+      positionLabel: participant?.position_label ?? 'Position',
       startMs,
       endMs,
       text: sectionText,
@@ -908,7 +908,7 @@ function formatSeconds(seconds: number) {
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
-  return debate.participants.find(participant => participant.participant_slot === slot)?.answer.label ?? 'Answer';
+  return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
 }
 
 function participantForSlot(debate: Debate, slot: ParticipantSlot) {

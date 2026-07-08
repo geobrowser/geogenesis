@@ -45,15 +45,15 @@ describe('DebateRoomPageClient', () => {
   it('shows a continuation prompt after a completed debate and can leave unselected', async () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Continue debating this question?')).toBeInTheDocument();
+    expect(await screen.findByText('Continue debating this claim?')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
 
     expect(mocks.joinMutate).not.toHaveBeenCalled();
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/claims');
   });
 
-  it('rejoins the queue with the chosen answer from the completed debate prompt', async () => {
+  it('rejoins the queue with the chosen position from the completed debate prompt', async () => {
     mocks.joinMutate.mockImplementation((_variables, options) => {
       options.onSuccess();
     });
@@ -64,16 +64,15 @@ describe('DebateRoomPageClient', () => {
 
     expect(mocks.joinMutate).toHaveBeenCalledWith(
       {
-        questionId: 'question-entity-1',
+        claimId: 'claim-entity-1',
         request: {
-          answer_entity_id: 'answer-yes',
-          answer_label: 'Yes',
+          position: true,
         },
       },
       expect.any(Object)
     );
     await waitFor(() => {
-      expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+      expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/claims');
     });
   });
 });
@@ -81,16 +80,12 @@ describe('DebateRoomPageClient', () => {
 function completedDebate(): Debate {
   return {
     id: 'debate-1',
-    question: {
-      id: 'debate-question-1',
+    claim: {
+      id: 'debate-claim-1',
       space_id: 'space-1',
-      question_entity_id: 'question-entity-1',
-      question: 'Should the protocol ship debates?',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'The protocol should ship debates',
       description: null,
-      answer_options: [
-        { entity_id: 'answer-yes', label: 'Yes' },
-        { entity_id: 'answer-no', label: 'No' },
-      ],
     },
     status: 'complete',
     room_name: 'geo-debate-debate-1',
@@ -114,7 +109,8 @@ function completedDebate(): Debate {
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        position: true,
+        position_label: 'Yes',
         joined_at: '2026-07-02T00:00:00.000Z',
       },
       {
@@ -123,7 +119,8 @@ function completedDebate(): Debate {
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        answer: { entity_id: 'answer-no', label: 'No' },
+        position: false,
+        position_label: 'No',
         joined_at: '2026-07-02T00:00:00.000Z',
       },
     ],

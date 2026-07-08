@@ -8,8 +8,8 @@ export const featureFlagsStorageKey = 'geo:feature-flags';
 export const featureFlagDefinitions = [
   {
     id: 'questionsTab',
-    label: 'Questions and debates',
-    description: 'Show the Questions and Debates tabs on spaces.',
+    label: 'Claims and debates',
+    description: 'Show the Claims and Debates tabs on spaces.',
   },
 ] as const;
 

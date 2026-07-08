@@ -25,7 +25,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const currentUserId = getCurrentGeoChatUserId();
   const [selectedFormatIds, setSelectedFormatIds] = React.useState<Record<string, DebateFormatId>>({});
   const [acceptedMatchIds, setAcceptedMatchIds] = React.useState<string[]>([]);
-  const [waitingQuestionIds, setWaitingQuestionIds] = React.useState<string[]>([]);
+  const [waitingClaimIds, setWaitingClaimIds] = React.useState<string[]>([]);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
   const navigatedDebateIdRef = React.useRef<string | null>(null);
@@ -63,19 +63,19 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       return;
     }
 
-    const waitingQuestionIdSet = new Set(waitingQuestionIds);
-    if (waitingQuestionIdSet.size === 0) return;
+    const waitingClaimIdSet = new Set(waitingClaimIds);
+    if (waitingClaimIdSet.size === 0) return;
 
     const debate = debates.find(
       debate =>
-        waitingQuestionIdSet.has(debate.question.id) &&
+        waitingClaimIdSet.has(debate.claim.id) &&
         debate.participants.some(participant => participant.user_id === currentUserId) &&
         !['complete', 'cancelled'].includes(debate.status)
     );
     if (debate) {
       navigateToDebate(debate.id);
     }
-  }, [currentUserId, debates, matches, navigateToDebate, waitingQuestionIds]);
+  }, [currentUserId, debates, matches, navigateToDebate, waitingClaimIds]);
 
   const waitingMatch =
     matches.find(match => {
@@ -83,13 +83,13 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       const participant = participantForUser(match, currentUserId);
       return (
         acceptedMatchIds.includes(match.id) ||
-        waitingQuestionIds.includes(match.question.id) ||
+        waitingClaimIds.includes(match.claim.id) ||
         participant?.accepted === true
       );
     }) ?? null;
   const activeMatch =
     waitingMatch ??
-    (waitingQuestionIds.length === 0 ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null) : null);
+    (waitingClaimIds.length === 0 ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null) : null);
   const minimizedMatch = activeMatch && minimizedMatchIds.includes(activeMatch.id) ? activeMatch : null;
 
   if (!activeMatch || !currentUserId) return null;
@@ -98,7 +98,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const myParticipant = participantForUser(activeMatch, currentUserId);
   const waiting =
     acceptedMatchIds.includes(activeMatch.id) ||
-    waitingQuestionIds.includes(activeMatch.question.id) ||
+    waitingClaimIds.includes(activeMatch.claim.id) ||
     myParticipant?.accepted === true;
   const error =
     acceptMatch.error instanceof Error
@@ -127,7 +127,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
             return;
           }
           setAcceptedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
-          setWaitingQuestionIds(current => Array.from(new Set([...current, activeMatch.question.id])));
+          setWaitingClaimIds(current => Array.from(new Set([...current, activeMatch.claim.id])));
         },
       }
     );
@@ -136,7 +136,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const decline = () => {
     setDismissedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
     setAcceptedMatchIds(current => current.filter(id => id !== activeMatch.id));
-    setWaitingQuestionIds(current => current.filter(id => id !== activeMatch.question.id));
+    setWaitingClaimIds(current => current.filter(id => id !== activeMatch.claim.id));
     setMinimizedMatchIds(current => current.filter(id => id !== activeMatch.id));
     declineMatch.mutate(activeMatch.id, {
       onError: () => {
@@ -225,7 +225,7 @@ function MatchDialog({
 
         <div className="min-h-0 overflow-y-auto pr-1">
           <Text as="p" variant="body" color="grey-04" className="mb-4">
-            {match.question.question}
+            {match.claim.claim}
           </Text>
 
           <div className="grid grid-cols-2 gap-2">
@@ -233,7 +233,7 @@ function MatchDialog({
               return (
                 <div key={participant.user_id} className="min-w-0 rounded-lg border border-grey-02 bg-bg p-3">
                   <Text as="div" variant="metadataMedium" color="ctaPrimary" className="truncate">
-                    {participant.answer.label}
+                    {participant.position_label}
                   </Text>
                   <Text as="div" variant="bodySemibold" color="text" className="mt-1 truncate">
                     {speakerLabel(participant)}
@@ -258,7 +258,7 @@ function MatchDialog({
 
           {myParticipant && (
             <Text as="p" variant="metadata" color="grey-04" className="mt-3">
-              You chose {myParticipant.answer.label}.
+              You chose {myParticipant.position_label}.
             </Text>
           )}
 
@@ -316,8 +316,8 @@ function MinimizedMatchPrompt({
           {waiting ? `${speakerLabel(other)} is waiting` : `Match found: ${speakerLabel(other)}`}
         </Text>
         <Text as="span" variant="metadata" color="grey-04" className="truncate">
-          {myParticipant ? `${myParticipant.answer.label} · ` : ''}
-          {match.question.question}
+          {myParticipant ? `${myParticipant.position_label} · ` : ''}
+          {match.claim.claim}
         </Text>
       </span>
       <Button type="button" small onClick={onOpen}>

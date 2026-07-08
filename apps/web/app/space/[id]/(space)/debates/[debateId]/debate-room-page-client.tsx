@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import type { Debate, DebateAnswer, LiveKitJoinResponse, ParticipantSlot } from '~/core/debates/api';
+import type { Debate, LiveKitJoinResponse, ParticipantSlot } from '~/core/debates/api';
 import {
   useAbortDebate,
   useCompleteLocalRecordingUpload,
@@ -102,7 +102,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const finalizedDebateRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
   const countdown = useDebateCountdown(debate);
-  const questionsPath = `/space/${spaceId}/questions`;
+  const claimsPath = `/space/${spaceId}/claims`;
   const localSlot = joinResponse?.participant_slot ?? null;
   const localAudioEnabled = shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted);
 
@@ -344,31 +344,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      router.push(debate.status === 'complete' ? questionsPath : `/space/${spaceId}/debates`);
+      router.push(debate.status === 'complete' ? claimsPath : `/space/${spaceId}/debates`);
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
-  }, [abortDebate, debate, discardLocalRecorder, finishAndUpload, questionsPath, router, spaceId]);
+  }, [abortDebate, debate, discardLocalRecorder, finishAndUpload, claimsPath, router, spaceId]);
 
   const continueDebating = React.useCallback(
-    (answer: DebateAnswer) => {
+    (position: boolean) => {
       if (!debate) return;
       joinQueue.mutate(
         {
-          questionId: debate.question.question_entity_id,
+          claimId: debate.claim.claim_entity_id,
           request: {
-            answer_entity_id: answer.entity_id,
-            answer_label: answer.label,
+            position,
           },
         },
         {
           onSuccess: () => {
-            router.replace(questionsPath);
+            router.replace(claimsPath);
           },
         }
       );
     },
-    [debate, joinQueue, questionsPath, router]
+    [debate, joinQueue, claimsPath, router]
   );
 
   React.useEffect(() => {
@@ -461,7 +460,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           </Text>
           {debate && (
             <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[760px]">
-              {debate.question.question}
+              {debate.claim.claim}
             </Text>
           )}
         </div>
@@ -500,7 +499,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                       className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
                     >
                       <span className="truncate">
-                        {participant.display_name || participant.profile_space_id} · {participant.answer.label}
+                        {participant.display_name || participant.profile_space_id} · {participant.position_label}
                       </span>
                     </span>
                   ))}
@@ -548,11 +547,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
           {debate.status === 'complete' && roomState === 'idle' && completionPromptDebateId === debate.id && (
             <ContinueDebatePrompt
-              debate={debate}
               busy={joinQueue.isPending}
               error={joinQueueError}
               onContinue={continueDebating}
-              onNotNow={() => router.replace(questionsPath)}
+              onNotNow={() => router.replace(claimsPath)}
             />
           )}
         </>
@@ -562,16 +560,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 }
 
 function ContinueDebatePrompt({
-  debate,
   busy,
   error,
   onContinue,
   onNotNow,
 }: {
-  debate: Debate;
   busy: boolean;
   error: string | null;
-  onContinue: (answer: DebateAnswer) => void;
+  onContinue: (position: boolean) => void;
   onNotNow: () => void;
 }) {
   return (
@@ -579,10 +575,10 @@ function ContinueDebatePrompt({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <Text as="h3" variant="bodySemibold" color="text">
-            Continue debating this question?
+            Continue debating this claim?
           </Text>
           <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[720px]">
-            Choose an answer to look for another debate, or leave it unselected for now.
+            Choose a position to look for another debate, or leave it unselected for now.
           </Text>
           {error && (
             <Text as="p" variant="body" color="red-01" className="mt-3">
@@ -591,15 +587,18 @@ function ContinueDebatePrompt({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {debate.question.answer_options.map(answer => (
+          {[
+            { label: 'Yes', value: true },
+            { label: 'No', value: false },
+          ].map(position => (
             <Button
-              key={answer.entity_id}
+              key={position.label}
               type="button"
               variant="secondary"
-              onClick={() => onContinue(answer)}
+              onClick={() => onContinue(position.value)}
               disabled={busy}
             >
-              {answer.label}
+              {position.label}
             </Button>
           ))}
           <Button type="button" onClick={onNotNow} disabled={busy}>
@@ -671,7 +670,7 @@ function DebateRecordingModal({
             </span>
           </div>
           <Text as="p" variant="metadata" color="grey-04" className="mt-1 line-clamp-2 max-w-[920px]">
-            {debate.question.question}
+            {debate.claim.claim}
           </Text>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -720,7 +719,7 @@ function DebateRecordingModal({
         <div className="grid min-h-0 flex-1 grid-rows-[minmax(180px,1fr)_auto_minmax(180px,1fr)] gap-3">
           <DebateVideoTile
             title="You"
-            answerLabel={localParticipant?.answer.label ?? 'Joining'}
+            positionLabel={localParticipant?.position_label ?? 'Joining'}
             active={countdown.activeSlot !== null && countdown.activeSlot === localSlot}
             overlayText={videoEnabled ? null : 'Camera off'}
           >
@@ -731,7 +730,7 @@ function DebateRecordingModal({
 
           <DebateVideoTile
             title="Other speaker"
-            answerLabel={remoteParticipant?.answer.label ?? 'Connecting'}
+            positionLabel={remoteParticipant?.position_label ?? 'Connecting'}
             active={countdown.activeSlot !== null && countdown.activeSlot === remoteParticipant?.participant_slot}
             overlayText={remoteVideoReady ? null : 'Waiting for video'}
           >
@@ -754,13 +753,13 @@ function DebateRecordingModal({
 
 function DebateVideoTile({
   title,
-  answerLabel,
+  positionLabel,
   active,
   overlayText,
   children,
 }: {
   title: string;
-  answerLabel: string;
+  positionLabel: string;
   active: boolean;
   overlayText?: string | null;
   children: React.ReactNode;
@@ -777,7 +776,7 @@ function DebateVideoTile({
           {title}
         </span>
         <span className="min-w-0 truncate rounded-full bg-bg px-3 py-1 text-[0.8125rem] leading-4 text-grey-04 shadow-light">
-          {answerLabel}
+          {positionLabel}
         </span>
       </div>
 
@@ -1049,7 +1048,7 @@ function roomStateLabel(roomState: 'connecting' | 'connected' | 'uploading') {
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
-  return debate.participants.find(participant => participant.participant_slot === slot)?.answer.label ?? 'Answer';
+  return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
 }
 
 function timestampMs(value: string | null) {

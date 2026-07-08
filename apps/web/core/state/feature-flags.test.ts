@@ -14,7 +14,7 @@ describe('feature flags', () => {
     window.localStorage.clear();
   });
 
-  it('defaults the Questions and debates flag to disabled', () => {
+  it('defaults the Claims and debates flag to disabled', () => {
     expect(defaultFeatureFlags.questionsTab).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({ questionsTab: false });
   });

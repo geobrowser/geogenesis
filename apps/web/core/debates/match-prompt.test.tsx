@@ -114,16 +114,12 @@ function match(): DebateMatch {
   return {
     id: 'match-1',
     status: 'pending',
-    question: {
-      id: 'question-1',
+    claim: {
+      id: 'claim-1',
       space_id: 'space-1',
-      question_entity_id: 'question-entity-1',
-      question: 'Should the protocol ship debates?',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'The protocol should ship debates',
       description: null,
-      answer_options: [
-        { entity_id: 'answer-yes', label: 'Yes' },
-        { entity_id: 'answer-no', label: 'No' },
-      ],
     },
     participants: [
       {
@@ -132,7 +128,8 @@ function match(): DebateMatch {
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        position: true,
+        position_label: 'Yes',
         accepted: false,
       },
       {
@@ -141,7 +138,8 @@ function match(): DebateMatch {
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        answer: { entity_id: 'answer-no', label: 'No' },
+        position: false,
+        position_label: 'No',
         accepted: false,
       },
     ],
@@ -155,16 +153,12 @@ function match(): DebateMatch {
 function debate(): Debate {
   return {
     id: 'debate-1',
-    question: {
-      id: 'question-1',
+    claim: {
+      id: 'claim-1',
       space_id: 'space-1',
-      question_entity_id: 'question-entity-1',
-      question: 'Should the protocol ship debates?',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'The protocol should ship debates',
       description: null,
-      answer_options: [
-        { entity_id: 'answer-yes', label: 'Yes' },
-        { entity_id: 'answer-no', label: 'No' },
-      ],
     },
     status: 'ready',
     room_name: 'geo-debate-debate-1',
@@ -188,7 +182,8 @@ function debate(): Debate {
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        position: true,
+        position_label: 'Yes',
         joined_at: null,
       },
       {
@@ -197,7 +192,8 @@ function debate(): Debate {
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        answer: { entity_id: 'answer-no', label: 'No' },
+        position: false,
+        position_label: 'No',
         joined_at: null,
       },
     ],

@@ -7,20 +7,15 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import type { DebateQuestion } from '~/core/debates/api';
-import { useDebateQuestions, useJoinDebateQueue } from '~/core/debates/hooks';
+import type { DebateClaim } from '~/core/debates/api';
+import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
 import { DebateMatchPrompt } from '~/core/debates/match-prompt';
 import {
-  ANSWERS_PROPERTY_ID,
-  PERSON_TYPE_ID,
-  PROJECT_TYPE_ID,
-  QUESTION_TYPE_ID,
-  RELATED_PEOPLE_PROPERTY_ID,
-  RELATED_PROJECTS_PROPERTY_ID,
+  CLAIM_TYPE_ID,
   TOPICS_PROPERTY_ID,
   TOPIC_TYPE_ID,
-} from '~/core/questions/ontology';
-import { buildQuestionDraft } from '~/core/questions/question-draft';
+} from '~/core/claims/ontology';
+import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { useDiff } from '~/core/state/diff-store';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -32,11 +27,11 @@ import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
 
-type QuestionsPageClientProps = {
+type ClaimsPageClientProps = {
   spaceId: string;
 };
 
-type RelatedSelectionKey = 'topics' | 'relatedPeople' | 'relatedProjects';
+type RelatedSelectionKey = 'topics';
 
 type RelatedField = {
   key: RelatedSelectionKey;
@@ -52,96 +47,84 @@ const relatedFields: RelatedField[] = [
     placeholder: 'Search topics...',
     typeId: TOPIC_TYPE_ID,
   },
-  {
-    key: 'relatedPeople',
-    label: 'Related people',
-    placeholder: 'Search people...',
-    typeId: PERSON_TYPE_ID,
-  },
-  {
-    key: 'relatedProjects',
-    label: 'Related projects',
-    placeholder: 'Search projects...',
-    typeId: PROJECT_TYPE_ID,
-  },
 ];
 
-export function QuestionsPageClient({ spaceId }: QuestionsPageClientProps) {
-  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
+export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
+  const claimsAndDebatesEnabled = useFeatureFlag('questionsTab');
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsAndDebatesEnabled) {
+    if (!claimsAndDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsAndDebatesEnabled, router, spaceId]);
+  }, [claimsAndDebatesEnabled, router, spaceId]);
 
-  if (!questionsAndDebatesEnabled) return null;
+  if (!claimsAndDebatesEnabled) return null;
 
-  return <QuestionsTabSurface spaceId={spaceId} debatesEnabled={questionsAndDebatesEnabled} />;
+  return <ClaimsTabSurface spaceId={spaceId} debatesEnabled={claimsAndDebatesEnabled} />;
 }
 
-function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientProps & { debatesEnabled: boolean }) {
+function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & { debatesEnabled: boolean }) {
   const [formOpen, setFormOpen] = React.useState(false);
-  const { entities: questions, isLoading } = useQueryEntities({
+  const { entities: claims, isLoading } = useQueryEntities({
     where: {
       spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: QUESTION_TYPE_ID } }],
+      types: [{ id: { equals: CLAIM_TYPE_ID } }],
     },
     first: 50,
     placeholderData: keepPreviousData,
     includeUnpublishedLocal: true,
   });
-  const publishedQuestionIds = React.useMemo(
-    () => questions.filter(isQuestionPublished).map(question => question.id),
-    [questions]
+  const publishedClaimIds = React.useMemo(
+    () => claims.filter(isClaimPublished).map(claim => claim.id),
+    [claims]
   );
-  const debateQuestionsQuery = useDebateQuestions(spaceId, publishedQuestionIds, debatesEnabled);
-  const debateQuestionsByEntityId = React.useMemo(() => {
-    const map = new Map<string, DebateQuestion>();
-    for (const question of debateQuestionsQuery.data?.questions ?? []) {
-      map.set(question.question_entity_id, question);
+  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, debatesEnabled);
+  const debateClaimsByEntityId = React.useMemo(() => {
+    const map = new Map<string, DebateClaim>();
+    for (const claim of debateClaimsQuery.data?.claims ?? []) {
+      map.set(claim.claim_entity_id, claim);
     }
     return map;
-  }, [debateQuestionsQuery.data?.questions]);
+  }, [debateClaimsQuery.data?.claims]);
   const activeMatches = React.useMemo(
     () =>
-      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
-        question.active_match ? [question.active_match] : []
+      (debateClaimsQuery.data?.claims ?? []).flatMap(claim =>
+        claim.active_match ? [claim.active_match] : []
       ),
-    [debateQuestionsQuery.data?.questions]
+    [debateClaimsQuery.data?.claims]
   );
   const activeDebates = React.useMemo(
     () =>
-      (debateQuestionsQuery.data?.questions ?? []).flatMap(question =>
-        question.active_debate ? [question.active_debate] : []
+      (debateClaimsQuery.data?.claims ?? []).flatMap(claim =>
+        claim.active_debate ? [claim.active_debate] : []
       ),
-    [debateQuestionsQuery.data?.questions]
+    [debateClaimsQuery.data?.claims]
   );
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <Text as="h2" variant="smallTitle" color="text">
-          Questions
+          Claims
         </Text>
         {!formOpen && (
           <Button type="button" variant="secondary" icon={<Plus />} onClick={() => setFormOpen(true)}>
-            Add question
+            Add claim
           </Button>
         )}
       </div>
 
-      {formOpen && <AddQuestionForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
+      {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
       <div className={cx(formOpen && 'mt-6')}>
-        <QuestionsList
-          questions={questions}
+        <ClaimsList
+          claims={claims}
           isLoading={isLoading}
           spaceId={spaceId}
           debatesEnabled={debatesEnabled}
           debateJoinBlocked={activeMatches.length > 0}
-          debateQuestionsByEntityId={debateQuestionsByEntityId}
-          debateStatus={debateQuestionsQuery.error instanceof Error ? debateQuestionsQuery.error.message : null}
+          debateClaimsByEntityId={debateClaimsByEntityId}
+          debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
         />
       </div>
       <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} debates={activeDebates} />
@@ -149,27 +132,19 @@ function QuestionsTabSurface({ spaceId, debatesEnabled }: QuestionsPageClientPro
   );
 }
 
-function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () => void }) {
+function AddClaimForm({ spaceId, onCancel }: { spaceId: string; onCancel: () => void }) {
   const { storage } = useMutate();
   const { setActiveSpace, bumpReviewVersion, setIsReviewOpen } = useDiff();
-  const [questionText, setQuestionText] = React.useState('');
-  const [answerA, setAnswerA] = React.useState('Yes');
-  const [answerB, setAnswerB] = React.useState('No');
+  const [claimText, setClaimText] = React.useState('');
   const [topics, setTopics] = React.useState<SelectEntityCompactResult[]>([]);
-  const [relatedPeople, setRelatedPeople] = React.useState<SelectEntityCompactResult[]>([]);
-  const [relatedProjects, setRelatedProjects] = React.useState<SelectEntityCompactResult[]>([]);
   const [error, setError] = React.useState<string | null>(null);
 
   const selectionsByKey = {
     topics,
-    relatedPeople,
-    relatedProjects,
   };
 
   const setSelectionsByKey = {
     topics: setTopics,
-    relatedPeople: setRelatedPeople,
-    relatedProjects: setRelatedProjects,
   };
 
   const addSelection = (key: RelatedSelectionKey, selection: SelectEntityCompactResult) => {
@@ -188,13 +163,10 @@ function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () 
     setError(null);
 
     try {
-      const draft = buildQuestionDraft({
+      const draft = buildClaimDraft({
         spaceId,
-        questionText,
-        answerLabels: [answerA, answerB],
+        claimText,
         topics,
-        relatedPeople,
-        relatedProjects,
       });
 
       for (const name of draft.names) {
@@ -210,7 +182,7 @@ function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () 
       setIsReviewOpen(true);
       onCancel();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not stage the question.');
+      setError(e instanceof Error ? e.message : 'Could not stage the claim.');
     }
   };
 
@@ -219,43 +191,18 @@ function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () 
       <div className="space-y-4">
         <label className="block">
           <Text as="span" variant="metadataMedium" color="text">
-            Question
+            Claim
           </Text>
           <textarea
-            value={questionText}
-            onChange={event => setQuestionText(event.target.value)}
+            value={claimText}
+            onChange={event => setClaimText(event.target.value)}
             rows={3}
             className="mt-2 block w-full resize-y rounded-md border border-grey-02 bg-white px-3 py-2 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
             placeholder="What should this space decide?"
           />
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <Text as="span" variant="metadataMedium" color="text">
-              Answer 1
-            </Text>
-            <input
-              type="text"
-              value={answerA}
-              onChange={event => setAnswerA(event.target.value)}
-              className="mt-2 block w-full rounded-md border border-grey-02 bg-white px-3 py-2 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
-            />
-          </label>
-          <label className="block">
-            <Text as="span" variant="metadataMedium" color="text">
-              Answer 2
-            </Text>
-            <input
-              type="text"
-              value={answerB}
-              onChange={event => setAnswerB(event.target.value)}
-              className="mt-2 block w-full rounded-md border border-grey-02 bg-white px-3 py-2 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:grid-cols-2">
           {relatedFields.map(field => (
             <div key={field.key} className="min-w-0">
               <Text as="div" variant="metadataMedium" color="text" className="mb-2">
@@ -290,39 +237,39 @@ function AddQuestionForm({ spaceId, onCancel }: { spaceId: string; onCancel: () 
   );
 }
 
-function QuestionsList({
-  questions,
+function ClaimsList({
+  claims,
   isLoading,
   spaceId,
   debatesEnabled,
   debateJoinBlocked,
-  debateQuestionsByEntityId,
+  debateClaimsByEntityId,
   debateStatus,
 }: {
-  questions: Entity[];
+  claims: Entity[];
   isLoading: boolean;
   spaceId: string;
   debatesEnabled: boolean;
   debateJoinBlocked: boolean;
-  debateQuestionsByEntityId: Map<string, DebateQuestion>;
+  debateClaimsByEntityId: Map<string, DebateClaim>;
   debateStatus: string | null;
 }) {
-  if (isLoading && questions.length === 0) {
+  if (isLoading && claims.length === 0) {
     return (
       <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
-        <Text color="grey-04">Loading questions...</Text>
+        <Text color="grey-04">Loading claims...</Text>
       </div>
     );
   }
 
-  if (questions.length === 0) {
+  if (claims.length === 0) {
     return (
       <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
         <Text as="h3" variant="bodySemibold" color="text">
-          No questions yet
+          No claims yet
         </Text>
         <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-          Add a question to stage it as an edit, then publish it through Review edits.
+          Add a claim to stage it as an edit, then publish it through Review edits.
         </Text>
       </div>
     );
@@ -335,49 +282,45 @@ function QuestionsList({
           <Text color="red-01">{debateStatus}</Text>
         </div>
       )}
-      {questions.map(question => (
-        <QuestionListItem
-          key={question.id}
-          question={question}
+      {claims.map(claim => (
+        <ClaimListItem
+          key={claim.id}
+          claim={claim}
           spaceId={spaceId}
           debatesEnabled={debatesEnabled}
           debateJoinBlocked={debateJoinBlocked}
-          debateQuestion={debateQuestionsByEntityId.get(question.id) ?? null}
+          debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
         />
       ))}
     </div>
   );
 }
 
-function QuestionListItem({
-  question,
+function ClaimListItem({
+  claim,
   spaceId,
   debatesEnabled,
   debateJoinBlocked,
-  debateQuestion,
+  debateClaim,
 }: {
-  question: Entity;
+  claim: Entity;
   spaceId: string;
   debatesEnabled: boolean;
   debateJoinBlocked: boolean;
-  debateQuestion: DebateQuestion | null;
+  debateClaim: DebateClaim | null;
 }) {
-  const answers = relationsForProperty(question.relations, ANSWERS_PROPERTY_ID);
-  const topics = relationsForProperty(question.relations, TOPICS_PROPERTY_ID);
-  const relatedPeople = relationsForProperty(question.relations, RELATED_PEOPLE_PROPERTY_ID);
-  const relatedProjects = relationsForProperty(question.relations, RELATED_PROJECTS_PROPERTY_ID);
-  const published = isQuestionPublished(question);
+  const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
+  const published = isClaimPublished(claim);
   const joinQueue = useJoinDebateQueue(spaceId);
-  const activeMatch = debateQuestion?.active_match ?? null;
-  const activeDebate = debateQuestion?.active_debate ?? null;
+  const activeMatch = debateClaim?.active_match ?? null;
+  const activeDebate = debateClaim?.active_debate ?? null;
   const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
 
-  const joinAnswer = (answer: { entityId: string; label: string }) => {
+  const joinPosition = (position: boolean) => {
     joinQueue.mutate({
-      questionId: question.id,
+      claimId: claim.id,
       request: {
-        answer_entity_id: answer.entityId,
-        answer_label: answer.label,
+        position,
       },
     });
   };
@@ -386,93 +329,90 @@ function QuestionListItem({
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
       <div className="min-w-0">
         <Text as="h3" variant="bodySemibold" color="text" className="block">
-          {question.name ?? question.id}
+          {claim.name ?? claim.id}
         </Text>
 
         {!published && debatesEnabled && (
           <Text as="p" variant="body" color="grey-04" className="mt-2">
-            Publish this question before starting a debate.
+            Publish this claim before starting a debate.
           </Text>
         )}
       </div>
 
-      <AnswerChipGroup
-        relations={answers}
+      <PositionButtonGroup
         debatesEnabled={debatesEnabled}
         canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
-        pendingAnswerEntityId={debateQuestion?.viewer_waiting_answer_entity_id ?? null}
+        pendingPosition={debateClaim?.viewer_waiting_position ?? null}
         joinPending={joinQueue.isPending}
-        onJoinAnswer={joinAnswer}
+        onJoinPosition={joinPosition}
         className="mt-3"
       />
 
       {debatesEnabled && (
-        <QuestionDebateStatus
-          debateQuestion={debateQuestion}
+        <ClaimDebateStatus
+          debateClaim={debateClaim}
           mutationError={mutationError}
           published={published}
         />
       )}
 
-      {(topics.length > 0 || relatedPeople.length > 0 || relatedProjects.length > 0) && (
+      {topics.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">
           <RelationChipGroup label="Topics" relations={topics} />
-          <RelationChipGroup label="People" relations={relatedPeople} />
-          <RelationChipGroup label="Projects" relations={relatedProjects} />
         </div>
       )}
     </article>
   );
 }
 
-function AnswerChipGroup({
-  relations,
+function PositionButtonGroup({
   debatesEnabled,
   canJoinDebate,
-  pendingAnswerEntityId,
+  pendingPosition,
   joinPending,
-  onJoinAnswer,
+  onJoinPosition,
   className,
 }: {
-  relations: Relation[];
   debatesEnabled: boolean;
   canJoinDebate: boolean;
-  pendingAnswerEntityId: string | null;
+  pendingPosition: boolean | null;
   joinPending: boolean;
-  onJoinAnswer: (answer: { entityId: string; label: string }) => void;
+  onJoinPosition: (position: boolean) => void;
   className?: string;
 }) {
-  if (relations.length === 0) return null;
+  const positions = [
+    { label: 'Yes', value: true },
+    { label: 'No', value: false },
+  ];
 
   return (
     <div className={className}>
       <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        Answers
+        Position
       </Text>
       <div className="flex flex-wrap gap-1.5">
-        {relations.map(relation => {
-          const label = relation.toEntity.name ?? relation.toEntity.id;
+        {positions.map(position => {
           if (debatesEnabled) {
             return (
               <Button
-                key={relation.id}
+                key={position.label}
                 type="button"
                 variant="secondary"
                 small
-                onClick={() => onJoinAnswer({ entityId: relation.toEntity.id, label })}
-                disabled={!canJoinDebate || joinPending || pendingAnswerEntityId === relation.toEntity.id}
+                onClick={() => onJoinPosition(position.value)}
+                disabled={!canJoinDebate || joinPending || pendingPosition === position.value}
               >
-                {label}
+                {position.label}
               </Button>
             );
           }
 
           return (
             <span
-              key={relation.id}
+              key={position.label}
               className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
             >
-              <span className="truncate">{label}</span>
+              <span className="truncate">{position.label}</span>
             </span>
           );
         })}
@@ -481,12 +421,12 @@ function AnswerChipGroup({
   );
 }
 
-function QuestionDebateStatus({
-  debateQuestion,
+function ClaimDebateStatus({
+  debateClaim,
   mutationError,
   published,
 }: {
-  debateQuestion: DebateQuestion | null;
+  debateClaim: DebateClaim | null;
   mutationError: string | null;
   published: boolean;
 }) {
@@ -500,15 +440,15 @@ function QuestionDebateStatus({
 
   if (!published) return null;
 
-  if (debateQuestion?.active_debate) {
+  if (debateClaim?.active_debate) {
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Debate {debateQuestion.active_debate.status.replace('_', ' ')}
+        Debate {debateClaim.active_debate.status.replace('_', ' ')}
       </Text>
     );
   }
 
-  if (debateQuestion?.active_match) {
+  if (debateClaim?.active_match) {
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
         Match found. Both speakers need to accept.
@@ -516,10 +456,10 @@ function QuestionDebateStatus({
     );
   }
 
-  if (debateQuestion?.viewer_waiting_answer_entity_id) {
+  if (debateClaim?.viewer_waiting_position !== null && debateClaim?.viewer_waiting_position !== undefined) {
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Waiting for someone with a different answer.
+        Waiting for someone with the opposite position.
       </Text>
     );
   }
@@ -561,6 +501,6 @@ function relationsForProperty(relations: Relation[], propertyId: string): Relati
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
 }
 
-function isQuestionPublished(question: Entity): boolean {
-  return !question.relations.some(relation => relation.isLocal && relation.hasBeenPublished !== true);
+function isClaimPublished(claim: Entity): boolean {
+  return !claim.relations.some(relation => relation.isLocal && relation.hasBeenPublished !== true);
 }
