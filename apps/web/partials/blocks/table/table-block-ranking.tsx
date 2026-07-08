@@ -73,7 +73,10 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
 
   return (
-    <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
+    <div
+      className={cx('w-full min-w-0', isGalleryView ? 'overflow-x-visible' : 'overflow-x-hidden')}
+      onMouseDown={e => e.stopPropagation()}
+    >
       <div className="mb-2 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
         <div className="min-w-0 flex-1">
           <h4 className="text-mediumTitle text-text">{displayName}</h4>
