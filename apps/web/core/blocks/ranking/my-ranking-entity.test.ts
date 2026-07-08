@@ -21,6 +21,8 @@ function rankEntity({
   return {
     id,
     name: null,
+    description: null,
+    spaces: [],
     types: [],
     values: [],
     relations,
