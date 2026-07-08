@@ -135,7 +135,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I'm ready" })).toBeInTheDocument();
-    expect(screen.getByText('Pending...')).toBeInTheDocument();
+    expect(screen.getAllByText('Not ready')).toHaveLength(2);
     expect(screen.queryByRole('dialog', { name: 'Debate recording' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalled();

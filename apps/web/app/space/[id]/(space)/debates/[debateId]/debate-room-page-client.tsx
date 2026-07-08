@@ -20,6 +20,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button, SquareButton } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -752,9 +753,6 @@ function DebatePreScreen({
           participant={localParticipant}
           label="You"
           ready={localReady}
-          isLocal
-          busy={readyBusy}
-          onReady={onReady}
         />
         <div className="relative grid h-[92px] w-12 place-items-center">
           <span aria-hidden="true" className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-grey-02" />
@@ -766,9 +764,6 @@ function DebatePreScreen({
           participant={remoteParticipant}
           label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
           ready={remoteReady}
-          isLocal={false}
-          busy={false}
-          onReady={onReady}
         />
       </div>
 
@@ -789,6 +784,10 @@ function DebatePreScreen({
         </Text>
       )}
 
+      <Button type="button" onClick={onReady} disabled={readyBusy || localReady} className="mt-4 w-full">
+        {localReady ? 'Ready' : readyBusy ? 'Saving...' : "I'm ready"}
+      </Button>
+
       <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
         Leave debate
       </Button>
@@ -800,16 +799,10 @@ function PreScreenParticipant({
   participant,
   label,
   ready,
-  isLocal,
-  busy,
-  onReady,
 }: {
   participant: Debate['participants'][number] | null;
   label: string;
   ready: boolean;
-  isLocal: boolean;
-  busy: boolean;
-  onReady: () => void;
 }) {
   return (
     <div className="grid min-w-0 justify-items-center gap-2">
@@ -824,20 +817,15 @@ function PreScreenParticipant({
       <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
         {label}
       </Text>
-      {isLocal && !ready ? (
-        <Button type="button" small onClick={onReady} disabled={busy}>
-          {busy ? 'Saving...' : "I'm ready"}
-        </Button>
-      ) : (
-        <span
-          className={cx(
-            'rounded-full px-3 py-1 text-metadataMedium',
-            ready ? 'bg-ctaPrimary text-white' : 'bg-bg text-grey-04'
-          )}
-        >
-          {ready ? 'Ready' : 'Pending...'}
-        </span>
-      )}
+      <span
+        className={cx(
+          'inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-body leading-none text-text',
+          ready ? 'bg-green' : 'bg-bg'
+        )}
+      >
+        {ready && <Check />}
+        {ready ? 'Ready' : 'Not ready'}
+      </span>
     </div>
   );
 }
