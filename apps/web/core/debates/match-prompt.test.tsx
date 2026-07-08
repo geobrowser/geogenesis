@@ -41,6 +41,8 @@ beforeEach(() => {
   mocks.currentUserId.mockReturnValue('user-for');
   mocks.acceptMutate.mockReset();
   mocks.declineMutate.mockReset();
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
 });
 
 afterEach(() => {
@@ -73,6 +75,18 @@ describe('DebateMatchPrompt', () => {
 
     const blockAction = screen.getByRole('menuitem', { name: 'Block Bri' });
     expect(blockAction).toBeDisabled();
+  });
+
+  it('locks background scrolling while the match dialog is open', () => {
+    const { unmount } = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
   });
 
   it('hides the format selector from the second participant', () => {

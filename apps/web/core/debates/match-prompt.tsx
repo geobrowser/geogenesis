@@ -93,6 +93,21 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
     (waitingClaimIds.length === 0 ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null) : null);
   const minimizedMatch = activeMatch && minimizedMatchIds.includes(activeMatch.id) ? activeMatch : null;
 
+  React.useEffect(() => {
+    if (!activeMatch || !currentUserId || minimizedMatch) return;
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalDocumentOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalDocumentOverflow;
+    };
+  }, [activeMatch, currentUserId, minimizedMatch]);
+
   if (!activeMatch || !currentUserId) return null;
 
   const selectedFormatId = selectedFormatIds[activeMatch.id] ?? formatIdForMatch(activeMatch);
