@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import type { Debate, LiveKitJoinResponse, ParticipantSlot } from '~/core/debates/api';
+import { type Debate, type LiveKitJoinResponse, type ParticipantSlot, getCurrentGeoChatUserId } from '~/core/debates/api';
 import {
   useAbortDebate,
   useCompleteLocalRecordingUpload,
@@ -14,9 +14,11 @@ import {
   useJoinDebateQueue,
   useLiveKitJoin,
   useMarkDebateJoined,
+  useMarkDebateReady,
 } from '~/core/debates/hooks';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
+import { Avatar } from '~/design-system/avatar';
 import { Button, SquareButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
@@ -74,6 +76,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const debateQuery = useDebate(debateId, true);
   const liveKitJoin = useLiveKitJoin(debateId);
   const markJoined = useMarkDebateJoined(debateId);
+  const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
   const createUpload = useCreateLocalRecordingUpload(debateId);
   const completeUpload = useCompleteLocalRecordingUpload(debateId);
@@ -83,6 +86,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [completionPromptDebateId, setCompletionPromptDebateId] = React.useState<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
+  const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
+  const [previewError, setPreviewError] = React.useState<string | null>(null);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
@@ -92,6 +97,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const roomRef = React.useRef<RoomLike | null>(null);
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
+  const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const recordingChunksRef = React.useRef<Blob[]>([]);
   const recordingStartedAtRef = React.useRef<number | null>(null);
@@ -103,6 +109,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const debate = debateQuery.data ?? null;
   const countdown = useDebateCountdown(debate);
   const claimsPath = `/space/${spaceId}/claims`;
+  const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
   const localAudioEnabled = shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted);
 
@@ -248,6 +255,50 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingEndedAtRef.current = null;
   }, [clearRecordingTimers]);
 
+  const ensureLocalPreview = React.useCallback(async () => {
+    if (localTracksRef.current.length > 0 && localMediaStreamRef.current) {
+      if (localVideoRef.current && localVideoRef.current.srcObject !== localMediaStreamRef.current) {
+        localVideoRef.current.srcObject = localMediaStreamRef.current;
+        localVideoRef.current.muted = true;
+        await localVideoRef.current.play().catch(() => undefined);
+      }
+      setPreviewState('ready');
+      return localTracksRef.current;
+    }
+    if (localPreviewPromiseRef.current) return localPreviewPromiseRef.current;
+
+    setPreviewError(null);
+    setPreviewState('starting');
+    const previewPromise = (async () => {
+      const livekit = await import('livekit-client');
+      const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
+      localTracksRef.current = tracks;
+      setLocalTrackPreferences(tracks, {
+        audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted),
+        videoEnabled,
+      });
+      const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
+      localMediaStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.muted = true;
+        await localVideoRef.current.play().catch(() => undefined);
+      }
+      setPreviewState('ready');
+      return tracks;
+    })();
+    localPreviewPromiseRef.current = previewPromise;
+    try {
+      return await previewPromise;
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : 'Could not start your camera preview.');
+      setPreviewState('idle');
+      throw error;
+    } finally {
+      localPreviewPromiseRef.current = null;
+    }
+  }, [audioMuted, countdown.activeSlot, debate, localSlot, videoEnabled]);
+
   const connect = React.useCallback(async () => {
     setRoomError(null);
     setRoomState('connecting');
@@ -277,7 +328,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       await room.connect(token.url, token.token);
       roomRef.current = room;
-      const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
+      const tracks =
+        localTracksRef.current.length > 0 ? localTracksRef.current : ((await livekit.createLocalTracks({
+          audio: true,
+          video: true,
+        })) as LocalTrackLike[]);
       localTracksRef.current = tracks;
       setLocalTrackPreferences(tracks, {
         audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, token.participant_slot, audioMuted),
@@ -333,6 +388,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return false;
     }
   }, [stopLocalRecorderAndUpload]);
+
+  const markLocalReady = React.useCallback(async () => {
+    setRoomError(null);
+    setPreviewError(null);
+    try {
+      await ensureLocalPreview();
+      await markReady.mutateAsync();
+    } catch (error) {
+      setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
+    }
+  }, [ensureLocalPreview, markReady]);
 
   const leave = React.useCallback(async () => {
     if (!debate) return;
@@ -392,8 +458,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [clearRecordingTimers, discardLocalRecorder]);
 
   React.useEffect(() => {
+    if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    void ensureLocalPreview().catch(() => undefined);
+  }, [debate, ensureLocalPreview, roomState]);
+
+  React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
+    if (debate.status === 'ready') return;
     if (autoConnectAttemptedRef.current === debate.id) return;
     autoConnectAttemptedRef.current = debate.id;
     void connect();
@@ -465,6 +537,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   return (
     <div className="py-8">
+      {debate?.status !== 'ready' && (
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <Text as="h2" variant="smallTitle" color="text">
@@ -480,6 +553,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           Back to debates
         </Button>
       </div>
+      )}
 
       {debateQuery.isLoading && (
         <div className="rounded-lg border border-grey-02 bg-white px-5 py-6">
@@ -494,7 +568,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       )}
 
       {debate && (
-        <>
+        debate.status === 'ready' ? (
+          <DebatePreScreen
+            debate={debate}
+            currentUserId={currentUserId}
+            localVideoRef={localVideoRef}
+            previewState={previewState}
+            error={roomError ?? previewError}
+            readyBusy={markReady.isPending}
+            onReady={markLocalReady}
+            onLeave={leave}
+            leaveDisabled={abortDebate.isPending}
+          />
+        ) : (
+          <>
           <section className="rounded-lg border border-grey-02 bg-white p-5 shadow-light">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -566,6 +653,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             />
           )}
         </>
+        )
       )}
     </div>
   );
@@ -619,6 +707,138 @@ function ContinueDebatePrompt({
         </div>
       </div>
     </section>
+  );
+}
+
+function DebatePreScreen({
+  debate,
+  currentUserId,
+  localVideoRef,
+  previewState,
+  error,
+  readyBusy,
+  onReady,
+  onLeave,
+  leaveDisabled,
+}: {
+  debate: Debate;
+  currentUserId: string | null;
+  localVideoRef: React.RefObject<HTMLVideoElement | null>;
+  previewState: 'idle' | 'starting' | 'ready';
+  error: string | null;
+  readyBusy: boolean;
+  onReady: () => void;
+  onLeave: () => void;
+  leaveDisabled: boolean;
+}) {
+  const participants = [...debate.participants].sort((a, b) => a.participant_slot - b.participant_slot);
+  const localParticipant = participants.find(participant => participant.user_id === currentUserId) ?? participants[0] ?? null;
+  const remoteParticipant =
+    participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? participants[1] ?? null;
+  const localReady = Boolean(localParticipant?.ready_at);
+  const remoteReady = Boolean(remoteParticipant?.ready_at);
+
+  return (
+    <section className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col items-center justify-start px-5 py-6 text-center md:max-w-[420px] md:justify-center">
+      <Text as="p" variant="bodySemibold" color="grey-04">
+        Debate
+      </Text>
+      <h1 className="mt-4 max-w-[390px] text-[2rem] leading-[1.12] font-semibold text-text md:text-[1.75rem]">
+        {debate.claim.claim}
+      </h1>
+
+      <div className="mt-10 grid w-full grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02">
+        <PreScreenParticipant
+          participant={localParticipant}
+          label="You"
+          ready={localReady}
+          isLocal
+          busy={readyBusy}
+          onReady={onReady}
+        />
+        <div className="relative grid h-[92px] w-12 place-items-center">
+          <span aria-hidden="true" className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-grey-02" />
+          <span className="relative grid h-8 w-8 place-items-center rounded-full border border-grey-02 bg-white text-metadataMedium text-text">
+            VS
+          </span>
+        </div>
+        <PreScreenParticipant
+          participant={remoteParticipant}
+          label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
+          ready={remoteReady}
+          isLocal={false}
+          busy={false}
+          onReady={onReady}
+        />
+      </div>
+
+      <div className="relative mt-3 aspect-[4/3] w-full overflow-hidden rounded-xl bg-grey-01">
+        <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
+        {previewState !== 'ready' && (
+          <div className="absolute inset-0 grid place-items-center bg-grey-01">
+            <Text variant="body" color="grey-04">
+              {previewState === 'starting' ? 'Starting camera...' : 'Camera preview unavailable'}
+            </Text>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <Text as="p" variant="metadata" color="red-01" className="mt-3">
+          {error}
+        </Text>
+      )}
+
+      <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
+        Leave debate
+      </Button>
+    </section>
+  );
+}
+
+function PreScreenParticipant({
+  participant,
+  label,
+  ready,
+  isLocal,
+  busy,
+  onReady,
+}: {
+  participant: Debate['participants'][number] | null;
+  label: string;
+  ready: boolean;
+  isLocal: boolean;
+  busy: boolean;
+  onReady: () => void;
+}) {
+  return (
+    <div className="grid min-w-0 justify-items-center gap-2">
+      <span className="h-7 w-7 overflow-hidden rounded-full">
+        <Avatar
+          avatarUrl={participant?.avatar_cid ?? null}
+          value={participant?.profile_space_id ?? label}
+          alt={label}
+          size={28}
+        />
+      </span>
+      <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
+        {label}
+      </Text>
+      {isLocal && !ready ? (
+        <Button type="button" small onClick={onReady} disabled={busy}>
+          {busy ? 'Saving...' : "I'm ready"}
+        </Button>
+      ) : (
+        <span
+          className={cx(
+            'rounded-full px-3 py-1 text-metadataMedium',
+            ready ? 'bg-ctaPrimary text-white' : 'bg-bg text-grey-04'
+          )}
+        >
+          {ready ? 'Ready' : 'Pending...'}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -1061,6 +1281,10 @@ function roomStateLabel(roomState: 'connecting' | 'connected' | 'uploading') {
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
   return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
+}
+
+function speakerName(participant: Pick<Debate['participants'][number], 'display_name' | 'profile_space_id'>) {
+  return participant.display_name || participant.profile_space_id;
 }
 
 function timestampMs(value: string | null) {

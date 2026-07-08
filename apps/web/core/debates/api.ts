@@ -54,6 +54,7 @@ export type DebateParticipant = DebateParticipantSummary & {
   position: boolean;
   position_label: string;
   joined_at: string | null;
+  ready_at: string | null;
 };
 
 export type DebateRecording = {
@@ -368,6 +369,14 @@ export async function getLiveKitToken(debateId: string, getPrivyIdentityToken: G
 
 export async function markDebateJoined(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}/joined`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function markDebateReady(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/ready`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,

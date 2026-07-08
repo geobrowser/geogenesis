@@ -211,6 +211,7 @@ function debate(): Debate {
         position: true,
         position_label: 'Yes',
         joined_at: null,
+        ready_at: null,
       },
       {
         user_id: 'user-against',
@@ -221,6 +222,7 @@ function debate(): Debate {
         position: false,
         position_label: 'No',
         joined_at: null,
+        ready_at: null,
       },
     ],
     recordings: [],

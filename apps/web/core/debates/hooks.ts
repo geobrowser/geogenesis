@@ -28,6 +28,7 @@ import {
   listDebateClaims,
   listSpaceDebates,
   markDebateJoined,
+  markDebateReady,
   requestDebateMediaProcessing,
 } from './api';
 
@@ -140,6 +141,16 @@ export function useMarkDebateJoined(debateId: string) {
 
   return useMutation({
     mutationFn: () => markDebateJoined(debateId, getPrivyIdentityToken),
+    onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
+  });
+}
+
+export function useMarkDebateReady(debateId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: () => markDebateReady(debateId, getPrivyIdentityToken),
     onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
   });
 }
