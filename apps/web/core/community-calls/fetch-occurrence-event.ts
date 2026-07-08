@@ -3,7 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 
 import { getBatchEntities, getEntityBacklinks, getRelationsByFromEntityId } from '~/core/io/queries';
-import { Relation } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 
 import { EVENT_SCHEMA, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
 
@@ -18,15 +18,14 @@ export type PublishedOccurrenceEvent = {
 };
 
 /**
- * Best-effort lookup of an already-published `Community call event` entity for one occurrence
- * of a series, plus its current agenda blocks (for re-editing) and BLOCKS relations (so a
- * republish can tombstone the old set before writing the new one).
+ * Best-effort match of an occurrence to its published `Community call event` entity: the
+ * event backlink whose START_TIME is nearest `occurrenceStart` within tolerance, or null.
  */
-export async function fetchOccurrenceEvent(
+async function matchOccurrenceEvent(
   seriesId: string,
   spaceId: string,
   occurrenceStart: number
-): Promise<PublishedOccurrenceEvent | null> {
+): Promise<{ entity: Entity; startMs: number } | null> {
   if (!EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE) return null;
 
   const backlinks = await Effect.runPromise(getEntityBacklinks(seriesId, spaceId)).catch(() => []);
@@ -42,15 +41,41 @@ export async function fetchOccurrenceEvent(
     return Number.isFinite(startMs) ? [{ entity, startMs }] : [];
   });
 
-  const best = scored.reduce<{ entity: (typeof scored)[number]['entity']; startMs: number } | null>(
-    (closest, candidate) => {
-      const delta = Math.abs(candidate.startMs - occurrenceStart);
-      if (!closest || delta < Math.abs(closest.startMs - occurrenceStart)) return candidate;
-      return closest;
-    },
-    null
-  );
+  const best = scored.reduce<{ entity: Entity; startMs: number } | null>((closest, candidate) => {
+    const delta = Math.abs(candidate.startMs - occurrenceStart);
+    if (!closest || delta < Math.abs(closest.startMs - occurrenceStart)) return candidate;
+    return closest;
+  }, null);
   if (!best || Math.abs(best.startMs - occurrenceStart) > OCCURRENCE_MATCH_TOLERANCE_MS) return null;
+  return best;
+}
+
+/**
+ * Just the entity id of the published `Community call event` for one occurrence, or null if
+ * no agenda was ever published for it. Cheaper than {@link fetchOccurrenceEvent} — skips the
+ * agenda-block round trips a list link doesn't need.
+ */
+export async function fetchOccurrenceEventId(
+  seriesId: string,
+  spaceId: string,
+  occurrenceStart: number
+): Promise<string | null> {
+  const best = await matchOccurrenceEvent(seriesId, spaceId, occurrenceStart);
+  return best?.entity.id ?? null;
+}
+
+/**
+ * Best-effort lookup of an already-published `Community call event` entity for one occurrence
+ * of a series, plus its current agenda blocks (for re-editing) and BLOCKS relations (so a
+ * republish can tombstone the old set before writing the new one).
+ */
+export async function fetchOccurrenceEvent(
+  seriesId: string,
+  spaceId: string,
+  occurrenceStart: number
+): Promise<PublishedOccurrenceEvent | null> {
+  const best = await matchOccurrenceEvent(seriesId, spaceId, occurrenceStart);
+  if (!best) return null;
 
   const blockRelations = await Effect.runPromise(
     getRelationsByFromEntityId(best.entity.id, SystemIds.BLOCKS, spaceId)

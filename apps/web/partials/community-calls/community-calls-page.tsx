@@ -13,6 +13,7 @@ import { listRecordings, notifyCommunityCallCancel } from '~/core/community-call
 import { buildDeleteCallOps } from '~/core/community-calls/call-ops';
 import { agendaHref, buildRoomName, detailsHref, liveCallHref } from '~/core/community-calls/constants';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
+import { fetchOccurrenceEventId } from '~/core/community-calls/fetch-occurrence-event';
 import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurrences';
 import { CallSeries, Occurrence, Recording } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
@@ -54,6 +55,15 @@ function flatten(series: CallSeries[], now: number) {
 
 function rowKey(row: Row): string {
   return `${row.call.callId}-${row.occ.startMs}`;
+}
+
+/** Published `Community call event` entity id for one occurrence, or null when none exists (so the link renders conditionally). */
+function useOccurrenceEventId(spaceId: string, callId: string, startMs: number): string | null {
+  const { data } = useQuery({
+    queryKey: ['community-call-occurrence-event-id', spaceId, callId, startMs],
+    queryFn: () => fetchOccurrenceEventId(callId, spaceId, startMs),
+  });
+  return data ?? null;
 }
 
 export function CommunityCallsPage({
@@ -180,9 +190,6 @@ function LiveCallCard({ spaceId, row }: { spaceId: string; row: Row }) {
           <Link href={agendaHref(spaceId, row.call.callId, row.occ.startMs, row.occ.endMs)}>
             <SmallButton>Agenda</SmallButton>
           </Link>
-          <Link href={NavUtils.toEntity(spaceId, row.call.callId)}>
-            <SmallButton>Entity</SmallButton>
-          </Link>
           <Link href={liveCallHref(spaceId, row.call.callId)}>
             <Button variant="primary">Join call</Button>
           </Link>
@@ -280,12 +287,6 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
                   router.push(agendaHref(row.call.spaceId, row.call.callId, row.occ.startMs, row.occ.endMs)),
               },
               {
-                label: 'Entity',
-                value: 'entity',
-                disabled: false,
-                onClick: () => router.push(NavUtils.toEntity(row.call.spaceId, row.call.callId)),
-              },
-              {
                 label: 'Copy link',
                 value: 'copy',
                 disabled: false,
@@ -337,6 +338,7 @@ function PastRow({
 }) {
   const roomName = buildRoomName(spaceId, row.call.callId, row.occ.startMs);
   const occRecordings = recordings.filter(r => r.roomName === roomName);
+  const eventId = useOccurrenceEventId(spaceId, row.call.callId, row.occ.startMs);
 
   return (
     <RowShell>
@@ -364,9 +366,11 @@ function PastRow({
               <SmallButton>Details</SmallButton>
             </Link>
           )}
-          <Link href={NavUtils.toEntity(spaceId, row.call.callId)}>
-            <SmallButton>Entity</SmallButton>
-          </Link>
+          {eventId && (
+            <Link href={NavUtils.toEntity(spaceId, eventId)}>
+              <SmallButton>Entity</SmallButton>
+            </Link>
+          )}
         </div>
       </div>
     </RowShell>
