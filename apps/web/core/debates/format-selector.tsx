@@ -2,8 +2,7 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 
 import {
@@ -36,67 +35,36 @@ export function DebateFormatSelector({
   const selectedFormat =
     debateFormatById(selectedFormatId) ?? debateFormatById(value) ?? debateFormatById(defaultDebateFormatId);
 
-  if (!canChoose) {
-    return (
-      <div className={className}>
-        <Text as="div" variant="metadataMedium" color="grey-04">
-          Timing
-        </Text>
-        <div className="mt-2 inline-flex max-w-full flex-wrap items-center gap-2 rounded-md border border-grey-02 bg-bg px-3 py-2">
-          <Text as="span" variant="metadataMedium" color="text">
-            {selectedFormat?.label ?? 'Standard'}
-          </Text>
-          {selectedFormat && (
-            <Text as="span" variant="metadata" color="grey-04">
-              {debateTimingSummary(selectedFormat)}
-            </Text>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <fieldset className={className} disabled={disabled}>
-      <legend className="text-metadataMedium text-grey-04">Timing</legend>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-        {debateFormats.map(format => {
-          const selected = format.id === value;
-          return (
-            <label
-              key={format.id}
-              className={cx(
-                'block min-w-0 rounded-md border bg-white px-3 py-2 transition-colors',
-                disabled ? 'cursor-default opacity-60' : 'cursor-pointer hover:border-text hover:bg-bg',
-                selected ? 'border-text shadow-inner shadow-grey-02' : 'border-grey-02'
-              )}
-            >
-              <input
-                type="radio"
-                name={name}
-                value={format.id}
-                checked={selected}
-                disabled={disabled}
-                onChange={() => onChange(format.id)}
-                className="sr-only"
-              />
-              <span className="flex min-w-0 items-center gap-2">
-                <Text as="span" variant="metadataMedium" color="text" className="truncate">
-                  {format.label}
-                </Text>
-                {format.developmentOnly && (
-                  <span className="rounded border border-grey-02 bg-bg px-1.5 py-0.5 text-[0.6875rem] leading-none text-grey-04">
-                    Dev
-                  </span>
-                )}
-              </span>
-              <Text as="span" variant="metadata" color="grey-04" className="mt-1 block truncate">
-                {debateTimingSummary(format)}
-              </Text>
-            </label>
-          );
-        })}
+    <div className={className}>
+      <label htmlFor={name} className="sr-only">
+        Debate format
+      </label>
+      <div className="relative">
+        <select
+          id={name}
+          name={name}
+          value={canChoose ? value : selectedFormat?.id}
+          disabled={disabled || !canChoose}
+          onChange={event => onChange(event.target.value as DebateFormatId)}
+          className="min-h-9 w-full appearance-none rounded border border-grey-02 bg-white px-3 py-2 pr-8 text-button text-text outline-hidden hover:border-grey-04 focus:border-text disabled:cursor-not-allowed disabled:bg-bg disabled:text-grey-04"
+        >
+          {debateFormats.map(format => (
+            <option key={format.id} value={format.id}>
+              {format.label} · {debateTimingSummary(format)}
+              {format.developmentOnly ? ' · Dev' : ''}
+            </option>
+          ))}
+        </select>
+        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2">
+          <ChevronDownSmall color="grey-04" />
+        </span>
       </div>
-    </fieldset>
+      {selectedFormat && (
+        <Text as="div" variant="metadata" color="grey-04" className="mt-1">
+          {debateTimingSummary(selectedFormat)}
+        </Text>
+      )}
+    </div>
   );
 }

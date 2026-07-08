@@ -51,11 +51,12 @@ describe('DebateMatchPrompt', () => {
   it('opens a match modal and lets the first participant choose a format before accepting', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
-    expect(screen.getByText('Bri wants to debate')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    expect(screen.getByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByText('Bri makes an argument')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('45/45 30/30'));
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.change(screen.getByLabelText('Debate format'), { target: { value: 'extended-standard' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
       { matchId: 'match-1', formatId: 'extended-standard' },
@@ -73,7 +74,7 @@ describe('DebateMatchPrompt', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
 
-    expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
   });
 
   it('rejects the matched person for the question', () => {
@@ -100,7 +101,7 @@ describe('DebateMatchPrompt', () => {
 
     const { rerender } = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
 
