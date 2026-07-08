@@ -277,10 +277,12 @@ export function useView() {
   }, [blockRelationRelations, storage]);
 
   /**
-   * Persist a full column ordering on the block-relation entity. Rewrites
-   * positions on existing shown-column relations and materializes PROPERTIES
-   * relations for columns that don't have one yet, so the ordering survives
-   * navigation. Name is implicit (always first) and never persisted.
+ pr   * Persist the ordering of the block's shown columns. Only repositions columns
+   * that are already shown — reordering never adds or removes columns. This lets
+   * surfaces that display every property (e.g. the Power Tool) reorder columns
+   * without materializing shown-column relations for hidden properties, which
+   * would otherwise reset the source table's property-visibility state. Name is
+   * implicit (always first) and never persisted.
    */
   const setShownColumnOrder = React.useCallback(
     (columns: Column[]) => {
@@ -292,43 +294,22 @@ export function useView() {
       let cursor: string | null = null;
       for (const column of columns) {
         if (ID.equals(column.id, SystemIds.NAME_PROPERTY)) continue;
+
+        const existing = relationByPropertyId.get(ID.uuidToHex(column.id));
+        if (!existing) continue;
+
         const position = Position.generateBetween(cursor, null);
         if (!position) continue;
         cursor = position;
 
-        const existing = relationByPropertyId.get(ID.uuidToHex(column.id));
-        if (existing) {
-          if (existing.position !== position) {
-            storage.relations.update(existing, draft => {
-              draft.position = position;
-            });
-          }
-          continue;
+        if (existing.position !== position) {
+          storage.relations.update(existing, draft => {
+            draft.position = position;
+          });
         }
-
-        storage.relations.set({
-          id: IdUtils.generate(),
-          entityId: IdUtils.generate(),
-          spaceId,
-          position,
-          renderableType: 'RELATION',
-          type: {
-            id: SystemIds.PROPERTIES,
-            name: 'Properties',
-          },
-          fromEntity: {
-            id: blocksRelationEntityId,
-            name: blockRelationName,
-          },
-          toEntity: {
-            id: column.id,
-            name: column.name,
-            value: column.id,
-          },
-        });
       }
     },
-    [blockRelationRelations, blocksRelationEntityId, blockRelationName, spaceId, storage]
+    [blockRelationRelations, blocksRelationEntityId, storage]
   );
 
   const reorderShownPropertyRelations = React.useCallback(

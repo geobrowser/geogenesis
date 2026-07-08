@@ -11,7 +11,12 @@ function row(entityId: string, name: string): Row {
     entityId,
     placeholder: false,
     columns: {
-      [SystemIds.NAME_PROPERTY]: { name, slotId: SystemIds.NAME_PROPERTY, space: 'space-1' },
+      [SystemIds.NAME_PROPERTY]: {
+        name,
+        slotId: SystemIds.NAME_PROPERTY,
+        propertyId: SystemIds.NAME_PROPERTY,
+        space: 'space-1',
+      },
     },
   } as Row;
 }
