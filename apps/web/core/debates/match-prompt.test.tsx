@@ -64,17 +64,28 @@ describe('DebateMatchPrompt', () => {
     );
   });
 
-  it('can be minimized and reopened', () => {
+  it('shows a disabled block menu for the other participant only', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }));
+    expect(screen.queryByRole('button', { name: 'More actions for You' })).not.toBeInTheDocument();
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('Match found: Bri')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Bri' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    const blockAction = screen.getByRole('menuitem', { name: 'Block Bri' });
+    expect(blockAction).toBeDisabled();
+  });
 
-    expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+  it('hides the format selector from the second participant', () => {
+    mocks.currentUserId.mockReturnValue('user-against');
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    expect(screen.getByText('Debate format')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.acceptMutate).toHaveBeenCalledWith({ matchId: 'match-1', formatId: undefined }, expect.any(Object));
   });
 
   it('rejects the matched person for the question', () => {

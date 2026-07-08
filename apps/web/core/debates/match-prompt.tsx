@@ -168,7 +168,6 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       onAccept={accept}
       onDecline={decline}
       onFormatChange={setSelectedFormatId}
-      onMinimize={() => setMinimizedMatchIds(current => Array.from(new Set([...current, activeMatch.id])))}
     />
   );
 }
@@ -183,7 +182,6 @@ function MatchDialog({
   onAccept,
   onDecline,
   onFormatChange,
-  onMinimize,
 }: {
   match: DebateMatch;
   currentUserId: string;
@@ -194,7 +192,6 @@ function MatchDialog({
   onAccept: () => void;
   onDecline: () => void;
   onFormatChange: (formatId: DebateFormatId) => void;
-  onMinimize: () => void;
 }) {
   const myParticipant = participantForUser(match, currentUserId);
   const canChooseFormat = myParticipant?.participant_slot === 1 && !waiting;
@@ -202,6 +199,11 @@ function MatchDialog({
   const firstParticipant = participants[0]!;
   const secondParticipant = participants[1] ?? firstParticipant;
   const selectedFormat = debateFormatById(selectedFormatId) ?? debateFormatById(defaultDebateFormatId)!;
+  const [openParticipantMenuUserId, setOpenParticipantMenuUserId] = React.useState<string | null>(null);
+
+  const toggleParticipantMenu = (participant: DebateMatchParticipant) => {
+    setOpenParticipantMenuUserId(current => (current === participant.user_id ? null : participant.user_id));
+  };
 
   return (
     <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-[1200] flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
@@ -209,45 +211,47 @@ function MatchDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="debate-match-title"
-        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 grid max-h-[calc(100dvh-2rem)] w-[min(668px,100%)] gap-7 overflow-hidden rounded-[1.25rem] bg-bg px-9 py-8 text-text shadow-card max-sm:px-5 max-sm:py-6"
+        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 grid max-h-[calc(100dvh-2rem)] w-[min(668px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[1.25rem] bg-bg px-8 py-6 text-text shadow-card max-sm:px-4 max-sm:py-5"
       >
         <header className="min-w-0 text-center">
           <Text as="div" variant="body" color="grey-04">
             Debate request
           </Text>
-          <h2 id="debate-match-title" className="mx-auto mt-3 max-w-[500px] text-[2rem] leading-[1.15] font-semibold">
+          <h2 id="debate-match-title" className="mx-auto mt-2 max-w-[500px] text-[1.75rem] leading-[1.12] font-semibold">
             {waiting ? 'Waiting for the other person' : match.claim.claim}
           </h2>
         </header>
 
-        <div className="min-h-0 overflow-y-auto">
-          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-7 py-5 shadow-inner shadow-grey-02 max-sm:px-4">
-            {!waiting && (
-              <button
-                type="button"
-                aria-label="Minimize"
-                onClick={onMinimize}
-                disabled={busy}
-                className="absolute top-3 right-4 text-2xl leading-none text-grey-03 hover:text-text disabled:opacity-50"
-              >
-                ...
-              </button>
-            )}
-            <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
-            <div className="grid h-[132px] w-20 place-items-center border-x border-grey-02">
-              <span className="grid h-12 w-12 place-items-center rounded-full border border-grey-02 bg-white text-button text-text">
+        <div className="min-h-0 overflow-y-auto pr-1">
+          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02 max-sm:px-3">
+            <ParticipantSummary
+              participant={firstParticipant}
+              currentUserId={currentUserId}
+              showMenu={!waiting && firstParticipant.user_id !== currentUserId}
+              menuOpen={openParticipantMenuUserId === firstParticipant.user_id}
+              onToggleMenu={() => toggleParticipantMenu(firstParticipant)}
+            />
+            <div className="relative grid h-[112px] w-16 place-items-center">
+              <span aria-hidden="true" className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-grey-02" />
+              <span className="relative grid h-11 w-11 place-items-center rounded-full border border-grey-02 bg-white text-button text-text">
                 VS
               </span>
             </div>
-            <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
+            <ParticipantSummary
+              participant={secondParticipant}
+              currentUserId={currentUserId}
+              showMenu={!waiting && secondParticipant.user_id !== currentUserId}
+              menuOpen={openParticipantMenuUserId === secondParticipant.user_id}
+              onToggleMenu={() => toggleParticipantMenu(secondParticipant)}
+            />
           </div>
 
-          <section className="mt-7 rounded-xl border border-grey-02 bg-white p-7 max-sm:p-4">
+          <section className="mt-4 rounded-xl border border-grey-02 bg-white p-5 max-sm:p-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <Text as="h3" variant="body" color="grey-04">
                 Debate format
               </Text>
-              {!waiting && (
+              {!waiting && canChooseFormat && (
                 <DebateFormatSelector
                   value={selectedFormatId}
                   selectedFormatId={match.turn_format_id}
@@ -259,7 +263,7 @@ function MatchDialog({
                 />
               )}
             </div>
-            <div className="mt-6 grid gap-2">
+            <div className="mt-4 grid gap-1.5">
               {selectedFormat.turnDurationsMs.map((durationMs, index) => {
                 const participant = participants[index % participants.length] ?? firstParticipant;
                 return (
@@ -277,7 +281,7 @@ function MatchDialog({
           </section>
 
           {myParticipant && (
-            <Text as="p" variant="metadata" color="grey-04" className="mt-4 text-center">
+            <Text as="p" variant="metadata" color="grey-04" className="mt-3 text-center">
               You chose {myParticipant.position_label}.
             </Text>
           )}
@@ -289,7 +293,7 @@ function MatchDialog({
           )}
         </div>
 
-        <footer className="grid gap-4">
+        <footer className="grid gap-3">
           {waiting ? (
             <>
               <Text as="p" variant="body" color="grey-04" className="text-center">
@@ -323,22 +327,60 @@ function MatchDialog({
 function ParticipantSummary({
   participant,
   currentUserId,
+  showMenu,
+  menuOpen,
+  onToggleMenu,
 }: {
   participant: DebateMatchParticipant;
   currentUserId: string;
+  showMenu: boolean;
+  menuOpen: boolean;
+  onToggleMenu: () => void;
 }) {
+  const label = participant.user_id === currentUserId ? 'You' : speakerLabel(participant);
+
   return (
-    <div className="grid min-w-0 justify-items-center gap-3 text-center">
-      <span className="h-9 w-9 overflow-hidden rounded-full">
+    <div className="relative grid min-w-0 justify-items-center gap-2 text-center">
+      {showMenu && (
+        <div className="absolute top-0 right-0 z-10">
+          <button
+            type="button"
+            aria-label={`More actions for ${label}`}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={onToggleMenu}
+            className="grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-grey-03 hover:bg-bg hover:text-text"
+          >
+            ...
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              aria-label={`${label} actions`}
+              className="absolute top-9 right-0 min-w-36 rounded-lg border border-grey-02 bg-white p-1 text-left shadow-card"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled
+                className="w-full cursor-not-allowed rounded px-3 py-2 text-left text-button text-grey-04"
+              >
+                Block {label}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      <span className="h-8 w-8 overflow-hidden rounded-full">
         <Avatar
           avatarUrl={participant.avatar_cid}
           value={participant.profile_space_id}
           alt={speakerLabel(participant)}
-          size={36}
+          size={32}
         />
       </span>
       <Text as="div" variant="body" color="text" className="max-w-full truncate">
-        {participant.user_id === currentUserId ? 'You' : speakerLabel(participant)}
+        {label}
       </Text>
       <span className="rounded-full bg-grey-02 px-3 py-1 text-metadataMedium text-text">
         {participant.position_label}
@@ -363,17 +405,17 @@ function DebateFormatTurnRow({
   const alternate = turnIndex % 2 === 1;
 
   return (
-    <div className={alternate ? 'rounded-lg bg-bg px-2 py-3' : 'px-2 py-3'}>
-      <div className="grid grid-cols-[3.5rem_2rem_minmax(0,1fr)] items-center gap-4">
-        <span className="grid h-12 w-12 place-items-center rounded-full border border-text text-body text-text">
+    <div className={alternate ? 'rounded-lg bg-bg px-2 py-2' : 'px-2 py-2'}>
+      <div className="grid grid-cols-[3rem_1.75rem_minmax(0,1fr)] items-center gap-3">
+        <span className="grid h-10 w-10 place-items-center rounded-full border border-text text-button text-text">
           {formatTurnDuration(durationMs)}
         </span>
-        <span className="h-7 w-7 overflow-hidden rounded-full">
+        <span className="h-6 w-6 overflow-hidden rounded-full">
           <Avatar
             avatarUrl={participant.avatar_cid}
             value={participant.profile_space_id}
             alt={speakerLabel(participant)}
-            size={28}
+            size={24}
           />
         </span>
         <Text as="div" variant="bodySemibold" color="text" className="min-w-0 truncate">

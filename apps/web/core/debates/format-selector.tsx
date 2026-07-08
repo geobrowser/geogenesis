@@ -3,8 +3,6 @@
 import * as React from 'react';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Text } from '~/design-system/text';
-
 import {
   type DebateFormatId,
   debateFormatById,
@@ -60,11 +58,6 @@ export function DebateFormatSelector({
           <ChevronDownSmall color="grey-04" />
         </span>
       </div>
-      {selectedFormat && (
-        <Text as="div" variant="metadata" color="grey-04" className="mt-1">
-          {debateTimingSummary(selectedFormat)}
-        </Text>
-      )}
     </div>
   );
 }
