@@ -133,8 +133,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const mimeType = preferredRecordingMimeType();
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
     recordingChunksRef.current = [];
-    recordingStartedAtRef.current = Date.now();
     recordingEndedAtRef.current = null;
+    recorder.addEventListener(
+      'start',
+      () => {
+        recordingStartedAtRef.current = Date.now();
+      },
+      { once: true }
+    );
     recorder.ondataavailable = event => {
       if (event.data.size > 0) {
         recordingChunksRef.current.push(event.data);
@@ -150,11 +156,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (recordingEndedAtRef.current !== null) return;
 
     const stopped = new Promise<void>(resolve => {
-      recorder.addEventListener('stop', () => resolve(), { once: true });
+      recorder.addEventListener(
+        'stop',
+        () => {
+          recordingEndedAtRef.current = Date.now();
+          resolve();
+        },
+        { once: true }
+      );
     });
     if (recorder.state !== 'inactive') {
       recorder.requestData();
-      recordingEndedAtRef.current = Date.now();
       recorder.stop();
       await stopped;
       return;
