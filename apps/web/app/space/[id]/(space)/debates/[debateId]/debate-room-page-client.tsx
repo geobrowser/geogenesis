@@ -21,6 +21,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { Avatar } from '~/design-system/avatar';
 import { Button, SquareButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -32,6 +33,11 @@ type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
   stop: () => void;
   detach?: () => void;
+};
+
+type MediaDeviceOption = {
+  deviceId: string;
+  label: string;
 };
 
 type RoomLike = {
@@ -92,6 +98,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [audioInputDevices, setAudioInputDevices] = React.useState<MediaDeviceOption[]>([]);
+  const [videoInputDevices, setVideoInputDevices] = React.useState<MediaDeviceOption[]>([]);
+  const [selectedAudioInputId, setSelectedAudioInputId] = React.useState('');
+  const [selectedVideoInputId, setSelectedVideoInputId] = React.useState('');
+  const selectedAudioInputIdRef = React.useRef('');
+  const selectedVideoInputIdRef = React.useRef('');
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
@@ -256,8 +268,44 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingEndedAtRef.current = null;
   }, [clearRecordingTimers]);
 
-  const ensureLocalPreview = React.useCallback(async () => {
-    if (localTracksRef.current.length > 0 && localMediaStreamRef.current) {
+  const refreshMediaDevices = React.useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return;
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices
+      .filter(device => device.kind === 'audioinput')
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Microphone ${index + 1}`,
+      }));
+    const videoInputs = devices
+      .filter(device => device.kind === 'videoinput')
+      .map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `Camera ${index + 1}`,
+      }));
+
+    setAudioInputDevices(audioInputs);
+    setVideoInputDevices(videoInputs);
+    setSelectedAudioInputId(current => {
+      const next =
+        current && audioInputs.some(device => device.deviceId === current) ? current : (audioInputs[0]?.deviceId ?? '');
+      selectedAudioInputIdRef.current = next;
+      return next;
+    });
+    setSelectedVideoInputId(current => {
+      const next =
+        current && videoInputs.some(device => device.deviceId === current) ? current : (videoInputs[0]?.deviceId ?? '');
+      selectedVideoInputIdRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const ensureLocalPreview = React.useCallback(async (options: {
+    forceRestart?: boolean;
+    audioInputId?: string;
+    videoInputId?: string;
+  } = {}) => {
+    if (!options.forceRestart && localTracksRef.current.length > 0 && localMediaStreamRef.current) {
       if (localVideoRef.current && localVideoRef.current.srcObject !== localMediaStreamRef.current) {
         localVideoRef.current.srcObject = localMediaStreamRef.current;
         localVideoRef.current.muted = true;
@@ -266,13 +314,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setPreviewState('ready');
       return localTracksRef.current;
     }
-    if (localPreviewPromiseRef.current) return localPreviewPromiseRef.current;
+    if (localPreviewPromiseRef.current) {
+      if (!options.forceRestart) return localPreviewPromiseRef.current;
+      await localPreviewPromiseRef.current.catch(() => undefined);
+    }
 
     setPreviewError(null);
     setPreviewState('starting');
     const previewPromise = (async () => {
       const livekit = await import('livekit-client');
-      const tracks = (await livekit.createLocalTracks({ audio: true, video: true })) as LocalTrackLike[];
+      stopLocalTracks(localTracksRef);
+      localMediaStreamRef.current = null;
+      const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
+      const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
+      const tracks = (await livekit.createLocalTracks({
+        audio: audioInputId ? { deviceId: audioInputId } : true,
+        video: videoInputId ? { deviceId: videoInputId } : true,
+      })) as LocalTrackLike[];
       localTracksRef.current = tracks;
       setLocalTrackPreferences(tracks, {
         audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted),
@@ -285,6 +343,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localVideoRef.current.muted = true;
         await localVideoRef.current.play().catch(() => undefined);
       }
+      await refreshMediaDevices();
       setPreviewState('ready');
       return tracks;
     })();
@@ -298,7 +357,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     } finally {
       localPreviewPromiseRef.current = null;
     }
-  }, [audioMuted, countdown.activeSlot, debate, localSlot, videoEnabled]);
+  }, [audioMuted, countdown.activeSlot, debate, localSlot, refreshMediaDevices, videoEnabled]);
+
+  const changeAudioInput = React.useCallback(
+    (deviceId: string) => {
+      selectedAudioInputIdRef.current = deviceId;
+      setSelectedAudioInputId(deviceId);
+      void ensureLocalPreview({
+        forceRestart: true,
+        audioInputId: deviceId,
+        videoInputId: selectedVideoInputIdRef.current,
+      }).catch(() => undefined);
+    },
+    [ensureLocalPreview]
+  );
+
+  const changeVideoInput = React.useCallback(
+    (deviceId: string) => {
+      selectedVideoInputIdRef.current = deviceId;
+      setSelectedVideoInputId(deviceId);
+      void ensureLocalPreview({
+        forceRestart: true,
+        audioInputId: selectedAudioInputIdRef.current,
+        videoInputId: deviceId,
+      }).catch(() => undefined);
+    },
+    [ensureLocalPreview]
+  );
 
   const connect = React.useCallback(async () => {
     setRoomError(null);
@@ -331,8 +416,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       roomRef.current = room;
       const tracks =
         localTracksRef.current.length > 0 ? localTracksRef.current : ((await livekit.createLocalTracks({
-          audio: true,
-          video: true,
+          audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
+          video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
         })) as LocalTrackLike[]);
       localTracksRef.current = tracks;
       setLocalTrackPreferences(tracks, {
@@ -576,6 +661,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             localVideoRef={localVideoRef}
             previewState={previewState}
             error={roomError ?? previewError}
+            audioInputDevices={audioInputDevices}
+            videoInputDevices={videoInputDevices}
+            selectedAudioInputId={selectedAudioInputId}
+            selectedVideoInputId={selectedVideoInputId}
+            onAudioInputChange={changeAudioInput}
+            onVideoInputChange={changeVideoInput}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
             onLeave={leave}
@@ -717,6 +808,12 @@ function DebatePreScreen({
   localVideoRef,
   previewState,
   error,
+  audioInputDevices,
+  videoInputDevices,
+  selectedAudioInputId,
+  selectedVideoInputId,
+  onAudioInputChange,
+  onVideoInputChange,
   readyBusy,
   onReady,
   onLeave,
@@ -727,6 +824,12 @@ function DebatePreScreen({
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   previewState: 'idle' | 'starting' | 'ready';
   error: string | null;
+  audioInputDevices: MediaDeviceOption[];
+  videoInputDevices: MediaDeviceOption[];
+  selectedAudioInputId: string;
+  selectedVideoInputId: string;
+  onAudioInputChange: (deviceId: string) => void;
+  onVideoInputChange: (deviceId: string) => void;
   readyBusy: boolean;
   onReady: () => void;
   onLeave: () => void;
@@ -739,48 +842,128 @@ function DebatePreScreen({
   const localReady = Boolean(localParticipant?.ready_at);
   const remoteReady = Boolean(remoteParticipant?.ready_at);
 
+  React.useEffect(() => {
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalDocumentOverflow = document.documentElement.style.overflow;
+
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalDocumentOverflow;
+    };
+  }, []);
+
   return (
-    <section className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[430px] flex-col items-center justify-start px-5 py-6 text-center md:max-w-[420px] md:justify-center">
-      <Text as="p" variant="bodySemibold" color="grey-04">
-        Debate
-      </Text>
-      <h1 className="mt-4 max-w-[390px] text-[2rem] leading-[1.12] font-semibold text-text md:text-[1.75rem]">
-        {debate.claim.claim}
-      </h1>
-
-      <div className="mt-10 w-full">
-        <PreScreenOpponent
-          participant={remoteParticipant}
-          label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
-          ready={remoteReady}
-        />
-      </div>
-
-      <div className="relative mt-3 aspect-[4/3] w-full overflow-hidden rounded-xl bg-grey-01">
-        <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-        {previewState !== 'ready' && (
-          <div className="absolute inset-0 grid place-items-center bg-grey-01">
-            <Text variant="body" color="grey-04">
-              {previewState === 'starting' ? 'Starting camera...' : 'Camera preview unavailable'}
-            </Text>
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <Text as="p" variant="metadata" color="red-01" className="mt-3">
-          {error}
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Debate readiness"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
+    >
+      <section className="mx-auto flex min-h-dvh w-full max-w-[860px] flex-col items-center justify-start px-5 py-6 text-center md:justify-center">
+        <Text as="p" variant="bodySemibold" color="grey-04">
+          Debate
         </Text>
-      )}
+        <h1 className="mt-4 max-w-[390px] text-[2rem] leading-[1.12] font-semibold text-text md:max-w-[780px] md:text-[1.75rem]">
+          {debate.claim.claim}
+        </h1>
 
-      <Button type="button" onClick={onReady} disabled={readyBusy || localReady} className="mt-4 w-full">
-        {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
-      </Button>
+        <div className="mt-10 w-full max-w-[430px]">
+          <PreScreenOpponent
+            participant={remoteParticipant}
+            label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
+            ready={remoteReady}
+          />
+        </div>
 
-      <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
-        Leave debate
-      </Button>
-    </section>
+        <div className="mt-3 w-full max-w-[430px] rounded-xl border border-grey-02 bg-white p-3 shadow-inner shadow-grey-02">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-grey-01">
+            <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
+            {previewState !== 'ready' && (
+              <div className="absolute inset-0 grid place-items-center bg-grey-01">
+                <Text variant="body" color="grey-04">
+                  {previewState === 'starting' ? 'Starting camera...' : 'Camera preview unavailable'}
+                </Text>
+              </div>
+            )}
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <PreScreenDeviceSelect
+              ariaLabel="Select microphone"
+              icon={<MicrophoneIcon muted={false} />}
+              value={selectedAudioInputId}
+              options={audioInputDevices}
+              fallbackLabel="Microphone"
+              onChange={onAudioInputChange}
+            />
+            <PreScreenDeviceSelect
+              ariaLabel="Select camera"
+              icon={<CameraIcon disabled={false} />}
+              value={selectedVideoInputId}
+              options={videoInputDevices}
+              fallbackLabel="Camera"
+              onChange={onVideoInputChange}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <Text as="p" variant="metadata" color="red-01" className="mt-3">
+            {error}
+          </Text>
+        )}
+
+        <Button type="button" onClick={onReady} disabled={readyBusy || localReady} className="mt-4 w-full max-w-[430px]">
+          {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
+        </Button>
+
+        <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
+          Leave debate
+        </Button>
+      </section>
+    </div>
+  );
+}
+
+function PreScreenDeviceSelect({
+  ariaLabel,
+  icon,
+  value,
+  options,
+  fallbackLabel,
+  onChange,
+}: {
+  ariaLabel: string;
+  icon: React.ReactNode;
+  value: string;
+  options: MediaDeviceOption[];
+  fallbackLabel: string;
+  onChange: (deviceId: string) => void;
+}) {
+  const selectOptions = options.length > 0 ? options : [{ deviceId: '', label: fallbackLabel }];
+
+  return (
+    <label className="relative flex min-w-0 items-center rounded-full border border-grey-02 bg-white px-3 py-2 text-left text-body text-text shadow-inner shadow-grey-02">
+      <span className="mr-2 shrink-0 text-text">{icon}</span>
+      <select
+        aria-label={ariaLabel}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        disabled={options.length === 0}
+        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-body text-text outline-none disabled:text-grey-04"
+      >
+        {selectOptions.map(device => (
+          <option key={device.deviceId || fallbackLabel} value={device.deviceId}>
+            {device.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-3 grid size-4 place-items-center">
+        <ChevronDownSmall color="grey-04" />
+      </span>
+    </label>
   );
 }
 
@@ -1133,17 +1316,21 @@ function shouldEnableLocalAudio(
   return debate.status === 'in_progress' && activeSlot === localSlot;
 }
 
+function stopLocalTracks(localTracksRef: React.MutableRefObject<LocalTrackLike[]>) {
+  for (const track of localTracksRef.current) {
+    track.detach?.();
+    track.stop();
+  }
+  localTracksRef.current = [];
+}
+
 function disconnectRoom(
   roomRef: React.MutableRefObject<RoomLike | null>,
   localTracksRef: React.MutableRefObject<LocalTrackLike[]>,
   localVideoRef: React.RefObject<HTMLVideoElement | null>,
   remoteMediaRef: React.RefObject<HTMLDivElement | null>
 ) {
-  for (const track of localTracksRef.current) {
-    track.detach?.();
-    track.stop();
-  }
-  localTracksRef.current = [];
+  stopLocalTracks(localTracksRef);
   roomRef.current?.disconnect();
   roomRef.current = null;
   if (localVideoRef.current) {

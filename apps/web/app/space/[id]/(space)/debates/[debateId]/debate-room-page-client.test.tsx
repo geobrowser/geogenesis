@@ -113,6 +113,12 @@ beforeEach(() => {
     configurable: true,
     value: {
       getUserMedia: vi.fn().mockResolvedValue(new MediaStream()),
+      enumerateDevices: vi.fn().mockResolvedValue([
+        { kind: 'audioinput', deviceId: 'mic-1', label: 'Shure MV7+' },
+        { kind: 'audioinput', deviceId: 'mic-2', label: 'Studio Mic' },
+        { kind: 'videoinput', deviceId: 'camera-1', label: 'HD Pro Webcam' },
+        { kind: 'videoinput', deviceId: 'camera-2', label: 'Desk Camera' },
+      ]),
     },
   });
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
@@ -132,6 +138,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
+    expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
@@ -144,6 +151,44 @@ describe('DebateRoomPageClient', () => {
       expect(mocks.createLocalTracks).toHaveBeenCalled();
     });
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('locks background scrolling while the pre-screen modal is open', () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const { unmount } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('lets participants choose microphone and camera devices from the pre-screen', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('combobox', { name: 'Select microphone' })).toHaveValue('mic-1');
+    });
+    expect(screen.getByRole('combobox', { name: 'Select camera' })).toHaveValue('camera-1');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Select microphone' }), { target: { value: 'mic-2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Select camera' }), { target: { value: 'camera-2' } });
+
+    await waitFor(() => {
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-2' },
+        video: { deviceId: 'camera-1' },
+      });
+    });
+    await waitFor(() => {
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({ audio: { deviceId: 'mic-2' }, video: { deviceId: 'camera-2' } });
+    });
   });
 
   it('shows the opponent as ready while the local participant can still become ready', () => {
