@@ -6,6 +6,7 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import * as React from 'react';
 import { useCallback } from 'react';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -14,6 +15,7 @@ import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { BulletedListView } from '~/design-system/icons/bulleted-list-view';
 import { Check } from '~/design-system/icons/check';
 import { Close } from '~/design-system/icons/close';
+import { ExploreView } from '~/design-system/icons/explore-view';
 import { GalleryView } from '~/design-system/icons/gallery-view';
 import { ListView } from '~/design-system/icons/list-view';
 import { PillView } from '~/design-system/icons/pill-view';
@@ -43,7 +45,7 @@ export function DataBlockViewMenu({
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,
-    preferredHeight: includeRankingViews ? 220 : 180,
+    preferredHeight: includeRankingViews ? 260 : 220,
     gap: 8,
     contentElement,
   });
@@ -101,6 +103,8 @@ function ViewIcon({ view, color }: { view: DataBlockView; color: ColorName }) {
       return <GalleryView color={color} />;
     case 'BULLETED_LIST':
       return <BulletedListView color={color} />;
+    case 'EXPLORE':
+      return <ExploreView color={color} />;
     case 'PILL':
       return <PillView color={color} />;
   }
@@ -113,6 +117,7 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
   { name: 'Gallery', id: SystemIds.GALLERY_VIEW, value: 'GALLERY' },
   { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
   { name: 'Bullet List', id: SystemIds.BULLETED_LIST_VIEW, value: 'BULLETED_LIST' },
+  { name: 'Explore', id: DATA_BLOCK_VIEW_EXPLORE_ID, value: 'EXPLORE' },
 ];
 
 const RANKING_ONLY_VIEWS: Array<DataBlockViewDetails> = [

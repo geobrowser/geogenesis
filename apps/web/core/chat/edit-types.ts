@@ -4,7 +4,7 @@ import type { DataType } from '~/core/types';
 
 export type BlockKind = 'text' | 'code' | 'image' | 'video' | 'data';
 
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'PILL';
+export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'EXPLORE' | 'PILL';
 
 export type DataBlockSource = 'COLLECTION' | 'QUERY' | 'GEO';
 

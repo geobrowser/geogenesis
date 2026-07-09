@@ -40,7 +40,7 @@ const MAX_MARKDOWN_CHARS = 20_000;
 const MAX_URL_CHARS = 2_048;
 const MAX_AUTO_SPLIT_LINES = 30;
 
-const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST'];
+const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE'];
 const DATA_SOURCES: readonly DataBlockSource[] = ['COLLECTION', 'QUERY', 'GEO'];
 const PROPERTY_TYPES: readonly SwitchableRenderableType[] = [
   'TEXT',

@@ -21,7 +21,7 @@ const VALUE_TYPES: readonly FilterableValueType[] = [
   'RELATION',
 ];
 
-const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST'];
+const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE'];
 
 type FilterInput = {
   columnId: string;

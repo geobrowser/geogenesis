@@ -8,6 +8,7 @@ import equal from 'fast-deep-equal';
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reactiveRelations } from '~/core/sync/store';
@@ -350,7 +351,7 @@ export function useView() {
   };
 }
 
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'PILL';
+export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'EXPLORE' | 'PILL';
 
 function selectViewRelation(relations: Relation[]): Relation | undefined {
   const views = relations.filter(r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted);
@@ -374,6 +375,7 @@ const getView = (viewRelation: Relation | undefined): DataBlockView => {
   if (ID.equals(targetId, SystemIds.LIST_VIEW)) return 'LIST';
   if (ID.equals(targetId, SystemIds.GALLERY_VIEW)) return 'GALLERY';
   if (ID.equals(targetId, SystemIds.BULLETED_LIST_VIEW)) return 'BULLETED_LIST';
+  if (ID.equals(targetId, DATA_BLOCK_VIEW_EXPLORE_ID)) return 'EXPLORE';
   if (ID.equals(targetId, RANKING_VIEW_PILL_ID)) return 'PILL';
 
   return 'TABLE';
@@ -414,6 +416,10 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
   BULLETED_LIST: {
     text: 'Add your first bullet item to get started',
+    image: '/list.png',
+  },
+  EXPLORE: {
+    text: 'Add your first story to get started',
     image: '/list.png',
   },
   PILL: {
