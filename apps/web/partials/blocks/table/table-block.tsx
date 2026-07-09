@@ -10,7 +10,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { ensureScoreShownColumn } from '~/core/blocks/data/ensure-score-shown-column';
+import { DEFAULT_SCORE_SORT_STATE, isSortedByScoreDescending, shouldApplyDefaultScoreSort } from '~/core/blocks/data/ensure-default-score-sort';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
+import { mergeBlockMenuProperties } from '~/core/blocks/data/merge-block-menu-properties';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
@@ -538,6 +543,7 @@ const ConfiguredTableBlock = ({
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const { entityId, relationId } = useDataBlockInstance();
+  const { storage } = useMutate();
   const blockEntityId = blockId ?? entityId;
   const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
@@ -690,16 +696,36 @@ const ConfiguredTableBlock = ({
     return [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(columnPropertyIdFromRelation)];
   }, [orderedShownColumnRelations]);
 
-  /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
-  const mergedBlockProperties = React.useMemo(() => {
-    const out = [...filterableProperties];
-    for (const p of properties) {
-      if (!out.some(x => ID.equals(x.id, p.id))) {
-        out.push(p);
-      }
-    }
-    return out;
-  }, [filterableProperties, properties]);
+  /** Schema + visible columns + always-available defaults (Description, Types, Score). */
+  const mergedBlockProperties = React.useMemo(
+    () => mergeBlockMenuProperties(filterableProperties, properties),
+    [filterableProperties, properties]
+  );
+
+  // List/gallery: persist Score when missing. Soft-deleted Score (user hid it) is not re-added.
+  const hasScoreShown = isScorePropertyShown(shownColumnIds);
+  const scoreBrowseDefault = isScoreVisibleOnBrowseView(shownColumnIds, relationId);
+  React.useEffect(() => {
+    if (!canEdit) return;
+    if (view !== 'LIST' && view !== 'GALLERY') return;
+    if (!relationId || hasScoreShown) return;
+    ensureScoreShownColumn({
+      storage,
+      blockRelationId: relationId,
+      spaceId,
+      relationsIncludingDeleted: store.getResolvedRelations(relationId, true),
+    });
+  }, [canEdit, view, relationId, hasScoreShown, storage, spaceId]);
+
+  React.useEffect(() => {
+    if (view !== 'LIST' && view !== 'GALLERY') return;
+    if (source.type === 'COLLECTION') return;
+    if (!shouldApplyDefaultScoreSort(sortState, scoreBrowseDefault)) return;
+    setSortState(DEFAULT_SCORE_SORT_STATE);
+  }, [view, source.type, sortState, scoreBrowseDefault, setSortState]);
+
+  const showScoreRankedList =
+    view === 'LIST' && scoreBrowseDefault && isSortedByScoreDescending(sortState) && source.type !== 'COLLECTION';
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
@@ -749,6 +775,7 @@ const ConfiguredTableBlock = ({
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
         placeholderFocusKey={placeholderFocusKey}
         collectionTypeFilters={collectionTypeFilters}
+        showScoreRank={showScoreRankedList}
       />
     );
   }

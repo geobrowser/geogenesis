@@ -6,7 +6,8 @@ import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
-import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -48,6 +49,8 @@ type Props = {
   autoFocus?: boolean;
   focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  /** 1-based rank when rendering a score-sorted browse list. */
+  listRank?: number;
 };
 
 export function TableBlockListItem({
@@ -64,10 +67,12 @@ export function TableBlockListItem({
   autoFocus = false,
   focusRequestKey,
   collectionTypeFilters,
+  listRank,
 }: Props) {
   const { storage } = useMutate();
+  const { relationId: blockRelationId } = useDataBlockInstance();
   const { shownColumnIds } = useView();
-  const showVoteButtons = isScorePropertyShown(shownColumnIds);
+  const showVoteButtons = isScoreVisibleOnBrowseView(shownColumnIds, blockRelationId);
   const nameCell = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -116,6 +121,55 @@ export function TableBlockListItem({
   const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
   if (image && imageUrl) {
     image = imageUrl;
+  }
+
+  const useRankedScoreListLayout = !isEditing && showVoteButtons && listRank != null && !isPlaceholder;
+
+  if (useRankedScoreListLayout) {
+    return (
+      <div className="flex w-full min-w-0 items-start gap-4 py-1">
+        <span className="w-5 shrink-0 pt-0.5 text-center text-button font-medium text-text tabular-nums">{listRank}</span>
+        {source.type !== 'COLLECTION' ? (
+          <Link
+            entityId={rowEntityId}
+            spaceId={currentSpaceId}
+            href={href}
+            className="min-w-0 flex-1 text-[19px] font-medium leading-[1.3] tracking-[-0.17px] text-text hover:underline"
+            title={name ?? undefined}
+          >
+            {name || rowEntityId}
+          </Link>
+        ) : (
+          <CollectionMetadata
+            view="LIST"
+            isEditing={false}
+            name={name}
+            currentSpaceId={currentSpaceId}
+            entityId={rowEntityId}
+            spaceId={nameCell?.space}
+            collectionId={nameCell?.collectionId}
+            relationId={relationId}
+            verified={verified}
+            onLinkEntry={onLinkEntry}
+            hideHoverActions
+            openedWithMainViewEditing={isEditing}
+          >
+            <Link
+              entityId={rowEntityId}
+              spaceId={currentSpaceId}
+              href={href}
+              className="min-w-0 flex-1 text-[19px] font-medium leading-[1.3] tracking-[-0.17px] text-text hover:underline"
+              title={name ?? undefined}
+            >
+              {name || rowEntityId}
+            </Link>
+          </CollectionMetadata>
+        )}
+        <div className="shrink-0 pt-0.5">
+          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        </div>
+      </div>
+    );
   }
 
   if (isEditing && source.type !== 'RELATIONS') {

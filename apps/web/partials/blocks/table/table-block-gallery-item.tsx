@@ -6,7 +6,8 @@ import cx from 'classnames';
 import NextImage from 'next/image';
 
 import { Source } from '~/core/blocks/data/source';
-import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
+import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -66,8 +67,9 @@ export function TableBlockGalleryItem({
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
+  const { relationId: blockRelationId } = useDataBlockInstance();
   const { shownColumnIds } = useView();
-  const showVoteButtons = isScorePropertyShown(shownColumnIds);
+  const showVoteButtons = isScoreVisibleOnBrowseView(shownColumnIds, blockRelationId);
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
