@@ -67,7 +67,7 @@ function WelcomeBanner() {
         type="button"
         onClick={handleDismiss}
         aria-label="Dismiss welcome banner"
-        className="absolute top-0 right-0 z-20 p-3 text-white opacity-60 transition duration-300 ease-in-out hover:opacity-100"
+        className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
       >
         <CloseSmall color="white" />
       </button>
