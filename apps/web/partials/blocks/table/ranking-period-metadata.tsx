@@ -16,7 +16,6 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
 import { FallbackImage } from '~/design-system/fallback-image';
-import { Stars } from '~/design-system/icons/stars';
 import { Time } from '~/design-system/icons/time';
 
 const VISIBLE_RANKED_BY_AVATARS = 3;
@@ -41,8 +40,8 @@ function preferAvatarsFirst<T>(items: T[], hasAvatar: (item: T) => boolean): T[]
   return [...withAvatar, ...withoutAvatar];
 }
 
-export function getRankingPeriodIcon(state: RankingPeriodState) {
-  return state === 'not-started' ? <Stars color="grey-04" /> : <Time color="grey-04" />;
+export function getRankingPeriodIcon(_state: RankingPeriodState) {
+  return <Time color="grey-04" />;
 }
 
 type RankingRankedByAvatar = {

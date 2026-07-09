@@ -32,6 +32,7 @@ interface DateInputProps {
   initialDate: string;
   onDateChange: (date: string) => void;
   label?: string;
+  timezone?: 'utc' | 'local';
 }
 
 const dateTextStyles = cva('', {
@@ -627,9 +628,10 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 /**
  * DateTimeInput - handles DATETIME dataType (default)
  * Shows all fields: date (year, month, day) and time (hour, minute, meridiem)
- * Serializes to full datetime ISO string
+ * Serializes to a UTC ISO string. By default typed values are UTC; pass
+ * `timezone="local"` to interpret wall-clock fields in the user's timezone.
  */
-export function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateTimeInput({ variant, initialDate, onDateChange, label, timezone = 'utc' }: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
@@ -637,7 +639,7 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label }: Dat
     hour: initialHour,
     minute: initialMinute,
     meridiem: initialMeridiem,
-  } = GeoDate.fromISOStringUTC(initialDate);
+  } = timezone === 'local' ? GeoDate.fromISOStringLocal(initialDate) : GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -749,13 +751,14 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label }: Dat
       timeFormState.isValid;
 
     if (isValid) {
-      const isoString = GeoDate.toISOStringUTC({
+      const parts = {
         day: newDay,
         month: newMonth,
         year: newYear,
         minute: newMinute,
         hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
-      });
+      };
+      const isoString = timezone === 'local' ? GeoDate.toISOStringLocal(parts) : GeoDate.toISOStringUTC(parts);
 
       onDateChange(isoString);
     }

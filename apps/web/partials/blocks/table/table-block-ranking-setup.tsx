@@ -61,6 +61,19 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
 
+  const startDateRef = React.useRef(startDate);
+  const endDateRef = React.useRef(endDate);
+
+  const onStartDateChange = React.useCallback((value: string) => {
+    startDateRef.current = value;
+    setStartDate(value);
+  }, []);
+
+  const onEndDateChange = React.useCallback((value: string) => {
+    endDateRef.current = value;
+    setEndDate(value);
+  }, []);
+
   const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
     propertyId: SystemIds.TYPES_PROPERTY,
     spaceId,
@@ -110,21 +123,22 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     }));
     const mergedFilters = [...withoutTypes, ...typeFilters];
     setSource(source, { filterStateOverride: mergedFilters });
+    const nextStartDate = startDateRef.current;
+    const nextEndDate = endDateRef.current;
     persistRankingBlockDateValues({
       storage,
       entityId,
       spaceId,
-      startDate,
-      endDate,
+      startDate: nextStartDate,
+      endDate: nextEndDate,
       existingValues,
     });
     setEditable(true);
-    onCompleteRankingSetup({ startDate, endDate });
+    onCompleteRankingSetup({ startDate: nextStartDate, endDate: nextEndDate });
   }, [
     blockEntityRelations,
     blockRelationRelations,
     blocksRelationEntityId,
-    endDate,
     entityId,
     existingValues,
     canEditSpace,
@@ -138,7 +152,6 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     setupTypePicks,
     source,
     spaceId,
-    startDate,
     storage,
   ]);
 
@@ -225,11 +238,16 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
           <div className="flex w-full flex-wrap items-start justify-center gap-8">
             <div className="flex flex-col items-center gap-2">
               <p className="text-button font-medium text-text">Start time</p>
-              <DateTimeInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
+              <DateTimeInput
+                variant="body"
+                initialDate={startDate}
+                onDateChange={onStartDateChange}
+                timezone="local"
+              />
             </div>
             <div className="flex flex-col items-center gap-2">
               <p className="text-button font-medium text-text">End time</p>
-              <DateTimeInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
+              <DateTimeInput variant="body" initialDate={endDate} onDateChange={onEndDateChange} timezone="local" />
             </div>
           </div>
 

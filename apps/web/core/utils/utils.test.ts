@@ -159,6 +159,27 @@ describe('GeoDate', () => {
     });
   });
 
+  it('round-trips local wall-clock time through UTC storage', () => {
+    const stored = GeoDate.toISOStringLocal({
+      day: '09',
+      month: '07',
+      year: '2026',
+      hour: '0',
+      minute: '0',
+    });
+    const parsed = GeoDate.fromISOStringLocal(stored);
+
+    expect(parsed).toEqual({
+      day: '9',
+      month: '7',
+      year: '2026',
+      hour: '12',
+      minute: '0',
+      meridiem: 'am',
+    });
+    expect(new Date(stored).getTime()).toBe(new Date(2026, 6, 9, 0, 0, 0, 0).getTime());
+  });
+
   it('validates leap year', () => {
     expect(GeoDate.isLeapYear(2000)).toBe(true);
     expect(GeoDate.isLeapYear(2001)).toBe(false);

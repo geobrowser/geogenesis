@@ -304,6 +304,55 @@ export class GeoDate {
     }
   }
 
+  static toISOStringLocal({
+    day,
+    month,
+    year,
+    hour,
+    minute,
+  }: {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+  }): string {
+    let paddedHour = hour;
+    let paddedMinute = minute;
+
+    if (Number(minute) < 10 && minute !== '') {
+      paddedMinute = minute.padStart(2, '0');
+    }
+
+    if (Number(hour) < 10 && hour !== '') {
+      paddedHour = hour.padStart(2, '0');
+    }
+
+    if (minute === '') {
+      paddedMinute = '00';
+    }
+
+    if (hour === '') {
+      paddedHour = '00';
+    }
+
+    try {
+      const localDate = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(paddedHour),
+        Number(paddedMinute),
+        0,
+        0
+      );
+      return localDate.toISOString();
+    } catch (e) {
+      console.error('failed parsing local datetime', e);
+      throw e;
+    }
+  }
+
   /**
    * Normalizes a stored date/time value to a full ISO string that `new Date()` can parse.
    * Handles RFC 3339 date-only ("2024-01-15"), time-only ("14:30:00Z"),
@@ -347,6 +396,37 @@ export class GeoDate {
     if (hour !== '' && Number(hour) > 12) {
       const hourAsNumber = Number(hour);
       hour = (hourAsNumber - 12).toString();
+    }
+
+    if (hour !== '' && Number(hour) === 0) {
+      hour = '12';
+      meridiem = 'am';
+    }
+
+    return { day, month, year, hour, minute, meridiem: meridiem as 'am' | 'pm' };
+  }
+
+  /** Parses a stored UTC ISO string into day/month/year/hour/minute in the user's local timezone. */
+  static fromISOStringLocal(dateString: string): {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+    meridiem: 'am' | 'pm';
+  } {
+    const normalized = GeoDate.toFullISOString(dateString);
+    const date = new Date(normalized);
+    const isDate = GeoDate.isValidDate(date);
+    const day = isDate ? date.getDate().toString() : '';
+    const month = isDate ? (date.getMonth() + 1).toString() : '';
+    const year = isDate ? date.getFullYear().toString() : '';
+    let hour = isDate ? date.getHours().toString() : '';
+    const minute = isDate ? date.getMinutes().toString() : '';
+    let meridiem = isDate && hour !== '' ? (Number(hour) < 12 ? 'am' : 'pm') : 'am';
+
+    if (hour !== '' && Number(hour) > 12) {
+      hour = (Number(hour) - 12).toString();
     }
 
     if (hour !== '' && Number(hour) === 0) {
