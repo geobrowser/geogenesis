@@ -4,7 +4,12 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import {
+  FILEBASE_GATEWAY_READ_PATH,
+  LIGHTHOUSE_GATEWAY_READ_PATH,
+  PINATA_GATEWAY_READ_PATH,
+  PLACEHOLDER_SPACE_IMAGE,
+} from '~/core/constants';
 import { ogImageToJpeg } from '~/core/og-jpeg';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -74,7 +79,7 @@ const geistFonts = [
 
 // Only these hosts (our IPFS gateways) may be fetched by Satori
 const ALLOWED_IMAGE_HOSTS = new Set(
-  [PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH]
+  [FILEBASE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH]
     .map(base => {
       try {
         return new URL(base).host;
