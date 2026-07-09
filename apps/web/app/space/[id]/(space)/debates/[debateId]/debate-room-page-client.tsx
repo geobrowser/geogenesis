@@ -748,19 +748,8 @@ function DebatePreScreen({
         {debate.claim.claim}
       </h1>
 
-      <div className="mt-10 grid w-full grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02">
-        <PreScreenParticipant
-          participant={localParticipant}
-          label="You"
-          ready={localReady}
-        />
-        <div className="relative grid h-[92px] w-12 place-items-center">
-          <span aria-hidden="true" className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-grey-02" />
-          <span className="relative grid h-8 w-8 place-items-center rounded-full border border-grey-02 bg-white text-metadataMedium text-text">
-            VS
-          </span>
-        </div>
-        <PreScreenParticipant
+      <div className="mt-10 w-full">
+        <PreScreenOpponent
           participant={remoteParticipant}
           label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
           ready={remoteReady}
@@ -785,7 +774,7 @@ function DebatePreScreen({
       )}
 
       <Button type="button" onClick={onReady} disabled={readyBusy || localReady} className="mt-4 w-full">
-        {localReady ? 'Ready' : readyBusy ? 'Saving...' : "I'm ready"}
+        {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
       </Button>
 
       <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
@@ -795,7 +784,7 @@ function DebatePreScreen({
   );
 }
 
-function PreScreenParticipant({
+function PreScreenOpponent({
   participant,
   label,
   ready,
@@ -805,26 +794,28 @@ function PreScreenParticipant({
   ready: boolean;
 }) {
   return (
-    <div className="grid min-w-0 justify-items-center gap-2">
-      <span className="h-7 w-7 overflow-hidden rounded-full">
-        <Avatar
-          avatarUrl={participant?.avatar_cid ?? null}
-          value={participant?.profile_space_id ?? label}
-          alt={label}
-          size={28}
-        />
-      </span>
-      <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
-        {label}
-      </Text>
+    <div className="flex min-h-[64px] w-full items-center justify-between gap-4 rounded-xl border border-grey-02 bg-white px-4 shadow-inner shadow-grey-02">
+      <div className="flex min-w-0 items-center gap-3">
+        <span className="h-7 w-7 shrink-0 overflow-hidden rounded-full">
+          <Avatar
+            avatarUrl={participant?.avatar_cid ?? null}
+            value={participant?.profile_space_id ?? label}
+            alt={label}
+            size={28}
+          />
+        </span>
+        <Text as="div" variant="body" color="text" className="min-w-0 truncate text-left">
+          {label}
+        </Text>
+      </div>
       <span
         className={cx(
-          'inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-body leading-none text-text',
+          'inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-body leading-none text-text',
           ready ? 'bg-green' : 'bg-bg'
         )}
       >
         {ready && <Check />}
-        {ready ? 'Ready' : 'Not ready'}
+        {ready ? 'Ready' : 'Waiting...'}
       </span>
     </div>
   );

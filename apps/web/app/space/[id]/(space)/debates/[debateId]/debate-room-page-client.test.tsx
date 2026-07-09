@@ -134,13 +134,35 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I'm ready" })).toBeInTheDocument();
-    expect(screen.getAllByText('Not ready')).toHaveLength(2);
+    expect(screen.getByText('Waiting...')).toBeInTheDocument();
+    expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
+    expect(screen.queryByText('VS')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Debate recording' })).not.toBeInTheDocument();
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalled();
     });
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('shows the opponent as ready while the local participant can still become ready', () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: true });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByText('Bri')).toBeInTheDocument();
+    expect(screen.getByText('Ready')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
+  });
+
+  it('disables the ready button while waiting for the opponent', () => {
+    mocks.debate = readyDebate({ localReady: true, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
+    expect(screen.getAllByText('Waiting...')).toHaveLength(2);
   });
 
   it('marks the local participant ready from the pre-screen', async () => {
