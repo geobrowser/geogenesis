@@ -31,9 +31,11 @@ export function ExploreWelcomeBanner() {
 function WelcomeBanner() {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
 
+  // Functional setter form so concurrent dismissals can't drop each other via a stale
+  // closure, and the guard keeps the id from being appended twice on a repeat click.
   const handleDismiss = useCallback(() => {
-    setDismissedNotices([...dismissedNotices, WELCOME_BANNER_ID]);
-  }, [dismissedNotices, setDismissedNotices]);
+    setDismissedNotices(prev => (prev.includes(WELCOME_BANNER_ID) ? prev : [...prev, WELCOME_BANNER_ID]));
+  }, [setDismissedNotices]);
 
   if (dismissedNotices.includes(WELCOME_BANNER_ID)) return null;
 
