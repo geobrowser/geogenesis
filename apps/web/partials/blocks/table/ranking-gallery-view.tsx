@@ -8,10 +8,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Button } from '~/design-system/button';
 import { GeoImage } from '~/design-system/geo-image';
-import { Eye } from '~/design-system/icons/eye';
-import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -176,9 +173,6 @@ export function RankingGalleryView({ state }: Props) {
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     periodState,
-    hasMySubmission,
-    isSaving,
-    openRankingCompose,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -204,23 +198,9 @@ export function RankingGalleryView({ state }: Props) {
     .filter(Boolean);
 
   const showLoadingCards = cards.length === 0 && entriesResolving && globalDisplayEntityIds.length > 0;
-  const actionLabel = hasMySubmission ? 'View' : 'Vote';
-  const actionIcon = hasMySubmission ? <Eye color="white" /> : <RankingChart color="white" />;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="flex justify-end">
-        <Button
-          variant="primary"
-          className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-          icon={actionIcon}
-          disabled={isSaving}
-          onClick={() => void openRankingCompose(hasMySubmission ? 'view' : 'edit')}
-        >
-          {actionLabel}
-        </Button>
-      </div>
-
       <RankingGalleryScrollRow itemCount={globalDisplayEntityIds.length}>
         {cards}
         {showLoadingCards

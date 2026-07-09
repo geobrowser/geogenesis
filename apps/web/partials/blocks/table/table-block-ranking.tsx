@@ -80,7 +80,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       stateView === 'EXPLORE'
   );
 
-  const showHeaderActions = isExploreView || isListView || isPillView;
+  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
