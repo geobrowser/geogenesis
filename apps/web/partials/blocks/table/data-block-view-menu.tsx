@@ -31,21 +31,15 @@ const VIEW_MENU_SURFACE =
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
   isLoading: boolean;
-  /** When true, include ranking-only views such as Pill. */
-  includeRankingViews?: boolean;
 };
 
-export function DataBlockViewMenu({
-  activeView,
-  isLoading,
-  includeRankingViews = false,
-}: TableBlockViewMenuProps) {
+export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: isMenuOpen,
-    preferredHeight: includeRankingViews ? 260 : 220,
+    preferredHeight: 260,
     gap: 8,
     contentElement,
   });
@@ -53,10 +47,7 @@ export function DataBlockViewMenu({
 
   const isEditing = useUserIsEditing(spaceId);
 
-  const views = React.useMemo(() => {
-    if (!includeRankingViews) return DATA_BLOCK_VIEWS;
-    return [...DATA_BLOCK_VIEWS, ...RANKING_ONLY_VIEWS];
-  }, [includeRankingViews]);
+  const views = DATA_BLOCK_VIEWS;
 
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);
@@ -118,9 +109,6 @@ const DATA_BLOCK_VIEWS: Array<DataBlockViewDetails> = [
   { name: 'List', id: SystemIds.LIST_VIEW, value: 'LIST' },
   { name: 'Bullet List', id: SystemIds.BULLETED_LIST_VIEW, value: 'BULLETED_LIST' },
   { name: 'Explore', id: DATA_BLOCK_VIEW_EXPLORE_ID, value: 'EXPLORE' },
-];
-
-const RANKING_ONLY_VIEWS: Array<DataBlockViewDetails> = [
   { name: 'Pill', id: RANKING_VIEW_PILL_ID, value: 'PILL' },
 ];
 

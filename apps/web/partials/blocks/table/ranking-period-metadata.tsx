@@ -158,7 +158,6 @@ export function RankingRankedBy({
 
     return (
       <span className={RANKED_BY_ROW_CLASS}>
-        <span className="shrink-0 text-grey-04">Ranked by</span>
         <RankingRankedByAvatarGroup
           avatars={visible.map(submission => ({
             key: submission.authorSpaceId,
@@ -174,7 +173,6 @@ export function RankingRankedBy({
   if (aggregatedSubmitterSpaceIds.length > 0 || aggregatedRankingCount > 0) {
     return (
       <span className={RANKED_BY_ROW_CLASS}>
-        <span className="shrink-0 text-grey-04">Ranked by</span>
         <RankingAggregatedSubmitterAvatars
           submitterSpaceIds={aggregatedSubmitterSpaceIds}
           totalCount={aggregatedRankingCount || aggregatedSubmitterSpaceIds.length}

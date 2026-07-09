@@ -80,7 +80,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       stateView === 'EXPLORE'
   );
 
-  const showHeaderActions = isExploreView || isListView;
+  const showHeaderActions = isExploreView || isListView || isPillView;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -129,7 +129,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
             aria-label="Open fullscreen ranking"
           />
 
-          <DataBlockViewMenu activeView={stateView} isLoading={false} includeRankingViews />
+          <DataBlockViewMenu activeView={stateView} isLoading={false} />
 
           <TableBlockContextMenu
             sourceType={source.type}
