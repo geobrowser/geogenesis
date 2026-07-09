@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
@@ -346,20 +346,6 @@ type StepEnterProfileProps = {
   address: string;
 };
 
-const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
-  default: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE],
-  company: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.COMPANY_TYPE],
-  nonprofit: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.NONPROFIT_TYPE],
-  personal: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE],
-  'academic-field': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.ACADEMIC_FIELD_TYPE],
-  region: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.REGION_TYPE],
-  industry: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INDUSTRY_TYPE],
-  protocol: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PROTOCOL_TYPE],
-  dao: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.DAO_TYPE],
-  'government-org': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.GOVERNMENT_ORG_TYPE],
-  interest: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INTEREST_TYPE],
-};
-
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const [name, setName] = useAtom(nameAtom);
   const [topicId, setTopicId] = useAtom(topicIdAtom);
@@ -367,7 +353,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
 
-  const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -436,7 +421,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         <div className="relative z-100 w-full">
           <div className={cx(topicId && 'invisible')}>
             <FindEntity
-              allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
                 setTopicId(entity.id);
