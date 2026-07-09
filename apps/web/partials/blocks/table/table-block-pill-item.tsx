@@ -72,7 +72,7 @@ export function TableBlockPillItem({
 
   return (
     <Link
-      href={NavUtils.toEntity(entitySpaceId, rowEntityId)}.
+      href={NavUtils.toEntity(entitySpaceId, rowEntityId)}
       className="inline-flex h-8 max-w-full shrink-0 items-center gap-2 overflow-hidden rounded-full border border-grey-02 bg-white p-2 text-[16px] leading-[13px] font-normal tracking-[-0.35px] text-text transition-colors hover:border-text"
       title={name}
     >
