@@ -8,9 +8,10 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
+import { ID } from '~/core/id';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { ID } from '~/core/id';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
@@ -20,6 +21,7 @@ import { Fullscreen } from '~/design-system/icons/full-screen';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingExploreActions, RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingListView } from './ranking-list-view';
 import { RankingPillView } from './ranking-pill-view';
@@ -72,6 +74,10 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const isPillView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
   );
+  const isExploreView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
+      stateView === 'EXPLORE'
+  );
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -85,11 +91,14 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       className={cx('w-full min-w-0', isGalleryView ? 'overflow-x-visible' : 'overflow-x-hidden')}
       onMouseDown={e => e.stopPropagation()}
     >
-      <div className="mb-2 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
+      <div
+        className={cx('mb-2 flex justify-between gap-4', isExploreView ? 'items-center' : 'items-start')}
+        onMouseDown={e => e.stopPropagation()}
+      >
         <div className="min-w-0 flex-1">
           <h4 className="text-mediumTitle text-text">{displayName}</h4>
 
-          {periodLabel || hasRankedByOthers ? (
+          {!isExploreView && (periodLabel || hasRankedByOthers) ? (
             <RankingPeriodMetadata
               periodState={periodState}
               periodLabel={periodLabel}
@@ -102,6 +111,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
+          {isExploreView ? <RankingExploreActions state={state} /> : null}
+
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}
             icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
@@ -211,6 +222,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         <RankingListView state={state} />
       ) : isPillView ? (
         <RankingPillView state={state} />
+      ) : isExploreView ? (
+        <RankingExploreView state={state} />
       ) : (
         <RankingBlockBody state={state} presentation="embedded" />
       )}

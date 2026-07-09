@@ -820,6 +820,15 @@ export function useRankingBlockState({
     aggregatedRankingCount === 0 &&
     myDisplayEntityIds.length === 0;
 
+  const embeddedBrowseDisplayEntityIds = globalRankingListEntityIds;
+  const embeddedBrowseEntryByEntityId = globalRankingEntryByEntityId;
+  const embeddedBrowseTotalCount = visibleGlobalDisplayEntityIds.length;
+  const embeddedBrowseShowPagination = showEmbeddedGlobalPagination;
+  const embeddedBrowsePageNumber = embeddedGlobalPageNumber;
+  const embeddedBrowseHasPreviousPage = hasEmbeddedGlobalPreviousPage;
+  const embeddedBrowseHasNextPage = hasEmbeddedGlobalNextPage;
+  const embeddedBrowseSetPage = setEmbeddedGlobalPage;
+
   return {
     spaceId,
     rankingStartDate,
@@ -897,6 +906,15 @@ export function useRankingBlockState({
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
+    embeddedBrowseDisplayEntityIds,
+    embeddedBrowseEntryByEntityId,
+    embeddedBrowseTotalCount,
+    embeddedBrowseShowPagination,
+    embeddedBrowsePageNumber,
+    embeddedBrowseHasPreviousPage,
+    embeddedBrowseHasNextPage,
+    embeddedBrowseSetPage,
     hasMyRankingData,
     hasGlobalRankingData,
     stateView,
