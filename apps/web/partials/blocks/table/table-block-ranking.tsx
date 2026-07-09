@@ -21,8 +21,9 @@ import { Fullscreen } from '~/design-system/icons/full-screen';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
-import { RankingExploreActions, RankingExploreView } from './ranking-explore-view';
+import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
+import { RankingHeaderActions } from './ranking-header-actions';
 import { RankingListView } from './ranking-list-view';
 import { RankingPillView } from './ranking-pill-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
@@ -79,6 +80,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       stateView === 'EXPLORE'
   );
 
+  const showHeaderActions = isExploreView || isListView;
+
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
   const filterGroupsForToolbarPills = React.useMemo(
@@ -92,13 +95,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
       onMouseDown={e => e.stopPropagation()}
     >
       <div
-        className={cx('mb-2 flex justify-between gap-4', isExploreView ? 'items-center' : 'items-start')}
+        className={cx('mb-2 flex justify-between gap-4', showHeaderActions ? 'items-center' : 'items-start')}
         onMouseDown={e => e.stopPropagation()}
       >
         <div className="min-w-0 flex-1">
           <h4 className="text-mediumTitle text-text">{displayName}</h4>
 
-          {!isExploreView && (periodLabel || hasRankedByOthers) ? (
+          {!showHeaderActions && (periodLabel || hasRankedByOthers) ? (
             <RankingPeriodMetadata
               periodState={periodState}
               periodLabel={periodLabel}
@@ -111,7 +114,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
-          {isExploreView ? <RankingExploreActions state={state} /> : null}
+          {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
 
           <IconButton
             onClick={() => setIsFilterOpen(open => !open)}

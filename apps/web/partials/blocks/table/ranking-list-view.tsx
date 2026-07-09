@@ -8,24 +8,23 @@ import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Button } from '~/design-system/button';
-import { Eye } from '~/design-system/icons/eye';
-import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
-import { getRankingPeriodIcon, RankingPeriodMetadata } from './ranking-period-metadata';
+import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
-const ROW_NAME_CLASS = 'block text-[19px] font-medium leading-[1.3] tracking-[-0.17px] text-text';
+const ROW_NAME_CLASS = 'block text-[16px] font-medium leading-[1.3] tracking-[-0.35px] text-[#2A2B2E]';
+const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3 py-1';
+const ROW_RANK_CLASS = 'w-5 shrink-0 text-center text-button font-medium text-grey-04 tabular-nums';
 
 function RankingListRowSkeleton({ rank }: { rank: number }) {
   return (
-    <div className="flex w-full min-w-0 items-start gap-4 py-1">
-      <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+    <div className={ROW_CLASS}>
+      <span className={ROW_RANK_CLASS}>{rank}</span>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <Skeleton className="h-5 w-full max-w-md rounded" />
         <Skeleton className="h-5 w-2/3 rounded" />
@@ -47,8 +46,8 @@ function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: List
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
-    <div className="flex w-full min-w-0 items-start gap-4 py-1">
-      <span className="w-5 shrink-0 pt-0.5 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+    <div className={ROW_CLASS}>
+      <span className={cx(ROW_RANK_CLASS, 'pt-0.5')}>{rank}</span>
       <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
         {name}
       </Link>
@@ -79,10 +78,6 @@ export function RankingListView({ state }: Props) {
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     periodState,
-    periodLabel,
-    hasMySubmission,
-    isSaving,
-    openRankingCompose,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -91,8 +86,6 @@ export function RankingListView({ state }: Props) {
   } = state;
 
   const showVoteButtons = isScorePropertyShown(shownColumnIds);
-  const actionLabel = hasMySubmission ? 'View' : 'Vote';
-  const actionIcon = hasMySubmission ? <Eye color="white" /> : <RankingChart color="white" />;
 
   const rows = globalDisplayEntityIds
     .map(entityId => {
@@ -121,24 +114,6 @@ export function RankingListView({ state }: Props) {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="flex items-center justify-end gap-4">
-        {hasMySubmission && periodLabel ? (
-          <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-metadata text-grey-04">
-            {getRankingPeriodIcon(periodState)}
-            {periodLabel}
-          </span>
-        ) : null}
-        <Button
-          variant="primary"
-          className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-          icon={actionIcon}
-          disabled={isSaving}
-          onClick={() => void openRankingCompose(hasMySubmission ? 'view' : 'edit')}
-        >
-          {actionLabel}
-        </Button>
-      </div>
-
       <div className="flex flex-col gap-4">
         {rows}
         {showLoadingRows
