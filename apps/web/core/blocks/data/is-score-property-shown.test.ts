@@ -1,3 +1,5 @@
+import { describe, expect, it } from 'vitest';
+
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 
 import { isScorePropertyShown } from './is-score-property-shown';
