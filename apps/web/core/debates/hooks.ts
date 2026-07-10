@@ -123,7 +123,7 @@ export function useDebatePresenceHeartbeat(enabled = true) {
     queryKey: ['debates', 'presence-heartbeat'],
     queryFn: async () => {
       const activity = await heartbeatDebatePresence(getPrivyIdentityToken);
-      queryClient.setQueryData(debateQueryKeys.activity, activity);
+      await queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity });
       return activity;
     },
     enabled: enabled && authenticated,
