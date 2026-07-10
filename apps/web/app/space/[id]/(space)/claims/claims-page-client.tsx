@@ -7,15 +7,10 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
+import { buildClaimDraft } from '~/core/claims/claim-draft';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
-import { DebateMatchPrompt } from '~/core/debates/match-prompt';
-import {
-  CLAIM_TYPE_ID,
-  TOPICS_PROPERTY_ID,
-  TOPIC_TYPE_ID,
-} from '~/core/claims/ontology';
-import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { useDiff } from '~/core/state/diff-store';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -75,10 +70,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     placeholderData: keepPreviousData,
     includeUnpublishedLocal: true,
   });
-  const publishedClaimIds = React.useMemo(
-    () => claims.filter(isClaimPublished).map(claim => claim.id),
-    [claims]
-  );
+  const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
   const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, debatesEnabled);
   const debateClaimsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
@@ -88,17 +80,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     return map;
   }, [debateClaimsQuery.data?.claims]);
   const activeMatches = React.useMemo(
-    () =>
-      (debateClaimsQuery.data?.claims ?? []).flatMap(claim =>
-        claim.active_match ? [claim.active_match] : []
-      ),
-    [debateClaimsQuery.data?.claims]
-  );
-  const activeDebates = React.useMemo(
-    () =>
-      (debateClaimsQuery.data?.claims ?? []).flatMap(claim =>
-        claim.active_debate ? [claim.active_debate] : []
-      ),
+    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_match ? [claim.active_match] : [])),
     [debateClaimsQuery.data?.claims]
   );
   return (
@@ -127,7 +109,6 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
           debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
         />
       </div>
-      <DebateMatchPrompt spaceId={spaceId} matches={activeMatches} debates={activeDebates} />
     </div>
   );
 }
@@ -349,11 +330,7 @@ function ClaimListItem({
       />
 
       {debatesEnabled && (
-        <ClaimDebateStatus
-          debateClaim={debateClaim}
-          mutationError={mutationError}
-          published={published}
-        />
+        <ClaimDebateStatus debateClaim={debateClaim} mutationError={mutationError} published={published} />
       )}
 
       {topics.length > 0 && (

@@ -4,6 +4,8 @@ export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'local';
+export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
+export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
 
 export type DebateWaiter = {
   id: string;
@@ -80,6 +82,7 @@ export type DebateRecording = {
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 export type DebateMediaArtifactKind =
   | 'final_video'
+  | 'preview_image'
   | 'transcript_json'
   | 'subtitle_srt'
   | 'subtitle_vtt'
@@ -185,9 +188,87 @@ export type Debate = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  rematch_session_id?: string | null;
   participants: DebateParticipant[];
   recordings: DebateRecording[];
   recording_error: string | null;
+};
+
+export type DebateActivity = {
+  online: boolean;
+  cooldown_until: string | null;
+  match: DebateMatch | null;
+  debate: Debate | null;
+  rematch: DebateRematchSession | null;
+};
+
+export type DebateRematchParticipant = DebateParticipantSummary & {
+  participant_slot: ParticipantSlot;
+  consented_at: string | null;
+};
+
+export type DebateRematchRequest = {
+  id: string;
+  status: DebateRematchRequestStatus;
+  claim: DebateClaimSummary;
+  requester_user_id: string;
+  recipient_user_id: string;
+  requester_position: boolean;
+  recipient_position: boolean;
+  turn_format_id: string;
+  created_at: string;
+  expires_at: string;
+};
+
+export type DebateRematchSession = {
+  id: string;
+  source_debate_id: string;
+  source_space_id: string;
+  status: DebateRematchStatus;
+  participants: DebateRematchParticipant[];
+  decision_expires_at: string;
+  browsing_expires_at: string | null;
+  request: DebateRematchRequest | null;
+  converted_debate_id: string | null;
+  recently_rejected_claim_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type DebateRematchClaimPosition = {
+  user_id: string;
+  position: boolean | null;
+};
+
+export type DebateRematchClaim = {
+  claim: DebateClaimSummary;
+  participants: DebateRematchClaimPosition[];
+  shared_preference: boolean;
+  recently_rejected: boolean;
+  previously_debated: boolean;
+};
+
+export type DebateRematchClaimsResponse = {
+  claims: DebateRematchClaim[];
+  excluded_claim_ids: string[];
+};
+
+export type DebateRematchActionResponse = {
+  session: DebateRematchSession;
+  request: DebateRematchRequest | null;
+  debate: Debate | null;
+};
+
+export type DebateSharePrompt = {
+  id: string;
+  debate_id: string;
+  source_space_id: string;
+  claim: string;
+  created_at: string;
+};
+
+export type DebateSharePromptsResponse = {
+  prompts: DebateSharePrompt[];
 };
 
 export type DebateClaim = {
@@ -298,6 +379,28 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
+export async function heartbeatDebatePresence(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateActivity>('/me/debate-presence/heartbeat', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateActivity(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateActivity>('/me/debate-activity', {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function listDebateSharePrompts(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateSharePromptsResponse>('/me/debate-share-prompts', {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
 export async function listDebateClaims(
   spaceId: string,
   claimIds: string[],
@@ -318,6 +421,20 @@ export async function joinDebateQueue(
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function updateDebatePreference(
+  spaceId: string,
+  claimId: string,
+  request: JoinDebateQueueRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-preference`, {
+    method: 'PUT',
     body: request,
     auth: true,
     getPrivyIdentityToken,
@@ -386,6 +503,98 @@ export async function markDebateReady(debateId: string, getPrivyIdentityToken: G
 export async function abortDebate(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}/abort`, {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function consentToDebateRematch(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debates/${debateId}/rematch/consent`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateRematch(sessionId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debate-rematches/${sessionId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function leaveDebateRematch(sessionId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debate-rematches/${sessionId}/leave`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function listDebateRematchClaims(
+  sessionId: string,
+  claimIds: string[],
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
+  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims${query}`, {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function updateDebateRematchPosition(
+  sessionId: string,
+  claimId: string,
+  position: boolean,
+  sourceSpaceId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims/${claimId}/position`, {
+    method: 'PUT',
+    body: { position, source_space_id: sourceSpaceId },
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function createDebateRematchRequest(
+  sessionId: string,
+  request: { source_space_id: string; claim_id: string; format_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematches/${sessionId}/requests`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function acceptDebateRematchRequest(requestId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematch-requests/${requestId}/accept`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function rejectDebateRematchRequest(requestId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematch-requests/${requestId}/reject`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function handleDebateSharePrompt(
+  promptId: string,
+  action: 'shared' | 'dismissed',
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateSharePrompt>(`/debate-share-prompts/${promptId}/handled`, {
+    method: 'POST',
+    body: { action },
     auth: true,
     getPrivyIdentityToken,
   });

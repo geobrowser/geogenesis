@@ -9,8 +9,9 @@ import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 import { type Debate, type DebateMatch, type DebateMatchParticipant, getCurrentGeoChatUserId } from './api';
+import { DebateFormatDetails } from './format-details';
 import { DebateFormatSelector } from './format-selector';
-import { type DebateFormat, type DebateFormatId, debateFormatById, defaultDebateFormatId } from './formats';
+import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from './formats';
 import { useAcceptDebateMatch, useDeclineDebateMatch } from './hooks';
 
 type DebateMatchPromptProps = {
@@ -57,8 +58,9 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   React.useEffect(() => {
     if (!currentUserId) return;
 
-    const debateIdFromMatch = matches.find(match => match.debate_id && participantForUser(match, currentUserId))
-      ?.debate_id;
+    const debateIdFromMatch = matches.find(
+      match => match.debate_id && participantForUser(match, currentUserId)
+    )?.debate_id;
     if (debateIdFromMatch) {
       navigateToDebate(debateIdFromMatch);
       return;
@@ -226,19 +228,22 @@ function MatchDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="debate-match-title"
-        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 grid max-h-[calc(100dvh-2rem)] w-[min(668px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[1.25rem] bg-bg px-8 py-6 text-text shadow-card max-sm:px-4 max-sm:py-5"
+        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(668px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[1.25rem] bg-bg px-8 py-6 text-text shadow-card"
       >
         <header className="min-w-0 text-center">
           <Text as="div" variant="body" color="grey-04">
             Debate request
           </Text>
-          <h2 id="debate-match-title" className="mx-auto mt-2 max-w-[500px] text-[1.75rem] leading-[1.12] font-semibold">
+          <h2
+            id="debate-match-title"
+            className="mx-auto mt-2 max-w-[500px] text-[1.75rem] leading-[1.12] font-semibold"
+          >
             {waiting ? 'Waiting for the other person' : match.claim.claim}
           </h2>
         </header>
 
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02 max-sm:px-3">
+          <div className="max-sm:px-3 relative grid grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02">
             <ParticipantSummary
               participant={firstParticipant}
               currentUserId={currentUserId}
@@ -261,7 +266,7 @@ function MatchDialog({
             />
           </div>
 
-          <section className="mt-4 rounded-xl border border-grey-02 bg-white p-5 max-sm:p-3">
+          <section className="max-sm:p-3 mt-4 rounded-xl border border-grey-02 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <Text as="h3" variant="body" color="grey-04">
                 Debate format
@@ -278,20 +283,12 @@ function MatchDialog({
                 />
               )}
             </div>
-            <div className="mt-4 grid gap-1.5">
-              {selectedFormat.turnDurationsMs.map((durationMs, index) => {
-                const participant = participants[index % participants.length] ?? firstParticipant;
-                return (
-                  <DebateFormatTurnRow
-                    key={`${selectedFormat.id}-${index}`}
-                    participant={participant}
-                    currentUserId={currentUserId}
-                    durationMs={durationMs}
-                    turnIndex={index}
-                    format={selectedFormat}
-                  />
-                );
-              })}
+            <div className="mt-4">
+              <DebateFormatDetails
+                formatId={selectedFormat.id}
+                participants={participants}
+                currentUserId={currentUserId}
+              />
             </div>
           </section>
 
@@ -404,43 +401,6 @@ function ParticipantSummary({
   );
 }
 
-function DebateFormatTurnRow({
-  participant,
-  currentUserId,
-  durationMs,
-  turnIndex,
-  format,
-}: {
-  participant: DebateMatchParticipant;
-  currentUserId: string;
-  durationMs: number;
-  turnIndex: number;
-  format: DebateFormat;
-}) {
-  const alternate = turnIndex % 2 === 1;
-
-  return (
-    <div className={alternate ? 'rounded-lg bg-bg px-2 py-2' : 'px-2 py-2'}>
-      <div className="grid grid-cols-[3rem_1.75rem_minmax(0,1fr)] items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-full border border-text text-button text-text">
-          {formatTurnDuration(durationMs)}
-        </span>
-        <span className="h-6 w-6 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={participant.avatar_cid}
-            value={participant.profile_space_id}
-            alt={speakerLabel(participant)}
-            size={24}
-          />
-        </span>
-        <Text as="div" variant="bodySemibold" color="text" className="min-w-0 truncate">
-          {turnLabel(participant, currentUserId, turnIndex, format)}
-        </Text>
-      </div>
-    </div>
-  );
-}
-
 function MinimizedMatchPrompt({
   match,
   currentUserId,
@@ -487,31 +447,6 @@ function orderedParticipants(match: DebateMatch) {
 
 function speakerLabel(participant: { display_name: string | null; profile_space_id: string }) {
   return participant.display_name || participant.profile_space_id;
-}
-
-function turnLabel(
-  participant: DebateMatchParticipant,
-  currentUserId: string,
-  turnIndex: number,
-  format: DebateFormat
-) {
-  const name = participant.user_id === currentUserId ? 'You' : speakerLabel(participant);
-  const roundIndex = Math.floor(turnIndex / 2);
-  if (roundIndex === 0) {
-    return `${name} ${name === 'You' ? 'make' : 'makes'} an argument`;
-  }
-  if (roundIndex === Math.floor((format.turnDurationsMs.length - 1) / 2)) {
-    return `${name} ${name === 'You' ? 'rebut' : 'rebuts'}`;
-  }
-  return `${name} ${name === 'You' ? 'respond' : 'responds'}`;
-}
-
-function formatTurnDuration(durationMs: number) {
-  const seconds = Math.max(0, Math.round(durationMs / 1_000));
-  if (seconds > 0 && seconds % 60 === 0) {
-    return `${seconds / 60}m`;
-  }
-  return `${seconds}s`;
 }
 
 function formatIdForMatch(match: DebateMatch): DebateFormatId {
