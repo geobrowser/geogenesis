@@ -129,6 +129,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -238,6 +239,47 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
     });
+  });
+
+  it('shows the recording screen as stacked local and remote video tiles', async () => {
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disable audio' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a large local countdown before the participant is up', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:21.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText("You're up in")).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
   });
 
   it('shows a continuation prompt after a completed debate and can leave unselected', async () => {

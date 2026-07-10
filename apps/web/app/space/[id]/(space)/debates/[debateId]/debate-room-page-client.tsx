@@ -19,7 +19,7 @@ import {
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
-import { Button, SquareButton } from '~/design-system/button';
+import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
@@ -51,6 +51,7 @@ type RoomLike = {
 
 type DebateCountdown = {
   label: string;
+  remainingSeconds: number;
   progress: number;
   activeSlot: ParticipantSlot | null;
 };
@@ -58,6 +59,10 @@ type DebateCountdown = {
 type DebateRecordingWindow = {
   startAtMs: number;
   endAtMs: number;
+};
+
+const recordingOverlayTextShadow = {
+  textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
 };
 
 const localRecordingUploadMaxAttempts = 3;
@@ -1039,149 +1044,135 @@ function DebateRecordingModal({
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
-  const localParticipant = localSlot
-    ? (debate.participants.find(participant => participant.participant_slot === localSlot) ?? null)
-    : null;
   const remoteParticipant = localSlot
     ? (debate.participants.find(participant => participant.participant_slot !== localSlot) ?? null)
     : null;
+  const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
 
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label="Debate recording"
-      className="fixed inset-0 z-[1000] flex h-dvh flex-col overflow-hidden bg-bg text-text"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
     >
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-grey-02 bg-white px-4 py-3 shadow-light">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <Text as="h2" variant="bodySemibold" color="text">
-              {statusLabel(debate.status)}
-            </Text>
-            <span className="rounded-full border border-grey-02 bg-bg px-2 py-0.5 text-[0.75rem] leading-4 text-grey-04">
-              {roomStateLabel(roomState)}
-            </span>
-          </div>
-          <Text as="p" variant="metadata" color="grey-04" className="mt-1 line-clamp-2 max-w-[920px]">
-            {debate.claim.claim}
-          </Text>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <SquareButton
-            type="button"
-            aria-label={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-            title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
-            className="h-[34px] w-[34px] shrink-0"
-            icon={<MicrophoneIcon muted={audioMuted} />}
-            isActive={audioMuted}
-            onClick={onToggleAudioMuted}
-            disabled={roomState === 'uploading'}
-          />
-          <SquareButton
-            type="button"
-            aria-label={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
-            title={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
-            className="h-[34px] w-[34px] shrink-0"
-            icon={<SpeakerIcon disabled={!remoteAudioEnabled} />}
-            isActive={!remoteAudioEnabled}
-            onClick={onToggleRemoteAudioEnabled}
-            disabled={roomState === 'uploading'}
-          />
-          <SquareButton
-            type="button"
-            aria-label={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-            title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
-            className="h-[34px] w-[34px] shrink-0"
-            icon={<CameraIcon disabled={!videoEnabled} />}
-            isActive={!videoEnabled}
-            onClick={onToggleVideoEnabled}
-            disabled={roomState === 'uploading'}
-          />
-          <Button
-            type="button"
-            variant={['complete', 'cancelled'].includes(debate.status) ? 'secondary' : 'error'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            {roomState === 'uploading' ? 'Uploading...' : 'Leave debate'}
-          </Button>
-        </div>
-      </header>
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-5 py-8">
+        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
+          {debate.claim.claim}
+        </h1>
 
-      <main className="flex min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4">
-        <div className="grid min-h-0 flex-1 grid-rows-[minmax(180px,1fr)_auto_minmax(180px,1fr)] gap-3">
+        <div className="grid w-full gap-2">
           <DebateVideoTile
-            title="You"
-            positionLabel={localParticipant?.position_label ?? 'Joining'}
             active={countdown.activeSlot !== null && countdown.activeSlot === localSlot}
             overlayText={videoEnabled ? null : 'Camera off'}
+            upcomingSeconds={localUpcomingSeconds}
           >
-            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-contain" playsInline muted autoPlay />
+            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
           </DebateVideoTile>
 
-          <DebateInstructionBand debate={debate} countdown={countdown} roomState={roomState} />
-
           <DebateVideoTile
-            title="Other speaker"
-            positionLabel={remoteParticipant?.position_label ?? 'Connecting'}
             active={countdown.activeSlot !== null && countdown.activeSlot === remoteParticipant?.participant_slot}
             overlayText={remoteVideoReady ? null : 'Waiting for video'}
+            muted={!remoteAudioEnabled}
           >
             <div
               ref={remoteMediaRef}
-              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-contain"
+              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
             />
           </DebateVideoTile>
         </div>
 
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <RecordingCircleButton
+            ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+            title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
+            onClick={onToggleAudioMuted}
+            disabled={roomState === 'uploading'}
+            active={audioMuted}
+          >
+            <MicrophoneIcon muted={audioMuted} />
+          </RecordingCircleButton>
+          <RecordingCircleButton
+            ariaLabel={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
+            title={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
+            onClick={onToggleRemoteAudioEnabled}
+            disabled={roomState === 'uploading'}
+            active={!remoteAudioEnabled}
+          >
+            <SpeakerIcon disabled={!remoteAudioEnabled} />
+          </RecordingCircleButton>
+          <RecordingCircleButton
+            ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+            title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+            onClick={onToggleVideoEnabled}
+            disabled={roomState === 'uploading'}
+            active={!videoEnabled}
+          >
+            <CameraIcon disabled={!videoEnabled} />
+          </RecordingCircleButton>
+        </div>
+
         {roomError && (
-          <div className="shrink-0 rounded-lg border border-red-01 bg-white px-4 py-3">
+          <div className="mt-3 w-full rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
           </div>
         )}
+
+        <div className="mt-5 flex w-full justify-end">
+          <RecordingCircleButton
+            ariaLabel={roomState === 'uploading' ? 'Uploading local recording' : 'Leave debate'}
+            title={roomState === 'uploading' ? 'Uploading local recording' : 'Leave debate'}
+            onClick={onLeave}
+            disabled={leaveDisabled}
+          >
+            <LeaveIcon />
+          </RecordingCircleButton>
+        </div>
       </main>
     </div>
   );
 }
 
 function DebateVideoTile({
-  title,
-  positionLabel,
   active,
   overlayText,
+  upcomingSeconds,
+  muted = false,
   children,
 }: {
-  title: string;
-  positionLabel: string;
   active: boolean;
   overlayText?: string | null;
+  upcomingSeconds?: number | null;
+  muted?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section
       className={cx(
-        'relative min-h-0 overflow-hidden rounded-lg border bg-white shadow-card',
-        active ? 'border-text' : 'border-grey-02'
+        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
+        muted && 'grayscale'
       )}
     >
-      <div className="absolute top-3 left-3 z-20 flex max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2">
-        <span className="rounded-full border border-grey-02 bg-white/90 px-3 py-1 text-[0.8125rem] leading-4 font-medium text-text shadow-light backdrop-blur">
-          {title}
-        </span>
-        <span className="min-w-0 truncate rounded-full bg-bg px-3 py-1 text-[0.8125rem] leading-4 text-grey-04 shadow-light">
-          {positionLabel}
-        </span>
-      </div>
-
       <div className="absolute inset-0 z-0">{children}</div>
+      {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
+
+      {upcomingSeconds !== null && upcomingSeconds !== undefined && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center text-center">
+          <div className="text-[1.375rem] leading-none font-semibold text-white" style={recordingOverlayTextShadow}>
+            You&apos;re up in
+          </div>
+          <div className="mt-1 text-[5.25rem] leading-[0.85] font-semibold text-white" style={recordingOverlayTextShadow}>
+            {upcomingSeconds}
+          </div>
+        </div>
+      )}
 
       {overlayText && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <Text
-            color="text"
+            color="white"
             variant="bodySemibold"
-            className="rounded-full border border-grey-02 bg-white px-4 py-2 shadow-light"
+            className="rounded-full border border-white/40 bg-black/70 px-4 py-2 shadow-light"
           >
             {overlayText}
           </Text>
@@ -1191,59 +1182,48 @@ function DebateVideoTile({
   );
 }
 
-function DebateInstructionBand({
-  debate,
-  countdown,
-  roomState,
+function RecordingCircleButton({
+  ariaLabel,
+  title,
+  onClick,
+  disabled,
+  active = false,
+  className,
+  children,
 }: {
-  debate: Debate;
-  countdown: DebateCountdown;
-  roomState: 'connecting' | 'connected' | 'uploading';
+  ariaLabel: string;
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  active?: boolean;
+  className?: string;
+  children: React.ReactNode;
 }) {
-  const isComplete = debate.status === 'complete';
-  const remainingRatio = isComplete ? 0 : Math.max(0, Math.min(1, 1 - countdown.progress));
-  const remainingDegrees = Math.round(remainingRatio * 360);
-  const statusText =
-    isComplete && roomState === 'uploading' ? 'Debate complete and uploading the video.' : speakerStatus(debate);
-  const helperText = isComplete
-    ? 'Keep this window open until the upload finishes.'
-    : debate.status === 'thanking'
-      ? 'Both speakers can talk during the wrap-up.'
-      : countdown.activeSlot
-        ? `${labelForSlot(debate, countdown.activeSlot)} has the floor.`
-        : 'Get ready.';
-
   return (
-    <div
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      title={title}
+      onClick={onClick}
+      disabled={disabled}
       className={cx(
-        'flex shrink-0 gap-4 rounded-lg border border-grey-02 bg-white px-4 py-3 shadow-light',
-        isComplete
-          ? 'flex-col items-center justify-center text-center'
-          : 'flex-wrap items-center justify-between text-left'
+        'grid size-10 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition disabled:opacity-50',
+        active && 'bg-bg',
+        className
       )}
     >
-      <div className={cx('min-w-0', isComplete && 'flex flex-col items-center')}>
-        <Text as="p" variant="bodySemibold" color="text">
-          {statusText}
-        </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-          {helperText}
-        </Text>
-      </div>
-      <div
-        className="relative size-20 shrink-0 rounded-full transition-[background] duration-500"
-        style={{
-          background: `conic-gradient(var(--color-text) ${remainingDegrees}deg, var(--color-grey-02) 0deg)`,
-        }}
-        aria-label={`Time remaining ${countdown.label}`}
-      >
-        <div className="absolute inset-1 flex items-center justify-center rounded-full bg-white shadow-inner shadow-grey-02">
-          <Text as="div" variant="metadataMedium" color="text">
-            {countdown.label}
-          </Text>
-        </div>
-      </div>
-    </div>
+      {children}
+    </button>
+  );
+}
+
+function LeaveIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M9 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
+      <path d="M13 12H3" />
+      <path d="M6 9l-3 3 3 3" />
+    </svg>
   );
 }
 
@@ -1316,6 +1296,33 @@ function shouldEnableLocalAudio(
   return debate.status === 'in_progress' && activeSlot === localSlot;
 }
 
+function localTurnStartsInSeconds(
+  debate: Debate,
+  countdown: DebateCountdown,
+  localSlot: ParticipantSlot | null
+): number | null {
+  if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 10) return null;
+
+  if (debate.status === 'preflight') {
+    return countdown.activeSlot === localSlot ? countdown.remainingSeconds : null;
+  }
+
+  if (debate.status !== 'in_progress') return null;
+  if (debate.current_speaker_slot === localSlot) return null;
+
+  const nextTurnIndex = debate.current_turn_index + 1;
+  if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
+
+  return participantSlotForTurn(debate.first_participant_slot, nextTurnIndex) === localSlot
+    ? countdown.remainingSeconds
+    : null;
+}
+
+function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {
+  if (turnIndex % 2 === 0) return firstParticipantSlot;
+  return firstParticipantSlot === 1 ? 2 : 1;
+}
+
 function stopLocalTracks(localTracksRef: React.MutableRefObject<LocalTrackLike[]>) {
   for (const track of localTracksRef.current) {
     track.detach?.();
@@ -1351,7 +1358,7 @@ function useDebateCountdown(debate: Debate | null): DebateCountdown {
 
   const countdownWindow = debate ? countdownWindowForDebate(debate) : null;
   if (!countdownWindow?.target) {
-    return { label: '00:00', progress: 0, activeSlot: null };
+    return { label: '00:00', remainingSeconds: 0, progress: 0, activeSlot: null };
   }
 
   const targetMs = new Date(countdownWindow.target).getTime();
@@ -1363,6 +1370,7 @@ function useDebateCountdown(debate: Debate | null): DebateCountdown {
 
   return {
     label: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
+    remainingSeconds: seconds,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
   };
@@ -1437,12 +1445,6 @@ function speakerStatus(debate: Debate) {
 
 function statusLabel(status: Debate['status']) {
   return status.replace('_', ' ');
-}
-
-function roomStateLabel(roomState: 'connecting' | 'connected' | 'uploading') {
-  if (roomState === 'connecting') return 'Connecting';
-  if (roomState === 'uploading') return 'Uploading';
-  return 'Connected';
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
