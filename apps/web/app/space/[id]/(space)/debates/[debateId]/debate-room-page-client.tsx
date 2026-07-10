@@ -645,9 +645,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await finishLiveDebate();
         return;
       } else if (debate.status === 'thanking' && debate.rematch_session_id) {
-        await uploadStoppedLocalRecording();
+        const finalized = await finalizeLocalRecordingUpload();
+        if (!finalized) {
+          throw new Error('Could not finalize the local recording. Please try leaving again.');
+        }
         await leaveRematch.mutateAsync();
-        await finalizeLocalRecordingUpload();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRoomState('idle');
@@ -677,7 +679,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     leaveRematch,
     router,
     spaceId,
-    uploadStoppedLocalRecording,
   ]);
 
   React.useEffect(() => {

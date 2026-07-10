@@ -470,6 +470,27 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
   });
 
+  it('does not leave the rematch flow when the local recording cannot be finalized', async () => {
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    expect(
+      await screen.findByText('Could not finalize the local recording. Please try leaving again.')
+    ).toBeInTheDocument();
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it('shows the thank-you hint only during the local participant half', async () => {
     installRecordingMocks();
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:31.000Z'));
