@@ -43,6 +43,8 @@ export function EntityVersionItem({ createdAt, name, createdById, createdBy, onC
       tabIndex={0}
       onClick={onClick}
       onKeyDown={event => {
+        // Ignore keys bubbling up from the nested author link so it stays keyboard-activatable.
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onClick();

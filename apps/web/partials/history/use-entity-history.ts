@@ -53,7 +53,7 @@ export function useEntityHistory({ entityId, spaceId, enabled }: UseEntityHistor
   }, [baseVersions]);
 
   const { data: resolvedProfiles } = useQuery({
-    enabled: unresolvedEditorIds.length > 0,
+    enabled: enabled && unresolvedEditorIds.length > 0,
     queryKey: ['entity-history-editor-profiles', unresolvedEditorIds],
     queryFn: () =>
       Effect.runPromise(
