@@ -4,6 +4,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import { Filter } from '~/core/blocks/data/filters';
@@ -13,7 +14,11 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { ensureRankingAggregationRestriction } from '~/core/blocks/ranking/ensure-ranking-aggregation-restriction';
 import { ensureRankingBlockTypeRelation } from '~/core/blocks/ranking/ensure-ranking-block-type';
 import { ensureRankingShownColumns } from '~/core/blocks/ranking/ensure-ranking-shown-columns';
-import { persistRankingBlockDateValues } from '~/core/blocks/ranking/persist-ranking-block-values';
+import { ensureRankingTypeRelation } from '~/core/blocks/ranking/ensure-ranking-type';
+import {
+  persistRankingBlockDateValues,
+  persistRankingSubmissionFrequency,
+} from '~/core/blocks/ranking/persist-ranking-block-values';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
@@ -60,6 +65,14 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const [setupTypePicks, setSetupTypePicks] = React.useState<QuerySetupTypePick[]>([]);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
+  const [isRolling, setIsRolling] = React.useState(false);
+  const [frequencyHoursInput, setFrequencyHoursInput] = React.useState('');
+
+  const frequencyHours = React.useMemo(() => {
+    const parsed = Number(frequencyHoursInput.trim());
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [frequencyHoursInput]);
+  const hasValidFrequency = !isRolling || frequencyHours != null;
 
   const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
     propertyId: SystemIds.TYPES_PROPERTY,
@@ -77,7 +90,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
 
   const handleCreate = React.useCallback(() => {
     const trimmed = name.trim();
-    if (!trimmed || !hasTypeSelected || !canEditSpace) return;
+    if (!trimmed || !hasTypeSelected || !canEditSpace || !hasValidFrequency) return;
 
     ensureRankingBlockTypeRelation({
       storage,
@@ -90,6 +103,13 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
       blockId: entityId,
       spaceId,
       relations: blockEntityRelations,
+    });
+    ensureRankingTypeRelation({
+      storage,
+      blockId: entityId,
+      spaceId,
+      relations: blockEntityRelations,
+      isRolling,
     });
     persistBlockName(trimmed);
     ensureRankingShownColumns({
@@ -110,16 +130,26 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     }));
     const mergedFilters = [...withoutTypes, ...typeFilters];
     setSource(source, { filterStateOverride: mergedFilters });
+
+    const effectiveStartDate = isRolling ? '' : startDate;
+    const effectiveEndDate = isRolling ? '' : endDate;
     persistRankingBlockDateValues({
       storage,
       entityId,
       spaceId,
-      startDate,
-      endDate,
+      startDate: effectiveStartDate,
+      endDate: effectiveEndDate,
+      existingValues,
+    });
+    persistRankingSubmissionFrequency({
+      storage,
+      entityId,
+      spaceId,
+      frequencyHours: isRolling ? frequencyHours : null,
       existingValues,
     });
     setEditable(true);
-    onCompleteRankingSetup({ startDate, endDate });
+    onCompleteRankingSetup({ startDate: effectiveStartDate, endDate: effectiveEndDate });
   }, [
     blockEntityRelations,
     blockRelationRelations,
@@ -129,7 +159,10 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     existingValues,
     canEditSpace,
     filterState,
+    frequencyHours,
     hasTypeSelected,
+    hasValidFrequency,
+    isRolling,
     onCompleteRankingSetup,
     name,
     setEditable,
@@ -142,7 +175,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     storage,
   ]);
 
-  const canCreate = canEditSpace && name.trim().length > 0 && hasTypeSelected;
+  const canCreate = canEditSpace && name.trim().length > 0 && hasTypeSelected && hasValidFrequency;
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }} onMouseDown={e => e.stopPropagation()}>
@@ -222,16 +255,73 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
             ) : null}
           </div>
 
-          <div className="flex w-full flex-wrap items-start justify-center gap-8">
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-button font-medium text-text">Start date</p>
-              <DateOnlyInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
+          <div className="flex w-full flex-col items-center gap-3">
+            <p className="text-center text-button font-medium text-text">Ranking type</p>
+            <div className="inline-flex items-center gap-1 rounded-lg bg-white p-1 shadow-button">
+              <button
+                type="button"
+                onClick={() => setIsRolling(false)}
+                aria-pressed={!isRolling}
+                className={cx(
+                  'rounded px-3 py-1 text-metadata transition',
+                  !isRolling ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
+                )}
+              >
+                Standard
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRolling(true)}
+                aria-pressed={isRolling}
+                className={cx(
+                  'rounded px-3 py-1 text-metadata transition',
+                  isRolling ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
+                )}
+              >
+                Rolling
+              </button>
             </div>
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-button font-medium text-text">End date</p>
-              <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
-            </div>
+            <p className="max-w-[320px] text-center text-footnote text-grey-04">
+              {isRolling
+                ? 'A single continuously-active ranking. Each submission stays live for the submission frequency, then rolls off until the curator submits again.'
+                : 'A round-based ranking bounded by a start and end date.'}
+            </p>
           </div>
+
+          {isRolling ? (
+            <div className="flex w-full flex-col items-center gap-2">
+              <p className="text-center text-button font-medium text-text">
+                Submission frequency <span className="text-grey-04">(hours, required)</span>
+              </p>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={frequencyHoursInput}
+                onChange={e => setFrequencyHoursInput(e.target.value)}
+                onMouseDown={e => e.stopPropagation()}
+                onPointerDown={e => e.stopPropagation()}
+                onKeyDown={e => e.stopPropagation()}
+                onKeyDownCapture={e => e.stopPropagation()}
+                onKeyUp={e => e.stopPropagation()}
+                placeholder="e.g. 168 for weekly"
+                aria-label="Submission frequency in hours"
+                className="w-full max-w-[220px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
+              />
+            </div>
+          ) : (
+            <div className="flex w-full flex-wrap items-start justify-center gap-8">
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-button font-medium text-text">Start date</p>
+                <DateOnlyInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-button font-medium text-text">End date</p>
+                <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
+              </div>
+            </div>
+          )}
 
           <button
             type="button"
