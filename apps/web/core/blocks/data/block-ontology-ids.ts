@@ -1,7 +1,13 @@
-/** Data-block / ranking-block ontology ids not yet exported from geo-sdk. */
-
-export const DATA_BLOCK_PAGE_SIZE_PROPERTY_ID = 'fd8d9863342d4dcea8fd9687805a88a4';
-
 export const DEFAULT_DATA_BLOCK_PAGE_SIZE = 9;
 export const MIN_DATA_BLOCK_PAGE_SIZE = 1;
 export const MAX_DATA_BLOCK_PAGE_SIZE = 100;
+export const DATA_BLOCK_PAGE_SIZE_PROPERTY_ID = 'fd8d9863342d4dcea8fd9687805a88a4';
+export const DATA_BLOCK_VIEW_PROPERTY_ID = '1907fd1c81114a3ca378b1f353425b65';
+export const DATA_BLOCK_PROPERTIES_PROPERTY_ID = '01412f8381894ab1836565c7fd358cc1';
+export const DATA_BLOCK_TOOLS_PROPERTY_ID = '721ac0d146404b0f93edf52535151d19';
+
+export const GALLERY_VIEW_ID = 'ccb70fc917f04a54b86e3b4d20cc7130';
+export const LIST_VIEW_ID = '7d497dba09c249b8968f716bcf520473';
+export const PILL_VIEW_ID = '60022d24d9df4e1888faa71e915f8101';
+export const EXPLORE_VIEW_ID = 'f4063f3d5e904e4694ab04729caad52b';
+export const LINK_INGESTION_TOOL_ID = '3eb4db0098d74dfbb357c852f4ac0590';
