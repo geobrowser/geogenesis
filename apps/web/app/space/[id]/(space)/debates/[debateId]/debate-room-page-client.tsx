@@ -121,6 +121,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [selectedVideoInputId, setSelectedVideoInputId] = React.useState('');
   const selectedAudioInputIdRef = React.useRef('');
   const selectedVideoInputIdRef = React.useRef('');
+  const mountedRef = React.useRef(true);
+  const previewGenerationRef = React.useRef(0);
+  const connectionGenerationRef = React.useRef(0);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
@@ -321,6 +324,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const refreshMediaDevices = React.useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
     const devices = await navigator.mediaDevices.enumerateDevices();
+    if (!mountedRef.current) return;
     const audioInputs = devices
       .filter(device => device.kind === 'audioinput')
       .map((device, index) => ({
@@ -374,8 +378,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       setPreviewError(null);
       setPreviewState('starting');
+      const generation = previewGenerationRef.current + 1;
+      previewGenerationRef.current = generation;
+      const isCurrent = () => mountedRef.current && previewGenerationRef.current === generation;
       const previewPromise = (async () => {
         const livekit = await import('livekit-client');
+        if (!isCurrent()) return [];
         stopLocalTracks(localTracksRef);
         localMediaStreamRef.current = null;
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
@@ -384,6 +392,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           audio: audioInputId ? { deviceId: audioInputId } : true,
           video: videoInputId ? { deviceId: videoInputId } : true,
         })) as LocalTrackLike[];
+        if (!isCurrent()) {
+          stopTracks(tracks);
+          return [];
+        }
         localTracksRef.current = tracks;
         setLocalTrackPreferences(tracks, {
           audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted),
@@ -397,6 +409,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           await localVideoRef.current.play().catch(() => undefined);
         }
         await refreshMediaDevices();
+        if (!isCurrent()) {
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          return [];
+        }
         setPreviewState('ready');
         return tracks;
       })();
@@ -404,11 +421,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       try {
         return await previewPromise;
       } catch (error) {
-        setPreviewError(error instanceof Error ? error.message : 'Could not start your camera preview.');
-        setPreviewState('idle');
+        if (isCurrent()) {
+          setPreviewError(error instanceof Error ? error.message : 'Could not start your camera preview.');
+          setPreviewState('idle');
+        }
         throw error;
       } finally {
-        localPreviewPromiseRef.current = null;
+        if (localPreviewPromiseRef.current === previewPromise) {
+          localPreviewPromiseRef.current = null;
+        }
       }
     },
     [audioMuted, countdown.activeSlot, debate, localSlot, refreshMediaDevices, videoEnabled]
@@ -441,6 +462,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const connect = React.useCallback(async () => {
+    const generation = connectionGenerationRef.current + 1;
+    connectionGenerationRef.current = generation;
+    const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
+    let connectingRoom: RoomLike | null = null;
+    let newlyCreatedTracks: LocalTrackLike[] = [];
     setRoomError(null);
     setRoomState('connecting');
     setRemoteVideoReady(false);
@@ -448,10 +474,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
     try {
       const token = await liveKitJoin.mutateAsync();
+      if (!isCurrent()) return;
       setJoinResponse(token);
 
       const livekit = await import('livekit-client');
+      if (!isCurrent()) return;
       const room = new livekit.Room({ adaptiveStream: true, dynacast: true }) as unknown as RoomLike;
+      connectingRoom = room;
       room.on(livekit.RoomEvent.TrackSubscribed, track => {
         const element = track.attach();
         if (element instanceof HTMLMediaElement) {
@@ -468,14 +497,25 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       });
 
       await room.connect(token.url, token.token);
+      if (!isCurrent()) {
+        room.disconnect();
+        return;
+      }
       roomRef.current = room;
-      const tracks =
-        localTracksRef.current.length > 0
-          ? localTracksRef.current
-          : ((await livekit.createLocalTracks({
+      const hasPreviewTracks = localTracksRef.current.length > 0;
+      const tracks = hasPreviewTracks
+        ? localTracksRef.current
+        : ((await livekit.createLocalTracks({
               audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
               video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
             })) as LocalTrackLike[]);
+      if (!hasPreviewTracks) newlyCreatedTracks = tracks;
+      if (!isCurrent()) {
+        room.disconnect();
+        stopTracks(newlyCreatedTracks);
+        if (roomRef.current === room) roomRef.current = null;
+        return;
+      }
       localTracksRef.current = tracks;
       setLocalTrackPreferences(tracks, {
         audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, token.participant_slot, audioMuted),
@@ -483,6 +523,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       });
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
       }
 
       const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
@@ -494,12 +541,25 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
 
       await markJoined.mutateAsync();
+      if (!isCurrent()) {
+        room.disconnect();
+        stopLocalTracks(localTracksRef);
+        localMediaStreamRef.current = null;
+        if (roomRef.current === room) roomRef.current = null;
+        return;
+      }
       setRoomState('connected');
     } catch (error) {
+      if (connectingRoom && roomRef.current !== connectingRoom) {
+        connectingRoom.disconnect();
+        stopTracks(newlyCreatedTracks);
+      }
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
-      setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-      setRoomState('idle');
+      if (isCurrent()) {
+        setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
+        setRoomState('idle');
+      }
     }
   }, [audioMuted, countdown.activeSlot, debate, liveKitJoin, markJoined, videoEnabled]);
 
@@ -622,6 +682,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     return () => {
+      mountedRef.current = false;
+      previewGenerationRef.current += 1;
+      connectionGenerationRef.current += 1;
       clearRecordingTimers();
       void discardLocalRecorder();
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -1694,11 +1757,15 @@ function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex
 }
 
 function stopLocalTracks(localTracksRef: React.MutableRefObject<LocalTrackLike[]>) {
-  for (const track of localTracksRef.current) {
+  stopTracks(localTracksRef.current);
+  localTracksRef.current = [];
+}
+
+function stopTracks(tracks: LocalTrackLike[]) {
+  for (const track of tracks) {
     track.detach?.();
     track.stop();
   }
-  localTracksRef.current = [];
 }
 
 function disconnectRoom(

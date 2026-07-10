@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   markJoinedMutateAsync: vi.fn(),
   createLocalTracks: vi.fn(),
   roomConnect: vi.fn(),
+  roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
@@ -68,7 +69,7 @@ vi.mock('livekit-client', () => ({
 
     on = vi.fn();
     connect = mocks.roomConnect;
-    disconnect = vi.fn();
+    disconnect = mocks.roomDisconnect;
   },
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
@@ -88,6 +89,7 @@ beforeEach(() => {
   mocks.markJoinedMutateAsync.mockReset();
   mocks.createLocalTracks.mockReset();
   mocks.roomConnect.mockReset();
+  mocks.roomDisconnect.mockReset();
   mocks.publishTrack.mockReset();
   mocks.debate = completedDebate();
   mocks.rematch = null;
@@ -271,6 +273,42 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
     });
+  });
+
+  it('stops preview tracks that resolve after the page unmounts', async () => {
+    const tracks = [
+      { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ];
+    const pendingTracks = deferred<typeof tracks>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    view.unmount();
+    pendingTracks.resolve(tracks);
+
+    await waitFor(() => expect(tracks.every(track => track.stop.mock.calls.length === 1)).toBe(true));
+  });
+
+  it('disconnects a LiveKit room that connects after the page unmounts', async () => {
+    const pendingConnection = deferred<void>();
+    mocks.roomConnect.mockReturnValue(pendingConnection.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'preparing',
+      prepare_started_at: '2026-07-02T00:00:00.000Z',
+      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    view.unmount();
+    pendingConnection.resolve();
+
+    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
   });
 
   it('shows the recording screen as stacked local and remote video tiles', async () => {
