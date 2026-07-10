@@ -45,11 +45,7 @@ export function SubtopicsDialog({ open, onOpenChange, spaceId }: SubtopicsDialog
           <Dots />
         </div>
       ) : isAddingSubtopic ? (
-        <AddSubtopicSearchView
-          spaceId={spaceId}
-          target={addTarget}
-          onProposed={() => setAddTarget(null)}
-        />
+        <AddSubtopicSearchView spaceId={spaceId} target={addTarget} onProposed={() => setAddTarget(null)} />
       ) : (
         <SubtopicsTreeView
           spaceId={spaceId}

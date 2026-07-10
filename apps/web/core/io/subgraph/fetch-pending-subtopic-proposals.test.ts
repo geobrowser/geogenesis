@@ -126,10 +126,7 @@ describe('fetchPendingSubtopicProposals', () => {
     );
 
     await expect(
-      fetchPendingSubtopicProposals(
-        '00000000-0000-0000-0000-000000000999',
-        '00000000-0000-0000-0000-000000000099'
-      )
+      fetchPendingSubtopicProposals('00000000-0000-0000-0000-000000000999', '00000000-0000-0000-0000-000000000099')
     ).resolves.toEqual([
       {
         spaceId: '00000000-0000-0000-0000-000000000999',

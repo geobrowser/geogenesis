@@ -1,13 +1,13 @@
 'use client';
 
-import { useAtom } from 'jotai';
-
 import { useCallback } from 'react';
 
-import { dismissedNoticesAtom } from '~/atoms';
+import { useAtom } from 'jotai';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
+
+import { dismissedNoticesAtom } from '~/atoms';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
@@ -47,7 +47,7 @@ function WelcomeBanner() {
           hides the covers on small screens while they show by default. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-0 -translate-y-1/2 translate-x-3 sm:hidden"
+        className="pointer-events-none absolute top-1/2 right-0 translate-x-3 -translate-y-1/2 sm:hidden"
       >
         <img src="/explore-welcome-banner.png" alt="" className="h-[135px] w-auto max-w-none select-none" />
       </div>
