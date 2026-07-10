@@ -98,10 +98,7 @@ export async function fetchPendingSubtopicProposals(
 
     for (const entityDiff of diffResult.entities) {
       for (const relation of entityDiff.relations) {
-        if (
-          relation.typeId !== SUBTOPIC_RELATION_TYPE_ID ||
-          validateSpaceId(relation.spaceId) !== validatedSpaceId
-        ) {
+        if (relation.typeId !== SUBTOPIC_RELATION_TYPE_ID || validateSpaceId(relation.spaceId) !== validatedSpaceId) {
           continue;
         }
 

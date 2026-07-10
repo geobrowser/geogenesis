@@ -2,15 +2,14 @@
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
-import { Effect } from 'effect';
-
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { validateWalletAddress } from '~/core/io/rest';
 import { fetchProfile, fetchProfileBySpaceId } from '~/core/io/subgraph';
 import { type EntityVersion, fetchEntityVersions } from '~/core/io/subgraph/fetch-entity-versions';
-import { validateWalletAddress } from '~/core/io/rest';
 import type { Profile } from '~/core/types';
 
 import type { HistoryDiffSelection } from './history-diff-slide-up';

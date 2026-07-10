@@ -134,7 +134,11 @@ export function useProposeSubtopicRelation(spaceId: string) {
       storage.relations.set(relation);
 
       const rollback = patchChildrenCache(parentEntityId, list =>
-        addChild(list, { id: childEntityId, name: childName?.trim() || PLACEHOLDER_TOPIC_NAME, relationId: relation.id })
+        addChild(list, {
+          id: childEntityId,
+          name: childName?.trim() || PLACEHOLDER_TOPIC_NAME,
+          relationId: relation.id,
+        })
       );
 
       const proposalName = `Add subtopic: ${childName ?? 'Untitled'} to ${parentName ?? 'topic'}`;

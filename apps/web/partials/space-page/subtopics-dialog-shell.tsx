@@ -61,7 +61,7 @@ export function SubtopicsDialogShell({
               <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-visible pb-4">
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-x-visible overflow-y-auto pb-4">
               <SubtopicsDialogPopoverContext.Provider value={popoverContainer}>
                 {children}
               </SubtopicsDialogPopoverContext.Provider>

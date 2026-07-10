@@ -79,9 +79,7 @@ export async function fetchSubtopicChildren(parentEntityId: string, spaceId: str
       case 'AbortError':
         throw error;
       default:
-        console.error(
-          `${error._tag}: Unable to fetch subtopic children for ${parentEntityId} in space ${spaceId}`
-        );
+        console.error(`${error._tag}: Unable to fetch subtopic children for ${parentEntityId} in space ${spaceId}`);
         throw new Error(`Failed to fetch subtopic children for entity ${parentEntityId}`);
     }
   }
