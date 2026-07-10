@@ -1,6 +1,8 @@
 export {
   usePrivy,
   useLogout,
+  useIdentityToken,
+  getIdentityToken,
   PrivyProvider,
   type PrivyClientConfig,
   useWallets,

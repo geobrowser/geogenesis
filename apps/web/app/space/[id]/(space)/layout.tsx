@@ -102,9 +102,9 @@ export default async function Layout(props0: LayoutProps) {
               />
             </React.Suspense>
           </div>
-          <Spacer height={20} />
-          {children}
         </EntityPageContentContainer>
+        <Spacer height={20} />
+        {children}
       </EditorProvider>
     </EntityStoreProvider>
   );

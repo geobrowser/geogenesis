@@ -367,7 +367,7 @@ function createMutator(store: GeoStore): Mutator {
         const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
         // Create the image entity using the Graph API. URL inputs are fetched
         // and pinned to IPFS by the SDK; blob inputs upload directly. Use
-        // TESTNET network to upload to Pinata via alternative gateway.
+        // TESTNET network to upload via the alternative gateway.
         const { id: imageId, ops: createImageOps } = await Graph.createImage(
           'file' in params ? { blob: params.file, network: 'TESTNET' } : { url: params.url, network: 'TESTNET' }
         );
@@ -514,7 +514,7 @@ function createMutator(store: GeoStore): Mutator {
         spaceId,
       }) => {
         // Create the video entity using the Graph API (uses same upload mechanism as images)
-        // Use TESTNET network to upload to Pinata via alternative gateway
+        // Use TESTNET network to upload via the alternative gateway
         const { id: videoId, ops: createVideoOps } = await Graph.createImage({
           blob: file,
           network: 'TESTNET',

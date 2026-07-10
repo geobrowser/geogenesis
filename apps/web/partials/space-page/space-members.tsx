@@ -1,15 +1,13 @@
-import * as React from 'react';
-
 import { cookies } from 'next/headers';
 
+import { getSpaceAccessForRequest } from '~/core/access/get-space-access-for-request';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { getCachedSpaceParticipantsPage } from '~/core/space-members/get-cached-space-participants-page';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getSpaceMemberRequest } from '~/partials/space-page/get-space-member-request';
 
-import { getIsEditorForSpace } from './get-is-editor-for-space';
-import { getIsMemberForSpace } from './get-is-member-for-space';
 import { SpaceMembersChip } from './space-members-chip';
 import { SpaceMembersDialogServerContainer } from './space-members-dialog-server-container';
 import { SpaceMembersJoinButton } from './space-members-join-button';
@@ -24,14 +22,8 @@ interface Props {
 
 export async function SpaceMembers({ spaceId }: Props) {
   const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const [isMember, isEditor, space, memberRequest] = await Promise.all([
-    getIsMemberForSpace(spaceId, connectedAddress),
-    getIsEditorForSpace(spaceId, connectedAddress),
-    cachedFetchSpace(spaceId),
-    getSpaceMemberRequest(spaceId, connectedAddress),
-  ]);
 
-  const isPublicSpace = space?.type === 'DAO';
+  const space = await cachedFetchSpace(spaceId);
 
   if (!space) {
     return null;
@@ -41,6 +33,18 @@ export async function SpaceMembers({ spaceId }: Props) {
     return null;
   }
 
+  const [access, membersPage, memberRequest] = await Promise.all([
+    getSpaceAccessForRequest(spaceId, connectedAddress),
+    getCachedSpaceParticipantsPage(spaceId, 'members', 0),
+    getSpaceMemberRequest(spaceId, connectedAddress),
+  ]);
+
+  const { isMember, isEditor } = access;
+  const isPublicSpace = space.type === 'DAO';
+  const firstThreeMembers = membersPage.participants.slice(0, 3);
+
+  const chip = <SpaceMembersChip firstThreeMembers={firstThreeMembers} totalMembers={membersPage.totalCount} />;
+
   const popoverContent = (
     <SpaceMembersContent
       spaceId={spaceId}
@@ -49,6 +53,7 @@ export async function SpaceMembers({ spaceId }: Props) {
       isEditor={isEditor}
       memberRequest={memberRequest}
       connectedAddress={connectedAddress ?? null}
+      initialParticipantsPage={membersPage}
     />
   );
 
@@ -57,10 +62,16 @@ export async function SpaceMembers({ spaceId }: Props) {
   if (isMember || isEditor) {
     return (
       <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-        <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
+        <SpaceMembersPopover trigger={chip} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
         <SpaceMembersMenu
-          manageMembersComponent={<SpaceMembersDialogServerContainer spaceId={spaceId} isEditor={isEditor} />}
+          manageMembersComponent={
+            <SpaceMembersDialogServerContainer
+              spaceId={spaceId}
+              isEditor={isEditor}
+              initialParticipantsPage={membersPage}
+            />
+          }
           trigger={<ChevronDownSmall color="grey-04" />}
         />
       </div>
@@ -69,7 +80,7 @@ export async function SpaceMembers({ spaceId }: Props) {
 
   return (
     <div className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata shadow-button transition-colors duration-150 focus-within:border-text">
-      <SpaceMembersPopover trigger={<SpaceMembersChip spaceId={spaceId} />} content={popoverContent} />
+      <SpaceMembersPopover trigger={chip} content={popoverContent} />
 
       {isPublicSpace ? <SpaceMembersJoinButton spaceId={spaceId} memberRequest={memberRequest} /> : null}
     </div>

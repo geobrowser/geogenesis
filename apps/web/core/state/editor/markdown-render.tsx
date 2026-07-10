@@ -212,8 +212,7 @@ function renderInlineTokenRange(
 
     switch (token.type) {
       case 'text': {
-        const segments =
-          options?.linkifyWeb2Urls && !insideLink ? tokenizeWeb2Urls(token.content) : null;
+        const segments = options?.linkifyWeb2Urls && !insideLink ? tokenizeWeb2Urls(token.content) : null;
 
         if (segments && segments.some(segment => segment.type === 'url')) {
           nodes.push(

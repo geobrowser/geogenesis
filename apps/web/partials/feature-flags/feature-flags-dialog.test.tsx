@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+
 import { Provider, createStore } from 'jotai';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -11,7 +12,7 @@ describe('FeatureFlagsDialog', () => {
     window.localStorage.clear();
   });
 
-  it('opens with Cmd/Ctrl+Shift+F and toggles the Questions tab flag', async () => {
+  it('opens with Cmd/Ctrl+Shift+F and toggles the Questions and debates flag', async () => {
     render(
       <Provider store={createStore()}>
         <FeatureFlagsDialog />
@@ -22,7 +23,7 @@ describe('FeatureFlagsDialog', () => {
 
     expect(await screen.findByRole('heading', { name: 'Feature flags' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Questions tab' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Questions and debates' }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(JSON.stringify({ questionsTab: true }));

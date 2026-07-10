@@ -7,7 +7,7 @@ import type { SearchGraphInput } from '~/core/chat/read-types';
 // results.
 export const searchGraph = tool({
   description:
-    "Search the Geo knowledge graph by free-text query. Use this before answering any question that mentions a specific entity, person, company, movie, topic, or other named thing in the graph. Returns up to 10 matches. Each match includes an id you can pass to getEntity for more detail. Local matches (the user's unpublished entities) are returned first; `isDraft: true` flags a local-only result.",
+    "Search the Geo knowledge graph by free-text query. Use this before answering any question that mentions a specific entity, person, company, topic, or other named thing in the graph. Returns up to 10 matches. Each match includes an id you can pass to getEntity for more detail. Local matches (the user's unpublished entities) are returned first; `isDraft: true` flags a local-only result.",
   inputSchema: jsonSchema<SearchGraphInput>({
     type: 'object',
     properties: {

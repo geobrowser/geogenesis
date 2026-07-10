@@ -10,6 +10,7 @@ import { QuestionsPageClient } from './questions-page-client';
 
 const mocks = vi.hoisted(() => {
   const replace = vi.fn();
+  const push = vi.fn();
   const setActiveSpace = vi.fn();
   const bumpReviewVersion = vi.fn();
   const setIsReviewOpen = vi.fn();
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     replace,
+    push,
     setActiveSpace,
     bumpReviewVersion,
     setIsReviewOpen,
@@ -31,13 +33,26 @@ let namesByEntityId = new Map<string, string>();
 let stagedRelations: Relation[] = [];
 let questionsTabEnabled = true;
 let lastQueryEntitiesOptions: unknown = null;
+let debateQuestionsResponse: { questions: unknown[] } = { questions: [] };
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => questionsTabEnabled,
+  useFeatureFlag: (id: string) => {
+    if (id !== 'questionsTab') {
+      throw new Error(`Unexpected feature flag: ${id}`);
+    }
+    return questionsTabEnabled;
+  },
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  useDebateQuestions: () => ({ data: debateQuestionsResponse, error: null }),
+  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/state/diff-store', () => ({
@@ -98,6 +113,7 @@ beforeEach(() => {
   stagedRelations = [];
   questionsTabEnabled = true;
   lastQueryEntitiesOptions = null;
+  debateQuestionsResponse = { questions: [] };
   vi.clearAllMocks();
 
   mocks.nameSet.mockImplementation((entityId: string, _spaceId: string, value: string) => {
@@ -182,6 +198,231 @@ describe('QuestionsPageClient', () => {
     expect(screen.getByText('Answers')).toBeInTheDocument();
     const answerRelations = stagedRelations.filter(relation => relation.type.id === ANSWERS_PROPERTY_ID);
     expect(answerRelations.map(relation => relation.toEntity.name)).toEqual(['Yes', 'No']);
+  });
+
+  it('shows debate answer controls for published questions when the feature flag is enabled', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+  });
+
+  it('renders answers once and makes every debate answer choice clickable', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Which answer should be debated?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-3',
+            entityId: 'answer-3',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Which answer should be debated?' },
+            toEntity: { id: 'maybe', name: 'Maybe', value: 'Maybe' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getAllByText('Yes')).toHaveLength(1);
+    expect(screen.getAllByText('No')).toHaveLength(1);
+    expect(screen.getAllByText('Maybe')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Maybe' })).toBeInTheDocument();
+  });
+
+  it('does not allow starting another queue while a match prompt is active', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+    debateQuestionsResponse = {
+      questions: [
+        {
+          question_entity_id: 'question-1',
+          answer_options: [
+            { entity_id: 'yes', label: 'Yes' },
+            { entity_id: 'no', label: 'No' },
+          ],
+          active_match: {
+            id: 'match-1',
+            question: {
+              id: 'debate-question-1',
+              question: 'Should we debate this?',
+              answer_options: [
+                { entity_id: 'yes', label: 'Yes' },
+                { entity_id: 'no', label: 'No' },
+              ],
+            },
+            participants: [
+              {
+                user_id: 'user-for',
+                profile_space_id: 'profile-for',
+                display_name: 'Alex',
+                avatar_cid: null,
+                participant_slot: 1,
+                answer: { entity_id: 'yes', label: 'Yes' },
+                accepted: false,
+              },
+              {
+                user_id: 'user-against',
+                profile_space_id: 'profile-against',
+                display_name: 'Bri',
+                avatar_cid: null,
+                participant_slot: 2,
+                answer: { entity_id: 'no', label: 'No' },
+                accepted: false,
+              },
+            ],
+            debate_id: null,
+          },
+          active_debate: null,
+        },
+      ],
+    };
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'No' })).toBeDisabled();
+  });
+
+  it('does not redirect to a persisted active debate from the questions page', () => {
+    questions = [
+      {
+        id: 'question-1',
+        name: 'Should we debate this?',
+        description: null,
+        spaces: ['space-1'],
+        types: [{ id: QUESTION_TYPE_ID, name: 'Question' }],
+        values: [],
+        relations: [
+          {
+            id: 'answer-1',
+            entityId: 'answer-1',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'yes', name: 'Yes', value: 'Yes' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+          {
+            id: 'answer-2',
+            entityId: 'answer-2',
+            type: { id: ANSWERS_PROPERTY_ID, name: 'Answers' },
+            fromEntity: { id: 'question-1', name: 'Should we debate this?' },
+            toEntity: { id: 'no', name: 'No', value: 'No' },
+            renderableType: 'RELATION',
+            spaceId: 'space-1',
+          },
+        ],
+      },
+    ];
+    debateQuestionsResponse = {
+      questions: [
+        {
+          question_entity_id: 'question-1',
+          answer_options: [
+            { entity_id: 'yes', label: 'Yes' },
+            { entity_id: 'no', label: 'No' },
+          ],
+          active_match: null,
+          active_debate: {
+            id: 'debate-1',
+            status: 'in_progress',
+          },
+        },
+      ],
+    };
+
+    render(<QuestionsPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Questions' })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('redirects direct visits when the feature flag is disabled', async () => {
