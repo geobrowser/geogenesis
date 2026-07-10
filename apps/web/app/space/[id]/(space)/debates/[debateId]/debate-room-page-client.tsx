@@ -65,6 +65,10 @@ const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
 };
 
+const recordingCountdownSize = 68;
+const recordingCountdownRadius = 25;
+const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
+
 const localRecordingUploadMaxAttempts = 3;
 const localRecordingUploadRetryDelayMs = 1_000;
 
@@ -96,7 +100,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
   const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'uploading'>('idle');
   const [roomError, setRoomError] = React.useState<string | null>(null);
-  const [completionPromptDebateId, setCompletionPromptDebateId] = React.useState<string | null>(null);
+  const [autoContinueError, setAutoContinueError] = React.useState<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -205,11 +209,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const recorder = recorderRef.current;
     const startedAtMs = recordingStartedAtRef.current;
     const endedAtMs = recordingEndedAtRef.current;
-    if (!recorder || !startedAtMs || !endedAtMs || !joinResponse) return;
+    if (!recorder || !startedAtMs || !endedAtMs || !joinResponse) return false;
 
     const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
     const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-    if (blob.size === 0) return;
+    if (blob.size === 0) return false;
 
     let uploadedFilename: string | null = null;
     for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
@@ -248,6 +252,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
     recordingEndedAtRef.current = null;
+    return true;
   }, [completeUpload, createUpload, joinResponse, stopLocalRecorder]);
 
   const discardLocalRecorder = React.useCallback(async () => {
@@ -467,7 +472,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRoomError(null);
     setRoomState('uploading');
     try {
-      await stopLocalRecorderAndUpload();
+      const uploaded = await stopLocalRecorderAndUpload();
+      if (!uploaded) {
+        throw new Error('No local recording was available to upload.');
+      }
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
       setRemoteVideoReady(false);
@@ -479,6 +487,48 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return false;
     }
   }, [stopLocalRecorderAndUpload]);
+
+  const rejoinClaimQueue = React.useCallback(() => {
+    if (!debate || !currentUserId) {
+      setAutoContinueError('Could not identify your debate position.');
+      return;
+    }
+    const localParticipant = debate.participants.find(participant => participant.user_id === currentUserId);
+    if (!localParticipant) {
+      setAutoContinueError('Could not identify your debate position.');
+      return;
+    }
+
+    setAutoContinueError(null);
+    joinQueue.mutate(
+      {
+        claimId: debate.claim.claim_entity_id,
+        request: {
+          position: localParticipant.position,
+        },
+      },
+      {
+        onSuccess: () => {
+          router.replace(claimsPath);
+        },
+        onError: error => {
+          setAutoContinueError(error instanceof Error ? error.message : 'Could not rejoin matchmaking.');
+        },
+      }
+    );
+  }, [claimsPath, currentUserId, debate, joinQueue, router]);
+
+  const uploadAndRejoin = React.useCallback(async () => {
+    const uploaded = await finishAndUpload();
+    if (!uploaded) return;
+    rejoinClaimQueue();
+  }, [finishAndUpload, rejoinClaimQueue]);
+
+  const finishLiveDebate = React.useCallback(async () => {
+    if (!debate || finalizedDebateRef.current === debate.id) return;
+    finalizedDebateRef.current = debate.id;
+    await uploadAndRejoin();
+  }, [debate, uploadAndRejoin]);
 
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
@@ -496,9 +546,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRoomError(null);
     try {
       if (debate.status === 'complete') {
-        const uploaded = await finishAndUpload();
-        if (!uploaded) return;
-        setCompletionPromptDebateId(debate.id);
+        await uploadAndRejoin();
         return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
@@ -517,27 +565,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
-  }, [abortDebate, debate, discardLocalRecorder, finishAndUpload, claimsPath, router, spaceId]);
-
-  const continueDebating = React.useCallback(
-    (position: boolean) => {
-      if (!debate) return;
-      joinQueue.mutate(
-        {
-          claimId: debate.claim.claim_entity_id,
-          request: {
-            position,
-          },
-        },
-        {
-          onSuccess: () => {
-            router.replace(claimsPath);
-          },
-        }
-      );
-    },
-    [debate, joinQueue, claimsPath, router]
-  );
+  }, [abortDebate, debate, discardLocalRecorder, router, spaceId, uploadAndRejoin]);
 
   React.useEffect(() => {
     return () => {
@@ -602,10 +630,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!debate) return;
-    if (debate.status === 'complete' && roomState === 'idle') {
-      setCompletionPromptDebateId(current => current ?? debate.id);
-      return;
-    }
     if (roomState === 'idle') return;
     if (debate.status === 'cancelled') {
       void discardLocalRecorder().finally(() => {
@@ -617,14 +641,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     if (debate.status !== 'complete') return;
-    if (finalizedDebateRef.current === debate.id) return;
-    finalizedDebateRef.current = debate.id;
-    void finishAndUpload().then(uploaded => {
-      if (uploaded) setCompletionPromptDebateId(debate.id);
-    });
-  }, [debate, discardLocalRecorder, finishAndUpload, roomState]);
-
-  const joinQueueError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
+    void finishLiveDebate();
+  }, [debate, discardLocalRecorder, finishLiveDebate, roomState]);
 
   return (
     <div className="py-8">
@@ -741,69 +759,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             />
           )}
 
-          {debate.status === 'complete' && roomState === 'idle' && completionPromptDebateId === debate.id && (
-            <ContinueDebatePrompt
-              busy={joinQueue.isPending}
-              error={joinQueueError}
-              onContinue={continueDebating}
-              onNotNow={() => router.replace(claimsPath)}
-            />
+          {debate.status === 'complete' && roomState === 'idle' && autoContinueError && (
+            <section className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white p-5 shadow-light">
+              <Text as="p" variant="body" color="red-01">
+                {autoContinueError}
+              </Text>
+              <Button type="button" onClick={rejoinClaimQueue} disabled={joinQueue.isPending}>
+                Retry matchmaking
+              </Button>
+            </section>
           )}
         </>
         )
       )}
     </div>
-  );
-}
-
-function ContinueDebatePrompt({
-  busy,
-  error,
-  onContinue,
-  onNotNow,
-}: {
-  busy: boolean;
-  error: string | null;
-  onContinue: (position: boolean) => void;
-  onNotNow: () => void;
-}) {
-  return (
-    <section className="mt-5 rounded-lg border border-grey-02 bg-white p-5 shadow-light">
-      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <Text as="h3" variant="bodySemibold" color="text">
-            Continue debating this claim?
-          </Text>
-          <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[720px]">
-            Choose a position to look for another debate, or leave it unselected for now.
-          </Text>
-          {error && (
-            <Text as="p" variant="body" color="red-01" className="mt-3">
-              {error}
-            </Text>
-          )}
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          {[
-            { label: 'Yes', value: true },
-            { label: 'No', value: false },
-          ].map(position => (
-            <Button
-              key={position.label}
-              type="button"
-              variant="secondary"
-              onClick={() => onContinue(position.value)}
-              disabled={busy}
-            >
-              {position.label}
-            </Button>
-          ))}
-          <Button type="button" onClick={onNotNow} disabled={busy}>
-            Not now
-          </Button>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -1044,10 +1013,15 @@ function DebateRecordingModal({
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
+  const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const remoteParticipant = localSlot
     ? (debate.participants.find(participant => participant.participant_slot !== localSlot) ?? null)
     : null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
+  const countdownRing = countdown.remainingSeconds > 0 ? <RecordingCountdownRing countdown={countdown} /> : null;
+  const sharedPhaseCountdown = countdown.activeSlot === null ? countdownRing : null;
+  const localCountdown = countdown.activeSlot === localSlot ? countdownRing : sharedPhaseCountdown;
+  const remoteCountdown = countdown.activeSlot === remoteParticipant?.participant_slot ? countdownRing : null;
 
   return (
     <div
@@ -1056,33 +1030,8 @@ function DebateRecordingModal({
       aria-label="Debate recording"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
     >
-      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-5 py-8">
-        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
-          {debate.claim.claim}
-        </h1>
-
-        <div className="grid w-full gap-2">
-          <DebateVideoTile
-            active={countdown.activeSlot !== null && countdown.activeSlot === localSlot}
-            overlayText={videoEnabled ? null : 'Camera off'}
-            upcomingSeconds={localUpcomingSeconds}
-          >
-            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
-          </DebateVideoTile>
-
-          <DebateVideoTile
-            active={countdown.activeSlot !== null && countdown.activeSlot === remoteParticipant?.participant_slot}
-            overlayText={remoteVideoReady ? null : 'Waiting for video'}
-            muted={!remoteAudioEnabled}
-          >
-            <div
-              ref={remoteMediaRef}
-              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
-            />
-          </DebateVideoTile>
-        </div>
-
-        <div className="mt-4 flex items-center justify-center gap-3">
+      {debateDebuggingEnabled && (
+        <div className="fixed top-4 right-4 z-[1010] flex items-center gap-2 rounded-full border border-grey-02 bg-white/95 p-1.5 shadow-light backdrop-blur">
           <RecordingCircleButton
             ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
@@ -1111,6 +1060,35 @@ function DebateRecordingModal({
             <CameraIcon disabled={!videoEnabled} />
           </RecordingCircleButton>
         </div>
+      )}
+
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-5 py-8">
+        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
+          {debate.claim.claim}
+        </h1>
+
+        <div className="grid w-full gap-2">
+          <DebateVideoTile
+            active={countdown.activeSlot !== null && countdown.activeSlot === localSlot}
+            overlayText={videoEnabled ? null : 'Camera off'}
+            upcomingSeconds={localUpcomingSeconds}
+            countdown={localCountdown}
+          >
+            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+          </DebateVideoTile>
+
+          <DebateVideoTile
+            active={countdown.activeSlot !== null && countdown.activeSlot === remoteParticipant?.participant_slot}
+            overlayText={remoteVideoReady ? null : 'Waiting for video'}
+            muted={!remoteAudioEnabled}
+            countdown={remoteCountdown}
+          >
+            <div
+              ref={remoteMediaRef}
+              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
+            />
+          </DebateVideoTile>
+        </div>
 
         {roomError && (
           <div className="mt-3 w-full rounded-lg border border-red-01 bg-white px-4 py-3">
@@ -1137,12 +1115,14 @@ function DebateVideoTile({
   active,
   overlayText,
   upcomingSeconds,
+  countdown,
   muted = false,
   children,
 }: {
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
+  countdown?: React.ReactNode;
   muted?: boolean;
   children: React.ReactNode;
 }) {
@@ -1155,9 +1135,10 @@ function DebateVideoTile({
     >
       <div className="absolute inset-0 z-0">{children}</div>
       {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
+      {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
       {upcomingSeconds !== null && upcomingSeconds !== undefined && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center text-center">
+        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
           <div className="text-[1.375rem] leading-none font-semibold text-white" style={recordingOverlayTextShadow}>
             You&apos;re up in
           </div>
@@ -1179,6 +1160,45 @@ function DebateVideoTile({
         </div>
       )}
     </section>
+  );
+}
+
+function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
+  const remainingRatio = Math.max(0, Math.min(1, 1 - countdown.progress));
+  const ringColor = remainingRatio <= 0.2 ? '#ff5c4f' : '#45d391';
+  const dashOffset = recordingCountdownCircumference * (1 - remainingRatio);
+
+  return (
+    <div
+      aria-label={`Phase timer: ${countdown.remainingSeconds} seconds remaining`}
+      className="relative grid place-items-center"
+      style={{ width: recordingCountdownSize, height: recordingCountdownSize }}
+    >
+      <svg
+        viewBox={`0 0 ${recordingCountdownSize} ${recordingCountdownSize}`}
+        aria-hidden="true"
+        className="absolute inset-0 size-full"
+      >
+        <circle cx="34" cy="34" r="32" fill="rgba(16,16,16,0.34)" stroke="rgba(16,16,16,0.64)" strokeWidth="5" />
+        <circle cx="34" cy="34" r="20" fill="rgba(0,0,0,0.52)" />
+        <circle cx="34" cy="34" r={recordingCountdownRadius} fill="none" stroke="rgba(119,119,119,0.88)" strokeWidth="6" />
+        <circle
+          cx="34"
+          cy="34"
+          r={recordingCountdownRadius}
+          fill="none"
+          stroke={ringColor}
+          strokeWidth="7"
+          strokeLinecap="butt"
+          strokeDasharray={recordingCountdownCircumference}
+          strokeDashoffset={dashOffset}
+          transform="rotate(-90 34 34)"
+        />
+      </svg>
+      <span className="relative z-10 text-[1.75rem] leading-none font-semibold text-white">
+        {countdown.remainingSeconds}
+      </span>
+    </div>
   );
 }
 

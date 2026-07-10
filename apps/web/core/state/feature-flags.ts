@@ -11,6 +11,11 @@ export const featureFlagDefinitions = [
     label: 'Claims and debates',
     description: 'Show the Claims and Debates tabs on spaces.',
   },
+  {
+    id: 'debateDebugging',
+    label: 'Debate debugging',
+    description: 'Show manual debugging controls during debate recording.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -19,11 +24,13 @@ type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>
 
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
+  debateDebugging: false,
 };
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
     questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
+    debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
   };
 }
 

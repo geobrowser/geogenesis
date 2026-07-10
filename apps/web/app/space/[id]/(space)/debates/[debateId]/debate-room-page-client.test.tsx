@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   joinMutate: vi.fn(),
+  createUploadMutateAsync: vi.fn(),
+  completeUploadMutateAsync: vi.fn(),
+  mediaRecorderStart: vi.fn(),
   readyMutateAsync: vi.fn(),
   liveKitJoinMutateAsync: vi.fn(),
   markJoinedMutateAsync: vi.fn(),
@@ -18,6 +21,10 @@ const mocks = vi.hoisted(() => ({
   roomConnect: vi.fn(),
   publishTrack: vi.fn(),
   debate: null as Debate | null,
+  featureFlags: {
+    questionsTab: true,
+    debateDebugging: false,
+  } as Record<string, boolean>,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -25,7 +32,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => true,
+  useFeatureFlag: (id: string) => mocks.featureFlags[id] ?? false,
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {
@@ -39,10 +46,10 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 vi.mock('~/core/debates/hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCompleteLocalRecordingUpload: () => ({ mutateAsync: vi.fn() }),
-  useCreateLocalRecordingUpload: () => ({ mutateAsync: vi.fn() }),
+  useCompleteLocalRecordingUpload: () => ({ mutateAsync: mocks.completeUploadMutateAsync }),
+  useCreateLocalRecordingUpload: () => ({ mutateAsync: mocks.createUploadMutateAsync }),
   useDebate: () => ({ data: mocks.debate, isLoading: false, error: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
@@ -68,6 +75,9 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.replace.mockReset();
   mocks.joinMutate.mockReset();
+  mocks.createUploadMutateAsync.mockReset();
+  mocks.completeUploadMutateAsync.mockReset();
+  mocks.mediaRecorderStart.mockReset();
   mocks.readyMutateAsync.mockReset();
   mocks.liveKitJoinMutateAsync.mockReset();
   mocks.markJoinedMutateAsync.mockReset();
@@ -75,6 +85,10 @@ beforeEach(() => {
   mocks.roomConnect.mockReset();
   mocks.publishTrack.mockReset();
   mocks.debate = completedDebate();
+  mocks.featureFlags = {
+    questionsTab: true,
+    debateDebugging: false,
+  };
   mocks.readyMutateAsync.mockResolvedValue(readyDebate({ localReady: true, remoteReady: false }));
   mocks.liveKitJoinMutateAsync.mockResolvedValue({
     token: 'livekit-token',
@@ -91,6 +105,15 @@ beforeEach(() => {
   ]);
   mocks.roomConnect.mockResolvedValue(undefined);
   mocks.publishTrack.mockResolvedValue(undefined);
+  mocks.createUploadMutateAsync.mockResolvedValue({
+    filename: 'debate.webm',
+    upload: {
+      url: 'https://uploads.test/debate.webm',
+      method: 'PUT',
+      headers: {},
+    },
+  });
+  mocks.completeUploadMutateAsync.mockResolvedValue(undefined);
   vi.stubGlobal(
     'MediaStream',
     class {
@@ -256,11 +279,67 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
+  });
+
+  it('shows recording debug controls when debate debugging is enabled', async () => {
+    mocks.featureFlags.debateDebugging = true;
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Disable audio' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
-    expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the circular phase timer during a timed debate turn', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:21.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByLabelText('Phase timer: 19 seconds remaining')).toBeInTheDocument();
+    expect(screen.getByText('19')).toBeInTheDocument();
+  });
+
+  it('shows the circular phase timer during shared recording phases', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:05.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preparing',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      prepare_started_at: '2026-07-02T00:00:00.000Z',
+      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByLabelText('Phase timer: 25 seconds remaining')).toBeInTheDocument();
+    expect(screen.getByText('25')).toBeInTheDocument();
   });
 
   it('shows a large local countdown before the participant is up', async () => {
@@ -279,43 +358,175 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText("You're up in")).toBeInTheDocument();
-    expect(screen.getByText('9')).toBeInTheDocument();
+    expect(screen.getAllByText('9')).toHaveLength(2);
   });
 
-  it('shows a continuation prompt after a completed debate and can leave unselected', async () => {
+  it('does not rejoin matchmaking when revisiting an already-completed debate', async () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Continue debating this claim?')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-
+    expect(await screen.findByText('Debate complete.')).toBeInTheDocument();
     expect(mocks.joinMutate).not.toHaveBeenCalled();
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/claims');
+    expect(screen.queryByText('Continue debating this claim?')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'No' })).not.toBeInTheDocument();
   });
 
-  it('rejoins the queue with the chosen position from the completed debate prompt', async () => {
+  it.each([
+    { position: true, label: 'Yes' },
+    { position: false, label: 'No' },
+  ])('automatically rejoins with the local participant $label position after live completion', async ({ position }) => {
     mocks.joinMutate.mockImplementation((_variables, options) => {
       options.onSuccess();
     });
+    installRecordingMocks();
+    const completed = completedDebate();
+    completed.participants[0] = {
+      ...completed.participants[0],
+      position,
+      position_label: position ? 'Yes' : 'No',
+    };
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    mocks.debate = completed;
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Yes' }));
-
-    expect(mocks.joinMutate).toHaveBeenCalledWith(
-      {
-        claimId: 'claim-entity-1',
-        request: {
-          position: true,
+    await waitFor(() => {
+      expect(mocks.joinMutate).toHaveBeenCalledWith(
+        {
+          claimId: 'claim-entity-1',
+          request: {
+            position,
+          },
         },
-      },
-      expect.any(Object)
-    );
+        expect.any(Object)
+      );
+    });
     await waitFor(() => {
       expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/claims');
     });
   });
+
+  it('waits for recording upload before automatically rejoining', async () => {
+    const upload = deferred<void>();
+    mocks.completeUploadMutateAsync.mockReturnValue(upload.promise);
+    mocks.joinMutate.mockImplementation((_variables, options) => options.onSuccess());
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.completeUploadMutateAsync).toHaveBeenCalled());
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
+
+    upload.resolve();
+    await waitFor(() => expect(mocks.joinMutate).toHaveBeenCalled());
+  });
+
+  it('does not rejoin when recording upload fails', async () => {
+    mocks.completeUploadMutateAsync.mockRejectedValue(new Error('Upload unavailable'));
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Upload unavailable')).toBeInTheDocument();
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not rejoin when no local recording is available', async () => {
+    const view = await renderLiveDebate();
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('No local recording was available to upload.')).toBeInTheDocument();
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
+  });
+
+  it('shows an automatic rejoin error and retries without uploading again', async () => {
+    mocks.joinMutate
+      .mockImplementationOnce((_variables, options) => options.onError(new Error('Matchmaking unavailable')))
+      .mockImplementationOnce((_variables, options) => options.onSuccess());
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Matchmaking unavailable')).toBeInTheDocument();
+    expect(mocks.createUploadMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.completeUploadMutateAsync).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry matchmaking' }));
+
+    await waitFor(() => expect(mocks.joinMutate).toHaveBeenCalledTimes(2));
+    expect(mocks.createUploadMutateAsync).toHaveBeenCalledTimes(1);
+    expect(mocks.completeUploadMutateAsync).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/claims');
+  });
 });
+
+async function renderLiveDebate() {
+  mocks.debate = {
+    ...completedDebate(),
+    status: 'in_progress',
+    current_speaker_slot: 1,
+    turn_started_at: '2026-07-02T00:00:10.000Z',
+    turn_ends_at: '2026-07-02T00:00:40.000Z',
+    completed_at: null,
+  };
+  const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+  await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+  return view;
+}
+
+function installRecordingMocks() {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+  vi.stubGlobal(
+    'MediaRecorder',
+    class extends EventTarget {
+      static isTypeSupported() {
+        return true;
+      }
+
+      state: RecordingState = 'inactive';
+      mimeType = 'video/webm';
+      ondataavailable: ((event: BlobEvent) => void) | null = null;
+
+      start() {
+        this.state = 'recording';
+        mocks.mediaRecorderStart();
+        this.dispatchEvent(new Event('start'));
+      }
+
+      requestData() {
+        this.ondataavailable?.({ data: new Blob(['recording']) } as BlobEvent);
+      }
+
+      stop() {
+        this.state = 'inactive';
+        this.dispatchEvent(new Event('stop'));
+      }
+    }
+  );
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>(resolvePromise => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 function completedDebate(): Debate {
   return {
