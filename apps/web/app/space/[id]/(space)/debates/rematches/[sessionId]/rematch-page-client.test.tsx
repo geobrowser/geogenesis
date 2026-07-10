@@ -96,6 +96,32 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
   });
+
+  it('disables every claim card while a rematch request is pending', () => {
+    mocks.session = session({
+      status: 'request_pending',
+      request: {
+        id: 'request-1',
+        status: 'pending',
+        claim: claimSummary('claim-shared', 'A claim both participants chose'),
+        requester_user_id: 'user-local',
+        recipient_user_id: 'user-remote',
+        requester_position: true,
+        recipient_position: false,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: 'Request debate' }).every(button => button.hasAttribute('disabled'))).toBe(
+      true
+    );
+    expect(screen.getAllByRole('combobox').every(select => select.hasAttribute('disabled'))).toBe(true);
+  });
 });
 
 function session(overrides: Partial<DebateRematchSession> = {}): DebateRematchSession {
