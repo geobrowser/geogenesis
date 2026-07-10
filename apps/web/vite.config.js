@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '~': path.resolve(__dirname, './'),
     },
+    setupFiles: ['./vitest.setup.ts'],
     environment: 'jsdom',
     env: {
       NEXT_PUBLIC_APP_ENV: 'production',
