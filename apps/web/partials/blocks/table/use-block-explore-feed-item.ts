@@ -9,8 +9,16 @@ import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-t
 import { useSpace } from '~/core/hooks/use-space';
 import { getEntity, getEntityBacklinks } from '~/core/io/queries';
 import { useAvatar, useCover, useDescription, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import type { Cell } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+
+function entityCreatedAtSec(entity: { createdAt?: string | number; updatedAt?: string | number } | null | undefined) {
+  return (
+    parseEntityUpdatedAtToUnixSec(entity?.updatedAt != null ? String(entity.updatedAt) : undefined) ||
+    parseEntityUpdatedAtToUnixSec(entity?.createdAt != null ? String(entity.createdAt) : undefined)
+  );
+}
 
 export function useBlockExploreFeedItem({
   rowEntityId,
@@ -53,15 +61,17 @@ export function useBlockExploreFeedItem({
     (typeof coverUrl === 'string' ? coverUrl : null) ??
     (typeof avatarUrl === 'string' ? avatarUrl : null);
 
-  const { data: entity } = useQuery({
+  const { entity: storeEntity } = useQueryEntity({ id: rowEntityId, spaceId: entitySpaceId, enabled });
+  const storeCreatedAtSec = entityCreatedAtSec(storeEntity);
+
+  const { data: remoteEntity } = useQuery({
     queryKey: ['network', 'entity', rowEntityId, undefined],
     queryFn: ({ signal }) => Effect.runPromise(getEntity(rowEntityId, undefined, signal)),
-    enabled,
+    enabled: enabled && storeCreatedAtSec === 0,
     staleTime: 60_000,
   });
-  const createdAtSec =
-    parseEntityUpdatedAtToUnixSec(entity?.updatedAt != null ? String(entity.updatedAt) : undefined) ||
-    parseEntityUpdatedAtToUnixSec(entity?.createdAt != null ? String(entity.createdAt) : undefined);
+
+  const createdAtSec = storeCreatedAtSec || entityCreatedAtSec(remoteEntity);
 
   const hideSpaceLink = entitySpaceId === blockSpaceId;
   const { space } = useSpace(hideSpaceLink ? undefined : entitySpaceId);

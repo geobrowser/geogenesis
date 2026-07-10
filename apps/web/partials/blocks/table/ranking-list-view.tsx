@@ -114,7 +114,7 @@ export function RankingListView({ state }: Props) {
   const showLoadingRows = rows.length === 0 && entriesResolving && globalDisplayEntityIds.length > 0;
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-4">
+    <div className="flex w-full min-w-0 flex-col gap-2">
       <div className="flex flex-col gap-2">
         {rows}
         {showLoadingRows
@@ -130,7 +130,7 @@ export function RankingListView({ state }: Props) {
         <p className="text-metadata text-grey-04">No published items yet</p>
       ) : null}
 
-      <div className="mt-1 flex w-full items-end justify-between gap-3">
+      <div className="flex w-full items-end justify-between gap-3">
         <RankingPeriodMetadata
           className="mt-0"
           periodState={periodState}
