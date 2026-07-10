@@ -1,7 +1,8 @@
 import type { ApiProfile } from '~/core/io/rest/schemas/profile';
-import { formatShortAddress } from '~/core/utils/utils';
+import { NavUtils, formatShortAddress } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type EntityVersionItemProps = {
@@ -33,12 +34,21 @@ export function EntityVersionItem({ createdAt, name, createdById, createdBy, onC
   const displayName = createdBy?.name ?? (createdById ? formatShortAddress(createdById) : null);
   // Use a stable identifier for avatar generation so the color doesn't change if the user renames
   const avatarId = createdBy?.spaceId ?? createdById;
+  // Link the publisher's name to their space when we've resolved which space published the version.
+  const spaceHref = createdBy?.spaceId ? NavUtils.toSpace(createdBy.spaceId) : null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="relative z-10 block w-full bg-white px-2 py-3 text-left text-grey-04 hover:bg-bg hover:text-text"
+      onKeyDown={event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      className="relative z-10 block w-full cursor-pointer bg-white px-2 py-3 text-left text-grey-04 hover:bg-bg hover:text-text"
     >
       <div className="flex items-center justify-between">
         <Text as="span" variant="metadataMedium" className="mb-1 truncate text-sm! text-ellipsis">
@@ -54,12 +64,22 @@ export function EntityVersionItem({ createdAt, name, createdById, createdBy, onC
               value={avatarId ?? 'unknown'}
             />
           </div>
-          <p className="text-smallButton">{displayName ?? 'Unknown author'}</p>
+          {spaceHref ? (
+            <PrefetchLink
+              href={spaceHref}
+              onClick={event => event.stopPropagation()}
+              className="text-smallButton hover:underline"
+            >
+              {displayName ?? 'Unknown author'}
+            </PrefetchLink>
+          ) : (
+            <p className="text-smallButton">{displayName ?? 'Unknown author'}</p>
+          )}
         </div>
         <p className="text-smallButton">
           {formattedDate} · {formattedTime}
         </p>
       </div>
-    </button>
+    </div>
   );
 }
