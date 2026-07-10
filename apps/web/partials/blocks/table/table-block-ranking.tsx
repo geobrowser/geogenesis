@@ -81,6 +81,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
 
   const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
+  
+  const showBrowseChrome = !showHeaderActions || isEditing;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -116,30 +118,36 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         <div className="flex shrink-0 items-center gap-5">
           {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
 
-          <IconButton
-            onClick={() => setIsFilterOpen(open => !open)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => setIsFilterOpen(open => !open)}
+              icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+              color="grey-04"
+            />
+          ) : null}
 
-          <IconButton
-            onClick={() => void openRankingCompose('view')}
-            icon={<Fullscreen color="grey-04" />}
-            color="grey-04"
-            aria-label="Open fullscreen ranking"
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => void openRankingCompose('view')}
+              icon={<Fullscreen color="grey-04" />}
+              color="grey-04"
+              aria-label="Open fullscreen ranking"
+            />
+          ) : null}
 
-          <DataBlockViewMenu activeView={stateView} isLoading={false} />
+          <DataBlockViewMenu activeView={stateView} isLoading={false} isRankingBlock />
 
-          <TableBlockContextMenu
-            sourceType={source.type}
-            globalRankingSharePath={globalSharePath}
-            onPrepareGlobalShareLink={ensureGlobalRankingOg}
-          />
+          {showBrowseChrome ? (
+            <TableBlockContextMenu
+              sourceType={source.type}
+              globalRankingSharePath={globalSharePath}
+              onPrepareGlobalShareLink={ensureGlobalRankingOg}
+            />
+          ) : null}
         </div>
       </div>
 
-      {isFilterOpen && (
+      {showBrowseChrome && isFilterOpen && (
         <AnimatePresence>
           <motion.div
             initial={{ opacity: 0 }}

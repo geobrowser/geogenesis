@@ -7,9 +7,8 @@ import { Effect } from 'effect';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import { useSpace } from '~/core/hooks/use-space';
-import { getEntityBacklinks } from '~/core/io/queries';
+import { getEntity, getEntityBacklinks } from '~/core/io/queries';
 import { useAvatar, useCover, useDescription, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
-import { useQueryEntity } from '~/core/sync/use-store';
 import type { Cell } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -54,7 +53,12 @@ export function useBlockExploreFeedItem({
     (typeof coverUrl === 'string' ? coverUrl : null) ??
     (typeof avatarUrl === 'string' ? avatarUrl : null);
 
-  const { entity } = useQueryEntity({ id: rowEntityId, spaceId: entitySpaceId, enabled });
+  const { data: entity } = useQuery({
+    queryKey: ['network', 'entity', rowEntityId, undefined],
+    queryFn: ({ signal }) => Effect.runPromise(getEntity(rowEntityId, undefined, signal)),
+    enabled,
+    staleTime: 60_000,
+  });
   const createdAtSec =
     parseEntityUpdatedAtToUnixSec(entity?.updatedAt != null ? String(entity.updatedAt) : undefined) ||
     parseEntityUpdatedAtToUnixSec(entity?.createdAt != null ? String(entity.createdAt) : undefined);

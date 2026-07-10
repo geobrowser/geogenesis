@@ -31,9 +31,10 @@ const VIEW_MENU_SURFACE =
 type TableBlockViewMenuProps = {
   activeView: DataBlockView;
   isLoading: boolean;
+  isRankingBlock?: boolean;
 };
 
-export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuProps) {
+export function DataBlockViewMenu({ activeView, isLoading, isRankingBlock = false }: TableBlockViewMenuProps) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
@@ -47,7 +48,15 @@ export function DataBlockViewMenu({ activeView, isLoading }: TableBlockViewMenuP
 
   const isEditing = useUserIsEditing(spaceId);
 
-  const views = DATA_BLOCK_VIEWS;
+  const views = React.useMemo(
+    () =>
+      isRankingBlock
+        ? DATA_BLOCK_VIEWS.filter(view => view.value !== 'BULLETED_LIST').map(view =>
+            view.value === 'TABLE' ? { ...view, name: 'Ranking view' } : view
+          )
+        : DATA_BLOCK_VIEWS,
+    [isRankingBlock]
+  );
 
   const onOpenChange = (open: boolean) => {
     setIsMenuOpen(open);

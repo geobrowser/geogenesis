@@ -17,17 +17,18 @@ import { RankingBlockGlobalPagination } from './ranking-block-global-pagination'
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
-const ROW_NAME_CLASS = 'block text-[16px] font-medium leading-[1.3] tracking-[-0.35px] text-[#2A2B2E]';
-const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3 py-1';
-const ROW_RANK_CLASS = 'w-5 shrink-0 text-center text-button font-medium text-grey-04 tabular-nums';
+const ROW_NAME_CLASS =
+  'block text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text';
+const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3';
+const ROW_RANK_CLASS =
+  'w-5 shrink-0 text-center text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 tabular-nums';
 
 function RankingListRowSkeleton({ rank }: { rank: number }) {
   return (
     <div className={ROW_CLASS}>
       <span className={ROW_RANK_CLASS}>{rank}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="min-w-0 flex-1">
         <Skeleton className="h-5 w-full max-w-md rounded" />
-        <Skeleton className="h-5 w-2/3 rounded" />
       </div>
       <Skeleton className="h-5 w-16 shrink-0 rounded" />
     </div>
@@ -47,12 +48,12 @@ function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: List
 
   return (
     <div className={ROW_CLASS}>
-      <span className={cx(ROW_RANK_CLASS, 'pt-0.5')}>{rank}</span>
+      <span className={ROW_RANK_CLASS}>{rank}</span>
       <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
         {name}
       </Link>
       {showVoteButtons ? (
-        <div className="shrink-0 pt-0.5">
+        <div className="flex h-5 shrink-0 items-center">
           <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
         </div>
       ) : null}
@@ -114,7 +115,7 @@ export function RankingListView({ state }: Props) {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {rows}
         {showLoadingRows
           ? globalDisplayEntityIds.map(entityId => (
