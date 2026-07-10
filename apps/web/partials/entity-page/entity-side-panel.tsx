@@ -59,18 +59,6 @@ import { editorContentVersionAtom, entitySidePanelHostElementAtom, entitySidePan
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
 
-function spaceHasDisplayName(entity: Entity | null | undefined, spaceId: string): boolean {
-  if (!entity?.values) return false;
-  return entity.values.some(
-    value =>
-      !value.isDeleted &&
-      value.spaceId === spaceId &&
-      value.property.id === SystemIds.NAME_PROPERTY &&
-      typeof value.value === 'string' &&
-      value.value.trim().length > 0
-  );
-}
-
 /**
  * `GeoStore.getEntity(id, { spaceId })` only keeps triples for that space. If callers pass the
  * block’s space while the row’s data lives in another space, the panel looks empty. Prefer a scope
@@ -85,12 +73,6 @@ function useSidePanelEntityScope(entityId: string, requestedSpaceId: string, pre
   const { entity: unscopedEntity, isLoading: isLoadingHydration } = useQueryEntity({
     id: entityId,
     enabled: Boolean(entityId),
-  });
-
-  const { entity: requestedScoped } = useQueryEntity({
-    id: entityId,
-    spaceId: requestedSpaceId,
-    enabled: Boolean(entityId && requestedSpaceId && preferRequestedSpace),
   });
 
   const derivedSpaceId = React.useMemo(() => {
@@ -112,11 +94,13 @@ function useSidePanelEntityScope(entityId: string, requestedSpaceId: string, pre
   }, [unscopedEntity, requestedSpaceId]);
 
   const effectiveSpaceId = React.useMemo(() => {
-    if (preferRequestedSpace && spaceHasDisplayName(requestedScoped, requestedSpaceId)) {
+    // Honor the requested space when opened for editing and the entity has any
+    // content there, so unpublished edits (including non-name ones) stay visible.
+    if (preferRequestedSpace && (unscopedEntity?.spaces ?? []).includes(requestedSpaceId)) {
       return requestedSpaceId;
     }
     return derivedSpaceId;
-  }, [derivedSpaceId, preferRequestedSpace, requestedScoped, requestedSpaceId]);
+  }, [derivedSpaceId, preferRequestedSpace, requestedSpaceId, unscopedEntity]);
 
   const { entity, isLoading: isLoadingScopedView } = useQueryEntity({
     id: entityId,
@@ -653,7 +637,7 @@ export function EntitySidePanel() {
 
       if (
         target.closest(
-          '[data-entity-side-panel], [data-entity-side-panel-opener], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover'
+          '[data-entity-side-panel], [data-power-tools-entity-panel], [data-entity-side-panel-opener], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover'
         )
       ) {
         return;
