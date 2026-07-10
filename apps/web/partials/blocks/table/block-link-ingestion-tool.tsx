@@ -161,7 +161,7 @@ export function BlockLinkIngestionPanel() {
 
   return (
     <div className="mb-4 w-full" onMouseDown={e => e.stopPropagation()}>
-      <div className="relative flex h-[10.0625rem] w-full flex-col justify-center gap-3 overflow-hidden rounded-[0.75rem] bg-[#E9E9E9] px-6">
+      <div className="relative flex w-full flex-col gap-3 overflow-hidden rounded-[0.75rem] bg-[#E9E9E9] px-6 pt-8 pb-6">
         <img
           src="/images/add-data/sculpture.png"
           alt=""
@@ -169,18 +169,19 @@ export function BlockLinkIngestionPanel() {
           className="pointer-events-none absolute top-[-1.125rem] right-[-16.3125rem] h-[13.5625rem] w-[68.625rem] object-none opacity-50"
         />
 
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          aria-label="Collapse link ingestion panel"
-          className="absolute top-3 right-6 z-10 flex size-4 items-center justify-center text-grey-04 transition-colors hover:text-text"
-        >
-          <ChevronUpBig />
-        </button>
-
-        {/* Use a div — TipTap `.ProseMirror .data-node h2` forces text-button (~17px). */}
-        <div className="relative text-[19px] leading-[21px] font-semibold tracking-[-0.5px] text-[#151515]">
-          Link a news story and we&rsquo;ll extract and organize it for you
+        <div className="relative flex items-center justify-between gap-2 pr-[0.40625rem]">
+          {/* Use a div — TipTap `.ProseMirror .data-node h2` forces text-button (~17px). */}
+          <div className="min-w-0 text-[19px] leading-[21px] font-semibold tracking-[-0.5px] text-[#151515]">
+            Link a news story and we&rsquo;ll extract and organize it for you
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded(false)}
+            aria-label="Collapse link ingestion panel"
+            className="flex size-4 shrink-0 items-center justify-center text-grey-04 transition-colors hover:text-text"
+          >
+            <ChevronUpBig />
+          </button>
         </div>
 
         <form
