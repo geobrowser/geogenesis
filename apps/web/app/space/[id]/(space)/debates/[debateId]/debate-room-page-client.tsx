@@ -112,6 +112,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
   const [previewError, setPreviewError] = React.useState<string | null>(null);
+  const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
@@ -597,10 +598,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const finishLiveDebate = React.useCallback(async () => {
     if (!debate || finalizedDebateRef.current === debate.id) return;
+    const session = rematchQuery.data;
+    if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
     finalizedDebateRef.current = debate.id;
     const uploaded = await finishAndUpload();
     if (!uploaded) return;
-    const session = rematchQuery.data;
     if (session?.status === 'converted' && session.converted_debate_id) {
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
       return;
@@ -618,13 +620,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [finishLiveDebate]);
 
   const requestRematch = React.useCallback(async () => {
+    if (rematchConsentRequested) return;
     setRoomError(null);
+    setRematchConsentRequested(true);
     try {
       await consentToRematch.mutateAsync();
     } catch (error) {
+      setRematchConsentRequested(false);
       setRoomError(error instanceof Error ? error.message : 'Could not request another debate.');
     }
-  }, [consentToRematch]);
+  }, [consentToRematch, rematchConsentRequested]);
 
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
@@ -682,6 +687,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   ]);
 
   React.useEffect(() => {
+    const resumingAfterEffectCleanup = !mountedRef.current;
+    mountedRef.current = true;
+    if (resumingAfterEffectCleanup) {
+      localPreviewPromiseRef.current = null;
+      autoConnectAttemptedRef.current = null;
+    }
     return () => {
       mountedRef.current = false;
       previewGenerationRef.current += 1;
@@ -881,6 +892,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 rematchSession={rematchQuery.data ?? null}
                 currentUserId={currentUserId}
                 onRequestRematch={requestRematch}
+                rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
                 onRetryFinalization={retryLiveDebateFinalization}
                 onLeave={leave}
@@ -1119,6 +1131,7 @@ function DebateRecordingModal({
   rematchSession,
   currentUserId,
   onRequestRematch,
+  rematchConsentRequested,
   rematchBusy,
   onRetryFinalization,
   onLeave,
@@ -1141,15 +1154,19 @@ function DebateRecordingModal({
   rematchSession: DebateRematchSession | null;
   currentUserId: string | null;
   onRequestRematch: () => void;
+  rematchConsentRequested: boolean;
   rematchBusy: boolean;
   onRetryFinalization: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
-  const remoteParticipant = localSlot
-    ? (debate.participants.find(participant => participant.participant_slot !== localSlot) ?? null)
-    : null;
+  const localParticipant =
+    (localSlot
+      ? debate.participants.find(participant => participant.participant_slot === localSlot)
+      : debate.participants.find(participant => participant.user_id === currentUserId)) ?? null;
+  const remoteParticipant =
+    debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
   const showLocalGo = localTurnGoIsVisible(debate, countdown, localSlot);
   const thankingSlot = thankingParticipantSlot(debate, countdown.progress);
@@ -1172,6 +1189,48 @@ function DebateRecordingModal({
   );
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
+  const localVideoTile = (
+    <DebateVideoTile
+      key="local"
+      participantPosition={localParticipant?.position ?? null}
+      active={debate.status === 'in_progress' && countdown.activeSlot === localSlot}
+      overlayText={videoEnabled ? null : 'Camera off'}
+      upcomingSeconds={localUpcomingSeconds}
+      showGo={showLocalGo}
+      inactive={localInactive}
+      revealInactive={localUpcomingSeconds !== null}
+      inactiveOverlayId="local"
+      countdown={localCountdown}
+      closingMessage={
+        debate.status === 'thanking' &&
+        thankingSlot !== null &&
+        localSlot !== null &&
+        thankingSlot === localSlot
+      }
+    >
+      <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+    </DebateVideoTile>
+  );
+  const remoteVideoTile = (
+    <DebateVideoTile
+      key="remote"
+      participantPosition={remoteParticipant?.position ?? null}
+      active={debate.status === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot}
+      overlayText={remoteVideoReady ? null : 'Waiting for video'}
+      inactive={remoteInactive}
+      inactiveOverlayId="remote"
+      muted={!remoteAudioEnabled}
+      countdown={remoteCountdown}
+    >
+      <div
+        ref={remoteMediaRef}
+        className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
+      />
+    </DebateVideoTile>
+  );
+  const orderedVideoTiles = localParticipant?.position === false
+    ? [remoteVideoTile, localVideoTile]
+    : [localVideoTile, remoteVideoTile];
 
   return (
     <div
@@ -1199,40 +1258,14 @@ function DebateRecordingModal({
         </h1>
 
         <div className="relative grid w-full gap-2">
-          <DebateVideoTile
-            active={debate.status === 'in_progress' && countdown.activeSlot === localSlot}
-            overlayText={videoEnabled ? null : 'Camera off'}
-            upcomingSeconds={localUpcomingSeconds}
-            showGo={showLocalGo}
-            inactive={localInactive}
-            revealInactive={localUpcomingSeconds !== null}
-            inactiveOverlayId="local"
-            countdown={localCountdown}
-            closingMessage={thankingSlot === localSlot}
-          >
-            <video ref={localVideoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
-          </DebateVideoTile>
-
-          <DebateVideoTile
-            active={debate.status === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot}
-            overlayText={remoteVideoReady ? null : 'Waiting for video'}
-            inactive={remoteInactive}
-            inactiveOverlayId="remote"
-            muted={!remoteAudioEnabled}
-            countdown={remoteCountdown}
-          >
-            <div
-              ref={remoteMediaRef}
-              className="h-full w-full bg-grey-01 [&>audio]:hidden [&>video]:h-full [&>video]:w-full [&>video]:bg-grey-01 [&>video]:object-cover"
-            />
-          </DebateVideoTile>
+          {orderedVideoTiles}
 
           {debate.status === 'thanking' && rematchSession && (
             <DebateAgainCard
               opponentName={
                 remoteRematchParticipant?.display_name || remoteRematchParticipant?.profile_space_id || 'Other debater'
               }
-              localConsented={localConsented}
+              localConsented={localConsented || rematchConsentRequested}
               remoteConsented={remoteConsented}
               busy={rematchBusy}
               onConsent={onRequestRematch}
@@ -1379,6 +1412,7 @@ function formatDebugDuration(durationMs: number) {
 }
 
 function DebateVideoTile({
+  participantPosition,
   active,
   overlayText,
   upcomingSeconds,
@@ -1391,6 +1425,7 @@ function DebateVideoTile({
   muted = false,
   children,
 }: {
+  participantPosition: boolean | null;
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
@@ -1405,6 +1440,9 @@ function DebateVideoTile({
 }) {
   return (
     <section
+      data-debate-video-position={
+        participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'
+      }
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
         muted && 'grayscale'
@@ -1525,7 +1563,7 @@ function DebateAgainCard({
             localConsented ? 'bg-ctaPrimary text-white' : 'bg-ctaPrimary text-white hover:bg-ctaPrimary/90'
           )}
         >
-          {busy ? 'Saving...' : 'Yes'}
+          {localConsented ? 'Waiting...' : busy ? 'Saving...' : 'Yes'}
         </button>
       </div>
       <div className="flex min-h-12 items-center justify-between gap-3 px-4">

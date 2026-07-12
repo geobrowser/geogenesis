@@ -35,6 +35,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ProcessedDebatePlayer', () => {
+  it('keeps the player surface transparent around the processed video', () => {
+    const { container } = render(
+      <ProcessedDebatePlayer
+        debateId="debate-1"
+        label="Processed debate video"
+        previewAvailable={false}
+        videoAvailable={false}
+      />
+    );
+
+    expect(container.firstElementChild).toHaveClass('bg-transparent');
+    expect(container.firstElementChild).not.toHaveClass('bg-text');
+  });
+
   it('loads the preview as a poster without requesting the final video', async () => {
     mocks.mediaMutate.mockImplementation((variables, options) => {
       if (variables.request.kind === 'preview_image') {

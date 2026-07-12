@@ -42,7 +42,7 @@ export function PublicDebateRecordingClient({ debateId }: { debateId: string }) 
           controls
           playsInline
           autoPlay
-          className="mx-auto max-h-[75dvh] w-full rounded-lg bg-black object-contain shadow-card"
+          className="mx-auto aspect-[27/41] w-full max-w-[49.4dvh] rounded-lg bg-transparent object-contain shadow-card"
         />
       ) : artifactUrl.error instanceof Error ? (
         <div className="rounded-lg border border-red-01 bg-white p-5 text-center">

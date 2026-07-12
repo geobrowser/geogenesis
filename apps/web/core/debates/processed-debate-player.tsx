@@ -116,7 +116,7 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
           : 'Loading preview...';
 
     return (
-      <div className={cn('relative aspect-[27/41] overflow-hidden rounded-lg bg-text shadow-light', className)}>
+      <div className={cn('relative aspect-[27/41] overflow-hidden rounded-lg bg-transparent shadow-light', className)}>
         <video
           ref={videoRef}
           src={videoUrl ?? undefined}
