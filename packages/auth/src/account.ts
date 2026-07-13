@@ -29,6 +29,7 @@ export type GeoWalletClient = {
   sendUserOperation: (args: {
     calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }>;
   }) => Promise<Hex>;
+  waitForUserOperationReceipt: (args: { hash: Hex }) => Promise<{ success: boolean }>;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────

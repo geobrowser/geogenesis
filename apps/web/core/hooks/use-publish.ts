@@ -12,7 +12,6 @@ import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
 import { getSpace } from '../io/queries';
-import { geo } from '../sdk/geo-client';
 import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
@@ -490,7 +489,7 @@ function executeFastProposal(args: ExecuteFastProposalArgs) {
       );
     }
 
-    const { to, calldata } = geo.daoSpaces.proposals.execute({
+    const { to, calldata } = geo.daoSpaces.executeProposal({
       authorSpaceId: author,
       spaceId,
       proposalId,
