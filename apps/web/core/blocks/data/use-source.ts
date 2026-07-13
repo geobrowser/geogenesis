@@ -35,7 +35,6 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
   const derivedSource: Source = getSource({
     blockId: EntityId(entityId),
     dataEntityRelations,
-    currentSpaceId: SpaceId(spaceId),
     filterState,
     knownSourceType,
   });

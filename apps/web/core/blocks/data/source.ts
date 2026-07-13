@@ -64,7 +64,6 @@ export function sourceStableKey(s: Source): string {
 type GetSourceArgs = {
   blockId: string;
   dataEntityRelations: Relation[];
-  currentSpaceId: string;
   filterState: Filter[];
   /** Source to assume while the block's Data Source Type relation is still unreadable. */
   knownSourceType?: Source['type'];
