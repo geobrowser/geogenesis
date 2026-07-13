@@ -92,7 +92,12 @@ function DataNodeComponent({ node, updateAttributes }: NodeViewProps) {
     <NodeViewWrapper>
       <div contentEditable="false" suppressContentEditableWarning={true} className="data-node">
         <ErrorBoundary fallback={<TableBlockError spaceId={spaceId} blockId={id} />} onError={reportBoundaryError}>
-          <DataBlockProvider spaceId={spaceId} entityId={id} relationId={relation?.entityId ?? ''}>
+          <DataBlockProvider
+            spaceId={spaceId}
+            entityId={id}
+            relationId={relation?.entityId ?? ''}
+            knownSourceType={node.attrs.initialDataSource === 'COLLECTION' ? 'COLLECTION' : undefined}
+          >
             <TableBlock
               spaceId={spaceId}
               blockId={id}
