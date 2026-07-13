@@ -41,6 +41,8 @@ beforeEach(() => {
   mocks.currentUserId.mockReturnValue('user-for');
   mocks.acceptMutate.mockReset();
   mocks.declineMutate.mockReset();
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
 });
 
 afterEach(() => {
@@ -51,11 +53,12 @@ describe('DebateMatchPrompt', () => {
   it('opens a match modal and lets the first participant choose a format before accepting', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
-    expect(screen.getByText('Bri wants to debate')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    expect(screen.getByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByText('Bri makes an argument')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('45/45 30/30'));
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.change(screen.getByLabelText('Debate format'), { target: { value: 'extended-standard' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
       { matchId: 'match-1', formatId: 'extended-standard' },
@@ -63,23 +66,46 @@ describe('DebateMatchPrompt', () => {
     );
   });
 
-  it('can be minimized and reopened', () => {
+  it('shows a disabled block menu for the other participant only', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Minimize' }));
+    expect(screen.queryByRole('button', { name: 'More actions for You' })).not.toBeInTheDocument();
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByText('Match found: Bri')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Bri' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
-
-    expect(screen.getByRole('dialog', { name: 'Bri wants to debate' })).toBeInTheDocument();
+    const blockAction = screen.getByRole('menuitem', { name: 'Block Bri' });
+    expect(blockAction).toBeDisabled();
   });
 
-  it('skips the matched person for ten minutes', () => {
+  it('locks background scrolling while the match dialog is open', () => {
+    const { unmount } = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('hides the format selector from the second participant', () => {
+    mocks.currentUserId.mockReturnValue('user-against');
+
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Skip this person for 10 min' }));
+    expect(screen.getByText('Debate format')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.acceptMutate).toHaveBeenCalledWith({ matchId: 'match-1', formatId: undefined }, expect.any(Object));
+  });
+
+  it('rejects the matched person for the question', () => {
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
 
     expect(mocks.declineMutate).toHaveBeenCalledWith('match-1', expect.any(Object));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -100,7 +126,7 @@ describe('DebateMatchPrompt', () => {
 
     const { rerender } = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
 
@@ -114,16 +140,12 @@ function match(): DebateMatch {
   return {
     id: 'match-1',
     status: 'pending',
-    question: {
-      id: 'question-1',
+    claim: {
+      id: 'claim-1',
       space_id: 'space-1',
-      question_entity_id: 'question-entity-1',
-      question: 'Should the protocol ship debates?',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'The protocol should ship debates',
       description: null,
-      answer_options: [
-        { entity_id: 'answer-yes', label: 'Yes' },
-        { entity_id: 'answer-no', label: 'No' },
-      ],
     },
     participants: [
       {
@@ -132,7 +154,8 @@ function match(): DebateMatch {
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        position: true,
+        position_label: 'Yes',
         accepted: false,
       },
       {
@@ -141,7 +164,8 @@ function match(): DebateMatch {
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        answer: { entity_id: 'answer-no', label: 'No' },
+        position: false,
+        position_label: 'No',
         accepted: false,
       },
     ],
@@ -155,16 +179,12 @@ function match(): DebateMatch {
 function debate(): Debate {
   return {
     id: 'debate-1',
-    question: {
-      id: 'question-1',
+    claim: {
+      id: 'claim-1',
       space_id: 'space-1',
-      question_entity_id: 'question-entity-1',
-      question: 'Should the protocol ship debates?',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'The protocol should ship debates',
       description: null,
-      answer_options: [
-        { entity_id: 'answer-yes', label: 'Yes' },
-        { entity_id: 'answer-no', label: 'No' },
-      ],
     },
     status: 'ready',
     room_name: 'geo-debate-debate-1',
@@ -188,8 +208,10 @@ function debate(): Debate {
         display_name: 'Alex',
         avatar_cid: null,
         participant_slot: 1,
-        answer: { entity_id: 'answer-yes', label: 'Yes' },
+        position: true,
+        position_label: 'Yes',
         joined_at: null,
+        ready_at: null,
       },
       {
         user_id: 'user-against',
@@ -197,8 +219,10 @@ function debate(): Debate {
         display_name: 'Bri',
         avatar_cid: null,
         participant_slot: 2,
-        answer: { entity_id: 'answer-no', label: 'No' },
+        position: false,
+        position_label: 'No',
         joined_at: null,
+        ready_at: null,
       },
     ],
     recordings: [],

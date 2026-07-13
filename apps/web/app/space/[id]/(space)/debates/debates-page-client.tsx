@@ -4,9 +4,20 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import type { Debate, ParticipantSlot } from '~/core/debates/api';
-import { useRecordingUrl, useSpaceDebates } from '~/core/debates/hooks';
-import { DebateMatchPrompt } from '~/core/debates/match-prompt';
+import {
+  type Debate,
+  type DebateTranscriptSegment,
+  type ParticipantSlot,
+  getCurrentGeoChatUserId,
+} from '~/core/debates/api';
+import {
+  useDebateMedia,
+  useDebateTranscript,
+  useRecordingUrl,
+  useRequestDebateMediaProcessing,
+  useSpaceDebates,
+} from '~/core/debates/hooks';
+import { ProcessedDebatePlayer, type ProcessedDebatePlayerHandle } from '~/core/debates/processed-debate-player';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -38,6 +49,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
   const debates = debatesQuery.data?.debates ?? [];
   const recordedDebates = debates.filter(isWatchableDebate);
   const [selectedDebate, setSelectedDebate] = React.useState<Debate | null>(null);
+  const [selectedTranscriptDebate, setSelectedTranscriptDebate] = React.useState<Debate | null>(null);
 
   return (
     <div className="py-8">
@@ -65,7 +77,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
             No debates yet
           </Text>
           <Text as="p" variant="body" color="grey-04" className="mt-2 max-w-[560px]">
-            Start from a published question by choosing an answer on the Questions tab.
+            Start from a published claim by choosing Yes or No on the Claims tab.
           </Text>
         </div>
       )}
@@ -78,53 +90,144 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
             </Text>
             <div className="space-y-3">
               {recordedDebates.map(debate => (
-                <DebateCard key={debate.id} debate={debate} onWatch={() => setSelectedDebate(debate)} />
+                <DebateCard
+                  key={debate.id}
+                  debate={debate}
+                  onWatch={() => setSelectedDebate(debate)}
+                  onTranscript={() => setSelectedTranscriptDebate(debate)}
+                />
               ))}
             </div>
           </section>
         )}
       </div>
       {selectedDebate && <DebatePlaybackDialog debate={selectedDebate} onClose={() => setSelectedDebate(null)} />}
-      <DebateMatchPrompt spaceId={spaceId} matches={matches} debates={debates} />
+      {selectedTranscriptDebate && (
+        <DebateTranscriptDialog debate={selectedTranscriptDebate} onClose={() => setSelectedTranscriptDebate(null)} />
+      )}
     </div>
   );
 }
 
-function DebateCard({ debate, onWatch }: { debate: Debate; onWatch: () => void }) {
+function DebateCard({
+  debate,
+  onWatch,
+  onTranscript,
+}: {
+  debate: Debate;
+  onWatch: () => void;
+  onTranscript: () => void;
+}) {
   const participants = orderedParticipants(debate);
+  const mediaQuery = useDebateMedia(debate.id, debate.status === 'complete');
+  const reprocessMediaMutation = useRequestDebateMediaProcessing(debate.id);
+  const processedVideoPlayerRef = React.useRef<ProcessedDebatePlayerHandle | null>(null);
+  const currentUserId = getCurrentGeoChatUserId();
+  const [reprocessError, setReprocessError] = React.useState<string | null>(null);
+  const hasProcessedVideo =
+    mediaQuery.data?.artifacts.some(artifact => artifact.kind === 'final_video' && artifact.filename.length > 0) ??
+    false;
+  const hasPreviewImage =
+    mediaQuery.data?.artifacts.some(artifact => artifact.kind === 'preview_image' && artifact.filename.length > 0) ??
+    false;
+  const hasTranscript = (mediaQuery.data?.transcript_segment_count ?? 0) > 0;
+  const mediaJobStatus = mediaQuery.data?.job?.status ?? null;
+  const isMediaProcessing = mediaJobStatus === 'queued' || mediaJobStatus === 'running';
+  const isParticipant =
+    !!currentUserId && debate.participants.some(participant => participant.user_id === currentUserId);
+
+  const reprocessVideo = async () => {
+    setReprocessError(null);
+    try {
+      await reprocessMediaMutation.mutateAsync({ force: true });
+    } catch (caught) {
+      setReprocessError(caught instanceof Error ? caught.message : 'Could not reprocess video.');
+    }
+  };
 
   return (
-    <article className="max-md:grid max-md:grid-cols-1 max-md:items-stretch flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-light">
-      <div className="max-md:min-w-0 grid min-w-[220px] gap-1">
-        <div className="min-w-0">
-          <Text as="h3" variant="bodySemibold" color="text" className="block">
-            {debate.question.question}
-          </Text>
-          <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-            {statusLabel(debate.status)} · {formatDate(debate.completed_at ?? debate.started_at ?? debate.created_at)}
-          </Text>
+    <article className="max-md:flex-col max-md:items-stretch flex min-w-0 items-center gap-4 rounded-lg border border-grey-02 bg-white p-3 shadow-light">
+      <ProcessedDebatePlayer
+        ref={processedVideoPlayerRef}
+        debateId={debate.id}
+        label={`Processed video for ${debate.claim.claim}`}
+        previewAvailable={hasPreviewImage}
+        videoAvailable={hasProcessedVideo}
+        className="max-md:mx-auto max-md:w-[180px] w-[150px] shrink-0"
+      />
+      <div className="max-md:grid max-md:grid-cols-1 max-md:items-stretch flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3">
+        <div className="max-md:min-w-0 grid min-w-[220px] gap-1">
+          <div className="min-w-0">
+            <Text as="h3" variant="bodySemibold" color="text" className="block">
+              {debate.claim.claim}
+            </Text>
+            <Text as="p" variant="metadata" color="grey-04" className="mt-1">
+              {statusLabel(debate.status)} · {formatDate(debate.completed_at ?? debate.started_at ?? debate.created_at)}
+            </Text>
+          </div>
+        </div>
+        <dl className="max-md:grid max-md:min-w-0 max-md:grid-cols-2 max-md:justify-stretch max-md:gap-x-4 max-md:gap-y-3 m-0 flex min-w-[280px] flex-1 items-center justify-end gap-3">
+          {participants.map(participant => (
+            <ParticipantTerm
+              key={participant.user_id}
+              label={participant.position_label}
+              name={speakerLabel(participant)}
+            />
+          ))}
+          <div className="grid min-w-[76px] gap-0.5">
+            <dt className="text-xs text-grey-04">Recordings</dt>
+            <dd className="m-0 text-xs text-text">{debate.recordings.length}</dd>
+          </div>
+          <div className="grid min-w-[76px] gap-0.5">
+            <dt className="text-xs text-grey-04">Format</dt>
+            <dd className="m-0 text-xs text-text">{debate.turn_durations_ms.length} turns</dd>
+          </div>
+        </dl>
+        <div className="max-md:w-full grid gap-1">
+          <div className="max-md:grid max-md:grid-cols-1 flex items-center justify-end gap-2">
+            <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
+              Watch
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              small
+              className="max-md:w-full"
+              disabled={!hasProcessedVideo}
+              onClick={() => processedVideoPlayerRef.current?.play()}
+            >
+              Processed video
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              small
+              className="max-md:w-full"
+              disabled={!hasTranscript}
+              onClick={onTranscript}
+            >
+              Transcript
+            </Button>
+            {isParticipant && (
+              <Button
+                type="button"
+                variant="secondary"
+                small
+                className="max-md:w-full"
+                disabled={isMediaProcessing || reprocessMediaMutation.isPending}
+                onClick={reprocessVideo}
+              >
+                {isMediaProcessing || reprocessMediaMutation.isPending ? 'Processing...' : 'Reprocess'}
+              </Button>
+            )}
+          </div>
+          {reprocessError && (
+            <Text as="p" variant="metadata" color="red-01" className="text-right">
+              {reprocessError}
+            </Text>
+          )}
         </div>
       </div>
-      <dl className="max-md:grid max-md:min-w-0 max-md:grid-cols-2 max-md:justify-stretch max-md:gap-x-4 max-md:gap-y-3 m-0 flex min-w-[280px] flex-1 items-center justify-end gap-3">
-        {participants.map(participant => (
-          <ParticipantTerm
-            key={participant.user_id}
-            label={participant.answer.label}
-            name={speakerLabel(participant)}
-          />
-        ))}
-        <div className="grid min-w-[76px] gap-0.5">
-          <dt className="text-xs text-grey-04">Recordings</dt>
-          <dd className="m-0 text-xs text-text">{debate.recordings.length}</dd>
-        </div>
-        <div className="grid min-w-[76px] gap-0.5">
-          <dt className="text-xs text-grey-04">Format</dt>
-          <dd className="m-0 text-xs text-text">{debate.turn_durations_ms.length} turns</dd>
-        </div>
-      </dl>
-      <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
-        Watch
-      </Button>
     </article>
   );
 }
@@ -164,12 +267,91 @@ function DebatePlaybackDialog({ debate, onClose }: { debate: Debate; onClose: ()
               id="debate-playback-title"
               className="mt-1 block truncate text-[0.9375rem] leading-5 font-semibold text-text"
             >
-              {debate.question.question}
+              {debate.claim.claim}
             </h2>
           </div>
           <SquareButton type="button" icon={<Close />} aria-label="Close playback" onClick={onClose} />
         </header>
         <DebatePlayback debate={debate} />
+      </section>
+    </div>
+  );
+}
+
+function DebateTranscriptDialog({ debate, onClose }: { debate: Debate; onClose: () => void }) {
+  const transcriptQuery = useDebateTranscript(debate.id, 'json', true);
+  const transcriptSegments = transcriptQuery.data?.segments ?? [];
+  const sections = React.useMemo(() => transcriptSectionsFor(debate, transcriptSegments), [debate, transcriptSegments]);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="max-sm:p-0 fixed inset-0 z-[1300] flex items-center justify-center bg-text/20 p-4 backdrop-blur-md">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="debate-transcript-title"
+        className="max-sm:h-dvh max-sm:max-h-dvh max-sm:rounded-none flex h-[min(760px,calc(100dvh-2rem))] max-h-[calc(100dvh-2rem)] w-[min(640px,100%)] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-text shadow-card"
+      >
+        <header className="flex min-w-0 items-start justify-between gap-3 border-b border-grey-02 px-4 py-3">
+          <div className="min-w-0">
+            <Text as="div" variant="metadataMedium" color="grey-04" className="uppercase">
+              Transcript
+            </Text>
+            <h2
+              id="debate-transcript-title"
+              className="mt-1 block truncate text-[0.9375rem] leading-5 font-semibold text-text"
+            >
+              {debate.claim.claim}
+            </h2>
+          </div>
+          <SquareButton type="button" icon={<Close />} aria-label="Close transcript" onClick={onClose} />
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-bg px-4 py-4">
+          {transcriptQuery.isLoading && (
+            <div className="rounded-lg border border-grey-02 bg-white px-4 py-5">
+              <Text color="grey-04">Loading transcript...</Text>
+            </div>
+          )}
+
+          {transcriptQuery.error instanceof Error && (
+            <div className="rounded-lg border border-red-01 bg-white px-4 py-4">
+              <Text color="red-01">{transcriptQuery.error.message}</Text>
+            </div>
+          )}
+
+          {!transcriptQuery.isLoading && !transcriptQuery.error && transcriptSegments.length === 0 && (
+            <div className="rounded-lg border border-grey-02 bg-white px-4 py-5">
+              <Text color="grey-04">No transcript is available for this debate yet.</Text>
+            </div>
+          )}
+
+          {transcriptSegments.length > 0 && (
+            <div className="space-y-3">
+              {sections.map(section => (
+                <section key={section.index} className="rounded-lg border border-grey-02 bg-white px-4 py-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <Text as="h3" variant="metadataMedium" color="grey-04">
+                      Turn {section.index + 1} · {formatTranscriptRange(section.startMs, section.endMs)}
+                    </Text>
+                    <span className="rounded-full bg-bg px-2 py-0.5 text-xs text-grey-04">{section.positionLabel}</span>
+                  </div>
+                  <p className="m-0 text-sm leading-6 whitespace-pre-wrap text-text">
+                    <span className="font-semibold">{section.speakerName}:</span>{' '}
+                    {section.text || <span className="text-grey-04">No transcript for this turn.</span>}
+                  </p>
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -364,8 +546,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
       <div className="relative grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] place-items-center gap-2 overflow-hidden px-2 py-3">
         <PlaybackPane
           slot={1}
-          label={slot1Participant?.answer.label ?? 'Answer'}
-          name={slot1Participant ? speakerLabel(slot1Participant) : 'Answer'}
+          label={slot1Participant?.position_label ?? 'Position'}
+          name={slot1Participant ? speakerLabel(slot1Participant) : 'Position'}
           src={urls.slot1}
           countdown={turnState?.slot === 1 ? turnState : null}
           mutedByTurn={playing && turnState?.slot === 2}
@@ -377,8 +559,8 @@ function DebatePlayback({ debate }: { debate: Debate }) {
         />
         <PlaybackPane
           slot={2}
-          label={slot2Participant?.answer.label ?? 'Answer'}
-          name={slot2Participant ? speakerLabel(slot2Participant) : 'Answer'}
+          label={slot2Participant?.position_label ?? 'Position'}
+          name={slot2Participant ? speakerLabel(slot2Participant) : 'Position'}
           src={urls.slot2}
           countdown={turnState?.slot === 2 ? turnState : null}
           mutedByTurn={playing && turnState?.slot === 1}
@@ -607,6 +789,16 @@ type TurnSegment = {
   durationSeconds: number;
 };
 
+type TranscriptSection = {
+  index: number;
+  slot: ParticipantSlot;
+  speakerName: string;
+  positionLabel: string;
+  startMs: number;
+  endMs: number;
+  text: string;
+};
+
 function isWatchableDebate(debate: Debate) {
   return (
     debate.status === 'complete' &&
@@ -630,6 +822,44 @@ function turnSegmentsFor(firstSlot: ParticipantSlot, turnDurationsMs: number[]):
     index,
     durationSeconds: Math.max(0, durationMs / 1_000),
   }));
+}
+
+function transcriptSectionsFor(debate: Debate, segments: DebateTranscriptSegment[]): TranscriptSection[] {
+  const sortedSegments = [...segments].sort(
+    (a, b) => a.start_ms - b.start_ms || a.sequence_index - b.sequence_index || a.participant_slot - b.participant_slot
+  );
+  const turnDurationsMs = normalizeTurnDurationsMs(debate.turn_durations_ms);
+  const sections: TranscriptSection[] = [];
+  let startMs = 0;
+
+  for (let index = 0; index < turnDurationsMs.length; index += 1) {
+    const durationMs = turnDurationsMs[index];
+    const endMs = startMs + durationMs;
+    const slot = turnSlot(debate.first_participant_slot, index);
+    const participant = participantForSlot(debate, slot);
+    const sectionText = sortedSegments
+      .filter(segment => segment.participant_slot === slot && segmentOverlapsWindow(segment, startMs, endMs))
+      .map(segment => segment.text.trim())
+      .filter(Boolean)
+      .join(' ');
+
+    sections.push({
+      index,
+      slot,
+      speakerName: participant ? speakerLabel(participant) : `Speaker ${slot}`,
+      positionLabel: participant?.position_label ?? 'Position',
+      startMs,
+      endMs,
+      text: sectionText,
+    });
+    startMs = endMs;
+  }
+
+  return sections;
+}
+
+function segmentOverlapsWindow(segment: DebateTranscriptSegment, startMs: number, endMs: number) {
+  return segment.start_ms < endMs && segment.end_ms > startMs;
 }
 
 function turnStateForTime(firstSlot: ParticipantSlot, turnDurationsMs: number[], seconds: number): TurnState {
@@ -670,7 +900,11 @@ function formatSeconds(seconds: number) {
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
-  return debate.participants.find(participant => participant.participant_slot === slot)?.answer.label ?? 'Answer';
+  return debate.participants.find(participant => participant.participant_slot === slot)?.position_label ?? 'Position';
+}
+
+function participantForSlot(debate: Debate, slot: ParticipantSlot) {
+  return debate.participants.find(participant => participant.participant_slot === slot) ?? null;
 }
 
 function orderedParticipants(debate: Debate) {
@@ -688,4 +922,8 @@ function statusLabel(status: Debate['status']) {
 function formatDate(value: string | null) {
   if (!value) return 'Not started';
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function formatTranscriptRange(startMs: number, endMs: number) {
+  return `${formatSeconds(startMs / 1_000)}-${formatSeconds(endMs / 1_000)}`;
 }
