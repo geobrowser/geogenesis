@@ -145,9 +145,21 @@ export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, ta
     const url = relation.toEntity.value;
 
     const isVideo = relation.renderableType === 'VIDEO';
-    const hasUrl = sourceValues.some(value => value.entity.id === mediaEntityId && isMediaUrl(value.value));
+    const typeId = isVideo ? SystemIds.VIDEO_TYPE : SystemIds.IMAGE_TYPE;
+
+    // Both guards ask whether the copies above already carried the media entity
+    // across, so they check for the exact url property and type the rebuild
+    // below would write. Matching any url-shaped value, or any Types relation,
+    // would skip a rebuild the target space still needs.
+    const hasUrl = sourceValues.some(
+      value =>
+        value.entity.id === mediaEntityId &&
+        value.property.id === SystemIds.IMAGE_URL_PROPERTY &&
+        isMediaUrl(value.value)
+    );
+
     const hasType = sourceRelations.some(
-      r => r.fromEntity.id === mediaEntityId && r.type.id === SystemIds.TYPES_PROPERTY
+      r => r.fromEntity.id === mediaEntityId && r.type.id === SystemIds.TYPES_PROPERTY && r.toEntity.id === typeId
     );
 
     const valueId = ID.createValueId({
@@ -167,8 +179,6 @@ export function cloneEntityIntoSpace(entityId: string, sourceSpaceId: string, ta
     }
 
     if (hasType) return;
-
-    const typeId = isVideo ? SystemIds.VIDEO_TYPE : SystemIds.IMAGE_TYPE;
 
     const typeRelation: Relation = {
       id: IdUtils.generate(),
