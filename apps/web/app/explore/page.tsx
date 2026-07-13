@@ -25,6 +25,8 @@ export default async function ExploreRoutePage() {
     memberSpaceId = null;
   }
 
+  // Fire every fetch in parallel. Each branch handles its own failure so one
+  // degraded indexer call doesn't drop the whole page.
   const browsePromise = fetchBrowseSidebarData(memberSpaceId).catch(() =>
     fetchBrowseSidebarData(null).catch(() => null)
   );
@@ -58,7 +60,7 @@ export default async function ExploreRoutePage() {
     : [];
   const editorSpaceIds: string[] = governance ? governance.editorIds : [];
 
-  // For featured + recently-claimed spaces the user isn't already part of, check
+  // For featured spaces the user isn't already part of, check
   // whether they have an active ADD_MEMBER proposal so the Join button can render
   // "Membership pending" without a client roundtrip.
   let pendingMembershipSpaceIds: string[] = [];
@@ -70,8 +72,11 @@ export default async function ExploreRoutePage() {
       if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
       candidateIds.set(normalized, s.spaceId);
     }
+    // Cap concurrency: with up to ~60 featured + recently-claimed candidates this
+    // is one REST call each, and an unbounded fan-out would burst the indexer.
     const checks = await mapWithConcurrency([...candidateIds.values()], 8, async spaceId => {
       try {
+        // Only an open vote is "pending"; a stuck request lets the Join button reappear.
         const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
         return req != null && !req.isVotingEnded ? spaceId : null;
       } catch {
