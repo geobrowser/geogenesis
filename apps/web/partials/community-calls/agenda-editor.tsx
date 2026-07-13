@@ -77,6 +77,7 @@ export function AgendaEditor({
   spaceId,
   callId,
   seriesName,
+  seriesDescription,
   occurrence,
   autoPublishAhead,
   schedule,
@@ -84,6 +85,8 @@ export function AgendaEditor({
   spaceId: string;
   callId: string;
   seriesName: string;
+  /** Series description, inherited onto the published event's Description. */
+  seriesDescription: string;
   occurrence: Occurrence;
   /** Series' `Auto publish ahead` setting — a republish nudge is only useful when it's > 0. */
   autoPublishAhead: number;
@@ -298,6 +301,7 @@ export function AgendaEditor({
       spaceId,
       seriesId: callId,
       seriesName,
+      seriesDescription,
       occurrenceStart: effectiveStart,
       occurrenceEnd: effectiveEnd,
       agendaBlocks: parseAgendaText(text),

@@ -6,6 +6,7 @@ import { getBatchEntities, getEntityBacklinks, getRelationsByFromEntityId } from
 import { Entity, Relation } from '~/core/types';
 
 import { EVENT_SCHEMA, OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
+import { isPlayableRecordingUrl } from './recordings';
 
 export type PublishedAgendaBlock = { blockId: string; markdown: string; position: string };
 
@@ -62,6 +63,18 @@ export async function fetchOccurrenceEventId(
 ): Promise<string | null> {
   const best = await matchOccurrenceEvent(seriesId, spaceId, occurrenceStart);
   return best?.entity.id ?? null;
+}
+
+/**
+ * The recording URLs already attached to a published event, so a publish can skip a recording
+ * that's already there. `getRelationsByFromEntityId` runs the live decoder, so `toEntity.value`
+ * is the resolved URL of the relation's Video entity.
+ */
+export async function fetchEventRecordingUrls(eventId: string, spaceId: string): Promise<string[]> {
+  const relations = await Effect.runPromise(
+    getRelationsByFromEntityId(eventId, EVENT_SCHEMA.RECORDINGS_PROPERTY, spaceId)
+  ).catch(() => []);
+  return relations.map(r => r.toEntity.value).filter(isPlayableRecordingUrl);
 }
 
 /**
