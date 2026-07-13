@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,9 +60,32 @@ beforeEach(() => {
   mocks.claims = [sharedClaim()];
 });
 
-afterEach(cleanup);
+afterEach(async () => {
+  cleanup();
+  await new Promise(resolve => window.setTimeout(resolve, 0));
+});
 
 describe('DebateRematchPageClient', () => {
+  it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
+    render(
+      <StrictMode>
+        <DebateRematchPageClient sessionId="rematch-1" />
+      </StrictMode>
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Rematch Salina' })).toBeInTheDocument();
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('leaves a browsing rematch when the page actually unmounts', async () => {
+    const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    unmount();
+
+    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledOnce());
+  });
+
   it('pins shared preferences above additional published claims and enables opposing requests', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 

@@ -69,6 +69,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const leavingRef = React.useRef(false);
   const sessionStatusRef = React.useRef<DebateRematchSession['status'] | null>(null);
   const leaveMutationRef = React.useRef(leaveSession.mutate);
+  const leaveOnUnmountTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
   leaveMutationRef.current = leaveSession.mutate;
   const acceptRequest = useAcceptDebateRematchRequest();
   const rejectRequest = useRejectDebateRematchRequest();
@@ -135,17 +136,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
   }, [router, session]);
 
-  React.useEffect(
-    () => () => {
+  React.useEffect(() => {
+    if (leaveOnUnmountTimerRef.current !== null) {
+      window.clearTimeout(leaveOnUnmountTimerRef.current);
+      leaveOnUnmountTimerRef.current = null;
+    }
+
+    return () => {
       if (
         !leavingRef.current &&
         (sessionStatusRef.current === 'browsing' || sessionStatusRef.current === 'request_pending')
       ) {
-        leaveMutationRef.current();
+        leaveOnUnmountTimerRef.current = window.setTimeout(() => {
+          leaveOnUnmountTimerRef.current = null;
+          if (
+            !leavingRef.current &&
+            (sessionStatusRef.current === 'browsing' || sessionStatusRef.current === 'request_pending')
+          ) {
+            leaveMutationRef.current();
+          }
+        }, 0);
       }
-    },
-    []
-  );
+    };
+  }, []);
 
   const leave = () => {
     leavingRef.current = true;
