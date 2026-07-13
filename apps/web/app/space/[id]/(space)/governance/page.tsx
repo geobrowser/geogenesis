@@ -19,6 +19,7 @@ import { getMembershipProposalDisplayName } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import {
   type GovernanceProposalType,
   GovernanceProposalTypeFilter,
@@ -127,34 +128,36 @@ export default async function GovernancePage(props: Props) {
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="flex items-center gap-5">
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Voting period</h2>
-            <p className="text-mediumTitle">{votingPeriod}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-            <p className="text-mediumTitle">{passThreshold}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Active proposals</h2>
-            <p className="text-mediumTitle">{activeProposals.totalCount}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
-            <div className="flex items-center gap-3 text-mediumTitle">
-              <span>{acceptedProposals.totalCount}</span>
-              <div className="h-4 w-px bg-grey-02" />
-              <span>{rejectedProposals.totalCount}</span>
-            </div>
-          </GovernanceMetadataBox>
+      <EntityPageContentContainer>
+        <div className="space-y-4">
+          <div className="flex items-center gap-5">
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Voting period</h2>
+              <p className="text-mediumTitle">{votingPeriod}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Pass threshold</h2>
+              <p className="text-mediumTitle">{passThreshold}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Active proposals</h2>
+              <p className="text-mediumTitle">{activeProposals.totalCount}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Accepted vs. rejected</h2>
+              <div className="flex items-center gap-3 text-mediumTitle">
+                <span>{acceptedProposals.totalCount}</span>
+                <div className="h-4 w-px bg-grey-02" />
+                <span>{rejectedProposals.totalCount}</span>
+              </div>
+            </GovernanceMetadataBox>
+          </div>
+          <GovernanceProposalTypeFilter spaceId={params.id} />
+          <React.Suspense fallback="Loading initial...">
+            <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
+          </React.Suspense>
         </div>
-        <GovernanceProposalTypeFilter spaceId={params.id} />
-        <React.Suspense fallback="Loading initial...">
-          <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
-        </React.Suspense>
-      </div>
+      </EntityPageContentContainer>
 
       <ActiveProposal connectedAddress={connectedAddress} spaceId={params.id} proposalId={searchParams.proposalId} />
     </>

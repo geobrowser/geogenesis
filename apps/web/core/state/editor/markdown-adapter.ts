@@ -9,7 +9,6 @@ import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
   PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
 } from '~/core/state/editor/profile-overview-tail-placeholder';
-
 import { tokenizeWeb2Urls } from '~/core/utils/url-detection';
 
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
@@ -138,9 +137,7 @@ function markWeb2UrlsInJson(node: JSONContent): JSONContent {
 
   const content: JSONContent[] = [];
   for (const child of node.content) {
-    const alreadyLinked = (child.marks ?? []).some(
-      mark => mark.type === 'link' || mark.type === 'web2URL'
-    );
+    const alreadyLinked = (child.marks ?? []).some(mark => mark.type === 'link' || mark.type === 'web2URL');
 
     if (child.type === 'text' && typeof child.text === 'string' && !alreadyLinked) {
       const segments = tokenizeWeb2Urls(child.text);

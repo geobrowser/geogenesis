@@ -14,12 +14,7 @@ export function SpaceEditorsDialogServerContainer({
     <SpaceMembersManageDialog
       header={<h1 className="text-smallTitle">Manage editors</h1>}
       trigger={<p>Manage editors</p>}
-      content={
-        <SpaceEditorsManageDialogContent
-          spaceId={spaceId}
-          initialParticipantsPage={initialParticipantsPage}
-        />
-      }
+      content={<SpaceEditorsManageDialogContent spaceId={spaceId} initialParticipantsPage={initialParticipantsPage} />}
     />
   );
 }

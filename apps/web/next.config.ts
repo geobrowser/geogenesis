@@ -12,12 +12,10 @@ const isDev = process.env.NODE_ENV === 'development';
 const turbopackOptimizations =
   isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
     ? {
-        turbopackInferModuleSideEffects: false,
-        turbopackInputSourceMaps: false,
+        turbopackTreeShaking: false,
         turbopackRemoveUnusedExports: false,
         turbopackRemoveUnusedImports: false,
-        turbopackSourceMaps: false,
-        turbopackTreeShaking: false,
+        turbopackInferModuleSideEffects: false,
       }
     : {};
 
@@ -26,6 +24,7 @@ const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
+  agentRules: false,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   turbopack: isDev
     ? {
@@ -37,6 +36,7 @@ const nextConfig: NextConfig = {
       }
     : undefined,
   experimental: {
+    turbopackRustReactCompiler: true,
     ...turbopackOptimizations,
     optimizePackageImports,
   },

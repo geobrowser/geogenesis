@@ -13,3 +13,5 @@ replay.log
 .nitro
 tmp
 .worktrees
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
