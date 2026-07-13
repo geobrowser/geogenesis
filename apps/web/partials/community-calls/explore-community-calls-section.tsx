@@ -23,6 +23,10 @@ import { RsvpButton } from './rsvp-button';
 
 type Row = { call: ExploreCall; occ: Occurrence };
 
+// A recurring call expands into an occurrence per week across the whole future
+// window, so the upcoming list runs long without a cap.
+const INITIAL_VISIBLE_COUNT = 3;
+
 type Props = {
   calls: ExploreCall[];
   /** Spaces the viewer already belongs to — no Join space button for these. */
@@ -51,6 +55,13 @@ export function ExploreCommunityCallsSection({
   }, []);
 
   const [spaceFilter, setSpaceFilter] = React.useState('all');
+  const [showAll, setShowAll] = React.useState(false);
+
+  // A new filter is a new list, so collapse back to the default cap.
+  const selectSpace = (value: string) => {
+    setSpaceFilter(value);
+    setShowAll(false);
+  };
 
   const spaceOptions = React.useMemo(() => {
     const seen = new Map<string, string>();
@@ -82,13 +93,17 @@ export function ExploreCommunityCallsSection({
     pending: pendingMembershipSpaceIds.has(normId(spaceId)),
   });
 
+  // Live calls are happening now, so the cap applies only to the upcoming stream.
+  const visibleUpcoming = showAll ? upcoming : upcoming.slice(0, INITIAL_VISIBLE_COUNT);
+  const hasMore = upcoming.length > INITIAL_VISIBLE_COUNT;
+
   return (
     <section className="flex flex-col">
       <div className="flex flex-col gap-3 pb-4">
         <div className="flex items-center justify-between">
           <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">Community calls</h2>
           <div className="w-[120px]">
-            <Select value={spaceFilter} onChange={setSpaceFilter} options={spaceOptions} />
+            <Select value={spaceFilter} onChange={selectSpace} options={spaceOptions} />
           </div>
         </div>
         <p className="text-[16px] leading-[20px] text-grey-04">
@@ -97,17 +112,30 @@ export function ExploreCommunityCallsSection({
       </div>
 
       {now !== null && (
-        <div className="flex flex-col gap-2">
-          {live.map(row => (
-            <LiveCard key={`${row.call.callId}-${row.occ.startMs}`} row={row} {...membership(row.call.spaceId)} />
-          ))}
-          {upcoming.map(row => (
-            <UpcomingCard key={`${row.call.callId}-${row.occ.startMs}`} row={row} {...membership(row.call.spaceId)} />
-          ))}
-          {live.length === 0 && upcoming.length === 0 && (
-            <p className="text-[16px] leading-[20px] text-grey-04">No live or upcoming calls.</p>
-          )}
-        </div>
+        <>
+          <div className="flex flex-col gap-2">
+            {live.map(row => (
+              <LiveCard key={`${row.call.callId}-${row.occ.startMs}`} row={row} {...membership(row.call.spaceId)} />
+            ))}
+            {visibleUpcoming.map(row => (
+              <UpcomingCard key={`${row.call.callId}-${row.occ.startMs}`} row={row} {...membership(row.call.spaceId)} />
+            ))}
+            {live.length === 0 && upcoming.length === 0 && (
+              <p className="text-[16px] leading-[20px] text-grey-04">No live or upcoming calls.</p>
+            )}
+          </div>
+
+          {hasMore ? (
+            <button
+              type="button"
+              aria-expanded={showAll}
+              onClick={() => setShowAll(prev => !prev)}
+              className="mt-3 self-start rounded-full border border-grey-02 py-1.5 pr-2.5 pl-2 text-[16px] leading-[18px] text-grey-04 transition-colors hover:border-text hover:text-text"
+            >
+              {showAll ? 'Show less' : 'Show more'}
+            </button>
+          ) : null}
+        </>
       )}
     </section>
   );
