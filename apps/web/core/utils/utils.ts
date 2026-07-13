@@ -465,6 +465,19 @@ export const getImagePathAtLevel = (value: string, level: number) => {
 // Primary gateway (Filebase). For single-shot callers with no runtime fallback.
 export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 
+// Image values are free-text entity properties, so an author can type anything.
+// next/image throws on a src that is neither root-relative nor an absolute URL,
+// which kills the whole page that rendered it.
+export const isRenderableImageSrc = (src: string) => {
+  if (src.startsWith('/')) return true;
+  try {
+    new URL(src);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 export const getVideoHash = getImageHash;
 export const getVideoPathAtLevel = getImagePathAtLevel;
 export const getVideoPath = (value: string) => getImagePathAtLevel(value, 0);
