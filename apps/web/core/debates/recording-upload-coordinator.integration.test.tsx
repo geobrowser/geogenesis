@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   createUpload: vi.fn(),
   deleteUpload: vi.fn(),
   getUpload: vi.fn(),
+  getToken: vi.fn(),
   invalidateQueries: vi.fn(),
   lockRequest: vi.fn(),
   markUploaded: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
-    getPrivyIdentityToken: vi.fn(),
+    getPrivyIdentityToken: mocks.getToken,
   }),
 }));
 
@@ -77,6 +78,7 @@ beforeEach(() => {
   }));
   mocks.deleteUpload.mockReset().mockResolvedValue(undefined);
   mocks.getUpload.mockReset().mockImplementation(async (id: string) => mocks.queue.find(upload => upload.id === id));
+  mocks.getToken.mockReset().mockResolvedValue('identity-token');
   mocks.invalidateQueries.mockReset();
   mocks.lockRequest.mockReset().mockImplementation(async (_name, _options, callback) => callback({ name: 'lock' }));
   mocks.markUploaded.mockReset().mockResolvedValue(undefined);
@@ -162,6 +164,19 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+  });
+
+  it('retries transient user resolution failures when the browser reconnects', async () => {
+    mocks.queue = [queuedRecording('debate-1')];
+    mocks.resolveUser.mockRejectedValueOnce(new Error('auth unavailable')).mockResolvedValue('user-a');
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.resolveUser).toHaveBeenCalledOnce());
+    window.dispatchEvent(new Event('online'));
+
+    await waitFor(() => expect(mocks.resolveUser).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
   });
 });
 

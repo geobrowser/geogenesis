@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   consentMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
+  getRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
   estimateStorage: vi.fn(),
   mediaRecorderStart: vi.fn(),
@@ -62,8 +63,10 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/debates/recording-upload-queue', () => ({
+  debateRecordingUploadId: (userId: string, debateId: string) => `${userId}:${debateId}`,
   enqueueDebateRecordingUpload: mocks.enqueueRecording,
   estimateRecordingStorage: mocks.estimateStorage,
+  getDebateRecordingUpload: mocks.getRecording,
   isStorageQuotaError: (error: unknown) =>
     typeof error === 'object' && error !== null && 'name' in error && error.name === 'QuotaExceededError',
   requestPersistentRecordingStorage: mocks.requestPersistentStorage,
@@ -91,6 +94,7 @@ beforeEach(() => {
   mocks.consentMutateAsync.mockReset();
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
+  mocks.getRecording.mockReset();
   mocks.requestPersistentStorage.mockReset();
   mocks.estimateStorage.mockReset();
   mocks.mediaRecorderStart.mockReset();
@@ -124,6 +128,7 @@ beforeEach(() => {
   mocks.roomConnect.mockResolvedValue(undefined);
   mocks.publishTrack.mockResolvedValue(undefined);
   mocks.enqueueRecording.mockResolvedValue(undefined);
+  mocks.getRecording.mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockResolvedValue(true);
   mocks.estimateStorage.mockResolvedValue({ quota: 1_000_000_000, usage: 0 });
   vi.stubGlobal(
@@ -737,6 +742,40 @@ describe('DebateRoomPageClient', () => {
 
     persistence.resolve();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:10.001Z'));
+    mocks.debate = { ...mocks.debate! };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    expect(mocks.debate.status).toBe('in_progress');
+  });
+
+  it('recognizes a durable queued recording after the debate room reloads', async () => {
+    mocks.getRecording.mockResolvedValue({ id: 'user-a:debate-1' });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing');
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.getRecording).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
   it('waits for a deciding rematch session to resolve before finalizing the completed debate', async () => {

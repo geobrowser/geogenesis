@@ -80,6 +80,7 @@ export function DebateRecordingUploadCoordinator() {
   const [activeUploadId, setActiveUploadId] = React.useState<string | null>(null);
   const [online, setOnline] = React.useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [wakeAt, setWakeAt] = React.useState(() => Date.now());
+  const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
   const [toastDismissed, setToastDismissed] = React.useState(false);
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
@@ -95,20 +96,29 @@ export function DebateRecordingUploadCoordinator() {
   React.useEffect(() => {
     if (!ready || !authenticated) {
       setUserId(null);
+      setUploads([]);
       return;
     }
+    setUserId(null);
+    setUploads([]);
     let cancelled = false;
+    let retryTimer: number | null = null;
     void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
       .then(id => {
+        if (!id) throw new Error('The debate upload user could not be resolved.');
         if (!cancelled) setUserId(id);
       })
       .catch(error => {
         console.warn('[DebateRecordingUploadCoordinator] could not resolve user:', error);
+        if (!cancelled) {
+          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), initialRetryDelayMs);
+        }
       });
     return () => {
       cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, ready]);
+  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -126,10 +136,14 @@ export function DebateRecordingUploadCoordinator() {
     const handleOnline = () => {
       setOnline(true);
       setWakeAt(Date.now());
+      if (!userId) setIdentityRetrySignal(current => current + 1);
     };
     const handleOffline = () => setOnline(false);
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') setWakeAt(Date.now());
+      if (document.visibilityState === 'visible') {
+        setWakeAt(Date.now());
+        if (!userId) setIdentityRetrySignal(current => current + 1);
+      }
     };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -139,7 +153,7 @@ export function DebateRecordingUploadCoordinator() {
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, []);
+  }, [userId]);
 
   React.useEffect(() => {
     if (activeUploadId || uploads.length === 0) return;

@@ -23,8 +23,10 @@ import {
   useMarkDebateReady,
 } from '~/core/debates/hooks';
 import {
+  debateRecordingUploadId,
   enqueueDebateRecordingUpload,
   estimateRecordingStorage,
+  getDebateRecordingUpload,
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
@@ -244,12 +246,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const performStoppedLocalRecordingPersistence = React.useCallback(async () => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return true;
+
+    const localParticipant =
+      debate?.participants.find(participant => participant.participant_slot === joinResponse?.participant_slot) ??
+      debate?.participants.find(participant => participant.user_id === currentUserId) ??
+      null;
+    if (!localParticipant || !debate) return false;
+
+    const backendRecordingExists = debate.recordings.some(recording => recording.user_id === localParticipant.user_id);
+    const queuedRecording = backendRecordingExists
+      ? undefined
+      : await getDebateRecordingUpload(debateRecordingUploadId(localParticipant.user_id, debate.id));
+    if (backendRecordingExists || queuedRecording) {
+      persistedRecordingDebateIdRef.current = debate.id;
+      return true;
+    }
+
     await stopLocalRecorder();
 
     const recorder = recorderRef.current;
     const startedAtMs = recordingStartedAtRef.current;
     const endedAtMs = recordingEndedAtRef.current;
-    if (!recorder || !startedAtMs || !endedAtMs || !joinResponse || !debate) return false;
+    if (!recorder || !startedAtMs || !endedAtMs) return false;
 
     if (!stoppedRecordingRef.current) {
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
@@ -268,11 +286,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         videoBitsPerSecond: recorder.videoBitsPerSecond || null,
       };
     }
-
-    const localParticipant = debate.participants.find(
-      participant => participant.participant_slot === joinResponse.participant_slot
-    );
-    if (!localParticipant) return false;
 
     const recording = stoppedRecordingRef.current;
     const storage = await estimateRecordingStorage();
@@ -316,7 +329,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingStartedAtRef.current = null;
     recordingEndedAtRef.current = null;
     return true;
-  }, [debate, joinResponse, stopLocalRecorder]);
+  }, [currentUserId, debate, joinResponse?.participant_slot, stopLocalRecorder]);
 
   const persistStoppedLocalRecording = React.useCallback(() => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return Promise.resolve(true);
@@ -327,6 +340,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingPersistencePromiseRef.current = persistence;
     return persistence;
   }, [debate?.id, performStoppedLocalRecordingPersistence]);
+
+  const persistRecordingAfterCapture = React.useCallback(() => {
+    if (!debate || recordingPersistenceStartedRef.current === debate.id) return;
+    recordingPersistenceStartedRef.current = debate.id;
+    void persistStoppedLocalRecording().catch(error => {
+      recordingPersistenceStartedRef.current = null;
+      setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+    });
+  }, [debate, persistStoppedLocalRecording]);
 
   const discardLocalRecorder = React.useCallback(async () => {
     clearRecordingTimers();
@@ -794,20 +816,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!recordingWindow) return;
 
     if (debate.status === 'thanking') {
-      if (recordingPersistenceStartedRef.current !== debate.id) {
-        recordingPersistenceStartedRef.current = debate.id;
-        void persistStoppedLocalRecording().catch(error => {
-          recordingPersistenceStartedRef.current = null;
-          setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
-        });
-      }
+      persistRecordingAfterCapture();
       return;
     }
     if (debate.status !== 'preflight' && debate.status !== 'in_progress') return;
 
     const now = Date.now();
     if (now >= recordingWindow.endAtMs) {
-      void stopLocalRecorder();
+      persistRecordingAfterCapture();
       return;
     }
 
@@ -819,13 +835,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
     recordingStopTimerRef.current = window.setTimeout(
       () => {
-        void stopLocalRecorder();
+        persistRecordingAfterCapture();
       },
       Math.max(0, recordingWindow.endAtMs - now)
     );
 
     return clearRecordingTimers;
-  }, [clearRecordingTimers, debate, persistStoppedLocalRecording, roomState, startLocalRecorder, stopLocalRecorder]);
+  }, [clearRecordingTimers, debate, persistRecordingAfterCapture, roomState, startLocalRecorder]);
 
   React.useEffect(() => {
     if (!debate) return;
