@@ -4,7 +4,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 import { Filter } from '~/core/blocks/data/filters';
@@ -28,6 +27,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -255,38 +255,17 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
             ) : null}
           </div>
 
-          <div className="flex w-full flex-col items-center gap-3">
-            <p className="text-center text-button font-medium text-text">Ranking type</p>
-            <div className="inline-flex items-center gap-1 rounded-lg bg-white p-1 shadow-button">
-              <button
-                type="button"
-                onClick={() => setIsRolling(false)}
-                aria-pressed={!isRolling}
-                className={cx(
-                  'rounded px-3 py-1 text-metadata transition',
-                  !isRolling ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
-                )}
-              >
-                Standard
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsRolling(true)}
-                aria-pressed={isRolling}
-                className={cx(
-                  'rounded px-3 py-1 text-metadata transition',
-                  isRolling ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
-                )}
-              >
-                Rolling
-              </button>
-            </div>
-            <p className="max-w-[320px] text-center text-footnote text-grey-04">
-              {isRolling
-                ? 'A single continuously-active ranking. Each submission stays live for the submission frequency, then rolls off until the curator submits again.'
-                : 'A round-based ranking bounded by a start and end date.'}
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsRolling(v => !v)}
+            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+            aria-pressed={isRolling}
+            className="flex items-center gap-1.5 text-metadata text-text"
+          >
+            Recurring
+            <CheckboxVisual checked={isRolling} className="size-3.5" />
+          </button>
 
           {isRolling ? (
             <div className="flex w-full flex-col items-center gap-2">
