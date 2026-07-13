@@ -304,8 +304,6 @@ function RematchClaimCard({
 }) {
   const localPosition = claim.participants.find(position => position.user_id === currentUserId)?.position ?? null;
   const remotePosition = claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null;
-  const localParticipant = session?.participants.find(participant => participant.user_id === currentUserId) ?? null;
-  const remoteParticipant = session?.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
   const request = session?.request;
   const requesting =
@@ -321,7 +319,6 @@ function RematchClaimCard({
       <div className="mt-4 grid grid-cols-2 gap-2">
         {[true, false].map(position => {
           const localOnPosition = localPosition === position;
-          const remoteOnPosition = remotePosition === position;
           return (
             <button
               key={String(position)}
@@ -329,23 +326,11 @@ function RematchClaimCard({
               onClick={() => onPositionChange(position)}
               disabled={busy || requesting}
               className={cx(
-                'flex min-h-11 items-center justify-between rounded-full px-4 text-button transition-colors disabled:opacity-60',
+                'flex min-h-11 items-center rounded-full px-4 text-button transition-colors disabled:opacity-60',
                 localOnPosition ? 'bg-green text-text' : 'bg-bg text-text'
               )}
             >
               <span>{position ? 'Yes' : 'No'}</span>
-              <span className="flex -space-x-1">
-                {localOnPosition && localParticipant && (
-                  <Avatar avatarUrl={localParticipant.avatar_cid} value={localParticipant.profile_space_id} size={22} />
-                )}
-                {remoteOnPosition && remoteParticipant && (
-                  <Avatar
-                    avatarUrl={remoteParticipant.avatar_cid}
-                    value={remoteParticipant.profile_space_id}
-                    size={22}
-                  />
-                )}
-              </span>
             </button>
           );
         })}

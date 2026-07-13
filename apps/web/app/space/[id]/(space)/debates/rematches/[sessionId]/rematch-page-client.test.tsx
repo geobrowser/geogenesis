@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -93,6 +93,15 @@ describe('DebateRematchPageClient', () => {
     const additional = screen.getByRole('heading', { name: 'A newly published claim' });
     expect(shared.compareDocumentPosition(additional) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+  });
+
+  it('does not show participant avatars in claim position controls', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
+    expect(sharedClaimCard).not.toBeNull();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).toBeNull();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).toBeNull();
   });
 
   it('shows an incoming request with the snapshotted format details', () => {
