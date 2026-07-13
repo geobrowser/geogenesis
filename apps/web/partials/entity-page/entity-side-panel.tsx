@@ -281,14 +281,21 @@ function EntitySidePanelBody({
     return entity?.relations?.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
   }, [entity]);
 
-  const blockIds = React.useMemo(() => blockRelations.map(r => r.toEntity.id), [blockRelations]);
+  const blockEntityIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const relation of blockRelations) {
+      ids.add(relation.toEntity.id);
+      if (relation.entityId) ids.add(relation.entityId);
+    }
+    return [...ids];
+  }, [blockRelations]);
 
   const { entities: blocks, isLoading: isBlocksLoading } = useQueryEntities({
     where: {
-      id: { in: blockIds },
+      id: { in: blockEntityIds },
     },
-    enabled: blockIds.length > 0,
-    first: Math.max(blockIds.length, 9),
+    enabled: blockEntityIds.length > 0,
+    first: Math.max(blockEntityIds.length, 9),
   });
 
   const tabRelations = React.useMemo(() => {
@@ -368,6 +375,11 @@ function EntitySidePanelBody({
       return;
     }
 
+    const allBlockRelations = [
+      ...blockRelations,
+      ...tabEntitiesOrdered.flatMap(tabEntity => (tabEntity.relations ?? []).filter(r => r.type.id === SystemIds.BLOCKS)),
+    ];
+
     let cancelled = false;
     fetchCollectionItemsForBlocks(
       mergedBlocks,
@@ -375,7 +387,8 @@ function EntitySidePanelBody({
         if (ids.length === 0) return [];
         return findMany({ where: { id: { in: ids } }, first: Math.max(ids.length, 9) });
       },
-      entitySpaceId
+      entitySpaceId,
+      allBlockRelations
     ).then(items => {
       if (!cancelled) setInitialCollectionItems(items);
     });
@@ -383,7 +396,17 @@ function EntitySidePanelBody({
     return () => {
       cancelled = true;
     };
-  }, [entity, blocks, initialTabs, loadingTabEntities, loadingNestedTabBlocks, entitySpaceId, findMany]);
+  }, [
+    entity,
+    blocks,
+    initialTabs,
+    loadingTabEntities,
+    loadingNestedTabBlocks,
+    entitySpaceId,
+    findMany,
+    blockRelations,
+    tabEntitiesOrdered,
+  ]);
 
   const isPanelLoading = (isLoadingEntity && !entity) || isBlocksLoading;
 

@@ -14,9 +14,11 @@ import { propertyForSort } from '~/core/utils/column-sort';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
+import { DEFAULT_DATA_BLOCK_PAGE_SIZE } from './block-ontology-ids';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter, FilterMode } from './filters';
 import { Source } from './source';
+import { useBlockPageSize } from './use-block-page-size';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
 import { mappingToCell, mappingToRows } from './use-mapping';
@@ -26,7 +28,8 @@ import { useSort } from './use-sort';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
-export const PAGE_SIZE = 9;
+/** Default when no Page size is set on the block relation. Prefer `useDataBlock().pageSize`. */
+export const PAGE_SIZE = DEFAULT_DATA_BLOCK_PAGE_SIZE;
 
 interface RenderablesQueryKey {
   sourceType: Source['type'];
@@ -109,6 +112,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   } = useView();
 
   const { sortState, setSortState } = useSort(options?.canEdit);
+  const pageSize = useBlockPageSize();
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const where = React.useMemo(
@@ -150,10 +154,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isPlaceholderData: isCollectionPlaceholder,
   } = useCollection({
     source,
-    first: PAGE_SIZE,
+    first: pageSize,
     pageNumber,
     after: currentAfter,
-    offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
+    offset: currentOffset !== undefined ? currentOffset * pageSize : undefined,
     where: where,
     sort: serverSort,
   });
@@ -188,9 +192,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
-    first: PAGE_SIZE,
+    first: pageSize,
     after: currentAfter,
-    offset: currentOffset !== undefined ? currentOffset * PAGE_SIZE : undefined,
+    offset: currentOffset !== undefined ? currentOffset * pageSize : undefined,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
     includeUnpublishedLocal: true,
@@ -357,17 +361,17 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const sortKey = React.useMemo(() => stableStringify(serverSort ?? null), [serverSort]);
   const lastResetKeyRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    const key = `${filterStateKey}::${sortKey}`;
+    const key = `${filterStateKey}::${sortKey}::${pageSize}`;
     if (lastResetKeyRef.current !== null && lastResetKeyRef.current !== key) {
       resetPagination();
     }
     lastResetKeyRef.current = key;
-  }, [filterStateKey, sortKey, resetPagination]);
+  }, [filterStateKey, sortKey, pageSize, resetPagination]);
 
-  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(collectionData.totalCount / pageSize);
   const sortedRows = React.useMemo(
-    () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
-    [rows, sortState]
+    () => (sortState ? rows.slice(0, pageSize) : (sortRows(rows)?.slice(0, pageSize) ?? [])),
+    [pageSize, rows, sortState]
   );
   const properties = React.useMemo(() => {
     if (!propertiesSchema) return [];
@@ -412,7 +416,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     source.type === 'COLLECTION'
       ? serverSort
         ? collectionHasNextPage
-        : (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
+        : (pageNumber + 1) * pageSize < collectionData.totalCount
       : source.type === 'GEO' || source.type === 'SPACES'
         ? queriedHasNextPage
         : false;
@@ -428,7 +432,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     propertiesSchema,
 
     pageNumber,
-    pageSize: PAGE_SIZE,
+    pageSize,
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,

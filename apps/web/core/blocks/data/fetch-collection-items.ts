@@ -1,13 +1,14 @@
-import { Entity } from '~/core/types';
+import { Entity, Relation } from '~/core/types';
 
 import { getCollectionItemIds } from './get-collection-item-ids';
 
 export async function fetchCollectionItemsForBlocks(
   blocks: Entity[],
   fetchBatch: (ids: string[], spaceId?: string) => Promise<Entity[]>,
-  spaceId?: string
+  spaceId?: string,
+  blockRelations?: Relation[]
 ): Promise<Record<string, Entity[]>> {
-  const idsByBlock = getCollectionItemIds(blocks);
+  const idsByBlock = getCollectionItemIds(blocks, { blockRelations, spaceId });
   const allIds = [...new Set(Object.values(idsByBlock).flat())];
 
   if (allIds.length === 0) return {};
