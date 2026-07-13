@@ -84,6 +84,24 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
+  it('does not route stale debate activity over an active rematch page', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = {
+      online: true,
+      cooldown_until: null,
+      match: null,
+      debate: {
+        id: 'debate-1',
+        claim: { space_id: 'space-1' },
+      } as NonNullable<DebateActivity['debate']>,
+      rematch: null,
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
   it('copies a stable recording link when native sharing is unavailable', async () => {
     mocks.activity = { online: true, cooldown_until: null, match: null, debate: null, rematch: null };
     mocks.prompts = [

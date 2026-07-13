@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -60,10 +60,7 @@ beforeEach(() => {
   mocks.claims = [sharedClaim()];
 });
 
-afterEach(async () => {
-  cleanup();
-  await new Promise(resolve => window.setTimeout(resolve, 0));
-});
+afterEach(cleanup);
 
 describe('DebateRematchPageClient', () => {
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
@@ -78,12 +75,21 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
 
-  it('leaves a browsing rematch when the page actually unmounts', async () => {
+  it('does not end a browsing rematch when the page unmounts', async () => {
     const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     unmount();
+    await new Promise(resolve => window.setTimeout(resolve, 0));
 
-    await waitFor(() => expect(mocks.mutate).toHaveBeenCalledOnce());
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('ends a browsing rematch only through the explicit leave action', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    expect(mocks.mutate).toHaveBeenCalledOnce();
   });
 
   it('pins shared preferences above additional published claims and enables opposing requests', () => {
@@ -182,7 +188,7 @@ function session(overrides: Partial<DebateRematchSession> = {}): DebateRematchSe
       },
     ],
     decision_expires_at: '2026-07-10T10:00:20.000Z',
-    browsing_expires_at: '2026-07-10T10:05:00.000Z',
+    browsing_expires_at: null,
     request: null,
     converted_debate_id: null,
     recently_rejected_claim_ids: [],

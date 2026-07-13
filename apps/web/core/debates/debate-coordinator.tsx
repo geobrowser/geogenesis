@@ -31,7 +31,8 @@ export function DebateCoordinator() {
   React.useEffect(() => {
     if (!activity) return;
     const debate = activity.debate;
-    if (debate && !pathname.includes(`/debates/${debate.id}`)) {
+    const viewingRematch = pathname.includes('/debates/rematches/');
+    if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
       router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
       return;
     }

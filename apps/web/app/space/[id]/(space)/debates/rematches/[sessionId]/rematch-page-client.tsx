@@ -66,16 +66,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const updatePosition = useUpdateDebateRematchPosition(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);
   const leaveSession = useLeaveDebateRematch(sessionId);
-  const leavingRef = React.useRef(false);
-  const sessionStatusRef = React.useRef<DebateRematchSession['status'] | null>(null);
-  const leaveMutationRef = React.useRef(leaveSession.mutate);
-  const leaveOnUnmountTimerRef = React.useRef<ReturnType<typeof window.setTimeout> | null>(null);
-  leaveMutationRef.current = leaveSession.mutate;
   const acceptRequest = useAcceptDebateRematchRequest();
   const rejectRequest = useRejectDebateRematchRequest();
   const [formatByClaimId, setFormatByClaimId] = React.useState<Record<string, DebateFormatId>>({});
   const session = sessionQuery.data ?? null;
-  sessionStatusRef.current = session?.status ?? null;
   const sourceDebateQuery = useDebate(session?.source_debate_id ?? '', Boolean(session?.source_debate_id));
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(
@@ -136,32 +130,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
   }, [router, session]);
 
-  React.useEffect(() => {
-    if (leaveOnUnmountTimerRef.current !== null) {
-      window.clearTimeout(leaveOnUnmountTimerRef.current);
-      leaveOnUnmountTimerRef.current = null;
-    }
-
-    return () => {
-      if (
-        !leavingRef.current &&
-        (sessionStatusRef.current === 'browsing' || sessionStatusRef.current === 'request_pending')
-      ) {
-        leaveOnUnmountTimerRef.current = window.setTimeout(() => {
-          leaveOnUnmountTimerRef.current = null;
-          if (
-            !leavingRef.current &&
-            (sessionStatusRef.current === 'browsing' || sessionStatusRef.current === 'request_pending')
-          ) {
-            leaveMutationRef.current();
-          }
-        }, 0);
-      }
-    };
-  }, []);
-
   const leave = () => {
-    leavingRef.current = true;
     leaveSession.mutate(undefined, {
       onSuccess: ended => router.replace(`/space/${ended.source_space_id}/debates`),
     });

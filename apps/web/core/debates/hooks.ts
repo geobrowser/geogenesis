@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
+  type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type GetPrivyIdentityToken,
@@ -228,9 +229,16 @@ export function useConsentToDebateRematch(debateId: string) {
 
   return useMutation({
     mutationFn: () => consentToDebateRematch(debateId, getPrivyIdentityToken),
-    onSuccess: session => {
+    onSuccess: async session => {
+      await queryClient.cancelQueries({ queryKey: debateQueryKeys.activity });
       queryClient.setQueryData(debateQueryKeys.rematch(session.id), session);
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity });
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity, current => ({
+        online: current?.online ?? true,
+        cooldown_until: null,
+        match: null,
+        debate: null,
+        rematch: session,
+      }));
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
     },
   });

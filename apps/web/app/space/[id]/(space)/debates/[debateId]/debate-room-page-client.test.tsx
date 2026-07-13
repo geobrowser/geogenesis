@@ -817,7 +817,7 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
       },
     ],
     decision_expires_at: '2026-07-02T00:01:30.000Z',
-    browsing_expires_at: status === 'browsing' ? '2026-07-02T00:06:10.000Z' : null,
+    browsing_expires_at: null,
     request: null,
     converted_debate_id: null,
     recently_rejected_claim_ids: [],
