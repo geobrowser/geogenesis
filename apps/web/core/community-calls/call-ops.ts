@@ -62,6 +62,110 @@ function buildUnsetValue(args: {
   return { ...buildValue({ ...args, value: '' }), isDeleted: true };
 }
 
+/** The event's Description value — a plain-TEXT write when non-empty, an unset when cleared. */
+function buildEventDescriptionValue({
+  entityRef,
+  spaceId,
+  description,
+}: {
+  entityRef: { id: string; name: string | null };
+  spaceId: string;
+  description: string;
+}): Value {
+  const args = {
+    entityRef,
+    spaceId,
+    propertyId: EVENT_SCHEMA.DESCRIPTION_PROPERTY,
+    propertyName: 'Description',
+    dataType: 'TEXT' as const,
+  };
+  return description.trim() ? buildValue({ ...args, value: description }) : buildUnsetValue(args);
+}
+
+type EventRef = { id: string; name: string };
+
+/** Name/Start time/End time for an occurrence's event entity. */
+function buildEventCoreValues({
+  entityRef,
+  spaceId,
+  occurrenceStart,
+  occurrenceEnd,
+}: {
+  entityRef: EventRef;
+  spaceId: string;
+  occurrenceStart: number;
+  occurrenceEnd: number;
+}): Value[] {
+  return [
+    buildValue({
+      entityRef,
+      spaceId,
+      propertyId: SystemIds.NAME_PROPERTY,
+      propertyName: 'Name',
+      dataType: 'TEXT',
+      value: entityRef.name,
+    }),
+    buildValue({
+      entityRef,
+      spaceId,
+      propertyId: EVENT_SCHEMA.START_TIME_PROPERTY,
+      propertyName: 'Start time',
+      dataType: 'DATETIME',
+      value: new Date(occurrenceStart).toISOString(),
+    }),
+    buildValue({
+      entityRef,
+      spaceId,
+      propertyId: EVENT_SCHEMA.END_TIME_PROPERTY,
+      propertyName: 'End time',
+      dataType: 'DATETIME',
+      value: new Date(occurrenceEnd).toISOString(),
+    }),
+  ];
+}
+
+/**
+ * The event's `Community call parent` relation back to the series + its `Types` relation. Only
+ * safe to write when minting the event: relation ids aren't deterministic, so re-adding these on
+ * an update would duplicate them.
+ */
+function buildEventLinkRelations({
+  entityRef,
+  spaceId,
+  seriesId,
+  seriesName,
+}: {
+  entityRef: EventRef;
+  spaceId: string;
+  seriesId: string;
+  seriesName: string;
+}): Relation[] {
+  return [
+    {
+      id: createEntityId(),
+      entityId: createEntityId(),
+      spaceId,
+      renderableType: 'RELATION',
+      fromEntity: entityRef,
+      toEntity: { id: seriesId, name: seriesName, value: seriesId },
+      type: { id: EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, name: 'Community call parent' },
+    },
+    {
+      id: createEntityId(),
+      entityId: createEntityId(),
+      spaceId,
+      renderableType: 'RELATION',
+      fromEntity: entityRef,
+      toEntity: {
+        id: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
+        name: 'Community call event',
+        value: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
+      },
+      type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+    },
+  ];
+}
+
 /**
  * Builds fresh `TEXT_BLOCK` entities + `BLOCKS` relations for a set of markdown blocks off
  * `entityRef`, tombstoning `existingBlockRelations` — a full republish, not a diff. Shared by
@@ -367,10 +471,9 @@ export function buildDeleteOccurrenceOps({
 }
 
 /**
- * Mints (or updates) a `Community call event` entity for one occurrence: Name/Start
- * time/End time, a `Community call parent` relation back to the series (create only —
- * relation ids aren't deterministic, so re-adding it on update would duplicate it), and
- * fresh `TEXT_BLOCK` children + `BLOCKS` relations for the agenda's markdown blocks.
+ * Mints (or updates) a `Community call event` entity for one occurrence: its core fields, the
+ * relations back to the series, and fresh `TEXT_BLOCK` children + `BLOCKS` relations for the
+ * agenda's markdown blocks.
  *
  * Republishing replaces the agenda wholesale: pass the event's current `BLOCKS` relations
  * as `existingBlockRelations` and they're tombstoned here — `prepareLocalDataForPublishing`
@@ -380,6 +483,7 @@ export function buildPublishOccurrenceOps({
   spaceId,
   seriesId,
   seriesName,
+  seriesDescription,
   occurrenceStart,
   occurrenceEnd,
   agendaBlocks,
@@ -389,6 +493,8 @@ export function buildPublishOccurrenceOps({
   spaceId: string;
   seriesId: string;
   seriesName: string;
+  /** Series description, inherited onto the event's Description. Omit to leave it untouched; '' unsets it. */
+  seriesDescription?: string;
   occurrenceStart: number;
   occurrenceEnd: number;
   agendaBlocks: OccurrenceAgendaBlock[];
@@ -399,65 +505,105 @@ export function buildPublishOccurrenceOps({
   const name = `${seriesName} — ${formatFullDate(occurrenceStart)}`;
   const entityRef = { id: entityId, name };
 
-  const values: Value[] = [
-    buildValue({
-      entityRef,
-      spaceId,
-      propertyId: SystemIds.NAME_PROPERTY,
-      propertyName: 'Name',
-      dataType: 'TEXT',
-      value: name,
-    }),
-    buildValue({
-      entityRef,
-      spaceId,
-      propertyId: EVENT_SCHEMA.START_TIME_PROPERTY,
-      propertyName: 'Start time',
-      dataType: 'DATETIME',
-      value: new Date(occurrenceStart).toISOString(),
-    }),
-    buildValue({
-      entityRef,
-      spaceId,
-      propertyId: EVENT_SCHEMA.END_TIME_PROPERTY,
-      propertyName: 'End time',
-      dataType: 'DATETIME',
-      value: new Date(occurrenceEnd).toISOString(),
-    }),
-  ];
+  const values = buildEventCoreValues({ entityRef, spaceId, occurrenceStart, occurrenceEnd });
 
+  if (typeof seriesDescription === 'string') {
+    values.push(buildEventDescriptionValue({ entityRef, spaceId, description: seriesDescription }));
+  }
+
+  const relations: Relation[] = existingEventId
+    ? []
+    : buildEventLinkRelations({ entityRef, spaceId, seriesId, seriesName });
+
+  const blockOps = buildBlockOps({ entityRef, spaceId, blocks: agendaBlocks, existingBlockRelations });
+  values.push(...blockOps.values);
+  relations.push(...blockOps.relations);
+
+  return { entityId, values, relations };
+}
+
+/**
+ * Attaches recordings to an occurrence's `Community call event` entity. Each `ipfsUrls` entry is
+ * an `ipfs://<cid>` already pinned by the publish-recording route.
+ *
+ * Additive to an existing event: it never touches the agenda blocks or core fields, so
+ * publishing a recording can't clobber a published agenda. When the occurrence has no event yet
+ * it mints one, so a recording can be published even if an agenda never was.
+ */
+export function buildPublishRecordingsOps({
+  spaceId,
+  seriesId,
+  seriesName,
+  seriesDescription,
+  occurrenceStart,
+  occurrenceEnd,
+  ipfsUrls,
+  existingEventId,
+}: {
+  spaceId: string;
+  seriesId: string;
+  seriesName: string;
+  /** Series description, inherited onto the event's Description only when this call mints the event. */
+  seriesDescription?: string;
+  occurrenceStart: number;
+  occurrenceEnd: number;
+  ipfsUrls: string[];
+  existingEventId?: string | null;
+}): { entityId: string; values: Value[]; relations: Relation[] } {
+  const entityId = existingEventId ?? createEntityId();
+  const name = `${seriesName} — ${formatFullDate(occurrenceStart)}`;
+  const entityRef = { id: entityId, name };
+
+  const values: Value[] = [];
   const relations: Relation[] = [];
 
   if (!existingEventId) {
+    values.push(...buildEventCoreValues({ entityRef, spaceId, occurrenceStart, occurrenceEnd }));
+    if (seriesDescription?.trim()) {
+      values.push(buildEventDescriptionValue({ entityRef, spaceId, description: seriesDescription }));
+    }
+    relations.push(...buildEventLinkRelations({ entityRef, spaceId, seriesId, seriesName }));
+  }
+
+  // A recording takes the app's standard video shape: a `Video`-typed entity holding the IPFS
+  // URL (on IMAGE_URL_PROPERTY, which is the URL property videos use too), linked to the event
+  // by a `Recordings` relation. That way it renders through the same path as any other video.
+  for (const ipfsUrl of ipfsUrls) {
+    const videoEntityId = createEntityId();
+    const videoRef = { id: videoEntityId, name: null };
+    values.push(
+      buildValue({
+        entityRef: videoRef,
+        spaceId,
+        propertyId: SystemIds.IMAGE_URL_PROPERTY,
+        propertyName: 'IPFS URL',
+        dataType: 'TEXT',
+        value: ipfsUrl,
+      })
+    );
     relations.push(
       {
         id: createEntityId(),
         entityId: createEntityId(),
         spaceId,
+        position: Position.generate(),
         renderableType: 'RELATION',
-        fromEntity: entityRef,
-        toEntity: { id: seriesId, name: seriesName, value: seriesId },
-        type: { id: EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, name: 'Community call parent' },
+        fromEntity: videoRef,
+        toEntity: { id: SystemIds.VIDEO_TYPE, name: 'Video', value: SystemIds.VIDEO_TYPE },
+        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
       },
       {
         id: createEntityId(),
         entityId: createEntityId(),
         spaceId,
-        renderableType: 'RELATION',
+        position: Position.generate(),
+        renderableType: 'VIDEO',
         fromEntity: entityRef,
-        toEntity: {
-          id: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
-          name: 'Community call event',
-          value: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE,
-        },
-        type: { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
+        toEntity: { id: videoEntityId, name: null, value: videoEntityId },
+        type: { id: EVENT_SCHEMA.RECORDINGS_PROPERTY, name: 'Recordings' },
       }
     );
   }
-
-  const blockOps = buildBlockOps({ entityRef, spaceId, blocks: agendaBlocks, existingBlockRelations });
-  values.push(...blockOps.values);
-  relations.push(...blockOps.relations);
 
   return { entityId, values, relations };
 }

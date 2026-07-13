@@ -12,11 +12,12 @@ import { useRouter } from 'next/navigation';
 import { listRecordings, notifyCommunityCallCancel } from '~/core/community-calls/api';
 import { buildDeleteCallOps } from '~/core/community-calls/call-ops';
 import { agendaHref, buildRoomName, detailsHref, liveCallHref } from '~/core/community-calls/constants';
-import { fetchOccurrenceEventId } from '~/core/community-calls/fetch-occurrence-event';
+import { fetchEventRecordingUrls, fetchOccurrenceEventId } from '~/core/community-calls/fetch-occurrence-event';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
 import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurrences';
 import { CallSeries, Occurrence, Recording } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
+import { usePublishRecordings } from '~/core/community-calls/use-publish-recordings';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePublish } from '~/core/hooks/use-publish';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
@@ -64,6 +65,16 @@ function useOccurrenceEventId(spaceId: string, callId: string, startMs: number):
     queryFn: () => fetchOccurrenceEventId(callId, spaceId, startMs),
   });
   return data ?? null;
+}
+
+/** Whether the occurrence's event already carries a published recording. */
+function useRecordingPublished(spaceId: string, eventId: string | null): boolean {
+  const { data } = useQuery({
+    queryKey: ['community-call-event-recordings', spaceId, eventId],
+    queryFn: () => (eventId ? fetchEventRecordingUrls(eventId, spaceId) : Promise.resolve([])),
+    enabled: Boolean(eventId),
+  });
+  return (data?.length ?? 0) > 0;
 }
 
 export function CommunityCallsPage({
@@ -339,6 +350,12 @@ function PastRow({
   const roomName = buildRoomName(spaceId, row.call.callId, row.occ.startMs);
   const occRecordings = recordings.filter(r => r.roomName === roomName);
   const eventId = useOccurrenceEventId(spaceId, row.call.callId, row.occ.startMs);
+  const recordingPublished = useRecordingPublished(spaceId, eventId);
+  const { publish, publishingKey } = usePublishRecordings();
+
+  // Once the recording lives on the entity it's watchable there, so these editor-only actions
+  // retire and the Entity link takes over.
+  const showRecordingActions = isEditor && occRecordings.length > 0 && !recordingPublished;
 
   return (
     <RowShell>
@@ -351,12 +368,30 @@ function PastRow({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {occRecordings.length > 0 && (
-            <Dialog
-              trigger={<SmallButton>Watch recording</SmallButton>}
-              header={<span className="text-smallTitle">{row.call.name}</span>}
-              content={<RecordingPlayer recordings={occRecordings} />}
-            />
+          {showRecordingActions && (
+            <>
+              <Dialog
+                trigger={<SmallButton>Watch recording</SmallButton>}
+                header={<span className="text-smallTitle">{row.call.name}</span>}
+                content={<RecordingPlayer recordings={occRecordings} />}
+              />
+              <SmallButton
+                onClick={() =>
+                  publish({
+                    recordings: occRecordings,
+                    spaceId,
+                    callId: row.call.callId,
+                    seriesName: row.call.name,
+                    seriesDescription: row.call.description ?? '',
+                    occurrence: row.occ,
+                    busyKey: roomName,
+                  })
+                }
+                disabled={publishingKey === roomName}
+              >
+                {publishingKey === roomName ? 'Publishing…' : 'Publish recording'}
+              </SmallButton>
+            </>
           )}
           <Link href={agendaHref(spaceId, row.call.callId, row.occ.startMs, row.occ.endMs)}>
             <SmallButton>Agenda</SmallButton>
