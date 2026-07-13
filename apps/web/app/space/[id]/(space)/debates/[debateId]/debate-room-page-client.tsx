@@ -63,6 +63,9 @@ type DebateCountdown = {
   remainingSeconds: number;
   progress: number;
   activeSlot: ParticipantSlot | null;
+  effectiveStatus: Debate['status'];
+  turnIndex: number | null;
+  elapsedMs: number;
 };
 
 type DebateRecordingWindow = {
@@ -80,6 +83,7 @@ const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
 
 const localRecordingUploadMaxAttempts = 3;
 const localRecordingUploadRetryDelayMs = 1_000;
+const debateThankingDurationMs = 20_000;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
   const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
@@ -152,7 +156,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const countdown = useDebateCountdown(debate);
   const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
-  const localAudioEnabled = shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted);
+  const localAudioEnabled = shouldEnableLocalAudio(
+    debate ? countdown.effectiveStatus : null,
+    countdown.activeSlot,
+    localSlot,
+    audioMuted
+  );
 
   React.useEffect(() => {
     setLocalTrackPreferences(localTracksRef.current, { audioEnabled: localAudioEnabled, videoEnabled });
@@ -399,7 +408,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         localTracksRef.current = tracks;
         setLocalTrackPreferences(tracks, {
-          audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, localSlot, audioMuted),
+          audioEnabled: shouldEnableLocalAudio(countdown.effectiveStatus, countdown.activeSlot, localSlot, audioMuted),
           videoEnabled,
         });
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
@@ -433,7 +442,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
       }
     },
-    [audioMuted, countdown.activeSlot, debate, localSlot, refreshMediaDevices, videoEnabled]
+    [audioMuted, countdown.activeSlot, countdown.effectiveStatus, localSlot, refreshMediaDevices, videoEnabled]
   );
 
   const changeAudioInput = React.useCallback(
@@ -507,9 +516,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const tracks = hasPreviewTracks
         ? localTracksRef.current
         : ((await livekit.createLocalTracks({
-              audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
-              video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
-            })) as LocalTrackLike[]);
+            audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
+            video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
+          })) as LocalTrackLike[]);
       if (!hasPreviewTracks) newlyCreatedTracks = tracks;
       if (!isCurrent()) {
         room.disconnect();
@@ -519,7 +528,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       localTracksRef.current = tracks;
       setLocalTrackPreferences(tracks, {
-        audioEnabled: shouldEnableLocalAudio(debate, countdown.activeSlot, token.participant_slot, audioMuted),
+        audioEnabled: shouldEnableLocalAudio(
+          countdown.effectiveStatus,
+          countdown.activeSlot,
+          token.participant_slot,
+          audioMuted
+        ),
         videoEnabled,
       });
       for (const track of tracks) {
@@ -562,7 +576,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRoomState('idle');
       }
     }
-  }, [audioMuted, countdown.activeSlot, debate, liveKitJoin, markJoined, videoEnabled]);
+  }, [audioMuted, countdown.activeSlot, countdown.effectiveStatus, liveKitJoin, markJoined, videoEnabled]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
@@ -1168,11 +1182,11 @@ function DebateRecordingModal({
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
-  const showLocalGo = localTurnGoIsVisible(debate, countdown, localSlot);
-  const thankingSlot = thankingParticipantSlot(debate, countdown.progress);
-  const localInactive = participantIsInactive(debate, localSlot, countdown.activeSlot);
+  const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
+  const thankingSlot = thankingParticipantSlot(debate, countdown);
+  const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
   const remoteInactive = participantIsInactive(
-    debate,
+    countdown.effectiveStatus,
     remoteParticipant?.participant_slot ?? null,
     countdown.activeSlot
   );
@@ -1193,7 +1207,7 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      active={debate.status === 'in_progress' && countdown.activeSlot === localSlot}
+      active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
       overlayText={videoEnabled ? null : 'Camera off'}
       upcomingSeconds={localUpcomingSeconds}
       showGo={showLocalGo}
@@ -1202,7 +1216,7 @@ function DebateRecordingModal({
       inactiveOverlayId="local"
       countdown={localCountdown}
       closingMessage={
-        debate.status === 'thanking' &&
+        countdown.effectiveStatus === 'thanking' &&
         thankingSlot !== null &&
         localSlot !== null &&
         thankingSlot === localSlot
@@ -1215,7 +1229,9 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
-      active={debate.status === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot}
+      active={
+        countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
+      }
       overlayText={remoteVideoReady ? null : 'Waiting for video'}
       inactive={remoteInactive}
       inactiveOverlayId="remote"
@@ -1228,9 +1244,8 @@ function DebateRecordingModal({
       />
     </DebateVideoTile>
   );
-  const orderedVideoTiles = localParticipant?.position === false
-    ? [remoteVideoTile, localVideoTile]
-    : [localVideoTile, remoteVideoTile];
+  const orderedVideoTiles =
+    localParticipant?.position === false ? [remoteVideoTile, localVideoTile] : [localVideoTile, remoteVideoTile];
 
   return (
     <div
@@ -1242,6 +1257,7 @@ function DebateRecordingModal({
       {debateDebuggingEnabled && (
         <DebateDebugMenu
           debate={debate}
+          countdown={countdown}
           roomState={roomState}
           audioMuted={audioMuted}
           remoteAudioEnabled={remoteAudioEnabled}
@@ -1260,7 +1276,7 @@ function DebateRecordingModal({
         <div className="relative grid w-full gap-2">
           {orderedVideoTiles}
 
-          {debate.status === 'thanking' && rematchSession && (
+          {countdown.effectiveStatus === 'thanking' && rematchSession && (
             <DebateAgainCard
               opponentName={
                 remoteRematchParticipant?.display_name || remoteRematchParticipant?.profile_space_id || 'Other debater'
@@ -1301,6 +1317,7 @@ function DebateRecordingModal({
 
 function DebateDebugMenu({
   debate,
+  countdown,
   roomState,
   audioMuted,
   remoteAudioEnabled,
@@ -1310,6 +1327,7 @@ function DebateDebugMenu({
   onToggleVideoEnabled,
 }: {
   debate: Debate;
+  countdown: DebateCountdown;
   roomState: 'connecting' | 'connected' | 'uploading';
   audioMuted: boolean;
   remoteAudioEnabled: boolean;
@@ -1318,7 +1336,7 @@ function DebateDebugMenu({
   onToggleRemoteAudioEnabled: () => void;
   onToggleVideoEnabled: () => void;
 }) {
-  const phases = debateDebugPhases(debate);
+  const phases = debateDebugPhases(debate, countdown);
 
   return (
     <aside className="fixed top-4 right-4 z-[1010] w-[min(280px,calc(100vw-2rem))] rounded-lg border border-grey-02 bg-white/95 p-3 shadow-card backdrop-blur">
@@ -1376,31 +1394,31 @@ function DebateDebugMenu({
   );
 }
 
-function debateDebugPhases(debate: Debate) {
+function debateDebugPhases(debate: Debate, countdown: DebateCountdown) {
   return [
     {
       id: 'preparing',
       label: 'Preparing',
       duration: null,
-      current: debate.status === 'preparing',
+      current: countdown.effectiveStatus === 'preparing',
     },
     {
       id: 'preflight',
       label: 'Preflight',
       duration: null,
-      current: debate.status === 'preflight',
+      current: countdown.effectiveStatus === 'preflight',
     },
     ...debate.turn_durations_ms.map((durationMs, index) => ({
       id: `turn-${index}`,
       label: `Timed turn ${index + 1}`,
       duration: formatDebugDuration(durationMs),
-      current: debate.status === 'in_progress' && debate.current_turn_index === index,
+      current: countdown.effectiveStatus === 'in_progress' && countdown.turnIndex === index,
     })),
     {
       id: 'thanking',
       label: 'Thanking',
       duration: null,
-      current: debate.status === 'thanking',
+      current: countdown.effectiveStatus === 'thanking',
     },
   ];
 }
@@ -1440,9 +1458,7 @@ function DebateVideoTile({
 }) {
   return (
     <section
-      data-debate-video-position={
-        participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'
-      }
+      data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
         muted && 'grayscale'
@@ -1513,25 +1529,27 @@ function DebateVideoTile({
 }
 
 function participantIsInactive(
-  debate: Debate,
+  effectiveStatus: Debate['status'],
   participantSlot: ParticipantSlot | null,
   activeSlot: ParticipantSlot | null
 ) {
-  if (!participantSlot || debate.status === 'thanking' || debate.status === 'complete') return false;
-  if (debate.status === 'in_progress') return activeSlot !== participantSlot;
-  return debate.status === 'preparing' || debate.status === 'preflight';
+  if (!participantSlot || effectiveStatus === 'thanking' || effectiveStatus === 'complete') return false;
+  if (effectiveStatus === 'in_progress') return activeSlot !== participantSlot;
+  return effectiveStatus === 'preparing' || effectiveStatus === 'preflight';
 }
 
-function localTurnGoIsVisible(debate: Debate, countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
-  if (debate.status !== 'in_progress' || !localSlot || countdown.activeSlot !== localSlot) return false;
-  const turnDurationMs = debate.turn_durations_ms[debate.current_turn_index] ?? 0;
-  if (turnDurationMs <= 0) return false;
-  return countdown.progress * turnDurationMs < 2_000;
+function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
+  return (
+    countdown.effectiveStatus === 'in_progress' &&
+    localSlot !== null &&
+    countdown.activeSlot === localSlot &&
+    countdown.elapsedMs < 2_000
+  );
 }
 
-function thankingParticipantSlot(debate: Debate, progress: number): ParticipantSlot | null {
-  if (debate.status !== 'thanking') return null;
-  if (progress < 0.5) return debate.first_participant_slot;
+function thankingParticipantSlot(debate: Debate, countdown: DebateCountdown): ParticipantSlot | null {
+  if (countdown.effectiveStatus !== 'thanking') return null;
+  if (countdown.progress < 0.5) return debate.first_participant_slot;
   return debate.first_participant_slot === 1 ? 2 : 1;
 }
 
@@ -1758,14 +1776,14 @@ function setRemoteMediaAudioEnabled(
 }
 
 function shouldEnableLocalAudio(
-  debate: Debate | null,
+  effectiveStatus: Debate['status'] | null,
   activeSlot: ParticipantSlot | null,
   localSlot: ParticipantSlot | null,
   audioMuted: boolean
 ) {
-  if (audioMuted || !debate || !localSlot) return false;
-  if (debate.status === 'thanking') return true;
-  return debate.status === 'in_progress' && activeSlot === localSlot;
+  if (audioMuted || !effectiveStatus || !localSlot) return false;
+  if (effectiveStatus === 'thanking') return true;
+  return effectiveStatus === 'in_progress' && activeSlot === localSlot;
 }
 
 function localTurnStartsInSeconds(
@@ -1775,14 +1793,14 @@ function localTurnStartsInSeconds(
 ): number | null {
   if (!localSlot || countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 5) return null;
 
-  if (debate.status === 'preflight') {
+  if (countdown.effectiveStatus === 'preflight') {
     return countdown.activeSlot === localSlot ? countdown.remainingSeconds : null;
   }
 
-  if (debate.status !== 'in_progress') return null;
-  if (debate.current_speaker_slot === localSlot) return null;
+  if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  if (countdown.activeSlot === localSlot) return null;
 
-  const nextTurnIndex = debate.current_turn_index + 1;
+  const nextTurnIndex = countdown.turnIndex + 1;
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
 
   return participantSlotForTurn(debate.first_participant_slot, nextTurnIndex) === localSlot
@@ -1832,23 +1850,34 @@ function useDebateCountdown(debate: Debate | null): DebateCountdown {
     return () => window.clearInterval(timer);
   }, []);
 
-  const countdownWindow = debate ? countdownWindowForDebate(debate) : null;
-  if (!countdownWindow?.target) {
-    return { label: '00:00', remainingSeconds: 0, progress: 0, activeSlot: null };
+  const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
+  if (!countdownWindow || countdownWindow.targetMs === null) {
+    return {
+      label: '00:00',
+      remainingSeconds: 0,
+      progress: 0,
+      activeSlot: countdownWindow?.activeSlot ?? null,
+      effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
+      turnIndex: countdownWindow?.turnIndex ?? null,
+      elapsedMs: 0,
+    };
   }
 
-  const targetMs = new Date(countdownWindow.target).getTime();
-  const startMs = countdownWindow.start ? new Date(countdownWindow.start).getTime() : null;
+  const targetMs = countdownWindow.targetMs;
+  const startMs = countdownWindow.startMs;
   const remainingMs = Math.max(0, targetMs - now);
   const seconds = Math.ceil(remainingMs / 1_000);
-  const totalMs = startMs ? Math.max(1, targetMs - startMs) : 0;
-  const elapsedMs = startMs ? Math.min(totalMs, Math.max(0, now - startMs)) : 0;
+  const totalMs = startMs !== null ? Math.max(1, targetMs - startMs) : 0;
+  const elapsedMs = startMs !== null ? Math.min(totalMs, Math.max(0, now - startMs)) : 0;
 
   return {
     label: `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`,
     remainingSeconds: seconds,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
+    effectiveStatus: countdownWindow.effectiveStatus,
+    turnIndex: countdownWindow.turnIndex,
+    elapsedMs,
   };
 }
 
@@ -1863,47 +1892,106 @@ function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null 
   };
 }
 
-function countdownWindowForDebate(debate: Debate): {
-  start: string | null;
-  target: string | null;
+function countdownWindowForDebate(
+  debate: Debate,
+  now: number
+): {
+  startMs: number | null;
+  targetMs: number | null;
   activeSlot: ParticipantSlot | null;
+  effectiveStatus: Debate['status'];
+  turnIndex: number | null;
 } {
   if (debate.status === 'preparing') {
     return {
-      start: debate.prepare_started_at,
-      target: debate.prepare_ends_at,
+      startMs: timestampMs(debate.prepare_started_at),
+      targetMs: timestampMs(debate.prepare_ends_at),
       activeSlot: null,
+      effectiveStatus: 'preparing',
+      turnIndex: null,
     };
   }
 
   if (debate.status === 'preflight') {
+    const debateStartMs = timestampMs(debate.preflight_ends_at);
+    if (debateStartMs !== null && now >= debateStartMs) {
+      return timedDebateCountdownWindow(debate, debateStartMs, now);
+    }
     return {
-      start: debate.prepare_ends_at,
-      target: debate.preflight_ends_at,
+      startMs: timestampMs(debate.prepare_ends_at),
+      targetMs: debateStartMs,
       activeSlot: debate.first_participant_slot,
+      effectiveStatus: 'preflight',
+      turnIndex: null,
     };
   }
 
   if (debate.status === 'in_progress') {
+    const debateStartMs = timestampMs(debate.started_at ?? debate.preflight_ends_at);
+    if (debateStartMs !== null) {
+      return timedDebateCountdownWindow(debate, debateStartMs, now);
+    }
     return {
-      start: debate.turn_started_at,
-      target: debate.turn_ends_at,
+      startMs: timestampMs(debate.turn_started_at),
+      targetMs: timestampMs(debate.turn_ends_at),
       activeSlot: debate.current_speaker_slot,
+      effectiveStatus: 'in_progress',
+      turnIndex: debate.current_turn_index,
     };
   }
 
   if (debate.status === 'thanking') {
     return {
-      start: debate.turn_started_at,
-      target: debate.turn_ends_at,
+      startMs: timestampMs(debate.turn_started_at),
+      targetMs: timestampMs(debate.turn_ends_at),
       activeSlot: null,
+      effectiveStatus: 'thanking',
+      turnIndex: null,
     };
   }
 
   return {
-    start: null,
-    target: null,
+    startMs: null,
+    targetMs: null,
     activeSlot: null,
+    effectiveStatus: debate.status,
+    turnIndex: null,
+  };
+}
+
+function timedDebateCountdownWindow(
+  debate: Debate,
+  debateStartMs: number,
+  now: number
+): {
+  startMs: number;
+  targetMs: number;
+  activeSlot: ParticipantSlot | null;
+  effectiveStatus: Debate['status'];
+  turnIndex: number | null;
+} {
+  let turnStartMs = debateStartMs;
+
+  for (const [turnIndex, configuredDurationMs] of debate.turn_durations_ms.entries()) {
+    const turnEndMs = turnStartMs + Math.max(0, configuredDurationMs);
+    if (now < turnEndMs) {
+      return {
+        startMs: turnStartMs,
+        targetMs: turnEndMs,
+        activeSlot: participantSlotForTurn(debate.first_participant_slot, turnIndex),
+        effectiveStatus: 'in_progress',
+        turnIndex,
+      };
+    }
+    turnStartMs = turnEndMs;
+  }
+
+  return {
+    startMs: turnStartMs,
+    targetMs: turnStartMs + debateThankingDurationMs,
+    activeSlot: null,
+    effectiveStatus: 'thanking',
+    turnIndex: null,
   };
 }
 

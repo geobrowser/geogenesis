@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
 import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -344,6 +345,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('shows the recording screen as stacked local and remote video tiles', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
@@ -396,6 +398,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('shows recording debug controls when debate debugging is enabled', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
     mocks.featureFlags.debateDebugging = true;
     mocks.debate = {
       ...completedDebate(),
@@ -479,13 +482,14 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('shows a large local countdown before the participant is up', async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:29.500Z'));
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
       first_participant_slot: 2,
       current_turn_index: 0,
       current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
       turn_started_at: '2026-07-02T00:00:00.000Z',
       turn_ends_at: '2026-07-02T00:00:30.000Z',
       completed_at: null,
@@ -494,7 +498,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText("You're up in")).toBeInTheDocument();
-    expect(screen.getAllByText('5')).toHaveLength(2);
+    expect(screen.getAllByText('1')).toHaveLength(2);
     expect(document.querySelector('circle[stroke="#ff5c4f"]')).toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
   });
@@ -506,6 +510,7 @@ describe('DebateRoomPageClient', () => {
       status: 'in_progress',
       current_turn_index: 0,
       current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:30.000Z',
       turn_started_at: '2026-07-02T00:00:30.000Z',
       turn_ends_at: '2026-07-02T00:01:00.000Z',
       completed_at: null,
@@ -515,6 +520,99 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('GO!')).toBeInTheDocument();
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
+  });
+
+  it('advances directly from the warning to GO without waiting for a debate refresh', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:30.500Z'));
+    const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('GO!')).toBeInTheDocument();
+    expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+
+    mocks.debate = {
+      ...mocks.debate,
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:30.000Z',
+      turn_ends_at: '2026-07-02T00:01:00.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByText('GO!')).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
+  });
+
+  it('advances from preflight to the first turn without waiting for a debate refresh', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:30.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      first_participant_slot: 1,
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      started_at: null,
+      prepare_ends_at: '2026-07-02T00:00:20.000Z',
+      preflight_ends_at: '2026-07-02T00:00:30.000Z',
+      turn_started_at: null,
+      turn_ends_at: null,
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('GO!')).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+  });
+
+  it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
+    const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_durations_ms: [10_000, 10_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:20.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(
+      await screen.findByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
+    ).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
   });
 
   it('does not restart completion work when revisiting an already-completed debate', async () => {
