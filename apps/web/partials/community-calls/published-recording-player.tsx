@@ -21,8 +21,10 @@ export type RecordingSource = {
  */
 export function PublishedRecordingPlayer({ sources, spaceId }: { sources: RecordingSource[]; spaceId: string }) {
   const [activeIndex, setActiveIndex] = React.useState(0);
-  // Clamped: a sync-store update can shrink `sources` out from under a stale index.
-  const active = sources[Math.min(activeIndex, sources.length - 1)];
+  // Clamped: a sync-store update can shrink `sources` out from under a stale index. Everything
+  // below reads the clamped index, so the playing source and the highlighted button can't diverge.
+  const clampedIndex = Math.min(activeIndex, sources.length - 1);
+  const active = sources[clampedIndex];
 
   // A no-op for published sources, whose URL already sits on the relation.
   const resolvedFromEntity = useVideoUrlFromEntity(active.videoEntityId ?? undefined, spaceId);
@@ -48,7 +50,7 @@ export function PublishedRecordingPlayer({ sources, spaceId }: { sources: Record
               key={source.directUrl ?? source.videoEntityId ?? i}
               onClick={() => setActiveIndex(i)}
               className={`rounded-md px-2 py-1.5 text-metadata ${
-                i === activeIndex ? 'bg-grey-01 text-text' : 'text-grey-04 hover:bg-grey-01'
+                i === clampedIndex ? 'bg-grey-01 text-text' : 'text-grey-04 hover:bg-grey-01'
               }`}
             >
               Recording {i + 1}
