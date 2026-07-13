@@ -41,14 +41,9 @@ export function setFeatureFlagValue(flags: FeatureFlags, id: FeatureFlagId, enab
   };
 }
 
-export const featureFlagsAtom = atomWithStorage<FeatureFlags>(
-  featureFlagsStorageKey,
-  defaultFeatureFlags,
-  undefined,
-  {
-    getOnInit: true,
-  }
-);
+export const featureFlagsAtom = atomWithStorage<FeatureFlags>(featureFlagsStorageKey, defaultFeatureFlags, undefined, {
+  getOnInit: true,
+});
 
 export function useFeatureFlag(id: FeatureFlagId) {
   const flags = useAtomValue(featureFlagsAtom);

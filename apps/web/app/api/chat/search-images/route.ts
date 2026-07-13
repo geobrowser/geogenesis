@@ -36,7 +36,7 @@ const VERIFY_MAX_OUTPUT_TOKENS = 500;
 
 const IMAGE_EXTENSION_RE = /\.(jpe?g|png|webp|gif|avif|svg)(?:\?|#|$)/i;
 
-const SYSTEM_PROMPT = `You are an image-finder subagent. The orchestrating assistant gives you a focused query (e.g. "Shawshank Redemption movie poster") and your job is to return direct image URLs that can be uploaded to IPFS and shown on a Geo entity page.
+const SYSTEM_PROMPT = `You are an image-finder subagent. The orchestrating assistant gives you a focused query (a title or subject plus the media kind, e.g. a poster, cover, or logo) and your job is to return direct image URLs that can be uploaded to IPFS and shown on a Geo entity page.
 
 Workflow:
 - Use webSearch (up to ${WEB_SEARCH_MAX_USES} calls) to find pages with the image. Bias the FIRST search toward canonical sources for the query type below — they ship correct, high-resolution, hotlink-friendly URLs and avoid fan-art / lyric-site noise. Widen to general web only if the canonical pass returns nothing.
@@ -61,7 +61,7 @@ const VERIFIER_SYSTEM_PROMPT = `You are an image-match verifier. You receive a s
 
 Reasoning rules:
 - Be strict. The point is to keep wrong/poor matches out of a knowledge graph.
-- For album covers, movie posters, book covers, logos — only ACCEPT if the artwork visibly matches the canonical artwork you'd expect for that title. Text-only covers (e.g. minimalist typography) are valid if the typography and color match the real release. Fan art, mock-ups, parody, low-res thumbnails of a different release, lyric backgrounds, and "no image available" placeholders all REJECT.
+- For album covers, posters, book covers, logos — only ACCEPT if the artwork visibly matches the canonical artwork you'd expect for that title. Text-only covers (e.g. minimalist typography) are valid if the typography and color match the real release. Fan art, mock-ups, parody, low-res thumbnails of a different release, lyric backgrounds, and "no image available" placeholders all REJECT.
 - For people, places, products — ACCEPT only if the photo plausibly depicts the named subject. A photo of someone else with the same name, a stock photo, or an unrelated context REJECTS.
 - If you are uncertain, REJECT — the orchestrator will widen the search or ask the user.
 - Each candidate is referenced by a 0-based index in the order it was passed to you.

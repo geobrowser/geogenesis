@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { usePendingMembershipSet } from '~/core/hooks/use-pending-memberships';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
@@ -9,6 +10,8 @@ import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopi
 import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
 import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 import { normId } from '~/core/utils/norm-id';
+
+import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
 
 import { ClaimATopicSection } from './claim-a-topic-section';
 import { FeaturedRankingsSection } from './featured-rankings-section';
@@ -23,6 +26,8 @@ export type ExploreSidePanelProps = {
   parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
+  editorSpaceIds: string[];
+  communityCalls: ExploreCall[];
 };
 
 export function ExploreSidePanel({
@@ -33,6 +38,8 @@ export function ExploreSidePanel({
   parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
+  editorSpaceIds,
+  communityCalls,
 }: ExploreSidePanelProps) {
   // Durable (server) + optimistic (persisted) pending requests, unioned with the
   // SSR-seeded set for first paint.
@@ -40,6 +47,7 @@ export function ExploreSidePanel({
 
   const pendingSet = new Set(pendingMembershipSpaceIds.map(normId));
   const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
+  const editorSet = new Set(editorSpaceIds.map(normId));
 
   // A space drops out of "Join spaces" once the user belongs to it, already has
   // a pending request from a prior visit, or just requested one this session.
@@ -52,7 +60,8 @@ export function ExploreSidePanel({
     joinableSpaces.length > 0 ||
     featuredRankings.length > 0 ||
     unclaimedTopics.length > 0 ||
-    recentlyClaimedSpaces.length > 0;
+    recentlyClaimedSpaces.length > 0 ||
+    communityCalls.length > 0;
   if (!hasContent) return null;
 
   // Build only the sections that have content, then join them with dividers so
@@ -79,6 +88,19 @@ export function ExploreSidePanel({
           spaces={recentlyClaimedSpaces}
           pendingMembershipSpaceIds={pendingSet}
           memberOrEditorSpaceIds={memberOrEditorSet}
+        />
+      ),
+    });
+  }
+  if (communityCalls.length > 0) {
+    sections.push({
+      key: 'community-calls',
+      node: (
+        <ExploreCommunityCallsSection
+          calls={communityCalls}
+          memberOrEditorSpaceIds={memberOrEditorSet}
+          editorSpaceIds={editorSet}
+          pendingMembershipSpaceIds={pendingSet}
         />
       ),
     });

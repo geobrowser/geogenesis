@@ -11,12 +11,10 @@ import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSpace } from '~/core/hooks/use-space';
 import { useDiff } from '~/core/state/diff-store';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { useRelationEntityRelations } from '~/core/state/entity-page-store/entity-store';
@@ -32,12 +30,11 @@ import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Entity, TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
+import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
-import { Divider } from '~/design-system/divider';
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
-import { ThumbGeoImage } from '~/design-system/geo-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
@@ -45,7 +42,6 @@ import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
@@ -57,56 +53,54 @@ import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
 
 import { editorContentVersionAtom, entitySidePanelHostElementAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
 
-function spaceHasDisplayName(entity: Entity | null | undefined, spaceId: string): boolean {
-  if (!entity?.values) return false;
-  return entity.values.some(
-    value =>
-      !value.isDeleted &&
-      value.spaceId === spaceId &&
-      value.property.id === SystemIds.NAME_PROPERTY &&
-      typeof value.value === 'string' &&
-      value.value.trim().length > 0
-  );
-}
-
 /**
  * `GeoStore.getEntity(id, { spaceId })` only keeps triples for that space. If callers pass the
  * block’s space while the row’s data lives in another space, the panel looks empty. Prefer a scope
  * that actually has the entity name — not merely backlinks/votes in the ranking block’s space.
+ *
+ * When browsing, prefer the top-ranked space where the entity has a name, so a multi-space person
+ * opens to their canonical space rather than a personal space that merely references them. When
+ * opened for editing (main-view edit / review), honor the requested space so unpublished edits
+ * scoped to it stay visible.
  */
-function useSidePanelEntityScope(entityId: string, requestedSpaceId: string) {
+function useSidePanelEntityScope(entityId: string, requestedSpaceId: string, preferRequestedSpace: boolean) {
   const { entity: unscopedEntity, isLoading: isLoadingHydration } = useQueryEntity({
     id: entityId,
     enabled: Boolean(entityId),
   });
 
-  const { entity: requestedScoped } = useQueryEntity({
-    id: entityId,
-    spaceId: requestedSpaceId,
-    enabled: Boolean(entityId && requestedSpaceId),
-  });
-
   const derivedSpaceId = React.useMemo(() => {
-    if (unscopedEntity) {
-      const nameValue = Entities.nameValue(unscopedEntity.values);
-      if (nameValue?.spaceId) return nameValue.spaceId;
+    const namedSpaceIds = new Set<string>();
+    for (const value of unscopedEntity?.values ?? []) {
+      if (
+        !value.isDeleted &&
+        value.property.id === SystemIds.NAME_PROPERTY &&
+        typeof value.value === 'string' &&
+        value.value.trim().length > 0
+      ) {
+        namedSpaceIds.add(value.spaceId);
+      }
     }
-    const v = unscopedEntity?.values.find(x => !x.isDeleted)?.spaceId;
-    const r = unscopedEntity?.relations.find(rel => !rel.isDeleted)?.spaceId;
-    return v ?? r ?? requestedSpaceId;
+
+    return (
+      getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(unscopedEntity?.spaces ?? []) ?? requestedSpaceId
+    );
   }, [unscopedEntity, requestedSpaceId]);
 
   const effectiveSpaceId = React.useMemo(() => {
-    if (spaceHasDisplayName(requestedScoped, requestedSpaceId)) {
+    // Honor the requested space when opened for editing and the entity has any
+    // content there, so unpublished edits (including non-name ones) stay visible.
+    if (preferRequestedSpace && (unscopedEntity?.spaces ?? []).includes(requestedSpaceId)) {
       return requestedSpaceId;
     }
     return derivedSpaceId;
-  }, [derivedSpaceId, requestedScoped, requestedSpaceId]);
+  }, [derivedSpaceId, preferRequestedSpace, requestedSpaceId, unscopedEntity]);
 
   const { entity, isLoading: isLoadingScopedView } = useQueryEntity({
     id: entityId,
@@ -216,9 +210,7 @@ function EntitySidePanelHeader({
   onClose: () => void;
 }) {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
-  const { space } = useSpace(entitySpaceId);
 
-  const displayName = space?.entity?.name ?? 'Space';
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
@@ -232,24 +224,7 @@ function EntitySidePanelHeader({
         <CloseSidePanel color="grey-04" />
       </button>
 
-      <Link
-        href={NavUtils.toSpace(entitySpaceId)}
-        spaceId={entitySpaceId}
-        className="flex max-w-[min(100%,14rem)] min-w-0 shrink items-center gap-1.5 rounded-sm px-1 py-1"
-      >
-        <div className="relative h-4 w-4 shrink-0 overflow-hidden rounded-sm">
-          <ThumbGeoImage
-            value={space?.entity?.image || PLACEHOLDER_SPACE_IMAGE}
-            alt=""
-            loading="eager"
-            fetchPriority="high"
-          />
-        </div>
-        <Divider type="vertical" className="inline-block h-4 w-px shrink-0" />
-        <Truncate shouldTruncate variant="breadcrumb" maxLines={1} className="min-w-0 font-medium">
-          {displayName}
-        </Truncate>
-      </Link>
+      <NavbarBreadcrumb spaceId={entitySpaceId} entityId={entityId} />
 
       <div className="min-w-0 flex-1" aria-hidden />
 
@@ -510,7 +485,12 @@ export function EntitySidePanelSurface({
   previewDescription?: string | null;
   onClose: () => void;
 }) {
-  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId);
+  const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
+  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(
+    entityId,
+    requestedSpaceId,
+    preferRequestedSpace
+  );
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
 
   return (
@@ -642,16 +622,32 @@ export function EntitySidePanel() {
     }
   }, [pathname, sidePanelTarget, handleCloseSidePanel]);
 
+  // Close when clicking outside the panel. Capture phase so it beats descendant
+  // handlers that stopPropagation. Openers switch the panel instead of closing;
+  // popovers/menus/dialogs portaled out of the panel are ignored.
   React.useEffect(() => {
     if (!sidePanelTarget) return;
+    // The review modal opens and switches this panel; let it own its dismissal
+    // instead of closing on every click within it.
+    if (sidePanelTarget.openedFromReviewEdits) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      if (
+        target.closest(
+          '[data-entity-side-panel], [data-power-tools-entity-panel], [data-entity-side-panel-opener], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover'
+        )
+      ) {
+        return;
+      }
+
       handleCloseSidePanel();
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
   }, [sidePanelTarget, handleCloseSidePanel]);
 
   if (!sidePanelTarget) {

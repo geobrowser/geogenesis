@@ -2,15 +2,13 @@ import { cache } from 'react';
 
 import { Effect } from 'effect';
 
-import { Telemetry } from '~/app/api/telemetry';
-
 import {
   type ParticipantKind,
   SPACE_PARTICIPANTS_PAGE_SIZE,
   type SpaceParticipantsPage,
   fetchSpaceParticipantsPage,
 } from './fetch-space-participants-page';
-
+import { Telemetry } from '~/app/api/telemetry';
 
 export const getCachedSpaceParticipantsPage = cache(
   async (

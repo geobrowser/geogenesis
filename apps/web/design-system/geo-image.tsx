@@ -6,7 +6,7 @@ import type { ImgHTMLAttributes } from 'react';
 import cn from 'classnames';
 import Image, { ImageProps } from 'next/image';
 
-import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
+import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
@@ -18,17 +18,26 @@ type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
   value: string;
 };
 
-/** Image component that resolves IPFS values via Pinata, with Lighthouse fallback for legacy CIDs. */
+// next/image throws synchronously if `src` isn't a valid URL or local path, so
+// skip values that don't resolve to something renderable — e.g. a bare CID or an
+// unresolved entity id that slipped through in place of an ipfs:// URL.
+function isRenderableSrc(src: string): boolean {
+  return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
+}
+
+/** Image component that resolves IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
 export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
-  const [useFallback, setUseFallback] = useState(false);
+  const [level, setLevel] = useState(0);
 
   const handleError = useCallback(() => {
-    if (!useFallback && value.startsWith('ipfs://')) {
-      setUseFallback(true);
+    if (value.startsWith('ipfs://')) {
+      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
     }
-  }, [useFallback, value]);
+  }, [value]);
 
-  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const src = getImagePathAtLevel(value, level);
+  if (!isRenderableSrc(src)) return null;
+
   const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
   return <Image {...imageProps} src={src} alt={alt} onError={handleError} unoptimized={unoptimized} />;
 }
@@ -37,17 +46,19 @@ type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'on
   value: string;
 };
 
-/** Native img element with Pinata primary, Lighthouse fallback for legacy CIDs. */
+/** Native img element resolving IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
 export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProps) {
-  const [useFallback, setUseFallback] = useState(false);
+  const [level, setLevel] = useState(0);
 
   const handleError = useCallback(() => {
-    if (!useFallback && value.startsWith('ipfs://')) {
-      setUseFallback(true);
+    if (value.startsWith('ipfs://')) {
+      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
     }
-  }, [useFallback, value]);
+  }, [value]);
 
-  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const src = getImagePathAtLevel(value, level);
+  if (!isRenderableSrc(src)) return null;
+
   return <img {...props} src={src} alt={alt} onError={handleError} />;
 }
 

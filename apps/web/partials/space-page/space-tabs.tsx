@@ -151,7 +151,15 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   const overviewHref = NavUtils.toSpace(spaceId);
 
-  // Build system tabs that appear after dynamic tabs
+  // Our Community tab renders for non-person spaces, always as the 2nd tab (after
+  // Overview) — and in addition to any custom "Community" tab the space authored.
+  const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE);
+
+  // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
+  // Governance + Activity trail.
+  const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
+  if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
+
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
   if (questionsTabEnabled) {
@@ -159,9 +167,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
 
-  if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
-    systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
-  }
+  if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
 
   systemTabsAfter.push({ label: 'Activity', href: `/space/${spaceId}/activity` });
 
@@ -178,20 +184,28 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
         entityId={entityId}
         spaceId={spaceId}
         editableTabs={editableTabs}
-        systemTabsBefore={[{ label: 'Overview', href: overviewHref }]}
+        systemTabsBefore={systemTabsBefore}
         systemTabsAfter={systemTabsAfter}
         overviewHref={overviewHref}
       />
     );
   }
 
-  // Build dynamic tabs in the correct order
+  // Custom (content) tabs, in their authored order.
   const dynamicTabs = sortedTabEntities.map(entity => ({
     label: entity.name ?? '',
     href: `${overviewHref}?tabId=${entity.id}`,
   }));
 
-  const tabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, questionsTabEnabled });
+  const baseTabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, questionsTabEnabled });
+
+  const tabs = showCommunity
+    ? [
+        baseTabs[0],
+        { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
+        ...baseTabs.slice(1),
+      ]
+    : baseTabs;
 
   return <TabGroup tabs={tabs} />;
 }

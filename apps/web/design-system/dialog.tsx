@@ -25,7 +25,7 @@ export function Dialog(props: Props) {
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
         <Title className="sr-only">{props.title ?? 'Dialog Title'}</Title>
         <Content className="fixed inset-0 z-101 flex items-start justify-center focus:outline-hidden">
-          <div className="mt-40 inline-flex max-h-[415px] max-w-[586px] flex-col gap-3 overflow-y-auto rounded-lg bg-white p-4">
+          <div className="mt-40 flex max-h-[415px] w-full max-w-[586px] flex-col gap-3 overflow-y-auto rounded-lg bg-white p-4">
             <div className="flex items-center justify-between">
               {props.header}
               <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />

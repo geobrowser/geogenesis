@@ -15,7 +15,7 @@ export const Main = ({ children }: MainProps) => {
   const { isReviewOpen } = useDiff();
   const isHidden = isReviewOpen;
   const pathname = usePathname();
-  const isExplore = pathname === '/explore';
+  const isFullWidth = pathname === '/explore' || /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname);
 
   return (
     <motion.main
@@ -23,7 +23,7 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className={isExplore ? 'min-w-0 flex-1' : 'mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16'}
+      className={isFullWidth ? 'min-w-0 flex-1' : 'mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16'}
     >
       {children}
     </motion.main>

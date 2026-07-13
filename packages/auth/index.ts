@@ -1,4 +1,11 @@
-export { getIdentityToken, usePrivy, useLogout, PrivyProvider, type PrivyClientConfig } from '@privy-io/react-auth';
+export {
+  usePrivy,
+  useLogout,
+  useIdentityToken,
+  getIdentityToken,
+  PrivyProvider,
+  type PrivyClientConfig,
+} from '@privy-io/react-auth';
 export { WagmiProvider } from '@privy-io/wagmi';
 export { useAccountEffect, useWalletClient } from 'wagmi';
 export { getGeoChain } from './src/chain.js';

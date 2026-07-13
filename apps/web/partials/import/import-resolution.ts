@@ -43,8 +43,7 @@ type ResolutionGuard = {
 };
 
 type ResolvedEntityMatch =
-  | { status: 'resolved'; entity: { id: string; name: string } }
-  | { status: 'unresolved'; reason: 'none' | 'ambiguous' };
+  { status: 'resolved'; entity: { id: string; name: string } } | { status: 'unresolved'; reason: 'none' | 'ambiguous' };
 
 function getCandidateTopSpaceRank(spaceIds: string[]): number {
   if (spaceIds.length === 0) return Number.MAX_SAFE_INTEGER;

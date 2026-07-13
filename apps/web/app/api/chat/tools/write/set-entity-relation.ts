@@ -11,7 +11,7 @@ type SetEntityRelationInput = {
 
 export const setEntityRelation = tool({
   description:
-    'Add a typed relation from one entity to another — e.g. link a movie to its director, tag a page with a topic. `typeId` must be a property whose dataType is RELATION. Both fromEntity and toEntity must exist; use searchGraph or getEntity to resolve ids.',
+    'Add a typed relation from one entity to another — e.g. link an entity to a related person, tag a page with a topic. `typeId` must be a property whose dataType is RELATION. Both fromEntity and toEntity must exist; use searchGraph or getEntity to resolve ids.',
   inputSchema: jsonSchema<SetEntityRelationInput>({
     type: 'object',
     properties: {
