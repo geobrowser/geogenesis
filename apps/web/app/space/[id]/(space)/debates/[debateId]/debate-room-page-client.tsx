@@ -2063,14 +2063,14 @@ function disconnectRoom(
 }
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
-  const [, setTick] = React.useState(0);
+  const [now, setNow] = React.useState(serverNow);
 
   React.useEffect(() => {
-    const timer = window.setInterval(() => setTick(current => current + 1), 500);
+    setNow(serverNow());
+    const timer = window.setInterval(() => setNow(serverNow()), 500);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [serverNow]);
 
-  const now = serverNow();
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   if (!countdownWindow || countdownWindow.targetMs === null) {
     return {

@@ -502,6 +502,31 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getAllByText('5')).not.toHaveLength(0);
   });
 
+  it('advances a synchronized countdown between debate refetches', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse('2030-01-01T00:00:00.000Z'));
+    mocks.getServerTime.mockResolvedValue({ server_time_ms: Date.parse('2026-07-02T00:00:05.000Z') });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      preflight_ends_at: '2026-07-02T00:00:10.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
+
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+
+    expect(screen.getByLabelText('Phase timer: 4 seconds remaining')).toBeInTheDocument();
+  });
+
   it('uses synchronized server time when the device clock is skewed', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2030-01-01T00:00:00.000Z'));
     mocks.getServerTime.mockResolvedValue({ server_time_ms: Date.parse('2026-07-02T00:00:05.000Z') });
