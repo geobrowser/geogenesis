@@ -12,7 +12,7 @@ const dynamicTabs = [
 ];
 
 describe('buildSpaceTabs', () => {
-  it('omits Questions and Debates when the feature flag is disabled', () => {
+  it('omits Claims and Debates when the feature flag is disabled', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
@@ -24,7 +24,7 @@ describe('buildSpaceTabs', () => {
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Governance', 'Activity']);
   });
 
-  it('inserts Questions and Debates after content tabs and before Governance when enabled', () => {
+  it('inserts Claims and Debates after content tabs and before Governance when enabled', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
@@ -37,16 +37,16 @@ describe('buildSpaceTabs', () => {
       'Overview',
       'Facts',
       'Sources',
-      'Questions',
+      'Claims',
       'Debates',
       'Governance',
       'Activity',
     ]);
-    expect(tabs.find(tab => tab.label === 'Questions')?.href).toBe(`/space/${spaceId}/questions`);
+    expect(tabs.find(tab => tab.label === 'Claims')?.href).toBe(`/space/${spaceId}/claims`);
     expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`/space/${spaceId}/debates`);
   });
 
-  it('keeps personal spaces from showing Governance while still showing Questions and Debates', () => {
+  it('keeps personal spaces from showing Governance while still showing Claims and Debates', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
@@ -55,14 +55,14 @@ describe('buildSpaceTabs', () => {
       questionsTabEnabled: true,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Questions', 'Debates', 'Activity']);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Debates', 'Activity']);
   });
 
-  it('keeps the system Questions route when a dynamic tab has the same label', () => {
+  it('keeps the system Claims route when a dynamic tab has the same label', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
-      dynamicTabs: [...dynamicTabs, { label: 'Questions', href: `${overviewHref}?tabId=dynamic-questions` }],
+      dynamicTabs: [...dynamicTabs, { label: 'Claims', href: `${overviewHref}?tabId=dynamic-claims` }],
       typeIds: [SystemIds.SPACE_TYPE],
       questionsTabEnabled: true,
     });
@@ -71,12 +71,12 @@ describe('buildSpaceTabs', () => {
       'Overview',
       'Facts',
       'Sources',
-      'Questions',
+      'Claims',
       'Debates',
       'Governance',
       'Activity',
     ]);
-    expect(tabs.find(tab => tab.label === 'Questions')?.href).toBe(`/space/${spaceId}/questions`);
+    expect(tabs.find(tab => tab.label === 'Claims')?.href).toBe(`/space/${spaceId}/claims`);
   });
 
   it('keeps the system Debates route when a dynamic tab has the same label', () => {
@@ -92,7 +92,7 @@ describe('buildSpaceTabs', () => {
       'Overview',
       'Facts',
       'Sources',
-      'Questions',
+      'Claims',
       'Debates',
       'Governance',
       'Activity',

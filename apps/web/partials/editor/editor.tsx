@@ -285,7 +285,10 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    if (!editor) return;
+    // `destroy()` nulls the editor's internals but not the reference, so a closure
+    // over a destroyed instance passes a plain null check and then throws on
+    // `.commands`. Navigating between entities destroys the editor this effect holds.
+    if (!editor || editor.isDestroyed) return;
 
     // While in edit mode, the editor is the source of truth. Content is
     // persisted to the store via onBlur. Pushing store changes back into
@@ -311,7 +314,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   const handleGutterClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!editor || !editable) return;
+      if (!editor || editor.isDestroyed || !editable) return;
 
       // Only focus when clicking on the editor wrapper itself, not inner content.
       if (e.target === e.currentTarget) {

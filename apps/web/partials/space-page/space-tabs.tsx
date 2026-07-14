@@ -55,8 +55,8 @@ export function buildSpaceTabs({
   ];
 
   const QUESTION_TAB: BuiltSpaceTab = {
-    label: 'Questions',
-    href: `/space/${spaceId}/questions`,
+    label: 'Claims',
+    href: `/space/${spaceId}/claims`,
     priority: 2,
   };
 
@@ -163,7 +163,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
   if (questionsTabEnabled) {
-    systemTabsAfter.push({ label: 'Questions', href: `/space/${spaceId}/questions` });
+    systemTabsAfter.push({ label: 'Claims', href: `/space/${spaceId}/claims` });
     systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
 

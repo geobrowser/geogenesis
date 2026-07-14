@@ -2,13 +2,10 @@
 
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
-export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
-export type DebateRecordingSource = 'egress' | 'local';
-
-export type DebateAnswer = {
-  entity_id: string;
-  label: string;
-};
+export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
+export type DebateRecordingSource = 'local';
+export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
+export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
 
 export type DebateWaiter = {
   id: string;
@@ -16,7 +13,8 @@ export type DebateWaiter = {
   profile_space_id: string;
   display_name: string | null;
   avatar_cid: string | null;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   joined_at: string;
 };
 
@@ -27,19 +25,18 @@ export type DebateParticipantSummary = {
   avatar_cid: string | null;
 };
 
-export type DebateQuestionSummary = {
+export type DebateClaimSummary = {
   id: string;
   space_id: string;
-  question_entity_id: string;
-  question: string;
+  claim_entity_id: string;
+  claim: string;
   description: string | null;
-  answer_options: DebateAnswer[];
 };
 
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
-  question: DebateQuestionSummary;
+  claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
   debate_id: string | null;
@@ -49,20 +46,24 @@ export type DebateMatch = {
 
 export type DebateMatchParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   accepted: boolean;
 };
 
 export type DebateParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   joined_at: string | null;
+  ready_at: string | null;
 };
 
 export type DebateRecording = {
   id: string;
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
   user_id: string;
   object_key: string;
   filename: string;
@@ -78,16 +79,107 @@ export type DebateRecording = {
   video_bits_per_second: number | null;
 };
 
+export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type DebateMediaArtifactKind =
+  | 'final_video'
+  | 'preview_image'
+  | 'transcript_json'
+  | 'subtitle_srt'
+  | 'subtitle_vtt'
+  | 'subtitle_ass'
+  | 'render_metadata';
+
+export type DebateMediaRegion = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type DebateMediaRenderLayout = {
+  output_width: number;
+  output_height: number;
+  slot_1: DebateMediaRegion;
+  subtitles: DebateMediaRegion;
+  slot_2: DebateMediaRegion;
+};
+
+export type DebateMediaJobSummary = {
+  id: string;
+  status: DebateMediaJobStatus;
+  attempt_count: number;
+  locked_at: string | null;
+  locked_by: string | null;
+  available_at: string;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export type DebateMediaArtifact = {
+  id: string;
+  kind: DebateMediaArtifactKind;
+  filename: string;
+  content_type: string;
+  byte_size: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DebateMediaResponse = {
+  job: DebateMediaJobSummary | null;
+  artifacts: DebateMediaArtifact[];
+  transcript_segment_count: number;
+  layout: DebateMediaRenderLayout;
+  whisper_model_id: string;
+};
+
+export type DebateMediaProcessRequest = {
+  force?: boolean;
+};
+
+export type DebateMediaArtifactUrlRequest = {
+  kind?: DebateMediaArtifactKind;
+  filename?: string;
+};
+
+export type DebateMediaArtifactUrlResponse = {
+  upload: ObjectStoreUpload;
+};
+
+export type TranscriptFormat = 'json' | 'srt' | 'vtt' | 'ass';
+
+export type DebateTranscriptSegment = {
+  id: string;
+  participant_slot: ParticipantSlot;
+  position: boolean;
+  position_label: string;
+  sequence_index: number;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DebateTranscriptResponse = {
+  format: TranscriptFormat;
+  model_id: string;
+  segments: DebateTranscriptSegment[];
+  body?: string;
+};
+
 export type Debate = {
   id: string;
-  question: DebateQuestionSummary;
+  claim: DebateClaimSummary;
   status: DebateStatus;
   room_name: string;
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
   current_speaker_slot: ParticipantSlot | null;
-  prepare_started_at: string | null;
-  prepare_ends_at: string | null;
+  connecting_started_at: string | null;
+  connecting_deadline_at: string | null;
   turn_started_at: string | null;
   turn_ends_at: string | null;
   preflight_ends_at: string | null;
@@ -96,19 +188,97 @@ export type Debate = {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
+  rematch_session_id?: string | null;
   participants: DebateParticipant[];
   recordings: DebateRecording[];
   recording_error: string | null;
+  cancellation_reason: string | null;
 };
 
-export type DebateQuestion = {
+export type DebateActivity = {
+  online: boolean;
+  cooldown_until: string | null;
+  match: DebateMatch | null;
+  debate: Debate | null;
+  rematch: DebateRematchSession | null;
+};
+
+export type DebateRematchParticipant = DebateParticipantSummary & {
+  participant_slot: ParticipantSlot;
+  consented_at: string | null;
+};
+
+export type DebateRematchRequest = {
+  id: string;
+  status: DebateRematchRequestStatus;
+  claim: DebateClaimSummary;
+  requester_user_id: string;
+  recipient_user_id: string;
+  requester_position: boolean;
+  recipient_position: boolean;
+  turn_format_id: string;
+  created_at: string;
+  expires_at: string;
+};
+
+export type DebateRematchSession = {
+  id: string;
+  source_debate_id: string;
+  source_space_id: string;
+  status: DebateRematchStatus;
+  participants: DebateRematchParticipant[];
+  decision_expires_at: string;
+  browsing_expires_at: string | null;
+  request: DebateRematchRequest | null;
+  converted_debate_id: string | null;
+  recently_rejected_claim_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type DebateRematchClaimPosition = {
+  user_id: string;
+  position: boolean | null;
+};
+
+export type DebateRematchClaim = {
+  claim: DebateClaimSummary;
+  participants: DebateRematchClaimPosition[];
+  shared_preference: boolean;
+  recently_rejected: boolean;
+  previously_debated: boolean;
+};
+
+export type DebateRematchClaimsResponse = {
+  claims: DebateRematchClaim[];
+  excluded_claim_ids: string[];
+};
+
+export type DebateRematchActionResponse = {
+  session: DebateRematchSession;
+  request: DebateRematchRequest | null;
+  debate: Debate | null;
+};
+
+export type DebateSharePrompt = {
+  id: string;
+  debate_id: string;
+  source_space_id: string;
+  claim: string;
+  created_at: string;
+};
+
+export type DebateSharePromptsResponse = {
+  prompts: DebateSharePrompt[];
+};
+
+export type DebateClaim = {
   id: string;
   space_id: string;
-  question_entity_id: string;
-  question: string;
+  claim_entity_id: string;
+  claim: string;
   description: string | null;
-  answer_options: DebateAnswer[];
-  viewer_waiting_answer_entity_id: string | null;
+  viewer_waiting_position: boolean | null;
   waiters: DebateWaiter[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
@@ -123,17 +293,16 @@ export type ObjectStoreUpload = {
   expires_at: string;
 };
 
-export type DebateQuestionsResponse = {
-  questions: DebateQuestion[];
+export type DebateClaimsResponse = {
+  claims: DebateClaim[];
 };
 
 export type JoinDebateQueueRequest = {
-  answer_entity_id: string;
-  answer_label: string;
+  position: boolean;
 };
 
 export type JoinDebateQueueResponse = {
-  question: DebateQuestion;
+  claim: DebateClaim;
   match: DebateMatch | null;
 };
 
@@ -153,7 +322,8 @@ export type LiveKitJoinResponse = {
   room_name: string;
   role: string;
   participant_slot: ParticipantSlot;
-  answer: DebateAnswer;
+  position: boolean;
+  position_label: string;
 };
 
 export type LocalRecordingUploadRequest = {
@@ -210,13 +380,44 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
-export async function listDebateQuestions(
+export async function getServerTime() {
+  return geoChatRequest<{ server_time_ms: number }>('/time');
+}
+
+export async function resolveCurrentGeoChatUserId(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  const accessToken = await getGeoChatAccessToken(getPrivyIdentityToken);
+  return decodeGeoChatAccessToken(accessToken)?.user_id ?? null;
+}
+
+export async function heartbeatDebatePresence(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateActivity>('/me/debate-presence/heartbeat', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateActivity(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateActivity>('/me/debate-activity', {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function listDebateSharePrompts(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateSharePromptsResponse>('/me/debate-share-prompts', {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function listDebateClaims(
   spaceId: string,
-  questionIds: string[],
+  claimIds: string[],
   getPrivyIdentityToken?: GetPrivyIdentityToken
 ) {
-  const query = questionIds.length > 0 ? `?question_ids=${encodeURIComponent(questionIds.join(','))}` : '';
-  return geoChatRequest<DebateQuestionsResponse>(`/spaces/${spaceId}/debate-questions${query}`, {
+  const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
+  return geoChatRequest<DebateClaimsResponse>(`/spaces/${spaceId}/debate-claims${query}`, {
     auth: 'optional',
     getPrivyIdentityToken,
   });
@@ -224,12 +425,26 @@ export async function listDebateQuestions(
 
 export async function joinDebateQueue(
   spaceId: string,
-  questionId: string,
+  claimId: string,
   request: JoinDebateQueueRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken
 ) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/questions/${questionId}/debate-queue`, {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function updateDebatePreference(
+  spaceId: string,
+  claimId: string,
+  request: JoinDebateQueueRequest,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-preference`, {
+    method: 'PUT',
     body: request,
     auth: true,
     getPrivyIdentityToken,
@@ -287,9 +502,109 @@ export async function markDebateJoined(debateId: string, getPrivyIdentityToken: 
   });
 }
 
+export async function markDebateReady(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/ready`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
 export async function abortDebate(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<Debate>(`/debates/${debateId}/abort`, {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function consentToDebateRematch(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debates/${debateId}/rematch/consent`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateRematch(sessionId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debate-rematches/${sessionId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function leaveDebateRematch(sessionId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchSession>(`/debate-rematches/${sessionId}/leave`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function listDebateRematchClaims(
+  sessionId: string,
+  claimIds: string[],
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
+  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims${query}`, {
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function updateDebateRematchPosition(
+  sessionId: string,
+  claimId: string,
+  position: boolean,
+  sourceSpaceId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims/${claimId}/position`, {
+    method: 'PUT',
+    body: { position, source_space_id: sourceSpaceId },
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function createDebateRematchRequest(
+  sessionId: string,
+  request: { source_space_id: string; claim_id: string; format_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematches/${sessionId}/requests`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function acceptDebateRematchRequest(requestId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematch-requests/${requestId}/accept`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function rejectDebateRematchRequest(requestId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateRematchActionResponse>(`/debate-rematch-requests/${requestId}/reject`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function handleDebateSharePrompt(
+  promptId: string,
+  action: 'shared' | 'dismissed',
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateSharePrompt>(`/debate-share-prompts/${promptId}/handled`, {
+    method: 'POST',
+    body: { action },
     auth: true,
     getPrivyIdentityToken,
   });
@@ -332,6 +647,53 @@ export async function getRecordingUrl(
     auth: 'optional',
     getPrivyIdentityToken,
   });
+}
+
+export async function getDebateMedia(debateId: string, getPrivyIdentityToken?: GetPrivyIdentityToken) {
+  return geoChatRequest<DebateMediaResponse>(`/debates/${debateId}/media`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+  });
+}
+
+export async function requestDebateMediaProcessing(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  request: DebateMediaProcessRequest = {}
+) {
+  return geoChatRequest<DebateMediaResponse>(`/debates/${debateId}/media/process`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateMediaArtifactUrl(
+  debateId: string,
+  request: DebateMediaArtifactUrlRequest,
+  getPrivyIdentityToken?: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateMediaArtifactUrlResponse>(`/debates/${debateId}/media/artifacts/url`, {
+    method: 'POST',
+    body: request,
+    auth: 'optional',
+    getPrivyIdentityToken,
+  });
+}
+
+export async function getDebateTranscript(
+  debateId: string,
+  format: TranscriptFormat = 'json',
+  getPrivyIdentityToken?: GetPrivyIdentityToken
+) {
+  return geoChatRequest<DebateTranscriptResponse>(
+    `/debates/${debateId}/transcript?format=${encodeURIComponent(format)}`,
+    {
+      auth: 'optional',
+      getPrivyIdentityToken,
+    }
+  );
 }
 
 async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {

@@ -7,6 +7,8 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
+import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
@@ -116,6 +118,8 @@ export function App({ children }: { children: React.ReactNode }) {
         <ReviewChanges />
         <ChatWidget />
         <FeatureFlagsDialog />
+        <DebateCoordinator />
+        <DebateRecordingUploadCoordinator />
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}

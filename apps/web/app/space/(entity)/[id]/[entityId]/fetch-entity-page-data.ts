@@ -99,7 +99,16 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
   const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...(blockRelations ?? []),
+    ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(
+    allBlocks,
+    cachedFetchEntitiesBatch,
+    spaceId,
+    allBlockRelations
+  );
 
   return {
     id: entityId,

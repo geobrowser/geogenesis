@@ -7,12 +7,12 @@
  * token in the Authorization header is the user's own; the LiveKit token is minted
  * by curator-backend and returned through here unchanged.
  *
- * Defaults to the staging curator-backend in dev; set CURATOR_BACKEND_URL (server-only)
- * to point at another deploy. Required in production — the route throws rather than
- * silently falling back to staging.
+ * CURATOR_BACKEND_URL (server-only) must be set in every environment, to the same
+ * shared curator-backend deploy — local dev and prod need to hit the same backend/DB
+ * so data created in one environment (e.g. a recording) is visible in the others. No
+ * default/fallback: an unset var fails loudly instead of silently drifting between
+ * environments.
  */
-
-const DEFAULT_CURATOR_BACKEND_URL = 'https://curator-api-staging-testnet.up.railway.app';
 
 // Hop-by-hop headers must not be forwarded (RFC 7230 §6.1) plus content-length /
 // host which the runtime recomputes for the upstream request/response. Cookies are
@@ -28,10 +28,10 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
 ]);
 
 async function proxy(req: Request, path: string[]): Promise<Response> {
-  if (process.env.NODE_ENV === 'production' && !process.env.CURATOR_BACKEND_URL) {
-    throw new Error('CURATOR_BACKEND_URL must be set in production');
+  const base = process.env.CURATOR_BACKEND_URL;
+  if (!base) {
+    throw new Error('CURATOR_BACKEND_URL must be set');
   }
-  const base = process.env.CURATOR_BACKEND_URL || DEFAULT_CURATOR_BACKEND_URL;
 
   const { search } = new URL(req.url);
   const target = `${base.replace(/\/$/, '')}/${path.map(encodeURIComponent).join('/')}${search}`;

@@ -8,7 +8,7 @@ const MEMBER_SUGGESTIONS = [
   'Learn about Geo',
   'Complete my profile',
   'Create my first post',
-  'Organize my favorite movies',
+  'Organize a collection',
   'Create a business page',
 ];
 

@@ -185,7 +185,16 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
   });
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...blockRelations,
+    ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(
+    allBlocks,
+    cachedFetchEntitiesBatch,
+    spaceId,
+    allBlockRelations
+  );
 
   return { blocks, blockRelations, tabs, initialCollectionItems };
 }
@@ -214,6 +223,12 @@ type SubtopicGalleryContainerProps = {
 };
 
 const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
+  const space = await cachedFetchSpace(spaceId);
+
+  if (!space) {
+    return null;
+  }
+
   const subtopics = await fetchSubtopics(spaceId);
 
   if (subtopics.length === 0) {

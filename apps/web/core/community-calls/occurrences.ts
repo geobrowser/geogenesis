@@ -3,7 +3,7 @@
  * into live / upcoming / past. Mirrors curator's `getNextOccurrences` /
  * `isOccurrenceLive`, reusing geogenesis's existing schedule parser.
  */
-import { parseSchedule } from '~/core/utils/schedule';
+import { localToUtcMs, parseSchedule } from '~/core/utils/schedule';
 
 import { Occurrence } from './types';
 
@@ -24,11 +24,25 @@ function toMs(dateStr: string, time: string): number {
   return Date.UTC(y, m - 1, d, h || 0, min || 0);
 }
 
+/**
+ * Converts a "naive" ms value (wall-clock digits stamped as if UTC) to a true UTC
+ * instant when `tz` is set, re-deriving the zone's offset fresh at that instant —
+ * this is what makes recurrence DST-correct: each occurrence's real UTC offset is
+ * looked up at its own date rather than inherited from the series' first occurrence.
+ */
+function toTrueMs(naiveMs: number, tz: string | undefined): number {
+  return tz ? localToUtcMs(naiveMs, tz) : naiveMs;
+}
+
 /** Expand a schedule into occurrences within [now - 60d, now + 180d]. */
 export function getOccurrences(schedule: string, now = Date.now()): Occurrence[] {
   const parsed = parseSchedule(schedule);
   if (!parsed.startDate) return [];
 
+  // All stepping arithmetic below (weekBase/startMs) stays in "naive" ms — wall-clock
+  // calendar math (add N days/weeks/months) is timezone-agnostic by nature. Only the
+  // final occurrence instants get converted to true UTC via `toTrueMs`, once per
+  // occurrence, so each one picks up the correct offset for its own date.
   const baseStart = toMs(parsed.startDate, parsed.startTime);
   const duration = parsed.endTime
     ? Math.max(toMs(parsed.startDate, parsed.endTime) - baseStart, DEFAULT_DURATION_MS)
@@ -40,15 +54,17 @@ export function getOccurrences(schedule: string, now = Date.now()): Occurrence[]
 
   // Non-recurring: the single instance.
   if (!parsed.freq) {
-    return baseStart + duration >= windowStart && baseStart <= windowEnd
-      ? [{ startMs: baseStart, endMs: baseStart + duration }]
+    const trueStart = toTrueMs(baseStart, parsed.timezone);
+    return trueStart + duration >= windowStart && trueStart <= windowEnd
+      ? [{ startMs: trueStart, endMs: trueStart + duration }]
       : [];
   }
 
   const starts: number[] = [];
-  const push = (startMs: number) => {
-    if (startMs < baseStart) return;
-    if (startMs + duration >= windowStart && startMs <= windowEnd) starts.push(startMs);
+  const push = (naiveStartMs: number) => {
+    if (naiveStartMs < baseStart) return;
+    const trueStartMs = toTrueMs(naiveStartMs, parsed.timezone);
+    if (trueStartMs + duration >= windowStart && trueStartMs <= windowEnd) starts.push(trueStartMs);
   };
 
   const base = new Date(baseStart);

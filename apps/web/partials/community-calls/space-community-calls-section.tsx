@@ -1,28 +1,22 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import Link from 'next/link';
 
-import { subscribeToCall } from '~/core/community-calls/api';
 import { liveCallHref } from '~/core/community-calls/constants';
 import { formatDateLabel, formatTimeRange } from '~/core/community-calls/format';
 import { bucketOccurrences, getOccurrences } from '~/core/community-calls/occurrences';
 import { CallSeries, Occurrence } from '~/core/community-calls/types';
-import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useToast } from '~/core/hooks/use-toast';
-import { useReportError } from '~/core/state/status-bar-store';
-import { toUserFacingError } from '~/core/utils/error-diagnostics';
 
-import { Button, SmallButton } from '~/design-system/button';
+import { Button } from '~/design-system/button';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
 
 import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
+import { RsvpButton } from './rsvp-button';
 
 type Row = { call: CallSeries; occ: Occurrence };
 
@@ -59,7 +53,7 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
     return () => window.clearInterval(id);
   }, []);
 
-  const { isMember, isLoading: accessLoading } = useAccessControl(spaceId);
+  const { isMember, isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
 
   const highlight = React.useMemo(() => {
     if (now === null) return null;
@@ -87,7 +81,7 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
       ) : highlight.isLive ? (
         <LiveCard spaceId={spaceId} row={highlight.row} />
       ) : (
-        <UpcomingCard row={highlight.row} isMember={isMember} accessLoading={accessLoading} />
+        <UpcomingCard row={highlight.row} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
       )}
     </aside>
   );
@@ -124,12 +118,22 @@ function LiveCard({ spaceId, row }: { spaceId: string; row: Row }) {
   );
 }
 
-function UpcomingCard({ row, isMember, accessLoading }: { row: Row; isMember: boolean; accessLoading: boolean }) {
+function UpcomingCard({
+  row,
+  isMember,
+  isEditor,
+  accessLoading,
+}: {
+  row: Row;
+  isMember: boolean;
+  isEditor: boolean;
+  accessLoading: boolean;
+}) {
   return (
     <CardShell>
       <div className="flex items-start justify-between gap-2">
         <Title row={row} />
-        <CardAction call={row.call} isMember={isMember} accessLoading={accessLoading} />
+        <CardAction call={row.call} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
       </div>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
         <span className="text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
@@ -137,7 +141,6 @@ function UpcomingCard({ row, isMember, accessLoading }: { row: Row; isMember: bo
           spaceId={row.call.spaceId}
           callId={row.call.callId}
           name={row.call.name}
-          description={row.call.description}
           startMs={row.occ.startMs}
           endMs={row.occ.endMs}
           schedule={row.call.schedule}
@@ -148,59 +151,29 @@ function UpcomingCard({ row, isMember, accessLoading }: { row: Row; isMember: bo
 }
 
 /**
- * Mirrors explore-community-calls-section's upcoming-card treatment: members get
- * an RSVP button, everyone else gets "Join space" — we don't have a
+ * Mirrors explore-community-calls-section's upcoming-card treatment: editors get
+ * an RSVP button (curator's `isCreator`/`isEditor` gate on "RSVP via email" —
+ * regular members never see it), everyone else gets "Join space" — we don't have a
  * server-computed "request already pending" signal for a single space page, so
  * ExploreJoinSpaceButton's own post-click optimistic state covers that instead.
  */
 function CardAction({
   call,
   isMember,
+  isEditor,
   accessLoading,
 }: {
   call: CallSeries;
   isMember: boolean;
+  isEditor: boolean;
   accessLoading: boolean;
 }) {
   if (accessLoading) return null;
-  if (isMember) return <RsvpButton call={call} />;
+  if (isEditor) return <RsvpButton call={call} />;
+  if (isMember) return null;
   return (
     <div className="shrink-0 whitespace-nowrap">
       <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={false} variant="text" />
     </div>
-  );
-}
-
-function RsvpButton({ call }: { call: CallSeries }) {
-  'use no memo';
-
-  const { identityToken, getToken } = useCommunityCallIdentityToken();
-  const { user } = usePrivy();
-  const [, setToast] = useToast();
-  const notifyStatusBarError = useReportError();
-  const [busy, setBusy] = React.useState(false);
-
-  const onRsvp = async () => {
-    if (busy) return;
-    if (!identityToken) return setToast(<>Sign in to RSVP.</>);
-    const email = user?.email?.address;
-    if (!email) return setToast(<>Add an email to your account to RSVP.</>);
-    setBusy(true);
-    try {
-      const token = await getToken();
-      if (!token) return setToast(<>Sign in to RSVP.</>);
-      await subscribeToCall({ spaceId: call.spaceId, callId: call.callId, email }, token);
-      setToast(<>RSVP sent — we’ll email you the invite.</>);
-    } catch (err) {
-      notifyStatusBarError(toUserFacingError(err, "Couldn't RSVP: ").message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <SmallButton className="shrink-0" disabled={busy} onClick={onRsvp}>
-      RSVP
-    </SmallButton>
   );
 }

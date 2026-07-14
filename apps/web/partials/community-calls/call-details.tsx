@@ -11,7 +11,7 @@ import {
   getCallTranscript,
   listRecordings,
 } from '~/core/community-calls/api';
-import { OCCURRENCE_MATCH_TOLERANCE_MS, parseRoomName } from '~/core/community-calls/constants';
+import { OCCURRENCE_MATCH_TOLERANCE_MS, detailsHref, parseRoomName } from '~/core/community-calls/constants';
 import { formatDateTime, formatDuration, formatFullDate, formatTimeRange } from '~/core/community-calls/format';
 import {
   CallAttendee,
@@ -21,6 +21,7 @@ import {
   TranscriptSegment,
 } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
+import { usePublishRecordings } from '~/core/community-calls/use-publish-recordings';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { normId } from '~/core/utils/norm-id';
 
@@ -28,6 +29,7 @@ import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
 import { Dialog } from '~/design-system/dialog';
 
+import { OccurrenceSelector } from './occurrence-selector';
 import { RecordingPlayer } from './recording-player';
 
 const SYSTEM_SENDER_IDENTITY = 'system';
@@ -47,12 +49,16 @@ export function CallDetails({
   spaceId,
   callId,
   seriesName,
+  seriesDescription,
   occurrence,
+  schedule,
 }: {
   spaceId: string;
   callId: string;
   seriesName: string;
+  seriesDescription: string;
   occurrence: Occurrence;
+  schedule: string;
 }) {
   const { isEditor, isLoading: accessLoading } = useAccessControl(spaceId);
   const { identityToken, getToken } = useCommunityCallIdentityToken();
@@ -128,11 +134,18 @@ export function CallDetails({
 
   return (
     <div className="mx-auto flex max-w-[820px] flex-col gap-4 px-4 py-8">
-      <div className="flex flex-col gap-1">
-        <span className="text-smallTitle">{seriesName} — Details</span>
-        <span className="text-metadata text-grey-04">
-          {formatFullDate(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
-        </span>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-smallTitle">{seriesName} — Details</span>
+          <span className="text-metadata text-grey-04">
+            {formatFullDate(occurrence.startMs)} · {formatTimeRange(occurrence.startMs, occurrence.endMs)}
+          </span>
+        </div>
+        <OccurrenceSelector
+          schedule={schedule}
+          selectedStartMs={occurrence.startMs}
+          hrefFor={(startMs, endMs) => detailsHref(spaceId, callId, startMs, endMs)}
+        />
       </div>
 
       <div className="flex items-center gap-4 border-b border-grey-02">
@@ -159,7 +172,16 @@ export function CallDetails({
         />
       )}
       {tab === 'recordings' && (
-        <RecordingsTab recordings={recordings} getToken={getToken} onChanged={refetchRecordings} />
+        <RecordingsTab
+          recordings={recordings}
+          getToken={getToken}
+          onChanged={refetchRecordings}
+          spaceId={spaceId}
+          callId={callId}
+          seriesName={seriesName}
+          seriesDescription={seriesDescription}
+          occurrence={occurrence}
+        />
       )}
       {tab === 'attendees' && <AttendeesTab attendees={attendees} />}
       {tab === 'transcript' && <TranscriptTab segments={transcriptSegments} />}
@@ -207,11 +229,22 @@ function RecordingsTab({
   recordings,
   getToken,
   onChanged,
+  spaceId,
+  callId,
+  seriesName,
+  seriesDescription,
+  occurrence,
 }: {
   recordings: Recording[];
   getToken: () => Promise<string | null>;
   onChanged: () => void;
+  spaceId: string;
+  callId: string;
+  seriesName: string;
+  seriesDescription: string;
+  occurrence: Occurrence;
 }) {
+  const { publish, publishingKey } = usePublishRecordings();
   const [deletingFilename, setDeletingFilename] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<string | null>(null);
 
@@ -255,7 +288,25 @@ function RecordingsTab({
                 header={<span className="text-smallTitle">{formatDateTime(r.startedAt)}</span>}
                 content={<RecordingPlayer recordings={[r]} />}
               />
-              <SmallButton onClick={() => setDeletingFilename(r.filename)}>Delete</SmallButton>
+              <SmallButton
+                onClick={() =>
+                  publish({
+                    recordings: [r],
+                    spaceId,
+                    callId,
+                    seriesName,
+                    seriesDescription,
+                    occurrence,
+                    busyKey: r.filename,
+                  })
+                }
+                disabled={publishingKey === r.filename}
+              >
+                {publishingKey === r.filename ? 'Publishing…' : 'Publish'}
+              </SmallButton>
+              <SmallButton onClick={() => setDeletingFilename(r.filename)} disabled={publishingKey === r.filename}>
+                Delete
+              </SmallButton>
             </div>
           )}
         </div>

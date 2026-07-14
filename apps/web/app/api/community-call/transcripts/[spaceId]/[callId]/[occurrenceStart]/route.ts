@@ -4,9 +4,9 @@
  * CURATOR_BACKEND_URL). Same CORS-workaround shape: forward the Authorization
  * header verbatim, return the response untouched.
  *
- * Defaults to the staging rapporteur deploy in dev; set RAPPORTEUR_BACKEND_URL
- * (server-only) to point at another deploy. Required in production — the route
- * throws rather than silently falling back to staging.
+ * Hard-coded to the shared staging rapporteur deploy in every environment, same
+ * reasoning as the curator-backend proxy. Still overridable via
+ * RAPPORTEUR_BACKEND_URL (server-only) for local testing against a different deploy.
  */
 
 const DEFAULT_RAPPORTEUR_BACKEND_URL = 'https://rapporteur-staging-testnet.up.railway.app';
@@ -23,9 +23,6 @@ const STRIPPED_RESPONSE_HEADERS = new Set([
 type Ctx = { params: Promise<{ spaceId: string; callId: string; occurrenceStart: string }> };
 
 export async function GET(req: Request, ctx: Ctx) {
-  if (process.env.NODE_ENV === 'production' && !process.env.RAPPORTEUR_BACKEND_URL) {
-    throw new Error('RAPPORTEUR_BACKEND_URL must be set in production');
-  }
   const base = process.env.RAPPORTEUR_BACKEND_URL || DEFAULT_RAPPORTEUR_BACKEND_URL;
 
   const { spaceId, callId, occurrenceStart } = await ctx.params;
