@@ -13,8 +13,8 @@ import type { EntityFilter } from '~/core/gql/graphql';
 import { getAllEntities, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import {
   RANKING_BLOCK_TYPE_ID,
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
+  LEGACY_RANKING_END_DATE_PROPERTY_ID,
+  LEGACY_RANKING_START_DATE_PROPERTY_ID,
 } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -156,8 +156,8 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
       const entity = page.entity;
       const relations = page.relations.length > 0 ? page.relations : entity.relations;
 
-      const rankingStartDate = readDateValue(entity, RANKING_START_DATE_PROPERTY_ID, spaceId);
-      const rankingEndDate = readDateValue(entity, RANKING_END_DATE_PROPERTY_ID, spaceId);
+      const rankingStartDate = readDateValue(entity, LEGACY_RANKING_END_DATE_PROPERTY_ID, spaceId);
+      const rankingEndDate = readDateValue(entity, LEGACY_RANKING_START_DATE_PROPERTY_ID, spaceId);
 
       // "Live" == voting is currently open (in-progress, or no bounded window).
       const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
