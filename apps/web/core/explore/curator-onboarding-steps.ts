@@ -22,7 +22,7 @@ export const CURATOR_ONBOARDING_STEPS: CuratorOnboardingStep[] = [
   {
     id: 'rsvp-community-call',
     title: 'RSVP for a community call',
-    description: 'Community calls are a great way find out how to get involved',
+    description: 'Community calls are a great way to find out how to get involved',
     points: 10,
   },
   {

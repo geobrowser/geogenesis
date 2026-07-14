@@ -71,7 +71,7 @@ export function CuratorOnboardingSection() {
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >
           <span className={cx('transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>
-            <ChevronDownSmall color="grey-04" />
+            <ChevronDownSmall />
           </span>
         </button>
       </div>
