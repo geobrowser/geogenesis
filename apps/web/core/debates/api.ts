@@ -7,17 +7,6 @@ export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
 
-export type DebateWaiter = {
-  id: string;
-  user_id: string;
-  profile_space_id: string;
-  display_name: string | null;
-  avatar_cid: string | null;
-  position: boolean;
-  position_label: string;
-  joined_at: string;
-};
-
 export type DebateParticipantSummary = {
   user_id: string;
   profile_space_id: string;
@@ -272,6 +261,13 @@ export type DebateSharePromptsResponse = {
   prompts: DebateSharePrompt[];
 };
 
+export type DebateOnlineChoice = {
+  position: boolean;
+  position_label: string;
+  participant_count: number;
+  participants: DebateParticipantSummary[];
+};
+
 export type DebateClaim = {
   id: string;
   space_id: string;
@@ -279,7 +275,7 @@ export type DebateClaim = {
   claim: string;
   description: string | null;
   viewer_waiting_position: boolean | null;
-  waiters: DebateWaiter[];
+  online_choices: DebateOnlineChoice[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
   created_at: string;

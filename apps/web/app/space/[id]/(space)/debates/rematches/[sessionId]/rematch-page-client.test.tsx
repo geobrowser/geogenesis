@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+
 import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -156,9 +157,9 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: 'Request debate' }).every(button => button.hasAttribute('disabled'))).toBe(
-      true
-    );
+    expect(
+      screen.getAllByRole('button', { name: 'Request debate' }).every(button => button.hasAttribute('disabled'))
+    ).toBe(true);
     expect(screen.getAllByRole('combobox').every(select => select.hasAttribute('disabled'))).toBe(true);
   });
 });
