@@ -6,24 +6,16 @@ import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { usePendingMembershipSet } from '~/core/hooks/use-pending-memberships';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
-import type { RootTopicChip } from '~/core/io/subgraph/fetch-first-level-subtopics';
-import type { ParentTopicOption } from '~/core/io/subgraph/fetch-parent-topic-options';
-import type { RecentlyClaimedSpace } from '~/core/io/subgraph/fetch-recently-claimed-spaces';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
 
-import { ClaimATopicSection } from './claim-a-topic-section';
 import { FeaturedRankingsSection } from './featured-rankings-section';
 import { JoinSpacesSection } from './join-spaces-section';
-import { RecentlyClaimedSection } from './recently-claimed-section';
 
 export type ExploreSidePanelProps = {
   featuredSpaces: FeaturedSpace[];
   featuredRankings: FeaturedRanking[];
-  unclaimedTopics: RootTopicChip[];
-  recentlyClaimedSpaces: RecentlyClaimedSpace[];
-  parentTopicOptions: ParentTopicOption[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
   editorSpaceIds: string[];
@@ -33,9 +25,6 @@ export type ExploreSidePanelProps = {
 export function ExploreSidePanel({
   featuredSpaces,
   featuredRankings,
-  unclaimedTopics,
-  recentlyClaimedSpaces,
-  parentTopicOptions,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
   editorSpaceIds,
@@ -56,12 +45,7 @@ export function ExploreSidePanel({
     return !memberOrEditorSet.has(normalized) && !pendingSet.has(normalized) && !dynamicPendingSet.has(normalized);
   });
 
-  const hasContent =
-    joinableSpaces.length > 0 ||
-    featuredRankings.length > 0 ||
-    unclaimedTopics.length > 0 ||
-    recentlyClaimedSpaces.length > 0 ||
-    communityCalls.length > 0;
+  const hasContent = joinableSpaces.length > 0 || featuredRankings.length > 0 || communityCalls.length > 0;
   if (!hasContent) return null;
 
   // Build only the sections that have content, then join them with dividers so
@@ -73,24 +57,6 @@ export function ExploreSidePanel({
   }
   if (featuredRankings.length > 0) {
     sections.push({ key: 'featured-rankings', node: <FeaturedRankingsSection rankings={featuredRankings} /> });
-  }
-  if (unclaimedTopics.length > 0 || parentTopicOptions.length > 0) {
-    sections.push({
-      key: 'claim',
-      node: <ClaimATopicSection topics={unclaimedTopics} parentTopicOptions={parentTopicOptions} />,
-    });
-  }
-  if (recentlyClaimedSpaces.length > 0) {
-    sections.push({
-      key: 'recently-claimed',
-      node: (
-        <RecentlyClaimedSection
-          spaces={recentlyClaimedSpaces}
-          pendingMembershipSpaceIds={pendingSet}
-          memberOrEditorSpaceIds={memberOrEditorSet}
-        />
-      ),
-    });
   }
   if (communityCalls.length > 0) {
     sections.push({
@@ -110,8 +76,7 @@ export function ExploreSidePanel({
     // Independent scroll surface mirroring BrowseSidebar pattern
     // (partials/browse-sidebar/browse-sidebar.tsx:323,339). The aside pins to
     // top: 44px (navbar height) so its full height is always visible — without
-    // the offset, the panel's bottom sits below the viewport at top-of-page
-    // and Recently Claimed becomes unreachable without scrolling the main feed.
+    // the offset, the panel's bottom sits below the viewport at top-of-page.
     // `self-start` stops the flex container from stretching the aside past its
     // declared height.
     <aside className="sticky top-11 flex h-[calc(100dvh-2.75rem)] w-[360px] shrink-0 flex-col self-start lg:hidden">
