@@ -19,10 +19,15 @@ import type { ServerBlock } from '~/partials/editor/server-content';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
+import {
+  RANKING_DATE_PROPERTY_IDS,
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDate,
+} from '../../blocks/ranking/ranking-block-dates';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
-import { RANKING_END_TIME_PROPERTY_ID, RANKING_START_TIME_PROPERTY_ID } from '../../ranking-block-ids';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -281,8 +286,7 @@ export function useEditorStore() {
       value.spaceId === spaceId &&
       (value.property.id === SystemIds.NAME_PROPERTY ||
         value.property.id === SystemIds.FILTER ||
-        value.property.id === RANKING_START_TIME_PROPERTY_ID ||
-        value.property.id === RANKING_END_TIME_PROPERTY_ID),
+        RANKING_DATE_PROPERTY_IDS.has(value.property.id)),
   });
 
   const blockTypesRelations = useRelations({
@@ -402,8 +406,8 @@ export function useEditorStore() {
               selector: v =>
                 v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
             })[0]?.value ?? null;
-          const rankingStartDate = readRankingDate(RANKING_START_TIME_PROPERTY_ID);
-          const rankingEndDate = readRankingDate(RANKING_END_TIME_PROPERTY_ID);
+          const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readRankingDate) || null;
+          const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readRankingDate) || null;
 
           return [
             {
