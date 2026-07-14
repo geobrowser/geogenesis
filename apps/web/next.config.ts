@@ -7,7 +7,7 @@ import { ServerEnvironment } from './app/api/environment';
 const isDev = process.env.NODE_ENV === 'development';
 
 // Faster local dev. Opt in with ENABLE_TURBOPACK_OPTIMIZATIONS=1.
-// Flags defined on ExperimentalConfig:
+// Flags are defined on ExperimentalConfig:
 // https://github.com/vercel/next.js/blob/canary/packages/next/src/server/config-shared.ts
 const turbopackOptimizations =
   isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
