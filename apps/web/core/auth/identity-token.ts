@@ -35,6 +35,7 @@ type CachedToken = {
 let cached: CachedToken | null = null;
 let inFlight: Promise<string | null> | null = null;
 let refreshBlockedUntil = 0;
+let sessionEpoch = 0;
 
 function expiresAtFrom(token: string): number {
   const fallback = Date.now() + FALLBACK_TTL_MS;
@@ -54,8 +55,17 @@ function isFresh(entry: CachedToken): boolean {
   return Date.now() < entry.expiresAt - EXPIRY_SKEW_MS;
 }
 
-export function setCachedIdentityToken(token: string | null) {
+function store(token: string | null) {
   cached = token === null ? null : { token, expiresAt: expiresAtFrom(token) };
+}
+
+/** Called whenever Privy's session changes: hydration, reissue, or logout. */
+export function setCachedIdentityToken(token: string | null) {
+  // A refresh in flight was issued against the outgoing session and can land after this
+  // one, so retire its epoch: it will discard its result instead of writing the previous
+  // user's token back into the cache we just cleared.
+  sessionEpoch += 1;
+  store(token);
   refreshBlockedUntil = 0;
 }
 
@@ -65,14 +75,19 @@ export async function getCachedIdentityToken(): Promise<string | null> {
   if (current && isFresh(current)) return current.token;
   if (Date.now() < refreshBlockedUntil) return current?.token ?? null;
 
+  const issuedFor = sessionEpoch;
+
   inFlight ??= getIdentityToken()
     .then(token => {
-      setCachedIdentityToken(token);
-      if (token === null) refreshBlockedUntil = Date.now() + FAILURE_COOLDOWN_MS;
+      if (issuedFor !== sessionEpoch) return cached?.token ?? null;
+
+      store(token);
+      refreshBlockedUntil = token === null ? Date.now() + FAILURE_COOLDOWN_MS : 0;
+
       return token;
     })
     .catch(() => {
-      refreshBlockedUntil = Date.now() + FAILURE_COOLDOWN_MS;
+      if (issuedFor === sessionEpoch) refreshBlockedUntil = Date.now() + FAILURE_COOLDOWN_MS;
       // Fall back to the last token we held, past due or not. The backend decides expiry.
       return cached?.token ?? null;
     })

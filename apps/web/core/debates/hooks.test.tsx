@@ -100,6 +100,28 @@ describe('useGeoChatAuth', () => {
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
   });
 
+  // A `users/me` sent before logout can resolve after it. Writing that result back would
+  // repopulate the cache with the signed-out user's token, and nothing would clear it again
+  // until it expired, because Privy's reactive token just stays null.
+  it('discards a refresh that resolves after the user signs out', async () => {
+    mocks.identityToken.mockReturnValue(null);
+
+    let settleRefresh!: (token: string | null) => void;
+    mocks.getIdentityToken.mockReturnValue(
+      new Promise<string | null>(resolve => {
+        settleRefresh = resolve;
+      })
+    );
+
+    const { result } = renderHook(() => useGeoChatAuth());
+    const pending = result.current.getPrivyIdentityToken();
+
+    act(() => setCachedIdentityToken(null));
+    settleRefresh('signed-out-user-token');
+
+    await expect(pending).resolves.toBeNull();
+  });
+
   it('shares a single refresh between concurrent callers', async () => {
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue('identity-token');

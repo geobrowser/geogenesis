@@ -96,6 +96,9 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     if (!ready || !authenticated) {
+      // Signing back in starts a new identity resolution, so it shouldn't inherit the
+      // backoff the previous session had built up.
+      identityAttemptsRef.current = 0;
       setUserId(null);
       setUploads([]);
       return;
