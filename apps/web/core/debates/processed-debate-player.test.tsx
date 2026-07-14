@@ -86,6 +86,23 @@ describe('ProcessedDebatePlayer', () => {
     expect(container.querySelector('video')).toHaveAttribute('controls');
   });
 
+  it('delegates activation without requesting the final video when an external action is provided', async () => {
+    const onActivate = vi.fn();
+    mocks.mediaMutate.mockImplementation((variables, options) => {
+      if (variables.request.kind === 'preview_image') {
+        options.onSuccess({ upload: { url: 'https://media.test/preview.jpg' } });
+      }
+    });
+
+    render(<ProcessedDebatePlayer debateId="debate-1" label="Processed debate video" onActivate={onActivate} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Play Processed debate video' }));
+
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
   it('keeps playback available when an older debate has no preview artifact', async () => {
     mocks.mediaMutate.mockImplementation((variables, options) => {
       if (variables.request.kind === 'final_video') {
