@@ -10,6 +10,8 @@ import {
 
 const now = new Date('2026-06-04T12:00:00.000Z');
 
+const localNoon = new Date(2026, 5, 4, 12, 0, 0);
+
 describe('getRankingPeriodState', () => {
   it('returns no-date when both dates are empty', () => {
     expect(getRankingPeriodState('', '', now)).toBe('no-date');
@@ -36,7 +38,11 @@ describe('getRankingPeriodState', () => {
   });
 
   it('keeps date-only end dates in progress through the end calendar day', () => {
-    expect(getRankingPeriodState('2026-05-01', '2026-06-04', now)).toBe('in-progress');
+    expect(getRankingPeriodState('2026-05-01', '2026-06-04', localNoon)).toBe('in-progress');
+  });
+
+  it('ends a date-only ranking once its end day has passed', () => {
+    expect(getRankingPeriodState('2026-05-01', '2026-06-03', localNoon)).toBe('ended');
   });
 });
 
@@ -85,6 +91,28 @@ describe('formatRankingPeriodLabel', () => {
   it('falls back to Ended when in-progress state is stale relative to a datetime end', () => {
     expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04T10:00:00.000Z', now)).toBe('Ended');
   });
+
+  it('says Ends today on the final day of a date-only window', () => {
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-04', localNoon)).toBe('Ends today');
+  });
+
+  it('counts whole days on the eve of a date-only window, not minutes to midnight', () => {
+    expect(formatRankingPeriodLabel('in-progress', '2026-05-01', '2026-06-05', localNoon)).toBe('Ends in 1 day');
+    expect(formatRankingPeriodLabel('not-started', '2026-06-05', '2026-06-30', localNoon)).toBe('Starts in 1 day');
+  });
+
+  it('never disagrees with the state it was given for a date-only window', () => {
+    for (const endDate of ['2026-06-03', '2026-06-04', '2026-06-05', '2026-06-20']) {
+      const state = getRankingPeriodState('2026-05-01', endDate, localNoon);
+      const label = formatRankingPeriodLabel(state, '2026-05-01', endDate, localNoon);
+
+      if (rankingSubmissionsOpen(state)) {
+        expect(label, `open ranking ending ${endDate} must not read as closed`).not.toBe('Ended');
+      } else {
+        expect(label, `closed ranking ending ${endDate}`).toBe('Ended');
+      }
+    }
+  });
 });
 
 describe('rankingSubmissionsOpen', () => {
@@ -127,6 +155,18 @@ describe('msUntilRankingPeriodChange', () => {
 
     expect(renderedAt(startDate, endDate, justBeforeTick)).toBe(rendered);
     expect(renderedAt(startDate, endDate, atTick)).not.toBe(rendered);
+  });
+
+  it('ticks a date-only window at local midnight, which is the only time it can change', () => {
+    const untilMidnight = startOfDay(addDays(localNoon, 1)).getTime() - localNoon.getTime();
+
+    expect(msUntilRankingPeriodChange('2026-05-01', '2026-06-04', localNoon)).toBe(untilMidnight);
+
+    const justBefore = new Date(localNoon.getTime() + untilMidnight - 1);
+    const atTick = new Date(localNoon.getTime() + untilMidnight);
+
+    expect(getRankingPeriodState('2026-05-01', '2026-06-04', justBefore)).toBe('in-progress');
+    expect(getRankingPeriodState('2026-05-01', '2026-06-04', atTick)).toBe('ended');
   });
 
   it('ticks at local midnight while the countdown is still counting calendar days', () => {

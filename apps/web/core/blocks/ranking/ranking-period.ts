@@ -5,9 +5,11 @@ import { GeoDate } from '~/core/utils/utils';
 export type RankingPeriodState = 'no-date' | 'not-started' | 'in-progress' | 'ended';
 
 function parseRankingDate(iso: string): Date | null {
-  if (!iso.trim()) return null;
+  const trimmed = iso.trim();
+  if (!trimmed) return null;
   try {
-    return parseISO(GeoDate.toFullISOString(iso));
+    if (isDateOnlyValue(trimmed)) return parseISO(trimmed);
+    return parseISO(GeoDate.toFullISOString(trimmed));
   } catch {
     return null;
   }
@@ -32,6 +34,16 @@ function hasRankingNotStarted(start: Date, startDateString: string, now: Date): 
   return start.getTime() > now.getTime();
 }
 
+/**
+ * Countdown for a date-only window, which runs through the whole of its end day.
+ */
+function formatCalendarCountdown(prefix: 'Starts' | 'Ends', target: Date, now: Date): string | null {
+  const days = differenceInCalendarDays(target, now);
+  if (days < 0) return null;
+  if (days === 0) return `${prefix} today`;
+  return days === 1 ? `${prefix} in 1 day` : `${prefix} in ${days} days`;
+}
+
 function formatRelativeCountdown(prefix: 'Starts' | 'Ends', target: Date, now: Date): string | null {
   const msRemaining = target.getTime() - now.getTime();
   if (msRemaining <= 0) return null;
@@ -50,6 +62,13 @@ function formatRelativeCountdown(prefix: 'Starts' | 'Ends', target: Date, now: D
   if (days > 0) return days === 1 ? `${prefix} in 1 day` : `${prefix} in ${days} days`;
   // Same calendar day but >= 24h remaining (timezone edge) — still show hours.
   return `${prefix} in ${totalHours} hrs`;
+}
+
+/**
+ * Pick the countdown that matches how the state machine reads this value.
+ */
+function countdownFor(dateString: string) {
+  return isDateOnlyValue(dateString) ? formatCalendarCountdown : formatRelativeCountdown;
 }
 
 export function getRankingPeriodState(startDate: string, endDate: string, now = new Date()): RankingPeriodState {
@@ -77,13 +96,13 @@ export function formatRankingPeriodLabel(
     case 'not-started': {
       const start = parseRankingDate(startDate);
       if (!start) return null;
-      return formatRelativeCountdown('Starts', start, now);
+      return countdownFor(startDate)('Starts', start, now);
     }
     case 'in-progress': {
       const end = parseRankingDate(endDate);
       if (!end) return null;
 
-      const label = formatRelativeCountdown('Ends', end, now);
+      const label = countdownFor(endDate)('Ends', end, now);
       return label ?? 'Ended';
     }
     case 'ended':
@@ -123,8 +142,11 @@ export function msUntilRankingPeriodChange(startDate: string, endDate: string, n
   const state = getRankingPeriodState(startDate, endDate, now);
   if (state === 'no-date' || state === 'ended') return null;
 
-  const target = parseRankingDate(state === 'not-started' ? startDate : endDate);
+  const targetString = state === 'not-started' ? startDate : endDate;
+  const target = parseRankingDate(targetString);
   if (!target) return null;
+
+  if (isDateOnlyValue(targetString)) return msUntilNextLocalMidnight(now);
 
   const untilCountdownChanges = msUntilCountdownChanges(target, now);
   const untilMidnight = msUntilNextLocalMidnight(now);
