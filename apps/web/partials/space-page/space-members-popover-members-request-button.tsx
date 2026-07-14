@@ -1,5 +1,6 @@
 'use client';
 
+import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -21,14 +22,17 @@ export function SpaceMembersPopoverMemberRequestButton({
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
+  // Durable + optimistic pending state so a request made anywhere (and surviving
+  // refresh) reflects here without waiting on this page's SSR memberRequest.
+  const isPending = useIsMembershipPending(spaceId);
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
   const isStuck = Boolean(memberRequest?.isVotingEnded);
 
   // Open vote, or just submitted (before the indexer catches up) — show the live
-  // vote so we never flip back to "Request again".
-  if (status === 'success' || (memberRequest && !isStuck)) {
+  // vote so we never flip back to "Request again". A stuck request never counts.
+  if (status === 'success' || (!isStuck && (memberRequest != null || isPending))) {
     return (
       <span className="text-smallButton text-grey-04">
         <UnderVote />

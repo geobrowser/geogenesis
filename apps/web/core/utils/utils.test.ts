@@ -3,7 +3,7 @@ import { renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PINATA_GATEWAY_READ_PATH } from '../constants';
+import { FILEBASE_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '../constants';
 import * as useStore from '../sync/use-store';
 import { Value } from '../types';
 import { useImageUrlFromEntity } from './use-entity-media';
@@ -17,6 +17,7 @@ import {
   formatShortAddress,
   getImageHash,
   getImagePath,
+  getImagePathAtLevel,
   getPaginationPages,
   validateSpaceId,
 } from './utils';
@@ -370,7 +371,7 @@ describe('formatGovernanceOutcomeDateTime', () => {
 
 describe('getImagePath', () => {
   it('an IPFS pre-fixed string returns the Geo IPFS gateway path', () => {
-    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`);
+    expect(getImagePath('ipfs://QmBananaSandwich')).toBe(`${FILEBASE_GATEWAY_READ_PATH}QmBananaSandwich`);
   });
 
   it('an HTTP pre-fixed string returns the same string', () => {
@@ -391,12 +392,33 @@ describe('getImageHash', () => {
     expect(getImageHash('https://gateway.example.com/ipfs/QmBananaSandwich')).toBe('QmBananaSandwich');
   });
 
-  it('a Pinata gateway URL returns the IPFS hash', () => {
+  it('a Filebase gateway URL returns the IPFS hash', () => {
+    expect(getImageHash(`${FILEBASE_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
+  });
+
+  it('a Pinata gateway URL (/files/ path) returns the IPFS hash', () => {
     expect(getImageHash(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`)).toBe('QmBananaSandwich');
   });
 
   it('a non-HTTP and non-IPFS path returns the same string', () => {
     expect(getImageHash('QmBananaSandwich')).toBe('QmBananaSandwich');
+  });
+});
+
+describe('getImagePathAtLevel', () => {
+  it('resolves the fallback chain Filebase → Pinata → Lighthouse by level', () => {
+    expect(getImagePathAtLevel('ipfs://QmBananaSandwich', 0)).toBe(`${FILEBASE_GATEWAY_READ_PATH}QmBananaSandwich`);
+    expect(getImagePathAtLevel('ipfs://QmBananaSandwich', 1)).toBe(`${PINATA_GATEWAY_READ_PATH}QmBananaSandwich`);
+    expect(getImagePathAtLevel('ipfs://QmBananaSandwich', 2)).toBe(`${LIGHTHOUSE_GATEWAY_READ_PATH}QmBananaSandwich`);
+  });
+
+  it('clamps levels past the end of the chain to the last gateway', () => {
+    expect(getImagePathAtLevel('ipfs://QmBananaSandwich', 99)).toBe(`${LIGHTHOUSE_GATEWAY_READ_PATH}QmBananaSandwich`);
+  });
+
+  it('passes non-IPFS values through unchanged at any level', () => {
+    expect(getImagePathAtLevel('https://banana.sandwich', 0)).toBe('https://banana.sandwich');
+    expect(getImagePathAtLevel('https://banana.sandwich', 2)).toBe('https://banana.sandwich');
   });
 });
 

@@ -442,7 +442,7 @@ const VideoPropertyCell = ({ typeName, typeId, relations, spaceId, side }: Video
       <Text as="p" variant="bodySemibold">
         {typeName ?? typeId}
       </Text>
-      <div className={cx('mt-1 aspect-video w-full max-w-[240px] overflow-hidden rounded-lg', ringClass)}>
+      <div className={cx('mt-1 aspect-video w-full overflow-hidden rounded-lg', ringClass)}>
         <video src={videoSrc} controls className="h-full w-full object-cover" />
       </div>
     </div>

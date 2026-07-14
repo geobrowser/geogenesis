@@ -15,6 +15,7 @@ import {
   type EntityFilter,
   type EntitySpacesBatchQuery,
   SortOrder,
+  UserHasEntityVoteDocument,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -453,15 +454,13 @@ export function getEntityTiebreakerBatch(entityIds: string[], signal?: AbortCont
   return graphql({
     query: entityTiebreakerBatchQuery,
     decoder: data =>
-      (data.entities ?? []).map(
-        (e): EntityTiebreakerData => ({
-          id: e.id,
-          createdAt: e.createdAt,
-          backlinksCount: e.backlinks?.totalCount ?? 0,
-          relationsCount: e.relations?.totalCount ?? 0,
-          valuesCount: e.values?.totalCount ?? 0,
-        })
-      ),
+      (data.entities ?? []).map((e): EntityTiebreakerData => ({
+        id: e.id,
+        createdAt: e.createdAt,
+        backlinksCount: e.backlinks?.totalCount ?? 0,
+        relationsCount: e.relations?.totalCount ?? 0,
+        valuesCount: e.values?.totalCount ?? 0,
+      })),
     variables: { filter: { id: { in: entityIds } } },
     signal,
   });
@@ -1104,6 +1103,15 @@ export function getUserEntityVote(
       return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
     },
     variables: { userId, objectId: entityId, objectType, spaceId },
+    signal,
+  });
+}
+
+export function getUserHasEntityVote(userId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: UserHasEntityVoteDocument,
+    decoder: data => (data.userVotes?.length ?? 0) > 0,
+    variables: { userId },
     signal,
   });
 }

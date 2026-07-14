@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
@@ -120,13 +120,13 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows } = useDataBlock();
+  const { name, entityId, relationId, rows, pageSize } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
   const canEdit = useCanUserEdit(spaceId);
 
-  const { filterState, setFilterState } = useFilters(canEdit);
+  const { filterState, resolvedFilterState, filterMode, setFilterState, setFilterMode } = useFilters(canEdit);
   const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const { startDate, endDate } = useRankingBlockDates({
@@ -277,7 +277,7 @@ export function useRankingBlockState({
     setEmbeddedMyPageNumber(0);
   }, [entityId, myRankingIdsKey]);
 
-  const embeddedMyTotalPages = Math.max(1, Math.ceil(myDisplayEntityIds.length / PAGE_SIZE));
+  const embeddedMyTotalPages = Math.max(1, Math.ceil(myDisplayEntityIds.length / pageSize));
 
   React.useEffect(() => {
     setEmbeddedMyPageNumber(prev => Math.min(prev, embeddedMyTotalPages - 1));
@@ -285,15 +285,15 @@ export function useRankingBlockState({
 
   const paginatedMyDisplayEntityIds = React.useMemo(() => {
     if (!paginateEmbeddedRanking) return myDisplayEntityIds;
-    const start = embeddedMyPageNumber * PAGE_SIZE;
-    return myDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedMyPageNumber, myDisplayEntityIds, paginateEmbeddedRanking]);
+    const start = embeddedMyPageNumber * pageSize;
+    return myDisplayEntityIds.slice(start, start + pageSize);
+  }, [embeddedMyPageNumber, myDisplayEntityIds, paginateEmbeddedRanking, pageSize]);
 
   const myRankingListEntityIds = paginateEmbeddedRanking ? paginatedMyDisplayEntityIds : myDisplayEntityIds;
 
   const hasEmbeddedMyPreviousPage = paginateEmbeddedRanking && embeddedMyPageNumber > 0;
   const hasEmbeddedMyNextPage = paginateEmbeddedRanking && embeddedMyPageNumber < embeddedMyTotalPages - 1;
-  const showEmbeddedMyPagination = paginateEmbeddedRanking && myDisplayEntityIds.length > PAGE_SIZE;
+  const showEmbeddedMyPagination = paginateEmbeddedRanking && myDisplayEntityIds.length > pageSize;
 
   const setEmbeddedMyPage = React.useCallback(
     (page: number | 'previous' | 'next') => {
@@ -440,7 +440,7 @@ export function useRankingBlockState({
     setEmbeddedGlobalPageNumber(0);
   }, [entityId, visibleGlobalIdsKey]);
 
-  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / PAGE_SIZE));
+  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / pageSize));
 
   React.useEffect(() => {
     setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
@@ -448,9 +448,9 @@ export function useRankingBlockState({
 
   const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
     if (!paginateEmbeddedRanking) return visibleGlobalDisplayEntityIds;
-    const start = embeddedGlobalPageNumber * PAGE_SIZE;
-    return visibleGlobalDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedGlobalPageNumber, visibleGlobalDisplayEntityIds, paginateEmbeddedRanking]);
+    const start = embeddedGlobalPageNumber * pageSize;
+    return visibleGlobalDisplayEntityIds.slice(start, start + pageSize);
+  }, [embeddedGlobalPageNumber, paginateEmbeddedRanking, pageSize, visibleGlobalDisplayEntityIds]);
 
   const globalRankingListEntityIds = paginateEmbeddedRanking
     ? paginatedGlobalDisplayEntityIds
@@ -458,7 +458,7 @@ export function useRankingBlockState({
 
   const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
   const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
-  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > PAGE_SIZE;
+  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > pageSize;
 
   const setEmbeddedGlobalPage = React.useCallback(
     (page: number | 'previous' | 'next') => {
@@ -822,7 +822,10 @@ export function useRankingBlockState({
     isMobile,
     canEdit,
     filterState,
+    resolvedFilterState,
+    filterMode,
     setFilterState,
+    setFilterMode,
     source,
     setSource,
     isFilterOpen,
@@ -839,6 +842,7 @@ export function useRankingBlockState({
     totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,
+    pageSize,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,

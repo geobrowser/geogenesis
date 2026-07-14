@@ -1,0 +1,5 @@
+export const CLAIM_TYPE_ID = '96f859efa1ca4b229372c86ad58b694b';
+export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
+
+export const TOPICS_PROPERTY_ID = '806d52bc27e94c9193c057978b093351';
+export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';

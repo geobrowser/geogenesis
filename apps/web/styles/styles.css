@@ -48,6 +48,7 @@
   --shadow-onboarding: 0px 0px 71.36363220214844px 0px;
   --shadow-dropdown: 0px 6px 8px #60606033;
   --shadow-button: 0px 1px 2px #f0f0f0;
+  --shadow-panel: 0 8px 20px 0 rgba(0, 0, 0, 0.04);
   --shadow-card: 0px 26px 45px rgba(0, 0, 0, 0.09);
   --shadow-light: 0px 1px 2px #f0f0f0;
   --shadow-big: 0 1px 21px #dbdbdb;

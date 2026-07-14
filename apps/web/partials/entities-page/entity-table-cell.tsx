@@ -168,7 +168,7 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
         currentSpaceId={spaceId}
         entityId={relationValue}
         relationEntityId={relation.entityId}
-        spaceId={relation.spaceId}
+        spaceId={relation.toSpaceId}
         relationId={relationId}
         truncateLabel={truncateLabel}
       >

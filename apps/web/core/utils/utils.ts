@@ -5,7 +5,12 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
-import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import {
+  FILEBASE_GATEWAY_READ_PATH,
+  LIGHTHOUSE_GATEWAY_READ_PATH,
+  PINATA_GATEWAY_READ_PATH,
+  ROOT_SPACE,
+} from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -505,11 +510,17 @@ export class GeoDate {
   };
 }
 
-// Extract the IPFS CID from a gateway URL, ipfs:// URI, or raw hash
+// IPFS read gateways in fallback priority order, so content pinned on any
+// provider still resolves.
+const IPFS_GATEWAYS = [FILEBASE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH];
+
+/** Number of gateways in the fallback chain. */
+export const IPFS_GATEWAY_COUNT = IPFS_GATEWAYS.length;
+
+// Extract the IPFS CID from a known gateway URL, ipfs:// URI, or raw hash.
 export const getImageHash = (value: string) => {
-  if (value.startsWith(PINATA_GATEWAY_READ_PATH)) {
-    const [, hash] = value.split(PINATA_GATEWAY_READ_PATH);
-    return hash;
+  for (const gateway of IPFS_GATEWAYS) {
+    if (value.startsWith(gateway)) return value.slice(gateway.length);
   }
   const ipfsPathIndex = value.indexOf('/ipfs/');
   if (ipfsPathIndex !== -1) {
@@ -522,38 +533,34 @@ export const getImageHash = (value: string) => {
   return value;
 };
 
-// Resolve an image triple value to a Pinata gateway URL
-export const getImagePath = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
-  }
+// Resolve an ipfs:// value to a gateway URL at the given fallback level
+// (0 = Filebase, 1 = Pinata, 2 = Lighthouse); levels past the end clamp to the
+// last gateway. Non-ipfs values (http, paths) pass through unchanged.
+export const getImagePathAtLevel = (value: string, level: number) => {
+  if (!value.startsWith('ipfs://')) return value;
+  const index = Math.min(Math.max(level, 0), IPFS_GATEWAYS.length - 1);
+  return `${IPFS_GATEWAYS[index]}${getImageHash(value)}`;
 };
 
-// Lighthouse fallback for legacy CIDs not yet migrated to Pinata
-export const getImagePathFallback = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${LIGHTHOUSE_GATEWAY_READ_PATH}${getImageHash(value)}`;
+// Primary gateway (Filebase). For single-shot callers with no runtime fallback.
+export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
+
+// Image values are free-text entity properties, so an author can type anything.
+// next/image throws on a src that is neither root-relative nor an absolute URL,
+// which kills the whole page that rendered it.
+export const isRenderableImageSrc = (src: string) => {
+  if (src.startsWith('/')) return true;
+  try {
+    new URL(src);
+    return true;
+  } catch {
+    return false;
   }
-  return value;
 };
 
 export const getVideoHash = getImageHash;
-
-export const getVideoPath = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${PINATA_GATEWAY_READ_PATH}${getVideoHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
-  }
-};
-
-export const getVideoPathFallback = getImagePathFallback;
+export const getVideoPathAtLevel = getImagePathAtLevel;
+export const getVideoPath = (value: string) => getImagePathAtLevel(value, 0);
 
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);

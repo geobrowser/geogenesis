@@ -290,6 +290,15 @@ export function DateOnlyInput({ variant, initialDate, onDateChange, label }: Dat
 
   useSelectAllOnFocus([yearInputRef, monthInputRef, dayInputRef]);
 
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setYear('');
+      setMonth('');
+      setDay('');
+    }
+  }, [initialDate, setYear, setMonth, setDay]);
+
   const isValidYear =
     year.value === '' ||
     (!year.isValidating && year.isValid) ||
@@ -484,6 +493,15 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   useSelectAllOnFocus([hourInputRef, minuteInputRef]);
 
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setHour('');
+      setMinute('');
+      setMeridiem('am');
+    }
+  }, [initialDate, setHour, setMinute]);
+
   const isValidHour =
     hour.value === '' ||
     (!hour.isValidating && hour.isValid) ||
@@ -675,6 +693,18 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label, timez
   const meridiemButtonRef = React.useRef<HTMLButtonElement>(null);
 
   useSelectAllOnFocus([yearInputRef, monthInputRef, dayInputRef, hourInputRef, minuteInputRef]);
+
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setYear('');
+      setMonth('');
+      setDay('');
+      setHour('');
+      setMinute('');
+      setMeridiem('am');
+    }
+  }, [initialDate, setYear, setMonth, setDay, setHour, setMinute]);
 
   const isValidYear =
     year.value === '' ||

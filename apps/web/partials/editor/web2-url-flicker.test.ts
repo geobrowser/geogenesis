@@ -1,9 +1,10 @@
 import { Editor } from '@tiptap/core';
+import type { JSONContent } from '@tiptap/core';
 import Document from '@tiptap/extension-document';
 import Link from '@tiptap/extension-link';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
-import type { JSONContent } from '@tiptap/core';
+
 import { describe, expect, it } from 'vitest';
 
 import { normalizeEditorContent } from './normalize-editor-content';

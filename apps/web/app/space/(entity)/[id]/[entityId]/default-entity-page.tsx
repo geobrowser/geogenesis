@@ -28,6 +28,8 @@ interface Props {
   showHeading?: boolean;
   showHeader?: boolean;
   notice?: React.ReactNode;
+  /** Replaces the cover/avatar slot above the Name (e.g. a community-call recording player). */
+  coverSlot?: React.ReactNode;
 }
 
 export default async function DefaultEntityPage({
@@ -37,6 +39,7 @@ export default async function DefaultEntityPage({
   showHeading = true,
   showHeader = true,
   notice = null,
+  coverSlot,
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
@@ -60,7 +63,8 @@ export default async function DefaultEntityPage({
           initialTabs={props.tabs}
           initialCollectionItems={props.initialCollectionItems}
         >
-          {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+          {showCover &&
+            (coverSlot ?? <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />)}
           <EntityPageContentContainer>
             <EntityPageHeader
               showHeading={showHeading}

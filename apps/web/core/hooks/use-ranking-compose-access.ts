@@ -22,12 +22,7 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 export type RankingComposeAccessStatus =
-  | 'loading'
-  | 'needs-login'
-  | 'needs-onboarding'
-  | 'needs-membership'
-  | 'not-found'
-  | 'ready';
+  'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
 /** Dedupes automatic membership requests across compose screen + embedded block mounts. */
 const autoRequestedMemberships = new Set<string>();

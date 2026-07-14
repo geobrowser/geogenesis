@@ -72,8 +72,7 @@ describe('markdown-render', () => {
   // linkifyWeb2Urls makes the server render match the editor's web2URL rendering
   // (see ServerContent) so links don't flicker from plain text to anchors on mount.
   describe('renderMarkdownDocument with linkifyWeb2Urls', () => {
-    const render = (md: string) =>
-      renderToStaticMarkup(<>{renderMarkdownDocument(md, { linkifyWeb2Urls: true })}</>);
+    const render = (md: string) => renderToStaticMarkup(<>{renderMarkdownDocument(md, { linkifyWeb2Urls: true })}</>);
 
     it('linkifies a raw https URL as a web2URL anchor', () => {
       const html = render('see https://google.com here');
