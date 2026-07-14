@@ -2,7 +2,7 @@
 
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
-export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
+export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -178,8 +178,8 @@ export type Debate = {
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
   current_speaker_slot: ParticipantSlot | null;
-  prepare_started_at: string | null;
-  prepare_ends_at: string | null;
+  connecting_started_at: string | null;
+  connecting_deadline_at: string | null;
   turn_started_at: string | null;
   turn_ends_at: string | null;
   preflight_ends_at: string | null;
@@ -192,6 +192,7 @@ export type Debate = {
   participants: DebateParticipant[];
   recordings: DebateRecording[];
   recording_error: string | null;
+  cancellation_reason: string | null;
 };
 
 export type DebateActivity = {
@@ -377,6 +378,10 @@ export function getGeoChatApiBaseUrl() {
 export function getCurrentGeoChatUserId() {
   const session = loadSession();
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
+}
+
+export async function getServerTime() {
+  return geoChatRequest<{ server_time_ms: number }>('/time');
 }
 
 export async function resolveCurrentGeoChatUserId(getPrivyIdentityToken: GetPrivyIdentityToken) {
