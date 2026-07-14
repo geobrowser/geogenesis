@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { StrictMode } from 'react';
 
@@ -26,6 +26,9 @@ const mocks = vi.hoisted(() => ({
   roomConnect: vi.fn(),
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
+  getServerTime: vi.fn(),
+  refetchDebate: vi.fn(),
+  roomOn: vi.fn(),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
@@ -48,13 +51,14 @@ vi.mock('~/core/debates/api', async importOriginal => {
   return {
     ...actual,
     getCurrentGeoChatUserId: () => 'user-a',
+    getServerTime: mocks.getServerTime,
   };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
-  useDebate: () => ({ data: mocks.debate, isLoading: false, error: null }),
+  useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
@@ -79,12 +83,13 @@ vi.mock('livekit-client', () => ({
       publishTrack: mocks.publishTrack,
     };
 
-    on = vi.fn();
+    on = mocks.roomOn;
     connect = mocks.roomConnect;
     disconnect = mocks.roomDisconnect;
   },
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
+    ParticipantConnected: 'participantConnected',
   },
 }));
 
@@ -105,6 +110,9 @@ beforeEach(() => {
   mocks.roomConnect.mockReset();
   mocks.roomDisconnect.mockReset();
   mocks.publishTrack.mockReset();
+  mocks.getServerTime.mockReset();
+  mocks.refetchDebate.mockReset();
+  mocks.roomOn.mockReset();
   mocks.debate = completedDebate();
   mocks.rematch = null;
   mocks.featureFlags = {
@@ -127,6 +135,8 @@ beforeEach(() => {
   ]);
   mocks.roomConnect.mockResolvedValue(undefined);
   mocks.publishTrack.mockResolvedValue(undefined);
+  mocks.getServerTime.mockImplementation(() => Promise.resolve({ server_time_ms: Date.now() }));
+  mocks.refetchDebate.mockResolvedValue(undefined);
   mocks.enqueueRecording.mockResolvedValue(undefined);
   mocks.getRecording.mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockResolvedValue(true);
@@ -169,6 +179,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -283,9 +294,9 @@ describe('DebateRoomPageClient', () => {
   it('connects to LiveKit once the debate leaves the ready pre-screen', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
-      status: 'preparing',
-      prepare_started_at: '2026-07-02T00:00:00.000Z',
-      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
     };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -296,14 +307,17 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
     });
+    const joinedCallOrder = mocks.markJoinedMutateAsync.mock.invocationCallOrder[0];
+    expect(mocks.publishTrack).toHaveBeenCalledTimes(2);
+    expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder < joinedCallOrder)).toBe(true);
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
-      status: 'preparing',
-      prepare_started_at: '2026-07-02T00:00:00.000Z',
-      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
     };
 
     render(
@@ -314,6 +328,23 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
     await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+  });
+
+  it('refetches the debate when LiveKit reports the remote participant connected', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    const participantConnected = mocks.roomOn.mock.calls.find(([event]) => event === 'participantConnected')?.[1];
+
+    expect(participantConnected).toBeTypeOf('function');
+    participantConnected();
+    expect(mocks.refetchDebate).toHaveBeenCalled();
   });
 
   it('stops preview tracks that resolve after the page unmounts', async () => {
@@ -338,9 +369,9 @@ describe('DebateRoomPageClient', () => {
     mocks.roomConnect.mockReturnValue(pendingConnection.promise);
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
-      status: 'preparing',
-      prepare_started_at: '2026-07-02T00:00:00.000Z',
-      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
     };
 
     const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -425,7 +456,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Disable audio' })).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Debate phases' })).toBeInTheDocument();
-    expect(screen.getByText('Preparing').closest('li')).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('Connecting').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Preflight').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Timed turn 1').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Timed turn 2').closest('li')).not.toHaveAttribute('aria-current');
@@ -451,33 +482,95 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('circle[stroke="#ffffff"]')).toBeInTheDocument();
   });
 
-  it('shows the circular phase timer during shared recording phases', async () => {
+  it('shows the circular five-second timer during preflight', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:05.000Z'));
     mocks.debate = {
       ...completedDebate(),
-      status: 'preparing',
+      status: 'preflight',
       current_turn_index: 0,
       current_speaker_slot: null,
-      prepare_started_at: '2026-07-02T00:00:00.000Z',
-      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      preflight_ends_at: '2026-07-02T00:00:10.000Z',
       completed_at: null,
     };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findAllByLabelText('Phase timer: 25 seconds remaining')).toHaveLength(2);
-    expect(screen.getAllByText('25')).toHaveLength(2);
+    expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
+    expect(screen.getAllByText('5')).not.toHaveLength(0);
+  });
+
+  it('uses synchronized server time when the device clock is skewed', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2030-01-01T00:00:00.000Z'));
+    mocks.getServerTime.mockResolvedValue({ server_time_ms: Date.parse('2026-07-02T00:00:05.000Z') });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      preflight_ends_at: '2026-07-02T00:00:10.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
+  });
+
+  it('shows connection state without exposing the connection deadline', async () => {
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      completed_at: null,
+      participants: completedDebate().participants.map(participant => ({
+        ...participant,
+        joined_at: participant.user_id === 'user-a' ? participant.joined_at : null,
+      })),
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('Connecting')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Phase timer/)).not.toBeInTheDocument();
+    expect(screen.queryByText('00:10')).not.toBeInTheDocument();
+  });
+
+  it('stops media at the deadline and returns to matching after backend cancellation', () => {
+    vi.useFakeTimers();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'connecting',
+      connecting_started_at: '2000-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2000-07-02T00:00:10.000Z',
+      completed_at: null,
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.getByText('Connection failed. Finding another match.')).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.debate = {
+      ...mocks.debate,
+      status: 'cancelled',
+      cancellation_reason: 'connection_timeout',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    act(() => vi.advanceTimersByTime(750));
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
   });
 
   it('does not show the thank-you hint before the thanking phase when the local slot is unknown', async () => {
     mocks.liveKitJoinMutateAsync.mockReturnValue(deferred<never>().promise);
     mocks.debate = {
       ...completedDebate(),
-      status: 'preparing',
+      status: 'connecting',
       current_turn_index: 0,
       current_speaker_slot: null,
-      prepare_started_at: '2026-07-02T00:00:00.000Z',
-      prepare_ends_at: '2026-07-02T00:00:30.000Z',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
       completed_at: null,
     };
 
@@ -580,7 +673,6 @@ describe('DebateRoomPageClient', () => {
       current_turn_index: 0,
       current_speaker_slot: null,
       started_at: null,
-      prepare_ends_at: '2026-07-02T00:00:20.000Z',
       preflight_ends_at: '2026-07-02T00:00:30.000Z',
       turn_started_at: null,
       turn_ends_at: null,
@@ -745,6 +837,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
@@ -904,8 +997,8 @@ function completedDebate(): Debate {
     first_participant_slot: 1,
     current_turn_index: 0,
     current_speaker_slot: null,
-    prepare_started_at: null,
-    prepare_ends_at: null,
+    connecting_started_at: null,
+    connecting_deadline_at: null,
     turn_started_at: null,
     turn_ends_at: null,
     preflight_ends_at: null,
@@ -940,6 +1033,7 @@ function completedDebate(): Debate {
     ],
     recordings: [],
     recording_error: null,
+    cancellation_reason: null,
   };
 }
 
