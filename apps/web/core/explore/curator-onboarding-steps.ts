@@ -1,9 +1,5 @@
 export type CuratorOnboardingStepId =
-  | 'join-space'
-  | 'rsvp-community-call'
-  | 'vote-entity'
-  | 'submit-ranking'
-  | 'comment-entity';
+  'join-space' | 'rsvp-community-call' | 'vote-entity' | 'submit-ranking' | 'comment-entity';
 
 export type CuratorOnboardingStep = {
   id: CuratorOnboardingStepId;

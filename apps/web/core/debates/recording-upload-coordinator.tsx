@@ -85,6 +85,7 @@ export function DebateRecordingUploadCoordinator() {
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
+  const identityAttemptsRef = React.useRef(0);
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -95,6 +96,9 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     if (!ready || !authenticated) {
+      // Signing back in starts a new identity resolution, so it shouldn't inherit the
+      // backoff the previous session had built up.
+      identityAttemptsRef.current = 0;
       setUserId(null);
       setUploads([]);
       return;
@@ -106,12 +110,18 @@ export function DebateRecordingUploadCoordinator() {
     void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
-        if (!cancelled) setUserId(id);
+        if (!cancelled) {
+          identityAttemptsRef.current = 0;
+          setUserId(id);
+        }
       })
       .catch(error => {
         console.warn('[DebateRecordingUploadCoordinator] could not resolve user:', error);
         if (!cancelled) {
-          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), initialRetryDelayMs);
+          // A flat retry interval keeps Privy's token endpoint rate-limited, so it never recovers.
+          const delay = recordingUploadRetryDelay(identityAttemptsRef.current);
+          identityAttemptsRef.current += 1;
+          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), delay);
         }
       });
     return () => {
