@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRematchSession } from './api';
-import { debateQueryKeys, useConsentToDebateRematch, useGeoChatAuth } from './hooks';
+import { debateQueryKeys, useClearTimedOutDebateActivity, useConsentToDebateRematch, useGeoChatAuth } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   getIdentityToken: vi.fn(),
@@ -74,6 +74,32 @@ describe('useConsentToDebateRematch', () => {
       match: null,
       debate: null,
       rematch: session,
+    });
+  });
+});
+
+describe('useClearTimedOutDebateActivity', () => {
+  it('removes only the timed-out debate from the coordinator cache', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const activity: DebateActivity = {
+      online: true,
+      cooldown_until: '2026-07-02T00:10:00.000Z',
+      match: null,
+      debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
+      rematch: null,
+    };
+    queryClient.setQueryData(debateQueryKeys.activity, activity);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useClearTimedOutDebateActivity(), { wrapper });
+
+    act(() => result.current('debate-1'));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity)).toEqual({
+      ...activity,
+      cooldown_until: null,
+      debate: null,
     });
   });
 });

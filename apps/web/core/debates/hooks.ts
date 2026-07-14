@@ -116,6 +116,21 @@ export function useDebateActivity(enabled = true) {
   });
 }
 
+export function useClearTimedOutDebateActivity() {
+  const queryClient = useQueryClient();
+
+  return React.useCallback(
+    (debateId: string) => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity, current => {
+        if (!current || current.debate?.id !== debateId) return current;
+        return { ...current, debate: null, cooldown_until: null };
+      });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity });
+    },
+    [queryClient]
+  );
+}
+
 export function useDebatePresenceHeartbeat(enabled = true) {
   const queryClient = useQueryClient();
   const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
