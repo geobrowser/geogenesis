@@ -786,3 +786,11 @@ export const entityVotersQuery = graphql(/* GraphQL */ `
     }
   }
 `);
+
+export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
+  query UserHasEntityVote($userId: UUID!) {
+    userVotes(condition: { userId: $userId }, first: 1) {
+      userId
+    }
+  }
+`);

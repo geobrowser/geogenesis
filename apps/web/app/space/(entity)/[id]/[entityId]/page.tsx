@@ -2,7 +2,11 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { EVENT_SCHEMA } from '~/core/community-calls/constants';
+import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
+
+import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
@@ -30,6 +34,23 @@ export default async function EntityTemplateStrategy(props: Props) {
 
   if (entityHasOnlyPostType(result?.entity)) {
     return <PostEntityPage params={params} searchParams={searchParams} />;
+  }
+
+  // A community call's recording takes the cover slot; its agenda renders below as block content.
+  if (result?.entity?.types.some(t => t.id === EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE)) {
+    return (
+      <DefaultEntityPage
+        params={params}
+        searchParams={searchParams}
+        coverSlot={
+          <CommunityCallRecording
+            entityId={params.entityId}
+            spaceId={params.id}
+            serverRecordingUrls={getRecordingUrls(result.entity.relations)}
+          />
+        }
+      />
+    );
   }
 
   return <DefaultEntityPage params={params} searchParams={searchParams} />;

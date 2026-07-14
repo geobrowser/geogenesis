@@ -4,7 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import { Relation } from '~/core/types';
 
-import { buildCreateCallOps, buildDeleteCallOps, buildUpdateCallOps } from './call-ops';
+import {
+  buildCreateCallOps,
+  buildDeleteCallOps,
+  buildPublishOccurrenceOps,
+  buildPublishRecordingsOps,
+  buildUpdateCallOps,
+} from './call-ops';
+import { EVENT_SCHEMA } from './constants';
 
 function fakeBlockRelation(id: string): Relation {
   return {
@@ -88,6 +95,61 @@ describe('buildUpdateCallOps', () => {
 
     expect(relations).toHaveLength(1);
     expect(relations[0].isDeleted).toBe(true);
+  });
+});
+
+describe('buildPublishOccurrenceOps', () => {
+  const base = {
+    spaceId: 'space-1',
+    seriesId: 'series-1',
+    seriesName: 'Weekly sync',
+    occurrenceStart: Date.UTC(2026, 2, 5, 17),
+    occurrenceEnd: Date.UTC(2026, 2, 5, 18),
+    agendaBlocks: [],
+  };
+
+  it('inherits the series description onto the event Description', () => {
+    const { values } = buildPublishOccurrenceOps({ ...base, seriesDescription: 'A recurring call.' });
+    const description = values.find(v => v.property.id === EVENT_SCHEMA.DESCRIPTION_PROPERTY);
+    expect(description?.value).toBe('A recurring call.');
+    expect(description?.isDeleted).toBeFalsy();
+  });
+
+  it('unsets the event Description when the series description is empty', () => {
+    const { values } = buildPublishOccurrenceOps({ ...base, seriesDescription: '' });
+    const description = values.find(v => v.property.id === EVENT_SCHEMA.DESCRIPTION_PROPERTY);
+    expect(description?.isDeleted).toBe(true);
+  });
+
+  it('leaves the event Description untouched when no series description is passed', () => {
+    const { values } = buildPublishOccurrenceOps(base);
+    expect(values.find(v => v.property.id === EVENT_SCHEMA.DESCRIPTION_PROPERTY)).toBeUndefined();
+  });
+});
+
+describe('buildPublishRecordingsOps', () => {
+  const base = {
+    spaceId: 'space-1',
+    seriesId: 'series-1',
+    seriesName: 'Weekly sync',
+    occurrenceStart: Date.UTC(2026, 2, 5, 17),
+    occurrenceEnd: Date.UTC(2026, 2, 5, 18),
+    ipfsUrls: ['ipfs://cid-1'],
+  };
+
+  it('inherits the series description when it mints a fresh event', () => {
+    const { values } = buildPublishRecordingsOps({ ...base, seriesDescription: 'A recurring call.' });
+    const description = values.find(v => v.property.id === EVENT_SCHEMA.DESCRIPTION_PROPERTY);
+    expect(description?.value).toBe('A recurring call.');
+  });
+
+  it('does not touch Description when attaching to an existing event', () => {
+    const { values } = buildPublishRecordingsOps({
+      ...base,
+      seriesDescription: 'A recurring call.',
+      existingEventId: 'event-1',
+    });
+    expect(values.find(v => v.property.id === EVENT_SCHEMA.DESCRIPTION_PROPERTY)).toBeUndefined();
   });
 });
 

@@ -54,6 +54,7 @@ type Documents = {
     "\n  query EntityVoteCount($objectId: UUID!, $objectType: Int!) {\n    votesCountsConnection(condition: { objectId: $objectId, objectType: $objectType }) {\n      nodes {\n        spaceId\n        upvotes\n        downvotes\n      }\n    }\n  }\n": typeof types.EntityVoteCountDocument,
     "\n  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(\n      userId: $userId\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n    ) {\n      voteType\n    }\n  }\n": typeof types.UserEntityVoteDocument,
     "\n  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {\n      userId\n      voteType\n    }\n  }\n": typeof types.EntityVotersDocument,
+    "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": typeof types.UserHasEntityVoteDocument,
 };
 const documents: Documents = {
     "\n  fragment RelationToEntity on Entity {\n    id\n    name\n    types {\n      id\n    }\n    valuesList {\n      spaceId\n      propertyId\n      text\n    }\n  }\n": types.RelationToEntityFragmentDoc,
@@ -96,6 +97,7 @@ const documents: Documents = {
     "\n  query EntityVoteCount($objectId: UUID!, $objectType: Int!) {\n    votesCountsConnection(condition: { objectId: $objectId, objectType: $objectType }) {\n      nodes {\n        spaceId\n        upvotes\n        downvotes\n      }\n    }\n  }\n": types.EntityVoteCountDocument,
     "\n  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(\n      userId: $userId\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n    ) {\n      voteType\n    }\n  }\n": types.UserEntityVoteDocument,
     "\n  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {\n      userId\n      voteType\n    }\n  }\n": types.EntityVotersDocument,
+    "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": types.UserHasEntityVoteDocument,
 };
 
 /**
@@ -272,6 +274,10 @@ export function graphql(source: "\n  query UserEntityVote($userId: UUID!, $objec
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {\n      userId\n      voteType\n    }\n  }\n"): (typeof documents)["\n  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {\n      userId\n      voteType\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"): (typeof documents)["\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

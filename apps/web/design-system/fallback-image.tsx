@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import Image from 'next/image';
 
-import { getImagePathAtLevel } from '~/core/utils/utils';
+import { getImagePathAtLevel, isRenderableImageSrc } from '~/core/utils/utils';
 
 type FallbackImageProps = {
   value: string;
@@ -32,6 +32,10 @@ export function FallbackImage({ value, sizes, className, priority = false }: Fal
 
   const { level, unoptimized } = STAGES[stage];
   const src = getImagePathAtLevel(value, level);
+
+  // Callers wrap us in a neutral placeholder, so rendering nothing degrades to an
+  // empty thumbnail.
+  if (!isRenderableImageSrc(src)) return null;
 
   return (
     <Image

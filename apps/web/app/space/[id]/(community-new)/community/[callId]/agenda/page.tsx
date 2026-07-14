@@ -1,4 +1,4 @@
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 import { notFound, redirect } from 'next/navigation';
@@ -28,6 +28,7 @@ export default async function CommunityCallAgendaPage(props: Props) {
   }
 
   const schedule = entity.values.find(v => v.property.id === CALL_SCHEMA.MEETING_TIME_PROPERTY)?.value ?? '';
+  const seriesDescription = entity.values.find(v => v.property.id === SystemIds.DESCRIPTION_PROPERTY)?.value ?? '';
 
   const startMs = Number(searchParams.start);
   const endMs = Number(searchParams.end);
@@ -51,6 +52,7 @@ export default async function CommunityCallAgendaPage(props: Props) {
       spaceId={params.id}
       callId={params.callId}
       seriesName={entity.name ?? 'Untitled call'}
+      seriesDescription={seriesDescription}
       occurrence={{ startMs, endMs }}
       autoPublishAhead={autoPublishAheadValue ? Number(autoPublishAheadValue) : 0}
       schedule={schedule}
