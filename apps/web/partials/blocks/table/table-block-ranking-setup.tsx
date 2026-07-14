@@ -66,12 +66,22 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [isRolling, setIsRolling] = React.useState(false);
+  const [frequencyDaysInput, setFrequencyDaysInput] = React.useState('');
   const [frequencyHoursInput, setFrequencyHoursInput] = React.useState('');
 
   const frequencyHours = React.useMemo(() => {
-    const parsed = Number(frequencyHoursInput.trim());
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }, [frequencyHoursInput]);
+    const parseField = (raw: string) => {
+      const trimmed = raw.trim();
+      if (trimmed === '') return 0;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+    const days = parseField(frequencyDaysInput);
+    const hours = parseField(frequencyHoursInput);
+    if (days == null || hours == null) return null;
+    const total = days * 24 + hours;
+    return total > 0 ? total : null;
+  }, [frequencyDaysInput, frequencyHoursInput]);
   const hasValidFrequency = !isRolling || frequencyHours != null;
 
   const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
@@ -270,24 +280,49 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
           {isRolling ? (
             <div className="flex w-full flex-col items-center gap-2">
               <p className="text-center text-button font-medium text-text">
-                Submission frequency <span className="text-grey-04">(hours, required)</span>
+                Submission frequency <span className="text-grey-04">(required)</span>
               </p>
-              <input
-                type="number"
-                inputMode="numeric"
-                min={1}
-                step={1}
-                value={frequencyHoursInput}
-                onChange={e => setFrequencyHoursInput(e.target.value)}
-                onMouseDown={e => e.stopPropagation()}
-                onPointerDown={e => e.stopPropagation()}
-                onKeyDown={e => e.stopPropagation()}
-                onKeyDownCapture={e => e.stopPropagation()}
-                onKeyUp={e => e.stopPropagation()}
-                placeholder="e.g. 168 for weekly"
-                aria-label="Submission frequency in hours"
-                className="w-full max-w-[220px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
-              />
+              <div className="flex items-start justify-center gap-3">
+                <div className="flex flex-col items-center gap-1">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={frequencyDaysInput}
+                    onChange={e => setFrequencyDaysInput(e.target.value)}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="0"
+                    aria-label="Submission frequency in days"
+                    className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
+                  />
+                  <span className="text-footnote text-grey-04">Days</span>
+                </div>
+                <div className="flex flex-col items-center gap-1">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={frequencyHoursInput}
+                    onChange={e => setFrequencyHoursInput(e.target.value)}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="0"
+                    aria-label="Submission frequency in hours"
+                    className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
+                  />
+                  <span className="text-footnote text-grey-04">Hours</span>
+                </div>
+              </div>
+              <p className="text-center text-footnote text-grey-04">e.g. 7 days for weekly</p>
             </div>
           ) : (
             <div className="flex w-full flex-wrap items-start justify-center gap-8">
