@@ -42,4 +42,18 @@ describe('debate server clock', () => {
 
     expect(createLocalServerClock().now()).toBe(42_000);
   });
+
+  it('finishes synchronization when time requests hang', async () => {
+    vi.useFakeTimers();
+    const synchronization = synchronizeServerClock(
+      () => new Promise(() => undefined),
+      () => 0,
+      50
+    );
+    const rejection = expect(synchronization).rejects.toThrow('Could not synchronize the debate clock.');
+
+    await vi.advanceTimersByTimeAsync(50);
+    await rejection;
+    vi.useRealTimers();
+  });
 });

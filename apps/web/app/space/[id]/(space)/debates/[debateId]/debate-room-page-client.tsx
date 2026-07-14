@@ -15,6 +15,7 @@ import {
 } from '~/core/debates/api';
 import {
   useAbortDebate,
+  useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
   useDebateRematch,
@@ -116,6 +117,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
+  const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
   const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'saving'>('idle');
@@ -128,6 +130,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
+  const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [audioInputDevices, setAudioInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [videoInputDevices, setVideoInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [selectedAudioInputId, setSelectedAudioInputId] = React.useState('');
@@ -153,6 +156,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
   const connectionFailureHandledRef = React.useRef(false);
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
+  const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
   const finalizedDebateRef = React.useRef<string | null>(null);
   const recordingPersistenceStartedRef = React.useRef<string | null>(null);
@@ -358,10 +362,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const persistRecordingAfterCapture = React.useCallback(() => {
     if (!debate || recordingPersistenceStartedRef.current === debate.id) return;
     recordingPersistenceStartedRef.current = debate.id;
-    void persistStoppedLocalRecording().catch(error => {
-      recordingPersistenceStartedRef.current = null;
-      setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
-    });
+    void persistStoppedLocalRecording()
+      .then(persisted => {
+        if (!persisted) recordingPersistenceStartedRef.current = null;
+      })
+      .catch(error => {
+        recordingPersistenceStartedRef.current = null;
+        setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+      });
   }, [debate, persistStoppedLocalRecording]);
 
   const discardLocalRecorder = React.useCallback(async () => {
@@ -543,12 +551,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     let newlyCreatedTracks: LocalTrackLike[] = [];
     setRoomError(null);
     setRoomState('connecting');
+    setServerClockSettled(false);
     setRemoteVideoReady(false);
+    if (remoteParticipantRefetchTimerRef.current !== null) {
+      window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+      remoteParticipantRefetchTimerRef.current = null;
+    }
     remoteMediaRef.current?.replaceChildren();
-    const clockSynchronization = synchronizeServerClock(getServerTime).catch(() => null);
-    void clockSynchronization.then(clock => {
-      if (clock && isCurrent()) setServerClock(clock);
-    });
+    void synchronizeServerClock(getServerTime)
+      .then(clock => {
+        if (isCurrent()) setServerClock(clock);
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (isCurrent()) setServerClockSettled(true);
+      });
 
     try {
       const token = await liveKitJoin.mutateAsync();
@@ -575,8 +592,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         void refetchDebate();
       });
       room.on(livekit.RoomEvent.ParticipantConnected, () => {
+        if (!isCurrent()) return;
         void refetchDebate();
-        window.setTimeout(() => void refetchDebate(), 250);
+        remoteParticipantRefetchTimerRef.current = window.setTimeout(() => {
+          remoteParticipantRefetchTimerRef.current = null;
+          if (isCurrent()) void refetchDebate();
+        }, 250);
       });
 
       await room.connect(token.url, token.token);
@@ -802,6 +823,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (connectionFailureHandledRef.current) return;
     connectionFailureHandledRef.current = true;
     connectionGenerationRef.current += 1;
+    if (remoteParticipantRefetchTimerRef.current !== null) {
+      window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+      remoteParticipantRefetchTimerRef.current = null;
+    }
+    clearTimedOutDebateActivity(debateId);
     clearRecordingTimers();
     void discardLocalRecorder();
     disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -809,7 +835,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteVideoReady(false);
     setRoomError('Connection failed. Finding another match.');
     setRoomState('connecting');
-  }, [clearRecordingTimers, discardLocalRecorder]);
+  }, [clearRecordingTimers, clearTimedOutDebateActivity, debateId, discardLocalRecorder]);
 
   const redirectAfterConnectionFailure = React.useCallback(() => {
     if (connectionFailureRedirectTimerRef.current !== null) return;
@@ -818,19 +844,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }, connectionFailureRedirectDelayMs);
   }, [router, spaceId]);
 
+  const reconcileConnectionDeadline = React.useCallback(async () => {
+    const generation = connectionGenerationRef.current;
+    const result = await refetchDebate().catch(() => null);
+    if (!mountedRef.current || connectionGenerationRef.current !== generation) return;
+    if (result?.data?.status !== 'cancelled' || result.data.cancellation_reason !== 'connection_timeout') return;
+    handleConnectionFailure();
+    redirectAfterConnectionFailure();
+  }, [handleConnectionFailure, redirectAfterConnectionFailure, refetchDebate]);
+
   React.useEffect(() => {
     if (!debate || debate.status !== 'connecting') return;
     const deadline = timestampMs(debate.connecting_deadline_at);
     if (deadline === null) return;
     const remainingMs = deadline - serverClock.now();
     if (remainingMs <= 0) {
-      handleConnectionFailure();
-      void refetchDebate();
+      void reconcileConnectionDeadline();
       return;
     }
-    const timer = window.setTimeout(handleConnectionFailure, Math.min(remainingMs, maximumBrowserTimeoutMs));
+    const timer = window.setTimeout(
+      () => void reconcileConnectionDeadline(),
+      Math.min(remainingMs, maximumBrowserTimeoutMs)
+    );
     return () => window.clearTimeout(timer);
-  }, [debate, handleConnectionFailure, refetchDebate, serverClock]);
+  }, [debate, reconcileConnectionDeadline, serverClock]);
 
   React.useEffect(() => {
     if (debate?.status === 'cancelled' && debate.cancellation_reason === 'connection_timeout') {
@@ -853,6 +890,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (connectionFailureRedirectTimerRef.current !== null) {
         window.clearTimeout(connectionFailureRedirectTimerRef.current);
         connectionFailureRedirectTimerRef.current = null;
+      }
+      if (remoteParticipantRefetchTimerRef.current !== null) {
+        window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+        remoteParticipantRefetchTimerRef.current = null;
       }
       clearRecordingTimers();
       void discardLocalRecorder();
@@ -885,7 +926,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     clearRecordingTimers();
-    if (!debate || roomState !== 'connected') return;
+    if (!debate || roomState !== 'connected' || !serverClockSettled) return;
 
     const stream = localMediaStreamRef.current;
     if (!stream) return;
@@ -919,7 +960,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     );
 
     return clearRecordingTimers;
-  }, [clearRecordingTimers, debate, persistRecordingAfterCapture, roomState, serverClock, startLocalRecorder]);
+  }, [
+    clearRecordingTimers,
+    debate,
+    persistRecordingAfterCapture,
+    roomState,
+    serverClock,
+    serverClockSettled,
+    startLocalRecorder,
+  ]);
 
   React.useEffect(() => {
     if (!debate) return;

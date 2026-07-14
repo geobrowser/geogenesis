@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   publishTrack: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
+  clearTimedOutDebateActivity: vi.fn(),
   roomOn: vi.fn(),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
@@ -57,6 +58,7 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 vi.mock('~/core/debates/hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
   useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
@@ -112,6 +114,7 @@ beforeEach(() => {
   mocks.publishTrack.mockReset();
   mocks.getServerTime.mockReset();
   mocks.refetchDebate.mockReset();
+  mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
   mocks.debate = completedDebate();
   mocks.rematch = null;
@@ -516,6 +519,31 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
   });
 
+  it('waits for clock synchronization before arming recording timers', async () => {
+    const pendingClock = deferred<{ server_time_ms: number }>();
+    mocks.getServerTime.mockReturnValue(pendingClock.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2030-01-01T00:00:00.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(mocks.mediaRecorderStart).not.toHaveBeenCalled();
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    pendingClock.resolve({ server_time_ms: Date.parse('2026-07-02T00:00:20.000Z') });
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
   it('shows connection state without exposing the connection deadline', async () => {
     mocks.debate = {
       ...completedDebate(),
@@ -537,29 +565,88 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('00:10')).not.toBeInTheDocument();
   });
 
-  it('stops media at the deadline and returns to matching after backend cancellation', () => {
+  it('stops media at the deadline and returns to matching after backend cancellation', async () => {
     vi.useFakeTimers();
-    mocks.debate = {
+    const connectingDebate: Debate = {
       ...completedDebate(),
       status: 'connecting',
       connecting_started_at: '2000-07-02T00:00:00.000Z',
       connecting_deadline_at: '2000-07-02T00:00:10.000Z',
       completed_at: null,
     };
+    mocks.debate = connectingDebate;
+    mocks.refetchDebate.mockResolvedValue({
+      data: {
+        ...connectingDebate,
+        status: 'cancelled',
+        cancellation_reason: 'connection_timeout',
+      },
+    });
 
-    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(screen.getByText('Connection failed. Finding another match.')).toBeInTheDocument();
+    expect(mocks.clearTimedOutDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
-
-    mocks.debate = {
-      ...mocks.debate,
-      status: 'cancelled',
-      cancellation_reason: 'connection_timeout',
-    };
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     act(() => vi.advanceTimersByTime(750));
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+  });
+
+  it('keeps the room connected when preflight won the deadline race', async () => {
+    const connectingDebate: Debate = {
+      ...completedDebate(),
+      status: 'connecting',
+      connecting_started_at: '2000-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2000-07-02T00:00:10.000Z',
+      completed_at: null,
+    };
+    mocks.debate = connectingDebate;
+    mocks.refetchDebate.mockResolvedValue({
+      data: {
+        ...connectingDebate,
+        status: 'preflight',
+        preflight_ends_at: '2000-07-02T00:00:15.000Z',
+      },
+    });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.refetchDebate).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(screen.queryByText('Connection failed. Finding another match.')).not.toBeInTheDocument();
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('stops published tracks when the backend confirms a connection timeout', async () => {
+    const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([audioTrack, videoTrack]);
+    const connectingDebate: Debate = {
+      ...completedDebate(),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+      completed_at: null,
+    };
+    mocks.debate = connectingDebate;
+    mocks.refetchDebate.mockResolvedValue({
+      data: { ...connectingDebate, status: 'cancelled', cancellation_reason: 'connection_timeout' },
+    });
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    mocks.debate = { ...connectingDebate, connecting_deadline_at: '2000-07-02T00:00:10.000Z' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.clearTimedOutDebateActivity).toHaveBeenCalledWith('debate-1'));
+    expect(mocks.roomDisconnect).toHaveBeenCalled();
+    expect(audioTrack.stop).toHaveBeenCalled();
+    expect(videoTrack.stop).toHaveBeenCalled();
   });
 
   it('does not show the thank-you hint before the thanking phase when the local slot is unknown', async () => {
