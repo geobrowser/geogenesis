@@ -74,7 +74,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
     ? getMembershipProposalDisplayName(proposal.type, proposal.targetProfile)
     : (proposal.name ??
       (isVotingSettingsProposal
-        ? 'Governance settings update'
+        ? 'Change governance settings'
         : getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space })));
   const bylineProfile = proposal.targetProfile ?? proposal.createdBy;
 

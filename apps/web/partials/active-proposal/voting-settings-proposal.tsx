@@ -6,6 +6,8 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import type { Proposal } from '~/core/io/dto/proposals';
 
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+
 import type { VotingSettingsSnapshot } from '~/partials/governance/voting-settings';
 
 type Props = {
@@ -32,25 +34,19 @@ export function VotingSettingsProposal({ proposal, spaceId }: Props) {
   const rows = buildRows(details, current);
 
   return (
-    <div className="mx-auto max-w-[560px]">
-      <h3 className="text-smallTitle">Proposed governance settings</h3>
-      <p className="pt-1 text-metadata text-grey-04">
-        If this proposal passes, the space&apos;s voting settings change as follows.
-      </p>
-      <div className="mt-5 divide-y divide-divider rounded-lg border border-grey-02">
+    <div className="mx-auto w-full max-w-[400px]">
+      <div className="divide-y divide-grey-02 border-y border-grey-02">
         {rows.map(row => (
-          <div key={row.label} className="flex items-center justify-between gap-4 px-4 py-3">
-            <span className="text-metadata text-grey-04">{row.label}</span>
-            <div className="flex items-center gap-2 text-quoteMedium tabular-nums">
+          <div key={row.label} className="flex items-center justify-between gap-4 py-3">
+            <span className="text-metadata text-text">{row.label}</span>
+            <div className="flex items-center gap-2 text-metadata text-text tabular-nums">
               {row.changed && row.current !== null && (
                 <>
-                  <span className="text-grey-03 line-through">{row.current}</span>
-                  <span aria-hidden className="text-grey-03">
-                    →
-                  </span>
+                  <span>{row.current}</span>
+                  <RightArrowLongSmall color="grey-04" />
                 </>
               )}
-              <span className={row.changed ? 'text-text' : 'text-grey-04'}>{row.proposed}</span>
+              <span>{row.proposed}</span>
             </div>
           </div>
         ))}
