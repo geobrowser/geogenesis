@@ -14,8 +14,10 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   consentMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
-  createUploadMutateAsync: vi.fn(),
-  completeUploadMutateAsync: vi.fn(),
+  enqueueRecording: vi.fn(),
+  getRecording: vi.fn(),
+  requestPersistentStorage: vi.fn(),
+  estimateStorage: vi.fn(),
   mediaRecorderStart: vi.fn(),
   readyMutateAsync: vi.fn(),
   liveKitJoinMutateAsync: vi.fn(),
@@ -51,15 +53,23 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 vi.mock('~/core/debates/hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useCompleteLocalRecordingUpload: () => ({ mutateAsync: mocks.completeUploadMutateAsync }),
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
-  useCreateLocalRecordingUpload: () => ({ mutateAsync: mocks.createUploadMutateAsync }),
   useDebate: () => ({ data: mocks.debate, isLoading: false, error: null }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
+}));
+
+vi.mock('~/core/debates/recording-upload-queue', () => ({
+  debateRecordingUploadId: (userId: string, debateId: string) => `${userId}:${debateId}`,
+  enqueueDebateRecordingUpload: mocks.enqueueRecording,
+  estimateRecordingStorage: mocks.estimateStorage,
+  getDebateRecordingUpload: mocks.getRecording,
+  isStorageQuotaError: (error: unknown) =>
+    typeof error === 'object' && error !== null && 'name' in error && error.name === 'QuotaExceededError',
+  requestPersistentRecordingStorage: mocks.requestPersistentStorage,
 }));
 
 vi.mock('livekit-client', () => ({
@@ -83,8 +93,10 @@ beforeEach(() => {
   mocks.replace.mockReset();
   mocks.consentMutateAsync.mockReset();
   mocks.leaveRematchMutateAsync.mockReset();
-  mocks.createUploadMutateAsync.mockReset();
-  mocks.completeUploadMutateAsync.mockReset();
+  mocks.enqueueRecording.mockReset();
+  mocks.getRecording.mockReset();
+  mocks.requestPersistentStorage.mockReset();
+  mocks.estimateStorage.mockReset();
   mocks.mediaRecorderStart.mockReset();
   mocks.readyMutateAsync.mockReset();
   mocks.liveKitJoinMutateAsync.mockReset();
@@ -115,15 +127,10 @@ beforeEach(() => {
   ]);
   mocks.roomConnect.mockResolvedValue(undefined);
   mocks.publishTrack.mockResolvedValue(undefined);
-  mocks.createUploadMutateAsync.mockResolvedValue({
-    filename: 'debate.webm',
-    upload: {
-      url: 'https://uploads.test/debate.webm',
-      method: 'PUT',
-      headers: {},
-    },
-  });
-  mocks.completeUploadMutateAsync.mockResolvedValue(undefined);
+  mocks.enqueueRecording.mockResolvedValue(undefined);
+  mocks.getRecording.mockResolvedValue(undefined);
+  mocks.requestPersistentStorage.mockResolvedValue(true);
+  mocks.estimateStorage.mockResolvedValue({ quota: 1_000_000_000, usage: 0 });
   vi.stubGlobal(
     'MediaStream',
     class {
@@ -184,6 +191,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalled();
     });
+    expect(mocks.requestPersistentStorage).toHaveBeenCalledOnce();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -619,7 +627,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Debate complete.')).toBeInTheDocument();
-    expect(mocks.createUploadMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
     expect(screen.queryByText('Continue debating this claim?')).not.toBeInTheDocument();
   });
 
@@ -667,7 +675,7 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });
 
-  it('does not leave the rematch flow when the local recording cannot be finalized', async () => {
+  it('does not leave the rematch flow when the local recording cannot be persisted', async () => {
     mocks.debate = {
       ...completedDebate(),
       status: 'thanking',
@@ -682,7 +690,7 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
 
     expect(
-      await screen.findByText('Could not finalize the local recording. Please try leaving again.')
+      await screen.findByText('Could not save the local recording. Please try leaving again.')
     ).toBeInTheDocument();
     expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
     expect(mocks.push).not.toHaveBeenCalled();
@@ -709,9 +717,9 @@ describe('DebateRoomPageClient', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('waits for recording finalization before entering the rematch browser', async () => {
-    const upload = deferred<void>();
-    mocks.completeUploadMutateAsync.mockReturnValue(upload.promise);
+  it('waits for durable recording persistence before entering the rematch browser', async () => {
+    const persistence = deferred<void>();
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
     installRecordingMocks();
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
@@ -720,11 +728,54 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.completeUploadMutateAsync).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-a',
+        debateId: 'debate-1',
+        blob: expect.any(Blob),
+        mimeType: 'video/webm',
+      })
+    );
+    expect(fetch).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
 
-    upload.resolve();
+    persistence.resolve();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:01:10.001Z'));
+    mocks.debate = { ...mocks.debate! };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    expect(mocks.debate.status).toBe('in_progress');
+  });
+
+  it('recognizes a durable queued recording after the debate room reloads', async () => {
+    mocks.getRecording.mockResolvedValue({ id: 'user-a:debate-1' });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing');
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.getRecording).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
   it('waits for a deciding rematch session to resolve before finalizing the completed debate', async () => {
@@ -737,18 +788,18 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(screen.getByText('Debate complete.')).toBeInTheDocument());
-    expect(mocks.completeUploadMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
     expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates');
 
     mocks.rematch = rematchSession('browsing');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.completeUploadMutateAsync).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalled());
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
-  it('keeps the completion screen available when recording finalization fails', async () => {
-    mocks.completeUploadMutateAsync.mockRejectedValue(new Error('Upload unavailable'));
+  it('keeps the completion screen available when recording persistence fails', async () => {
+    mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
     installRecordingMocks();
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
@@ -756,8 +807,31 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = completedDebate();
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findAllByText('Upload unavailable')).not.toHaveLength(0);
+    expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('retains an in-memory recording after a quota failure and retries the same Blob', async () => {
+    mocks.enqueueRecording.mockRejectedValueOnce(new DOMException('Storage full', 'QuotaExceededError'));
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(
+      await screen.findByText(
+        'There is not enough browser storage to save this recording. Free some device storage, then retry.'
+      )
+    ).toBeInTheDocument();
+    const firstBlob = mocks.enqueueRecording.mock.calls[0]?.[0].blob;
+    mocks.enqueueRecording.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry save' }));
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
+    expect(mocks.enqueueRecording.mock.calls[1]?.[0].blob).toBe(firstBlob);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
   });
 });
 
