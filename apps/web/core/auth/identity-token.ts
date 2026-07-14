@@ -50,8 +50,8 @@ function expiresAtFrom(token: string): number {
   }
 }
 
-function isUsable(entry: CachedToken | null): entry is CachedToken {
-  return entry !== null && Date.now() < entry.expiresAt - EXPIRY_SKEW_MS;
+function isFresh(entry: CachedToken): boolean {
+  return Date.now() < entry.expiresAt - EXPIRY_SKEW_MS;
 }
 
 export function setCachedIdentityToken(token: string | null) {
@@ -60,8 +60,10 @@ export function setCachedIdentityToken(token: string | null) {
 }
 
 export async function getCachedIdentityToken(): Promise<string | null> {
-  if (isUsable(cached)) return cached.token;
-  if (Date.now() < refreshBlockedUntil) return cached?.token ?? null;
+  const current = cached;
+
+  if (current && isFresh(current)) return current.token;
+  if (Date.now() < refreshBlockedUntil) return current?.token ?? null;
 
   inFlight ??= getIdentityToken()
     .then(token => {
