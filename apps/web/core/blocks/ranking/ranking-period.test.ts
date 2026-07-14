@@ -1,6 +1,12 @@
+import { addDays, startOfDay } from 'date-fns';
 import { describe, expect, it } from 'vitest';
 
-import { formatRankingPeriodLabel, getRankingPeriodState, rankingSubmissionsOpen } from './ranking-period';
+import {
+  formatRankingPeriodLabel,
+  getRankingPeriodState,
+  msUntilRankingPeriodChange,
+  rankingSubmissionsOpen,
+} from './ranking-period';
 
 const now = new Date('2026-06-04T12:00:00.000Z');
 
@@ -87,5 +93,50 @@ describe('rankingSubmissionsOpen', () => {
     expect(rankingSubmissionsOpen('no-date')).toBe(true);
     expect(rankingSubmissionsOpen('not-started')).toBe(false);
     expect(rankingSubmissionsOpen('ended')).toBe(false);
+  });
+});
+
+describe('msUntilRankingPeriodChange', () => {
+  const renderedAt = (startDate: string, endDate: string, at: Date) => {
+    const state = getRankingPeriodState(startDate, endDate, at);
+    return `${state}|${formatRankingPeriodLabel(state, startDate, endDate, at)}`;
+  };
+
+  it('returns null when nothing can change again', () => {
+    expect(msUntilRankingPeriodChange('', '', now)).toBeNull();
+    expect(msUntilRankingPeriodChange('2026-05-01', '2026-06-04T10:00:00.000Z', now)).toBeNull();
+    expect(msUntilRankingPeriodChange('2026-05-01', '', now)).toBeNull();
+  });
+
+  it.each([
+    ['ends within the minute', '2026-05-01', '2026-06-04T12:00:30.000Z'],
+    ['ends on a minute boundary', '2026-05-01', '2026-06-04T12:05:00.000Z'],
+    ['ends off a minute boundary', '2026-05-01', '2026-06-04T12:05:20.000Z'],
+    ['ends in hours', '2026-05-01', '2026-06-04T18:30:00.000Z'],
+    ['crosses from hours into minutes', '2026-05-01', '2026-06-04T13:00:00.000Z'],
+    ['crosses from days into hours', '2026-05-01', '2026-06-05T11:30:00.000Z'],
+    ['starts in minutes', '2026-06-04T12:05:00.000Z', '2026-06-30'],
+    ['starts in hours', '2026-06-04T18:00:00.000Z', '2026-06-30'],
+  ])('ticks exactly when %s changes what is rendered', (_label, startDate, endDate) => {
+    const delay = msUntilRankingPeriodChange(startDate, endDate, now);
+    expect(delay).not.toBeNull();
+
+    const rendered = renderedAt(startDate, endDate, now);
+    const justBeforeTick = new Date(now.getTime() + delay! - 1);
+    const atTick = new Date(now.getTime() + delay!);
+
+    expect(renderedAt(startDate, endDate, justBeforeTick)).toBe(rendered);
+    expect(renderedAt(startDate, endDate, atTick)).not.toBe(rendered);
+  });
+
+  it('ticks at local midnight while the countdown is still counting calendar days', () => {
+    const endDate = '2026-06-20T12:00:00.000Z';
+    const untilMidnight = startOfDay(addDays(now, 1)).getTime() - now.getTime();
+
+    expect(msUntilRankingPeriodChange('2026-05-01', endDate, now)).toBe(untilMidnight);
+
+    const rendered = renderedAt('2026-05-01', endDate, now);
+    expect(renderedAt('2026-05-01', endDate, new Date(now.getTime() + untilMidnight - 1))).toBe(rendered);
+    expect(renderedAt('2026-05-01', endDate, new Date(now.getTime() + untilMidnight))).not.toBe(rendered);
   });
 });

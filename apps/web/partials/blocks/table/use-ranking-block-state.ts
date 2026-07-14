@@ -25,7 +25,6 @@ import {
   getPendingProposerSpaceIds,
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
-import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
@@ -38,6 +37,7 @@ import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-da
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
+import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
@@ -196,12 +196,7 @@ export function useRankingBlockState({
 
   const rowsByEntityId = React.useMemo(() => new Map(rows.map(r => [r.entityId, r])), [rows]);
 
-  const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
-
-  const periodLabel = React.useMemo(
-    () => formatRankingPeriodLabel(periodState, startDate, endDate),
-    [periodState, startDate, endDate]
-  );
+  const { periodState, periodLabel } = useRankingPeriod(startDate, endDate);
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;

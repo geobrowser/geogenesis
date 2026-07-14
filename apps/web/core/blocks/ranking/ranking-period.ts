@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { addDays, differenceInCalendarDays, parseISO, startOfDay } from 'date-fns';
 
 import { GeoDate } from '~/core/utils/utils';
 
@@ -93,4 +93,41 @@ export function formatRankingPeriodLabel(
 
 export function rankingSubmissionsOpen(state: RankingPeriodState): boolean {
   return state === 'in-progress' || state === 'no-date';
+}
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+
+// Mirror the granularity thresholds in `formatRelativeCountdown`
+const MINUTE_GRANULARITY_MAX_MS = 59 * MINUTE_MS;
+const HOUR_GRANULARITY_MAX_MS = 23 * HOUR_MS;
+
+function msUntilNextLocalMidnight(now: Date): number {
+  return startOfDay(addDays(now, 1)).getTime() - now.getTime();
+}
+
+function msUntilCountdownChanges(target: Date, now: Date): number | null {
+  const msRemaining = target.getTime() - now.getTime();
+  if (msRemaining <= 0) return null;
+
+  if (msRemaining <= MINUTE_GRANULARITY_MAX_MS) {
+    return msRemaining % MINUTE_MS || MINUTE_MS;
+  }
+  if (msRemaining <= HOUR_GRANULARITY_MAX_MS) {
+    return Math.min(msRemaining % HOUR_MS || HOUR_MS, msRemaining - MINUTE_GRANULARITY_MAX_MS);
+  }
+  return Math.min(msUntilNextLocalMidnight(now), msRemaining - HOUR_GRANULARITY_MAX_MS);
+}
+
+export function msUntilRankingPeriodChange(startDate: string, endDate: string, now = new Date()): number | null {
+  const state = getRankingPeriodState(startDate, endDate, now);
+  if (state === 'no-date' || state === 'ended') return null;
+
+  const target = parseRankingDate(state === 'not-started' ? startDate : endDate);
+  if (!target) return null;
+
+  const untilCountdownChanges = msUntilCountdownChanges(target, now);
+  const untilMidnight = msUntilNextLocalMidnight(now);
+
+  return untilCountdownChanges === null ? untilMidnight : Math.min(untilCountdownChanges, untilMidnight);
 }

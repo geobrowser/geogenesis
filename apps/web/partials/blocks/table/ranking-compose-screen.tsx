@@ -16,11 +16,7 @@ import {
   getPendingProposerSpaceIds,
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
-import {
-  formatRankingPeriodLabel,
-  getRankingPeriodState,
-  rankingSubmissionsOpen,
-} from '~/core/blocks/ranking/ranking-period';
+import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
 import {
   getRowDescription,
   getRowDisplayName,
@@ -32,11 +28,13 @@ import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-bloc
 import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compose-search';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
+import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
+import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
 import type { SearchResult } from '~/core/types';
 
@@ -72,6 +70,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
   const { showOnboarding } = useOnboarding();
+  const [, setToast] = useToast();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
   const {
     status: accessStatus,
@@ -114,12 +113,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
-  const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
-  const periodLabel = React.useMemo(
-    () => formatRankingPeriodLabel(periodState, startDate, endDate),
-    [periodState, startDate, endDate]
-  );
-  const submissionsOpen = rankingSubmissionsOpen(periodState);
+  const { periodState, periodLabel, submissionsOpen } = useRankingPeriod(startDate, endDate);
 
   const {
     submissions,
@@ -462,6 +456,12 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     orderedIds.length > 0 && hasUnpublishedChanges && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
 
   const handlePublish = async () => {
+    // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
+    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
+      setToast(<span>This ranking has closed.</span>);
+      return;
+    }
+
     const slots = orderedIds.map(id => {
       const row = rowsByEntityId.get(id);
       const entry = displayRankableEntriesById.get(id) ?? myEntriesById.get(id);
