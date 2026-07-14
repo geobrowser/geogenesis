@@ -1,15 +1,16 @@
 'use client';
 
-import { getIdentityToken, usePrivy } from '@geogenesis/auth';
+import { usePrivy } from '@geogenesis/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
+
+import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
 import {
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
-  type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -61,12 +62,12 @@ export const debateQueryKeys = {
 
 export function useGeoChatAuth() {
   const privy = usePrivy();
-  const getPrivyIdentityToken = React.useCallback<GetPrivyIdentityToken>(() => getIdentityToken(), []);
+  useIdentityTokenSync();
 
   return {
     ready: privy.ready,
     authenticated: privy.authenticated,
-    getPrivyIdentityToken,
+    getPrivyIdentityToken: getCachedIdentityToken,
   };
 }
 
