@@ -5,15 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { CALL_RSVP_PROPERTY_ID } from '~/core/community-call-ids';
 import { CURATOR_ONBOARDING_STEPS, type CuratorOnboardingStepId } from '~/core/explore/curator-onboarding-steps';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import {
-  getAllEntities,
-  getRelationsByFromEntityId,
-  getSpacesWhereMember,
-  getUserHasEntityVote,
-} from '~/core/io/queries';
+import { getAllEntities, getSpacesWhereMember, getUserHasEntityVote } from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 
 export type CuratorOnboardingCompletion = Record<CuratorOnboardingStepId, boolean>;
@@ -37,13 +31,23 @@ async function personalSpaceHasEntityType(
   return entities.length > 0;
 }
 
-async function personalSpaceHasCallRsvp(personalSpaceId: string, signal?: AbortSignal): Promise<boolean> {
+/**
+ * Whether the user has accepted a community-call invite, read from the
+ * Rendezvous RSVP service via our server proxy (which derives the person
+ * from the wallet cookie). "Accepted" only — a pending invite is not an RSVP.
+ */
+async function fetchHasCallRsvp(signal?: AbortSignal): Promise<boolean> {
   try {
-    const relations = await Effect.runPromise(
-      getRelationsByFromEntityId(personalSpaceId, CALL_RSVP_PROPERTY_ID, personalSpaceId, signal)
-    );
-    return relations.length > 0;
-  } catch {
+    const res = await fetch('/api/community-call/rsvp-status', { signal });
+    if (!res.ok) {
+      return false;
+    }
+    const data: { hasAccepted: boolean } = await res.json();
+    return data.hasAccepted;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error;
+    }
     return false;
   }
 }
@@ -58,18 +62,16 @@ export function useCuratorOnboardingStatus() {
     queryFn: async ({ signal }): Promise<CuratorOnboardingCompletion> => {
       if (!personalSpaceId) return emptyCompletion();
 
-      const memberSpaces = await Effect.runPromise(getSpacesWhereMember(personalSpaceId, signal));
-      const hasJoinedPublicDaoSpace = memberSpaces.some(space => space.type === 'DAO');
-
-      const [hasRsvp, hasVote, hasRanking, hasComment] = await Promise.all([
-        personalSpaceHasCallRsvp(personalSpaceId, signal),
+      const [memberSpaces, hasRsvp, hasVote, hasRanking, hasComment] = await Promise.all([
+        Effect.runPromise(getSpacesWhereMember(personalSpaceId, signal)),
+        fetchHasCallRsvp(signal),
         Effect.runPromise(getUserHasEntityVote(personalSpaceId, signal)),
         personalSpaceHasEntityType(personalSpaceId, RANK_TYPE_ID, signal),
         personalSpaceHasEntityType(personalSpaceId, COMMENT_TYPE_ID, signal),
       ]);
 
       return {
-        'join-space': hasJoinedPublicDaoSpace,
+        'join-space': memberSpaces.some(space => space.type === 'DAO'),
         'rsvp-community-call': hasRsvp,
         'vote-entity': hasVote,
         'submit-ranking': hasRanking,
