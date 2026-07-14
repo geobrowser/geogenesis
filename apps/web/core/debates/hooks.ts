@@ -1,6 +1,6 @@
 'use client';
 
-import { getIdentityToken, usePrivy } from '@geogenesis/auth';
+import { getIdentityToken, useIdentityToken, usePrivy } from '@geogenesis/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -32,6 +32,7 @@ import {
   getRecordingUrl,
   handleDebateSharePrompt,
   heartbeatDebatePresence,
+  isIdentityTokenFresh,
   joinDebateQueue,
   leaveDebateRematch,
   listDebateClaims,
@@ -42,6 +43,7 @@ import {
   markDebateReady,
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
+  syncGeoChatAuthAccount,
   updateDebatePreference,
   updateDebateRematchPosition,
 } from './api';
@@ -61,7 +63,25 @@ export const debateQueryKeys = {
 
 export function useGeoChatAuth() {
   const privy = usePrivy();
-  const getPrivyIdentityToken = React.useCallback<GetPrivyIdentityToken>(() => getIdentityToken(), []);
+  const { identityToken } = useIdentityToken();
+  const { getAccessToken } = privy;
+  const privyAccountId = privy.user?.id ?? null;
+
+  React.useEffect(() => {
+    if (privy.ready) syncGeoChatAuthAccount(privyAccountId);
+  }, [privy.ready, privyAccountId]);
+
+  const getPrivyIdentityToken = React.useCallback<GetPrivyIdentityToken>(async () => {
+    try {
+      await getAccessToken();
+      const freshToken = await getIdentityToken();
+      if (freshToken) return freshToken;
+    } catch (error) {
+      if (!isIdentityTokenFresh(identityToken)) throw error;
+    }
+
+    return isIdentityTokenFresh(identityToken) ? identityToken : null;
+  }, [getAccessToken, identityToken]);
 
   return {
     ready: privy.ready,
@@ -71,11 +91,11 @@ export function useGeoChatAuth() {
 }
 
 export function useDebateClaims(spaceId: string, claimIds: string[], enabled: boolean) {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.claims(spaceId, claimIds),
-    queryFn: () => listDebateClaims(spaceId, claimIds, getPrivyIdentityToken),
+    queryFn: () => listDebateClaims(spaceId, claimIds, authenticated ? getPrivyIdentityToken : undefined),
     enabled: enabled && claimIds.length > 0,
     refetchInterval: 5_000,
   });
@@ -179,22 +199,22 @@ export function useDeclineDebateMatch(spaceId?: string) {
 }
 
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.spaceDebates(spaceId),
-    queryFn: () => listSpaceDebates(spaceId, getPrivyIdentityToken),
+    queryFn: () => listSpaceDebates(spaceId, authenticated ? getPrivyIdentityToken : undefined),
     enabled,
     refetchInterval: 5_000,
   });
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.debate(debateId),
-    queryFn: () => getDebate(debateId, getPrivyIdentityToken),
+    queryFn: () => getDebate(debateId, authenticated ? getPrivyIdentityToken : undefined),
     enabled,
     refetchInterval: 1_000,
   });
@@ -392,20 +412,20 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
 }
 
 export function useRecordingUrl() {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
-      getRecordingUrl(debateId, filename, getPrivyIdentityToken),
+      getRecordingUrl(debateId, filename, authenticated ? getPrivyIdentityToken : undefined),
   });
 }
 
 export function useDebateMedia(debateId: string, enabled: boolean) {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.media(debateId),
-    queryFn: () => getDebateMedia(debateId, getPrivyIdentityToken),
+    queryFn: () => getDebateMedia(debateId, authenticated ? getPrivyIdentityToken : undefined),
     enabled,
     refetchInterval: 5_000,
   });
@@ -423,20 +443,20 @@ export function useRequestDebateMediaProcessing(debateId: string) {
 }
 
 export function useDebateMediaArtifactUrl() {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
     mutationFn: ({ debateId, request }: { debateId: string; request: DebateMediaArtifactUrlRequest }) =>
-      getDebateMediaArtifactUrl(debateId, request, getPrivyIdentityToken),
+      getDebateMediaArtifactUrl(debateId, request, authenticated ? getPrivyIdentityToken : undefined),
   });
 }
 
 export function useDebateTranscript(debateId: string, format: TranscriptFormat = 'json', enabled = true) {
-  const { getPrivyIdentityToken } = useGeoChatAuth();
+  const { authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     queryKey: debateQueryKeys.transcript(debateId, format),
-    queryFn: () => getDebateTranscript(debateId, format, getPrivyIdentityToken),
+    queryFn: () => getDebateTranscript(debateId, format, authenticated ? getPrivyIdentityToken : undefined),
     enabled,
   });
 }

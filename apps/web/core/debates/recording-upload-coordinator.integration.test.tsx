@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   putRecording: vi.fn(),
   queue: [] as DebateRecordingUpload[],
   resolveUser: vi.fn(),
+  currentUserId: null as string | null,
+  retryAt: 0,
   scheduleRetry: vi.fn(),
 }));
 
@@ -43,7 +45,12 @@ vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
   completeLocalRecordingUpload: mocks.completeUpload,
   createLocalRecordingUpload: mocks.createUpload,
+  getCurrentGeoChatUserId: () => mocks.currentUserId,
+  getGeoChatAuthRetryAt: () => mocks.retryAt,
   resolveCurrentGeoChatUserId: mocks.resolveUser,
+  wakeGeoChatAuthRecovery: () => {
+    mocks.retryAt = 0;
+  },
 }));
 
 vi.mock('./recording-upload-queue', async importOriginal => ({
@@ -86,6 +93,8 @@ beforeEach(() => {
   mocks.putRecording.mockReset().mockResolvedValue({ ok: true });
   mocks.queue = [];
   mocks.resolveUser.mockReset().mockResolvedValue('user-a');
+  mocks.currentUserId = null;
+  mocks.retryAt = 0;
   mocks.scheduleRetry.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal('fetch', mocks.putRecording);
   Object.defineProperty(navigator, 'locks', {
@@ -116,8 +125,19 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  it('uses the locally cached geo-chat user without resolving identity again', async () => {
+    mocks.currentUserId = 'user-a';
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    expect(mocks.resolveUser).not.toHaveBeenCalled();
+  });
+
   it('waits while offline and resumes when the browser reconnects', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    mocks.currentUserId = 'user-a';
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
@@ -154,6 +174,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
   it('restores a dismissed upload pill after the app remounts', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    mocks.currentUserId = 'user-a';
     mocks.queue = [queuedRecording('debate-1')];
 
     const firstMount = render(<DebateRecordingUploadCoordinator />);
@@ -173,10 +194,25 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.resolveUser).toHaveBeenCalledOnce());
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    window.dispatchEvent(new Event('offline'));
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     window.dispatchEvent(new Event('online'));
 
     await waitFor(() => expect(mocks.resolveUser).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+  });
+
+  it('does not bypass identity backoff when the tab becomes visible', async () => {
+    mocks.retryAt = Date.now() + 60_000;
+    mocks.resolveUser.mockRejectedValue(new Error('auth unavailable'));
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    await new Promise(resolve => window.setTimeout(resolve, 20));
+    expect(mocks.resolveUser).not.toHaveBeenCalled();
   });
 });
 

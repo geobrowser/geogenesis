@@ -15,7 +15,10 @@ import {
   type LocalRecordingUploadResponse,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
+  getCurrentGeoChatUserId,
+  getGeoChatAuthRetryAt,
   resolveCurrentGeoChatUserId,
+  wakeGeoChatAuthRecovery,
 } from './api';
 import { debateQueryKeys, useGeoChatAuth } from './hooks';
 import {
@@ -28,7 +31,7 @@ import {
 } from './recording-upload-queue';
 
 const initialRetryDelayMs = 5_000;
-const maxRetryDelayMs = 5 * 60_000;
+const maxRetryDelayMs = 2 * 60_000;
 
 type RecordingUploadDependencies = {
   createUpload: (debateId: string, request: LocalRecordingUploadRequest) => Promise<LocalRecordingUploadResponse>;
@@ -83,8 +86,11 @@ export function DebateRecordingUploadCoordinator() {
   const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
   const [toastDismissed, setToastDismissed] = React.useState(false);
   const activeUploadIdRef = React.useRef<string | null>(null);
+  const identityAttemptCountRef = React.useRef(0);
+  const identityRetryAtRef = React.useRef(0);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
+  const onlineRef = React.useRef(online);
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -97,28 +103,55 @@ export function DebateRecordingUploadCoordinator() {
     if (!ready || !authenticated) {
       setUserId(null);
       setUploads([]);
+      identityAttemptCountRef.current = 0;
+      identityRetryAtRef.current = 0;
       return;
     }
-    setUserId(null);
-    setUploads([]);
+    const cachedUserId = getCurrentGeoChatUserId();
+    if (cachedUserId) {
+      setUserId(cachedUserId);
+      identityAttemptCountRef.current = 0;
+      identityRetryAtRef.current = 0;
+      return;
+    }
+    if (!online) return;
+
     let cancelled = false;
     let retryTimer: number | null = null;
+    const retryAt = Math.max(identityRetryAtRef.current, getGeoChatAuthRetryAt());
+    if (retryAt > Date.now()) {
+      retryTimer = window.setTimeout(
+        () => setIdentityRetrySignal(current => current + 1),
+        Math.max(0, retryAt - Date.now())
+      );
+      return () => window.clearTimeout(retryTimer!);
+    }
+
     void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
-        if (!cancelled) setUserId(id);
-      })
-      .catch(error => {
-        console.warn('[DebateRecordingUploadCoordinator] could not resolve user:', error);
         if (!cancelled) {
-          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), initialRetryDelayMs);
+          identityAttemptCountRef.current = 0;
+          identityRetryAtRef.current = 0;
+          setUserId(id);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          const delay = recordingUploadRetryDelay(identityAttemptCountRef.current);
+          identityAttemptCountRef.current += 1;
+          identityRetryAtRef.current = Math.max(getGeoChatAuthRetryAt(), Date.now() + delay);
+          retryTimer = window.setTimeout(
+            () => setIdentityRetrySignal(current => current + 1),
+            Math.max(0, identityRetryAtRef.current - Date.now())
+          );
         }
       });
     return () => {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
+  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, online, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -134,15 +167,24 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     const handleOnline = () => {
+      const reconnected = !onlineRef.current;
+      onlineRef.current = true;
       setOnline(true);
       setWakeAt(Date.now());
-      if (!userId) setIdentityRetrySignal(current => current + 1);
+      if (reconnected && !userId) {
+        wakeGeoChatAuthRecovery();
+        identityRetryAtRef.current = 0;
+        setIdentityRetrySignal(current => current + 1);
+      }
     };
-    const handleOffline = () => setOnline(false);
+    const handleOffline = () => {
+      onlineRef.current = false;
+      setOnline(false);
+    };
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') {
         setWakeAt(Date.now());
-        if (!userId) setIdentityRetrySignal(current => current + 1);
+        if (!userId && getCurrentGeoChatUserId()) setIdentityRetrySignal(current => current + 1);
       }
     };
     window.addEventListener('online', handleOnline);

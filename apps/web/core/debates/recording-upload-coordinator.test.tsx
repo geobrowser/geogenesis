@@ -73,7 +73,7 @@ describe('debate recording uploader', () => {
   it('uses bounded exponential retry delays', () => {
     expect(recordingUploadRetryDelay(0)).toBe(5_000);
     expect(recordingUploadRetryDelay(1)).toBe(10_000);
-    expect(recordingUploadRetryDelay(12)).toBe(300_000);
+    expect(recordingUploadRetryDelay(12)).toBe(120_000);
   });
 });
 

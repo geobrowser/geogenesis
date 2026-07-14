@@ -366,6 +366,61 @@ type RequestOptions = {
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
+const geoChatAccountStorageKey = 'geo:chat-account-id';
+const initialAuthRetryDelayMs = 5_000;
+const maxAuthRetryDelayMs = 2 * 60_000;
+
+let sessionAcquisition: Promise<string> | null = null;
+let sessionFailure: Error | null = null;
+let sessionFailureCount = 0;
+let sessionRetryAt = 0;
+let sessionGeneration = 0;
+let activePrivyAccountId: string | null | undefined;
+
+export function geoChatAuthRetryDelay(attemptCount: number) {
+  return Math.min(maxAuthRetryDelayMs, initialAuthRetryDelayMs * 2 ** Math.max(0, attemptCount));
+}
+
+export function getGeoChatAuthRetryAt() {
+  return sessionRetryAt;
+}
+
+export function wakeGeoChatAuthRecovery() {
+  sessionRetryAt = 0;
+}
+
+export function resetGeoChatAuthState() {
+  sessionGeneration += 1;
+  sessionAcquisition = null;
+  sessionFailure = null;
+  sessionFailureCount = 0;
+  sessionRetryAt = 0;
+  activePrivyAccountId = undefined;
+  clearSession();
+  clearStoredAccountId();
+}
+
+export function syncGeoChatAuthAccount(accountId: string | null) {
+  if (activePrivyAccountId === undefined) {
+    const storedAccountId = loadStoredAccountId();
+    if (storedAccountId !== null && storedAccountId !== accountId) {
+      resetGeoChatAuthState();
+    }
+    activePrivyAccountId = accountId;
+    saveStoredAccountId(accountId);
+    return;
+  }
+  if (activePrivyAccountId === accountId) return;
+
+  resetGeoChatAuthState();
+  activePrivyAccountId = accountId;
+  saveStoredAccountId(accountId);
+}
+
+export function isIdentityTokenFresh(token: string | null | undefined, minimumValidityMs = 30_000) {
+  const expiresAt = decodeJwtPayload(token)?.exp;
+  return typeof expiresAt === 'number' && expiresAt * 1_000 > Date.now() + minimumValidityMs;
+}
 
 export function getGeoChatApiBaseUrl() {
   return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
@@ -719,6 +774,7 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
 
 async function accessTokenForRequest(options: RequestOptions) {
   if (!options.auth) return null;
+  if (options.auth === 'optional' && !options.getPrivyIdentityToken) return null;
 
   try {
     return await getGeoChatAccessToken(options.getPrivyIdentityToken);
@@ -734,12 +790,51 @@ async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityTok
     return stored.access_token;
   }
 
+  if (sessionAcquisition) return sessionAcquisition;
+  if (Date.now() < sessionRetryAt) {
+    throw sessionFailure ?? new Error('Geo-chat authentication is temporarily unavailable.');
+  }
+
+  const generation = sessionGeneration;
+  const acquisition = acquireGeoChatAccessToken(getPrivyIdentityToken, generation)
+    .then(accessToken => {
+      if (generation === sessionGeneration) {
+        sessionFailure = null;
+        sessionFailureCount = 0;
+        sessionRetryAt = 0;
+      }
+      return accessToken;
+    })
+    .catch(error => {
+      const failure = error instanceof Error ? error : new Error(String(error));
+      if (generation === sessionGeneration) {
+        const delay = geoChatAuthRetryDelay(sessionFailureCount);
+        sessionFailure = failure;
+        sessionFailureCount += 1;
+        sessionRetryAt = Date.now() + delay;
+        console.warn(`[GeoChatAuth] session acquisition failed; retrying in ${Math.ceil(delay / 1_000)}s`, failure);
+      }
+      throw failure;
+    })
+    .finally(() => {
+      if (sessionAcquisition === acquisition) sessionAcquisition = null;
+    });
+
+  sessionAcquisition = acquisition;
+  return acquisition;
+}
+
+async function acquireGeoChatAccessToken(getPrivyIdentityToken: GetPrivyIdentityToken | undefined, generation: number) {
+  const stored = loadSession();
+
   if (stored?.refresh_token) {
     try {
       const refreshed = await refreshGeoChatSession(stored.refresh_token);
+      assertSessionGeneration(generation);
       saveSession(refreshed);
       return refreshed.access_token;
     } catch {
+      assertSessionGeneration(generation);
       clearSession();
     }
   }
@@ -750,8 +845,15 @@ async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityTok
   }
 
   const session = await createGeoChatSession(privyIdentityToken);
+  assertSessionGeneration(generation);
   saveSession(session);
   return session.access_token;
+}
+
+function assertSessionGeneration(generation: number) {
+  if (generation !== sessionGeneration) {
+    throw new Error('Geo-chat authentication changed while creating a session.');
+  }
 }
 
 async function createGeoChatSession(privyToken: string): Promise<GeoChatSession> {
@@ -797,7 +899,31 @@ function clearSession() {
   }
 }
 
+function loadStoredAccountId() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(geoChatAccountStorageKey);
+}
+
+function saveStoredAccountId(accountId: string | null) {
+  if (typeof window === 'undefined') return;
+  if (accountId) {
+    window.localStorage.setItem(geoChatAccountStorageKey, accountId);
+  } else {
+    window.localStorage.removeItem(geoChatAccountStorageKey);
+  }
+}
+
+function clearStoredAccountId() {
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(geoChatAccountStorageKey);
+  }
+}
+
 function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string } | null {
+  return decodeJwtPayload(token);
+}
+
+function decodeJwtPayload(token: string | null | undefined): { user_id?: string; exp?: number } | null {
   if (!token || typeof window === 'undefined' || typeof window.atob !== 'function') return null;
   const payload = token.split('.')[1];
   if (!payload) return null;
@@ -805,7 +931,7 @@ function decodeGeoChatAccessToken(token: string | undefined): { user_id?: string
   try {
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
-    return JSON.parse(window.atob(padded)) as { user_id?: string };
+    return JSON.parse(window.atob(padded)) as { user_id?: string; exp?: number };
   } catch {
     return null;
   }

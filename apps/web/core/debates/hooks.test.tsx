@@ -12,14 +12,18 @@ const mocks = vi.hoisted(() => ({
   getIdentityToken: vi.fn(),
   getAccessToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
+  identityToken: null as string | null,
+  userId: 'privy-user-a' as string | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
+  useIdentityToken: () => ({ identityToken: mocks.identityToken }),
   usePrivy: () => ({
     ready: true,
     authenticated: true,
     getAccessToken: mocks.getAccessToken,
+    user: mocks.userId ? { id: mocks.userId } : null,
   }),
 }));
 
@@ -33,6 +37,8 @@ describe('useGeoChatAuth', () => {
     mocks.getIdentityToken.mockReset();
     mocks.getAccessToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
+    mocks.identityToken = null;
+    mocks.userId = 'privy-user-a';
   });
 
   it('uses the Privy identity token for geo-chat session exchange', async () => {
@@ -43,7 +49,26 @@ describe('useGeoChatAuth', () => {
 
     await expect(result.current.getPrivyIdentityToken()).resolves.toBe('identity-token');
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
-    expect(mocks.getAccessToken).not.toHaveBeenCalled();
+    expect(mocks.getAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back only to an unexpired cached identity token', async () => {
+    mocks.getAccessToken.mockRejectedValue(new Error('refresh unavailable'));
+    mocks.identityToken = jwt({ exp: Math.floor(Date.now() / 1000) + 60 });
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await expect(result.current.getPrivyIdentityToken()).resolves.toBe(mocks.identityToken);
+    expect(mocks.getIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale cached identity token when refresh fails', async () => {
+    mocks.getAccessToken.mockRejectedValue(new Error('refresh unavailable'));
+    mocks.identityToken = jwt({ exp: Math.floor(Date.now() / 1000) - 60 });
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await expect(result.current.getPrivyIdentityToken()).rejects.toThrow('refresh unavailable');
   });
 });
 
@@ -119,4 +144,8 @@ function rematchSession(): DebateRematchSession {
     created_at: '2026-07-02T00:00:00.000Z',
     updated_at: '2026-07-02T00:00:01.000Z',
   };
+}
+
+function jwt(payload: object) {
+  return `header.${window.btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')}.signature`;
 }
