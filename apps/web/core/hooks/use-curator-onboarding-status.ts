@@ -32,9 +32,10 @@ async function personalSpaceHasEntityType(
 }
 
 /**
- * Whether the user has accepted a community-call invite, read from the
- * Rendezvous RSVP service via our server proxy (which derives the person
- * from the wallet cookie). "Accepted" only — a pending invite is not an RSVP.
+ * Whether the user has RSVP'd to a community call, read from curator-backend via
+ * our server proxy (which derives the person from the wallet cookie). A sent
+ * invite counts even while it's still `pending` — most users never accept the
+ * .ics in their mail client, so requiring `accepted` would strand the step.
  */
 async function fetchHasCallRsvp(signal?: AbortSignal): Promise<boolean> {
   try {
@@ -42,8 +43,8 @@ async function fetchHasCallRsvp(signal?: AbortSignal): Promise<boolean> {
     if (!res.ok) {
       return false;
     }
-    const data: { hasAccepted: boolean } = await res.json();
-    return data.hasAccepted;
+    const data: { hasRsvp: boolean } = await res.json();
+    return data.hasRsvp;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw error;
