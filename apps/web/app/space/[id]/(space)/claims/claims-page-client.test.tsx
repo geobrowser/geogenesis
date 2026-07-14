@@ -213,6 +213,8 @@ describe('ClaimsPageClient', () => {
     expect(within(yesButton).getByTitle('Current viewer')).toBeInTheDocument();
     expect(within(yesButton).getByTitle('Other participant')).toBeInTheDocument();
     expect(within(yesButton).getByText('+2')).toBeInTheDocument();
+    expect(within(yesButton).queryByRole('list')).not.toBeInTheDocument();
+    expect(yesButton.querySelector('li')).not.toBeInTheDocument();
     expect(within(noButton).queryByRole('img')).not.toBeInTheDocument();
   });
 

@@ -18,7 +18,6 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { Plus } from '~/design-system/icons/plus';
@@ -429,25 +428,25 @@ function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
   if (participants.length === 0 && overflowCount === 0) return null;
 
   return (
-    <span aria-hidden="true" className="shrink-0">
-      <AvatarGroup>
-        {participants.map(participant => {
-          const label = participant.display_name || participant.profile_space_id;
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
+      {participants.map(participant => {
+        const label = participant.display_name || participant.profile_space_id;
 
-          return (
-            <AvatarGroup.Item key={participant.user_id} size={20}>
-              <span title={label} className="block h-full w-full">
-                <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
-              </span>
-            </AvatarGroup.Item>
-          );
-        })}
-        {overflowCount > 0 && (
-          <li className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
-            +{overflowCount}
-          </li>
-        )}
-      </AvatarGroup>
+        return (
+          <span
+            key={participant.user_id}
+            title={label}
+            className="relative box-content block h-5 w-5 overflow-hidden rounded-full border-2 border-white"
+          >
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
+          </span>
+        );
+      })}
+      {overflowCount > 0 && (
+        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
+          +{overflowCount}
+        </span>
+      )}
     </span>
   );
 }
