@@ -66,10 +66,16 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   } = useDataBlockInstance();
   const { storage } = useMutate();
 
-  const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
+  const { entity, isLoading: isBlockEntityHydrating } = useQueryEntity({
     spaceId: spaceId,
     id: entityId,
   });
+
+  // `useQueryEntity` stays loading until its remote hydration settles, even when the
+  // entity already resolves from the local store. A block the user just created exists
+  // only locally, so that fetch comes back empty and the skeleton would show for the
+  // length of it.
+  const isBlockEntityLoading = isBlockEntityHydrating && !entity;
 
   const {
     filterState: dbFilterState,
@@ -494,6 +500,7 @@ const DataBlockContext = React.createContext<{
   entityId: string;
   spaceId: string;
   relationId: string;
+  knownSourceType: Source['type'] | undefined;
   pageNumber: number;
   currentAfter: string | undefined;
   currentOffset: number | undefined;
@@ -509,9 +516,11 @@ interface Props {
   children: React.ReactNode;
   entityId: string;
   relationId: string;
+  /** Lets `useSource` resolve a freshly inserted block before its source relation is written. */
+  knownSourceType?: Source['type'];
 }
 
-export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
+export function DataBlockProvider({ spaceId, children, entityId, relationId, knownSourceType }: Props) {
   const { pageNumber, currentAfter, currentOffset, setPage, recordEndCursor, reset, canJumpTo, maxJumpPages } =
     usePagination(entityId);
 
@@ -520,6 +529,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
       spaceId,
       entityId,
       relationId,
+      knownSourceType,
       pageNumber,
       currentAfter,
       currentOffset,
@@ -533,6 +543,7 @@ export function DataBlockProvider({ spaceId, children, entityId, relationId }: P
     spaceId,
     entityId,
     relationId,
+    knownSourceType,
     pageNumber,
     currentAfter,
     currentOffset,

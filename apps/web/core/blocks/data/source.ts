@@ -64,8 +64,9 @@ export function sourceStableKey(s: Source): string {
 type GetSourceArgs = {
   blockId: string;
   dataEntityRelations: Relation[];
-  currentSpaceId: string;
   filterState: Filter[];
+  /** Source to assume while the block's Data Source Type relation is still unreadable. */
+  knownSourceType?: Source['type'];
 };
 
 function sourceTypeRelations(blockId: string, dataEntityRelations: Relation[] = []): Relation[] {
@@ -113,7 +114,7 @@ function currentSourceTypeRelation(blockId: string, dataEntityRelations: Relatio
  * for the type of source as a {@link Source}. If no source is found, returns
  * the full Geo graph.
  */
-export function getSource({ blockId, dataEntityRelations, filterState }: GetSourceArgs): Source {
+export function getSource({ blockId, dataEntityRelations, filterState, knownSourceType }: GetSourceArgs): Source {
   const sourceType = currentSourceTypeRelation(blockId, dataEntityRelations)?.toEntity.id;
 
   const maybeEntityFilter = filterState.find(f => f.columnId === SystemIds.RELATION_FROM_PROPERTY);
@@ -151,6 +152,16 @@ export function getSource({ blockId, dataEntityRelations, filterState }: GetSour
     return {
       type: 'SPACES',
       value: spaceIds,
+    };
+  }
+
+  // The editor writes a new block's source relation in an effect, so the first renders
+  // see no source type. Falling through to GEO would fire an unfiltered query across the
+  // whole graph for a block that only ever reads its own collection items.
+  if (!sourceType && knownSourceType === 'COLLECTION') {
+    return {
+      type: 'COLLECTION',
+      value: blockId,
     };
   }
 
