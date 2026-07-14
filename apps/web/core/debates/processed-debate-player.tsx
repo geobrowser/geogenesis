@@ -18,11 +18,15 @@ type ProcessedDebatePlayerProps = {
   label: string;
   previewAvailable?: boolean;
   videoAvailable?: boolean;
+  onActivate?: () => void;
   className?: string;
 };
 
 export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandle, ProcessedDebatePlayerProps>(
-  function ProcessedDebatePlayer({ debateId, label, previewAvailable = true, videoAvailable = true, className }, ref) {
+  function ProcessedDebatePlayer(
+    { debateId, label, previewAvailable = true, videoAvailable = true, onActivate, className },
+    ref
+  ) {
     const previewArtifact = useDebateMediaArtifactUrl();
     const videoArtifact = useDebateMediaArtifactUrl();
     const videoRef = React.useRef<HTMLVideoElement | null>(null);
@@ -85,6 +89,10 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
     const play = React.useCallback(() => {
       setPlaybackError(null);
       if (!videoAvailable || videoArtifact.isPending) return;
+      if (onActivate) {
+        onActivate();
+        return;
+      }
       if (videoUrl) {
         videoRef.current?.play().catch(error => {
           setPlaybackError(error instanceof Error ? error.message : 'Could not play this debate.');
@@ -103,7 +111,7 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
           },
         }
       );
-    }, [debateId, videoArtifact, videoAvailable, videoUrl]);
+    }, [debateId, onActivate, videoArtifact, videoAvailable, videoUrl]);
 
     React.useImperativeHandle(ref, () => ({ play }), [play]);
 

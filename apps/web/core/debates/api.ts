@@ -379,6 +379,11 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
+export async function resolveCurrentGeoChatUserId(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  const accessToken = await getGeoChatAccessToken(getPrivyIdentityToken);
+  return decodeGeoChatAccessToken(accessToken)?.user_id ?? null;
+}
+
 export async function heartbeatDebatePresence(getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<DebateActivity>('/me/debate-presence/heartbeat', {
     method: 'POST',
