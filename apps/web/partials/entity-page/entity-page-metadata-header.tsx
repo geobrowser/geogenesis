@@ -290,7 +290,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
         )}
       </div>
       <div className="flex items-center gap-2">
-        <ClaimDebateButton entityId={id} spaceId={spaceId} />
+        <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
         {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
       </div>
     </div>

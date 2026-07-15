@@ -7,7 +7,8 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { isClaimPublished } from '~/core/claims/publish';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -21,6 +22,12 @@ import { useDebateActivity, useDebateClaims, useJoinDebateQueue } from './hooks'
 type ClaimDebateButtonProps = {
   entityId: string;
   spaceId: string;
+  /**
+   * The entity, if the parent already subscribes to it (e.g. the entity-page
+   * header). Passing it avoids a duplicate `useQueryEntity` subscription on the
+   * entity-page hot path; omit it to let the button fetch on its own.
+   */
+  entity?: Entity | null;
 };
 
 const positions = [
@@ -28,24 +35,29 @@ const positions = [
   { label: 'No', value: false },
 ] as const;
 
-export function ClaimDebateButton({ entityId, spaceId }: ClaimDebateButtonProps) {
-  const debatesEnabled = useFeatureFlag('questionsTab');
+export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }: ClaimDebateButtonProps) {
+  const isDebatesEnabled = useDebatesEnabled();
 
-  const { entity } = useQueryEntity({ id: entityId, spaceId, enabled: debatesEnabled });
+  const { entity: fetchedEntity } = useQueryEntity({
+    id: entityId,
+    spaceId,
+    enabled: isDebatesEnabled && providedEntity == null,
+  });
+  const entity = providedEntity ?? fetchedEntity;
 
   const isClaim = entity?.types.some(type => type.id === CLAIM_TYPE_ID) ?? false;
   const published = entity ? isClaimPublished(entity) : false;
 
-  const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], debatesEnabled && isClaim);
+  const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], isDebatesEnabled && isClaim);
   const debateClaim = debateClaimsQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
 
-  const activityQuery = useDebateActivity(debatesEnabled && isClaim);
+  const activityQuery = useDebateActivity(isDebatesEnabled && isClaim);
   const activity = activityQuery.data ?? null;
   const hasActiveFlowElsewhere = Boolean(activity?.match || activity?.debate || activity?.rematch);
 
   const joinQueue = useJoinDebateQueue(spaceId);
 
-  if (!debatesEnabled || !isClaim) return null;
+  if (!isDebatesEnabled || !isClaim) return null;
 
   const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
@@ -206,8 +218,4 @@ function ClaimDebateStatus({
   }
 
   return null;
-}
-
-function isClaimPublished(claim: Entity): boolean {
-  return !claim.relations.some(relation => relation.isLocal && relation.hasBeenPublished !== true);
 }
