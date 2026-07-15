@@ -56,7 +56,8 @@ export function useClaimVoteVariant(
     value => normalizeId(value.property.id) === IS_FACTUAL_PROPERTY
   )?.value;
   const factualRaw = syncFactualValue?.value ?? fetchedFactualRaw ?? null;
-  const isFactual = factualRaw === '1';
+
+  const isFactual = factualRaw === '1' || factualRaw?.toLowerCase() === 'true';
 
   if (!isClaim) {
     return { variant: 'default' };

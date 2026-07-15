@@ -20,10 +20,10 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { CloseSmall } from '~/design-system/icons/close-small';
+import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
+import { CloseCircleSmall } from '~/design-system/icons/close-circle-small';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
-import { TickSmall } from '~/design-system/icons/tick-small';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -217,7 +217,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0, entityTyp
 
   const upvoteIcon =
     variant === 'factual' ? (
-      <TickSmall color={upvoteActive ? 'text' : 'grey-03'} />
+      <CheckCircleSmall color={upvoteActive ? 'text' : 'grey-03'} />
     ) : variant === 'thumbs' ? (
       <ThumbUp filled={upvoteActive} color="grey-03" />
     ) : (
@@ -226,7 +226,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0, entityTyp
 
   const downvoteIcon =
     variant === 'factual' ? (
-      <CloseSmall color={downvoteActive ? 'text' : 'grey-03'} />
+      <CloseCircleSmall color={downvoteActive ? 'text' : 'grey-03'} />
     ) : variant === 'thumbs' ? (
       <ThumbDown filled={downvoteActive} color="grey-03" />
     ) : (
