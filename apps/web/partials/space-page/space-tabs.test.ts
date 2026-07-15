@@ -18,7 +18,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
-      questionsTabEnabled: false,
+      isDebatesEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Governance', 'Activity']);
@@ -30,7 +30,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
-      questionsTabEnabled: true,
+      isDebatesEnabled: true,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
@@ -52,7 +52,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
-      questionsTabEnabled: true,
+      isDebatesEnabled: true,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Debates', 'Activity']);
@@ -64,7 +64,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Claims', href: `${overviewHref}?tabId=dynamic-claims` }],
       typeIds: [SystemIds.SPACE_TYPE],
-      questionsTabEnabled: true,
+      isDebatesEnabled: true,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
@@ -85,7 +85,7 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
-      questionsTabEnabled: true,
+      isDebatesEnabled: true,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
