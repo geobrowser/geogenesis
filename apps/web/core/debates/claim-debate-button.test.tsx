@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   debatesEnabled: vi.fn(),
   debateClaims: vi.fn(),
   joinMutate: vi.fn(),
+  leaveMutate: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -27,12 +28,14 @@ vi.mock('./hooks', () => ({
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
   useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 beforeEach(() => {
   mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
+  mocks.leaveMutate.mockReset();
 });
 
 afterEach(() => {
@@ -91,14 +94,18 @@ describe('ClaimDebateButton', () => {
     expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1', request: { position: true } });
   });
 
-  it('marks the chosen position selected and disabled while waiting', () => {
+  it('marks the chosen position selected while waiting and leaves the queue when clicked again', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
     render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
     openPopover();
 
     const yes = screen.getByRole('button', { name: /^Yes,.*selected/ });
     expect(yes).toHaveAttribute('aria-pressed', 'true');
-    expect(yes).toBeDisabled();
+    expect(yes).toBeEnabled();
     expect(screen.getByText('Waiting for someone with the opposite position.')).toBeInTheDocument();
+
+    fireEvent.click(yes);
+    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1' });
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
   });
 });

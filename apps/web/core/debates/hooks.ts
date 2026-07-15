@@ -34,6 +34,7 @@ import {
   handleDebateSharePrompt,
   heartbeatDebatePresence,
   joinDebateQueue,
+  leaveDebateQueue,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
@@ -89,6 +90,18 @@ export function useJoinDebateQueue(spaceId: string) {
   return useMutation({
     mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
       joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+    },
+  });
+}
+
+export function useLeaveDebateQueue(spaceId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ claimId }: { claimId: string }) => leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
