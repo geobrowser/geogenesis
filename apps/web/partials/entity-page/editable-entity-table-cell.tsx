@@ -21,7 +21,7 @@ import { PageStringField, TableImageField, TableStringField } from '~/design-sys
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -122,11 +122,8 @@ export function EditableEntityTableCell({
                 onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={spaceId} entityId={entityId} />
-            </div>
             {!isPlaceholderRow && (
-              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100 md:hidden">
+              <div className="invisible flex shrink-0 flex-nowrap items-center gap-0.5 group-hover/name-cell:visible md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={spaceId}
@@ -353,15 +350,17 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
   };
 
   return (
-    <SquareButton
-      className="box-border !h-5 !w-5"
-      icon={<RightArrowLongSmall />}
+    <button
+      type="button"
       onClick={handleClick}
       aria-label="Navigate to entity"
       onMouseDown={e => {
         e.stopPropagation();
       }}
-    />
+      className="inline-flex h-5 w-5 shrink-0 items-center justify-center border-none bg-transparent p-0 text-grey-03 transition duration-300 ease-in-out hover:text-text"
+    >
+      <RightArrowLongChip />
+    </button>
   );
 }
 

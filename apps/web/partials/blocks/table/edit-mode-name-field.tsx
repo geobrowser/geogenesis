@@ -47,7 +47,7 @@ export function EditModeNameField({
         <PageStringField placeholder={placeholder} value={name ?? ''} onChange={onChange} />
       </div>
       {!hideHoverActions && isRowHovered && (
-        <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center gap-0.5 md:hidden">
+        <div className="absolute top-0 right-0 flex h-[1.8125rem] shrink-0 flex-nowrap items-center gap-0.5 md:hidden">
           <DataBlockOpenSidePanelButton
             entityId={entityId}
             entitySpaceId={resolvedPanelSpaceId}

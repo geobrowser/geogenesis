@@ -67,7 +67,12 @@ export const CollectionMetadata = ({
     >
       <div className={cx('min-w-0', paddingClass)}>{children}</div>
       {reserveActionSpace && (
-        <div className="absolute top-0 right-0 flex flex-nowrap items-center gap-0.5">
+        <div
+          className={cx(
+            'absolute top-0 right-0 flex flex-nowrap items-center gap-0.5',
+            view !== 'TABLE' && 'h-[1.8125rem]'
+          )}
+        >
           {verified && (
             <span className="inline-flex shrink-0 pt-0.5">
               <CheckCircle color={isEditing || view !== 'TABLE' ? 'text' : 'ctaHover'} />

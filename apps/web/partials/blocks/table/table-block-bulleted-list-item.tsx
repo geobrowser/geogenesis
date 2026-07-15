@@ -153,7 +153,7 @@ export function TableBlockBulletedListItem({
           </CollectionMetadata>
         )}
       </div>
-      <div className="flex shrink-0 items-center gap-1 md:hidden">
+      <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
         {!isPlaceholder && source.type !== 'COLLECTION' && (
           <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 [&>button]:h-5 [&>button]:w-5">
             <DataBlockOpenSidePanelButton
