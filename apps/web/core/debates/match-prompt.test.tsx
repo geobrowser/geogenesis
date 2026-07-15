@@ -191,8 +191,8 @@ function debate(): Debate {
     first_participant_slot: 1,
     current_turn_index: 0,
     current_speaker_slot: null,
-    prepare_started_at: null,
-    prepare_ends_at: null,
+    connecting_started_at: null,
+    connecting_deadline_at: null,
     turn_started_at: null,
     turn_ends_at: null,
     preflight_ends_at: null,
@@ -227,5 +227,6 @@ function debate(): Debate {
     ],
     recordings: [],
     recording_error: null,
+    cancellation_reason: null,
   };
 }

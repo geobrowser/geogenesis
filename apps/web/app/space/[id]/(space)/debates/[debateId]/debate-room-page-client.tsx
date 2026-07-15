@@ -9,15 +9,14 @@ import {
   type Debate,
   type DebateRematchSession,
   type LiveKitJoinResponse,
-  type LocalRecordingCompleteRequest,
   type ParticipantSlot,
   getCurrentGeoChatUserId,
+  getServerTime,
 } from '~/core/debates/api';
 import {
   useAbortDebate,
-  useCompleteLocalRecordingUpload,
+  useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
-  useCreateLocalRecordingUpload,
   useDebate,
   useDebateRematch,
   useLeaveDebateRematch,
@@ -25,6 +24,15 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
+import {
+  debateRecordingUploadId,
+  enqueueDebateRecordingUpload,
+  estimateRecordingStorage,
+  getDebateRecordingUpload,
+  isStorageQuotaError,
+  requestPersistentRecordingStorage,
+} from '~/core/debates/recording-upload-queue';
+import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
@@ -81,9 +89,10 @@ const recordingCountdownSize = 68;
 const recordingCountdownRadius = 25;
 const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
 
-const localRecordingUploadMaxAttempts = 3;
-const localRecordingUploadRetryDelayMs = 1_000;
 const debateThankingDurationMs = 20_000;
+const debatePreflightDurationMs = 5_000;
+const connectionFailureRedirectDelayMs = 750;
+const maximumBrowserTimeoutMs = 2_147_483_647;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
   const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
@@ -103,15 +112,15 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
   const debateQuery = useDebate(debateId, true);
+  const refetchDebate = debateQuery.refetch;
   const liveKitJoin = useLiveKitJoin(debateId);
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
-  const createUpload = useCreateLocalRecordingUpload(debateId);
-  const completeUpload = useCompleteLocalRecordingUpload(debateId);
+  const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
-  const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'uploading'>('idle');
+  const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'saving'>('idle');
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
@@ -120,6 +129,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [serverClock, setServerClock] = React.useState(createLocalServerClock);
+  const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [audioInputDevices, setAudioInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [videoInputDevices, setVideoInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [selectedAudioInputId, setSelectedAudioInputId] = React.useState('');
@@ -143,17 +154,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStartTimerRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
+  const connectionFailureHandledRef = React.useRef(false);
+  const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
+  const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
+  const serverNowRef = React.useRef(serverClock.now);
   const finalizedDebateRef = React.useRef<string | null>(null);
-  const recordingUploadStartedRef = React.useRef<string | null>(null);
-  const recordingUploadPromiseRef = React.useRef<Promise<boolean> | null>(null);
-  const pendingRecordingUploadRef = React.useRef<LocalRecordingCompleteRequest | null>(null);
+  const recordingPersistenceStartedRef = React.useRef<string | null>(null);
+  const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
+  const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
+  const stoppedRecordingRef = React.useRef<{
+    blob: Blob;
+    mimeType: string;
+    startedAtMs: number;
+    endedAtMs: number;
+    durationSeconds: number;
+    width: number | null;
+    height: number | null;
+    framerate: number | null;
+    videoBitsPerSecond: number | null;
+  } | null>(null);
+  const storagePersistenceRequestedRef = React.useRef(false);
   const debate = debateQuery.data ?? null;
   const rematchQuery = useDebateRematch(
     debate?.rematch_session_id ?? '',
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
-  const countdown = useDebateCountdown(debate);
+  const countdown = useDebateCountdown(debate, serverClock.now);
   const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
   const localAudioEnabled = shouldEnableLocalAudio(
@@ -162,6 +189,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted
   );
+
+  React.useEffect(() => {
+    serverNowRef.current = serverClock.now;
+  }, [serverClock]);
 
   React.useEffect(() => {
     setLocalTrackPreferences(localTracksRef.current, { audioEnabled: localAudioEnabled, videoEnabled });
@@ -194,7 +225,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recorder.addEventListener(
       'start',
       () => {
-        recordingStartedAtRef.current = Date.now();
+        recordingStartedAtRef.current = serverNowRef.current();
       },
       { once: true }
     );
@@ -216,7 +247,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       recorder.addEventListener(
         'stop',
         () => {
-          recordingEndedAtRef.current = Date.now();
+          recordingEndedAtRef.current = serverNowRef.current();
           resolve();
         },
         { once: true }
@@ -228,79 +259,118 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await stopped;
       return;
     }
-    recordingEndedAtRef.current = Date.now();
+    recordingEndedAtRef.current = serverNowRef.current();
   }, []);
 
-  const performStoppedLocalRecordingUpload = React.useCallback(async () => {
-    if (pendingRecordingUploadRef.current) return true;
+  const performStoppedLocalRecordingPersistence = React.useCallback(async () => {
+    if (persistedRecordingDebateIdRef.current === debate?.id) return true;
+
+    const localParticipant =
+      debate?.participants.find(participant => participant.participant_slot === joinResponse?.participant_slot) ??
+      debate?.participants.find(participant => participant.user_id === currentUserId) ??
+      null;
+    if (!localParticipant || !debate) return false;
+
+    const backendRecordingExists = debate.recordings.some(recording => recording.user_id === localParticipant.user_id);
+    const queuedRecording = backendRecordingExists
+      ? undefined
+      : await getDebateRecordingUpload(debateRecordingUploadId(localParticipant.user_id, debate.id));
+    if (backendRecordingExists || queuedRecording) {
+      persistedRecordingDebateIdRef.current = debate.id;
+      return true;
+    }
+
     await stopLocalRecorder();
 
     const recorder = recorderRef.current;
     const startedAtMs = recordingStartedAtRef.current;
     const endedAtMs = recordingEndedAtRef.current;
-    if (!recorder || !startedAtMs || !endedAtMs || !joinResponse) return false;
+    if (!recorder || !startedAtMs || !endedAtMs) return false;
 
-    const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-    const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-    if (blob.size === 0) return false;
+    if (!stoppedRecordingRef.current) {
+      const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
+      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+      if (blob.size === 0) return false;
+      const videoSettings = localMediaStreamRef.current?.getVideoTracks()[0]?.getSettings?.();
+      stoppedRecordingRef.current = {
+        blob,
+        mimeType,
+        startedAtMs,
+        endedAtMs,
+        durationSeconds: Math.max(1, Math.round((endedAtMs - startedAtMs) / 1_000)),
+        width: videoSettings?.width ?? null,
+        height: videoSettings?.height ?? null,
+        framerate: videoSettings?.frameRate ?? null,
+        videoBitsPerSecond: recorder.videoBitsPerSecond || null,
+      };
+    }
 
-    let uploadedFilename: string | null = null;
-    for (let attempt = 1; attempt <= localRecordingUploadMaxAttempts; attempt += 1) {
-      try {
-        const upload = await createUpload.mutateAsync({ mime_type: mimeType, started_at_ms: startedAtMs });
-        const headers = new Headers(upload.upload.headers);
-        headers.set('Content-Type', mimeType);
-        const uploadResponse = await fetch(upload.upload.url, {
-          method: upload.upload.method,
-          headers,
-          body: blob,
+    const recording = stoppedRecordingRef.current;
+    const storage = await estimateRecordingStorage();
+    if (storage?.quota !== undefined && storage.usage !== undefined) {
+      const availableBytes = storage.quota - storage.usage;
+      if (availableBytes < recording.blob.size) {
+        console.warn('[DebateRecording] browser storage estimate is below recording size', {
+          availableBytes,
+          recordingBytes: recording.blob.size,
         });
-        if (!uploadResponse.ok) {
-          throw new Error(`Recording upload failed (${uploadResponse.status})`);
-        }
-        uploadedFilename = upload.filename;
-        break;
-      } catch (error) {
-        if (attempt >= localRecordingUploadMaxAttempts) {
-          throw error;
-        }
-        await delay(localRecordingUploadRetryDelayMs * attempt);
       }
     }
-    if (!uploadedFilename) throw new Error('Recording upload failed.');
 
-    pendingRecordingUploadRef.current = {
-      filename: uploadedFilename,
-      mime_type: mimeType,
-      started_at_ms: startedAtMs,
-      ended_at_ms: endedAtMs,
-      duration_seconds: Math.max(1, Math.round((endedAtMs - startedAtMs) / 1_000)),
-      byte_size: blob.size,
-    };
+    try {
+      await enqueueDebateRecordingUpload({
+        userId: localParticipant.user_id,
+        debateId: debate.id,
+        blob: recording.blob,
+        mimeType: recording.mimeType,
+        startedAtMs: recording.startedAtMs,
+        endedAtMs: recording.endedAtMs,
+        durationSeconds: recording.durationSeconds,
+        width: recording.width,
+        height: recording.height,
+        framerate: recording.framerate,
+        videoBitsPerSecond: recording.videoBitsPerSecond,
+      });
+    } catch (error) {
+      if (isStorageQuotaError(error)) {
+        throw new Error(
+          'There is not enough browser storage to save this recording. Free some device storage, then retry.'
+        );
+      }
+      throw error;
+    }
+
+    persistedRecordingDebateIdRef.current = debate.id;
     recorderRef.current = null;
     recordingChunksRef.current = [];
-    return true;
-  }, [createUpload, joinResponse, stopLocalRecorder]);
-
-  const uploadStoppedLocalRecording = React.useCallback(() => {
-    if (pendingRecordingUploadRef.current) return Promise.resolve(true);
-    if (recordingUploadPromiseRef.current) return recordingUploadPromiseRef.current;
-    const upload = performStoppedLocalRecordingUpload().finally(() => {
-      recordingUploadPromiseRef.current = null;
-    });
-    recordingUploadPromiseRef.current = upload;
-    return upload;
-  }, [performStoppedLocalRecordingUpload]);
-
-  const finalizeLocalRecordingUpload = React.useCallback(async () => {
-    const uploaded = await uploadStoppedLocalRecording();
-    if (!uploaded || !pendingRecordingUploadRef.current) return false;
-    await completeUpload.mutateAsync(pendingRecordingUploadRef.current);
-    pendingRecordingUploadRef.current = null;
+    stoppedRecordingRef.current = null;
     recordingStartedAtRef.current = null;
     recordingEndedAtRef.current = null;
     return true;
-  }, [completeUpload, uploadStoppedLocalRecording]);
+  }, [currentUserId, debate, joinResponse?.participant_slot, stopLocalRecorder]);
+
+  const persistStoppedLocalRecording = React.useCallback(() => {
+    if (persistedRecordingDebateIdRef.current === debate?.id) return Promise.resolve(true);
+    if (recordingPersistencePromiseRef.current) return recordingPersistencePromiseRef.current;
+    const persistence = performStoppedLocalRecordingPersistence().finally(() => {
+      recordingPersistencePromiseRef.current = null;
+    });
+    recordingPersistencePromiseRef.current = persistence;
+    return persistence;
+  }, [debate?.id, performStoppedLocalRecordingPersistence]);
+
+  const persistRecordingAfterCapture = React.useCallback(() => {
+    if (!debate || recordingPersistenceStartedRef.current === debate.id) return;
+    recordingPersistenceStartedRef.current = debate.id;
+    void persistStoppedLocalRecording()
+      .then(persisted => {
+        if (!persisted) recordingPersistenceStartedRef.current = null;
+      })
+      .catch(error => {
+        recordingPersistenceStartedRef.current = null;
+        setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+      });
+  }, [debate, persistStoppedLocalRecording]);
 
   const discardLocalRecorder = React.useCallback(async () => {
     clearRecordingTimers();
@@ -309,9 +379,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
       recordingEndedAtRef.current = null;
-      pendingRecordingUploadRef.current = null;
-      recordingUploadStartedRef.current = null;
-      recordingUploadPromiseRef.current = null;
+      stoppedRecordingRef.current = null;
+      recordingPersistenceStartedRef.current = null;
+      recordingPersistencePromiseRef.current = null;
+      persistedRecordingDebateIdRef.current = null;
       return;
     }
 
@@ -326,9 +397,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
     recordingEndedAtRef.current = null;
-    pendingRecordingUploadRef.current = null;
-    recordingUploadStartedRef.current = null;
-    recordingUploadPromiseRef.current = null;
+    stoppedRecordingRef.current = null;
+    recordingPersistenceStartedRef.current = null;
+    recordingPersistencePromiseRef.current = null;
+    persistedRecordingDebateIdRef.current = null;
   }, [clearRecordingTimers]);
 
   const refreshMediaDevices = React.useCallback(async () => {
@@ -479,8 +551,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     let newlyCreatedTracks: LocalTrackLike[] = [];
     setRoomError(null);
     setRoomState('connecting');
+    setServerClockSettled(false);
     setRemoteVideoReady(false);
+    if (remoteParticipantRefetchTimerRef.current !== null) {
+      window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+      remoteParticipantRefetchTimerRef.current = null;
+    }
     remoteMediaRef.current?.replaceChildren();
+    void synchronizeServerClock(getServerTime)
+      .then(clock => {
+        if (isCurrent()) setServerClock(clock);
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (isCurrent()) setServerClockSettled(true);
+      });
 
     try {
       const token = await liveKitJoin.mutateAsync();
@@ -504,6 +589,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           element.className = 'hidden';
         }
         remoteMediaRef.current?.appendChild(element);
+        void refetchDebate();
+      });
+      room.on(livekit.RoomEvent.ParticipantConnected, () => {
+        if (!isCurrent()) return;
+        void refetchDebate();
+        remoteParticipantRefetchTimerRef.current = window.setTimeout(() => {
+          remoteParticipantRefetchTimerRef.current = null;
+          if (isCurrent()) void refetchDebate();
+        }, 250);
       });
 
       await room.connect(token.url, token.token);
@@ -573,10 +667,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       localMediaStreamRef.current = null;
       if (isCurrent()) {
         setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-        setRoomState('idle');
+        setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
       }
     }
-  }, [audioMuted, countdown.activeSlot, countdown.effectiveStatus, liveKitJoin, markJoined, videoEnabled]);
+  }, [
+    audioMuted,
+    countdown.activeSlot,
+    countdown.effectiveStatus,
+    debate?.status,
+    liveKitJoin,
+    markJoined,
+    refetchDebate,
+    videoEnabled,
+  ]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
@@ -590,13 +693,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setVideoEnabled(current => !current);
   }, []);
 
-  const finishAndUpload = React.useCallback(async () => {
+  const finishAndPersist = React.useCallback(async () => {
     setRoomError(null);
-    setRoomState('uploading');
+    setRoomState('saving');
     try {
-      const uploaded = await finalizeLocalRecordingUpload();
-      if (!uploaded) {
-        throw new Error('No local recording was available to upload.');
+      const persisted = await persistStoppedLocalRecording();
+      if (!persisted) {
+        throw new Error('No local recording was available to save.');
       }
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
@@ -604,19 +707,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('idle');
       return true;
     } catch (error) {
-      setRoomError(error instanceof Error ? error.message : 'Could not upload the local recording.');
+      setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
       setRoomState('connected');
       return false;
     }
-  }, [finalizeLocalRecordingUpload]);
+  }, [persistStoppedLocalRecording]);
 
   const finishLiveDebate = React.useCallback(async () => {
     if (!debate || finalizedDebateRef.current === debate.id) return;
     const session = rematchQuery.data;
     if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
     finalizedDebateRef.current = debate.id;
-    const uploaded = await finishAndUpload();
-    if (!uploaded) return;
+    const persisted = await finishAndPersist();
+    if (!persisted) return;
     if (session?.status === 'converted' && session.converted_debate_id) {
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
       return;
@@ -626,12 +729,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     router.replace(`/space/${spaceId}/debates`);
-  }, [debate, finishAndUpload, rematchQuery.data, router, spaceId]);
+  }, [debate, finishAndPersist, rematchQuery.data, router, spaceId]);
 
   const retryLiveDebateFinalization = React.useCallback(() => {
+    if (debate?.status === 'thanking') {
+      setRoomError(null);
+      setRoomState('saving');
+      recordingPersistenceStartedRef.current = debate.id;
+      void persistStoppedLocalRecording()
+        .then(persisted => {
+          if (!persisted) throw new Error('No local recording was available to save.');
+          setRoomState('connected');
+        })
+        .catch(error => {
+          recordingPersistenceStartedRef.current = null;
+          setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+          setRoomState('connected');
+        });
+      return;
+    }
     finalizedDebateRef.current = null;
     void finishLiveDebate();
-  }, [finishLiveDebate]);
+  }, [debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
 
   const requestRematch = React.useCallback(async () => {
     if (rematchConsentRequested) return;
@@ -664,9 +783,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await finishLiveDebate();
         return;
       } else if (debate.status === 'thanking' && debate.rematch_session_id) {
-        const finalized = await finalizeLocalRecordingUpload();
-        if (!finalized) {
-          throw new Error('Could not finalize the local recording. Please try leaving again.');
+        const persisted = await persistStoppedLocalRecording();
+        if (!persisted) {
+          throw new Error('Could not save the local recording. Please try leaving again.');
         }
         await leaveRematch.mutateAsync();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -693,12 +812,69 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     abortDebate,
     debate,
     discardLocalRecorder,
-    finalizeLocalRecordingUpload,
     finishLiveDebate,
     leaveRematch,
+    persistStoppedLocalRecording,
     router,
     spaceId,
   ]);
+
+  const handleConnectionFailure = React.useCallback(() => {
+    if (connectionFailureHandledRef.current) return;
+    connectionFailureHandledRef.current = true;
+    connectionGenerationRef.current += 1;
+    if (remoteParticipantRefetchTimerRef.current !== null) {
+      window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+      remoteParticipantRefetchTimerRef.current = null;
+    }
+    clearTimedOutDebateActivity(debateId);
+    clearRecordingTimers();
+    void discardLocalRecorder();
+    disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+    localMediaStreamRef.current = null;
+    setRemoteVideoReady(false);
+    setRoomError('Connection failed. Finding another match.');
+    setRoomState('connecting');
+  }, [clearRecordingTimers, clearTimedOutDebateActivity, debateId, discardLocalRecorder]);
+
+  const redirectAfterConnectionFailure = React.useCallback(() => {
+    if (connectionFailureRedirectTimerRef.current !== null) return;
+    connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
+      router.replace(`/space/${spaceId}/questions`);
+    }, connectionFailureRedirectDelayMs);
+  }, [router, spaceId]);
+
+  const reconcileConnectionDeadline = React.useCallback(async () => {
+    const generation = connectionGenerationRef.current;
+    const result = await refetchDebate().catch(() => null);
+    if (!mountedRef.current || connectionGenerationRef.current !== generation) return;
+    if (result?.data?.status !== 'cancelled' || result.data.cancellation_reason !== 'connection_timeout') return;
+    handleConnectionFailure();
+    redirectAfterConnectionFailure();
+  }, [handleConnectionFailure, redirectAfterConnectionFailure, refetchDebate]);
+
+  React.useEffect(() => {
+    if (!debate || debate.status !== 'connecting') return;
+    const deadline = timestampMs(debate.connecting_deadline_at);
+    if (deadline === null) return;
+    const remainingMs = deadline - serverClock.now();
+    if (remainingMs <= 0) {
+      void reconcileConnectionDeadline();
+      return;
+    }
+    const timer = window.setTimeout(
+      () => void reconcileConnectionDeadline(),
+      Math.min(remainingMs, maximumBrowserTimeoutMs)
+    );
+    return () => window.clearTimeout(timer);
+  }, [debate, reconcileConnectionDeadline, serverClock]);
+
+  React.useEffect(() => {
+    if (debate?.status === 'cancelled' && debate.cancellation_reason === 'connection_timeout') {
+      handleConnectionFailure();
+      redirectAfterConnectionFailure();
+    }
+  }, [debate?.cancellation_reason, debate?.status, handleConnectionFailure, redirectAfterConnectionFailure]);
 
   React.useEffect(() => {
     const resumingAfterEffectCleanup = !mountedRef.current;
@@ -711,6 +887,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       mountedRef.current = false;
       previewGenerationRef.current += 1;
       connectionGenerationRef.current += 1;
+      if (connectionFailureRedirectTimerRef.current !== null) {
+        window.clearTimeout(connectionFailureRedirectTimerRef.current);
+        connectionFailureRedirectTimerRef.current = null;
+      }
+      if (remoteParticipantRefetchTimerRef.current !== null) {
+        window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+        remoteParticipantRefetchTimerRef.current = null;
+      }
       clearRecordingTimers();
       void discardLocalRecorder();
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -719,12 +903,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [clearRecordingTimers, discardLocalRecorder]);
 
   React.useEffect(() => {
+    if (!debate || storagePersistenceRequestedRef.current) return;
+    if (['complete', 'cancelled'].includes(debate.status)) return;
+    storagePersistenceRequestedRef.current = true;
+    void requestPersistentRecordingStorage();
+  }, [debate]);
+
+  React.useEffect(() => {
     if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
     void ensureLocalPreview().catch(() => undefined);
   }, [debate, ensureLocalPreview, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
+    if (connectionFailureHandledRef.current) return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
     if (debate.status === 'ready') return;
     if (autoConnectAttemptedRef.current === debate.id) return;
@@ -734,7 +926,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     clearRecordingTimers();
-    if (!debate || roomState !== 'connected') return;
+    if (!debate || roomState !== 'connected' || !serverClockSettled) return;
 
     const stream = localMediaStreamRef.current;
     if (!stream) return;
@@ -743,20 +935,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!recordingWindow) return;
 
     if (debate.status === 'thanking') {
-      if (recordingUploadStartedRef.current !== debate.id) {
-        recordingUploadStartedRef.current = debate.id;
-        void uploadStoppedLocalRecording().catch(error => {
-          recordingUploadStartedRef.current = null;
-          setRoomError(error instanceof Error ? error.message : 'Could not upload the local recording.');
-        });
-      }
+      persistRecordingAfterCapture();
       return;
     }
     if (debate.status !== 'preflight' && debate.status !== 'in_progress') return;
 
-    const now = Date.now();
+    const now = serverClock.now();
     if (now >= recordingWindow.endAtMs) {
-      void stopLocalRecorder();
+      persistRecordingAfterCapture();
       return;
     }
 
@@ -768,18 +954,27 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
     recordingStopTimerRef.current = window.setTimeout(
       () => {
-        void stopLocalRecorder();
+        persistRecordingAfterCapture();
       },
       Math.max(0, recordingWindow.endAtMs - now)
     );
 
     return clearRecordingTimers;
-  }, [clearRecordingTimers, debate, roomState, startLocalRecorder, stopLocalRecorder, uploadStoppedLocalRecording]);
+  }, [
+    clearRecordingTimers,
+    debate,
+    persistRecordingAfterCapture,
+    roomState,
+    serverClock,
+    serverClockSettled,
+    startLocalRecorder,
+  ]);
 
   React.useEffect(() => {
     if (!debate) return;
     if (roomState === 'idle') return;
     if (debate.status === 'cancelled') {
+      if (debate.cancellation_reason === 'connection_timeout') return;
       void discardLocalRecorder().finally(() => {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
@@ -909,8 +1104,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
                 onRetryFinalization={retryLiveDebateFinalization}
+                onRetryConnection={connect}
                 onLeave={leave}
-                leaveDisabled={abortDebate.isPending || roomState === 'uploading'}
+                leaveDisabled={abortDebate.isPending || roomState === 'saving'}
               />
             )}
           </>
@@ -1148,11 +1344,12 @@ function DebateRecordingModal({
   rematchConsentRequested,
   rematchBusy,
   onRetryFinalization,
+  onRetryConnection,
   onLeave,
   leaveDisabled,
 }: {
   debate: Debate;
-  roomState: 'connecting' | 'connected' | 'uploading';
+  roomState: 'connecting' | 'connected' | 'saving';
   roomError: string | null;
   countdown: DebateCountdown;
   localSlot: ParticipantSlot | null;
@@ -1171,6 +1368,7 @@ function DebateRecordingModal({
   rematchConsentRequested: boolean;
   rematchBusy: boolean;
   onRetryFinalization: () => void;
+  onRetryConnection: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
 }) {
@@ -1203,12 +1401,21 @@ function DebateRecordingModal({
   );
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
+  const connecting = countdown.effectiveStatus === 'connecting';
   const localVideoTile = (
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
       active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
-      overlayText={videoEnabled ? null : 'Camera off'}
+      overlayText={
+        connecting
+          ? roomState === 'connected' || Boolean(localParticipant?.joined_at)
+            ? 'Connected'
+            : 'Connecting'
+          : videoEnabled
+            ? null
+            : 'Camera off'
+      }
       upcomingSeconds={localUpcomingSeconds}
       showGo={showLocalGo}
       inactive={localInactive}
@@ -1232,7 +1439,15 @@ function DebateRecordingModal({
       active={
         countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
       }
-      overlayText={remoteVideoReady ? null : 'Waiting for video'}
+      overlayText={
+        connecting
+          ? remoteParticipant?.joined_at
+            ? 'Connected'
+            : 'Connecting'
+          : remoteVideoReady
+            ? null
+            : 'Waiting for video'
+      }
       inactive={remoteInactive}
       inactiveOverlayId="remote"
       muted={!remoteAudioEnabled}
@@ -1292,9 +1507,14 @@ function DebateRecordingModal({
         {roomError && (
           <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
-            {debate.status === 'complete' && (
-              <Button type="button" onClick={onRetryFinalization} disabled={roomState === 'uploading'}>
-                Retry upload
+            {['thanking', 'complete'].includes(debate.status) && (
+              <Button type="button" onClick={onRetryFinalization} disabled={roomState === 'saving'}>
+                Retry save
+              </Button>
+            )}
+            {debate.status === 'connecting' && (
+              <Button type="button" onClick={onRetryConnection} disabled={roomState === 'saving'}>
+                Retry connection
               </Button>
             )}
           </div>
@@ -1302,8 +1522,8 @@ function DebateRecordingModal({
 
         <div className="mt-5 flex w-full justify-end">
           <RecordingCircleButton
-            ariaLabel={roomState === 'uploading' ? 'Uploading local recording' : 'Leave debate'}
-            title={roomState === 'uploading' ? 'Uploading local recording' : 'Leave debate'}
+            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             onClick={onLeave}
             disabled={leaveDisabled}
           >
@@ -1328,7 +1548,7 @@ function DebateDebugMenu({
 }: {
   debate: Debate;
   countdown: DebateCountdown;
-  roomState: 'connecting' | 'connected' | 'uploading';
+  roomState: 'connecting' | 'connected' | 'saving';
   audioMuted: boolean;
   remoteAudioEnabled: boolean;
   videoEnabled: boolean;
@@ -1349,7 +1569,7 @@ function DebateDebugMenu({
             ariaLabel={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             title={audioMuted ? 'Unmute microphone' : 'Mute microphone'}
             onClick={onToggleAudioMuted}
-            disabled={roomState === 'uploading'}
+            disabled={roomState === 'saving'}
             active={audioMuted}
           >
             <MicrophoneIcon muted={audioMuted} />
@@ -1358,7 +1578,7 @@ function DebateDebugMenu({
             ariaLabel={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
             title={remoteAudioEnabled ? 'Disable audio' : 'Enable audio'}
             onClick={onToggleRemoteAudioEnabled}
-            disabled={roomState === 'uploading'}
+            disabled={roomState === 'saving'}
             active={!remoteAudioEnabled}
           >
             <SpeakerIcon disabled={!remoteAudioEnabled} />
@@ -1367,7 +1587,7 @@ function DebateDebugMenu({
             ariaLabel={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
             onClick={onToggleVideoEnabled}
-            disabled={roomState === 'uploading'}
+            disabled={roomState === 'saving'}
             active={!videoEnabled}
           >
             <CameraIcon disabled={!videoEnabled} />
@@ -1397,10 +1617,10 @@ function DebateDebugMenu({
 function debateDebugPhases(debate: Debate, countdown: DebateCountdown) {
   return [
     {
-      id: 'preparing',
-      label: 'Preparing',
+      id: 'connecting',
+      label: 'Connecting',
       duration: null,
-      current: countdown.effectiveStatus === 'preparing',
+      current: countdown.effectiveStatus === 'connecting',
     },
     {
       id: 'preflight',
@@ -1535,7 +1755,7 @@ function participantIsInactive(
 ) {
   if (!participantSlot || effectiveStatus === 'thanking' || effectiveStatus === 'complete') return false;
   if (effectiveStatus === 'in_progress') return activeSlot !== participantSlot;
-  return effectiveStatus === 'preparing' || effectiveStatus === 'preflight';
+  return effectiveStatus === 'connecting' || effectiveStatus === 'preflight';
 }
 
 function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
@@ -1842,13 +2062,14 @@ function disconnectRoom(
   }
 }
 
-function useDebateCountdown(debate: Debate | null): DebateCountdown {
-  const [now, setNow] = React.useState(() => Date.now());
+function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
+  const [now, setNow] = React.useState(serverNow);
 
   React.useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 500);
+    setNow(serverNow());
+    const timer = window.setInterval(() => setNow(serverNow()), 500);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [serverNow]);
 
   const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   if (!countdownWindow || countdownWindow.targetMs === null) {
@@ -1902,12 +2123,12 @@ function countdownWindowForDebate(
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
 } {
-  if (debate.status === 'preparing') {
+  if (debate.status === 'connecting') {
     return {
-      startMs: timestampMs(debate.prepare_started_at),
-      targetMs: timestampMs(debate.prepare_ends_at),
+      startMs: null,
+      targetMs: null,
       activeSlot: null,
-      effectiveStatus: 'preparing',
+      effectiveStatus: 'connecting',
       turnIndex: null,
     };
   }
@@ -1918,7 +2139,7 @@ function countdownWindowForDebate(
       return timedDebateCountdownWindow(debate, debateStartMs, now);
     }
     return {
-      startMs: timestampMs(debate.prepare_ends_at),
+      startMs: debateStartMs === null ? null : debateStartMs - debatePreflightDurationMs,
       targetMs: debateStartMs,
       activeSlot: debate.first_participant_slot,
       effectiveStatus: 'preflight',
@@ -1996,7 +2217,7 @@ function timedDebateCountdownWindow(
 }
 
 function speakerStatus(debate: Debate) {
-  if (debate.status === 'preparing') return 'Both speakers joined. Preparation is running.';
+  if (debate.status === 'connecting') return 'Connecting both speakers.';
   if (debate.status === 'preflight') return 'Get ready. The first turn is about to start.';
   if (debate.status === 'in_progress' && debate.current_speaker_slot) {
     return `${labelForSlot(debate, debate.current_speaker_slot)} is speaking.`;
@@ -2023,10 +2244,6 @@ function timestampMs(value: string | null) {
   if (!value) return null;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : null;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => window.setTimeout(resolve, ms));
 }
 
 function preferredRecordingMimeType() {

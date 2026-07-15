@@ -72,11 +72,15 @@ export function usePersistentChat(args: {
 
   React.useEffect(() => {
     let cancelled = false;
+    let inFlight = false;
 
     const fetchHistory = async () => {
-      const token = await getToken();
-      if (!token || cancelled) return;
+      // Don't stack requests when a fetch runs longer than the poll interval.
+      if (inFlight) return;
+      inFlight = true;
       try {
+        const token = await getToken();
+        if (!token || cancelled) return;
         const { messages } = await getCallChat({ spaceId, callId, occurrenceStart }, token);
         if (!cancelled) {
           setHistory(
@@ -92,6 +96,8 @@ export function usePersistentChat(args: {
         }
       } catch {
         // best-effort — live messages still render even if history is unreachable
+      } finally {
+        inFlight = false;
       }
     };
 

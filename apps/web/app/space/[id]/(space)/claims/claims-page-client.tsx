@@ -9,7 +9,7 @@ import { useRouter } from 'next/navigation';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import type { DebateClaim } from '~/core/debates/api';
+import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
 import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
 import { useDiff } from '~/core/state/diff-store';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -17,7 +17,9 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
+import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -324,6 +326,7 @@ function ClaimListItem({
         debatesEnabled={debatesEnabled}
         canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
         pendingPosition={debateClaim?.viewer_waiting_position ?? null}
+        onlineChoices={debateClaim?.online_choices ?? []}
         joinPending={joinQueue.isPending}
         onJoinPosition={joinPosition}
         className="mt-3"
@@ -346,6 +349,7 @@ function PositionButtonGroup({
   debatesEnabled,
   canJoinDebate,
   pendingPosition,
+  onlineChoices,
   joinPending,
   onJoinPosition,
   className,
@@ -353,6 +357,7 @@ function PositionButtonGroup({
   debatesEnabled: boolean;
   canJoinDebate: boolean;
   pendingPosition: boolean | null;
+  onlineChoices: DebateOnlineChoice[];
   joinPending: boolean;
   onJoinPosition: (position: boolean) => void;
   className?: string;
@@ -367,20 +372,38 @@ function PositionButtonGroup({
       <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
         Position
       </Text>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="grid grid-cols-2 gap-2">
         {positions.map(position => {
+          const choice = onlineChoices.find(choice => choice.position === position.value);
+          const label = choice?.position_label ?? position.label;
+          const participantCount = choice?.participant_count ?? 0;
+          const selected = pendingPosition === position.value;
+          const accessibleLabel = `${label}, ${participantCount} participant${participantCount === 1 ? '' : 's'} available${selected ? ', selected' : ''}`;
+
           if (debatesEnabled) {
             return (
-              <Button
+              <button
                 key={position.label}
                 type="button"
-                variant="secondary"
-                small
+                aria-label={accessibleLabel}
+                aria-pressed={selected}
                 onClick={() => onJoinPosition(position.value)}
-                disabled={!canJoinDebate || joinPending || pendingPosition === position.value}
+                disabled={!canJoinDebate || joinPending || selected}
+                className={cx(
+                  'flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors disabled:opacity-60 sm:px-4',
+                  selected ? 'bg-green text-text' : 'bg-bg text-text'
+                )}
               >
-                {position.label}
-              </Button>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {selected && (
+                    <span aria-hidden="true" className="shrink-0">
+                      <Check />
+                    </span>
+                  )}
+                  <span className="truncate">{label}</span>
+                </span>
+                {choice && <OnlineChoiceParticipants choice={choice} />}
+              </button>
             );
           }
 
@@ -389,12 +412,42 @@ function PositionButtonGroup({
               key={position.label}
               className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
             >
-              <span className="truncate">{position.label}</span>
+              <span className="truncate">{label}</span>
             </span>
           );
         })}
       </div>
     </div>
+  );
+}
+
+function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
+  const participants = choice.participants.slice(0, 2);
+  const overflowCount = Math.max(0, choice.participant_count - participants.length);
+
+  if (participants.length === 0 && overflowCount === 0) return null;
+
+  return (
+    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
+      {participants.map(participant => {
+        const label = participant.display_name || participant.profile_space_id;
+
+        return (
+          <span
+            key={participant.user_id}
+            title={label}
+            className="relative box-content block h-5 w-5 overflow-hidden rounded-full border-2 border-white"
+          >
+            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
+          </span>
+        );
+      })}
+      {overflowCount > 0 && (
+        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
+          +{overflowCount}
+        </span>
+      )}
+    </span>
   );
 }
 
