@@ -17,7 +17,7 @@ import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
 import type { DebateClaim, DebateOnlineChoice } from './api';
-import { useDebateActivity, useDebateClaims, useJoinDebateQueue } from './hooks';
+import { useDebateActivity, useDebateClaims, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
 
 type ClaimDebateButtonProps = {
   entityId: string;
@@ -56,16 +56,28 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   const hasActiveFlowElsewhere = Boolean(activity?.match || activity?.debate || activity?.rematch);
 
   const joinQueue = useJoinDebateQueue(spaceId);
+  const leaveQueue = useLeaveDebateQueue(spaceId);
 
   if (!isDebatesEnabled || !isClaim) return null;
 
   const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
   const canJoinDebate = published && !activeDebate && !activeMatch && !hasActiveFlowElsewhere;
-  const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
+  const isMutating = joinQueue.isPending || leaveQueue.isPending;
+  const mutationError =
+    joinQueue.error instanceof Error
+      ? joinQueue.error.message
+      : leaveQueue.error instanceof Error
+        ? leaveQueue.error.message
+        : null;
 
-  const joinPosition = (position: boolean) => {
-    joinQueue.mutate({ claimId: entityId, request: { position } });
+  // Clicking the position you're already waiting on leaves the queue.
+  const togglePosition = (position: boolean) => {
+    if (debateClaim?.viewer_waiting_position === position) {
+      leaveQueue.mutate({ claimId: entityId });
+    } else {
+      joinQueue.mutate({ claimId: entityId, request: { position } });
+    }
   };
 
   return (
@@ -110,11 +122,11 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
                   type="button"
                   aria-label={accessibleLabel}
                   aria-pressed={selected}
-                  onClick={() => joinPosition(position.value)}
-                  disabled={!canJoinDebate || joinQueue.isPending || selected}
+                  onClick={() => togglePosition(position.value)}
+                  disabled={!canJoinDebate || isMutating}
                   className={cx(
                     'flex min-h-7 min-w-0 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors disabled:opacity-60',
-                    selected ? 'bg-green text-text' : 'bg-bg text-text'
+                    selected ? (position.value ? 'bg-green text-text' : 'bg-red-01 text-text') : 'bg-bg text-text'
                   )}
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
