@@ -9,10 +9,11 @@ import { useRouter } from 'next/navigation';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { isClaimPublished } from '~/core/claims/publish';
 import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
 import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
 import { useDiff } from '~/core/state/diff-store';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
@@ -47,18 +48,18 @@ const relatedFields: RelatedField[] = [
 ];
 
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
-  const claimsAndDebatesEnabled = useFeatureFlag('questionsTab');
+  const isDebatesEnabled = useDebatesEnabled();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!claimsAndDebatesEnabled) {
+    if (!isDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [claimsAndDebatesEnabled, router, spaceId]);
+  }, [isDebatesEnabled, router, spaceId]);
 
-  if (!claimsAndDebatesEnabled) return null;
+  if (!isDebatesEnabled) return null;
 
-  return <ClaimsTabSurface spaceId={spaceId} debatesEnabled={claimsAndDebatesEnabled} />;
+  return <ClaimsTabSurface spaceId={spaceId} debatesEnabled={isDebatesEnabled} />;
 }
 
 function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & { debatesEnabled: boolean }) {
@@ -529,8 +530,4 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
-}
-
-function isClaimPublished(claim: Entity): boolean {
-  return !claim.relations.some(relation => relation.isLocal && relation.hasBeenPublished !== true);
 }

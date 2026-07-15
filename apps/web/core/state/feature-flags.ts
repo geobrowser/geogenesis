@@ -50,6 +50,16 @@ export function useFeatureFlag(id: FeatureFlagId) {
   return normalizeFeatureFlags(flags)[id];
 }
 
+/**
+ * The Debates feature — the space Claims/Debates tabs, the debate room, the
+ * claim debate button, and the match coordinator — all gate on the single
+ * `questionsTab` flag. Use this hook everywhere that renders claim/debate UI
+ * instead of inlining the flag id, so every surface flips together.
+ */
+export function useDebatesEnabled() {
+  return useFeatureFlag('questionsTab');
+}
+
 export function useFeatureFlags() {
   const [flags, setFlags] = useAtom(featureFlagsAtom);
   const normalizedFlags = normalizeFeatureFlags(flags);

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -21,9 +21,9 @@ import { ProcessedDebatePlayer } from './processed-debate-player';
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
-  const debatesEnabled = useFeatureFlag('questionsTab');
-  useDebatePresenceHeartbeat(debatesEnabled);
-  const activityQuery = useDebateActivity(debatesEnabled);
+  const isDebatesEnabled = useDebatesEnabled();
+  useDebatePresenceHeartbeat(isDebatesEnabled);
+  const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;
   const activeFlow = Boolean(activity?.match || activity?.debate || activity?.rematch);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
@@ -53,7 +53,7 @@ export function DebateCoordinator() {
   }, [activity, pathname, router]);
 
   const match = activity?.match;
-  if (!debatesEnabled) return null;
+  if (!isDebatesEnabled) return null;
 
   return (
     <>
