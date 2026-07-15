@@ -53,8 +53,16 @@ function graphValueDataType(value: unknown): DataType {
       return 'TIME';
     case 'point':
       return 'POINT';
+    case 'bytes':
+      return 'BYTES';
+    case 'schedule':
+      return 'SCHEDULE';
+    case 'embedding':
+      return 'EMBEDDING';
     case 'text':
+      return 'TEXT';
     default:
+      console.warn(`[use-mutate] unrecognized GRC-20 value type "${String(type)}" in createImageOps; defaulting to TEXT`);
       return 'TEXT';
   }
 }
