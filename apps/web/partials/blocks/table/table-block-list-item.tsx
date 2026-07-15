@@ -245,7 +245,7 @@ export function TableBlockListItem({
   }
 
   return (
-    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:relative md:block md:pr-1">
+    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:block md:pr-1">
       <div className="flex min-w-0 flex-1 items-start gap-6 pr-2 md:w-full md:pr-0">
         <Link
           entityId={rowEntityId}
@@ -272,7 +272,7 @@ export function TableBlockListItem({
           )}
         </Link>
         <div className="w-full min-w-0">
-          <div className="md:pr-16">
+          <div>
             {source.type !== 'COLLECTION' ? (
               <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                 <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
@@ -326,32 +326,32 @@ export function TableBlockListItem({
               </div>
             );
           })}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
-        {!isPlaceholder && (
-          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
-            {source.type === 'COLLECTION' ? (
-              <CollectionRowActions
-                isEditing={false}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                relationId={relationId}
-                verified={verified}
-                onLinkEntry={onLinkEntry}
-                openedWithMainViewEditing={isEditing}
-              />
-            ) : (
-              <DataBlockOpenSidePanelButton
-                entityId={rowEntityId}
-                entitySpaceId={nameCell?.space ?? currentSpaceId}
-                openedWithMainViewEditing={isEditing}
-              />
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+            {!isPlaceholder && (
+              <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={false}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                )}
+              </div>
             )}
           </div>
-        )}
-        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        </div>
       </div>
     </div>
   );
