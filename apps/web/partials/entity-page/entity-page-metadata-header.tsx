@@ -18,6 +18,7 @@ import {
   FORMAT_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
 } from '~/core/constants';
+import { ClaimDebateButton } from '~/core/debates/claim-debate-button';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -288,7 +289,10 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
           />
         )}
       </div>
-      {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
+      <div className="flex items-center gap-2">
+        <ClaimDebateButton entityId={id} spaceId={spaceId} />
+        {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
+      </div>
     </div>
   );
 }
