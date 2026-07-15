@@ -12,6 +12,8 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
 const ROW_NAME_CLASS = 'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
@@ -46,6 +48,7 @@ type Props = {
   linkToEntity?: boolean;
   /** `leading` = rank column left of avatar; `avatar-badge` = overlapping corner badge (default). */
   rankStyle?: 'leading' | 'avatar-badge';
+  showVotes?: boolean;
 };
 
 export function RankingEntryRow({
@@ -57,6 +60,7 @@ export function RankingEntryRow({
   pending = false,
   linkToEntity = true,
   rankStyle = 'avatar-badge',
+  showVotes = false,
 }: Props) {
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
@@ -110,6 +114,11 @@ export function RankingEntryRow({
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
       </div>
+      {showVotes ? (
+        <div className="shrink-0" onClick={e => e.stopPropagation()}>
+          <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
+        </div>
+      ) : null}
     </div>
   );
 }

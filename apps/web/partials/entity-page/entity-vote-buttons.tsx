@@ -11,20 +11,38 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { CheckRectSmall } from '~/design-system/icons/check-rect-small';
+import { CloseRectSmall } from '~/design-system/icons/close-rect-small';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 type OptimisticVote = 0 | 1 | 'none' | null;
+
+type VoteVariant = 'default' | 'thumbs' | 'check';
+
+const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
+
+const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
+
+function parseBoolean(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
 
 type EntityVoteButtonsProps = {
   entityId: string;
@@ -40,6 +58,14 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   });
   const { smartAccount } = useSmartAccount();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+
+  // Claim entities render a different vote control.
+  const { entity } = useQueryEntity({ id: entityId, spaceId });
+  const isClaim = entity?.types.some(t => normalizeId(t.id) === CLAIM_TYPE) ?? false;
+  const isFactualClaim =
+    isClaim && parseBoolean(entity?.values.find(v => v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value);
+  const variant: VoteVariant = isClaim ? (isFactualClaim ? 'check' : 'thumbs') : 'default';
+
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -191,6 +217,39 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
 
   const totalVoters = (voteCounts?.upvotes ?? 0) + (voteCounts?.downvotes ?? 0);
 
+  const optimisticUpDelta = optimisticVote !== null ? (upvoteActive ? 1 : 0) - (serverVoteDirection === 0 ? 1 : 0) : 0;
+  const optimisticDownDelta =
+    optimisticVote !== null ? (downvoteActive ? 1 : 0) - (serverVoteDirection === 1 ? 1 : 0) : 0;
+  const effectiveUpvotes = Math.max(0, (voteCounts?.upvotes ?? 0) + optimisticUpDelta);
+  const effectiveDownvotes = Math.max(0, (voteCounts?.downvotes ?? 0) + optimisticDownDelta);
+  const effectiveTotal = effectiveUpvotes + effectiveDownvotes;
+  const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectiveUpvotes) / effectiveTotal)}%` : '—';
+
+  const isClaimVariant = variant !== 'default';
+  const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
+
+  const renderVoteIcon = (direction: 'up' | 'down', active: boolean) => {
+    const iconColor = active ? 'grey-04' : 'grey-03';
+
+    if (variant === 'check') {
+      return direction === 'up' ? (
+        <CheckRectSmall filled={active} color={iconColor} />
+      ) : (
+        <CloseRectSmall filled={active} color={iconColor} />
+      );
+    }
+
+    if (variant === 'thumbs') {
+      return direction === 'up' ? (
+        <ThumbUp filled={active} color={iconColor} />
+      ) : (
+        <ThumbDown filled={active} color={iconColor} />
+      );
+    }
+
+    return <VoteArrow direction={direction} filled={active} color="grey-03" />;
+  };
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
@@ -212,7 +271,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
+        {renderVoteIcon('up', upvoteActive)}
       </button>
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
@@ -221,7 +280,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
             title={totalVoters > 0 ? 'View voters' : undefined}
             disabled={totalVoters === 0}
           >
-            {scoreLabel}
+            {displayLabel}
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -254,7 +313,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
+        {renderVoteIcon('down', downvoteActive)}
       </button>
     </div>
   );
