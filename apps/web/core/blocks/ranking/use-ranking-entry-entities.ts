@@ -15,6 +15,7 @@ export type RankingEntryDisplay = {
   name: string;
   description: string | null;
   image: string | null;
+  types?: { id: string; name: string | null }[];
 };
 
 export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
@@ -33,7 +34,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   const entries: RankingEntryDisplay[] = React.useMemo(
     () =>
       stableIds
-        .map(id => {
+        .map((id): RankingEntryDisplay | null => {
           const entity = byId.get(id);
           if (!entity) return null;
           return {
@@ -41,6 +42,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
             name: pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId) ?? 'Untitled',
             description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
             image: pickImage(entity.relations, spaceId),
+            types: entity.types,
           };
         })
         .filter((e): e is RankingEntryDisplay => e != null),

@@ -11,6 +11,7 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
+import { useClaimVoteVariant } from '~/core/hooks/use-claim-vote-variant';
 import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
@@ -19,6 +20,10 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { CloseSmall } from '~/design-system/icons/close-small';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { TickSmall } from '~/design-system/icons/tick-small';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -30,9 +35,13 @@ type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
   objectType?: VoteObjectType;
+  entityTypes?: { id: string }[];
 };
 
-export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityVoteButtonsProps) {
+export function EntityVoteButtons({ entityId, spaceId, objectType = 0, entityTypes }: EntityVoteButtonsProps) {
+  const { variant } = useClaimVoteVariant(entityId, spaceId, entityTypes);
+  const isClaim = variant !== 'default';
+
   const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
@@ -92,6 +101,19 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const downvotes = BigInt(voteCounts?.downvotes ?? 0);
   const netScore = upvotes - downvotes;
   const displayScore = optimisticScore !== null ? optimisticScore : netScore;
+
+  const serverUpvotes = voteCounts?.upvotes ?? 0;
+  const serverDownvotes = voteCounts?.downvotes ?? 0;
+  let optimisticUpvotes = serverUpvotes;
+  let optimisticDownvotes = serverDownvotes;
+  if (serverVoteDirection === 0) optimisticUpvotes -= 1;
+  else if (serverVoteDirection === 1) optimisticDownvotes -= 1;
+  if (activeVote === 0) optimisticUpvotes += 1;
+  else if (activeVote === 1) optimisticDownvotes += 1;
+  optimisticUpvotes = Math.max(0, optimisticUpvotes);
+  optimisticDownvotes = Math.max(0, optimisticDownvotes);
+  const totalVotes = optimisticUpvotes + optimisticDownvotes;
+  const percentLabel = totalVotes > 0 ? `${Math.round((100 * optimisticUpvotes) / totalVotes)}%` : '—';
 
   function openPrivySignIn() {
     setName('');
@@ -191,6 +213,26 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
 
   const totalVoters = (voteCounts?.upvotes ?? 0) + (voteCounts?.downvotes ?? 0);
 
+  const centerLabel = isClaim ? percentLabel : scoreLabel;
+
+  const upvoteIcon =
+    variant === 'factual' ? (
+      <TickSmall color={upvoteActive ? 'text' : 'grey-03'} />
+    ) : variant === 'thumbs' ? (
+      <ThumbUp filled={upvoteActive} color="grey-03" />
+    ) : (
+      <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
+    );
+
+  const downvoteIcon =
+    variant === 'factual' ? (
+      <CloseSmall color={downvoteActive ? 'text' : 'grey-03'} />
+    ) : variant === 'thumbs' ? (
+      <ThumbDown filled={downvoteActive} color="grey-03" />
+    ) : (
+      <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
+    );
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       <button
@@ -212,7 +254,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="up" filled={upvoteActive} color="grey-03" />
+        {upvoteIcon}
       </button>
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
@@ -221,7 +263,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
             title={totalVoters > 0 ? 'View voters' : undefined}
             disabled={totalVoters === 0}
           >
-            {scoreLabel}
+            {centerLabel}
           </button>
         </Popover.Trigger>
         <Popover.Portal>
@@ -254,7 +296,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
-        <VoteArrow direction="down" filled={downvoteActive} color="grey-03" />
+        {downvoteIcon}
       </button>
     </div>
   );

@@ -116,7 +116,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       </div>
 
       <div className="flex items-center gap-6">
-        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
+        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} entityTypes={item.types} />
         <Link
           href={entityHref}
           className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
