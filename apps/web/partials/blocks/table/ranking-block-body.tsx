@@ -256,7 +256,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       spaceId={spaceId}
                       linkToEntity={!isMobile}
                       pending={pendingEntityIds.has(entityId)}
-                      showVotes
                     />
                   </div>
                   <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
