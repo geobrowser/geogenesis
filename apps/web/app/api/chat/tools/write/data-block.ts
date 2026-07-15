@@ -21,7 +21,7 @@ const VALUE_TYPES: readonly FilterableValueType[] = [
   'RELATION',
 ];
 
-const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE'];
+const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE', 'PILL'];
 
 type FilterInput = {
   columnId: string;
@@ -87,7 +87,7 @@ type SetDataBlockViewInput = {
 
 export const setDataBlockView = tool({
   description:
-    'Change how a data block is rendered: TABLE, LIST, GALLERY, or BULLETED_LIST. Only affects display — filters and source are unchanged. Pass `blockId` (the data block entity id — from `getEntity.blocks[i].id`, or the `blockId` you just passed to `createBlock`) and `parentEntityId` (the page or tab entity that holds the block). Works on blocks you just staged in this session; no publish needed first.',
+    'Change how a data block is rendered: TABLE, LIST, GALLERY, BULLETED_LIST, EXPLORE, or PILL. Only affects display — filters and source are unchanged. Pass `blockId` (the data block entity id — from `getEntity.blocks[i].id`, or the `blockId` you just passed to `createBlock`) and `parentEntityId` (the page or tab entity that holds the block). Works on blocks you just staged in this session; no publish needed first.',
   inputSchema: jsonSchema<SetDataBlockViewInput>({
     type: 'object',
     properties: {
