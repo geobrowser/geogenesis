@@ -18,7 +18,7 @@ import {
   useSpaceDebates,
 } from '~/core/debates/hooks';
 import { ProcessedDebatePlayer } from '~/core/debates/processed-debate-player';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -29,16 +29,16 @@ type DebatesPageClientProps = {
 };
 
 export function DebatesPageClient({ spaceId }: DebatesPageClientProps) {
-  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
+  const isDebatesEnabled = useDebatesEnabled();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsAndDebatesEnabled) {
+    if (!isDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsAndDebatesEnabled, router, spaceId]);
+  }, [isDebatesEnabled, router, spaceId]);
 
-  if (!questionsAndDebatesEnabled) return null;
+  if (!isDebatesEnabled) return null;
 
   return <DebatesTabSurface spaceId={spaceId} />;
 }

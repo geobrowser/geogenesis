@@ -61,6 +61,18 @@ export async function generateSmartAccount({
     chain,
   });
 
+  // The RPC must actually serve the chain we think we're on. If it doesn't, viem reads the
+  // account's bytecode from the wrong chain, concludes it isn't deployed, and attaches init
+  // code — which the bundler rejects as `AA10 sender already constructed`, but only after the
+  // edit has been uploaded to IPFS. Fail here instead, where the cause is still legible.
+  const rpcChainId = await publicClient.getChainId();
+
+  if (rpcChainId !== chain.id) {
+    throw new Error(
+      `RPC chain mismatch: ${rpcUrl} serves chain ${rpcChainId}, but the app is configured for ${chain.name} (${chain.id}). Point RPC_ENDPOINT_TESTNET at a chain ${chain.id} RPC.`
+    );
+  }
+
   let safeAccount;
 
   if (chain.id === 19411) {

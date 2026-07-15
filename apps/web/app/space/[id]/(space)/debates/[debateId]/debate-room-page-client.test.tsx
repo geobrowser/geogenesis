@@ -44,6 +44,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.featureFlags[id] ?? false,
+  useDebatesEnabled: () => mocks.featureFlags['questionsTab'] ?? false,
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {

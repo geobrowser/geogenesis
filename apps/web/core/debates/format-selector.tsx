@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+
 import {
   type DebateFormatId,
   debateFormatById,

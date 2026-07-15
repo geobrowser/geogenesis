@@ -33,7 +33,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
@@ -95,16 +95,16 @@ const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
-  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
+  const isDebatesEnabled = useDebatesEnabled();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsAndDebatesEnabled) {
+    if (!isDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsAndDebatesEnabled, router, spaceId]);
+  }, [isDebatesEnabled, router, spaceId]);
 
-  if (!questionsAndDebatesEnabled) return null;
+  if (!isDebatesEnabled) return null;
 
   return <DebateRoomSurface spaceId={spaceId} debateId={debateId} />;
 }

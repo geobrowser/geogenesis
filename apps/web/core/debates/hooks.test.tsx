@@ -5,22 +5,21 @@ import type { ReactNode } from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setCachedIdentityToken } from '~/core/auth/identity-token';
+
 import type { DebateActivity, DebateRematchSession } from './api';
 import { debateQueryKeys, useClearTimedOutDebateActivity, useConsentToDebateRematch, useGeoChatAuth } from './hooks';
 
 const mocks = vi.hoisted(() => ({
   getIdentityToken: vi.fn(),
-  getAccessToken: vi.fn(),
+  identityToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
-  usePrivy: () => ({
-    ready: true,
-    authenticated: true,
-    getAccessToken: mocks.getAccessToken,
-  }),
+  useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
+  usePrivy: () => ({ ready: true, authenticated: true }),
 }));
 
 vi.mock('./api', async importOriginal => {
@@ -28,22 +27,114 @@ vi.mock('./api', async importOriginal => {
   return { ...actual, consentToDebateRematch: mocks.consentToDebateRematch };
 });
 
+function jwtExpiringIn(seconds: number) {
+  const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + seconds }));
+  return `header.${payload}.signature`;
+}
+
 describe('useGeoChatAuth', () => {
   beforeEach(() => {
     mocks.getIdentityToken.mockReset();
-    mocks.getAccessToken.mockReset();
+    mocks.identityToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
+    setCachedIdentityToken(null);
   });
 
   it('uses the Privy identity token for geo-chat session exchange', async () => {
+    mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue('identity-token');
-    mocks.getAccessToken.mockResolvedValue('access-token');
 
     const { result } = renderHook(() => useGeoChatAuth());
 
     await expect(result.current.getPrivyIdentityToken()).resolves.toBe('identity-token');
+  });
+
+  // getIdentityToken() is a `users/me` round-trip, not a local read, so calling it on
+  // every poll is what got us rate limited by Privy.
+  it('serves a live token from cache instead of calling Privy per request', async () => {
+    mocks.identityToken.mockReturnValue(jwtExpiringIn(60 * 60));
+    mocks.getIdentityToken.mockResolvedValue('refreshed-token');
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await result.current.getPrivyIdentityToken();
+    await result.current.getPrivyIdentityToken();
+    await result.current.getPrivyIdentityToken();
+
+    expect(mocks.getIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('refreshes through Privy once the token nears expiry', async () => {
+    mocks.identityToken.mockReturnValue(jwtExpiringIn(30));
+    mocks.getIdentityToken.mockResolvedValue('refreshed-token');
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await expect(result.current.getPrivyIdentityToken()).resolves.toBe('refreshed-token');
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
-    expect(mocks.getAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('backs off instead of retrying a failed refresh on every poll', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockRejectedValue(new Error('too_many_requests'));
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await expect(result.current.getPrivyIdentityToken()).resolves.toBeNull();
+    await result.current.getPrivyIdentityToken();
+    await result.current.getPrivyIdentityToken();
+
+    expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask Privy for a token on every poll while signed out', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await result.current.getPrivyIdentityToken();
+    await result.current.getPrivyIdentityToken();
+    await result.current.getPrivyIdentityToken();
+
+    expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
+  });
+
+  // A `users/me` sent before logout can resolve after it. Writing that result back would
+  // repopulate the cache with the signed-out user's token, and nothing would clear it again
+  // until it expired, because Privy's reactive token just stays null.
+  it('discards a refresh that resolves after the user signs out', async () => {
+    mocks.identityToken.mockReturnValue(null);
+
+    let settleRefresh!: (token: string | null) => void;
+    mocks.getIdentityToken.mockReturnValue(
+      new Promise<string | null>(resolve => {
+        settleRefresh = resolve;
+      })
+    );
+
+    const { result } = renderHook(() => useGeoChatAuth());
+    const pending = result.current.getPrivyIdentityToken();
+
+    act(() => setCachedIdentityToken(null));
+    settleRefresh('signed-out-user-token');
+
+    await expect(pending).resolves.toBeNull();
+  });
+
+  it('shares a single refresh between concurrent callers', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue('identity-token');
+
+    const { result } = renderHook(() => useGeoChatAuth());
+
+    await Promise.all([
+      result.current.getPrivyIdentityToken(),
+      result.current.getPrivyIdentityToken(),
+      result.current.getPrivyIdentityToken(),
+    ]);
+
+    expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
   });
 });
 
