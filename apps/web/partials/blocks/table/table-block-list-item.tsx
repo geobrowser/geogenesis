@@ -170,6 +170,7 @@ export function TableBlockListItem({
                     spaceId={currentSpaceId}
                     entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
                     openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -188,6 +189,7 @@ export function TableBlockListItem({
                     onLinkEntry={onLinkEntry}
                     showSidePanel={!isPlaceholder}
                     openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -239,6 +241,31 @@ export function TableBlockListItem({
                 </div>
               );
             })}
+
+          {!isPlaceholder && (
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={true}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -329,7 +356,7 @@ export function TableBlockListItem({
           <div className="mt-2 flex items-center justify-between gap-2">
             <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
             {!isPlaceholder && (
-              <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={false}
