@@ -78,8 +78,8 @@ export function useBlockExploreFeedItem({
 
   const { data: commentCount = 0 } = useQuery({
     queryKey: ['entity-backlink-count', rowEntityId],
-    queryFn: async () => {
-      const backlinks = await Effect.runPromise(getEntityBacklinks(rowEntityId));
+    queryFn: async ({ signal }) => {
+      const backlinks = await Effect.runPromise(getEntityBacklinks(rowEntityId, undefined, signal));
       return backlinks.length;
     },
     staleTime: 60_000,
