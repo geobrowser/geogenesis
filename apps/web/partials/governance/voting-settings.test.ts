@@ -117,6 +117,11 @@ describe('parseVotingSettingsForm', () => {
     expect(result.kind).toBe('error');
   });
 
+  it('rejects a fast path vote count below 1', () => {
+    const result = parseVotingSettingsForm({ ...validForm, fastPathVotes: '0' }, hidden);
+    expect(result).toEqual({ kind: 'error', message: 'Fast path votes must be at least 1.' });
+  });
+
   it('enforces the editor count when provided (create flow)', () => {
     // Only one initial editor, so quorum=3 must be rejected up front.
     const result = parseVotingSettingsForm({ ...validForm, quorum: '3' }, hidden, 1);
@@ -139,19 +144,6 @@ describe('parseVotingSettingsForm', () => {
 });
 
 describe('votingSettingsWarnings', () => {
-  it('warns when fast path votes is 0', () => {
-    const warnings = votingSettingsWarnings({
-      slowPathThresholdPercent: '51',
-      durationDays: '1',
-      durationHours: '0',
-      durationMinutes: '0',
-      durationSeconds: '0',
-      fastPathVotes: '0',
-      quorum: '1',
-    });
-    expect(warnings.some(w => w.includes('single editor vote'))).toBe(true);
-  });
-
   it('warns on a likely-decimal threshold', () => {
     const warnings = votingSettingsWarnings({
       slowPathThresholdPercent: '0.5',

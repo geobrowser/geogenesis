@@ -12,7 +12,6 @@ import { useSetAtom, useStore } from 'jotai';
 
 import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
 import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -449,10 +448,9 @@ export const ReviewChanges = () => {
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
-  // Fast/slow path selection (design 62501-94092). Only editors of a DAO space get a
-  // choice; members are always on the slow path, and personal spaces don't vote at all.
-  const activeSpaceAccess = useAccessControl(activeSpace);
-  const canChoosePath = activeSpaceMetadata?.type === 'DAO' && activeSpaceAccess.isEditor;
+  // Fast/slow path selection (design 62501-94092). Every DAO-space submitter gets the
+  // choice — members as well as editors. Personal spaces don't vote at all.
+  const canChoosePath = activeSpaceMetadata?.type === 'DAO';
   const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(
     activeSpaceMetadata?.address,
     canChoosePath

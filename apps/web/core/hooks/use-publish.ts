@@ -334,14 +334,12 @@ function makeProposal(args: MakeProposalArgs) {
       // `author` is the caller's personal space ID, already validated as non-null
       // by the guard in usePublish/useBulkPublish before makeProposal is called.
 
-      // Editors can use the fast path for immediate execution and now choose it
-      // explicitly via the review-screen selector (design 62501-94092); absent a
-      // choice they default to FAST. Members can only ever use the slow path (a
-      // voting period), so a stray FAST request from a non-editor is ignored.
-      // FAST is valid even when the DAO's flatSupportThreshold is 0 — the contract
-      // accepts votes on those proposals as of the backend fix (previously they
-      // reverted with CanNotVote()).
-      const votingMode: ProposalVotingMode = space.isEditor ? (requestedVotingMode ?? 'FAST') : 'SLOW';
+      // Every DAO submitter — members included — picks fast vs. slow via the review-
+      // screen selector (design 62501-94092); absent a choice we default to FAST.
+      // A member's FAST proposal still needs an editor vote to hit flatSupportThreshold,
+      // so we only auto-execute below when the caller is an editor (their create-vote
+      // can satisfy the threshold on its own).
+      const votingMode: ProposalVotingMode = requestedVotingMode ?? 'FAST';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({
@@ -375,7 +373,7 @@ function makeProposal(args: MakeProposalArgs) {
       to = result.to as `0x${string}`;
       calldata = result.calldata as `0x${string}`;
 
-      if (votingMode === 'FAST') {
+      if (votingMode === 'FAST' && space.isEditor) {
         fastProposalToExecute = { spaceId: space.id, proposalId: result.proposalId as `0x${string}` };
       }
     } else {

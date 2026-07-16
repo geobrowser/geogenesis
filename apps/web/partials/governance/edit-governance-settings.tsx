@@ -11,6 +11,7 @@ import { describeError } from '~/core/utils/error-diagnostics';
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
+import { Time } from '~/design-system/icons/time';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { Pending } from '~/design-system/pending';
 
@@ -136,7 +137,14 @@ export function EditGovernanceSettings({ spaceId, daoSpaceAddress, snapshot }: P
                     <div className="mt-4 rounded bg-errorTertiary px-3 py-2 text-metadataMedium text-red-01">{error}</div>
                   )}
                 </div>
-                <div className="p-4">
+                <div className="flex flex-col gap-3 p-4">
+                  {/* Governance-settings changes are review-path only at the contract level
+                      (SDK's proposeUpdateVotingSettings rejects FAST). Show it explicitly so
+                      the modal matches the ProposalPathSelector affordance elsewhere. */}
+                  <div className="flex items-center justify-end gap-1.5 text-metadata text-grey-04">
+                    <Time />
+                    <span>Review path</span>
+                  </div>
                   <Button
                     variant="primary"
                     onClick={handleSubmit}

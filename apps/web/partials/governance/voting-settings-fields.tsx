@@ -70,7 +70,7 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
 
       <SettingRow
         label="Fast path votes"
-        hint="Number of editor votes that instantly approve a fast-path proposal. Set to 0 to require only a single editor vote."
+        hint="Number of editor votes that instantly approve a fast-path proposal. Minimum 1."
       >
         <ValueInput value={state.fastPathVotes} onChange={v => set('fastPathVotes', v)} disabled={disabled} />
       </SettingRow>

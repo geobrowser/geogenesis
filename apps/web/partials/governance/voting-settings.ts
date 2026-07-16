@@ -185,8 +185,8 @@ export function parseVotingSettingsForm(
   if (![days, hours, minutes, seconds].every(n => Number.isInteger(n) && n >= 0)) {
     return { kind: 'error', message: 'Vote duration values must be non-negative whole numbers.' };
   }
-  if (!Number.isInteger(flat) || flat < 0) {
-    return { kind: 'error', message: 'Fast path votes must be a non-negative whole number.' };
+  if (!Number.isInteger(flat) || flat < 1) {
+    return { kind: 'error', message: 'Fast path votes must be at least 1.' };
   }
   if (!Number.isInteger(quorum) || quorum < 1) {
     return { kind: 'error', message: 'Quorum must be at least 1.' };
@@ -218,14 +218,8 @@ export function parseVotingSettingsForm(
 /** Non-blocking warnings for values that parse cleanly but are likely mistakes. */
 export function votingSettingsWarnings(state: VotingSettingsFormState): string[] {
   const warnings: string[] = [];
-  const flat = Number(state.fastPathVotes);
   const partial = Number(state.slowPathThresholdPercent);
 
-  if (Number.isFinite(flat) && flat === 0) {
-    warnings.push(
-      'Fast path votes is 0 — fast-path proposals pass with a single editor vote. Make sure this is intended.'
-    );
-  }
   if (Number.isFinite(partial) && partial > 0 && partial < 1) {
     warnings.push(
       `Slow path threshold is ${partial}%. Percentages are whole numbers — 50 means 50%, not 0.5. Did you mean ${Math.round(partial * 10)}%?`
