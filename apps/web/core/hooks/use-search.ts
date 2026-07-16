@@ -24,7 +24,13 @@ interface SearchOptions {
   restrictToFilterTypes?: boolean;
   enabled?: boolean;
   pageSize?: number;
-  /** Pass `false` to restrict results to the canonical graph. Defaults to including everything. */
+  /**
+   * Pass `false` to restrict results to the canonical graph plus your spaces.
+   * Pass explicit `true` to drop that eligibility restriction entirely and
+   * search everything. Omitting it behaves like `true` for search purposes,
+   * but doesn't suppress the additional-spaces widening the way an explicit
+   * `true` does — callers with no opinion on this should just omit it.
+   */
   includeNonCanonical?: boolean;
 }
 
@@ -80,7 +86,12 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  const additionalSpaceIds = filterBySpace ? undefined : globalAdditionalSpaceIds;
+  // additionalSpaceIds widens eligibility to "canonical graph plus these
+  // spaces" — that's a restriction relative to true unrestricted search.
+  // When a caller explicitly asks for non-canonical results (includeNonCanonical
+  // === true, not just unset), drop it entirely so the request isn't silently
+  // narrowed back down to canonical-plus-your-spaces.
+  const additionalSpaceIds = filterBySpace || includeNonCanonical === true ? undefined : globalAdditionalSpaceIds;
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
