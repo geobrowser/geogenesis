@@ -26,6 +26,7 @@ import {
 } from '~/core/debates/hooks';
 import {
   debateRecordingUploadId,
+  deleteDebateRecordingUpload,
   enqueueDebateRecordingUpload,
   estimateRecordingStorage,
   getDebateRecordingUpload,
@@ -85,7 +86,15 @@ const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
 };
 
+// Label/phrase overlays in Figma are dark text with a white outline (the inverse of the big
+// numbers and "GO!", which stay white-on-black via recordingOverlayTextShadow).
+const recordingLabelTextShadow = {
+  textShadow: '-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 4px 12px rgba(0,0,0,0.25)',
+};
+
+// Ring geometry lives in a 68-unit viewBox; the tile renders it at the Figma frame size (51px).
 const recordingCountdownSize = 68;
+const recordingCountdownRenderSize = 51;
 const recordingCountdownRadius = 25;
 const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
 
@@ -174,6 +183,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     videoBitsPerSecond: number | null;
   } | null>(null);
   const storagePersistenceRequestedRef = React.useRef(false);
+  const recordingCancellationHandledRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
   const rematchQuery = useDebateRematch(
     debate?.rematch_session_id ?? '',
@@ -183,6 +193,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const countdown = useDebateCountdown(debate, serverClock.now);
   const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
+  const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
+  const opponentCancelledRecording = recordingCancelledBy !== null && recordingCancelledBy !== currentUserId;
+  const recordingCanceller =
+    recordingCancelledBy !== null
+      ? (debate?.participants.find(participant => participant.user_id === recordingCancelledBy) ?? null)
+      : null;
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
@@ -988,8 +1004,46 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void finishLiveDebate();
   }, [debate, discardLocalRecorder, finishLiveDebate, rematchQuery.data, roomState]);
 
+  React.useEffect(() => {
+    if (!debate || recordingCancelledBy === null) return;
+    if (recordingCancellationHandledRef.current === debate.id) return;
+    recordingCancellationHandledRef.current = debate.id;
+    // The recording is gone for both sides. Block the normal finalize/redirect path and make
+    // sure nothing from this tab tries to publish the local blob.
+    finalizedDebateRef.current = debate.id;
+    if (currentUserId) {
+      void deleteDebateRecordingUpload(debateRecordingUploadId(currentUserId, debate.id)).catch(() => undefined);
+    }
+    void discardLocalRecorder();
+    disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+    localMediaStreamRef.current = null;
+    setRemoteVideoReady(false);
+    setRoomState('idle');
+    // The canceller already saw the confirmation in the upload banner; only the opponent needs
+    // the "your debate was removed" popup, so send the canceller straight back to the list.
+    if (!opponentCancelledRecording) {
+      router.replace(`/space/${spaceId}/debates`);
+    }
+  }, [
+    currentUserId,
+    debate,
+    discardLocalRecorder,
+    opponentCancelledRecording,
+    recordingCancelledBy,
+    router,
+    spaceId,
+  ]);
+
   return (
     <div className="py-8">
+      {debate && opponentCancelledRecording && (
+        <DebateRecordingRemovedDialog
+          cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
+          claim={debate.claim.claim}
+          onAcknowledge={() => router.replace(`/space/${spaceId}/debates`)}
+        />
+      )}
+
       {debate?.status !== 'ready' && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1176,15 +1230,15 @@ function DebatePreScreen({
       aria-label="Debate readiness"
       className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
     >
-      <section className="mx-auto flex min-h-dvh w-full max-w-[860px] flex-col items-center justify-start px-5 py-6 text-center md:justify-center">
-        <Text as="p" variant="bodySemibold" color="grey-04">
+      <section className="mx-auto flex min-h-dvh w-full max-w-[920px] flex-col items-center justify-start px-5 py-6 text-center md:justify-center">
+        <Text as="p" variant="cardEntityTitle" color="grey-04">
           Debate
         </Text>
-        <h1 className="mt-4 max-w-[390px] text-[2rem] leading-[1.12] font-semibold text-text md:max-w-[780px] md:text-[1.75rem]">
+        <h1 className="mt-3 max-w-[560px] text-[2.5rem] leading-[1.05] font-semibold text-text md:max-w-[870px] md:text-[3.625rem] md:leading-[0.93]">
           {debate.claim.claim}
         </h1>
 
-        <div className="mt-10 w-full max-w-[430px]">
+        <div className="mt-10 w-full max-w-[272px]">
           <PreScreenOpponent
             participant={remoteParticipant}
             label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
@@ -1192,8 +1246,8 @@ function DebatePreScreen({
           />
         </div>
 
-        <div className="mt-3 w-full max-w-[430px] rounded-xl border border-grey-02 bg-white p-3 shadow-inner shadow-grey-02">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-grey-01">
+        <div className="mt-3 w-full max-w-[272px] rounded-lg border border-grey-02 bg-white p-3">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded bg-grey-01">
             <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
             {previewState !== 'ready' && (
               <div className="absolute inset-0 grid place-items-center bg-grey-01">
@@ -1229,18 +1283,20 @@ function DebatePreScreen({
           </Text>
         )}
 
-        <Button
+        <button
           type="button"
           onClick={onReady}
           disabled={readyBusy || localReady}
-          className="mt-4 w-full max-w-[430px]"
+          className="mt-3 flex min-h-11 w-full max-w-[272px] items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
         >
-          {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
-        </Button>
+          {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : 'Accept'}
+        </button>
 
-        <Button type="button" variant="secondary" onClick={onLeave} disabled={leaveDisabled} className="mt-12">
-          Leave debate
-        </Button>
+        <div className="mt-5">
+          <RecordingCircleButton ariaLabel="Leave debate" title="Leave debate" onClick={onLeave} disabled={leaveDisabled}>
+            <LeaveIcon />
+          </RecordingCircleButton>
+        </div>
       </section>
     </div>
   );
@@ -1264,14 +1320,14 @@ function PreScreenDeviceSelect({
   const selectOptions = options.length > 0 ? options : [{ deviceId: '', label: fallbackLabel }];
 
   return (
-    <label className="relative flex min-w-0 items-center rounded-full border border-grey-02 bg-white px-3 py-2 text-left text-body text-text shadow-inner shadow-grey-02">
+    <label className="relative flex min-w-0 items-center rounded-full border border-grey-02 bg-white px-3 py-2 text-left text-metadata text-text">
       <span className="mr-2 shrink-0 text-text">{icon}</span>
       <select
         aria-label={ariaLabel}
         value={value}
         onChange={event => onChange(event.target.value)}
         disabled={options.length === 0}
-        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-body text-text outline-none disabled:text-grey-04"
+        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-metadata text-text outline-none disabled:text-grey-04"
       >
         {selectOptions.map(device => (
           <option key={device.deviceId || fallbackLabel} value={device.deviceId}>
@@ -1296,24 +1352,24 @@ function PreScreenOpponent({
   ready: boolean;
 }) {
   return (
-    <div className="flex min-h-[64px] w-full items-center justify-between gap-4 rounded-xl border border-grey-02 bg-white px-4 shadow-inner shadow-grey-02">
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="h-7 w-7 shrink-0 overflow-hidden rounded-full">
+    <div className="flex min-h-[52px] w-full items-center justify-between gap-4 rounded-lg border border-grey-02 bg-white px-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="h-5 w-5 shrink-0 overflow-hidden rounded-full">
           <Avatar
             avatarUrl={participant?.avatar_cid ?? null}
             value={participant?.profile_space_id ?? label}
             alt={label}
-            size={28}
+            size={20}
           />
         </span>
-        <Text as="div" variant="body" color="text" className="min-w-0 truncate text-left">
+        <Text as="div" variant="metadata" color="text" className="min-w-0 truncate text-left">
           {label}
         </Text>
       </div>
       <span
         className={cx(
-          'inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-body leading-none text-text',
-          ready ? 'bg-green' : 'bg-bg'
+          'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-metadata leading-none',
+          ready ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
         )}
       >
         {ready && <Check />}
@@ -1380,7 +1436,11 @@ function DebateRecordingModal({
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
+  const localUpcomingLabel = upcomingTurnIsRebuttal(debate, countdown) ? 'Rebut in' : "You're up in";
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
+  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
+  const showRemoteWrapItUp = wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null);
+  const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
   const remoteInactive = participantIsInactive(
@@ -1417,9 +1477,12 @@ function DebateRecordingModal({
             : 'Camera off'
       }
       upcomingSeconds={localUpcomingSeconds}
+      upcomingLabel={localUpcomingLabel}
       showGo={showLocalGo}
+      showWrapItUp={showLocalWrapItUp}
+      showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
-      revealInactive={localUpcomingSeconds !== null}
+      revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
       inactiveOverlayId="local"
       countdown={localCountdown}
       closingMessage={
@@ -1448,6 +1511,7 @@ function DebateRecordingModal({
             ? null
             : 'Waiting for video'
       }
+      showWrapItUp={showRemoteWrapItUp}
       inactive={remoteInactive}
       inactiveOverlayId="remote"
       muted={!remoteAudioEnabled}
@@ -1508,12 +1572,12 @@ function DebateRecordingModal({
           <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
             {['thanking', 'complete'].includes(debate.status) && (
-              <Button type="button" onClick={onRetryFinalization} disabled={roomState === 'saving'}>
+              <Button type="button" variant="tertiary" onClick={onRetryFinalization} disabled={roomState === 'saving'}>
                 Retry save
               </Button>
             )}
             {debate.status === 'connecting' && (
-              <Button type="button" onClick={onRetryConnection} disabled={roomState === 'saving'}>
+              <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={roomState === 'saving'}>
                 Retry connection
               </Button>
             )}
@@ -1654,7 +1718,10 @@ function DebateVideoTile({
   active,
   overlayText,
   upcomingSeconds,
+  upcomingLabel = "You're up in",
   showGo = false,
+  showWrapItUp = false,
+  showDebateEndsSoon = false,
   inactive = false,
   revealInactive = false,
   inactiveOverlayId,
@@ -1667,7 +1734,10 @@ function DebateVideoTile({
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
+  upcomingLabel?: string;
   showGo?: boolean;
+  showWrapItUp?: boolean;
+  showDebateEndsSoon?: boolean;
   inactive?: boolean;
   revealInactive?: boolean;
   inactiveOverlayId: 'local' | 'remote';
@@ -1681,7 +1751,7 @@ function DebateVideoTile({
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        muted && 'grayscale'
+        (muted || (inactive && !revealInactive)) && 'grayscale'
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
@@ -1701,8 +1771,8 @@ function DebateVideoTile({
 
       {closingMessage && (
         <div
-          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-[1.75rem] leading-[1.05] font-semibold text-white"
-          style={recordingOverlayTextShadow}
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-recordingLabel text-text"
+          style={recordingLabelTextShadow}
         >
           Nice debate!
           <br />
@@ -1712,13 +1782,10 @@ function DebateVideoTile({
 
       {upcomingSeconds !== null && upcomingSeconds !== undefined && (
         <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
-          <div className="text-[1.375rem] leading-none font-semibold text-white" style={recordingOverlayTextShadow}>
-            You&apos;re up in
+          <div className="text-recordingLabel text-text" style={recordingLabelTextShadow}>
+            {upcomingLabel}
           </div>
-          <div
-            className="mt-1 text-[5.25rem] leading-[0.85] font-semibold text-white"
-            style={recordingOverlayTextShadow}
-          >
+          <div className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white" style={recordingOverlayTextShadow}>
             {upcomingSeconds}
           </div>
         </div>
@@ -1726,10 +1793,28 @@ function DebateVideoTile({
 
       {showGo && (
         <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[5.25rem] leading-none font-semibold text-white"
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[7.5rem] leading-none font-bold text-white"
           style={recordingOverlayTextShadow}
         >
           GO!
+        </div>
+      )}
+
+      {showWrapItUp && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+          style={recordingLabelTextShadow}
+        >
+          Wrap it up!
+        </div>
+      )}
+
+      {showDebateEndsSoon && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+          style={recordingLabelTextShadow}
+        >
+          Debate ends soon
         </div>
       )}
 
@@ -1767,10 +1852,80 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
   );
 }
 
+function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
+  return (
+    countdown.effectiveStatus === 'in_progress' &&
+    slot !== null &&
+    countdown.activeSlot === slot &&
+    countdown.remainingSeconds > 0 &&
+    countdown.remainingSeconds <= 5
+  );
+}
+
+function upcomingTurnIsRebuttal(debate: Debate, countdown: DebateCountdown) {
+  if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return false;
+  const nextTurnIndex = countdown.turnIndex + 1;
+  const turnCount = debate.turn_durations_ms.length;
+  if (nextTurnIndex >= turnCount) return false;
+  // Mirror format-details.tsx: round 0 is always an opening argument, so a turn is a
+  // rebuttal only when it falls in the last round and that round is not the opening one.
+  const roundIndex = Math.floor(nextTurnIndex / 2);
+  return roundIndex !== 0 && roundIndex === Math.floor((turnCount - 1) / 2);
+}
+
+function debateEndsSoonIsVisible(debate: Debate, countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
+  if (!localSlot || countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return false;
+  if (countdown.activeSlot === localSlot) return false;
+  if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 5) return false;
+  return countdown.turnIndex === debate.turn_durations_ms.length - 1;
+}
+
 function thankingParticipantSlot(debate: Debate, countdown: DebateCountdown): ParticipantSlot | null {
   if (countdown.effectiveStatus !== 'thanking') return null;
   if (countdown.progress < 0.5) return debate.first_participant_slot;
   return debate.first_participant_slot === 1 ? 2 : 1;
+}
+
+function DebateRecordingRemovedDialog({
+  cancellerName,
+  claim,
+  onAcknowledge,
+}: {
+  cancellerName: string;
+  claim: string;
+  onAcknowledge: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/40 px-6">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Your debate was removed"
+        className="w-full max-w-[360px] rounded-xl bg-white p-5 text-center text-text shadow-card"
+      >
+        <Text as="h2" variant="smallTitle" color="text">
+          Your debate was removed
+        </Text>
+        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+          {cancellerName} cancelled the upload of your debate
+        </Text>
+        <div className="mt-4 rounded-lg bg-grey-01 px-4 py-3">
+          <Text as="p" variant="metadata" color="grey-04" className="line-clamp-3">
+            {claim}
+          </Text>
+        </div>
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={onAcknowledge}
+            className="min-h-7 rounded-full bg-text px-3 text-metadata text-white transition-colors hover:bg-text/90"
+          >
+            Okay
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DebateAgainCard({
@@ -1787,9 +1942,9 @@ function DebateAgainCard({
   onConsent: () => void;
 }) {
   return (
-    <section className="absolute top-1/2 left-1/2 z-40 w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl bg-white text-text shadow-card">
-      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-grey-02 px-4">
-        <Text as="span" variant="bodySemibold" color="text">
+    <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+      <div className="flex min-h-7 items-center justify-between gap-2.5">
+        <Text as="span" variant="smallTitle" color="text">
           Debate again?
         </Text>
         <button
@@ -1797,21 +1952,21 @@ function DebateAgainCard({
           onClick={onConsent}
           disabled={busy || localConsented}
           className={cx(
-            'min-h-9 rounded-full px-5 text-button transition-colors disabled:cursor-default',
-            localConsented ? 'bg-ctaPrimary text-white' : 'bg-ctaPrimary text-white hover:bg-ctaPrimary/90'
+            'min-h-7 rounded-full px-3 text-metadata text-white transition-colors disabled:cursor-default',
+            localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
           )}
         >
           {localConsented ? 'Waiting...' : busy ? 'Saving...' : 'Yes'}
         </button>
       </div>
-      <div className="flex min-h-12 items-center justify-between gap-3 px-4">
-        <Text as="span" variant="body" color="grey-04" className="min-w-0 truncate">
+      <div className="flex min-h-7 items-center justify-between gap-2.5">
+        <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
           {opponentName}
         </Text>
         <span
           className={cx(
-            'inline-flex shrink-0 items-center gap-2 rounded-full px-4 py-1.5 text-button',
-            remoteConsented ? 'bg-green text-text' : 'bg-bg text-grey-04'
+            'inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-metadata',
+            remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
           )}
         >
           {remoteConsented && <Check />}
@@ -1824,14 +1979,19 @@ function DebateAgainCard({
 
 function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
   const remainingRatio = Math.max(0, Math.min(1, 1 - countdown.progress));
-  const ringColor = remainingRatio <= 0.2 ? '#ff5c4f' : '#ffffff';
+  const danger =
+    countdown.effectiveStatus === 'in_progress' &&
+    countdown.activeSlot !== null &&
+    countdown.remainingSeconds > 0 &&
+    countdown.remainingSeconds <= 5;
+  const ringColor = danger ? 'var(--color-red-01)' : 'var(--color-white)';
   const dashOffset = recordingCountdownCircumference * (1 - remainingRatio);
 
   return (
     <div
       aria-label={`Phase timer: ${countdown.remainingSeconds} seconds remaining`}
       className="relative grid place-items-center"
-      style={{ width: recordingCountdownSize, height: recordingCountdownSize }}
+      style={{ width: recordingCountdownRenderSize, height: recordingCountdownRenderSize }}
     >
       <svg
         viewBox={`0 0 ${recordingCountdownSize} ${recordingCountdownSize}`}
@@ -1861,7 +2021,7 @@ function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
           transform="rotate(-90 34 34)"
         />
       </svg>
-      <span className="relative z-10 text-[1.75rem] leading-none font-semibold text-white">
+      <span className="relative z-10 text-[1.625rem] leading-none font-medium text-white">
         {countdown.remainingSeconds}
       </span>
     </div>

@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  DebateRecordingUploadPill,
+  DebateCancelUploadDialog,
+  DebateRecordingUploadBanner,
   processDebateRecordingUpload,
   recordingUploadRetryDelay,
 } from './recording-upload-coordinator';
@@ -77,20 +78,61 @@ describe('debate recording uploader', () => {
   });
 });
 
-describe('DebateRecordingUploadPill', () => {
-  it('shows upload count and dismisses only its presentation', () => {
-    const dismiss = vi.fn();
-    render(<DebateRecordingUploadPill count={1} waiting={false} onDismiss={dismiss} />);
+describe('DebateRecordingUploadBanner', () => {
+  it('shows the upload count with the publish checkbox checked', () => {
+    render(
+      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={() => undefined} />
+    );
 
     expect(screen.getByText('Uploading 1 debate')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide recording upload status' }));
-    expect(dismiss).toHaveBeenCalledOnce();
+    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows plural waiting copy while offline or backing off', () => {
-    render(<DebateRecordingUploadPill count={2} waiting onDismiss={() => undefined} />);
+    render(<DebateRecordingUploadBanner count={2} waiting publishChecked onUncheckPublish={() => undefined} />);
 
     expect(screen.getByText('Waiting to upload 2 debates')).toBeInTheDocument();
+  });
+
+  it('asks to cancel only when unchecking a checked publish box', () => {
+    const uncheck = vi.fn();
+    const { rerender } = render(
+      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={uncheck} />
+    );
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
+    expect(uncheck).toHaveBeenCalledOnce();
+
+    rerender(
+      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked={false} onUncheckPublish={uncheck} />
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
+    expect(uncheck).toHaveBeenCalledOnce();
+  });
+});
+
+describe('DebateCancelUploadDialog', () => {
+  it('confirms and closes the permanent-removal prompt', () => {
+    const confirm = vi.fn();
+    const close = vi.fn();
+    render(<DebateCancelUploadDialog busy={false} error={null} onConfirm={confirm} onClose={close} />);
+
+    expect(screen.getByText("Don't want to publish?")).toBeInTheDocument();
+    expect(
+      screen.getByText('This action permanently removes this debate video on behalf of you and your opponent.')
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete debate forever' }));
+    expect(confirm).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('disables the actions while removing', () => {
+    render(<DebateCancelUploadDialog busy error={null} onConfirm={() => undefined} onClose={() => undefined} />);
+
+    expect(screen.getByRole('button', { name: 'Removing...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
   });
 });
 

@@ -16,6 +16,7 @@ import {
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
   abortDebate,
+  cancelDebateRecording,
   acceptDebateMatch,
   acceptDebateRematchRequest,
   completeLocalRecordingUpload,
@@ -248,6 +249,16 @@ export function useAbortDebate(debateId: string) {
 
   return useMutation({
     mutationFn: () => abortDebate(debateId, getPrivyIdentityToken),
+    onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
+  });
+}
+
+export function useCancelDebateRecording(debateId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: () => cancelDebateRecording(debateId, getPrivyIdentityToken),
     onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
   });
 }

@@ -164,5 +164,7 @@ function completedDebate(): Debate {
     })),
     recording_error: null,
     cancellation_reason: null,
+    recording_cancelled_at: null,
+    recording_cancelled_by: null,
   };
 }

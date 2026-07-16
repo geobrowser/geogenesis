@@ -189,6 +189,10 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   );
 }
 
+// Built but hidden: the Figma match-request design omits these controls. Flip to re-enable.
+const SHOW_FORMAT_SELECTOR = false; // first participant picking the turn format
+const SHOW_POSITION_LABELS = false; // Yes/No pills under each name + the "You chose X." line
+
 function MatchDialog({
   match,
   currentUserId,
@@ -216,62 +220,45 @@ function MatchDialog({
   const firstParticipant = participants[0]!;
   const secondParticipant = participants[1] ?? firstParticipant;
   const selectedFormat = debateFormatById(selectedFormatId) ?? debateFormatById(defaultDebateFormatId)!;
-  const [openParticipantMenuUserId, setOpenParticipantMenuUserId] = React.useState<string | null>(null);
-
-  const toggleParticipantMenu = (participant: DebateMatchParticipant) => {
-    setOpenParticipantMenuUserId(current => (current === participant.user_id ? null : participant.user_id));
-  };
 
   return (
-    <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-[1200] flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
+    <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="debate-match-title"
-        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(668px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-[1.25rem] bg-bg px-8 py-6 text-text shadow-card"
+        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card"
       >
         <header className="min-w-0 text-center">
-          <Text as="div" variant="body" color="grey-04">
+          <Text as="div" variant="metadata" color="text">
             Debate request
           </Text>
-          <h2
-            id="debate-match-title"
-            className="mx-auto mt-2 max-w-[500px] text-[1.75rem] leading-[1.12] font-semibold"
-          >
+          <h2 id="debate-match-title" className="mt-3 text-cardEntityTitle leading-[1.375rem]">
             {waiting ? 'Waiting for the other person' : match.claim.claim}
           </h2>
         </header>
 
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="max-sm:px-3 relative grid grid-cols-[1fr_auto_1fr] items-center rounded-xl border border-grey-02 bg-white px-6 py-4 shadow-inner shadow-grey-02">
-            <ParticipantSummary
-              participant={firstParticipant}
-              currentUserId={currentUserId}
-              showMenu={!waiting && firstParticipant.user_id !== currentUserId}
-              menuOpen={openParticipantMenuUserId === firstParticipant.user_id}
-              onToggleMenu={() => toggleParticipantMenu(firstParticipant)}
-            />
-            <div className="relative grid h-[112px] w-16 place-items-center">
-              <span aria-hidden="true" className="absolute top-0 left-1/2 h-full w-px -translate-x-1/2 bg-grey-02" />
-              <span className="relative grid h-11 w-11 place-items-center rounded-full border border-grey-02 bg-white text-button text-text">
-                VS
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+            <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
+            <div className="relative grid w-16 place-items-center">
+              <span
+                aria-hidden="true"
+                className="absolute top-1/2 left-1/2 h-14 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
+              />
+              <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-smallButton text-text">
+                vs
               </span>
             </div>
-            <ParticipantSummary
-              participant={secondParticipant}
-              currentUserId={currentUserId}
-              showMenu={!waiting && secondParticipant.user_id !== currentUserId}
-              menuOpen={openParticipantMenuUserId === secondParticipant.user_id}
-              onToggleMenu={() => toggleParticipantMenu(secondParticipant)}
-            />
+            <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
           </div>
 
-          <section className="max-sm:p-3 mt-4 rounded-xl border border-grey-02 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <Text as="h3" variant="body" color="grey-04">
+          <section className="mt-4 overflow-hidden rounded-lg border border-grey-02 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+              <Text as="h3" variant="metadata" color="text">
                 Debate format
               </Text>
-              {!waiting && canChooseFormat && (
+              {SHOW_FORMAT_SELECTOR && !waiting && canChooseFormat && (
                 <DebateFormatSelector
                   value={selectedFormatId}
                   selectedFormatId={match.turn_format_id}
@@ -283,7 +270,7 @@ function MatchDialog({
                 />
               )}
             </div>
-            <div className="mt-4">
+            <div className="px-1 pb-1">
               <DebateFormatDetails
                 formatId={selectedFormat.id}
                 participants={participants}
@@ -292,7 +279,7 @@ function MatchDialog({
             </div>
           </section>
 
-          {myParticipant && (
+          {SHOW_POSITION_LABELS && myParticipant && (
             <Text as="p" variant="metadata" color="grey-04" className="mt-3 text-center">
               You chose {myParticipant.position_label}.
             </Text>
@@ -317,14 +304,19 @@ function MatchDialog({
             </>
           ) : (
             <>
-              <Button type="button" onClick={onAccept} disabled={busy} className="w-full">
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                className="flex min-h-11 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+              >
                 Accept
-              </Button>
+              </button>
               <button
                 type="button"
                 onClick={onDecline}
                 disabled={busy}
-                className="mx-auto min-h-10 px-4 text-button text-text hover:text-ctaPrimary disabled:opacity-50"
+                className="mx-auto min-h-10 px-4 text-button text-grey-04 hover:text-text disabled:opacity-50"
               >
                 Reject
               </button>
@@ -339,64 +331,30 @@ function MatchDialog({
 function ParticipantSummary({
   participant,
   currentUserId,
-  showMenu,
-  menuOpen,
-  onToggleMenu,
 }: {
   participant: DebateMatchParticipant;
   currentUserId: string;
-  showMenu: boolean;
-  menuOpen: boolean;
-  onToggleMenu: () => void;
 }) {
   const label = participant.user_id === currentUserId ? 'You' : speakerLabel(participant);
 
   return (
-    <div className="relative grid min-w-0 justify-items-center gap-2 text-center">
-      {showMenu && (
-        <div className="absolute top-0 right-0 z-10">
-          <button
-            type="button"
-            aria-label={`More actions for ${label}`}
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={onToggleMenu}
-            className="grid h-8 w-8 place-items-center rounded-full text-xl leading-none text-grey-03 hover:bg-bg hover:text-text"
-          >
-            ...
-          </button>
-          {menuOpen && (
-            <div
-              role="menu"
-              aria-label={`${label} actions`}
-              className="absolute top-9 right-0 min-w-36 rounded-lg border border-grey-02 bg-white p-1 text-left shadow-card"
-            >
-              <button
-                type="button"
-                role="menuitem"
-                disabled
-                className="w-full cursor-not-allowed rounded px-3 py-2 text-left text-button text-grey-04"
-              >
-                Block {label}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      <span className="h-8 w-8 overflow-hidden rounded-full">
+    <div className="grid min-w-0 justify-items-center gap-2 text-center">
+      <span className="h-5 w-5 overflow-hidden rounded-full">
         <Avatar
           avatarUrl={participant.avatar_cid}
           value={participant.profile_space_id}
           alt={speakerLabel(participant)}
-          size={32}
+          size={20}
         />
       </span>
-      <Text as="div" variant="body" color="text" className="max-w-full truncate">
+      <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
         {label}
       </Text>
-      <span className="rounded-full bg-grey-02 px-3 py-1 text-metadataMedium text-text">
-        {participant.position_label}
-      </span>
+      {SHOW_POSITION_LABELS && (
+        <span className="rounded-full bg-grey-02 px-3 py-1 text-metadataMedium text-text">
+          {participant.position_label}
+        </span>
+      )}
     </div>
   );
 }
@@ -416,7 +374,7 @@ function MinimizedMatchPrompt({
   const myParticipant = participantForUser(match, currentUserId);
 
   return (
-    <aside className="max-sm:right-3 max-sm:bottom-3 max-sm:left-3 max-sm:w-auto fixed right-6 bottom-6 z-[1100] grid w-[min(360px,calc(100vw-48px))] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 text-text shadow-card">
+    <aside className="max-sm:right-3 max-sm:bottom-3 max-sm:left-3 max-sm:w-auto fixed right-6 bottom-6 z-1100 grid w-[min(360px,calc(100vw-48px))] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 text-text shadow-card">
       <span className="grid min-w-0 gap-0.5">
         <Text as="span" variant="bodySemibold" color="text" className="truncate">
           {waiting ? `${speakerLabel(other)} is waiting` : `Match found: ${speakerLabel(other)}`}

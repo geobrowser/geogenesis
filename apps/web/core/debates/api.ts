@@ -182,6 +182,8 @@ export type Debate = {
   recordings: DebateRecording[];
   recording_error: string | null;
   cancellation_reason: string | null;
+  recording_cancelled_at: string | null;
+  recording_cancelled_by: string | null;
 };
 
 export type DebateActivity = {
@@ -526,6 +528,14 @@ export async function abortDebate(debateId: string, getPrivyIdentityToken: GetPr
   });
 }
 
+export async function cancelDebateRecording(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/recordings/cancel`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
 export async function consentToDebateRematch(debateId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<DebateRematchSession>(`/debates/${debateId}/rematch/consent`, {
     method: 'POST',
@@ -722,11 +732,35 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
   });
 
   if (!response.ok) {
-    const message = await errorMessage(response);
-    throw new Error(message);
+    throw await requestError(response);
   }
 
   return response.json() as Promise<T>;
+}
+
+export class GeoChatRequestError extends Error {
+  code: string | null;
+  status: number;
+
+  constructor(message: string, code: string | null, status: number) {
+    super(message);
+    this.name = 'GeoChatRequestError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function requestError(response: Response) {
+  let code: string | null = null;
+  let message = `${response.status} ${response.statusText}`;
+  try {
+    const body = (await response.json()) as { error?: { code?: string; message?: string } };
+    code = body.error?.code ?? null;
+    message = body.error?.message || message;
+  } catch {
+    // fall back to the status line built above
+  }
+  return new GeoChatRequestError(message, code, response.status);
 }
 
 async function accessTokenForRequest(options: RequestOptions) {

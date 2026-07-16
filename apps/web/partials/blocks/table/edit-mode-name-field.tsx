@@ -22,6 +22,7 @@ export function EditModeNameField({
   placeholder = 'Entity name...',
   onChange,
   openedWithMainViewEditing = false,
+  hideHoverActions = false,
 }: {
   name: string | null;
   entityId: string;
@@ -30,6 +31,7 @@ export function EditModeNameField({
   placeholder?: string;
   onChange: (value: string) => void;
   openedWithMainViewEditing?: boolean;
+  hideHoverActions?: boolean;
 }) {
   const [isRowHovered, setIsRowHovered] = useState(false);
   const resolvedPanelSpaceId = entitySpaceIdForPanel ?? spaceId;
@@ -41,11 +43,11 @@ export function EditModeNameField({
       onMouseEnter={() => setIsRowHovered(true)}
       onMouseLeave={() => setIsRowHovered(false)}
     >
-      <div className="min-w-0 pr-14 md:pr-0">
+      <div className={hideHoverActions ? 'min-w-0' : 'min-w-0 pr-14 md:pr-0'}>
         <PageStringField placeholder={placeholder} value={name ?? ''} onChange={onChange} />
       </div>
-      {isRowHovered && (
-        <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center gap-0.5 md:hidden">
+      {!hideHoverActions && isRowHovered && (
+        <div className="absolute top-0 right-0 flex h-[1.8125rem] shrink-0 flex-nowrap items-center gap-0.5 md:hidden">
           <DataBlockOpenSidePanelButton
             entityId={entityId}
             entitySpaceId={resolvedPanelSpaceId}
