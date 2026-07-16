@@ -39,9 +39,12 @@ interface SearchOptions {
    * - `undefined` (omitted): same eligibility restriction as `false` —
    *   additionalSpaceIds is still applied. Callers with no opinion on
    *   canonical-only should just omit this.
-   * - `true` (explicit): drop the eligibility restriction entirely —
-   *   additionalSpaceIds is NOT applied — and search everything. Only pass
-   *   this when the caller genuinely wants unrestricted search.
+   * - `true` (explicit): drop the canonical/scoped-spaces eligibility
+   *   restriction — additionalSpaceIds is NOT applied. Any other filters
+   *   the caller passes (filterBySpace, filterByTypes, etc.) still apply as
+   *   normal; this only lifts the canonical-graph-and-scoped-spaces gating,
+   *   not every constraint on the search. Only pass this when the caller
+   *   genuinely wants that specific restriction lifted.
    */
   includeNonCanonical?: boolean;
 }
