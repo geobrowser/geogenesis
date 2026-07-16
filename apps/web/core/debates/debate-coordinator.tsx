@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
+import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
 import {
@@ -122,7 +123,7 @@ function DebateSharePromptDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="debate-share-title"
-        className="relative w-[min(460px,100%)] rounded-xl bg-bg p-6 shadow-card"
+        className="relative w-[min(370px,100%)] rounded-lg bg-bg p-5 shadow-card"
       >
         {stackCount > 1 && (
           <span aria-hidden="true" className="absolute inset-x-4 top-4 -bottom-3 -z-10 rounded-xl bg-grey-02" />
@@ -131,7 +132,7 @@ function DebateSharePromptDialog({
           <span aria-hidden="true" className="absolute inset-x-7 top-7 -bottom-6 -z-20 rounded-xl bg-grey-03" />
         )}
         <header className="flex items-start justify-between gap-4">
-          <h2 id="debate-share-title" className="text-[1.35rem] leading-tight font-semibold">
+          <h2 id="debate-share-title" className="text-cardEntityTitle">
             Your debate is ready to share!
           </h2>
           <button
@@ -145,12 +146,12 @@ function DebateSharePromptDialog({
           </button>
         </header>
 
-        <div className="mx-auto mt-5 w-full max-w-[326px] overflow-hidden rounded-lg bg-text text-white shadow-card">
-          <div className="bg-ctaPrimary px-5 py-4 text-center">
-            <Text as="div" variant="metadata" color="white">
+        <div className="mx-auto mt-5 w-full max-w-[270px] overflow-hidden rounded-lg bg-text text-white shadow-card">
+          <div className="bg-purple px-4 py-3 text-center">
+            <Text as="div" variant="smallButton" color="white">
               Geo
             </Text>
-            <div className="mt-1 text-[1.15rem] leading-tight font-semibold">{prompt.claim}</div>
+            <div className="mt-1 text-[1.25rem] leading-[1.2] font-medium">{prompt.claim}</div>
           </div>
           <ProcessedDebatePlayer
             debateId={prompt.debate_id}
@@ -165,7 +166,13 @@ function DebateSharePromptDialog({
           </Text>
         )}
         <div className="mt-5 flex justify-center">
-          <Button type="button" onClick={share} disabled={handlePrompt.isPending || !publicUrl}>
+          <Button
+            type="button"
+            onClick={share}
+            disabled={handlePrompt.isPending || !publicUrl}
+            icon={<Upload />}
+            className="gap-2 rounded-full"
+          >
             Share
           </Button>
         </div>

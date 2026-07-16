@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMatch } from './api';
+import { defaultDebateFormatId } from './formats';
 import { DebateMatchPrompt } from './match-prompt';
 
 const mocks = vi.hoisted(() => ({
@@ -50,31 +51,33 @@ afterEach(() => {
 });
 
 describe('DebateMatchPrompt', () => {
-  it('opens a match modal and lets the first participant choose a format before accepting', () => {
+  it('opens a match modal and the first participant accepts with the default format', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
     expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Debate request')).toBeInTheDocument();
     expect(screen.getByText('Bri makes an argument')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Debate format'), { target: { value: 'extended-standard' } });
+    // The format selector is hidden to match the Figma design, so no format is chosen in the UI —
+    // the first participant accepts with the match's default format.
+    expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
-      { matchId: 'match-1', formatId: 'extended-standard' },
+      { matchId: 'match-1', formatId: defaultDebateFormatId },
       expect.any(Object)
     );
   });
 
-  it('shows a disabled block menu for the other participant only', () => {
+  it('renders participants as avatar and name without a per-participant menu or position pill', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
+    // The design shows only the avatar + name in the VS card — no "..." menu, no Yes/No pill.
     expect(screen.queryByRole('button', { name: 'More actions for You' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'More actions for Bri' }));
-
-    const blockAction = screen.getByRole('menuitem', { name: 'Block Bri' });
-    expect(blockAction).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'More actions for Bri' })).not.toBeInTheDocument();
+    expect(screen.getByText('Bri')).toBeInTheDocument();
+    expect(screen.queryByText('You chose Yes.')).not.toBeInTheDocument();
   });
 
   it('locks background scrolling while the match dialog is open', () => {
@@ -228,5 +231,7 @@ function debate(): Debate {
     recordings: [],
     recording_error: null,
     cancellation_reason: null,
+    recording_cancelled_at: null,
+    recording_cancelled_by: null,
   };
 }
