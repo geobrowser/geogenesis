@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -17,8 +16,7 @@ import { RankingBlockGlobalPagination } from './ranking-block-global-pagination'
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
-const ROW_NAME_CLASS =
-  'block text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text';
+const ROW_NAME_CLASS = 'block text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text';
 const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3';
 const ROW_RANK_CLASS =
   'w-5 shrink-0 text-center text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 tabular-nums';
@@ -40,10 +38,9 @@ type ListRowProps = {
   entityId: string;
   spaceId: string;
   name: string;
-  showVoteButtons: boolean;
 };
 
-function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: ListRowProps) {
+function RankingListRow({ rank, entityId, spaceId, name }: ListRowProps) {
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
@@ -52,11 +49,9 @@ function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: List
       <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
         {name}
       </Link>
-      {showVoteButtons ? (
-        <div className="flex h-5 shrink-0 items-center">
-          <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
-        </div>
-      ) : null}
+      <div className="flex h-5 shrink-0 items-center">
+        <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+      </div>
     </div>
   );
 }
@@ -68,7 +63,6 @@ type Props = {
 export function RankingListView({ state }: Props) {
   const {
     spaceId,
-    shownColumnIds,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
@@ -86,8 +80,6 @@ export function RankingListView({ state }: Props) {
     setEmbeddedGlobalPage,
   } = state;
 
-  const showVoteButtons = isScorePropertyShown(shownColumnIds);
-
   const rows = globalDisplayEntityIds
     .map(entityId => {
       const entry = globalRankingEntryByEntityId.get(entityId);
@@ -98,16 +90,7 @@ export function RankingListView({ state }: Props) {
         return <RankingListRowSkeleton key={entityId} rank={rank} />;
       }
 
-      return (
-        <RankingListRow
-          key={entityId}
-          rank={rank}
-          entityId={entityId}
-          spaceId={spaceId}
-          name={entry.name}
-          showVoteButtons={showVoteButtons}
-        />
-      );
+      return <RankingListRow key={entityId} rank={rank} entityId={entityId} spaceId={spaceId} name={entry.name} />;
     })
     .filter(Boolean);
 
@@ -119,10 +102,7 @@ export function RankingListView({ state }: Props) {
         {rows}
         {showLoadingRows
           ? globalDisplayEntityIds.map(entityId => (
-              <RankingListRowSkeleton
-                key={entityId}
-                rank={globalRankByEntityId.get(entityId) ?? 0}
-              />
+              <RankingListRowSkeleton key={entityId} rank={globalRankByEntityId.get(entityId) ?? 0} />
             ))
           : null}
       </div>

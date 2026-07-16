@@ -12,6 +12,8 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
@@ -41,8 +43,11 @@ function RankingGalleryCard({
         </div>
       </Link>
       <Link href={href} className="mt-2 block" draggable={false}>
-        <p className="line-clamp-2 text-[19px] font-medium leading-[1.3] text-text">{name}</p>
+        <p className="line-clamp-2 text-[19px] leading-[1.3] font-medium text-text">{name}</p>
       </Link>
+      <div className="mt-2" onClick={event => event.stopPropagation()}>
+        <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+      </div>
     </div>
   );
 }

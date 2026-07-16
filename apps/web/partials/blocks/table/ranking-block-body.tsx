@@ -252,6 +252,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
                   pending={pendingEntityIds.has(entityId)}
+                  showVotes
                 />
               );
               return (
@@ -332,6 +333,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
+                  showVotes
                 />
               );
               return (

@@ -49,9 +49,15 @@ type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
   objectType?: VoteObjectType;
+  claimVoterAvatarsPosition?: 'leading' | 'trailing';
 };
 
-export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityVoteButtonsProps) {
+export function EntityVoteButtons({
+  entityId,
+  spaceId,
+  objectType = 0,
+  claimVoterAvatarsPosition = 'leading',
+}: EntityVoteButtonsProps) {
   const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
@@ -224,7 +230,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const effectiveUpvotes = Math.max(0, (voteCounts?.upvotes ?? 0) + optimisticUpDelta);
   const effectiveDownvotes = Math.max(0, (voteCounts?.downvotes ?? 0) + optimisticDownDelta);
   const effectiveTotal = effectiveUpvotes + effectiveDownvotes;
-  const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectiveUpvotes) / effectiveTotal)}%` : '—';
+  const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectiveUpvotes) / effectiveTotal)}%` : '0%';
 
   const isClaimVariant = variant !== 'default';
   const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
@@ -241,16 +247,22 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
     return <VoteArrow direction={direction} filled={active} color="grey-03" />;
   };
 
-  const claimVoteButtonColor = (active: boolean) =>
-    isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
+  const claimVoteButtonColor = (active: boolean) => {
+    if (variant === 'chevrons') {
+      return active ? 'text-[#2A2B2E]' : 'text-grey-03 hover:text-grey-04';
+    }
+    return isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
+  };
+
+  const claimVoterAvatars = isClaimVariant ? (
+    <ClaimVoterAvatars entityId={entityId} spaceId={spaceId} objectType={objectType} totalVoters={totalVoters} />
+  ) : null;
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {isClaimVariant && (
-        <span className="mr-1">
-          <ClaimVoterAvatars entityId={entityId} spaceId={spaceId} objectType={objectType} totalVoters={totalVoters} />
-        </span>
-      )}
+      {claimVoterAvatarsPosition === 'leading' && claimVoterAvatars ? (
+        <span className="mr-1">{claimVoterAvatars}</span>
+      ) : null}
       <button
         onClick={handleUpvote}
         disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
@@ -316,6 +328,9 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       >
         {renderVoteIcon('down', downvoteActive)}
       </button>
+      {claimVoterAvatarsPosition === 'trailing' && claimVoterAvatars ? (
+        <span className="ml-1">{claimVoterAvatars}</span>
+      ) : null}
     </div>
   );
 }
