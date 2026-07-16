@@ -11,14 +11,17 @@ const mocks = vi.hoisted(() => ({
   mediaMutate: vi.fn(),
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
+  push: vi.fn(),
+  replace: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
+  useDebatesEnabled: () => true,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -43,6 +46,8 @@ beforeEach(() => {
   mocks.mediaMutate.mockReset();
   mocks.play.mockClear();
   mocks.pause.mockClear();
+  mocks.push.mockClear();
+  mocks.replace.mockClear();
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
     configurable: true,
     value: mocks.play,
@@ -56,11 +61,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebatesPageClient', () => {
-  it('uses the preview poster and starts the processed video in its card', async () => {
+  it('links processed video actions to the public recording page', async () => {
     mocks.mediaMutate.mockImplementation((variables, options) => {
-      const url =
-        variables.request.kind === 'preview_image' ? 'https://media.test/preview.jpg' : 'https://media.test/final.mp4';
-      options.onSuccess({ upload: { url } });
+      if (variables.request.kind === 'preview_image') {
+        options.onSuccess({ upload: { url: 'https://media.test/preview.jpg' } });
+      }
     });
 
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
@@ -69,13 +74,23 @@ describe('DebatesPageClient', () => {
       expect(container.querySelector('video')).toHaveAttribute('poster', 'https://media.test/preview.jpg')
     );
     expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Watch originals' })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Processed video' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Watch processed video' }));
 
-    await waitFor(() =>
-      expect(container.querySelector('video')).toHaveAttribute('src', 'https://media.test/final.mp4')
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
+    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
+    expect(mocks.play).not.toHaveBeenCalled();
+
+    mocks.push.mockClear();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Play Processed video for Debates are useful',
+      })
     );
-    expect(mocks.play).toHaveBeenCalledTimes(1);
+
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
+    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
   });
 });
 
@@ -94,8 +109,8 @@ function completedDebate(): Debate {
     first_participant_slot: 1,
     current_turn_index: 1,
     current_speaker_slot: null,
-    prepare_started_at: null,
-    prepare_ends_at: null,
+    connecting_started_at: null,
+    connecting_deadline_at: null,
     turn_started_at: null,
     turn_ends_at: null,
     preflight_ends_at: null,
@@ -148,5 +163,6 @@ function completedDebate(): Debate {
       video_bits_per_second: 500_000,
     })),
     recording_error: null,
+    cancellation_reason: null,
   };
 }

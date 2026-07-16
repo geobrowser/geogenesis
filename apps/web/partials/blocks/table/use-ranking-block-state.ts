@@ -120,7 +120,16 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows, pageSize } = useDataBlock();
+  const {
+    name,
+    entityId,
+    relationId,
+    rows,
+    pageSize,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
+  } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -820,6 +829,15 @@ export function useRankingBlockState({
     aggregatedRankingCount === 0 &&
     myDisplayEntityIds.length === 0;
 
+  const embeddedBrowseDisplayEntityIds = globalRankingListEntityIds;
+  const embeddedBrowseEntryByEntityId = globalRankingEntryByEntityId;
+  const embeddedBrowseTotalCount = visibleGlobalDisplayEntityIds.length;
+  const embeddedBrowseShowPagination = showEmbeddedGlobalPagination;
+  const embeddedBrowsePageNumber = embeddedGlobalPageNumber;
+  const embeddedBrowseHasPreviousPage = hasEmbeddedGlobalPreviousPage;
+  const embeddedBrowseHasNextPage = hasEmbeddedGlobalNextPage;
+  const embeddedBrowseSetPage = setEmbeddedGlobalPage;
+
   return {
     spaceId,
     rankingStartDate,
@@ -840,6 +858,9 @@ export function useRankingBlockState({
     submissions,
     periodState,
     periodLabel,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
@@ -895,8 +916,19 @@ export function useRankingBlockState({
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
+    embeddedBrowseDisplayEntityIds,
+    embeddedBrowseEntryByEntityId,
+    embeddedBrowseTotalCount,
+    embeddedBrowseShowPagination,
+    embeddedBrowsePageNumber,
+    embeddedBrowseHasPreviousPage,
+    embeddedBrowseHasNextPage,
+    embeddedBrowseSetPage,
     hasMyRankingData,
     hasGlobalRankingData,
+    stateView,
+    stateViewRelation,
   };
 }
 

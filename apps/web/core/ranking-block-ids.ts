@@ -22,3 +22,5 @@ export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
 export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
 
 export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';
+
+export const RANKING_VIEW_PILL_ID = '60022d24d9df4e1888faa71e915f8101';

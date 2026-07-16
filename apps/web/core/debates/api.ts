@@ -2,21 +2,10 @@
 
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
-export type DebateStatus = 'ready' | 'preparing' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
+export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
-
-export type DebateWaiter = {
-  id: string;
-  user_id: string;
-  profile_space_id: string;
-  display_name: string | null;
-  avatar_cid: string | null;
-  position: boolean;
-  position_label: string;
-  joined_at: string;
-};
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -178,8 +167,8 @@ export type Debate = {
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
   current_speaker_slot: ParticipantSlot | null;
-  prepare_started_at: string | null;
-  prepare_ends_at: string | null;
+  connecting_started_at: string | null;
+  connecting_deadline_at: string | null;
   turn_started_at: string | null;
   turn_ends_at: string | null;
   preflight_ends_at: string | null;
@@ -192,6 +181,7 @@ export type Debate = {
   participants: DebateParticipant[];
   recordings: DebateRecording[];
   recording_error: string | null;
+  cancellation_reason: string | null;
 };
 
 export type DebateActivity = {
@@ -271,6 +261,13 @@ export type DebateSharePromptsResponse = {
   prompts: DebateSharePrompt[];
 };
 
+export type DebateOnlineChoice = {
+  position: boolean;
+  position_label: string;
+  participant_count: number;
+  participants: DebateParticipantSummary[];
+};
+
 export type DebateClaim = {
   id: string;
   space_id: string;
@@ -278,7 +275,7 @@ export type DebateClaim = {
   claim: string;
   description: string | null;
   viewer_waiting_position: boolean | null;
-  waiters: DebateWaiter[];
+  online_choices: DebateOnlineChoice[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
   created_at: string;
@@ -379,6 +376,15 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
+export async function getServerTime() {
+  return geoChatRequest<{ server_time_ms: number }>('/time');
+}
+
+export async function resolveCurrentGeoChatUserId(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  const accessToken = await getGeoChatAccessToken(getPrivyIdentityToken);
+  return decodeGeoChatAccessToken(accessToken)?.user_id ?? null;
+}
+
 export async function heartbeatDebatePresence(getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<DebateActivity>('/me/debate-presence/heartbeat', {
     method: 'POST',
@@ -422,6 +428,18 @@ export async function joinDebateQueue(
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
     body: request,
+    auth: true,
+    getPrivyIdentityToken,
+  });
+}
+
+export async function leaveDebateQueue(
+  spaceId: string,
+  claimId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken
+) {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
+    method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,
   });

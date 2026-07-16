@@ -64,6 +64,8 @@ import { TableBlockEditableTitle } from './table-block-editable-title';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
+import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
+import TableBlockPillItemsDnd from './table-block-pill-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
@@ -777,6 +779,52 @@ const ConfiguredTableBlock = ({
   if (view === 'GALLERY' && entries.length > 0) {
     EntriesComponent = (
       <TableBlockGalleryItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
+        collectionTypeFilters={collectionTypeFilters}
+      />
+    );
+  }
+
+  if (view === 'PILL' && entries.length > 0) {
+    EntriesComponent = (
+      <TableBlockPillItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
+        collectionTypeFilters={collectionTypeFilters}
+      />
+    );
+  }
+
+  if (view === 'EXPLORE' && entries.length > 0) {
+    EntriesComponent = (
+      <TableBlockExploreItemsDnd
         isEditing={isEditing}
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}

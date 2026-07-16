@@ -377,7 +377,9 @@ function EntitySidePanelBody({
 
     const allBlockRelations = [
       ...blockRelations,
-      ...tabEntitiesOrdered.flatMap(tabEntity => (tabEntity.relations ?? []).filter(r => r.type.id === SystemIds.BLOCKS)),
+      ...tabEntitiesOrdered.flatMap(tabEntity =>
+        (tabEntity.relations ?? []).filter(r => r.type.id === SystemIds.BLOCKS)
+      ),
     ];
 
     let cancelled = false;

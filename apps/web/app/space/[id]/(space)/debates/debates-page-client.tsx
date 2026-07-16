@@ -17,8 +17,8 @@ import {
   useRequestDebateMediaProcessing,
   useSpaceDebates,
 } from '~/core/debates/hooks';
-import { ProcessedDebatePlayer, type ProcessedDebatePlayerHandle } from '~/core/debates/processed-debate-player';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { ProcessedDebatePlayer } from '~/core/debates/processed-debate-player';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -29,21 +29,22 @@ type DebatesPageClientProps = {
 };
 
 export function DebatesPageClient({ spaceId }: DebatesPageClientProps) {
-  const questionsAndDebatesEnabled = useFeatureFlag('questionsTab');
+  const isDebatesEnabled = useDebatesEnabled();
   const router = useRouter();
 
   React.useEffect(() => {
-    if (!questionsAndDebatesEnabled) {
+    if (!isDebatesEnabled) {
       router.replace(`/space/${spaceId}`);
     }
-  }, [questionsAndDebatesEnabled, router, spaceId]);
+  }, [isDebatesEnabled, router, spaceId]);
 
-  if (!questionsAndDebatesEnabled) return null;
+  if (!isDebatesEnabled) return null;
 
   return <DebatesTabSurface spaceId={spaceId} />;
 }
 
 function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
+  const router = useRouter();
   const debatesQuery = useSpaceDebates(spaceId, true);
   const matches = debatesQuery.data?.matches ?? [];
   const debates = debatesQuery.data?.debates ?? [];
@@ -94,6 +95,7 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
                   key={debate.id}
                   debate={debate}
                   onWatch={() => setSelectedDebate(debate)}
+                  onWatchProcessed={() => router.push(`/space/${spaceId}/debates/${debate.id}/recording`)}
                   onTranscript={() => setSelectedTranscriptDebate(debate)}
                 />
               ))}
@@ -112,16 +114,17 @@ function DebatesTabSurface({ spaceId }: DebatesPageClientProps) {
 function DebateCard({
   debate,
   onWatch,
+  onWatchProcessed,
   onTranscript,
 }: {
   debate: Debate;
   onWatch: () => void;
+  onWatchProcessed: () => void;
   onTranscript: () => void;
 }) {
   const participants = orderedParticipants(debate);
   const mediaQuery = useDebateMedia(debate.id, debate.status === 'complete');
   const reprocessMediaMutation = useRequestDebateMediaProcessing(debate.id);
-  const processedVideoPlayerRef = React.useRef<ProcessedDebatePlayerHandle | null>(null);
   const currentUserId = getCurrentGeoChatUserId();
   const [reprocessError, setReprocessError] = React.useState<string | null>(null);
   const hasProcessedVideo =
@@ -148,11 +151,11 @@ function DebateCard({
   return (
     <article className="max-md:flex-col max-md:items-stretch flex min-w-0 items-center gap-4 rounded-lg border border-grey-02 bg-white p-3 shadow-light">
       <ProcessedDebatePlayer
-        ref={processedVideoPlayerRef}
         debateId={debate.id}
         label={`Processed video for ${debate.claim.claim}`}
         previewAvailable={hasPreviewImage}
         videoAvailable={hasProcessedVideo}
+        onActivate={onWatchProcessed}
         className="max-md:mx-auto max-md:w-[180px] w-[150px] shrink-0"
       />
       <div className="max-md:grid max-md:grid-cols-1 max-md:items-stretch flex min-w-0 flex-1 flex-wrap items-center justify-between gap-3">
@@ -186,7 +189,7 @@ function DebateCard({
         <div className="max-md:w-full grid gap-1">
           <div className="max-md:grid max-md:grid-cols-1 flex items-center justify-end gap-2">
             <Button type="button" variant="secondary" small className="max-md:w-full" onClick={onWatch}>
-              Watch
+              Watch originals
             </Button>
             <Button
               type="button"
@@ -194,9 +197,9 @@ function DebateCard({
               small
               className="max-md:w-full"
               disabled={!hasProcessedVideo}
-              onClick={() => processedVideoPlayerRef.current?.play()}
+              onClick={onWatchProcessed}
             >
-              Processed video
+              Watch processed video
             </Button>
             <Button
               type="button"

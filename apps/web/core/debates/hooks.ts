@@ -1,15 +1,16 @@
 'use client';
 
-import { getIdentityToken, usePrivy } from '@geogenesis/auth';
+import { usePrivy } from '@geogenesis/auth';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
+
+import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
 import {
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
-  type GetPrivyIdentityToken,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -33,6 +34,7 @@ import {
   handleDebateSharePrompt,
   heartbeatDebatePresence,
   joinDebateQueue,
+  leaveDebateQueue,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
@@ -61,12 +63,12 @@ export const debateQueryKeys = {
 
 export function useGeoChatAuth() {
   const privy = usePrivy();
-  const getPrivyIdentityToken = React.useCallback<GetPrivyIdentityToken>(() => getIdentityToken(), []);
+  useIdentityTokenSync();
 
   return {
     ready: privy.ready,
     authenticated: privy.authenticated,
-    getPrivyIdentityToken,
+    getPrivyIdentityToken: getCachedIdentityToken,
   };
 }
 
@@ -94,6 +96,18 @@ export function useJoinDebateQueue(spaceId: string) {
   });
 }
 
+export function useLeaveDebateQueue(spaceId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ claimId }: { claimId: string }) => leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+    },
+  });
+}
+
 export function useUpdateDebatePreference(spaceId: string) {
   const queryClient = useQueryClient();
   const { getPrivyIdentityToken } = useGeoChatAuth();
@@ -114,6 +128,21 @@ export function useDebateActivity(enabled = true) {
     enabled: enabled && authenticated,
     refetchInterval: 2_000,
   });
+}
+
+export function useClearTimedOutDebateActivity() {
+  const queryClient = useQueryClient();
+
+  return React.useCallback(
+    (debateId: string) => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity, current => {
+        if (!current || current.debate?.id !== debateId) return current;
+        return { ...current, debate: null, cooldown_until: null };
+      });
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity });
+    },
+    [queryClient]
+  );
 }
 
 export function useDebatePresenceHeartbeat(enabled = true) {

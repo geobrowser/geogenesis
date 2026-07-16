@@ -1,0 +1,114 @@
+'use client';
+
+import { getIdentityToken, useIdentityToken } from '@geogenesis/auth';
+
+import * as React from 'react';
+
+/**
+ * Cached access to the current user's Privy identity token (JWT).
+ *
+ * Privy's `getIdentityToken()` is not a local read. On every call it awaits
+ * `updateUserAndIdToken()`, a `GET /api/v1/users/me` round-trip. Debates and community
+ * calls poll on 1-5s intervals and build each request's `Authorization` header from this
+ * token, so calling it per request got us rate limited by Privy (`too_many_requests`).
+ *
+ * Refreshing as the token nears expiry still keeps long-open tabs from sending an expired
+ * one, which the backends reject with a 401.
+ */
+
+const EXPIRY_SKEW_MS = 60_000;
+
+// Privy issues JWTs, so `exp` normally parses. This only bounds the refresh rate for a
+// token we can't read an expiry from.
+const FALLBACK_TTL_MS = 5 * 60_000;
+
+// A failed refresh leaves the cache stale, so without a cooldown the next poll retries
+// immediately and the storm sustains itself. Same for a signed-out user, who has no token
+// to fetch but would be asked for one on every poll.
+const FAILURE_COOLDOWN_MS = 30_000;
+
+type CachedToken = {
+  token: string;
+  expiresAt: number;
+};
+
+let cached: CachedToken | null = null;
+let inFlight: Promise<string | null> | null = null;
+let refreshBlockedUntil = 0;
+let sessionEpoch = 0;
+
+function expiresAtFrom(token: string): number {
+  const fallback = Date.now() + FALLBACK_TTL_MS;
+  const payload = token.split('.')[1];
+
+  if (!payload) return fallback;
+
+  try {
+    const { exp } = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    return typeof exp === 'number' ? exp * 1000 : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function isFresh(entry: CachedToken): boolean {
+  return Date.now() < entry.expiresAt - EXPIRY_SKEW_MS;
+}
+
+function store(token: string | null) {
+  cached = token === null ? null : { token, expiresAt: expiresAtFrom(token) };
+}
+
+/** Called whenever Privy's session changes: hydration, reissue, or logout. */
+export function setCachedIdentityToken(token: string | null) {
+  // A refresh in flight was issued against the outgoing session and can land after this
+  // one, so retire its epoch: it will discard its result instead of writing the previous
+  // user's token back into the cache we just cleared.
+  sessionEpoch += 1;
+  store(token);
+  refreshBlockedUntil = 0;
+}
+
+export async function getCachedIdentityToken(): Promise<string | null> {
+  const current = cached;
+
+  if (current && isFresh(current)) return current.token;
+  if (Date.now() < refreshBlockedUntil) return current?.token ?? null;
+
+  const issuedFor = sessionEpoch;
+
+  inFlight ??= getIdentityToken()
+    .then(token => {
+      if (issuedFor !== sessionEpoch) return cached?.token ?? null;
+
+      store(token);
+      refreshBlockedUntil = token === null ? Date.now() + FAILURE_COOLDOWN_MS : 0;
+
+      return token;
+    })
+    .catch(() => {
+      if (issuedFor === sessionEpoch) refreshBlockedUntil = Date.now() + FAILURE_COOLDOWN_MS;
+      // Fall back to the last token we held, past due or not. The backend decides expiry.
+      return cached?.token ?? null;
+    })
+    .finally(() => {
+      inFlight = null;
+    });
+
+  return inFlight;
+}
+
+/**
+ * Privy reissues the identity token reactively, so priming the cache from it costs nothing
+ * and spares us the opening `users/me`. Clearing it on logout stops us sending a signed-out
+ * user's token.
+ */
+export function useIdentityTokenSync() {
+  const { identityToken } = useIdentityToken();
+
+  React.useEffect(() => {
+    setCachedIdentityToken(identityToken);
+  }, [identityToken]);
+
+  return identityToken;
+}

@@ -32,7 +32,7 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => true,
+  useDebatesEnabled: () => true,
 }));
 
 vi.mock('./match-prompt', () => ({

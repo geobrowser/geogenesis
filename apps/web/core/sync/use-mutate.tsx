@@ -28,6 +28,45 @@ const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [ADDRESS]: 'Address',
 };
 
+// Maps a GRC-20 v2 typed value's `type` discriminant to the local store's
+// DataType. `Graph.createImage` emits `text` for the IPFS URL value and
+// `float` for the Height/Width values — declaring all of them as TEXT (as
+// this used to do unconditionally) mis-types the numeric dimension
+// properties and trips the SDK's E005 property-type-mismatch check at
+// publish time.
+function graphValueDataType(value: unknown): DataType {
+  const type = value && typeof value === 'object' && 'type' in value ? (value as { type: unknown }).type : undefined;
+  switch (type) {
+    case 'integer':
+      return 'INTEGER';
+    case 'float':
+      return 'FLOAT';
+    case 'decimal':
+      return 'DECIMAL';
+    case 'boolean':
+      return 'BOOLEAN';
+    case 'date':
+      return 'DATE';
+    case 'datetime':
+      return 'DATETIME';
+    case 'time':
+      return 'TIME';
+    case 'point':
+      return 'POINT';
+    case 'bytes':
+      return 'BYTES';
+    case 'schedule':
+      return 'SCHEDULE';
+    case 'embedding':
+      return 'EMBEDDING';
+    case 'text':
+      return 'TEXT';
+    default:
+      console.warn(`[use-mutate] unrecognized GRC-20 value type "${String(type)}" in createImageOps; defaulting to TEXT`);
+      return 'TEXT';
+  }
+}
+
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
 
@@ -397,6 +436,7 @@ function createMutator(store: GeoStore): Mutator {
             });
           } else if (op.type === 'createEntity') {
             for (const pv of op.values) {
+              const dataType = graphValueDataType(pv.value);
               store.setValue({
                 id: ID.createValueId({
                   entityId: toHexId(op.id),
@@ -410,8 +450,8 @@ function createMutator(store: GeoStore): Mutator {
                 property: {
                   id: toHexId(pv.property),
                   name: 'Image Property',
-                  dataType: 'TEXT',
-                  renderableType: 'URL',
+                  dataType,
+                  renderableType: dataType === 'TEXT' ? 'URL' : null,
                 },
                 spaceId,
                 value: extractValueString(pv.value),
@@ -478,6 +518,7 @@ function createMutator(store: GeoStore): Mutator {
             });
           } else if (op.type === 'createEntity') {
             for (const pv of op.values) {
+              const dataType = graphValueDataType(pv.value);
               store.setValue({
                 id: ID.createValueId({
                   entityId: toHexId(op.id),
@@ -491,8 +532,8 @@ function createMutator(store: GeoStore): Mutator {
                 property: {
                   id: toHexId(pv.property),
                   name: 'Image Property',
-                  dataType: 'TEXT',
-                  renderableType: 'URL',
+                  dataType,
+                  renderableType: dataType === 'TEXT' ? 'URL' : null,
                 },
                 spaceId,
                 value: extractValueString(pv.value),

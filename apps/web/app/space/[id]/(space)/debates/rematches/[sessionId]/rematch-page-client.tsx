@@ -203,9 +203,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   format_id: formatByClaimId[claim.claim.claim_entity_id] ?? defaultDebateFormatId,
                 })
               }
-              busy={
-                updatePosition.isPending || createRequest.isPending || session?.status === 'request_pending'
-              }
+              busy={updatePosition.isPending || createRequest.isPending || session?.status === 'request_pending'}
             />
           ))}
         </div>

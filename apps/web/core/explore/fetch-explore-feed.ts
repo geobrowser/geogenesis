@@ -258,6 +258,10 @@ async function fetchTopEntitiesPage(args: {
         spaceIds: args.spaceIds,
         typeIds: args.typeIds?.length ? [...args.typeIds] : undefined,
         spaceIdsForLists: args.spaceIds,
+        // Union in entities that match the type/space filter but have no score row yet
+        // (missing-as-zero for the integer Score property), so "Top" surfaces the full
+        // set of entities ranked by score rather than only those already scored.
+        includeWithoutValue: true,
       },
     })
   );
