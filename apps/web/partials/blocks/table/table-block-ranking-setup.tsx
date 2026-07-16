@@ -141,14 +141,12 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     const mergedFilters = [...withoutTypes, ...typeFilters];
     setSource(source, { filterStateOverride: mergedFilters });
 
-    const effectiveStartDate = isRolling ? '' : startDate;
-    const effectiveEndDate = isRolling ? '' : endDate;
     persistRankingBlockDateValues({
       storage,
       entityId,
       spaceId,
-      startDate: effectiveStartDate,
-      endDate: effectiveEndDate,
+      startDate,
+      endDate,
       existingValues,
     });
     persistRankingSubmissionFrequency({
@@ -159,7 +157,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
       existingValues,
     });
     setEditable(true);
-    onCompleteRankingSetup({ startDate: effectiveStartDate, endDate: effectiveEndDate });
+    onCompleteRankingSetup({ startDate, endDate });
   }, [
     blockEntityRelations,
     blockRelationRelations,
@@ -265,6 +263,17 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
             ) : null}
           </div>
 
+          <div className="flex w-full flex-wrap items-start justify-center gap-8">
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-button font-medium text-text">Start date</p>
+              <DateOnlyInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-button font-medium text-text">End date</p>
+              <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
+            </div>
+          </div>
+
           <button
             type="button"
             onClick={() => setIsRolling(v => !v)}
@@ -283,59 +292,41 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
                 Submission frequency <span className="text-grey-04">(required)</span>
               </p>
               <div className="flex items-start justify-center gap-3">
-                <div className="flex flex-col items-center gap-1">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={1}
-                    value={frequencyDaysInput}
-                    onChange={e => setFrequencyDaysInput(e.target.value)}
-                    onMouseDown={e => e.stopPropagation()}
-                    onPointerDown={e => e.stopPropagation()}
-                    onKeyDown={e => e.stopPropagation()}
-                    onKeyDownCapture={e => e.stopPropagation()}
-                    onKeyUp={e => e.stopPropagation()}
-                    placeholder="0"
-                    aria-label="Submission frequency in days"
-                    className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
-                  />
-                  <span className="text-footnote text-grey-04">Days</span>
-                </div>
-                <div className="flex flex-col items-center gap-1">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={1}
-                    value={frequencyHoursInput}
-                    onChange={e => setFrequencyHoursInput(e.target.value)}
-                    onMouseDown={e => e.stopPropagation()}
-                    onPointerDown={e => e.stopPropagation()}
-                    onKeyDown={e => e.stopPropagation()}
-                    onKeyDownCapture={e => e.stopPropagation()}
-                    onKeyUp={e => e.stopPropagation()}
-                    placeholder="0"
-                    aria-label="Submission frequency in hours"
-                    className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
-                  />
-                  <span className="text-footnote text-grey-04">Hours</span>
-                </div>
-              </div>
-              <p className="text-center text-footnote text-grey-04">e.g. 7 days for weekly</p>
-            </div>
-          ) : (
-            <div className="flex w-full flex-wrap items-start justify-center gap-8">
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-button font-medium text-text">Start date</p>
-                <DateOnlyInput variant="body" initialDate={startDate} onDateChange={setStartDate} />
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <p className="text-button font-medium text-text">End date</p>
-                <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={frequencyDaysInput}
+                  onChange={e => setFrequencyDaysInput(e.target.value)}
+                  onMouseDown={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
+                  onKeyDown={e => e.stopPropagation()}
+                  onKeyDownCapture={e => e.stopPropagation()}
+                  onKeyUp={e => e.stopPropagation()}
+                  placeholder="Days"
+                  aria-label="Submission frequency in days"
+                  className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
+                />
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={frequencyHoursInput}
+                  onChange={e => setFrequencyHoursInput(e.target.value)}
+                  onMouseDown={e => e.stopPropagation()}
+                  onPointerDown={e => e.stopPropagation()}
+                  onKeyDown={e => e.stopPropagation()}
+                  onKeyDownCapture={e => e.stopPropagation()}
+                  onKeyUp={e => e.stopPropagation()}
+                  placeholder="Hours"
+                  aria-label="Submission frequency in hours"
+                  className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
+                />
               </div>
             </div>
-          )}
+          ) : null}
 
           <button
             type="button"
