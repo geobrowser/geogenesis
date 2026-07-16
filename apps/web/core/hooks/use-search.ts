@@ -26,8 +26,12 @@ interface SearchOptions {
   pageSize?: number;
   /**
    * Tri-state, not a plain boolean — `undefined` and `true` are different.
-   * Only affects unscoped (global) searches — when `filterBySpace` is set,
-   * additionalSpaceIds is never applied regardless of this value:
+   * Always threaded through to E.findFuzzyPage/getResultsPage, where it
+   * drives client-side canonical gating (shouldIncludeRestSearchResult) —
+   * that part applies regardless of `filterBySpace`. The additionalSpaceIds
+   * widening described below is the part that's specific to unscoped
+   * (global) searches: when `filterBySpace` is set, additionalSpaceIds is
+   * never applied, no matter what this value is.
    * - `false`: restrict results to the canonical graph plus the scoped spaces
    *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
    *   additionalSpaceIds applied).
@@ -99,7 +103,11 @@ export function useSearch({
   // non-canonical results (includeNonCanonical === true, not just unset), so
   // the request isn't silently narrowed back down to canonical-plus-scoped.
   const wantsUnrestrictedSearch = includeNonCanonical === true;
-  const isScopedToOneSpace = filterBySpace !== undefined;
+  // Truthy, not just !== undefined, to match the space filter's own
+  // truthiness check below (`filterBySpace ? { space: ... } : {}`) — an
+  // empty-string filterBySpace must not suppress additionalSpaceIds while
+  // also not actually scoping the query.
+  const isScopedToOneSpace = Boolean(filterBySpace);
   const skipAdditionalSpaceIds = isScopedToOneSpace || wantsUnrestrictedSearch;
   const additionalSpaceIds = skipAdditionalSpaceIds ? undefined : globalAdditionalSpaceIds;
 
