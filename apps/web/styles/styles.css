@@ -232,7 +232,7 @@
   --text-textLinkSemibold--line-height: 1.8125rem;
   --text-textLinkSemibold--font-weight: 600;
 
-  /* Debate recording overlay phrase ("Wrap it up!", "Rebut in", …) — Figma 72459-*, 30px semibold */
+  /* Debate recording overlay phrase, e.g. "Wrap it up!" */
   --text-recordingLabel: 1.875rem;
   --text-recordingLabel--line-height: 2.25rem;
   --text-recordingLabel--font-weight: 600;
