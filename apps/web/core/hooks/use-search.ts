@@ -25,7 +25,9 @@ interface SearchOptions {
   enabled?: boolean;
   pageSize?: number;
   /**
-   * Tri-state, not a plain boolean — `undefined` and `true` are different:
+   * Tri-state, not a plain boolean — `undefined` and `true` are different.
+   * Only affects unscoped (global) searches — when `filterBySpace` is set,
+   * additionalSpaceIds is never applied regardless of this value:
    * - `false`: restrict results to the canonical graph plus the scoped spaces
    *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
    *   additionalSpaceIds applied).
@@ -97,7 +99,9 @@ export function useSearch({
   // non-canonical results (includeNonCanonical === true, not just unset), so
   // the request isn't silently narrowed back down to canonical-plus-scoped.
   const wantsUnrestrictedSearch = includeNonCanonical === true;
-  const additionalSpaceIds = filterBySpace || wantsUnrestrictedSearch ? undefined : globalAdditionalSpaceIds;
+  const isScopedToOneSpace = filterBySpace !== undefined;
+  const skipAdditionalSpaceIds = isScopedToOneSpace || wantsUnrestrictedSearch;
+  const additionalSpaceIds = skipAdditionalSpaceIds ? undefined : globalAdditionalSpaceIds;
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
