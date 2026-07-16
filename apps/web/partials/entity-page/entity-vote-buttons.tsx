@@ -21,8 +21,8 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
-import { CheckRectSmall } from '~/design-system/icons/check-rect-small';
-import { CloseRectSmall } from '~/design-system/icons/close-rect-small';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
@@ -32,7 +32,7 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 
 type OptimisticVote = 0 | 1 | 'none' | null;
 
-type VoteVariant = 'default' | 'thumbs' | 'check';
+type VoteVariant = 'default' | 'thumbs' | 'chevrons';
 
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 
@@ -64,7 +64,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const isClaim = entity?.types.some(t => normalizeId(t.id) === CLAIM_TYPE) ?? false;
   const isFactualClaim =
     isClaim && parseBoolean(entity?.values.find(v => v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value);
-  const variant: VoteVariant = isClaim ? (isFactualClaim ? 'check' : 'thumbs') : 'default';
+  const variant: VoteVariant = isClaim ? (isFactualClaim ? 'chevrons' : 'thumbs') : 'default';
 
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
@@ -229,26 +229,19 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
 
   const renderVoteIcon = (direction: 'up' | 'down', active: boolean) => {
-    const iconColor = active ? 'grey-04' : 'grey-03';
-
-    if (variant === 'check') {
-      return direction === 'up' ? (
-        <CheckRectSmall filled={active} color={iconColor} />
-      ) : (
-        <CloseRectSmall filled={active} color={iconColor} />
-      );
+    if (variant === 'chevrons') {
+      return direction === 'up' ? <ChevronUp /> : <ChevronDown />;
     }
 
     if (variant === 'thumbs') {
-      return direction === 'up' ? (
-        <ThumbUp filled={active} color={iconColor} />
-      ) : (
-        <ThumbDown filled={active} color={iconColor} />
-      );
+      return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
     }
 
     return <VoteArrow direction={direction} filled={active} color="grey-03" />;
   };
+
+  const claimVoteButtonColor = (active: boolean) =>
+    isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
@@ -268,6 +261,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
         }
         className={cx(
           'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          claimVoteButtonColor(upvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
@@ -310,6 +304,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
         }
         className={cx(
           'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          claimVoteButtonColor(downvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
