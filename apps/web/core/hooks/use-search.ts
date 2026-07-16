@@ -25,11 +25,15 @@ interface SearchOptions {
   enabled?: boolean;
   pageSize?: number;
   /**
-   * Pass `false` to restrict results to the canonical graph plus your spaces.
-   * Pass explicit `true` to drop that eligibility restriction entirely and
-   * search everything. Omitting it behaves like `true` for search purposes,
-   * but doesn't suppress the additional-spaces widening the way an explicit
-   * `true` does — callers with no opinion on this should just omit it.
+   * Tri-state, not a plain boolean — `undefined` and `true` are different:
+   * - `false`: restrict results to the canonical graph plus your own spaces
+   *   (additionalSpaceIds applied).
+   * - `undefined` (omitted): same eligibility restriction as `false` —
+   *   additionalSpaceIds is still applied. Callers with no opinion on
+   *   canonical-only should just omit this.
+   * - `true` (explicit): drop the eligibility restriction entirely —
+   *   additionalSpaceIds is NOT applied — and search everything. Only pass
+   *   this when the caller genuinely wants unrestricted search.
    */
   includeNonCanonical?: boolean;
 }
@@ -87,11 +91,12 @@ export function useSearch({
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
   // additionalSpaceIds widens eligibility to "canonical graph plus these
-  // spaces" — that's a restriction relative to true unrestricted search.
-  // When a caller explicitly asks for non-canonical results (includeNonCanonical
-  // === true, not just unset), drop it entirely so the request isn't silently
-  // narrowed back down to canonical-plus-your-spaces.
-  const additionalSpaceIds = filterBySpace || includeNonCanonical === true ? undefined : globalAdditionalSpaceIds;
+  // spaces" — that's a restriction relative to true unrestricted search. Drop
+  // it entirely when the caller explicitly wants unrestricted, non-canonical
+  // results (includeNonCanonical === true, not just unset), so the request
+  // isn't silently narrowed back down to canonical-plus-your-spaces.
+  const wantsUnrestrictedSearch = includeNonCanonical === true;
+  const additionalSpaceIds = filterBySpace || wantsUnrestrictedSearch ? undefined : globalAdditionalSpaceIds;
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
