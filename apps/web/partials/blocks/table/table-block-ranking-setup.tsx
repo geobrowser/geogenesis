@@ -30,6 +30,7 @@ import { useQueryEntity, useValues } from '~/core/sync/use-store';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Input } from '~/design-system/input';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
@@ -292,38 +293,36 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
                 Submission frequency <span className="text-grey-04">(required)</span>
               </p>
               <div className="flex items-start justify-center gap-3">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={1}
-                  value={frequencyDaysInput}
-                  onChange={e => setFrequencyDaysInput(e.target.value)}
-                  onMouseDown={e => e.stopPropagation()}
-                  onPointerDown={e => e.stopPropagation()}
-                  onKeyDown={e => e.stopPropagation()}
-                  onKeyDownCapture={e => e.stopPropagation()}
-                  onKeyUp={e => e.stopPropagation()}
-                  placeholder="Days"
-                  aria-label="Submission frequency in days"
-                  className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
-                />
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={1}
-                  value={frequencyHoursInput}
-                  onChange={e => setFrequencyHoursInput(e.target.value)}
-                  onMouseDown={e => e.stopPropagation()}
-                  onPointerDown={e => e.stopPropagation()}
-                  onKeyDown={e => e.stopPropagation()}
-                  onKeyDownCapture={e => e.stopPropagation()}
-                  onKeyUp={e => e.stopPropagation()}
-                  placeholder="Hours"
-                  aria-label="Submission frequency in hours"
-                  className="w-full max-w-[96px] rounded border border-grey-02 bg-white px-3 py-1.5 text-center text-metadata text-text outline-hidden placeholder:text-grey-03 focus:border-text"
-                />
+                <div className="w-[96px]">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={frequencyDaysInput}
+                    onChange={e => setFrequencyDaysInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="Days"
+                    aria-label="Submission frequency in days"
+                  />
+                </div>
+                <div className="w-[96px]">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={frequencyHoursInput}
+                    onChange={e => setFrequencyHoursInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="Hours"
+                    aria-label="Submission frequency in hours"
+                  />
+                </div>
               </div>
             </div>
           ) : null}
