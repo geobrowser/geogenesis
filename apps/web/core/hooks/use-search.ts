@@ -26,8 +26,9 @@ interface SearchOptions {
   pageSize?: number;
   /**
    * Tri-state, not a plain boolean — `undefined` and `true` are different:
-   * - `false`: restrict results to the canonical graph plus your own spaces
-   *   (additionalSpaceIds applied).
+   * - `false`: restrict results to the canonical graph plus the scoped spaces
+   *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
+   *   additionalSpaceIds applied).
    * - `undefined` (omitted): same eligibility restriction as `false` —
    *   additionalSpaceIds is still applied. Callers with no opinion on
    *   canonical-only should just omit this.
@@ -91,10 +92,10 @@ export function useSearch({
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
   // additionalSpaceIds widens eligibility to "canonical graph plus these
-  // spaces" — that's a restriction relative to true unrestricted search. Drop
-  // it entirely when the caller explicitly wants unrestricted, non-canonical
-  // results (includeNonCanonical === true, not just unset), so the request
-  // isn't silently narrowed back down to canonical-plus-your-spaces.
+  // scoped spaces" — that's a restriction relative to true unrestricted
+  // search. Drop it entirely when the caller explicitly wants unrestricted,
+  // non-canonical results (includeNonCanonical === true, not just unset), so
+  // the request isn't silently narrowed back down to canonical-plus-scoped.
   const wantsUnrestrictedSearch = includeNonCanonical === true;
   const additionalSpaceIds = filterBySpace || wantsUnrestrictedSearch ? undefined : globalAdditionalSpaceIds;
 
