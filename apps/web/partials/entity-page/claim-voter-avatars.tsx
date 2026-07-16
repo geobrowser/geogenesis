@@ -35,6 +35,7 @@ export function ClaimVoterAvatars({
     <RankingAggregatedSubmitterAvatars
       submitterSpaceIds={voterSpaceIds}
       totalCount={Math.max(totalVoters, voterSpaceIds.length)}
+      size={12}
     />
   );
 }
