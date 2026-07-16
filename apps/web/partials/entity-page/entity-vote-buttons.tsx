@@ -28,6 +28,7 @@ import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { ClaimVoterAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 type OptimisticVote = 0 | 1 | 'none' | null;
@@ -245,6 +246,11 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
+      {isClaimVariant && (
+        <span className="mr-1">
+          <ClaimVoterAvatars entityId={entityId} spaceId={spaceId} objectType={objectType} totalVoters={totalVoters} />
+        </span>
+      )}
       <button
         onClick={handleUpvote}
         disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
