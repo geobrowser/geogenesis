@@ -4,11 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import {
-  CURATOR_ONBOARDING_GEO_ICON_SRC,
-  CURATOR_ONBOARDING_PROGRESS_COLOR,
-  CURATOR_ONBOARDING_STEPS,
-} from '~/core/explore/curator-onboarding-steps';
+import { CURATOR_ONBOARDING_PROGRESS_COLOR, CURATOR_ONBOARDING_STEPS } from '~/core/explore/curator-onboarding-steps';
 import { useCuratorOnboardingStatus } from '~/core/hooks/use-curator-onboarding-status';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -33,22 +29,6 @@ function CuratorOnboardingStepIndicator({ complete }: { complete: boolean }) {
           />
         </svg>
       ) : null}
-    </span>
-  );
-}
-
-function CuratorOnboardingPointsBadge({ points }: { points: number }) {
-  return (
-    <span className="inline-flex items-center gap-1">
-      <img
-        src={CURATOR_ONBOARDING_GEO_ICON_SRC}
-        alt=""
-        width={16}
-        height={16}
-        className="h-4 w-4 shrink-0 object-contain"
-        draggable={false}
-      />
-      <span className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-purple">{points}</span>
     </span>
   );
 }
@@ -100,10 +80,7 @@ export function CuratorOnboardingSection() {
               <li key={step.id} className="flex gap-3">
                 <CuratorOnboardingStepIndicator complete={complete} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{step.title}</p>
-                    <CuratorOnboardingPointsBadge points={step.points} />
-                  </div>
+                  <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{step.title}</p>
                   <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-grey-04">
                     {step.description}
                   </p>
