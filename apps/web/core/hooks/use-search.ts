@@ -13,6 +13,7 @@ import { mergeSearchResult } from '../database/result';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
+import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
 import { useDebouncedValue } from './use-debounced-value';
 import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
@@ -97,19 +98,11 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  // additionalSpaceIds widens eligibility to "canonical graph plus these
-  // scoped spaces" — that's a restriction relative to true unrestricted
-  // search. Drop it entirely when the caller explicitly wants unrestricted,
-  // non-canonical results (includeNonCanonical === true, not just unset), so
-  // the request isn't silently narrowed back down to canonical-plus-scoped.
-  const wantsUnrestrictedSearch = includeNonCanonical === true;
-  // Truthy, not just !== undefined, to match the space filter's own
-  // truthiness check below (`filterBySpace ? { space: ... } : {}`) — an
-  // empty-string filterBySpace must not suppress additionalSpaceIds while
-  // also not actually scoping the query.
-  const isScopedToOneSpace = Boolean(filterBySpace);
-  const skipAdditionalSpaceIds = isScopedToOneSpace || wantsUnrestrictedSearch;
-  const additionalSpaceIds = skipAdditionalSpaceIds ? undefined : globalAdditionalSpaceIds;
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+    filterBySpace,
+    includeNonCanonical,
+    globalAdditionalSpaceIds,
+  });
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
