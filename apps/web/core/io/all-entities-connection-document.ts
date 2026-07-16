@@ -52,6 +52,7 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
         name
         description
         spaceIds
+        createdAt
         updatedAt
 
         types {
