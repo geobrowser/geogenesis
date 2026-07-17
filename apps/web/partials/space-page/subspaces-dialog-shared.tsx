@@ -49,16 +49,16 @@ export function SubspacesDialogShell({ open, onOpenChange, children }: Subspaces
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
         <Content className="fixed inset-0 z-100 flex items-start justify-center focus:outline-hidden">
-          <div className="mt-32 flex w-[460px] flex-col gap-4 rounded-xl bg-white px-4 pt-4 shadow-lg">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between">
-                <Title asChild>
-                  <Text variant="smallTitle" as="h2">
-                    Space relationships
-                  </Text>
-                </Title>
-                <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
-              </div>
+          <div className="relative mt-32 flex max-h-[min(520px,75vh)] w-[460px] flex-col gap-4 overflow-hidden rounded-xl bg-white px-4 pt-4 shadow-lg">
+            <div className="flex shrink-0 items-start justify-between">
+              <Title asChild>
+                <Text variant="smallTitle" as="h2">
+                  Space relationships
+                </Text>
+              </Title>
+              <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} />
+            </div>
+            <div className="no-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-10">
               {children}
             </div>
           </div>
