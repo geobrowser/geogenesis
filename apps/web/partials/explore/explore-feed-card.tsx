@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
+import { DEBATE_TYPE_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
@@ -47,6 +48,7 @@ function MetaDot() {
 
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
+const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
 
 function CardTitle({ item }: { item: ExploreFeedItem }) {
   return (
@@ -117,8 +119,35 @@ function CommunityCallCardBody({ item, actions }: CardBodyProps) {
   );
 }
 
+/** A Debate body: the rendered debate video already contains both participant views. */
+function DebateCardBody({ item, actions }: CardBodyProps) {
+  const sources = useRecordingSources({
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    serverRecordingUrls: item.debateVideoUrls,
+    relationTypeId: DEBATE_VIDEOS_PROPERTY_ID,
+  });
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <CardTitle item={item} />
+      {sources.length > 0 ? (
+        <div className="w-full max-w-[484px]">
+          <PublishedRecordingPlayer
+            sources={sources}
+            spaceId={item.spaceId}
+            videoClassName="aspect-[484/291] rounded-xl object-contain"
+          />
+        </div>
+      ) : null}
+      {actions}
+    </div>
+  );
+}
+
 export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
+  const isDebate = item.types.some(type => normalizeId(type.id) === DEBATE_TYPE);
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
     const out: { id: string; name: string }[] = [];
@@ -213,6 +242,8 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
 
       {isCommunityCall ? (
         <CommunityCallCardBody item={item} actions={cardActions} />
+      ) : isDebate ? (
+        <DebateCardBody item={item} actions={cardActions} />
       ) : (
         <DefaultCardBody item={item} actions={cardActions} />
       )}

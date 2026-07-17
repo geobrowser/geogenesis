@@ -4,6 +4,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { parse } from 'graphql';
 
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -24,6 +25,7 @@ const CARD_RELATION_TYPE_IDS = [
   ContentIds.AVATAR_PROPERTY,
   SystemIds.TYPES_PROPERTY,
   EVENT_SCHEMA.RECORDINGS_PROPERTY,
+  DEBATE_VIDEOS_PROPERTY_ID,
 ];
 
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');

@@ -9,14 +9,15 @@ export function useRecordingSources({
   entityId,
   spaceId,
   serverRecordingUrls = [],
+  relationTypeId = EVENT_SCHEMA.RECORDINGS_PROPERTY,
 }: {
   entityId: string;
   spaceId: string;
   serverRecordingUrls?: string[];
+  relationTypeId?: string;
 }): RecordingSource[] {
   const relations = useRelations({
-    selector: r =>
-      r.fromEntity.id === entityId && r.type.id === EVENT_SCHEMA.RECORDINGS_PROPERTY && r.spaceId === spaceId,
+    selector: r => r.fromEntity.id === entityId && r.type.id === relationTypeId && r.spaceId === spaceId,
   });
 
   if (relations.length > 0) {
