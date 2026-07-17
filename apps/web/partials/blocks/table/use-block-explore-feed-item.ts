@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
@@ -109,6 +110,7 @@ export function useBlockExploreFeedItem({
         ? descriptionOverride?.trim() || null
         : description?.trim() || nameCell?.description?.trim() || null,
     imageUrl,
+    recordingUrls: getRecordingUrls((storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId)),
     commentCount,
     isMemberOrEditor,
     hasPendingMembershipRequest: false,

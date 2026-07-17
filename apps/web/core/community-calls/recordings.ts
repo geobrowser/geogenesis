@@ -8,6 +8,14 @@ import { EVENT_SCHEMA } from './constants';
  */
 export const isPlayableRecordingUrl = (value: string) => value.startsWith('ipfs://') || value.startsWith('http');
 
+/** A recording either as a directly-playable URL or an unresolved Video entity id. */
+export type RecordingSource = {
+  /** Public IPFS/HTTP URL */
+  directUrl: string | null;
+  /** Video entity to read the IPFS URL off of */
+  videoEntityId: string | null;
+};
+
 /**
  * Public recording URLs for a `Community call event` entity. The relation decoder
  * (`RelationDtoLive`) resolves each recording's Video entity down to its IPFS URL on

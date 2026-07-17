@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { EVENT_SCHEMA } from '~/core/community-calls/constants';
+import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
@@ -9,6 +11,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -42,7 +45,80 @@ function MetaDot() {
   return <span className="mx-[6px] shrink-0 text-[14px] leading-none text-[#2A2B2E]">·</span>;
 }
 
+const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
+const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
+
+function CardTitle({ item }: { item: ExploreFeedItem }) {
+  return (
+    <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
+      <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
+        {item.title}
+      </h2>
+    </Link>
+  );
+}
+
+type CardBodyProps = {
+  item: ExploreFeedItem;
+  /** The vote / comment row, owned by the shell so every body renders it identically. */
+  actions: React.ReactNode;
+};
+
+/** The default body: thumbnail on the left, title and description beside it. */
+function DefaultCardBody({ item, actions }: CardBodyProps) {
+  return (
+    <div className="flex items-start gap-4">
+      {item.imageUrl ? (
+        <Link
+          href={NavUtils.toEntity(item.spaceId, item.entityId)}
+          className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
+        >
+          <FallbackImage value={item.imageUrl} sizes="120px" className="object-cover" />
+        </Link>
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="min-w-0">
+          <CardTitle item={item} />
+          {item.description ? (
+            <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
+              {item.description}
+            </p>
+          ) : null}
+        </div>
+
+        {actions}
+      </div>
+    </div>
+  );
+}
+
+/** A Community call event's body */
+function CommunityCallCardBody({ item, actions }: CardBodyProps) {
+  const sources = useRecordingSources({
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    serverRecordingUrls: item.recordingUrls,
+  });
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <CardTitle item={item} />
+      {sources.length > 0 ? (
+        <div className="w-full max-w-[773px]">
+          <PublishedRecordingPlayer
+            sources={sources}
+            spaceId={item.spaceId}
+            videoClassName="aspect-[773/435] rounded-xl object-contain"
+          />
+        </div>
+      ) : null}
+      {actions}
+    </div>
+  );
+}
+
 export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
+  const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
     const out: { id: string; name: string }[] = [];
@@ -99,6 +175,19 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
     );
   }
 
+  const cardActions = (
+    <div className="flex items-center gap-6">
+      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
+      <Link
+        href={entityHref}
+        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
+      >
+        <ExploreCommentsIcon className="text-grey-04" />
+        <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
+      </Link>
+    </div>
+  );
+
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
       {showSpace || dottedSegments.length > 0 ? (
@@ -122,41 +211,11 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         </div>
       ) : null}
 
-      <div className="flex items-start gap-4">
-        {item.imageUrl ? (
-          <Link
-            href={NavUtils.toEntity(item.spaceId, item.entityId)}
-            className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
-          >
-            <FallbackImage value={item.imageUrl} sizes="120px" className="object-cover" />
-          </Link>
-        ) : null}
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="min-w-0">
-            <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
-              <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-                {item.title}
-              </h2>
-            </Link>
-            {item.description ? (
-              <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
-                {item.description}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-6">
-            <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
-            <Link
-              href={entityHref}
-              className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-            >
-              <ExploreCommentsIcon className="text-grey-04" />
-              <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-            </Link>
-          </div>
-        </div>
-      </div>
+      {isCommunityCall ? (
+        <CommunityCallCardBody item={item} actions={cardActions} />
+      ) : (
+        <DefaultCardBody item={item} actions={cardActions} />
+      )}
     </article>
   );
 }
