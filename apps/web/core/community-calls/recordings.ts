@@ -1,4 +1,5 @@
 import type { Relation } from '~/core/types';
+import { getRelationVideoUrls, isPlayableVideoUrl } from '~/core/utils/relation-video';
 
 import { EVENT_SCHEMA } from './constants';
 
@@ -6,7 +7,7 @@ import { EVENT_SCHEMA } from './constants';
  * A `Recordings` relation only carries a playable URL once the decoder has resolved its Video
  * entity; before then `toEntity.value` is just that entity's id.
  */
-export const isPlayableRecordingUrl = (value: string) => value.startsWith('ipfs://') || value.startsWith('http');
+export const isPlayableRecordingUrl = isPlayableVideoUrl;
 
 /** A recording either as a directly-playable URL or an unresolved Video entity id. */
 export type RecordingSource = {
@@ -23,8 +24,5 @@ export type RecordingSource = {
  * signed-URL round-trip.
  */
 export function getRecordingUrls(relations: Relation[]): string[] {
-  return relations
-    .filter(r => r.type.id === EVENT_SCHEMA.RECORDINGS_PROPERTY)
-    .map(r => r.toEntity.value)
-    .filter(isPlayableRecordingUrl);
+  return getRelationVideoUrls(relations, EVENT_SCHEMA.RECORDINGS_PROPERTY);
 }
