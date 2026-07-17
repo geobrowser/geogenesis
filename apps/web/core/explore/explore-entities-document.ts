@@ -3,6 +3,8 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { parse } from 'graphql';
 
+import { EVENT_SCHEMA } from '~/core/community-calls/constants';
+
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
   EXPLORE_COVER_PROPERTY_ID,
@@ -10,7 +12,7 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 
-// Only the four property IDs and the three relation-type IDs we actually read per entity.
+// Only the value / relation-type IDs we actually read per entity.
 // Narrowing these on the server slashes payload size — most entities have dozens of
 // unrelated values/relations we'd otherwise serialize, ship, and decode for nothing.
 const CARD_VALUE_PROPERTY_IDS = [
@@ -24,6 +26,8 @@ const CARD_RELATION_TYPE_IDS = [
   ContentIds.AVATAR_PROPERTY,
   // `types` relation — used to derive space-scoped type tags.
   SystemIds.TYPES_PROPERTY,
+  // Community call recordings
+  EVENT_SCHEMA.RECORDINGS_PROPERTY,
 ];
 
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');

@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
@@ -35,6 +36,7 @@ export type ExploreFeedItem = {
   title: string;
   description: string | null;
   imageUrl: string | null;
+  recordingUrls: string[];
   commentCount: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
@@ -289,8 +291,9 @@ function buildItems(
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
     const displaySpaceIdNorm = normId(spaceId);
-    const types = e.relations
-      .filter(r => normId(r.type.id) === typesRelationIdNorm && normId(r.spaceId) === displaySpaceIdNorm)
+    const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
+    const types = relationsInDisplaySpace
+      .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
 
     items.push({
@@ -301,6 +304,7 @@ function buildItems(
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
+      recordingUrls: getRecordingUrls(relationsInDisplaySpace),
       commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });
