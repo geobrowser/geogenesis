@@ -7,6 +7,7 @@ import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   GEO_LOCATION,
+  KEY_FRAME_IMAGE_PROPERTY,
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
@@ -16,6 +17,7 @@ import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
+import { extractVideoKeyframe } from '../utils/video/extract-keyframe';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -146,6 +148,94 @@ export interface Mutator {
 }
 
 function createMutator(store: GeoStore): Mutator {
+  // Create an Image entity from a file/URL and link it onto `fromEntityId` under
+  // `relationPropertyId` as an IMAGE renderable. Shared by `images.createAndLink`
+  // and the video-keyframe flow so both mint images against the same store.
+  const createAndLinkImage: Mutator['images']['createAndLink'] = async params => {
+    const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
+    // Create the image entity using the Graph API. URL inputs are fetched
+    // and pinned to IPFS by the SDK; blob inputs upload directly. Use
+    // TESTNET network to upload via the alternative gateway.
+    const { id: imageId, ops: createImageOps } = await Graph.createImage(
+      'file' in params ? { blob: params.file, network: 'TESTNET' } : { url: params.url, network: 'TESTNET' }
+    );
+
+    for (const op of createImageOps) {
+      if (op.type === 'createRelation') {
+        store.setRelation({
+          id: toHexId(op.id),
+          entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+          fromEntity: {
+            id: toHexId(op.from),
+            name: null,
+          },
+          type: {
+            id: toHexId(op.relationType),
+            name: 'Image',
+          },
+          toEntity: {
+            id: toHexId(op.to),
+            name: 'Image',
+            value: toHexId(op.to),
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
+      } else if (op.type === 'createEntity') {
+        for (const pv of op.values) {
+          const dataType = graphValueDataType(pv.value);
+          store.setValue({
+            id: ID.createValueId({
+              entityId: toHexId(op.id),
+              propertyId: toHexId(pv.property),
+              spaceId,
+            }),
+            entity: {
+              id: toHexId(op.id),
+              name: null,
+            },
+            property: {
+              id: toHexId(pv.property),
+              name: 'Image Property',
+              dataType,
+              renderableType: dataType === 'TEXT' ? 'URL' : null,
+            },
+            spaceId,
+            value: extractValueString(pv.value),
+          });
+        }
+      }
+    }
+
+    const relationId = ID.createEntityId();
+    const imageIdStr = toHexId(imageId);
+    store.setRelation({
+      id: relationId,
+      entityId: ID.createEntityId(),
+      fromEntity: {
+        id: fromEntityId,
+        name: fromEntityName || '',
+      },
+      type: {
+        id: relationPropertyId,
+        name: relationPropertyName || '',
+      },
+      toEntity: {
+        id: imageIdStr,
+        name: null,
+        value: imageIdStr,
+      },
+      spaceId,
+      position: Position.generate(),
+      verified: false,
+      renderableType: 'IMAGE',
+    });
+
+    return { imageId: imageIdStr, relationId };
+  };
+
   return {
     entities: {
       name: {
@@ -402,91 +492,7 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     images: {
-      createAndLink: async params => {
-        const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
-        // Create the image entity using the Graph API. URL inputs are fetched
-        // and pinned to IPFS by the SDK; blob inputs upload directly. Use
-        // TESTNET network to upload via the alternative gateway.
-        const { id: imageId, ops: createImageOps } = await Graph.createImage(
-          'file' in params ? { blob: params.file, network: 'TESTNET' } : { url: params.url, network: 'TESTNET' }
-        );
-
-        for (const op of createImageOps) {
-          if (op.type === 'createRelation') {
-            store.setRelation({
-              id: toHexId(op.id),
-              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
-              fromEntity: {
-                id: toHexId(op.from),
-                name: null,
-              },
-              type: {
-                id: toHexId(op.relationType),
-                name: 'Image',
-              },
-              toEntity: {
-                id: toHexId(op.to),
-                name: 'Image',
-                value: toHexId(op.to),
-              },
-              spaceId,
-              position: Position.generate(),
-              verified: false,
-              renderableType: 'RELATION',
-            });
-          } else if (op.type === 'createEntity') {
-            for (const pv of op.values) {
-              const dataType = graphValueDataType(pv.value);
-              store.setValue({
-                id: ID.createValueId({
-                  entityId: toHexId(op.id),
-                  propertyId: toHexId(pv.property),
-                  spaceId,
-                }),
-                entity: {
-                  id: toHexId(op.id),
-                  name: null,
-                },
-                property: {
-                  id: toHexId(pv.property),
-                  name: 'Image Property',
-                  dataType,
-                  renderableType: dataType === 'TEXT' ? 'URL' : null,
-                },
-                spaceId,
-                value: extractValueString(pv.value),
-              });
-            }
-          }
-        }
-
-        // Create relation from parent entity to image entity
-        const relationId = ID.createEntityId();
-        const imageIdStr = toHexId(imageId);
-        store.setRelation({
-          id: relationId,
-          entityId: ID.createEntityId(),
-          fromEntity: {
-            id: fromEntityId,
-            name: fromEntityName || '',
-          },
-          type: {
-            id: relationPropertyId,
-            name: relationPropertyName || '',
-          },
-          toEntity: {
-            id: imageIdStr,
-            name: null,
-            value: imageIdStr,
-          },
-          spaceId,
-          position: Position.generate(),
-          verified: false,
-          renderableType: 'IMAGE',
-        });
-
-        return { imageId: imageIdStr, relationId };
-      },
+      createAndLink: createAndLinkImage,
       createOnly: async ({ file, spaceId }) => {
         const { id: imageId, ops: createImageOps } = await Graph.createImage({
           blob: file,
@@ -645,6 +651,25 @@ function createMutator(store: GeoStore): Mutator {
           verified: false,
           renderableType: 'VIDEO',
         });
+
+        // Extract a still keyframe from the video and store it on the video
+        // entity's Key frame (Image renderable) property. A failed extraction
+        // must never block saving the video, so swallow errors here.
+        try {
+          const keyframe = await extractVideoKeyframe(file);
+          if (keyframe) {
+            await createAndLinkImage({
+              file: keyframe,
+              fromEntityId: videoIdStr,
+              fromEntityName: null,
+              relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
+              relationPropertyName: 'Key frame',
+              spaceId,
+            });
+          }
+        } catch (error) {
+          console.warn('[use-mutate] failed to save video keyframe', error);
+        }
 
         return { videoId: videoIdStr, relationId };
       },

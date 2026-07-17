@@ -9,7 +9,7 @@ import { useRef, useState } from 'react';
 
 import cx from 'classnames';
 
-import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
+import { KEY_FRAME_IMAGE_PROPERTY, MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -17,6 +17,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getVideoPath } from '~/core/utils/utils';
+import { extractVideoKeyframe } from '~/core/utils/video/extract-keyframe';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -240,6 +241,23 @@ function VideoNodeChildren({
         if (!storedName) {
           storage.entities.name.set(entityId, spaceId, fileName);
           setLocalName(fileName);
+        }
+
+        // Extract a still keyframe and store it on the video entity's Key frame
+        // (Image renderable) property. A failed extraction must not fail the upload.
+        try {
+          const keyframe = await extractVideoKeyframe(file);
+          if (keyframe) {
+            await storage.images.createAndLink({
+              file: keyframe,
+              fromEntityId: entityId,
+              relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
+              relationPropertyName: 'Key frame',
+              spaceId,
+            });
+          }
+        } catch (keyframeError) {
+          console.warn('Failed to save video keyframe:', keyframeError);
         }
       } else {
         // IPFS URL extraction failed - show error to user
