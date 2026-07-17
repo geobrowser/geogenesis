@@ -427,6 +427,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
         ? queriedHasNextPage
         : false;
 
+  const isPlaceholderData =
+    source.type === 'COLLECTION'
+      ? isCollectionPlaceholder
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? isQueryEntitiesPlaceholder
+        : false;
+
   const result = {
     entityId,
     spaceId,
@@ -447,6 +454,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     isLoading,
     isFetched,
+    isPlaceholderData,
 
     name: entity?.name ?? null,
     setName,

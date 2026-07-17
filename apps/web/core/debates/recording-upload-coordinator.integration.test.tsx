@@ -7,6 +7,7 @@ import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 const mocks = vi.hoisted(() => ({
+  cancelRecording: vi.fn(),
   completeUpload: vi.fn(),
   createUpload: vi.fn(),
   deleteUpload: vi.fn(),
@@ -37,10 +38,12 @@ vi.mock('./hooks', () => ({
     authenticated: true,
     getPrivyIdentityToken: mocks.getToken,
   }),
+  useDebateActivity: () => ({ data: undefined }),
 }));
 
 vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
+  cancelDebateRecording: mocks.cancelRecording,
   completeLocalRecordingUpload: mocks.completeUpload,
   createLocalRecordingUpload: mocks.createUpload,
   resolveCurrentGeoChatUserId: mocks.resolveUser,
@@ -66,6 +69,7 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
 }));
 
 beforeEach(() => {
+  mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
   mocks.completeUpload.mockReset().mockResolvedValue(undefined);
   mocks.createUpload.mockReset().mockImplementation(async (debateId: string) => ({
     filename: `recordings/${debateId}.webm`,
@@ -152,18 +156,21 @@ describe('DebateRecordingUploadCoordinator', () => {
     );
   });
 
-  it('restores a dismissed upload pill after the app remounts', async () => {
-    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+  it('cancels the upload and drops the local blob when publish is unchecked', async () => {
+    // Keep the upload in flight so the banner stays on screen while we interact with it.
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.queue = [queuedRecording('debate-1')];
 
-    const firstMount = render(<DebateRecordingUploadCoordinator />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Hide recording upload status' }));
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
-
-    firstMount.unmount();
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() =>
+      expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything())
+    );
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
   it('retries transient user resolution failures when the browser reconnects', async () => {

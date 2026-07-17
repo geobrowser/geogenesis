@@ -48,7 +48,9 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isRollingRolledOff, isSaving, openRankingCompose } = state;
+
+  const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
 
   return showEditRankingButton ? (
     <Button
@@ -68,7 +70,7 @@ function buildMyRankingActionButton(state: RankingBlockState) {
       disabled={isSaving}
       onClick={() => void openRankingCompose('edit')}
     >
-      Add my ranking
+      {addLabel}
     </Button>
   );
 }

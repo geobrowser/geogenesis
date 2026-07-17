@@ -13,7 +13,11 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { ensureRankingAggregationRestriction } from '~/core/blocks/ranking/ensure-ranking-aggregation-restriction';
 import { ensureRankingBlockTypeRelation } from '~/core/blocks/ranking/ensure-ranking-block-type';
 import { ensureRankingShownColumns } from '~/core/blocks/ranking/ensure-ranking-shown-columns';
-import { persistRankingBlockDateValues } from '~/core/blocks/ranking/persist-ranking-block-values';
+import { ensureRankingTypeRelation } from '~/core/blocks/ranking/ensure-ranking-type';
+import {
+  persistRankingBlockDateValues,
+  persistRankingSubmissionFrequency,
+} from '~/core/blocks/ranking/persist-ranking-block-values';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
@@ -23,8 +27,10 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Input } from '~/design-system/input';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
@@ -60,6 +66,24 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
   const [setupTypePicks, setSetupTypePicks] = React.useState<QuerySetupTypePick[]>([]);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
+  const [isRolling, setIsRolling] = React.useState(false);
+  const [frequencyDaysInput, setFrequencyDaysInput] = React.useState('');
+  const [frequencyHoursInput, setFrequencyHoursInput] = React.useState('');
+
+  const frequencyHours = React.useMemo(() => {
+    const parseField = (raw: string) => {
+      const trimmed = raw.trim();
+      if (trimmed === '') return 0;
+      const parsed = Number(trimmed);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+    };
+    const days = parseField(frequencyDaysInput);
+    const hours = parseField(frequencyHoursInput);
+    if (days == null || hours == null) return null;
+    const total = days * 24 + hours;
+    return total > 0 ? total : null;
+  }, [frequencyDaysInput, frequencyHoursInput]);
+  const hasValidFrequency = !isRolling || frequencyHours != null;
 
   const { relationValueTypes: allowedTargetTypes, waitForFilterTypes } = useRelationTargetTypeIds({
     propertyId: SystemIds.TYPES_PROPERTY,
@@ -77,7 +101,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
 
   const handleCreate = React.useCallback(() => {
     const trimmed = name.trim();
-    if (!trimmed || !hasTypeSelected || !canEditSpace) return;
+    if (!trimmed || !hasTypeSelected || !canEditSpace || !hasValidFrequency) return;
 
     ensureRankingBlockTypeRelation({
       storage,
@@ -90,6 +114,13 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
       blockId: entityId,
       spaceId,
       relations: blockEntityRelations,
+    });
+    ensureRankingTypeRelation({
+      storage,
+      blockId: entityId,
+      spaceId,
+      relations: blockEntityRelations,
+      isRolling,
     });
     persistBlockName(trimmed);
     ensureRankingShownColumns({
@@ -110,12 +141,20 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     }));
     const mergedFilters = [...withoutTypes, ...typeFilters];
     setSource(source, { filterStateOverride: mergedFilters });
+
     persistRankingBlockDateValues({
       storage,
       entityId,
       spaceId,
       startDate,
       endDate,
+      existingValues,
+    });
+    persistRankingSubmissionFrequency({
+      storage,
+      entityId,
+      spaceId,
+      frequencyHours: isRolling ? frequencyHours : null,
       existingValues,
     });
     setEditable(true);
@@ -129,7 +168,10 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     existingValues,
     canEditSpace,
     filterState,
+    frequencyHours,
     hasTypeSelected,
+    hasValidFrequency,
+    isRolling,
     onCompleteRankingSetup,
     name,
     setEditable,
@@ -142,7 +184,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
     storage,
   ]);
 
-  const canCreate = canEditSpace && name.trim().length > 0 && hasTypeSelected;
+  const canCreate = canEditSpace && name.trim().length > 0 && hasTypeSelected && hasValidFrequency;
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }} onMouseDown={e => e.stopPropagation()}>
@@ -232,6 +274,58 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
               <DateOnlyInput variant="body" initialDate={endDate} onDateChange={setEndDate} />
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsRolling(v => !v)}
+            onMouseDown={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+            aria-pressed={isRolling}
+            className="flex items-center gap-1.5 text-metadata text-text"
+          >
+            Recurring
+            <CheckboxVisual checked={isRolling} className="size-3.5" />
+          </button>
+
+          {isRolling ? (
+            <div className="flex w-full flex-col items-center gap-2">
+              <p className="text-center text-button font-medium text-text">
+                Submission frequency <span className="text-grey-04">(required)</span>
+              </p>
+              <div className="flex items-start justify-center gap-3">
+                <div className="w-[96px]">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={frequencyDaysInput}
+                    onChange={e => setFrequencyDaysInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="Days"
+                    aria-label="Submission frequency in days"
+                  />
+                </div>
+                <div className="w-[96px]">
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={frequencyHoursInput}
+                    onChange={e => setFrequencyHoursInput(e.target.value.replace(/[^0-9]/g, ''))}
+                    onMouseDown={e => e.stopPropagation()}
+                    onPointerDown={e => e.stopPropagation()}
+                    onKeyDown={e => e.stopPropagation()}
+                    onKeyDownCapture={e => e.stopPropagation()}
+                    onKeyUp={e => e.stopPropagation()}
+                    placeholder="Hours"
+                    aria-label="Submission frequency in hours"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <button
             type="button"
