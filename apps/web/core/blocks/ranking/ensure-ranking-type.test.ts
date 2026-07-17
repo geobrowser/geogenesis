@@ -45,9 +45,9 @@ describe('isRollingRankingBlock', () => {
   });
 
   it('ignores a relation from a different block', () => {
-    expect(isRollingRankingBlock([rankingTypeRelation({ fromEntity: { id: 'other-block', name: null } })], BLOCK, SPACE)).toBe(
-      false
-    );
+    expect(
+      isRollingRankingBlock([rankingTypeRelation({ fromEntity: { id: 'other-block', name: null } })], BLOCK, SPACE)
+    ).toBe(false);
   });
 
   it('ignores a relation in a different space', () => {

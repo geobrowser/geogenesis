@@ -26,8 +26,8 @@ import {
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
-import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,

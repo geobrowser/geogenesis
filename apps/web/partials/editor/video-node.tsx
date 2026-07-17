@@ -9,7 +9,7 @@ import { useRef, useState } from 'react';
 
 import cx from 'classnames';
 
-import { KEY_FRAME_IMAGE_PROPERTY, MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
+import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -17,7 +17,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getVideoPath } from '~/core/utils/utils';
-import { extractVideoKeyframe } from '~/core/utils/video/extract-keyframe';
+import { saveVideoKeyframe } from '~/core/utils/video/save-keyframe';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -243,25 +243,7 @@ function VideoNodeChildren({
           setLocalName(fileName);
         }
 
-        // Extract a still keyframe and link it onto the video's Key frame (Image
-        // renderable) property in the background. Extraction can take up to its timeout
-        // for a broken file, so it must not hold up the upload; don't await it.
-        void (async () => {
-          try {
-            const keyframe = await extractVideoKeyframe(file);
-            if (keyframe) {
-              await storage.images.createAndLink({
-                file: keyframe,
-                fromEntityId: entityId,
-                relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
-                relationPropertyName: 'Key frame',
-                spaceId,
-              });
-            }
-          } catch (keyframeError) {
-            console.warn('Failed to save video keyframe:', keyframeError);
-          }
-        })();
+        saveVideoKeyframe(file, { fromEntityId: entityId, spaceId, link: storage.images.createAndLink });
       } else {
         // IPFS URL extraction failed - show error to user
         console.error('Failed to extract IPFS URL from upload response');

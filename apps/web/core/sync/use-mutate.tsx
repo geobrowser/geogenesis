@@ -7,7 +7,6 @@ import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
   GEO_LOCATION,
-  KEY_FRAME_IMAGE_PROPERTY,
   PLACE,
   RENDERABLE_TYPE_PROPERTY,
   VIDEO_RENDERABLE_TYPE,
@@ -17,7 +16,7 @@ import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
-import { extractVideoKeyframe } from '../utils/video/extract-keyframe';
+import { saveVideoKeyframe } from '../utils/video/save-keyframe';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -64,7 +63,9 @@ function graphValueDataType(value: unknown): DataType {
     case 'text':
       return 'TEXT';
     default:
-      console.warn(`[use-mutate] unrecognized GRC-20 value type "${String(type)}" in createImageOps; defaulting to TEXT`);
+      console.warn(
+        `[use-mutate] unrecognized GRC-20 value type "${String(type)}" in createImageOps; defaulting to TEXT`
+      );
       return 'TEXT';
   }
 }
@@ -652,27 +653,7 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'VIDEO',
         });
 
-        // Extract a still keyframe and link it onto the video's Key frame (Image
-        // renderable) property in the background. Extraction can take up to `timeoutMs`
-        // for a broken file, so it must never block the caller's save; don't await it,
-        // and swallow errors here.
-        void (async () => {
-          try {
-            const keyframe = await extractVideoKeyframe(file);
-            if (keyframe) {
-              await createAndLinkImage({
-                file: keyframe,
-                fromEntityId: videoIdStr,
-                fromEntityName: null,
-                relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
-                relationPropertyName: 'Key frame',
-                spaceId,
-              });
-            }
-          } catch (error) {
-            console.warn('[use-mutate] failed to save video keyframe', error);
-          }
-        })();
+        saveVideoKeyframe(file, { fromEntityId: videoIdStr, spaceId, link: createAndLinkImage });
 
         return { videoId: videoIdStr, relationId };
       },

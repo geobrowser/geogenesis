@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -106,9 +106,7 @@ export function RankingPillView({ state }: Props) {
     <div className="flex w-full min-w-0 flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         {pills}
-        {showLoadingPills
-          ? globalDisplayEntityIds.map(entityId => <RankingPillItemSkeleton key={entityId} />)
-          : null}
+        {showLoadingPills ? globalDisplayEntityIds.map(entityId => <RankingPillItemSkeleton key={entityId} />) : null}
       </div>
       {!entriesResolving && pills.length === 0 && totalGlobalRankingEntityCount === 0 ? (
         <p className="text-metadata text-grey-04">No published items yet</p>

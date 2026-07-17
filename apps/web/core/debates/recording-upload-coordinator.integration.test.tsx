@@ -166,9 +166,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
-    await waitFor(() =>
-      expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything())
-    );
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything()));
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });

@@ -1,7 +1,7 @@
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 
-import { EntityId } from '~/core/io/substream-schema';
 import { ID } from '~/core/id';
+import { EntityId } from '~/core/io/substream-schema';
 import {
   RANKING_TYPE_PROPERTY_ID,
   RANKING_TYPE_PROPERTY_NAME,

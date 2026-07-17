@@ -28,8 +28,7 @@ export function keyframeFileExtension(mimeType: string): string {
  *
  * Returns an image `File` (named `<video>-keyframe.<ext>`, JPEG by default) ready to
  * hand to the image upload helpers, or `null` if extraction isn't possible (no DOM, decode/seek
- * failure, timeout). Callers should treat `null` as "skip the keyframe" — a failed
- * extraction must never block saving the video itself.
+ * failure, timeout). Callers should treat `null` as "skip the keyframe".
  */
 export async function extractVideoKeyframe(
   file: File,
