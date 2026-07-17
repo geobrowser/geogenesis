@@ -9,6 +9,21 @@ type ExtractKeyframeOptions = {
 };
 
 /**
+ * Where to seek before grabbing the frame. Clamp to the first half of the clip so short
+ * videos still land on a real frame; when the duration isn't known yet (non-finite), seek
+ * to `seekTime` directly rather than halving it.
+ */
+export function keyframeSeekTarget(seekTime: number, duration: number | null): number {
+  return duration === null ? seekTime : Math.min(seekTime, duration / 2);
+}
+
+/** File extension for the encoded frame, derived from the output mime type (defaults to jpg). */
+export function keyframeFileExtension(mimeType: string): string {
+  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') return 'jpg';
+  return mimeType.startsWith('image/') ? mimeType.slice('image/'.length) : 'jpg';
+}
+
+/**
  * Grab a still keyframe from a video file, client-side, via a hidden <video> + canvas.
  *
  * Returns an image `File` (named `<video>-keyframe.<ext>`, JPEG by default) ready to
@@ -51,9 +66,8 @@ export async function extractVideoKeyframe(
       video.addEventListener('error', () => finish(null));
 
       video.addEventListener('loadeddata', () => {
-        // Clamp the seek target so short clips still land on a real frame.
-        const duration = Number.isFinite(video.duration) ? video.duration : seekTime;
-        const target = Math.min(seekTime, duration / 2);
+        const duration = Number.isFinite(video.duration) ? video.duration : null;
+        const target = keyframeSeekTarget(seekTime, duration);
         try {
           video.currentTime = target;
         } catch {
@@ -94,7 +108,7 @@ export async function extractVideoKeyframe(
     if (!blob) return null;
 
     const baseName = file.name.replace(/\.[^/.]+$/, '') || 'video';
-    const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType.startsWith('image/') ? mimeType.slice('image/'.length) : 'jpg';
+    const ext = keyframeFileExtension(mimeType);
     return new File([blob], `${baseName}-keyframe.${ext}`, { type: blob.type || mimeType });
   } catch (error) {
     console.warn('[extract-keyframe] failed to extract video keyframe', error);

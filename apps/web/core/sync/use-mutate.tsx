@@ -652,24 +652,27 @@ function createMutator(store: GeoStore): Mutator {
           renderableType: 'VIDEO',
         });
 
-        // Extract a still keyframe from the video and store it on the video
-        // entity's Key frame (Image renderable) property. A failed extraction
-        // must never block saving the video, so swallow errors here.
-        try {
-          const keyframe = await extractVideoKeyframe(file);
-          if (keyframe) {
-            await createAndLinkImage({
-              file: keyframe,
-              fromEntityId: videoIdStr,
-              fromEntityName: null,
-              relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
-              relationPropertyName: 'Key frame',
-              spaceId,
-            });
+        // Extract a still keyframe and link it onto the video's Key frame (Image
+        // renderable) property in the background. Extraction can take up to `timeoutMs`
+        // for a broken file, so it must never block the caller's save; don't await it,
+        // and swallow errors here.
+        void (async () => {
+          try {
+            const keyframe = await extractVideoKeyframe(file);
+            if (keyframe) {
+              await createAndLinkImage({
+                file: keyframe,
+                fromEntityId: videoIdStr,
+                fromEntityName: null,
+                relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
+                relationPropertyName: 'Key frame',
+                spaceId,
+              });
+            }
+          } catch (error) {
+            console.warn('[use-mutate] failed to save video keyframe', error);
           }
-        } catch (error) {
-          console.warn('[use-mutate] failed to save video keyframe', error);
-        }
+        })();
 
         return { videoId: videoIdStr, relationId };
       },

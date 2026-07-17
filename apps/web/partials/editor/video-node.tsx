@@ -243,22 +243,25 @@ function VideoNodeChildren({
           setLocalName(fileName);
         }
 
-        // Extract a still keyframe and store it on the video entity's Key frame
-        // (Image renderable) property. A failed extraction must not fail the upload.
-        try {
-          const keyframe = await extractVideoKeyframe(file);
-          if (keyframe) {
-            await storage.images.createAndLink({
-              file: keyframe,
-              fromEntityId: entityId,
-              relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
-              relationPropertyName: 'Key frame',
-              spaceId,
-            });
+        // Extract a still keyframe and link it onto the video's Key frame (Image
+        // renderable) property in the background. Extraction can take up to its timeout
+        // for a broken file, so it must not hold up the upload; don't await it.
+        void (async () => {
+          try {
+            const keyframe = await extractVideoKeyframe(file);
+            if (keyframe) {
+              await storage.images.createAndLink({
+                file: keyframe,
+                fromEntityId: entityId,
+                relationPropertyId: KEY_FRAME_IMAGE_PROPERTY,
+                relationPropertyName: 'Key frame',
+                spaceId,
+              });
+            }
+          } catch (keyframeError) {
+            console.warn('Failed to save video keyframe:', keyframeError);
           }
-        } catch (keyframeError) {
-          console.warn('Failed to save video keyframe:', keyframeError);
-        }
+        })();
       } else {
         // IPFS URL extraction failed - show error to user
         console.error('Failed to extract IPFS URL from upload response');
