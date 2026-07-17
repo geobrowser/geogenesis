@@ -264,10 +264,12 @@ export function EntityVoteButtons({
     />
   ) : null;
 
+  const claimVoterAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimVoterAvatarsPosition === 'leading' && claimVoterAvatars ? (
-        <span className="mr-1">{claimVoterAvatars}</span>
+        <span className={cx(claimVoterAvatarsClassName, 'mr-1')}>{claimVoterAvatars}</span>
       ) : null}
       <button
         onClick={handleUpvote}
@@ -284,7 +286,8 @@ export function EntityVoteButtons({
                 : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+          !isClaimVariant && 'translate-y-px',
           claimVoteButtonColor(upvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
@@ -294,7 +297,7 @@ export function EntityVoteButtons({
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
           <button
-            className="min-w-[2ch] cursor-pointer text-center text-[16px]! tabular-nums hover:text-grey-04"
+            className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
             title={totalVoters > 0 ? 'View voters' : undefined}
             disabled={totalVoters === 0}
           >
@@ -327,7 +330,8 @@ export function EntityVoteButtons({
                 : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+          !isClaimVariant && 'translate-y-px',
           claimVoteButtonColor(downvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
@@ -335,7 +339,7 @@ export function EntityVoteButtons({
         {renderVoteIcon('down', downvoteActive)}
       </button>
       {claimVoterAvatarsPosition === 'trailing' && claimVoterAvatars ? (
-        <span className="ml-1">{claimVoterAvatars}</span>
+        <span className={cx(claimVoterAvatarsClassName, 'ml-1')}>{claimVoterAvatars}</span>
       ) : null}
     </div>
   );
