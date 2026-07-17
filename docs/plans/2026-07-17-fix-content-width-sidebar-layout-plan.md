@@ -61,7 +61,7 @@ Recommended API:
 
 The default must remain the narrow/readable variant so future content pages cannot accidentally inherit the sidebar measure. The wide variant should collapse back to the standard `900px` maximum when the sidebar is hidden at `lg`; otherwise the content would become wider precisely when the rail disappears between 900px and 1023px.
 
-The cover should remain independently sized at `1192px`. Avatar alignment should follow the standard content column, not the cover or sidebar width.
+The cover should remain independently sized at `1192px`. Avatar alignment should follow the standard content column, not the cover or sidebar width. When a space has the community-calls sidebar, its shared header and tabs should use the same `with-sidebar` width as the overview body so those surfaces align.
 
 ## Proposed Solution
 
@@ -105,6 +105,8 @@ Because the presence of community-call series determines the first rendered widt
 
 Avoid using a client-only measurement or `:has()` rule to discover the rail after it streams in; either would make the page change width after initial paint and recreate the layout shift this work is trying to control.
 
+The parent space layout should use the same server-side community-calls result to select the header container variant. Memoize `fetchCommunityCalls(spaceId)` per server render so the layout and page can make one consistent decision without issuing duplicate graph requests.
+
 ### Phase 4: Preserve specialized layout ownership
 
 Do not migrate independent full-page layouts into the entity-page variant as part of this fix.
@@ -135,10 +137,11 @@ If testing the async route directly requires excessive mocking, extract a small 
 
 ## Acceptance Criteria
 
-- [ ] Normal entity, article/post, profile, and space header content is capped at `900px`.
+- [ ] Normal entity, article/post, profile, and space header content without a sidebar is capped at `900px`.
 - [ ] The cover remains capped at `1192px` and does not animate horizontally when cover/avatar state changes.
 - [ ] Avatars align with the left edge of the standard `900px` content column.
 - [ ] A space home with community calls can expand to the proposed `1142px` sidebar layout.
+- [ ] On spaces with community calls, the space heading, metadata, and tabs expand to the same `1142px` width as the sidebar body.
 - [ ] A space home without community calls remains at the standard content width and does not reserve an empty rail.
 - [ ] At `1023px` and below, the community-calls rail is hidden and the content returns to the standard `900px` cap.
 - [ ] Navigating between content pages and sidebar pages does not produce an extra post-render width change.

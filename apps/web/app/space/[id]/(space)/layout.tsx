@@ -5,6 +5,7 @@ import * as React from 'react';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -47,9 +48,10 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const props = await getSpaceFrontPage(spaceId);
+  const [props, communityCalls] = await Promise.all([getSpaceFrontPage(spaceId), fetchCommunityCalls(spaceId)]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
+  const contentVariant = communityCalls.length > 0 ? 'with-sidebar' : 'content';
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -62,7 +64,7 @@ export default async function Layout(props0: LayoutProps) {
         initialCollectionItems={props.initialCollectionItems}
       >
         <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-        <EntityPageContentContainer>
+        <EntityPageContentContainer variant={contentVariant}>
           <div className="space-y-2">
             <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
             <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
