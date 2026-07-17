@@ -1,3 +1,5 @@
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+
 /** Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables). */
 export const EXPLORE_ENTITY_TYPES = [
   { id: 'e550fe517e904b2c8fffdf13408f5634', label: 'News story' },

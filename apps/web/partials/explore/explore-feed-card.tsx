@@ -7,6 +7,7 @@ import { useRecordingSources } from '~/core/community-calls/use-recording-source
 import { DEBATE_TYPE_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
@@ -17,6 +18,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { RankingCardBody, RankingVoteButton } from './explore-ranking-card-body';
 
 type ExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -49,6 +51,7 @@ function MetaDot() {
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
+const RANKING_BLOCK_TYPE = normalizeId(RANKING_BLOCK_TYPE_ID);
 
 function CardTitle({ item }: { item: ExploreFeedItem }) {
   return (
@@ -148,6 +151,7 @@ function DebateCardBody({ item, actions }: CardBodyProps) {
 export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isDebate = item.types.some(type => normalizeId(type.id) === DEBATE_TYPE);
+  const isRanking = item.types.some(type => normalizeId(type.id) === RANKING_BLOCK_TYPE);
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
     const out: { id: string; name: string }[] = [];
@@ -156,7 +160,8 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       const key = t.id.replace(/-/g, '').toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push({ id: t.id, name: t.name });
+      const name = key === RANKING_BLOCK_TYPE ? 'Ranking' : t.name;
+      out.push({ id: t.id, name });
     }
     return out;
   }, [item.types]);
@@ -219,8 +224,8 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
 
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      {showSpace || dottedSegments.length > 0 ? (
-        <div className="flex min-w-0 flex-wrap items-center">
+      {showSpace || dottedSegments.length > 0 || isRanking ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-y-2">
           {showSpace ? (
             <Link
               href={NavUtils.toSpace(item.spaceId)}
@@ -237,6 +242,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {segment}
             </React.Fragment>
           ))}
+          {isRanking ? <RankingVoteButton item={item} /> : null}
         </div>
       ) : null}
 
@@ -244,6 +250,8 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         <CommunityCallCardBody item={item} actions={cardActions} />
       ) : isDebate ? (
         <DebateCardBody item={item} actions={cardActions} />
+      ) : isRanking ? (
+        <RankingCardBody item={item} />
       ) : (
         <DefaultCardBody item={item} actions={cardActions} />
       )}
