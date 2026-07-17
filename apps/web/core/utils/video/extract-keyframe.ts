@@ -11,8 +11,8 @@ type ExtractKeyframeOptions = {
 /**
  * Grab a still keyframe from a video file, client-side, via a hidden <video> + canvas.
  *
- * Returns a JPEG `File` (named `<video>-keyframe.jpg`) ready to hand to the image
- * upload helpers, or `null` if extraction isn't possible (no DOM, decode/seek
+ * Returns an image `File` (named `<video>-keyframe.<ext>`, JPEG by default) ready to
+ * hand to the image upload helpers, or `null` if extraction isn't possible (no DOM, decode/seek
  * failure, timeout). Callers should treat `null` as "skip the keyframe" — a failed
  * extraction must never block saving the video itself.
  */
@@ -94,7 +94,8 @@ export async function extractVideoKeyframe(
     if (!blob) return null;
 
     const baseName = file.name.replace(/\.[^/.]+$/, '') || 'video';
-    return new File([blob], `${baseName}-keyframe.jpg`, { type: blob.type || 'image/jpeg' });
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : mimeType.startsWith('image/') ? mimeType.slice('image/'.length) : 'jpg';
+    return new File([blob], `${baseName}-keyframe.${ext}`, { type: blob.type || mimeType });
   } catch (error) {
     console.warn('[extract-keyframe] failed to extract video keyframe', error);
     return null;
