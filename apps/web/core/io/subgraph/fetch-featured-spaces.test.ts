@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { FEATURED_TAG_ID, ROOT_SPACE, TAG_PROPERTY_ID } from '~/core/constants';
 
 import { fetchFeaturedSpaces } from './fetch-featured-spaces';
 
@@ -25,8 +25,8 @@ function spaceNode(id: string, name: string) {
   return { id, page: { id: `page-${id}`, name, relationsList: [] }, members: { totalCount: 1 } };
 }
 
-function featuredTags(isFeatured = true) {
-  return isFeatured ? [{ toEntity: { id: FEATURED_TAG_ID } }] : [];
+function featuredTags(isFeatured = true, spaceId = ROOT_SPACE) {
+  return isFeatured ? [{ spaceId, toEntity: { id: FEATURED_TAG_ID } }] : [];
 }
 
 function query(arg: unknown): string {
@@ -101,6 +101,7 @@ describe('fetchFeaturedSpaces', () => {
       .filter(q => q.includes('entities(filter:'));
     expect(frontierQueries[0]).toContain(TAG_PROPERTY_ID);
     expect(frontierQueries[0]).toContain(FEATURED_TAG_ID);
+    expect(frontierQueries[0]).toContain(`spaceId: { is: "${ROOT_SPACE}" }`);
   });
 
   it('dedupes a space that claims more than one topic', async () => {
@@ -194,6 +195,39 @@ describe('fetchFeaturedSpaces', () => {
 
     expect(result.map(r => r.spaceId)).toEqual([AI_SPACE]);
     expect(result.some(r => r.spaceId === untaggedSpace)).toBe(false);
+  });
+
+  it('ignores a Featured tag attributed in a space other than Root', async () => {
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 'root' } });
+      if (q.includes('"topic"')) {
+        return Effect.succeed({
+          entities: [
+            {
+              id: 'topic',
+              name: 'AI',
+              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
+              featuredTags: featuredTags(true, '11111111111111111111111111111111'),
+              subtopics: [],
+            },
+          ],
+        });
+      }
+      return Effect.succeed({
+        entities: [
+          {
+            id: 'root',
+            name: 'Geo',
+            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
+            featuredTags: featuredTags(false),
+            subtopics: [{ toEntity: { id: 'topic' } }],
+          },
+        ],
+      });
+    });
+
+    expect(await fetchFeaturedSpaces()).toEqual([]);
   });
 
   it('returns [] when the root space has no topic', async () => {

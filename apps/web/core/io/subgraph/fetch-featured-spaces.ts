@@ -17,9 +17,9 @@ import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 // Featured spaces are discovered by walking the Subtopic relation tree that
 // hangs off the Root space's topic entity, breadth-first. We start at the top
 // (Root's direct subtopics) and work down, so shallow — i.e. most prominent —
-// topics surface first. A topic becomes a pill only if it is tagged Featured
-// and has at least one space claiming it; when several spaces share a topic we
-// feature the top-ranked one (see getTopRankedSpaceId).
+// topics surface first. A topic becomes a pill only if it is tagged Featured in
+// the Root space and has at least one space claiming it; when several spaces
+// share a topic we feature the top-ranked one (see getTopRankedSpaceId).
 
 // How many entity ids we expand per round. Batching keeps the number of
 // sequential round-trips small while staying well under any query-size limit.
@@ -56,7 +56,7 @@ interface TopicNode {
     totalCount: number;
     nodes: SpaceNode[];
   } | null;
-  featuredTags: Array<{ toEntity: { id: string } | null }> | null;
+  featuredTags: Array<{ spaceId: string; toEntity: { id: string } | null }> | null;
   subtopics: Array<{ toEntity: { id: string } | null }> | null;
 }
 
@@ -109,7 +109,9 @@ function frontierQuery(ids: string[]): string {
       featuredTags: relationsList(filter: {
         typeId: { is: ${JSON.stringify(TAG_PROPERTY_ID)} }
         toEntityId: { is: ${JSON.stringify(FEATURED_TAG_ID)} }
+        spaceId: { is: ${JSON.stringify(ROOT_SPACE)} }
       }) {
+        spaceId
         toEntity {
           id
         }
@@ -146,13 +148,13 @@ async function runQuery<T>(query: string): Promise<T | null> {
 
 /**
  * Builds the explore panel's "Join spaces" list by walking the Root space's
- * subtopic tree top-down and emitting one entry per Featured-tagged topic that
- * has a claiming space. The Root topic itself is used only as the traversal
- * seed — it is not featured. Untagged topics are still traversed so featured
- * descendants remain discoverable. Spaces are deduped (a space can claim
- * multiple topics). Traversal order is top-down only so the node cap trims the
- * deepest topics first; the returned list is ordered by space rank (then name),
- * not tree position.
+ * subtopic tree top-down and emitting one entry per topic tagged Featured in
+ * the Root space that has a claiming space. The Root topic itself is used only
+ * as the traversal seed — it is not featured. Untagged topics are still
+ * traversed so featured descendants remain discoverable. Spaces are deduped (a
+ * space can claim multiple topics). Traversal order is top-down only so the node
+ * cap trims the deepest topics first; the returned list is ordered by space rank
+ * (then name), not tree position.
  */
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
   const root = await runQuery<RootResult>(ROOT_QUERY);
@@ -177,7 +179,7 @@ export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
     const nextFrontier: string[] = [];
 
     for (const topic of topics) {
-      // Emit a pill for this topic if it is tagged Featured and a space claims
+      // Emit a pill if this topic is tagged Featured in Root and a space claims
       // it. Skip the Root topic seed (it still comes back in round 1).
       if (topic.id !== rootTopicId) {
         addFeaturedFromTopic(topic, seenSpaceIds, featured);
@@ -206,8 +208,10 @@ export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
 }
 
 function addFeaturedFromTopic(topic: TopicNode, seenSpaceIds: Set<string>, featured: FeaturedSpace[]): void {
-  const hasFeaturedTag = (topic.featuredTags ?? []).some(relation => relation.toEntity?.id === FEATURED_TAG_ID);
-  if (!hasFeaturedTag) return;
+  const hasRootFeaturedTag = (topic.featuredTags ?? []).some(
+    relation => relation.spaceId === ROOT_SPACE && relation.toEntity?.id === FEATURED_TAG_ID
+  );
+  if (!hasRootFeaturedTag) return;
 
   const spaceNodes = topic.spacesByTopicIdConnection?.nodes ?? [];
   if (spaceNodes.length === 0) return;
