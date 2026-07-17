@@ -24,12 +24,12 @@ import {
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import { useEditable } from '~/core/state/editable-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelation } from '~/core/sync/use-store';
@@ -728,6 +728,10 @@ const ConfiguredTableBlock = ({
     setPage(0);
   }, [accumulationResetKey, isExploreView, setPage]);
 
+  // Depending on the `entries` array reference (rather than a content signature)
+  // is safe here: `upsertRowPage` returns the previous `pages` reference when the
+  // page's entity-id signature is unchanged, so `setRowPages` bails and identity-only
+  // changes to `entries` can't cause a render loop.
   React.useEffect(() => {
     if (!isInfiniteExplore) return;
     if (!isFetched || isPlaceholderData) return;
@@ -916,7 +920,10 @@ const ConfiguredTableBlock = ({
       </>
     );
   }
-  if (source.type !== 'COLLECTION' && entries.length === 0 && isFetched && !isLoading) {
+  // In infinite explore mode the current page's `entries` can momentarily be
+  // empty (e.g. a trailing empty page) while accumulated rows are still shown —
+  // gate on `displayEntries` so the empty state can't clobber the populated list.
+  if (source.type !== 'COLLECTION' && displayEntries.length === 0 && isFetched && !isLoading) {
     EntriesComponent = (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
