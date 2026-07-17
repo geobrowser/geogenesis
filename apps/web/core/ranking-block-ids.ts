@@ -23,9 +23,6 @@ export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
 
 export const RANKING_VIEW_PILL_ID = '60022d24d9df4e1888faa71e915f8101';
 
-export const RANKING_TYPE_PROPERTY_ID = '48e01bc8324e48c2a6c9cab3f49290c6';
-export const RANKING_TYPE_PROPERTY_NAME = 'Ranking type';
-
 export const ROLLING_RANKING_TYPE_ID = 'd00ddc89b23c4a20a63febf545ddc139';
 export const ROLLING_RANKING_TYPE_NAME = 'Rolling ranking';
 
