@@ -2,29 +2,13 @@
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
-
 import { useBlockTools } from '~/core/blocks/data/use-block-tools';
-import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
+import { useUrlIngestionSubmit } from '~/core/hooks/use-url-ingestion-submit';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
-import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 
 import { Check } from '~/design-system/icons/check';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
-
-function normalizeHttpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const url = new URL(withScheme);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
 
 type BlockLinkIngestionContextValue = {
   spaceId: string;
@@ -94,70 +78,12 @@ export function BlockLinkIngestionChip() {
 export function BlockLinkIngestionPanel() {
   const { spaceId, enabled, expanded, setExpanded } = useBlockLinkIngestionContext();
   const canEdit = useCanUserEdit(spaceId);
-  const setSeed = useSetAtom(assistantSeedAtom);
-  const setChatOpen = useSetAtom(isChatOpenAtom);
-  const [url, setUrl] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
+  const { url, setUrl, canSubmit, handleSubmit } = useUrlIngestionSubmit({
+    logTag: 'BlockLinkIngestionPanel',
+    onComplete: () => setExpanded(false),
+  });
 
   if (!enabled || !canEdit || !expanded) return null;
-
-  const normalizedUrl = normalizeHttpUrl(url);
-  const canSubmit = normalizedUrl !== null && !submitting;
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!normalizedUrl || submitting) return;
-    setSubmitting(true);
-
-    let classification: ClassifyUrlResponse = { route: 'chat' };
-    try {
-      const res = await fetch('/api/chat/classify-url', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: normalizedUrl }),
-      });
-      if (res.ok) {
-        classification = (await res.json()) as ClassifyUrlResponse;
-      } else {
-        console.warn('[BlockLinkIngestionPanel] classify-url returned', res.status);
-      }
-    } catch (err) {
-      console.warn('[BlockLinkIngestionPanel] classify-url failed; falling back to chat flow', err);
-    }
-
-    if (classification.route === 'inject') {
-      try {
-        const res = await fetch('/api/chat/inject', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: normalizedUrl, type: classification.type }),
-        });
-        if (res.ok || res.status === 202) {
-          const body = (await res.json()) as { jobId: string };
-          if (body.jobId) {
-            setSeed({ mode: 'inject', url: normalizedUrl, jobId: body.jobId, injectType: classification.type });
-            setChatOpen(true);
-            setExpanded(false);
-            setUrl('');
-            setSubmitting(false);
-            return;
-          }
-        } else {
-          console.warn('[BlockLinkIngestionPanel] inject submit returned', res.status);
-        }
-      } catch (err) {
-        console.warn('[BlockLinkIngestionPanel] inject submit failed; falling back to chat flow', err);
-      }
-    }
-
-    setSeed({ mode: 'ingestion', url: normalizedUrl });
-    setChatOpen(true);
-    setExpanded(false);
-    setUrl('');
-    setSubmitting(false);
-  };
 
   return (
     <div className="mb-4 w-full" onMouseDown={e => e.stopPropagation()}>
