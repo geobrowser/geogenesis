@@ -4,47 +4,21 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { mappingToRows } from '~/core/blocks/data/use-mapping';
 import { useView } from '~/core/blocks/data/use-view';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Row } from '~/core/types';
 
 import { isCreatedWithinWindow } from './ranking-rolling';
 import { useRankingBlockConfig } from './use-ranking-block-config';
 
-export type RowPage = { page: number; rows: Row[] };
+export type { RowPage };
+export { flattenRowPages, upsertRowPage };
 
-function rowEntityIdsSignature(rows: Row[]): string {
+function rowEntityIdsSignature(rows: { entityId: string }[]): string {
   return rows.map(row => row.entityId).join('|');
-}
-
-export function upsertRowPage(pages: RowPage[], page: number, rows: Row[]): RowPage[] {
-  const signature = rowEntityIdsSignature(rows);
-  const existing = pages.find(p => p.page === page);
-  if (existing && rowEntityIdsSignature(existing.rows) === signature) {
-    return pages;
-  }
-  const without = pages.filter(p => p.page !== page);
-  const next = [...without, { page, rows }];
-  next.sort((a, b) => a.page - b.page);
-  return next;
-}
-
-export function flattenRowPages(pages: RowPage[]): Row[] {
-  const ordered: Row[] = [];
-  const seen = new Set<string>();
-
-  for (const page of pages) {
-    for (const row of page.rows) {
-      if (!row.entityId || seen.has(row.entityId)) continue;
-      seen.add(row.entityId);
-      ordered.push(row);
-    }
-  }
-
-  return ordered;
 }
 
 export function useRankingAccumulatedRows() {
