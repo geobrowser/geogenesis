@@ -4,6 +4,7 @@ import * as Either from 'effect/Either';
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { AbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
 import {
@@ -170,6 +171,17 @@ type BrowseSidebarSources = {
 
 type FeaturedSpacesSource = FeaturedSpace[] | PromiseLike<FeaturedSpace[]>;
 
+function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<FeaturedSpace[]> {
+  const promise = source ? Promise.resolve(source) : fetchFeaturedSpaces();
+  return promise.catch(error => {
+    // Cancellation must keep propagating so query consumers do not replace a
+    // cancelled request with a successful-but-empty sidebar response.
+    if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
+    console.error('Unable to load Featured spaces for the Browse sidebar', error);
+    return [];
+  });
+}
+
 /**
  * The optional source lets pages that also render the Explore Join-spaces panel
  * share its in-flight traversal rather than querying the Root topic tree twice.
@@ -178,7 +190,7 @@ export async function fetchBrowseSidebarData(
   memberSpaceId: string | null | undefined,
   featuredSpacesSource?: FeaturedSpacesSource
 ): Promise<BrowseSidebarData> {
-  const featuredSpacesPromise = featuredSpacesSource ? Promise.resolve(featuredSpacesSource) : fetchFeaturedSpaces();
+  const featuredSpacesPromise = resolveFeaturedSpaces(featuredSpacesSource);
 
   if (!memberSpaceId) {
     const [featuredSpaces, documentationRows] = await Promise.all([
@@ -207,7 +219,7 @@ export async function fetchBrowseSidebarDataWithMemberSpaces(
 ): Promise<{ sidebar: BrowseSidebarData; memberSpaces: Space[] }> {
   const [sources, featuredSpaces] = await Promise.all([
     fetchBrowseSidebarSources(memberSpaceId),
-    featuredSpacesSource ? Promise.resolve(featuredSpacesSource) : fetchFeaturedSpaces(),
+    resolveFeaturedSpaces(featuredSpacesSource),
   ]);
   const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources, featuredSpaces);
   return { sidebar, memberSpaces: sources.memberSpaces };

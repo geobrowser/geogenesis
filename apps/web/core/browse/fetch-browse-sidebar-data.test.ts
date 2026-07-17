@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { AbortError } from '~/core/io/subgraph/errors';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
 import { fetchBrowseSidebarData } from './fetch-browse-sidebar-data';
@@ -98,5 +99,29 @@ describe('fetchBrowseSidebarData', () => {
     expect(result.memberOf).toEqual([
       expect.objectContaining({ id: pendingMemberId, pendingLabel: 'Membership pending' }),
     ]);
+  });
+
+  it('keeps member and editor sections usable when the featured-space source fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    mocks.fetchFeaturedSpaces.mockRejectedValue(new Error('indexer unavailable'));
+    mocks.fetchEditorSpaceIds.mockResolvedValue(['editor-space']);
+
+    const result = await fetchBrowseSidebarData('personal-space');
+
+    expect(result.featured).toEqual([]);
+    expect(result.editorOf.map(row => row.id)).toEqual(['editor-space']);
+    expect(result.personalSpaceId).toBe('personal-space');
+    expect(consoleError).toHaveBeenCalledWith(
+      'Unable to load Featured spaces for the Browse sidebar',
+      expect.any(Error)
+    );
+    consoleError.mockRestore();
+  });
+
+  it('preserves featured-space request cancellation', async () => {
+    const abort = new AbortError();
+    mocks.fetchFeaturedSpaces.mockRejectedValue(abort);
+
+    await expect(fetchBrowseSidebarData(null)).rejects.toBe(abort);
   });
 });
