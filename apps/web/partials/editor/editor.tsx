@@ -324,7 +324,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
-    return <span>{placeholder}</span>;
+    return <>{placeholder}</>;
   }
 
   return (
