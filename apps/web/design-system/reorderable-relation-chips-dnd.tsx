@@ -1,22 +1,6 @@
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  horizontalListSortingStrategy,
-  sortableKeyboardCoordinates,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { move } from '@dnd-kit/helpers';
+import { DragDropProvider } from '@dnd-kit/react';
+import { useSortable } from '@dnd-kit/react/sortable';
 
 import React from 'react';
 
@@ -26,55 +10,39 @@ import { sortRelations } from '~/core/utils/utils';
 
 import { LinkableRelationChip } from './chip';
 
-export default function ReorderableRelationChipsDnd({
-  relations,
-  onUpdateRelation,
-  spaceId,
-}: {
+type Props = {
   relations: Relation[];
   onUpdateRelation: (relation: Relation, newPosition: string | null) => void;
   spaceId: string;
-}) {
-  const { storage } = useMutate();
+  afterChips?: React.ReactNode;
+};
 
+type DragDropProviderProps = React.ComponentProps<typeof DragDropProvider>;
+type DragEndEvent = Parameters<NonNullable<DragDropProviderProps['onDragEnd']>>[0];
+
+/**
+ * Reorderable, flex-wrapped list of relation chips.
+ *
+ * Built on the next-gen dnd-kit (@dnd-kit/react): unlike the classic sortable
+ * strategies — which compute transforms assuming uniform item sizes and therefore
+ * stretch or mis-space variable-width chips — it measures the real DOM and
+ * FLIP-animates reordering, so wrapped multi-row chip lists reflow correctly.
+ * Reordering is optimistic during the drag; we commit positions on drop.
+ */
+export default function ReorderableRelationChipsDnd({ relations, onUpdateRelation, spaceId, afterChips }: Props) {
   const sortedRelations = sortRelations(relations);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Prevent accidental drags
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [isDragging, setIsDragging] = React.useState(false);
-
-  const activeRelation = activeId ? sortedRelations.find(r => r?.id === activeId) : null;
-
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active?.id as string);
-    setIsDragging(true);
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active?.id === over?.id) return;
+    if (event.canceled) return;
 
-    const oldIndex = sortedRelations.findIndex(r => r?.id === active?.id);
-    const newIndex = sortedRelations.findIndex(r => r?.id === over?.id);
+    const newList = move(sortedRelations, event);
+    const changed = newList.some((relation, index) => relation.id !== sortedRelations[index]?.id);
+    if (!changed) return;
 
-    const newList = arrayMove(sortedRelations, oldIndex, newIndex);
-
+    // Reassign the existing set of positions across the new slot order.
     newList.forEach((relation, index) => {
-      onUpdateRelation(relation, sortedRelations[index].position ?? null);
+      onUpdateRelation(relation, sortedRelations[index]?.position ?? null);
     });
-
-    setIsDragging(false);
-    setActiveId(null);
   };
 
   if (sortedRelations.length <= 1) {
@@ -82,138 +50,98 @@ export default function ReorderableRelationChipsDnd({
       <>
         {sortedRelations.map(relation => (
           <div key={`relation-${relation.id}`} className="max-w-full min-w-0">
-            <LinkableRelationChip
-              isEditing
-              small
-              truncateLabel
-              onDelete={() => storage.relations.delete(relation)}
-              onDone={result => {
-                storage.relations.update(relation, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
-              }}
-              currentSpaceId={spaceId}
-              entityId={relation.toEntity.id}
-              relationId={relation.id}
-              relationEntityId={relation.entityId}
-              spaceId={relation.toSpaceId}
-              verified={relation.verified}
-            >
-              {relation.toEntity.name}
-            </LinkableRelationChip>
+            <RelationChip relation={relation} spaceId={spaceId} />
           </div>
         ))}
+        {afterChips}
       </>
     );
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <SortableContext items={sortedRelations.map(r => r.id)} strategy={horizontalListSortingStrategy}>
-        {sortedRelations.map(relation => (
-          <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
-        ))}
-      </SortableContext>
-
-      <DragOverlay>
-        {activeId && activeRelation ? (
-          <div className="inline-block" style={{ cursor: 'grabbing' }}>
-            <LinkableRelationChip
-              isEditing
-              small
-              truncateLabel
-              onDelete={() => {}}
-              currentSpaceId={spaceId}
-              entityId={activeRelation.toEntity?.id}
-              relationId={activeRelation?.id}
-              relationEntityId={activeRelation.entityId}
-              spaceId={activeRelation.toSpaceId}
-              verified={activeRelation.verified}
-            >
-              {activeRelation.toEntity.name}
-            </LinkableRelationChip>
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    <DragDropProvider onDragEnd={handleDragEnd}>
+      {sortedRelations.map((relation, index) => (
+        <SortableRelationChip key={relation.id} relation={relation} index={index} spaceId={spaceId} />
+      ))}
+      {afterChips}
+    </DragDropProvider>
   );
 }
 
-interface SortableRelationChipProps {
+function RelationChip({
+  relation,
+  spaceId,
+  dragHandleRef,
+}: {
   relation: Relation;
   spaceId: string;
+  dragHandleRef?: (element: HTMLButtonElement | null) => void;
+}) {
+  const { storage } = useMutate();
+
+  return (
+    <LinkableRelationChip
+      isEditing
+      small
+      truncateLabel
+      sortableDragHandleRef={dragHandleRef}
+      onDelete={() => storage.relations.delete(relation)}
+      onDone={result => {
+        storage.relations.update(relation, draft => {
+          draft.toSpaceId = result.space;
+          draft.verified = result.verified;
+        });
+      }}
+      currentSpaceId={spaceId}
+      entityId={relation.toEntity.id}
+      relationId={relation.id}
+      relationEntityId={relation.entityId}
+      spaceId={relation.toSpaceId}
+      verified={relation.verified}
+    >
+      {relation.toEntity.name}
+    </LinkableRelationChip>
+  );
 }
 
-function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: relation.id,
-  });
+function SortableRelationChip({
+  relation,
+  index,
+  spaceId,
+}: {
+  relation: Relation;
+  index: number;
+  spaceId: string;
+}) {
+  const { ref, handleRef, isDragging } = useSortable({ id: relation.id, index });
 
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    opacity: isDragging ? 0 : 1,
-    zIndex: isDragging ? 1000 : 'auto',
-  };
-
-  const { storage } = useMutate();
   const [justDragged, setJustDragged] = React.useState(false);
 
-  // Track when dragging ends to prevent click events
+  // Keep a short window after a drag ends so the ensuing click doesn't navigate.
   React.useEffect(() => {
     if (isDragging) {
       setJustDragged(true);
     } else if (justDragged) {
-      // Keep justDragged true for a short time after drag ends
       const timeout = setTimeout(() => setJustDragged(false), 200);
       return () => clearTimeout(timeout);
     }
   }, [isDragging, justDragged]);
 
-  const handleClick = (e: React.MouseEvent) => {
-    // Prevent navigation if we just finished dragging
+  const handleClick = (event: React.MouseEvent) => {
     if (justDragged) {
-      e.preventDefault();
-      e.stopPropagation();
+      event.preventDefault();
+      event.stopPropagation();
     }
   };
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
+      ref={ref}
       className="relative inline-block max-w-full min-w-0"
       onClick={handleClick}
       onClickCapture={handleClick}
     >
-      <LinkableRelationChip
-        isEditing
-        small
-        truncateLabel
-        sortableDragHandleListeners={listeners}
-        onDelete={() => storage.relations.delete(relation)}
-        onDone={result => {
-          storage.relations.update(relation, draft => {
-            draft.toSpaceId = result.space;
-            draft.verified = result.verified;
-          });
-        }}
-        currentSpaceId={spaceId}
-        entityId={relation.toEntity.id}
-        relationId={relation.id}
-        relationEntityId={relation.entityId}
-        spaceId={relation.toSpaceId}
-        verified={relation.verified}
-      >
-        {relation.toEntity.name}
-      </LinkableRelationChip>
+      <RelationChip relation={relation} spaceId={spaceId} dragHandleRef={handleRef} />
     </div>
   );
 }
