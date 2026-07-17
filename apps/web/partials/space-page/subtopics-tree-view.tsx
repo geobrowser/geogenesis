@@ -97,6 +97,7 @@ export function SubtopicsTreeView({ spaceId, rootEntityId, onAddSubtopic, onNavi
           isRoot
           defaultExpanded
           onAddSubtopic={onAddSubtopic}
+          onNavigate={onNavigate}
         />
       </div>
     </>
@@ -172,6 +173,7 @@ function SubtopicTreeNode({
   relationId,
   defaultExpanded = false,
   onAddSubtopic,
+  onNavigate,
 }: {
   entityId: string;
   name: string;
@@ -185,6 +187,7 @@ function SubtopicTreeNode({
   relationId?: string;
   defaultExpanded?: boolean;
   onAddSubtopic: (target: AddSubtopicTarget) => void;
+  onNavigate?: () => void;
 }) {
   const [expanded, setExpanded] = React.useState(defaultExpanded);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -244,7 +247,13 @@ function SubtopicTreeNode({
           </span>
         </button>
 
-        <span className="min-w-0 flex-1 truncate text-button text-current">{name}</span>
+        <Link
+          href={NavUtils.toEntity(spaceId, entityId)}
+          onClick={() => onNavigate?.()}
+          className="min-w-0 flex-1 truncate text-button text-current hover:underline"
+        >
+          {name}
+        </Link>
 
         {canEdit && (
           <Menu
@@ -303,6 +312,7 @@ function SubtopicTreeNode({
                 parentName={name}
                 relationId={child.relationId}
                 onAddSubtopic={onAddSubtopic}
+                onNavigate={onNavigate}
               />
             ))}
         </div>
