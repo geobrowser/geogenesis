@@ -1,3 +1,5 @@
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+
 /** Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables). */
 export const EXPLORE_ENTITY_TYPE_IDS = [
   'e550fe517e904b2c8fffdf13408f5634',
@@ -10,6 +12,7 @@ export const EXPLORE_ENTITY_TYPE_IDS = [
   '484a18c5030a499cb0f2ef588ff16d50',
   '0419ca20118b4cdb84dfdb9ed73b50c2',
   'fd51f93520634617be397b672b23364c',
+  RANKING_BLOCK_TYPE_ID,
 ] as const;
 
 export const EXPLORE_ENTITY_NAME_PROPERTY_ID = 'a126ca530c8e48d5b88882c734c38935';
