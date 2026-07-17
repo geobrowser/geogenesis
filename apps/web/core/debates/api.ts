@@ -435,11 +435,7 @@ export async function joinDebateQueue(
   });
 }
 
-export async function leaveDebateQueue(
-  spaceId: string,
-  claimId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken
-) {
+export async function leaveDebateQueue(spaceId: string, claimId: string, getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'DELETE',
     auth: true,

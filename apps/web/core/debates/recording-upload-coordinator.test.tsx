@@ -80,9 +80,7 @@ describe('debate recording uploader', () => {
 
 describe('DebateRecordingUploadBanner', () => {
   it('shows the upload count with the publish checkbox checked', () => {
-    render(
-      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={() => undefined} />
-    );
+    render(<DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={() => undefined} />);
 
     expect(screen.getByText('Uploading 1 debate')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');

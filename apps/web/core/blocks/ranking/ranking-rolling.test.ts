@@ -57,9 +57,9 @@ describe('isRollingSubmissionLive', () => {
   });
 
   it('is not live without any identifying id', () => {
-    expect(isRollingSubmissionLive({ personalSpaceId: null, myRankEntityId: null, aggregatedSubmitterRefs: refs })).toBe(
-      false
-    );
+    expect(
+      isRollingSubmissionLive({ personalSpaceId: null, myRankEntityId: null, aggregatedSubmitterRefs: refs })
+    ).toBe(false);
   });
 });
 

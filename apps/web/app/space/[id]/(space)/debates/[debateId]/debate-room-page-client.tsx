@@ -1024,15 +1024,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!opponentCancelledRecording) {
       router.replace(`/space/${spaceId}/debates`);
     }
-  }, [
-    currentUserId,
-    debate,
-    discardLocalRecorder,
-    opponentCancelledRecording,
-    recordingCancelledBy,
-    router,
-    spaceId,
-  ]);
+  }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, router, spaceId]);
 
   return (
     <div className="py-8">
@@ -1293,7 +1285,12 @@ function DebatePreScreen({
         </button>
 
         <div className="mt-5">
-          <RecordingCircleButton ariaLabel="Leave debate" title="Leave debate" onClick={onLeave} disabled={leaveDisabled}>
+          <RecordingCircleButton
+            ariaLabel="Leave debate"
+            title="Leave debate"
+            onClick={onLeave}
+            disabled={leaveDisabled}
+          >
             <LeaveIcon />
           </RecordingCircleButton>
         </div>
