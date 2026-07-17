@@ -21,6 +21,7 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
+  useDebatesEnabled: () => true,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -163,5 +164,7 @@ function completedDebate(): Debate {
     })),
     recording_error: null,
     cancellation_reason: null,
+    recording_cancelled_at: null,
+    recording_cancelled_by: null,
   };
 }

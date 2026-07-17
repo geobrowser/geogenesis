@@ -21,6 +21,15 @@ export const AGGREGATED_RANKINGS_PROPERTY_NAME = 'Aggregated rankings';
 export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
 export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
 
-export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';
-
 export const RANKING_VIEW_PILL_ID = '60022d24d9df4e1888faa71e915f8101';
+
+export const RANKING_TYPE_PROPERTY_ID = '48e01bc8324e48c2a6c9cab3f49290c6';
+export const RANKING_TYPE_PROPERTY_NAME = 'Ranking type';
+
+export const ROLLING_RANKING_TYPE_ID = 'd00ddc89b23c4a20a63febf545ddc139';
+export const ROLLING_RANKING_TYPE_NAME = 'Rolling ranking';
+
+export const SUBMISSION_FREQUENCY_PROPERTY_ID = 'c0ab99538eeb4d7c8ccb1dd585ae4711';
+export const SUBMISSION_FREQUENCY_PROPERTY_NAME = 'Submission frequency';
+
+export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';

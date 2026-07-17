@@ -16,6 +16,7 @@ import {
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
   abortDebate,
+  cancelDebateRecording,
   acceptDebateMatch,
   acceptDebateRematchRequest,
   completeLocalRecordingUpload,
@@ -34,6 +35,7 @@ import {
   handleDebateSharePrompt,
   heartbeatDebatePresence,
   joinDebateQueue,
+  leaveDebateQueue,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
@@ -89,6 +91,18 @@ export function useJoinDebateQueue(spaceId: string) {
   return useMutation({
     mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
       joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+    },
+  });
+}
+
+export function useLeaveDebateQueue(spaceId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ claimId }: { claimId: string }) => leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
@@ -235,6 +249,16 @@ export function useAbortDebate(debateId: string) {
 
   return useMutation({
     mutationFn: () => abortDebate(debateId, getPrivyIdentityToken),
+    onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
+  });
+}
+
+export function useCancelDebateRecording(debateId: string) {
+  const queryClient = useQueryClient();
+  const { getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: () => cancelDebateRecording(debateId, getPrivyIdentityToken),
     onSuccess: debate => queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate),
   });
 }

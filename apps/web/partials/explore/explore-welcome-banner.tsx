@@ -59,7 +59,7 @@ function WelcomeBanner() {
           </span>
           Welcome to Geo - Become a curator!
         </h2>
-        <p className="mt-2 max-w-[400px] text-metadata text-white">
+        <p className="mt-2 max-w-[338px] text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
           Help organize topics, questions, claims, and relevant sources to improve the quality of discourse. Join spaces
           and start contributing there.
         </p>

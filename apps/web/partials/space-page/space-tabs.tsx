@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useFeatureFlag } from '~/core/state/feature-flags';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
@@ -34,7 +34,7 @@ type BuildSpaceTabsParams = {
   overviewHref: string;
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
-  questionsTabEnabled: boolean;
+  isDebatesEnabled: boolean;
 };
 
 export function buildSpaceTabs({
@@ -42,7 +42,7 @@ export function buildSpaceTabs({
   overviewHref,
   dynamicTabs,
   typeIds,
-  questionsTabEnabled,
+  isDebatesEnabled,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -84,7 +84,7 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set(questionsTabEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []);
+      const reservedLabels = new Set(isDebatesEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -92,7 +92,7 @@ export function buildSpaceTabs({
     }
   }
 
-  if (questionsTabEnabled) {
+  if (isDebatesEnabled) {
     tabs.push(QUESTION_TAB);
     tabs.push(DEBATE_TAB);
   }
@@ -116,7 +116,7 @@ export function buildSpaceTabs({
 
 export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
   const { editable } = useEditable();
-  const questionsTabEnabled = useFeatureFlag('questionsTab');
+  const isDebatesEnabled = useDebatesEnabled();
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -162,7 +162,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
-  if (questionsTabEnabled) {
+  if (isDebatesEnabled) {
     systemTabsAfter.push({ label: 'Claims', href: `/space/${spaceId}/claims` });
     systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
@@ -197,7 +197,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     href: `${overviewHref}?tabId=${entity.id}`,
   }));
 
-  const baseTabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, questionsTabEnabled });
+  const baseTabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, isDebatesEnabled });
 
   const tabs = showCommunity
     ? [
