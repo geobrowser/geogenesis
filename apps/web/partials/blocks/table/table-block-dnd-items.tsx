@@ -35,7 +35,6 @@ export type RenderItemProps = {
   /** Bumps when user clicks "+" so Find or create refocuses even if the row already exists. */
   placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
-  listRank?: number;
 };
 
 export type DndItemsConfig = {
@@ -67,8 +66,6 @@ export type TableBlockDndItemsProps = {
   shouldAutoFocusPlaceholder?: boolean;
   placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
-  /** When true, pass 1-based list ranks for score-sorted browse rows. */
-  showScoreRank?: boolean;
   config: DndItemsConfig;
 };
 
@@ -89,7 +86,6 @@ export const TableBlockDndItems = ({
   shouldAutoFocusPlaceholder = false,
   placeholderFocusKey = 0,
   collectionTypeFilters,
-  showScoreRank = false,
   config,
 }: TableBlockDndItemsProps) => {
   const placeholderEntries = entries.filter(r => r.placeholder);
@@ -242,7 +238,6 @@ export const TableBlockDndItems = ({
               ...sharedItemProps,
               row,
               isPlaceholder: false,
-              listRank: showScoreRank ? pageNumber * pageSize + index + 1 : undefined,
             })}
           </React.Fragment>
         )

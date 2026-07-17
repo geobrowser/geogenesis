@@ -10,8 +10,8 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { DEFAULT_SCORE_SORT_STATE, shouldApplyDefaultScoreSort } from '~/core/blocks/data/ensure-default-score-sort';
 import { ensureScoreShownColumn } from '~/core/blocks/data/ensure-score-shown-column';
-import { DEFAULT_SCORE_SORT_STATE, isSortedByScoreDescending, shouldApplyDefaultScoreSort } from '~/core/blocks/data/ensure-default-score-sort';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
@@ -25,6 +25,7 @@ import {
   registerEntityBlockOwner,
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
+import { useScoreDismissed } from '~/core/blocks/data/use-score-dismissed';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -66,12 +67,12 @@ import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dn
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
+import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
-import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
-import TableBlockPillItemsDnd from './table-block-pill-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
+import TableBlockPillItemsDnd from './table-block-pill-items-dnd';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
 
@@ -702,8 +703,9 @@ const ConfiguredTableBlock = ({
     [filterableProperties, properties]
   );
 
-  // List/gallery: persist Score when missing. Soft-deleted Score (user hid it) is not re-added.
+  // List/gallery: persist Score when missing, unless the user durably dismissed it.
   const hasScoreShown = isScorePropertyShown(shownColumnIds);
+  const scoreDismissed = useScoreDismissed();
   const scoreBrowseDefault = isScoreVisibleOnBrowseView(shownColumnIds, relationId);
   React.useEffect(() => {
     if (!canEdit) return;
@@ -713,19 +715,22 @@ const ConfiguredTableBlock = ({
       storage,
       blockRelationId: relationId,
       spaceId,
+      scoreDismissed,
       relationsIncludingDeleted: store.getResolvedRelations(relationId, true),
     });
-  }, [canEdit, view, relationId, hasScoreShown, storage, spaceId]);
+  }, [canEdit, view, relationId, hasScoreShown, scoreDismissed, storage, spaceId]);
 
+  // The score sort is a seed, not an invariant.
+  const defaultScoreSortAppliedForRef = React.useRef<string | undefined>(undefined);
+  const scoreSortBlockKey = relationId ?? '';
   React.useEffect(() => {
     if (view !== 'LIST' && view !== 'GALLERY') return;
     if (source.type === 'COLLECTION') return;
+    if (defaultScoreSortAppliedForRef.current === scoreSortBlockKey) return;
+    defaultScoreSortAppliedForRef.current = scoreSortBlockKey;
     if (!shouldApplyDefaultScoreSort(sortState, scoreBrowseDefault)) return;
     setSortState(DEFAULT_SCORE_SORT_STATE);
-  }, [view, source.type, sortState, scoreBrowseDefault, setSortState]);
-
-  const showScoreRankedList =
-    view === 'LIST' && scoreBrowseDefault && isSortedByScoreDescending(sortState) && source.type !== 'COLLECTION';
+  }, [view, source.type, scoreSortBlockKey, sortState, scoreBrowseDefault, setSortState]);
 
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
@@ -775,7 +780,6 @@ const ConfiguredTableBlock = ({
         shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
         placeholderFocusKey={placeholderFocusKey}
         collectionTypeFilters={collectionTypeFilters}
-        showScoreRank={showScoreRankedList}
       />
     );
   }

@@ -20,7 +20,6 @@ const renderItem = ({
   autoFocus,
   placeholderFocusKey,
   collectionTypeFilters,
-  listRank,
 }: RenderItemProps) => (
   <TableBlockListItem
     isEditing={isEditing}
@@ -36,7 +35,6 @@ const renderItem = ({
     autoFocus={autoFocus}
     focusRequestKey={placeholderFocusKey}
     collectionTypeFilters={collectionTypeFilters}
-    listRank={listRank}
   />
 );
 

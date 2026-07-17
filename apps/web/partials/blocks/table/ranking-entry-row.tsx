@@ -2,11 +2,10 @@
 
 import cx from 'classnames';
 
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { useView } from '~/core/blocks/data/use-view';
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
-import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
-import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
-import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
@@ -63,9 +62,8 @@ export function RankingEntryRow({
   linkToEntity = true,
   rankStyle = 'avatar-badge',
 }: Props) {
-  const { relationId: blockRelationId } = useDataBlockInstance();
   const { shownColumnIds } = useView();
-  const showVoteButtons = isScoreVisibleOnBrowseView(shownColumnIds, blockRelationId);
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
 
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;

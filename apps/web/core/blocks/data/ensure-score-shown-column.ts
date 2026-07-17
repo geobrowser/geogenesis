@@ -11,14 +11,17 @@ export function ensureScoreShownColumn({
   storage,
   blockRelationId,
   spaceId,
+  scoreDismissed,
   relationsIncludingDeleted,
 }: {
   storage: Mutator;
   blockRelationId: string;
   spaceId: string;
+  scoreDismissed: boolean;
   relationsIncludingDeleted: Relation[];
 }) {
   if (!blockRelationId) return;
+  if (scoreDismissed) return;
 
   const scoreColumnRelations = relationsIncludingDeleted.filter(
     r =>
@@ -28,8 +31,7 @@ export function ensureScoreShownColumn({
       ID.equals(columnPropertyIdFromRelation(r), SCORE_SYSTEM_PROPERTY)
   );
 
-  if (scoreColumnRelations.some(r => !r.isDeleted)) return;
-  if (scoreColumnRelations.some(r => r.isDeleted)) return;
+  if (scoreColumnRelations.length > 0) return;
 
   const existingShown = relationsIncludingDeleted
     .filter(
