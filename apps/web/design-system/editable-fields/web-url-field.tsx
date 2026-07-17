@@ -64,6 +64,7 @@ export function WebUrlField({
   format,
   className = '',
   disableLink = false,
+  placeholder = 'Add value...',
   ...props
 }: WebUrlFieldProps) {
   // We use the local value and onBlur to improve performance when WebUrlField is rendered
@@ -89,6 +90,7 @@ export function WebUrlField({
   return isEditing ? (
     <input
       {...props}
+      placeholder={placeholder}
       value={localValue}
       className={cx(
         webUrlFieldStyles({ variant, editable: isEditing, className }),
