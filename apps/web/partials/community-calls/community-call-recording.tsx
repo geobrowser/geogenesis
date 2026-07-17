@@ -6,7 +6,7 @@ import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { isPlayableRecordingUrl } from '~/core/community-calls/recordings';
 import { useRelations } from '~/core/sync/use-store';
 
-import { CONTENT_MAX_WIDTH } from '~/partials/entity-page/editable-entity-cover-avatar-header';
+import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 
 import { PublishedRecordingPlayer, type RecordingSource } from './published-recording-player';
 
@@ -40,7 +40,7 @@ export function CommunityCallRecording({
   if (sources.length === 0) return null;
 
   return (
-    <div className="mx-auto mb-6 w-full px-4" style={{ maxWidth: CONTENT_MAX_WIDTH }}>
+    <div className="mx-auto mb-6 w-full px-4" style={{ maxWidth: ENTITY_PAGE_CONTENT_MAX_WIDTH }}>
       <PublishedRecordingPlayer sources={sources} spaceId={spaceId} />
     </div>
   );
