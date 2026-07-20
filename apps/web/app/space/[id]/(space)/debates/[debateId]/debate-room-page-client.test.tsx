@@ -416,12 +416,16 @@ describe('DebateRoomPageClient', () => {
     expect(
       document.querySelector('[data-inactive-speaker="remote"] [data-muted-indicator="true"]')
     ).toBeInTheDocument();
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
-  it('shows the yes participant above the no participant when the local participant chose no', async () => {
+  it('keeps the remote speaking turn in color and orders yes above no when the local participant chose no', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
+      first_participant_slot: 2,
       current_turn_index: 0,
       current_speaker_slot: 2,
       turn_started_at: '2026-07-02T00:00:10.000Z',
@@ -441,6 +445,13 @@ describe('DebateRoomPageClient', () => {
     expect(tiles.map(tile => tile.getAttribute('data-debate-video-position'))).toEqual(['yes', 'no']);
     expect(tiles[0]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'remote');
     expect(tiles[1]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'local');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-black/45');
+    expect(
+      document.querySelector('[data-inactive-speaker="local"] [data-muted-indicator="true"]')
+    ).toBeInTheDocument();
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
   it('shows recording debug controls when debate debugging is enabled', async () => {
@@ -449,8 +460,9 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
+      first_participant_slot: 2,
       current_turn_index: 0,
-      current_speaker_slot: 1,
+      current_speaker_slot: 2,
       turn_started_at: '2026-07-02T00:00:10.000Z',
       turn_ends_at: '2026-07-02T00:00:40.000Z',
       completed_at: null,
@@ -468,6 +480,16 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Timed turn 1').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Timed turn 2').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Thanking').closest('li')).not.toHaveAttribute('aria-current');
+
+    const remoteVideo = document.createElement('video');
+    const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
+    act(() => trackSubscribed?.({ attach: () => remoteVideo }));
+    expect(remoteVideo.muted).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+
+    await waitFor(() => expect(remoteVideo.muted).toBe(true));
+    expectDebateVideoTileInColor('remote');
   });
 
   it('shows the circular phase timer during a timed debate turn', async () => {
@@ -505,6 +527,10 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
     expect(screen.getAllByText('5')).not.toHaveLength(0);
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
   it('advances a synchronized countdown between debate refetches', async () => {
@@ -1146,6 +1172,12 @@ async function renderLiveDebate() {
   const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
   await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
   return view;
+}
+
+function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
+  const tile = document.querySelector(`[data-inactive-speaker="${participant}"]`)?.closest('section');
+  expect(tile).not.toBeNull();
+  expect(tile).not.toHaveClass('grayscale');
 }
 
 function installRecordingMocks() {
