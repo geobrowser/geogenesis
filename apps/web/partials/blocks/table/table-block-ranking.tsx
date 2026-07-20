@@ -69,8 +69,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const isGalleryView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
   );
-  const isListView = Boolean(
-    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  const isBulletedListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.BULLETED_LIST_VIEW)) ||
+    stateView === 'BULLETED_LIST'
   );
   const isPillView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
@@ -80,7 +81,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     stateView === 'EXPLORE'
   );
 
-  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
+  const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
 
   const showBrowseChrome = !showHeaderActions || isEditing;
 
@@ -229,7 +230,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
 
       {isGalleryView ? (
         <RankingGalleryView state={state} />
-      ) : isListView ? (
+      ) : isBulletedListView ? (
         <RankingListView state={state} />
       ) : isPillView ? (
         <RankingPillView state={state} />

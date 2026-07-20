@@ -49,12 +49,7 @@ export function DataBlockViewMenu({ activeView, isLoading, isRankingBlock = fals
   const isEditing = useUserIsEditing(spaceId);
 
   const views = React.useMemo(
-    () =>
-      isRankingBlock
-        ? DATA_BLOCK_VIEWS.filter(view => view.value !== 'BULLETED_LIST').map(view =>
-            view.value === 'TABLE' ? { ...view, name: 'Ranking view' } : view
-          )
-        : DATA_BLOCK_VIEWS,
+    () => (isRankingBlock ? DATA_BLOCK_VIEWS.filter(view => view.value !== 'TABLE') : DATA_BLOCK_VIEWS),
     [isRankingBlock]
   );
 
