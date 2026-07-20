@@ -388,14 +388,6 @@ export async function resolveCurrentGeoChatUserId(getPrivyIdentityToken: GetPriv
   return decodeGeoChatAccessToken(accessToken)?.user_id ?? null;
 }
 
-export async function heartbeatDebatePresence(getPrivyIdentityToken: GetPrivyIdentityToken) {
-  return geoChatRequest<DebateActivity>('/me/debate-presence/heartbeat', {
-    method: 'POST',
-    auth: true,
-    getPrivyIdentityToken,
-  });
-}
-
 export async function getDebateActivity(getPrivyIdentityToken: GetPrivyIdentityToken) {
   return geoChatRequest<DebateActivity>('/me/debate-activity', {
     auth: true,
