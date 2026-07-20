@@ -5,12 +5,13 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isBlockMediaProperty, resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -41,6 +42,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
+  shownColumnIds?: string[];
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
@@ -57,6 +59,7 @@ export function TableBlockListItem({
   onChangeEntry,
   onLinkEntry,
   properties,
+  shownColumnIds = [],
   relationId,
   source,
   autoFocus = false,
@@ -67,7 +70,7 @@ export function TableBlockListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { image } = nameCell;
+  const nameCellImageHint = nameCell?.image ?? null;
 
   const name =
     useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
@@ -79,39 +82,27 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const avatarRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
+  const image = useBlockMainMediaUrl({
+    entityId: rowEntityId,
     spaceId: currentSpaceId,
+    mediaPropertyId: mainMedia?.propertyId ?? null,
+    mediaKind: mainMedia?.kind,
+    fallbackHint: nameCellImageHint,
   });
 
-  const maybeAvatarUrl = avatarRelation?.toEntity.value;
-
-  const coverRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
-    spaceId: currentSpaceId,
-  });
-
-  const maybeCoverUrl = coverRelation?.toEntity.value;
-
-  // Always show cover if available, then fall back to avatar.
-  // This ensures images render even when cover/avatar aren't
-  // configured as shown columns on the data block.
-  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
+  const uploadPropertyId = mainMedia?.propertyId ?? ContentIds.AVATAR_PROPERTY;
+  const uploadPropertyName = mainMedia?.name ?? 'Avatar';
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
-  const otherPropertyData = Object.values(columns).filter(
-    c =>
-      c.slotId !== SystemIds.NAME_PROPERTY &&
-      c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY &&
-      c.slotId !== SystemIds.DESCRIPTION_PROPERTY
-  );
-
-  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
-  if (image && imageUrl) {
-    image = imageUrl;
-  }
+  const otherPropertyData = Object.values(columns).filter(c => {
+    if (c.slotId === SystemIds.NAME_PROPERTY) return false;
+    if (c.slotId === SystemIds.DESCRIPTION_PROPERTY) return false;
+    const property = properties?.[c.slotId];
+    if (isBlockMediaProperty(property)) return false;
+    return true;
+  });
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -129,14 +120,12 @@ export function TableBlockListItem({
               variant="avatar"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // List items default to avatar for new uploads since
-                // the small thumbnail is a natural fit for avatar images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: ContentIds.AVATAR_PROPERTY,
-                  relationPropertyName: 'Avatar',
+                  relationPropertyId: uploadPropertyId,
+                  relationPropertyName: uploadPropertyName,
                   spaceId: currentSpaceId,
                 });
               }}

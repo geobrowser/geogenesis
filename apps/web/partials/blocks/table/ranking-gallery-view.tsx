@@ -4,8 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { BlockMediaKind } from '~/core/blocks/data/resolve-main-media-property';
+import { resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
+import { useBlockMediaDimensions } from '~/core/hooks/use-block-media-dimensions';
+import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
@@ -21,22 +25,34 @@ function RankingGalleryCard({
   spaceId,
   name,
   imageHint,
+  mediaPropertyId,
+  mediaKind,
 }: {
   entityId: string;
   spaceId: string;
   name: string;
   imageHint?: string | null;
+  mediaPropertyId: string | null;
+  mediaKind?: BlockMediaKind;
 }) {
-  const { avatarUrl, coverUrl } = useEntityMedia(entityId, spaceId);
-  const directIpfs = imageHint && imageHint.startsWith('ipfs://') ? imageHint : undefined;
-  const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl = directIpfs ?? lookedUpFromHint ?? coverUrl ?? avatarUrl ?? PLACEHOLDER_SPACE_IMAGE;
+  const imageUrl =
+    useBlockMainMediaUrl({
+      entityId,
+      spaceId,
+      mediaPropertyId,
+      mediaKind,
+      fallbackHint: imageHint,
+    }) ?? PLACEHOLDER_SPACE_IMAGE;
+  const { aspectRatio } = useBlockMediaDimensions(mediaPropertyId);
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
     <div className="w-[240px] shrink-0 select-none">
       <Link href={href} className="block" draggable={false}>
-        <div className="relative h-[120px] w-[240px] overflow-hidden rounded-xl bg-grey-01">
+        <div
+          className={cx('relative w-[240px] overflow-hidden rounded-xl bg-grey-01', !aspectRatio && 'h-[120px]')}
+          style={aspectRatio ? { aspectRatio } : undefined}
+        >
           <GeoImage value={imageUrl} className="pointer-events-none object-cover" fill alt="" draggable={false} />
         </div>
       </Link>
@@ -164,6 +180,7 @@ type Props = {
 export function RankingGalleryView({ state }: Props) {
   const {
     spaceId,
+    shownColumnIds,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
@@ -180,6 +197,9 @@ export function RankingGalleryView({ state }: Props) {
     setEmbeddedGlobalPage,
   } = state;
 
+  const properties = useProperties(shownColumnIds, spaceId);
+  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
+
   const cards = globalDisplayEntityIds
     .map(entityId => {
       const entry = globalRankingEntryByEntityId.get(entityId);
@@ -192,6 +212,8 @@ export function RankingGalleryView({ state }: Props) {
           spaceId={spaceId}
           name={entry.name}
           imageHint={entry.image}
+          mediaPropertyId={mainMedia?.propertyId ?? null}
+          mediaKind={mainMedia?.kind}
         />
       );
     })

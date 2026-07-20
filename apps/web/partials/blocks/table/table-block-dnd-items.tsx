@@ -29,6 +29,7 @@ export type RenderItemProps = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
+  shownColumnIds?: string[];
   source: Source;
   isPlaceholder: boolean;
   autoFocus?: boolean;
@@ -52,6 +53,7 @@ export type DndItemsConfig = {
 export type TableBlockDndItemsProps = {
   spaceId: string;
   propertiesSchema?: Record<string, Property>;
+  shownColumnIds?: string[];
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
@@ -76,6 +78,7 @@ export const TableBlockDndItems = ({
   onChangeEntry,
   onLinkEntry,
   propertiesSchema,
+  shownColumnIds,
   source,
   onUpdateRelation,
   relations,
@@ -195,6 +198,7 @@ export const TableBlockDndItems = ({
     onChangeEntry,
     onLinkEntry,
     properties: propertiesSchema,
+    shownColumnIds,
     source,
     collectionTypeFilters,
     placeholderFocusKey,

@@ -11,6 +11,7 @@ const renderItem = ({
   onChangeEntry,
   onLinkEntry,
   properties,
+  shownColumnIds,
   source,
   isPlaceholder,
   autoFocus,
@@ -26,6 +27,7 @@ const renderItem = ({
     onChangeEntry={onChangeEntry}
     onLinkEntry={onLinkEntry}
     properties={properties}
+    shownColumnIds={shownColumnIds}
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
