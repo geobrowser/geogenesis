@@ -54,7 +54,10 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
     return map;
   }, [claims]);
 
-  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  // State-backed so children re-render once the scroll container mounts and can
+  // observe against it as their IntersectionObserver root — a plain ref would
+  // leave them with the initial null (i.e. the viewport).
+  const [scrollEl, setScrollEl] = React.useState<HTMLDivElement | null>(null);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [joinOpen, setJoinOpen] = React.useState(false);
@@ -68,11 +71,14 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
 
   const feed = (
     <div
-      ref={scrollRef}
+      ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
       {debatesQuery.isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
-      {!debatesQuery.isLoading && debates.length === 0 && (
+      {debatesQuery.error instanceof Error && debates.length === 0 && (
+        <FeedMessage>Could not load debates: {debatesQuery.error.message}</FeedMessage>
+      )}
+      {!debatesQuery.isLoading && !debatesQuery.error && debates.length === 0 && (
         <FeedMessage>No debates to watch yet. Start one from the Claims tab.</FeedMessage>
       )}
       {visibleDebates.map(debate => (
@@ -83,7 +89,7 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
-          root={scrollRef.current}
+          root={scrollEl}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
@@ -96,7 +102,7 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
         />
       ))}
       {visibleCount < debates.length && (
-        <LoadMoreSentinel root={scrollRef.current} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
+        <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
   );

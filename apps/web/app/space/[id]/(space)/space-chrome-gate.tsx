@@ -11,6 +11,6 @@ import { usePathname } from 'next/navigation';
  */
 export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (pathname && /\/debates(\/|$)/.test(pathname)) return null;
+  if (pathname && /^\/space\/[^/]+\/debates(\/|$)/.test(pathname)) return null;
   return <>{children}</>;
 }

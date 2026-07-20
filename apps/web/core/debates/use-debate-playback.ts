@@ -176,17 +176,15 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // Snap both to the same position so they resume in lockstep.
     const target = Math.max(...activeVideos.map(video => (Number.isFinite(video.currentTime) ? video.currentTime : 0)));
     for (const video of activeVideos) video.currentTime = target;
-    try {
-      await Promise.allSettled(activeVideos.map(video => video.play()));
-      if (activeVideos.every(video => !video.paused)) {
-        setPlaying(true);
-        setUserPaused(false);
-      } else {
-        for (const video of activeVideos) video.pause();
-        setPlaying(false);
-        setTurnState(null);
-      }
-    } catch {
+    // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
+    // policy) leaves the video paused rather than throwing — check both the
+    // settled results and the paused state, and surface the error inline.
+    const results = await Promise.allSettled(activeVideos.map(video => video.play()));
+    const ok = results.every(result => result.status === 'fulfilled') && activeVideos.every(video => !video.paused);
+    if (ok) {
+      setPlaying(true);
+      setUserPaused(false);
+    } else {
       for (const video of activeVideos) video.pause();
       setPlaying(false);
       setTurnState(null);
