@@ -26,25 +26,28 @@ export function DebateFormatDetails({
   if (!firstParticipant) return null;
 
   return (
-    <div className="grid gap-1.5">
+    <div className="grid">
       {format.turnDurationsMs.map((durationMs, index) => {
         const participant = participants[index % participants.length] ?? firstParticipant;
         const alternate = index % 2 === 1;
         return (
-          <div key={`${format.id}-${index}`} className={alternate ? 'rounded-lg bg-bg px-2 py-2' : 'px-2 py-2'}>
-            <div className="grid grid-cols-[3rem_1.75rem_minmax(0,1fr)] items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-full border border-text text-button text-text">
-                {formatTurnDuration(durationMs)}
-              </span>
-              <span className="h-6 w-6 overflow-hidden rounded-full">
+          <div
+            key={`${format.id}-${index}`}
+            className={`flex items-center gap-5 rounded-md px-3 py-3 ${alternate ? 'bg-grey-01' : ''}`}
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-text text-smallButton text-text">
+              {formatTurnDuration(durationMs)}
+            </span>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="h-4 w-4 shrink-0 overflow-hidden rounded-full">
                 <Avatar
                   avatarUrl={participant.avatar_cid}
                   value={participant.profile_space_id}
                   alt={speakerLabel(participant)}
-                  size={24}
+                  size={16}
                 />
               </span>
-              <Text as="div" variant="bodySemibold" color="text" className="min-w-0 truncate">
+              <Text as="div" variant="metadataMedium" color="text" className="min-w-0 truncate">
                 {turnLabel(participant, currentUserId, index, format.turnDurationsMs.length)}
               </Text>
             </div>

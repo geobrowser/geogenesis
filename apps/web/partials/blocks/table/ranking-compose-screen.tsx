@@ -22,6 +22,7 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -118,10 +119,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const {
     submissions,
     mySubmission,
+    hasMySubmission,
     saveMySubmission,
     isSaving,
     personalSpaceId,
     isLoading: isLoadingMySubmission,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
   } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;

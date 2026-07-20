@@ -16,6 +16,11 @@ export const featureFlagDefinitions = [
     label: 'Debate debugging',
     description: 'Show manual debugging controls during debate recording.',
   },
+  {
+    id: 'debateFormatSelector',
+    label: 'Debate format selector',
+    description: 'Allow the first matched debater to choose a format before accepting.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -25,12 +30,14 @@ type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
   debateDebugging: false,
+  debateFormatSelector: false,
 };
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
     questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
+    debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
   };
 }
 
@@ -48,6 +55,16 @@ export const featureFlagsAtom = atomWithStorage<FeatureFlags>(featureFlagsStorag
 export function useFeatureFlag(id: FeatureFlagId) {
   const flags = useAtomValue(featureFlagsAtom);
   return normalizeFeatureFlags(flags)[id];
+}
+
+/**
+ * The Debates feature — the space Claims/Debates tabs, the debate room, the
+ * claim debate button, and the match coordinator — all gate on the single
+ * `questionsTab` flag. Use this hook everywhere that renders claim/debate UI
+ * instead of inlining the flag id, so every surface flips together.
+ */
+export function useDebatesEnabled() {
+  return useFeatureFlag('questionsTab');
 }
 
 export function useFeatureFlags() {

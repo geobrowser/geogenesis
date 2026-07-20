@@ -26,6 +26,7 @@ import {
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
@@ -120,7 +121,16 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows, pageSize } = useDataBlock();
+  const {
+    name,
+    entityId,
+    relationId,
+    rows,
+    pageSize,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
+  } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -140,8 +150,19 @@ export function useRankingBlockState({
     initialSharedRanking?.rankingName?.trim() ||
     'Untitled ranking';
 
-  const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
-    useRankingSubmissions(entityId, spaceId, displayName);
+  const {
+    submissions,
+    hasMySubmission,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({
     rankEntityId: sharedRankEntityId,
@@ -815,6 +836,15 @@ export function useRankingBlockState({
     aggregatedRankingCount === 0 &&
     myDisplayEntityIds.length === 0;
 
+  const embeddedBrowseDisplayEntityIds = globalRankingListEntityIds;
+  const embeddedBrowseEntryByEntityId = globalRankingEntryByEntityId;
+  const embeddedBrowseTotalCount = visibleGlobalDisplayEntityIds.length;
+  const embeddedBrowseShowPagination = showEmbeddedGlobalPagination;
+  const embeddedBrowsePageNumber = embeddedGlobalPageNumber;
+  const embeddedBrowseHasPreviousPage = hasEmbeddedGlobalPreviousPage;
+  const embeddedBrowseHasNextPage = hasEmbeddedGlobalNextPage;
+  const embeddedBrowseSetPage = setEmbeddedGlobalPage;
+
   return {
     spaceId,
     rankingStartDate,
@@ -835,6 +865,9 @@ export function useRankingBlockState({
     submissions,
     periodState,
     periodLabel,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
@@ -869,6 +902,8 @@ export function useRankingBlockState({
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,
+    isRolling,
+    isRollingRolledOff: hasRolledOff,
     canSharePersonalRanking,
     sharePersonalRanking,
     globalSharePath,
@@ -890,8 +925,19 @@ export function useRankingBlockState({
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
+    embeddedBrowseDisplayEntityIds,
+    embeddedBrowseEntryByEntityId,
+    embeddedBrowseTotalCount,
+    embeddedBrowseShowPagination,
+    embeddedBrowsePageNumber,
+    embeddedBrowseHasPreviousPage,
+    embeddedBrowseHasNextPage,
+    embeddedBrowseSetPage,
     hasMyRankingData,
     hasGlobalRankingData,
+    stateView,
+    stateViewRelation,
   };
 }
 

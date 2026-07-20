@@ -1,4 +1,9 @@
-import { RANKING_END_TIME_PROPERTY_ID, RANKING_START_TIME_PROPERTY_ID } from '~/core/ranking-block-ids';
+import {
+  RANKING_END_TIME_PROPERTY_ID,
+  RANKING_START_TIME_PROPERTY_ID,
+  SUBMISSION_FREQUENCY_PROPERTY_ID,
+  SUBMISSION_FREQUENCY_PROPERTY_NAME,
+} from '~/core/ranking-block-ids';
 import type { Mutator } from '~/core/sync/use-mutate';
 import type { Value } from '~/core/types';
 
@@ -73,4 +78,37 @@ export function persistRankingBlockDateValues({
     isoDate: endDate,
     existing: findValue(RANKING_END_TIME_PROPERTY_ID),
   });
+}
+
+export function persistRankingSubmissionFrequency({
+  storage,
+  entityId,
+  spaceId,
+  frequencyHours,
+  existingValues,
+}: {
+  storage: Mutator;
+  entityId: string;
+  spaceId: string;
+  frequencyHours: number | null;
+  existingValues: Value[];
+}) {
+  const existing =
+    existingValues.find(
+      v => v.property.id === SUBMISSION_FREQUENCY_PROPERTY_ID && v.spaceId === spaceId && !v.isDeleted
+    ) ?? null;
+
+  if (frequencyHours == null || !Number.isFinite(frequencyHours) || frequencyHours <= 0) {
+    if (existing) storage.values.delete(existing);
+    return;
+  }
+
+  writeValue(
+    storage,
+    entityId,
+    spaceId,
+    { id: SUBMISSION_FREQUENCY_PROPERTY_ID, name: SUBMISSION_FREQUENCY_PROPERTY_NAME, dataType: 'INTEGER' },
+    String(Math.round(frequencyHours)),
+    existing
+  );
 }

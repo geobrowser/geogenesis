@@ -109,36 +109,5 @@ export function useSpaceParticipantsInfinite({
   };
 }
 
-export function useInfiniteScrollSentinel({
-  hasNextPage,
-  isFetchingNextPage,
-  fetchNextPage,
-  rootMargin = '200px',
-  root = null,
-}: {
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  fetchNextPage: () => unknown;
-  rootMargin?: string;
-  /** Scroll container for nested overflow lists; defaults to the viewport when omitted. */
-  root?: Element | null;
-}) {
-  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
-
-  React.useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
-    const io = new IntersectionObserver(
-      entries => {
-        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
-          void fetchNextPage();
-        }
-      },
-      { root, rootMargin }
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, root, rootMargin]);
-
-  return sentinelRef;
-}
+// Moved to a shared hook; re-exported here so existing consumers keep working.
+export { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';

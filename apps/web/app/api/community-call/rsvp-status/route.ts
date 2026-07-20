@@ -54,10 +54,9 @@ export async function GET() {
       return NextResponse.json({ hasRsvp: false, configured: true });
     }
 
-    const res = await fetch(
-      `${base.replace(/\/$/, '')}/community-call/subscriptions/${encodeURIComponent(personId)}`,
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    const res = await fetch(`${base.replace(/\/$/, '')}/community-call/subscriptions/${encodeURIComponent(personId)}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
     if (!res.ok) {
       return new NextResponse('rsvp lookup failed', { status: 502 });
     }
