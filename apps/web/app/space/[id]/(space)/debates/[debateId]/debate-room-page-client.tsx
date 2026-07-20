@@ -1511,7 +1511,6 @@ function DebateRecordingModal({
       showWrapItUp={showRemoteWrapItUp}
       inactive={remoteInactive}
       inactiveOverlayId="remote"
-      muted={!remoteAudioEnabled}
       countdown={remoteCountdown}
     >
       <div
@@ -1724,7 +1723,6 @@ function DebateVideoTile({
   inactiveOverlayId,
   countdown,
   closingMessage = false,
-  muted = false,
   children,
 }: {
   participantPosition: boolean | null;
@@ -1740,16 +1738,12 @@ function DebateVideoTile({
   inactiveOverlayId: 'local' | 'remote';
   countdown?: React.ReactNode;
   closingMessage?: boolean;
-  muted?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
-      className={cx(
-        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        (muted || (inactive && !revealInactive)) && 'grayscale'
-      )}
+      className="relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card"
     >
       <div className="absolute inset-0 z-0">{children}</div>
       {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
