@@ -151,6 +151,13 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     ) {
       const stillPlaying = primaryVideo.paused ? secondaryVideo : primaryVideo;
       stillPlaying.pause();
+      // The browser stopped playback on us — surface it as a paused state so the
+      // controls reappear and auto-resume stands down (it would just get blocked
+      // again), rather than leaving the UI believing playback is still running.
+      setPlaying(false);
+      setUserPaused(true);
+      setTurnState(null);
+      return;
     }
 
     if (!primaryVideo || primaryVideo.paused || primaryVideo.ended || currentTime >= timelineSeconds) {

@@ -309,7 +309,6 @@ function FeedScrubber({
         step="0.05"
         value={bounded}
         aria-label="Debate timeline"
-        onInput={event => onSeek(Number(event.currentTarget.value))}
         onChange={event => onSeek(Number(event.currentTarget.value))}
       />
     </div>
