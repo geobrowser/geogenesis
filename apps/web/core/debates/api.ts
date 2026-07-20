@@ -750,9 +750,16 @@ async function requestError(response: Response) {
   let code: string | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
-    const body = (await response.json()) as { error?: { code?: string; message?: string } };
-    code = body.error?.code ?? null;
-    message = body.error?.message || message;
+    const responseBody = (await response.text()).trim();
+    if (responseBody) {
+      try {
+        const body = JSON.parse(responseBody) as { error?: { code?: string; message?: string } };
+        code = body.error?.code ?? null;
+        message = body.error?.message || message;
+      } catch {
+        message = responseBody;
+      }
+    }
   } catch {
     // fall back to the status line built above
   }

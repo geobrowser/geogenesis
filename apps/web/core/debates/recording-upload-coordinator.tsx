@@ -36,6 +36,8 @@ import {
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
 
+type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
+
 type RecordingUploadDependencies = {
   createUpload: (debateId: string, request: LocalRecordingUploadRequest) => Promise<LocalRecordingUploadResponse>;
   putRecording: (upload: LocalRecordingUploadResponse['upload'], blob: Blob, mimeType: string) => Promise<void>;
@@ -48,11 +50,13 @@ export async function processDebateRecordingUpload(
   upload: DebateRecordingUpload,
   dependencies: RecordingUploadDependencies
 ) {
+  const startedAtMs = Math.round(upload.startedAtMs);
+  const endedAtMs = Math.round(upload.endedAtMs);
   let filename = upload.filename;
   if (upload.stage === 'queued' || !filename) {
     const target = await dependencies.createUpload(upload.debateId, {
       mime_type: upload.mimeType,
-      started_at_ms: upload.startedAtMs,
+      started_at_ms: startedAtMs,
     });
     await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
     filename = target.filename;
@@ -62,8 +66,8 @@ export async function processDebateRecordingUpload(
   await dependencies.completeUpload(upload.debateId, {
     filename,
     mime_type: upload.mimeType,
-    started_at_ms: upload.startedAtMs,
-    ended_at_ms: upload.endedAtMs,
+    started_at_ms: startedAtMs,
+    ended_at_ms: endedAtMs,
     duration_seconds: upload.durationSeconds,
     byte_size: upload.byteSize,
     width: upload.width,
@@ -190,10 +194,21 @@ export function DebateRecordingUploadCoordinator() {
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
     const dependencies = recordingUploadDependencies(getPrivyIdentityToken);
+    let attemptStage = upload.stage;
+    let attemptCount = upload.attemptCount;
     void withRecordingUploadLock(async () => {
       const latestUpload = await getDebateRecordingUpload(upload.id);
       if (!latestUpload || latestUpload.userId !== userId) return;
-      await processDebateRecordingUpload(latestUpload, dependencies);
+      attemptStage = latestUpload.stage;
+      attemptCount = latestUpload.attemptCount;
+      await processDebateRecordingUpload(latestUpload, {
+        ...dependencies,
+        markUploaded: async (id, filename) => {
+          await dependencies.markUploaded(id, filename);
+          attemptStage = 'uploaded';
+          attemptCount = 0;
+        },
+      });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(upload.debateId) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(upload.debateId) });
     })
@@ -215,6 +230,14 @@ export function DebateRecordingUploadCoordinator() {
           return;
         }
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
+        console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
+          uploadId: upload.id,
+          debateId: upload.debateId,
+          stage: attemptStage,
+          attemptCount: attemptCount + 1,
+          nextAttemptAt,
+          error,
+        });
         try {
           await scheduleDebateRecordingRetry(upload.id, error, nextAttemptAt);
         } catch (queueError) {
@@ -231,6 +254,16 @@ export function DebateRecordingUploadCoordinator() {
   }, [activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
 
   const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
+  const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+    if (!upload.lastError) return latest;
+    return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
+  }, null);
+  let waitingReason: DebateRecordingUploadWaitingReason = null;
+  if (!online) {
+    waitingReason = 'offline';
+  } else if (waiting) {
+    waitingReason = latestFailedUpload ? 'retry' : 'waiting';
+  }
 
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
@@ -281,7 +314,8 @@ export function DebateRecordingUploadCoordinator() {
     <>
       <DebateRecordingUploadBanner
         count={uploads.length}
-        waiting={waiting}
+        waitingReason={waitingReason}
+        errorMessage={latestFailedUpload?.lastError ?? null}
         publishChecked={!cancelPromptOpen}
         onUncheckPublish={() => setCancelPromptOpen(true)}
       />
@@ -299,24 +333,41 @@ export function DebateRecordingUploadCoordinator() {
 
 export function DebateRecordingUploadBanner({
   count,
-  waiting,
+  waitingReason,
+  errorMessage,
   publishChecked,
   onUncheckPublish,
 }: {
   count: number;
-  waiting: boolean;
+  waitingReason: DebateRecordingUploadWaitingReason;
+  errorMessage: string | null;
   publishChecked: boolean;
   onUncheckPublish: () => void;
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
+  let message = `Uploading ${label}`;
+  if (waitingReason === 'offline') {
+    message = `Waiting to upload ${label} — waiting for a connection`;
+  } else if (waitingReason === 'retry' && errorMessage) {
+    const failure = errorMessage.trim();
+    const punctuation = /[.!?]$/.test(failure) ? '' : '.';
+    message = `Waiting to upload ${label} — ${failure}${punctuation} Retrying automatically.`;
+  } else if (waitingReason) {
+    message = `Waiting to upload ${label}`;
+  }
+
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
     >
-      <span>{waiting ? `Waiting to upload ${label}` : `Uploading ${label}`}</span>
-      <span aria-hidden="true">·</span>
+      <span className="min-w-0 truncate">
+        {message}
+      </span>
+      <span aria-hidden="true" className="shrink-0">
+        ·
+      </span>
       <button
         type="button"
         role="checkbox"
@@ -325,7 +376,7 @@ export function DebateRecordingUploadBanner({
         onClick={() => {
           if (publishChecked) onUncheckPublish();
         }}
-        className="inline-flex items-center gap-1.5 text-text"
+        className="inline-flex shrink-0 items-center gap-1.5 text-text"
       >
         Publish
         <span
