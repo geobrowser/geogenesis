@@ -8,7 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
 
 import type { DebateActivity, DebateRematchSession } from './api';
-import { debateQueryKeys, useClearTimedOutDebateActivity, useConsentToDebateRematch, useGeoChatAuth } from './hooks';
+import {
+  debateQueryKeys,
+  useClearTimedOutDebateActivity,
+  useConsentToDebateRematch,
+  useDebateActivity,
+  useGeoChatAuth,
+} from './hooks';
 
 const mocks = vi.hoisted(() => ({
   getIdentityToken: vi.fn(),
@@ -192,6 +198,41 @@ describe('useClearTimedOutDebateActivity', () => {
       cooldown_until: null,
       debate: null,
     });
+  });
+});
+
+describe('debate query refresh behavior', () => {
+  it('does not issue periodic debate reads while time advances', async () => {
+    vi.useFakeTimers();
+    window.localStorage.setItem(
+      'geo:chat-session',
+      JSON.stringify({
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+      })
+    );
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ online: true, cooldown_until: null, match: null, debate: null, rematch: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateActivity(), { wrapper });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
   });
 });
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, completeLocalRecordingUpload } from './api';
+import { GeoChatRequestError, completeLocalRecordingUpload, getGeoChatSession } from './api';
 
 const completeRequest = {
   filename: 'recordings/debate-1/recording.webm',
@@ -84,5 +84,43 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+});
+
+describe('geo-chat session sharing', () => {
+  it('exposes the fresh session and its expiry to websocket callers', async () => {
+    await expect(getGeoChatSession(vi.fn())).resolves.toEqual({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      expires_at: expect.any(String),
+    });
+  });
+
+  it('refreshes one session for concurrent callers when expiry is near', async () => {
+    window.localStorage.setItem(
+      'geo:chat-session',
+      JSON.stringify({
+        access_token: 'stale-access-token',
+        refresh_token: 'refresh-token',
+        expires_at: new Date(Date.now() + 10_000).toISOString(),
+      })
+    );
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: 'fresh-access-token',
+          refresh_token: 'fresh-refresh-token',
+          expires_at: new Date(Date.now() + 60_000).toISOString(),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const [first, second] = await Promise.all([getGeoChatSession(vi.fn()), getGeoChatSession(vi.fn())]);
+
+    expect(first.access_token).toBe('fresh-access-token');
+    expect(second.access_token).toBe('fresh-access-token');
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

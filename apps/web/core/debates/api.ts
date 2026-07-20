@@ -352,7 +352,7 @@ export type RecordingCompleteResponse = {
   debate: Debate;
 };
 
-type GeoChatSession = {
+export type GeoChatSession = {
   access_token: string;
   refresh_token: string;
   expires_at: string;
@@ -368,6 +368,7 @@ type RequestOptions = {
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
+let geoChatSessionRequest: Promise<GeoChatSession> | null = null;
 
 export function getGeoChatApiBaseUrl() {
   return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
@@ -777,30 +778,40 @@ async function accessTokenForRequest(options: RequestOptions) {
   }
 }
 
-async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityToken) {
+export async function getGeoChatSession(getPrivyIdentityToken?: GetPrivyIdentityToken) {
   const stored = loadSession();
   if (stored && new Date(stored.expires_at).getTime() > Date.now() + 30_000) {
-    return stored.access_token;
+    return stored;
   }
 
-  if (stored?.refresh_token) {
-    try {
-      const refreshed = await refreshGeoChatSession(stored.refresh_token);
-      saveSession(refreshed);
-      return refreshed.access_token;
-    } catch {
-      clearSession();
+  geoChatSessionRequest ??= (async () => {
+    if (stored?.refresh_token) {
+      try {
+        const refreshed = await refreshGeoChatSession(stored.refresh_token);
+        saveSession(refreshed);
+        return refreshed;
+      } catch {
+        clearSession();
+      }
     }
-  }
 
-  const privyIdentityToken = await getPrivyIdentityToken?.();
-  if (!privyIdentityToken) {
-    throw new Error('Sign in to use debates.');
-  }
+    const privyIdentityToken = await getPrivyIdentityToken?.();
+    if (!privyIdentityToken) {
+      throw new Error('Sign in to use debates.');
+    }
 
-  const session = await createGeoChatSession(privyIdentityToken);
-  saveSession(session);
-  return session.access_token;
+    const session = await createGeoChatSession(privyIdentityToken);
+    saveSession(session);
+    return session;
+  })().finally(() => {
+    geoChatSessionRequest = null;
+  });
+
+  return geoChatSessionRequest;
+}
+
+async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityToken) {
+  return (await getGeoChatSession(getPrivyIdentityToken)).access_token;
 }
 
 async function createGeoChatSession(privyToken: string): Promise<GeoChatSession> {
