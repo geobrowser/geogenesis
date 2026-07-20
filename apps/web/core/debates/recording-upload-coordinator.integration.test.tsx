@@ -142,6 +142,11 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    expect(mocks.completeUpload).toHaveBeenCalledWith(
+      'debate-1',
+      expect.objectContaining({ framerate: 29.97 }),
+      expect.anything()
+    );
     expect(mocks.lockRequest).toHaveBeenCalledWith(
       'geo:debate-recording-uploader',
       { ifAvailable: true },
@@ -342,7 +347,7 @@ function queuedRecording(debateId: string): DebateRecordingUpload {
     byteSize: 9,
     width: null,
     height: null,
-    framerate: null,
+    framerate: 29.97,
     videoBitsPerSecond: null,
     stage: 'queued',
     filename: null,

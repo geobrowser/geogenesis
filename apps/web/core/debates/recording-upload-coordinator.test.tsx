@@ -37,6 +37,7 @@ describe('debate recording uploader', () => {
         byte_size: upload.blob.size,
         started_at_ms: 1_000,
         ended_at_ms: 11_000,
+        framerate: 29.97,
       })
     );
     expect(dependencies.deleteUpload).toHaveBeenCalledWith(upload.id);
@@ -224,7 +225,7 @@ function queuedRecording(): DebateRecordingUpload {
     byteSize: 9,
     width: null,
     height: null,
-    framerate: null,
+    framerate: 29.97,
     videoBitsPerSecond: null,
     stage: 'queued',
     filename: null,
