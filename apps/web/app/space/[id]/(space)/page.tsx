@@ -8,6 +8,8 @@ import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ROOT_SPACE } from '~/core/constants';
+import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -26,6 +28,7 @@ import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { ExploreSidePanel } from '~/partials/explore/explore-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -77,6 +80,7 @@ export default async function SpacePage(props0: Props) {
   }
 
   const props = await getSpaceFrontPage(space);
+  const isRootSpace = spaceId === ROOT_SPACE;
 
   return (
     <EntityPageContentContainer>
@@ -103,7 +107,7 @@ export default async function SpacePage(props0: Props) {
           </TrackedErrorBoundary>
         </div>
         <React.Suspense fallback={null}>
-          <SpaceCommunityCallsContainer spaceId={spaceId} />
+          {isRootSpace ? <RootExploreSidePanelContainer /> : <SpaceCommunityCallsContainer spaceId={spaceId} />}
         </React.Suspense>
       </div>
     </EntityPageContentContainer>
@@ -241,6 +245,23 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
 const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
   const series = await fetchCommunityCalls(spaceId);
   return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
+};
+
+const RootExploreSidePanelContainer = async () => {
+  const data = await fetchExploreSidePanelData();
+  return (
+    <>
+      <div aria-hidden className="ml-8 w-px shrink-0 self-stretch bg-divider lg:hidden" />
+      <ExploreSidePanel
+        featuredSpaces={data.featuredSpaces}
+        featuredRankings={data.featuredRankings}
+        pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
+        memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
+        editorSpaceIds={data.editorSpaceIds}
+        communityCalls={data.communityCalls}
+      />
+    </>
+  );
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
