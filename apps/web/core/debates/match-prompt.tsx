@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -189,8 +191,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   );
 }
 
-// Built but hidden: the Figma match-request design omits these controls. Flip to re-enable.
-const SHOW_FORMAT_SELECTOR = false; // first participant picking the turn format
+// Built but hidden: the Figma match-request design omits these labels. Flip to re-enable.
 const SHOW_POSITION_LABELS = false; // Yes/No pills under each name + the "You chose X." line
 
 function MatchDialog({
@@ -214,6 +215,7 @@ function MatchDialog({
   onDecline: () => void;
   onFormatChange: (formatId: DebateFormatId) => void;
 }) {
+  const debateFormatSelectorEnabled = useFeatureFlag('debateFormatSelector');
   const myParticipant = participantForUser(match, currentUserId);
   const canChooseFormat = myParticipant?.participant_slot === 1 && !waiting;
   const participants = orderedParticipants(match);
@@ -258,7 +260,7 @@ function MatchDialog({
               <Text as="h3" variant="metadata" color="text">
                 Debate format
               </Text>
-              {SHOW_FORMAT_SELECTOR && !waiting && canChooseFormat && (
+              {debateFormatSelectorEnabled && canChooseFormat && (
                 <DebateFormatSelector
                   value={selectedFormatId}
                   selectedFormatId={match.turn_format_id}

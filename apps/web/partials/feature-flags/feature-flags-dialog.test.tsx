@@ -23,13 +23,15 @@ describe('FeatureFlagsDialog', () => {
 
     expect(await screen.findByRole('heading', { name: 'Feature flags' })).toBeTruthy();
     expect(screen.getByText('Debate debugging')).toBeTruthy();
+    expect(screen.getByText('Debate format selector')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Claims and debates' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debate debugging' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Debate format selector' }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
-        JSON.stringify({ questionsTab: true, debateDebugging: true })
+        JSON.stringify({ questionsTab: true, debateDebugging: true, debateFormatSelector: true })
       );
     });
   });
