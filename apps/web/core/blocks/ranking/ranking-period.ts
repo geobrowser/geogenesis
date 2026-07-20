@@ -2,33 +2,30 @@ import { addDays, differenceInCalendarDays, parseISO, startOfDay } from 'date-fn
 
 import { GeoDate } from '~/core/utils/utils';
 
+import { type RankingDate } from './ranking-block-dates';
+
 export type RankingPeriodState = 'no-date' | 'not-started' | 'in-progress' | 'ended';
 
-function parseRankingDate(iso: string): Date | null {
-  const trimmed = iso.trim();
+function parseRankingDate(date: RankingDate): Date | null {
+  const trimmed = date.value.trim();
   if (!trimmed) return null;
   try {
-    if (isDateOnlyValue(trimmed)) return parseISO(trimmed);
+    if (date.isDateOnly) return parseISO(trimmed);
     return parseISO(GeoDate.toFullISOString(trimmed));
   } catch {
     return null;
   }
 }
 
-/** Date-only values (legacy DATE properties) are compared by calendar day; datetimes use timestamps. */
-function isDateOnlyValue(value: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(value.trim());
-}
-
-function hasRankingEnded(end: Date, endDateString: string, now: Date): boolean {
-  if (isDateOnlyValue(endDateString)) {
+function hasRankingEnded(end: Date, endDate: RankingDate, now: Date): boolean {
+  if (endDate.isDateOnly) {
     return differenceInCalendarDays(end, now) < 0;
   }
   return end.getTime() <= now.getTime();
 }
 
-function hasRankingNotStarted(start: Date, startDateString: string, now: Date): boolean {
-  if (isDateOnlyValue(startDateString)) {
+function hasRankingNotStarted(start: Date, startDate: RankingDate, now: Date): boolean {
+  if (startDate.isDateOnly) {
     return differenceInCalendarDays(start, now) > 0;
   }
   return start.getTime() > now.getTime();
@@ -67,11 +64,15 @@ function formatRelativeCountdown(prefix: 'Starts' | 'Ends', target: Date, now: D
 /**
  * Pick the countdown that matches how the state machine reads this value.
  */
-function countdownFor(dateString: string) {
-  return isDateOnlyValue(dateString) ? formatCalendarCountdown : formatRelativeCountdown;
+function countdownFor(date: RankingDate) {
+  return date.isDateOnly ? formatCalendarCountdown : formatRelativeCountdown;
 }
 
-export function getRankingPeriodState(startDate: string, endDate: string, now = new Date()): RankingPeriodState {
+export function getRankingPeriodState(
+  startDate: RankingDate,
+  endDate: RankingDate,
+  now = new Date()
+): RankingPeriodState {
   const start = parseRankingDate(startDate);
   const end = parseRankingDate(endDate);
 
@@ -86,8 +87,8 @@ export function getRankingPeriodState(startDate: string, endDate: string, now = 
 
 export function formatRankingPeriodLabel(
   state: RankingPeriodState,
-  startDate: string,
-  endDate: string,
+  startDate: RankingDate,
+  endDate: RankingDate,
   now = new Date()
 ): string | null {
   switch (state) {
@@ -138,15 +139,19 @@ function msUntilCountdownChanges(target: Date, now: Date): number | null {
   return Math.min(msUntilNextLocalMidnight(now), msRemaining - HOUR_GRANULARITY_MAX_MS);
 }
 
-export function msUntilRankingPeriodChange(startDate: string, endDate: string, now = new Date()): number | null {
+export function msUntilRankingPeriodChange(
+  startDate: RankingDate,
+  endDate: RankingDate,
+  now = new Date()
+): number | null {
   const state = getRankingPeriodState(startDate, endDate, now);
   if (state === 'no-date' || state === 'ended') return null;
 
-  const targetString = state === 'not-started' ? startDate : endDate;
-  const target = parseRankingDate(targetString);
+  const targetDate = state === 'not-started' ? startDate : endDate;
+  const target = parseRankingDate(targetDate);
   if (!target) return null;
 
-  if (isDateOnlyValue(targetString)) return msUntilNextLocalMidnight(now);
+  if (targetDate.isDateOnly) return msUntilNextLocalMidnight(now);
 
   const untilCountdownChanges = msUntilCountdownChanges(target, now);
   const untilMidnight = msUntilNextLocalMidnight(now);

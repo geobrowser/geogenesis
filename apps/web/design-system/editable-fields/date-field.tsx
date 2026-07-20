@@ -221,6 +221,12 @@ const VALID_DAY_LENGTH = 2;
 const VALID_HOUR_LENGTH = 2;
 const VALID_MINUTE_LENGTH = 2;
 
+export function to24HourString(hour12: string, meridiem: 'am' | 'pm'): string {
+  if (hour12.trim() === '') return '';
+  const normalized = Number(hour12) % 12; // 12 → 0; 1–11 unchanged
+  return String(meridiem === 'pm' ? normalized + 12 : normalized);
+}
+
 // Default display formats per data type
 const DATE_ONLY_FORMAT = 'MMM d, yyyy';
 const TIME_ONLY_FORMAT = 'h:mm aaa';
@@ -526,10 +532,6 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
       setHour(newHour);
     }
 
-    if (Number(hour.value) === 12) {
-      newHour = '00';
-    }
-
     const isValidHourCheck = hour.value === '' || (!hour.isValidating && hour.isValid);
     const isValidMinuteCheck = minute.value === '' || (!minute.isValidating && minute.isValid);
     const isValid = isValidHourCheck && isValidMinuteCheck && timeFormState.isValid;
@@ -540,7 +542,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
         day: '01',
         month: '01',
         year: '1970',
-        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+        hour: to24HourString(newHour, newMeridiem),
         minute: newMinute,
       });
 
@@ -762,10 +764,6 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label, timez
       setYear(newYear);
     }
 
-    if (Number(hour.value) === 12) {
-      newHour = '00';
-    }
-
     const isValidDayCheck = day.value !== '' || (!day.isValidating && day.isValid);
     const isValidMonthCheck = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
     const isValidYearCheck = year.value !== '' || (!year.isValidating && year.isValid);
@@ -786,7 +784,7 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label, timez
         month: newMonth,
         year: newYear,
         minute: newMinute,
-        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+        hour: to24HourString(newHour, newMeridiem),
       };
       const isoString = timezone === 'local' ? GeoDate.toISOStringLocal(parts) : GeoDate.toISOStringUTC(parts);
 

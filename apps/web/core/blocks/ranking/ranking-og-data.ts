@@ -13,6 +13,7 @@ import {
   fetchRankingPendingEntities,
 } from './fetch-ranking-pending-proposals';
 import { getMyRankingOrderedEntityIds, isRankSubmittedToBlock } from './my-ranking-entity';
+import { toRankingDate } from './ranking-block-dates';
 import { getAggregatedRankingSubmitterSpaceIds, getOrderedRelationTargetIds } from './ranking-block-relations';
 import { type RankingPendingProposalData, isPlaceholderRankingEntry } from './ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from './ranking-period';
@@ -154,8 +155,10 @@ async function backfillPendingNames(
 
 function periodLabel(startDate = '', endDate = ''): string | null {
   if (!startDate && !endDate) return null;
-  const state = getRankingPeriodState(startDate, endDate);
-  return formatRankingPeriodLabel(state, startDate, endDate);
+  const start = toRankingDate(startDate);
+  const end = toRankingDate(endDate);
+  const state = getRankingPeriodState(start, end);
+  return formatRankingPeriodLabel(state, start, end);
 }
 
 export async function getRankingOgCardData(

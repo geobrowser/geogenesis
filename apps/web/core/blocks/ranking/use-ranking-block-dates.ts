@@ -7,10 +7,15 @@ import {
   RANKING_DATE_PROPERTY_IDS,
   RANKING_END_PROPERTY_IDS,
   RANKING_START_PROPERTY_IDS,
-  resolveRankingDate,
+  type RankingDate,
+  resolveRankingDateValue,
+  toRankingDate,
 } from './ranking-block-dates';
 
-export function useRankingBlockDates(fallback: { startDate: string; endDate: string }) {
+export function useRankingBlockDates(fallback: { startDate: string; endDate: string }): {
+  startDate: RankingDate;
+  endDate: RankingDate;
+} {
   const { entityId, spaceId } = useDataBlockInstance();
 
   const values = useValues({
@@ -20,11 +25,11 @@ export function useRankingBlockDates(fallback: { startDate: string; endDate: str
 
   const readValue = (propertyId: string) => values.find(v => v.property.id === propertyId)?.value;
 
-  const startFromGraph = resolveRankingDate(RANKING_START_PROPERTY_IDS, readValue);
-  const endFromGraph = resolveRankingDate(RANKING_END_PROPERTY_IDS, readValue);
+  const startFromGraph = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readValue);
+  const endFromGraph = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readValue);
 
   return {
-    startDate: startFromGraph || fallback.startDate,
-    endDate: endFromGraph || fallback.endDate,
+    startDate: startFromGraph.value ? startFromGraph : toRankingDate(fallback.startDate),
+    endDate: endFromGraph.value ? endFromGraph : toRankingDate(fallback.endDate),
   };
 }

@@ -12,6 +12,7 @@ import {
   RANKING_END_PROPERTY_IDS,
   RANKING_START_PROPERTY_IDS,
   resolveRankingDate,
+  resolveRankingDateValue,
 } from './ranking-block-dates';
 import { getRankingPeriodState, rankingSubmissionsOpen } from './ranking-period';
 
@@ -74,10 +75,12 @@ describe('legacy ranking blocks', () => {
     };
     const now = new Date('2026-06-04T12:00:00.000Z');
 
-    const startDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readFrom(values));
-    const endDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readFrom(values));
+    const startDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readFrom(values));
+    const endDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readFrom(values));
     const state = getRankingPeriodState(startDate, endDate, now);
 
+    expect(startDate.isDateOnly).toBe(true);
+    expect(endDate.isDateOnly).toBe(true);
     expect(state).toBe('ended');
     expect(rankingSubmissionsOpen(state)).toBe(false);
   });
