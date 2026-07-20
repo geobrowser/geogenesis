@@ -368,14 +368,23 @@ type RequestOptions = {
 };
 
 const geoChatSessionStorageKey = 'geo:chat-session';
-let geoChatSessionRequest: Promise<GeoChatSession> | null = null;
+const geoChatSessionRequestTimeoutMs = 10_000;
+
+type StoredGeoChatSession = {
+  account_key: string | null;
+  session: GeoChatSession;
+};
+
+const geoChatSessionRequests = new Map<string, Promise<GeoChatSession>>();
+let geoChatSessionEpoch = 0;
+let geoChatSessionAccountKey: string | null = null;
 
 export function getGeoChatApiBaseUrl() {
   return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
 }
 
 export function getCurrentGeoChatUserId() {
-  const session = loadSession();
+  const session = loadSession(null);
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
@@ -770,20 +779,41 @@ async function accessTokenForRequest(options: RequestOptions) {
   }
 }
 
-export async function getGeoChatSession(getPrivyIdentityToken?: GetPrivyIdentityToken) {
-  const stored = loadSession();
+export async function getGeoChatSession(
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey: string | null = null
+) {
+  const storedRecord = loadStoredSession();
+  if (
+    accountKey !== null &&
+    ((geoChatSessionAccountKey !== null && geoChatSessionAccountKey !== accountKey) ||
+      (storedRecord && storedRecord.account_key !== accountKey))
+  ) {
+    resetGeoChatSession();
+  }
+  if (accountKey !== null) geoChatSessionAccountKey = accountKey;
+
+  const effectiveAccountKey = accountKey ?? geoChatSessionAccountKey ?? loadStoredSession()?.account_key ?? null;
+  const stored = loadSession(effectiveAccountKey);
   if (stored && new Date(stored.expires_at).getTime() > Date.now() + 30_000) {
     return stored;
   }
 
-  geoChatSessionRequest ??= (async () => {
+  const requestKey = effectiveAccountKey ?? '';
+  const existingRequest = geoChatSessionRequests.get(requestKey);
+  if (existingRequest) return existingRequest;
+
+  const issuedForEpoch = geoChatSessionEpoch;
+  const request = (async () => {
     if (stored?.refresh_token) {
       try {
         const refreshed = await refreshGeoChatSession(stored.refresh_token);
-        saveSession(refreshed);
+        assertCurrentGeoChatSessionEpoch(issuedForEpoch);
+        saveSession(refreshed, effectiveAccountKey);
         return refreshed;
       } catch {
-        clearSession();
+        assertCurrentGeoChatSessionEpoch(issuedForEpoch);
+        removeStoredSession();
       }
     }
 
@@ -793,13 +823,24 @@ export async function getGeoChatSession(getPrivyIdentityToken?: GetPrivyIdentity
     }
 
     const session = await createGeoChatSession(privyIdentityToken);
-    saveSession(session);
+    assertCurrentGeoChatSessionEpoch(issuedForEpoch);
+    saveSession(session, effectiveAccountKey);
     return session;
   })().finally(() => {
-    geoChatSessionRequest = null;
+    if (geoChatSessionRequests.get(requestKey) === request) {
+      geoChatSessionRequests.delete(requestKey);
+    }
   });
 
-  return geoChatSessionRequest;
+  geoChatSessionRequests.set(requestKey, request);
+  return request;
+}
+
+export function resetGeoChatSession() {
+  geoChatSessionEpoch += 1;
+  geoChatSessionAccountKey = null;
+  geoChatSessionRequests.clear();
+  removeStoredSession();
 }
 
 async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityToken) {
@@ -807,7 +848,7 @@ async function getGeoChatAccessToken(getPrivyIdentityToken?: GetPrivyIdentityTok
 }
 
 async function createGeoChatSession(privyToken: string): Promise<GeoChatSession> {
-  const response = await fetch(`${getGeoChatApiBaseUrl()}/auth/session`, {
+  const response = await fetchGeoChatSession(`${getGeoChatApiBaseUrl()}/auth/session`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${privyToken}` },
   });
@@ -817,7 +858,7 @@ async function createGeoChatSession(privyToken: string): Promise<GeoChatSession>
 }
 
 async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSession> {
-  const response = await fetch(`${getGeoChatApiBaseUrl()}/auth/session/refresh`, {
+  const response = await fetchGeoChatSession(`${getGeoChatApiBaseUrl()}/auth/session/refresh`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ refresh_token: refreshToken }),
@@ -827,25 +868,62 @@ async function refreshGeoChatSession(refreshToken: string): Promise<GeoChatSessi
   return response.json() as Promise<GeoChatSession>;
 }
 
-function loadSession(): GeoChatSession | null {
+async function fetchGeoChatSession(input: string, init: RequestInit) {
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    return await Promise.race([
+      fetch(input, { ...init, signal: controller.signal }),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error('Geo Chat session request timed out.'));
+        }, geoChatSessionRequestTimeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function loadSession(accountKey: string | null): GeoChatSession | null {
+  const stored = loadStoredSession();
+  if (!stored || (accountKey !== null && stored.account_key !== accountKey)) return null;
+  return stored.session;
+}
+
+function loadStoredSession(): StoredGeoChatSession | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.localStorage.getItem(geoChatSessionStorageKey);
-    return raw ? (JSON.parse(raw) as GeoChatSession) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredGeoChatSession | GeoChatSession;
+    if ('session' in parsed) return parsed;
+    return { account_key: null, session: parsed };
   } catch {
     return null;
   }
 }
 
-function saveSession(session: GeoChatSession) {
+function saveSession(session: GeoChatSession, accountKey: string | null) {
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem(geoChatSessionStorageKey, JSON.stringify(session));
+    window.localStorage.setItem(
+      geoChatSessionStorageKey,
+      JSON.stringify({ account_key: accountKey, session } satisfies StoredGeoChatSession)
+    );
   }
 }
 
-function clearSession() {
+function removeStoredSession() {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(geoChatSessionStorageKey);
+  }
+}
+
+function assertCurrentGeoChatSessionEpoch(issuedForEpoch: number) {
+  if (issuedForEpoch !== geoChatSessionEpoch) {
+    throw new Error('Geo Chat session changed while authentication was in progress.');
   }
 }
 

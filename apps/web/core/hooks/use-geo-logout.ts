@@ -7,6 +7,7 @@ import { useSetAtom } from 'jotai';
 
 import { loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
+import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
@@ -57,6 +58,7 @@ export function useGeoLogoutCleanup() {
       setStep('enter-profile');
       setDismissedHints([]);
       setPending(null);
+      resetGeoChatSession();
       queryClient.clear();
       // Bulletproof reset — see the doc comment. `/root` is the public home and
       // drops the user out of any onboarding/pending context they logged out of.

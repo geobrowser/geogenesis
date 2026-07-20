@@ -54,7 +54,7 @@ type WebSocketLike = {
 
 type DebateGatewayClientOptions = {
   queryClient: QueryClient;
-  getSession: (getPrivyIdentityToken: GetPrivyIdentityToken) => Promise<DebateGatewaySession>;
+  getSession: (getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) => Promise<DebateGatewaySession>;
   getApiBaseUrl: () => string;
   createWebSocket?: (url: string) => WebSocketLike;
   random?: () => number;
@@ -66,6 +66,8 @@ const OPEN = 1;
 const CAPABILITY = 'debate_invalidations_v1';
 const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const INVALIDATION_COALESCE_MS = 50;
+const BROAD_INVALIDATION_KEY = 'debates:all';
 
 export class DebateGatewayClient {
   private readonly queryClient: QueryClient;
@@ -83,6 +85,7 @@ export class DebateGatewayClient {
 
   private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false };
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
+  private accountKey: string | null = null;
   private socket: WebSocketLike | null = null;
   private enabled = false;
   private hasReachedReady = false;
@@ -94,7 +97,7 @@ export class DebateGatewayClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
-  private invalidationFlushQueued = false;
+  private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionGeneration = 0;
 
   constructor(options: DebateGatewayClientOptions) {
@@ -112,8 +115,10 @@ export class DebateGatewayClient {
     return () => this.listeners.delete(listener);
   };
 
-  start(getPrivyIdentityToken: GetPrivyIdentityToken) {
+  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) {
+    if (this.enabled && this.accountKey !== accountKey) this.stop();
     this.getPrivyIdentityToken = getPrivyIdentityToken;
+    this.accountKey = accountKey;
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false });
@@ -123,6 +128,7 @@ export class DebateGatewayClient {
   stop() {
     this.enabled = false;
     this.getPrivyIdentityToken = null;
+    this.accountKey = null;
     this.hasReachedReady = false;
     this.lastSequence = null;
     this.reconnectAttempt = 0;
@@ -130,6 +136,7 @@ export class DebateGatewayClient {
     this.disposeSocket();
     this.sentScopes.clear();
     this.confirmedScopes.clear();
+    this.pendingInvalidations.clear();
     this.setSnapshot({ status: 'idle', paused: false });
   }
 
@@ -160,11 +167,12 @@ export class DebateGatewayClient {
 
   private async connect() {
     const getPrivyIdentityToken = this.getPrivyIdentityToken;
-    if (!this.enabled || !getPrivyIdentityToken || this.socket) return;
+    const accountKey = this.accountKey;
+    if (!this.enabled || !getPrivyIdentityToken || !accountKey || this.socket) return;
     const generation = ++this.connectionGeneration;
 
     try {
-      const session = await this.getSession(getPrivyIdentityToken);
+      const session = await this.getSession(getPrivyIdentityToken, accountKey);
       if (!this.enabled || generation !== this.connectionGeneration) return;
 
       const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), session.access_token));
@@ -214,7 +222,13 @@ export class DebateGatewayClient {
         this.queueBroadReconcile();
         break;
       case 'ERROR':
-        if (isEventsLagged(envelope.payload)) this.queueBroadReconcile();
+        if (isEventsLagged(envelope.payload)) {
+          this.queueBroadReconcile();
+        } else if (isRateLimited(envelope.payload)) {
+          this.forceReconnect(socket, rateLimitRetryDelayMs(envelope.payload));
+        } else if (isSubscriptionLimitReached(envelope.payload)) {
+          this.setSnapshot({ status: 'degraded', paused: true });
+        }
         break;
     }
   }
@@ -242,17 +256,26 @@ export class DebateGatewayClient {
     this.setSnapshot({ status: 'ready', paused: false });
 
     if (firstReadyForSocket) {
+      this.queueBroadReconcile();
       if (this.hasReachedReady) {
-        this.queueBroadReconcile();
         if (this.lastSequence !== null) this.sendEnvelope('RESUME', {}, this.lastSequence);
       }
       this.hasReachedReady = true;
     }
 
+    const readyScopes = new Map<string, DebateGatewayScope>();
     for (const subscription of Array.isArray(ready.subscriptions) ? ready.subscriptions : []) {
       const scope = parseScope(subscription);
       if (!scope) continue;
       const key = scopeKey(scope);
+      readyScopes.set(key, scope);
+    }
+
+    for (const key of this.confirmedScopes) {
+      if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
+    }
+
+    for (const [key, scope] of readyScopes) {
       if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
       this.queueScopeReconcile(scope);
@@ -290,6 +313,7 @@ export class DebateGatewayClient {
         if (identifiers.debate_id) {
           this.queueQuery(['debates', 'media', identifiers.debate_id]);
           this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+          this.queueQuery(['debates', 'transcript', identifiers.debate_id]);
         }
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         break;
@@ -319,7 +343,7 @@ export class DebateGatewayClient {
   }
 
   private queueBroadReconcile() {
-    this.queueQuery(['debates']);
+    this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
@@ -348,15 +372,19 @@ export class DebateGatewayClient {
   }
 
   private queueInvalidation(key: string, filters: InvalidationFilters) {
+    if (key === BROAD_INVALIDATION_KEY) {
+      this.pendingInvalidations.clear();
+    } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
+      return;
+    }
     this.pendingInvalidations.set(key, filters);
-    if (this.invalidationFlushQueued) return;
-    this.invalidationFlushQueued = true;
-    queueMicrotask(() => {
-      this.invalidationFlushQueued = false;
+    if (this.invalidationTimer) return;
+    this.invalidationTimer = setTimeout(() => {
+      this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
       for (const queryFilters of invalidations) void this.queryClient.invalidateQueries(queryFilters);
-    });
+    }, INVALIDATION_COALESCE_MS);
   }
 
   private sendSubscription(scope: DebateGatewayScope, op: 'SUBSCRIBE' | 'UNSUBSCRIBE') {
@@ -415,7 +443,7 @@ export class DebateGatewayClient {
     this.scheduleReconnect();
   }
 
-  private forceReconnect(socket: WebSocketLike) {
+  private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0) {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
@@ -424,13 +452,13 @@ export class DebateGatewayClient {
     socket.close();
     if (!this.enabled) return;
     this.setSnapshot({ status: 'degraded', paused: true });
-    this.scheduleReconnect();
+    this.scheduleReconnect(minimumDelayMs);
   }
 
-  private scheduleReconnect() {
+  private scheduleReconnect(minimumDelayMs = 0) {
     if (!this.enabled || this.reconnectTimer) return;
     const baseDelay = Math.min(30_000, 1_000 * 2 ** this.reconnectAttempt);
-    const delay = Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random()));
+    const delay = Math.min(30_000, Math.max(minimumDelayMs, Math.round(baseDelay + baseDelay * 0.2 * this.random())));
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -456,6 +484,8 @@ export class DebateGatewayClient {
   private clearAllTimers() {
     this.clearConnectionTimers();
     this.clearTimer('reconnect');
+    if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
+    this.invalidationTimer = null;
   }
 
   private clearTimer(timer: 'heartbeat' | 'reconnect' | 'token') {
@@ -479,15 +509,19 @@ const debateGateway = new DebateGatewayClient({
   getApiBaseUrl: getGeoChatApiBaseUrl,
 });
 
-export function useDebateGateway(enabled: boolean, getPrivyIdentityToken: GetPrivyIdentityToken) {
+export function useDebateGateway(
+  enabled: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
   React.useEffect(() => {
-    if (!enabled) {
+    if (!enabled || !accountKey) {
       debateGateway.stop();
       return;
     }
-    debateGateway.start(getPrivyIdentityToken);
+    debateGateway.start(getPrivyIdentityToken, accountKey);
     return () => debateGateway.stop();
-  }, [enabled, getPrivyIdentityToken]);
+  }, [accountKey, enabled, getPrivyIdentityToken]);
 
   return React.useSyncExternalStore(debateGateway.subscribe, debateGateway.getSnapshot, debateGateway.getSnapshot);
 }
@@ -530,6 +564,20 @@ function parseScope(value: unknown): DebateGatewayScope | null {
 
 function isEventsLagged(payload: unknown) {
   return isRecord(payload) && payload.code === 'events_lagged';
+}
+
+function isRateLimited(payload: unknown) {
+  return isRecord(payload) && payload.code === 'rate_limited';
+}
+
+function isSubscriptionLimitReached(payload: unknown) {
+  return isRecord(payload) && payload.code === 'subscription_limit_reached';
+}
+
+function rateLimitRetryDelayMs(payload: unknown) {
+  if (!isRecord(payload) || typeof payload.message !== 'string') return 1_000;
+  const seconds = payload.message.match(/retry after (\d+) seconds/)?.[1];
+  return seconds ? Number(seconds) * 1_000 : 1_000;
 }
 
 function isDebateEvent(value: unknown): value is DebateInvalidationEvent {

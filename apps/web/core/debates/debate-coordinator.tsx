@@ -22,7 +22,8 @@ export function DebateCoordinator() {
   const geoChatAuth = useGeoChatAuth();
   const gateway = useDebateGateway(
     isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
-    geoChatAuth.getPrivyIdentityToken
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;

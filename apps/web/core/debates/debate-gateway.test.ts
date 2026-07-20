@@ -63,6 +63,14 @@ describe('DebateGatewayClient', () => {
   let queryClient: QueryClient;
   let invalidateQueries: ReturnType<typeof vi.spyOn>;
   let session: DebateGatewaySession;
+  let getSession: ReturnType<
+    typeof vi.fn<
+      (
+        getPrivyIdentityToken: () => Promise<string | null | undefined>,
+        accountKey: string
+      ) => Promise<DebateGatewaySession>
+    >
+  >;
   let client: DebateGatewayClient;
 
   beforeEach(() => {
@@ -76,9 +84,10 @@ describe('DebateGatewayClient', () => {
       refresh_token: 'refresh-token',
       expires_at: '2026-07-20T12:10:00.000Z',
     };
+    getSession = vi.fn(async () => session);
     client = new DebateGatewayClient({
       queryClient,
-      getSession: vi.fn(async () => session),
+      getSession,
       getApiBaseUrl: () => 'https://chat.example.com/',
       createWebSocket: url => {
         const socket = new FakeWebSocket(url);
@@ -99,19 +108,23 @@ describe('DebateGatewayClient', () => {
     const releaseFirst = client.retainScope({ scope: 'space', space_id: 'space-1' });
     const releaseSecond = client.retainScope({ scope: 'space', space_id: 'space-1' });
 
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
 
     expect(sockets[0]?.url).toBe('wss://chat.example.com/gateway/ws?access_token=access+token');
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
 
     expect(sockets[0]!.sent).toContainEqual(
       expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
     );
 
     sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
-    await vi.runAllTicks();
+    await flushInvalidations();
 
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['debates', 'claims', 'space-1'],
@@ -130,11 +143,16 @@ describe('DebateGatewayClient', () => {
     );
   });
 
-  it('deduplicates events and coalesces targeted invalidations in the same turn', async () => {
-    client.start(vi.fn(async () => 'privy-token'));
+  it('deduplicates events and coalesces invalidations across adjacent gateway messages', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'], refetchType: 'active' });
     invalidateQueries.mockClear();
 
     const event = {
@@ -144,16 +162,19 @@ describe('DebateGatewayClient', () => {
     };
     sockets[0]!.receive('EVENT', event, 1);
     sockets[0]!.receive('EVENT', event, 2);
-    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(25);
+    sockets[0]!.receive('EVENT', { ...event, event_id: 'event-2' }, 3);
+    await vi.advanceTimersByTimeAsync(25);
 
     expect(invalidateQueries.mock.calls).toEqual(
       expect.arrayContaining([
         [{ queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' }],
         [{ queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' }],
+        [{ queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' }],
         [{ queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' }],
       ])
     );
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
   });
 
   it.each([
@@ -177,14 +198,18 @@ describe('DebateGatewayClient', () => {
     ],
     ['share prompts', { event_type: 'debate.share_prompts_changed', payload: {} }, [['debates', 'share-prompts']]],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
     invalidateQueries.mockClear();
 
     sockets[0]!.receive('EVENT', { event_id: `event-${String(_label)}`, ...event });
-    await vi.runAllTicks();
+    await flushInvalidations();
 
     for (const queryKey of expectedKeys) {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey, refetchType: 'active' });
@@ -197,16 +222,21 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-2']], {});
     const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
 
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
     sockets[0]!.receive('EVENT', {
       event_id: 'event-claims',
       event_type: 'debate.claims_changed',
       payload: { space_id: 'space-1', claim_entity_ids: ['claim-2'] },
     });
-    await vi.runAllTicks();
+    await flushInvalidations();
 
     type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
     const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
@@ -222,7 +252,10 @@ describe('DebateGatewayClient', () => {
   });
 
   it('sends presence heartbeats and reconnects after two missed acknowledgements', async () => {
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
@@ -241,7 +274,10 @@ describe('DebateGatewayClient', () => {
   });
 
   it('resets missed acknowledgements and keeps the live socket connected', async () => {
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
@@ -255,10 +291,14 @@ describe('DebateGatewayClient', () => {
   });
 
   it('uses bounded exponential reconnects and broadly reconciles after reconnect or lag', async () => {
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
     invalidateQueries.mockClear();
 
     sockets[0]!.serverClose();
@@ -270,18 +310,21 @@ describe('DebateGatewayClient', () => {
 
     sockets[1]!.open();
     sockets[1]!.receive('READY', readyPayload([]));
-    await vi.runAllTicks();
+    await flushInvalidations();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'], refetchType: 'active' });
 
     invalidateQueries.mockClear();
     sockets[1]!.receive('ERROR', { code: 'events_lagged', message: 'events skipped' });
-    await vi.runAllTicks();
+    await flushInvalidations();
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'], refetchType: 'active' });
   });
 
   it('rotates the socket thirty seconds before token expiry', async () => {
     session = { ...session, expires_at: '2026-07-20T12:01:00.000Z' };
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
@@ -290,6 +333,97 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(1_001);
     expect(sockets).toHaveLength(2);
+  });
+
+  it('reconciles a scope again when READY confirms an unsubscribe/resubscribe race', async () => {
+    const release = client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    release();
+    const releaseAgain = client.retainScope({ scope: 'space', space_id: 'space-1' });
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await flushInvalidations();
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['debates', 'claims', 'space-1'],
+      refetchType: 'active',
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['debates', 'space', 'space-1'],
+      refetchType: 'active',
+    });
+    releaseAgain();
+  });
+
+  it('reconnects and replays desired subscriptions after a rate-limited command', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'retry after 5 seconds' });
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(sockets).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(2);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(sockets[1]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
+    );
+  });
+
+  it('shows degraded mode without reconnecting when the subscription cap is reached', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('ERROR', { code: 'subscription_limit_reached', message: 'too many subscriptions' });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+  });
+
+  it('reconnects with a new session when the authenticated account changes', async () => {
+    client.start(
+      vi.fn(async () => 'user-a-privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    expect(getSession.mock.calls[0]?.[1]).toBe('user-a');
+
+    session = { ...session, access_token: 'user-b-access-token' };
+    client.start(
+      vi.fn(async () => 'user-b-privy-token'),
+      'user-b'
+    );
+    await vi.runAllTicks();
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(getSession.mock.calls[1]?.[1]).toBe('user-b');
+    expect(sockets[1]!.url).toContain('access_token=user-b-access-token');
   });
 
   it('never opens a socket while stopped, which keeps signed-out views snapshot-only', async () => {
@@ -302,7 +436,10 @@ describe('DebateGatewayClient', () => {
   });
 
   it('enters degraded mode when the server lacks the required capability and recovers on READY', async () => {
-    client.start(vi.fn(async () => 'privy-token'));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
     await vi.runAllTicks();
     sockets[0]!.open();
     sockets[0]!.receive('READY', { ...readyPayload([]), capabilities: [] });
@@ -321,4 +458,8 @@ function readyPayload(subscriptions: unknown[]) {
     capabilities: ['debate_invalidations_v1'],
     subscriptions,
   };
+}
+
+async function flushInvalidations() {
+  await vi.advanceTimersByTimeAsync(50);
 }

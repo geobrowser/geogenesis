@@ -74,6 +74,7 @@ export function useGeoChatAuth() {
   return {
     ready: privy.ready,
     authenticated: privy.authenticated,
+    accountKey: privy.user?.id ?? null,
     getPrivyIdentityToken: getCachedIdentityToken,
   };
 }
