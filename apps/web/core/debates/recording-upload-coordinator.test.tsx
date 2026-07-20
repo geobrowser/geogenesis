@@ -75,34 +75,111 @@ describe('debate recording uploader', () => {
     expect(recordingUploadRetryDelay(0)).toBe(5_000);
     expect(recordingUploadRetryDelay(1)).toBe(10_000);
     expect(recordingUploadRetryDelay(12)).toBe(300_000);
+    expect(recordingUploadRetryDelay(1_000)).toBe(300_000);
   });
 });
 
 describe('DebateRecordingUploadBanner', () => {
   it('shows the upload count with the publish checkbox checked', () => {
-    render(<DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={() => undefined} />);
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
 
     expect(screen.getByText('Uploading 1 debate')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('shows plural waiting copy while offline or backing off', () => {
-    render(<DebateRecordingUploadBanner count={2} waiting publishChecked onUncheckPublish={() => undefined} />);
+  it('shows generic plural waiting copy when no reason is available', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={2}
+        waitingReason="waiting"
+        errorMessage={null}
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
 
     expect(screen.getByText('Waiting to upload 2 debates')).toBeInTheDocument();
+  });
+
+  it('explains that offline uploads are waiting for a connection', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason="offline"
+        errorMessage="stale upload failure"
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Waiting to upload 1 debate — waiting for a connection')).toBeInTheDocument();
+    expect(screen.queryByText(/stale upload failure/)).not.toBeInTheDocument();
+  });
+
+  it('shows the latest failure and says retries are automatic', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={2}
+        waitingReason="retry"
+        errorMessage="Finalization unavailable"
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByText('Waiting to upload 2 debates — Finalization unavailable. Retrying automatically.')
+    ).toBeInTheDocument();
+  });
+
+  it('keeps long failure text in the live region while visually truncating it', () => {
+    const longError = `Upload failed: ${'connection reset '.repeat(30)}`.trim();
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason="retry"
+        errorMessage={longError}
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
+
+    const message = `Waiting to upload 1 debate — ${longError}. Retrying automatically.`;
+    expect(screen.getByRole('status')).toHaveTextContent(message);
+    expect(screen.getByText(message)).toHaveClass('truncate');
   });
 
   it('asks to cancel only when unchecking a checked publish box', () => {
     const uncheck = vi.fn();
     const { rerender } = render(
-      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked onUncheckPublish={uncheck} />
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        publishChecked
+        onUncheckPublish={uncheck}
+      />
     );
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
     expect(uncheck).toHaveBeenCalledOnce();
 
     rerender(
-      <DebateRecordingUploadBanner count={1} waiting={false} publishChecked={false} onUncheckPublish={uncheck} />
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        publishChecked={false}
+        onUncheckPublish={uncheck}
+      />
     );
     fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
     expect(uncheck).toHaveBeenCalledOnce();

@@ -57,7 +57,23 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
     mocks.observer?.(mocks.queue);
   },
   getDebateRecordingUpload: (id: string) => mocks.getUpload(id),
-  markDebateRecordingUploaded: mocks.markUploaded,
+  markDebateRecordingUploaded: async (id: string, filename: string) => {
+    await mocks.markUploaded(id, filename);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? {
+            ...upload,
+            stage: 'uploaded',
+            filename,
+            attemptCount: 0,
+            nextAttemptAt: Date.now(),
+            lastError: null,
+            updatedAt: Date.now(),
+          }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
   observeDebateRecordingUploads: () => ({
     subscribe: ({ next }: { next: (uploads: DebateRecordingUpload[]) => void }) => {
       mocks.observer = next;
@@ -65,7 +81,21 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
       return { unsubscribe: () => (mocks.observer = null) };
     },
   }),
-  scheduleDebateRecordingRetry: mocks.scheduleRetry,
+  scheduleDebateRecordingRetry: async (id: string, error: unknown, nextAttemptAt: number) => {
+    await mocks.scheduleRetry(id, error, nextAttemptAt);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? {
+            ...upload,
+            attemptCount: upload.attemptCount + 1,
+            nextAttemptAt,
+            lastError: error instanceof Error ? error.message : 'Recording upload failed.',
+            updatedAt: Date.now(),
+          }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
 }));
 
 beforeEach(() => {
@@ -122,13 +152,23 @@ describe('DebateRecordingUploadCoordinator', () => {
 
   it('waits while offline and resumes when the browser reconnects', async () => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
-    mocks.queue = [queuedRecording('debate-1')];
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: 2,
+        nextAttemptAt: Date.now() + 60_000,
+        lastError: 'stale upload failure',
+      },
+    ];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    expect(await screen.findByText('Waiting to upload 1 debate — waiting for a connection')).toBeInTheDocument();
+    expect(screen.queryByText(/stale upload failure/)).not.toBeInTheDocument();
     expect(mocks.createUpload).not.toHaveBeenCalled();
 
+    mocks.queue = mocks.queue.map(upload => ({ ...upload, nextAttemptAt: 0 }));
+    mocks.observer?.(mocks.queue);
     Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
     window.dispatchEvent(new Event('online'));
 
@@ -147,6 +187,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() =>
       expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything())
     );
+    expect(screen.getByText('Uploading 2 debates')).toBeInTheDocument();
     expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything());
 
     firstCompletion.resolve();
@@ -154,6 +195,109 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() =>
       expect(mocks.completeUpload).toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything())
     );
+  });
+
+  it('persists and displays a failed attempt while keeping it queued for automatic retry', async () => {
+    const error = new Error('Finalization unavailable');
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValueOnce(error);
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    expect(
+      screen.getByText('Waiting to upload 1 debate — Finalization unavailable. Retrying automatically.')
+    ).toBeInTheDocument();
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledWith(
+      '[DebateRecordingUploadCoordinator] upload attempt failed:',
+      expect.objectContaining({
+        debateId: 'debate-1',
+        stage: 'uploaded',
+        attemptCount: 1,
+        nextAttemptAt: expect.any(Number),
+        error,
+      })
+    );
+  });
+
+  it('shows a persisted failure immediately on startup without changing the queue entry', async () => {
+    const persisted = {
+      ...queuedRecording('debate-1'),
+      attemptCount: 4,
+      nextAttemptAt: Date.now() + 60_000,
+      lastError: 'Upload authorization expired',
+    };
+    mocks.queue = [persisted];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(
+      await screen.findByText('Waiting to upload 1 debate — Upload authorization expired. Retrying automatically.')
+    ).toBeInTheDocument();
+    expect(mocks.queue[0]).toBe(persisted);
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it('shows the newest failure while preserving the aggregate queue count', async () => {
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        nextAttemptAt: Date.now() + 60_000,
+        lastError: 'Older failure',
+        updatedAt: 100,
+      },
+      {
+        ...queuedRecording('debate-2'),
+        nextAttemptAt: Date.now() + 60_000,
+        lastError: 'Newest failure',
+        updatedAt: 200,
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(
+      await screen.findByText('Waiting to upload 2 debates — Newest failure. Retrying automatically.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Older failure/)).not.toBeInTheDocument();
+  });
+
+  it('removes the diagnostic banner after a later retry succeeds', async () => {
+    mocks.completeUpload.mockRejectedValueOnce(new Error('Temporary failure')).mockResolvedValue(undefined);
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(
+      await screen.findByText('Waiting to upload 1 debate — Temporary failure. Retrying automatically.')
+    ).toBeInTheDocument();
+
+    mocks.queue = mocks.queue.map(upload => ({ ...upload, nextAttemptAt: 0 }));
+    mocks.observer?.(mocks.queue);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('keeps retrying entries with very high attempt counts', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValueOnce(new Error('Still unavailable'));
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        stage: 'uploaded',
+        filename: 'recordings/debate-1.webm',
+        attemptCount: 1_000,
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    expect(mocks.queue[0]?.attemptCount).toBe(1_001);
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
   });
 
   it('cancels the upload and drops the local blob when publish is unchecked', async () => {
