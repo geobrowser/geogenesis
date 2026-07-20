@@ -362,9 +362,7 @@ export function DebateRecordingUploadBanner({
       aria-live="polite"
       className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
     >
-      <span className="min-w-0 truncate">
-        {message}
-      </span>
+      <span className="min-w-0 truncate">{message}</span>
       <span aria-hidden="true" className="shrink-0">
         ·
       </span>

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,15 +8,15 @@ import type { Debate } from '~/core/debates/api';
 import { DebatesPageClient } from './debates-page-client';
 
 const mocks = vi.hoisted(() => ({
-  mediaMutate: vi.fn(),
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
-  push: vi.fn(),
   replace: vi.fn(),
+  recordingUrl: vi.fn(() => Promise.resolve({ url: 'https://media.test/slot.webm' })),
+  openSidePanel: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -26,71 +26,53 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
-  useDebateMedia: () => ({
-    data: {
-      job: { status: 'succeeded' },
-      artifacts: [
-        { kind: 'final_video', filename: 'debate.mp4' },
-        { kind: 'preview_image', filename: 'preview.jpg' },
-      ],
-      transcript_segment_count: 2,
-    },
-  }),
-  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, isPending: false }),
-  useRequestDebateMediaProcessing: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
-  useRecordingUrl: () => ({ mutateAsync: vi.fn() }),
+  useDebateClaims: () => ({ data: { claims: [] } }),
+  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
+}));
+
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
 beforeEach(() => {
-  mocks.mediaMutate.mockReset();
   mocks.play.mockClear();
   mocks.pause.mockClear();
-  mocks.push.mockClear();
   mocks.replace.mockClear();
-  Object.defineProperty(HTMLMediaElement.prototype, 'play', {
-    configurable: true,
-    value: mocks.play,
-  });
-  Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
-    configurable: true,
-    value: mocks.pause,
-  });
+  Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
+  Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
+  class MockIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
-describe('DebatesPageClient', () => {
-  it('links processed video actions to the public recording page', async () => {
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind === 'preview_image') {
-        options.onSuccess({ upload: { url: 'https://media.test/preview.jpg' } });
-      }
-    });
-
+describe('DebatesPageClient browse feed', () => {
+  it('renders the claim title, space, join button and both debater videos', async () => {
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
-    await waitFor(() =>
-      expect(container.querySelector('video')).toHaveAttribute('poster', 'https://media.test/preview.jpg')
-    );
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
-    expect(screen.getByRole('button', { name: 'Watch originals' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
+    expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Watch processed video' }));
-
-    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
-    expect(mocks.play).not.toHaveBeenCalled();
-
-    mocks.push.mockClear();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Play Processed video for Debates are useful',
-      })
-    );
-
-    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
+    await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });
 });
 
