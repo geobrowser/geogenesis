@@ -65,8 +65,14 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
 
   const visibleDebates = debates.slice(0, visibleCount);
 
+  // Keep an active debate whenever the list is non-empty — including when a
+  // refetch, pagination, or space switch drops the current activeId out of view,
+  // which would otherwise leave nothing active or autoplaying.
   React.useEffect(() => {
-    if (!activeId && visibleDebates.length > 0) setActiveId(visibleDebates[0].id);
+    if (visibleDebates.length === 0) return;
+    if (!activeId || !visibleDebates.some(debate => debate.id === activeId)) {
+      setActiveId(visibleDebates[0].id);
+    }
   }, [activeId, visibleDebates]);
 
   const feed = (
