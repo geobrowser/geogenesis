@@ -81,21 +81,29 @@ export const Relation = Schema.Struct({
     id: HexId,
     name: Schema.NullOr(Schema.String),
   }),
-  toEntity: Schema.Struct({
-    id: HexId,
-    name: Schema.NullOr(Schema.String),
-    // Each type is decoded as `{ id }` only: `v2_getRenderableEntityType`
-    // consumes the type ids, so the per-type `name` is intentionally not
-    // fetched. (`toEntity.name` above *is* fetched and rendered.)
-    types: Schema.Array(Schema.Struct({ id: HexId })),
-    valuesList: Schema.Array(
-      Schema.Struct({
-        spaceId: HexId,
-        propertyId: HexId,
-        text: Schema.NullOr(Schema.String),
-      })
-    ),
-  }),
+  // `toEntity` is nullable: the indexer returns dangling relations whose target
+  // entity no longer resolves (deleted, or not present in the queried space).
+  // These have no renderable target, so they're dropped at the DTO boundary
+  // (`hasRelationTarget`). Keeping this non-nullable would fail the *entire*
+  // parent entity decode — `relationsList` is a strict array — wiping every
+  // value and relation for any entity that has even one dangling relation.
+  toEntity: Schema.NullOr(
+    Schema.Struct({
+      id: HexId,
+      name: Schema.NullOr(Schema.String),
+      // Each type is decoded as `{ id }` only: `v2_getRenderableEntityType`
+      // consumes the type ids, so the per-type `name` is intentionally not
+      // fetched. (`toEntity.name` above *is* fetched and rendered.)
+      types: Schema.Array(Schema.Struct({ id: HexId })),
+      valuesList: Schema.Array(
+        Schema.Struct({
+          spaceId: HexId,
+          propertyId: HexId,
+          text: Schema.NullOr(Schema.String),
+        })
+      ),
+    })
+  ),
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
     id: HexId,
