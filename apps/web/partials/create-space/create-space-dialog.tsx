@@ -11,13 +11,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { type VotingSettingsInput, useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { type VotingSettingsInput } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useReportError } from '~/core/state/status-bar-store';
+import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { describeError } from '~/core/utils/error-diagnostics';
-import { NavUtils, sleep } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -128,16 +127,14 @@ export function CreateSpaceDialog() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
-  const { deploy } = useDeploySpace();
-  const reportError = useReportError();
+  const setPendingCreatedSpace = useSetAtom(pendingCreatedSpaceAtom);
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
   const topicId = useAtomValue(topicIdAtom);
   const image = useAtomValue(imageAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
   const governanceType = useAtomValue(governanceTypeAtom);
-  const [step, setStep] = useAtom(stepAtom);
+  const step = useAtomValue(stepAtom);
   const autoRun = useAtomValue(autoRunAtom);
   const votingSettings = useAtomValue(votingSettingsAtom);
 
@@ -179,51 +176,33 @@ export function CreateSpaceDialog() {
 
   if (!address) return null;
 
-  async function createSpaces(spaceType: SpaceType) {
+  function createSpaces(spaceType: SpaceType) {
     if (!address || !spaceType) return;
 
-    try {
-      const spaceId = await deploy({
-        type: spaceType,
-        spaceName: name,
-        spaceImage: image,
-        governanceType: governanceType ?? undefined,
-        topicId,
-        votingSettings: votingSettings ?? undefined,
-      });
+    // Optimistic: snapshot the deploy args and hand the slow chain (IPFS publish
+    // + on-chain factory tx + receipt + up to ~120s index wait) to the
+    // always-mounted PendingCreatedSpaceRunner, then close the modal immediately
+    // instead of blocking on it. The runner routes the user into the space once
+    // it's indexed (the space page notFound()s before then), and surfaces a
+    // retryable error via the status bar on failure.
+    setPendingCreatedSpace({
+      jobId: crypto.randomUUID(),
+      type: spaceType,
+      spaceName: name,
+      spaceImage: image || undefined,
+      governanceType: governanceType ?? undefined,
+      topicId: topicId || undefined,
+      votingSettings: votingSettings ?? undefined,
+      address,
+      status: 'pending',
+    });
 
-      if (!spaceId) {
-        throw new Error(`Creating space failed`);
-      }
-
-      setSpaceId(spaceId);
-      setStep('completed');
-    } catch (error) {
-      const message = describeError(error);
-      // Drop back to the form step so the user has a recovery path even if
-      // they dismiss the global error toast — StepHeader hides the close
-      // button while step is 'create-space' or 'completed'.
-      setStep('enter-profile');
-      reportError(`Space creation failed: ${message}`, () => {
-        setStep('create-space');
-        createSpaces(spaceType);
-      });
-    }
+    onOpenChange(false);
   }
 
-  async function onRunOnboardingWorkflow() {
+  function onRunOnboardingWorkflow() {
     if (!address || !smartAccount || !spaceType) return;
-
-    switch (step) {
-      case 'enter-profile':
-        setStep('create-space');
-        await sleep(100);
-        createSpaces(spaceType);
-        break;
-      case 'create-space':
-        createSpaces(spaceType);
-        break;
-    }
+    createSpaces(spaceType);
   }
 
   return (
@@ -579,8 +558,8 @@ function StepConfigureGovernance() {
     : DEFAULT_VOTING_SETTINGS_SNAPSHOT;
 
   const [state, setState] = React.useState<VotingSettingsFormState>(() => snapshotToFormState(initialSnapshot));
-  // Universal support, grace period, and the new-member fast-path toggle aren't in the
-  // design's form; carry whatever the draft started with through unchanged.
+  // Grace period and the new-member fast-path toggle aren't in the form; carry whatever
+  // the draft started with through unchanged. (Universal support is now an exposed field.)
   const hidden = React.useMemo(() => snapshotToHidden(initialSnapshot), [initialSnapshot]);
 
   const parsed = parseVotingSettingsForm(state, hidden, NEW_SPACE_INITIAL_EDITOR_COUNT);
