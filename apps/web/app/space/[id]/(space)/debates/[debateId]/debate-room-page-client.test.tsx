@@ -447,9 +447,7 @@ describe('DebateRoomPageClient', () => {
     expect(tiles[1]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'local');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-black/45');
-    expect(
-      document.querySelector('[data-inactive-speaker="local"] [data-muted-indicator="true"]')
-    ).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"] [data-muted-indicator="true"]')).toBeInTheDocument();
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
   });
