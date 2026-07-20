@@ -50,11 +50,13 @@ export async function processDebateRecordingUpload(
   upload: DebateRecordingUpload,
   dependencies: RecordingUploadDependencies
 ) {
+  const startedAtMs = Math.round(upload.startedAtMs);
+  const endedAtMs = Math.round(upload.endedAtMs);
   let filename = upload.filename;
   if (upload.stage === 'queued' || !filename) {
     const target = await dependencies.createUpload(upload.debateId, {
       mime_type: upload.mimeType,
-      started_at_ms: upload.startedAtMs,
+      started_at_ms: startedAtMs,
     });
     await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
     filename = target.filename;
@@ -64,8 +66,8 @@ export async function processDebateRecordingUpload(
   await dependencies.completeUpload(upload.debateId, {
     filename,
     mime_type: upload.mimeType,
-    started_at_ms: upload.startedAtMs,
-    ended_at_ms: upload.endedAtMs,
+    started_at_ms: startedAtMs,
+    ended_at_ms: endedAtMs,
     duration_seconds: upload.durationSeconds,
     byte_size: upload.byteSize,
     width: upload.width,

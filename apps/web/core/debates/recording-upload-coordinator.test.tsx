@@ -43,6 +43,29 @@ describe('debate recording uploader', () => {
     expect(dependencies.deleteUpload).toHaveBeenCalledWith(upload.id);
   });
 
+  it('rounds fractional timestamps from a persisted queue entry', async () => {
+    const upload = {
+      ...queuedRecording(),
+      startedAtMs: 1_784_542_272_505.1,
+      endedAtMs: 1_784_542_282_505.6,
+    };
+    const dependencies = uploadDependencies();
+
+    await processDebateRecordingUpload(upload, dependencies);
+
+    expect(dependencies.createUpload).toHaveBeenCalledWith(
+      upload.debateId,
+      expect.objectContaining({ started_at_ms: 1_784_542_272_505 })
+    );
+    expect(dependencies.completeUpload).toHaveBeenCalledWith(
+      upload.debateId,
+      expect.objectContaining({
+        started_at_ms: 1_784_542_272_505,
+        ended_at_ms: 1_784_542_282_506,
+      })
+    );
+  });
+
   it('retries only finalization after the object upload was persisted', async () => {
     const upload = {
       ...queuedRecording(),
