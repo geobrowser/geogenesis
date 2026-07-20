@@ -25,6 +25,7 @@ import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-com
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
@@ -76,37 +77,34 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const props = await getSpaceFrontPage(space);
+  const [props, communityCalls] = await Promise.all([getSpaceFrontPage(space), fetchCommunityCalls(spaceId)]);
 
   return (
-    <EntityPageContentContainer>
-      <div className="flex items-start">
-        <div className="min-w-0 flex-1">
-          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={params.id} />
-          </React.Suspense>
-          <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-          </React.Suspense>
-          <Spacer height={24} />
-          <ToggleEntityPage id={props.id} spaceId={spaceId} />
-          <Spacer height={40} />
-          {/*
-            Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-            boundary. We don't want to show any referenced by loading states but do want to
-            stream it in
-          */}
-          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={props.id} />
-            </React.Suspense>
-          </TrackedErrorBoundary>
-        </div>
-        <React.Suspense fallback={null}>
-          <SpaceCommunityCallsContainer spaceId={spaceId} />
+    <EntityPageSidebarLayout
+      sidebar={
+        communityCalls.length > 0 ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null
+      }
+    >
+      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+        <SubtopicGalleryContainer spaceId={params.id} />
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+      <Spacer height={24} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} />
+      <Spacer height={40} />
+      {/*
+        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+        boundary. We don't want to show any referenced by loading states but do want to
+        stream it in
+      */}
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={props.id} />
         </React.Suspense>
-      </div>
-    </EntityPageContentContainer>
+      </TrackedErrorBoundary>
+    </EntityPageSidebarLayout>
   );
 }
 
@@ -236,11 +234,6 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
   }
 
   return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
-};
-
-const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
-  const series = await fetchCommunityCalls(spaceId);
-  return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {

@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import { Effect } from 'effect';
 
 import { getAllEntities, getBatchEntities, getResults, getSpaces } from '~/core/io/queries';
@@ -14,7 +16,7 @@ import { Telemetry } from '~/app/api/telemetry';
  * Returns [] when the CommunityCall type id isn't configured yet, so the tab
  * renders an empty state instead of erroring.
  */
-export async function fetchCommunityCalls(spaceId: string): Promise<CallSeries[]> {
+export const fetchCommunityCalls = cache(async (spaceId: string): Promise<CallSeries[]> => {
   if (!CALL_SCHEMA.COMMUNITY_CALL_TYPE) return [];
 
   const page = await Effect.runPromise(
@@ -39,7 +41,7 @@ export async function fetchCommunityCalls(spaceId: string): Promise<CallSeries[]
       } satisfies CallSeries,
     ];
   });
-}
+});
 
 /** A community call plus its space's name/avatar, for the cross-space explore digest. */
 export type ExploreCall = CallSeries & { spaceName: string; spaceImage: string | null };
