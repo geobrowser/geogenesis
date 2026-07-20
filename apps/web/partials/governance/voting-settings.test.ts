@@ -43,6 +43,7 @@ describe('snapshotToFormState', () => {
     const form = snapshotToFormState(rawVotingSettingsToSnapshot(rawFixture));
     expect(form).toMatchObject({
       slowPathThresholdPercent: '51',
+      universalThresholdPercent: '90',
       durationDays: '1',
       durationHours: '2',
       durationMinutes: '30',
@@ -56,6 +57,7 @@ describe('snapshotToFormState', () => {
 describe('parseVotingSettingsForm', () => {
   const validForm: VotingSettingsFormState = {
     slowPathThresholdPercent: '51',
+    universalThresholdPercent: '90',
     durationDays: '1',
     durationHours: '0',
     durationMinutes: '0',
@@ -64,19 +66,29 @@ describe('parseVotingSettingsForm', () => {
     quorum: '1',
   };
 
-  it('accepts a valid form and preserves hidden fields', () => {
+  it('accepts a valid form, reads the universal threshold, and preserves hidden fields', () => {
     const result = parseVotingSettingsForm(validForm, hidden);
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
     expect(result.value).toMatchObject({
       partialPercentageSupportThreshold: 51,
-      universalPercentageSupportThreshold: hidden.universalPercent,
+      universalPercentageSupportThreshold: 90,
       flatSupportThreshold: 1,
       quorum: 1,
       durationInSeconds: 86400,
       executionGracePeriodInDays: hidden.graceDays,
       disableFastPathAccessForNewMembers: hidden.disableFastPathForNewMembers,
     });
+  });
+
+  it('rejects a universal threshold above 100%', () => {
+    const result = parseVotingSettingsForm({ ...validForm, universalThresholdPercent: '150' }, hidden);
+    expect(result.kind).toBe('error');
+  });
+
+  it('rejects a blank universal threshold before it coerces to 0', () => {
+    const result = parseVotingSettingsForm({ ...validForm, universalThresholdPercent: '' }, hidden);
+    expect(result).toEqual({ kind: 'error', message: 'All fields are required.' });
   });
 
   it('sums days/hours/minutes/seconds into durationInSeconds', () => {
@@ -144,16 +156,28 @@ describe('parseVotingSettingsForm', () => {
 });
 
 describe('votingSettingsWarnings', () => {
-  it('warns on a likely-decimal threshold', () => {
-    const warnings = votingSettingsWarnings({
-      slowPathThresholdPercent: '0.5',
-      durationDays: '1',
-      durationHours: '0',
-      durationMinutes: '0',
-      durationSeconds: '0',
-      fastPathVotes: '1',
-      quorum: '1',
-    });
+  const baseForm: VotingSettingsFormState = {
+    slowPathThresholdPercent: '51',
+    universalThresholdPercent: '90',
+    durationDays: '1',
+    durationHours: '0',
+    durationMinutes: '0',
+    durationSeconds: '0',
+    fastPathVotes: '1',
+    quorum: '1',
+  };
+
+  it('warns on a likely-decimal slow path threshold', () => {
+    const warnings = votingSettingsWarnings({ ...baseForm, slowPathThresholdPercent: '0.5' });
     expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('warns when the universal threshold is below the pass threshold', () => {
+    const warnings = votingSettingsWarnings({ ...baseForm, universalThresholdPercent: '5.1' });
+    expect(warnings.some(w => w.includes('below the pass threshold'))).toBe(true);
+  });
+
+  it('does not warn when the universal threshold is at or above the pass threshold', () => {
+    expect(votingSettingsWarnings(baseForm)).toEqual([]);
   });
 });

@@ -18,8 +18,8 @@ type Props = {
 /**
  * Renders the change an `UPDATE_VOTING_SETTINGS` proposal makes to a space's voting
  * settings. The proposed (new) values come from the proposal action; the current (old)
- * values are read on-chain. Only the four user-facing fields the API carries are shown —
- * slow-path threshold, fast-path votes, quorum, and vote duration.
+ * values are read on-chain. Shows the fields the API carries — slow-path threshold,
+ * universal support threshold, fast-path votes, quorum, and vote duration.
  */
 export function VotingSettingsProposal({ proposal, spaceId }: Props) {
   const { space } = useSpace(spaceId);
@@ -80,6 +80,15 @@ function buildRows(
         'Slow path threshold',
         current ? formatPercent(current.partialPercent) : null,
         formatPercent(ratioToPercent(details.slowThreshold))
+      )
+    );
+  }
+  if (details.universalThreshold !== undefined) {
+    rows.push(
+      makeRow(
+        'Universal support threshold',
+        current ? formatPercent(current.universalPercent) : null,
+        formatPercent(ratioToPercent(details.universalThreshold))
       )
     );
   }

@@ -53,9 +53,12 @@ export function rawVotingSettingsToSnapshot(raw: RawVotingSettings): VotingSetti
   };
 }
 
-/** The four fields the design exposes, held as strings while the user types. */
+/** The fields the form exposes, held as strings while the user types. */
 export type VotingSettingsFormState = {
   slowPathThresholdPercent: string;
+  /** Universal (early-execution) threshold — a review-path proposal passes the moment
+   *  this % of ALL editors vote YES, before the window ends. */
+  universalThresholdPercent: string;
   durationDays: string;
   durationHours: string;
   durationMinutes: string;
@@ -66,7 +69,6 @@ export type VotingSettingsFormState = {
 
 /** Fields the form doesn't expose but the SDK still requires; carried through unchanged. */
 export type HiddenVotingSettings = {
-  universalPercent: number;
   graceDays: number;
   disableFastPathForNewMembers: boolean;
 };
@@ -125,6 +127,7 @@ export function snapshotToFormState(snapshot: VotingSettingsSnapshot): VotingSet
   const { days, hours, minutes, seconds } = splitSeconds(snapshot.durationSeconds);
   return {
     slowPathThresholdPercent: String(roundPercent(snapshot.partialPercent)),
+    universalThresholdPercent: String(roundPercent(snapshot.universalPercent)),
     durationDays: String(days),
     durationHours: String(hours),
     durationMinutes: String(minutes),
@@ -136,7 +139,6 @@ export function snapshotToFormState(snapshot: VotingSettingsSnapshot): VotingSet
 
 export function snapshotToHidden(snapshot: VotingSettingsSnapshot): HiddenVotingSettings {
   return {
-    universalPercent: snapshot.universalPercent,
     graceDays: snapshot.graceDays,
     disableFastPathForNewMembers: snapshot.disableFastPathForNewMembers,
   };
@@ -160,7 +162,13 @@ export function parseVotingSettingsForm(
   editorCount?: number
 ): ParseVotingSettingsResult {
   const durationFields = [state.durationDays, state.durationHours, state.durationMinutes, state.durationSeconds];
-  const required = [state.slowPathThresholdPercent, state.fastPathVotes, state.quorum, ...durationFields];
+  const required = [
+    state.slowPathThresholdPercent,
+    state.universalThresholdPercent,
+    state.fastPathVotes,
+    state.quorum,
+    ...durationFields,
+  ];
 
   // Number('') and Number('  ') are 0, so blank fields must be rejected before conversion
   // or they silently become 0 (e.g. a 0% threshold or a 0-second duration).
@@ -169,6 +177,7 @@ export function parseVotingSettingsForm(
   }
 
   const partial = Number(state.slowPathThresholdPercent);
+  const universal = Number(state.universalThresholdPercent);
   const flat = Number(state.fastPathVotes);
   const quorum = Number(state.quorum);
   const days = Number(state.durationDays);
@@ -176,11 +185,14 @@ export function parseVotingSettingsForm(
   const minutes = Number(state.durationMinutes);
   const seconds = Number(state.durationSeconds);
 
-  if (![partial, flat, quorum, days, hours, minutes, seconds].every(Number.isFinite)) {
+  if (![partial, universal, flat, quorum, days, hours, minutes, seconds].every(Number.isFinite)) {
     return { kind: 'error', message: 'All fields must be valid numbers.' };
   }
   if (partial < 0 || partial > 100) {
     return { kind: 'error', message: 'Slow path threshold must be between 0 and 100%.' };
+  }
+  if (universal < 0 || universal > 100) {
+    return { kind: 'error', message: 'Universal support threshold must be between 0 and 100%.' };
   }
   if (![days, hours, minutes, seconds].every(n => Number.isInteger(n) && n >= 0)) {
     return { kind: 'error', message: 'Vote duration values must be non-negative whole numbers.' };
@@ -199,7 +211,7 @@ export function parseVotingSettingsForm(
 
   const value: VotingSettingsInput = {
     partialPercentageSupportThreshold: partial,
-    universalPercentageSupportThreshold: hidden.universalPercent,
+    universalPercentageSupportThreshold: universal,
     flatSupportThreshold: flat,
     quorum,
     durationInSeconds,
@@ -219,10 +231,18 @@ export function parseVotingSettingsForm(
 export function votingSettingsWarnings(state: VotingSettingsFormState): string[] {
   const warnings: string[] = [];
   const partial = Number(state.slowPathThresholdPercent);
+  const universal = Number(state.universalThresholdPercent);
 
   if (Number.isFinite(partial) && partial > 0 && partial < 1) {
     warnings.push(
       `Slow path threshold is ${partial}%. Percentages are whole numbers — 50 means 50%, not 0.5. Did you mean ${Math.round(partial * 10)}%?`
+    );
+  }
+  // A universal threshold below the pass threshold lets a review-path proposal execute early,
+  // before its voting window ends — usually not what you want.
+  if (Number.isFinite(universal) && Number.isFinite(partial) && universal < partial) {
+    warnings.push(
+      `Universal support threshold (${universal}%) is below the pass threshold (${partial}%), so review-path proposals can pass early, before the voting window ends.`
     );
   }
   return warnings;

@@ -79,6 +79,7 @@ export const ApiActionSchema = Schema.Struct({
   quorum: Schema.optional(Schema.Number),
   fastThreshold: Schema.optional(Schema.Number),
   slowThreshold: Schema.optional(Schema.Number),
+  universalPercentageSupportThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
   targetSpaceId: Schema.optional(Schema.String),
   targetTopicId: Schema.optional(Schema.String),
@@ -320,8 +321,9 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
 
 /**
  * Extract the proposed new voting settings from an `UPDATE_VOTING_SETTINGS` action. The API
- * carries the new values (`slowThreshold`, `fastThreshold`, `quorum`, `duration`) directly on
- * the action; returns null if there's no such action or it carries none of them.
+ * carries the new values (`slowThreshold`, `universalPercentageSupportThreshold`,
+ * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
+ * such action or it carries none of them.
  */
 export function getVotingSettingsProposalDetails(
   actions: readonly ApiAction[]
@@ -333,6 +335,7 @@ export function getVotingSettingsProposalDetails(
 
   const details: VotingSettingsProposalDetails = {
     slowThreshold: action.slowThreshold,
+    universalThreshold: action.universalPercentageSupportThreshold,
     fastThreshold: action.fastThreshold,
     quorum: action.quorum,
     durationSeconds: action.duration,

@@ -118,6 +118,7 @@ export default async function GovernancePage(props: Props) {
   // The four settings the governance design surfaces (design 62569-13445).
   const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
   const passThreshold = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
+  const universalThreshold = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '90%';
   const fastPassThreshold = votingSettings ? String(Number(votingSettings.flatSupportThreshold)) : '—';
   const quorum = votingSettings ? String(Number(votingSettings.quorum)) : '—';
 
@@ -151,6 +152,10 @@ export default async function GovernancePage(props: Props) {
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Pass threshold</h2>
             <p className="text-mediumTitle">{passThreshold}</p>
+          </GovernanceMetadataBox>
+          <GovernanceMetadataBox>
+            <h2 className="text-metadata text-grey-04">Universal threshold</h2>
+            <p className="text-mediumTitle">{universalThreshold}</p>
           </GovernanceMetadataBox>
           <GovernanceMetadataBox>
             <h2 className="text-metadata text-grey-04">Fast pass threshold</h2>

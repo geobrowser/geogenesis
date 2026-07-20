@@ -14,9 +14,10 @@ type Props = {
 };
 
 /**
- * The four governance settings the design exposes: slow-path threshold (slider),
- * vote duration (days/hours/minutes/seconds), fast-path votes, and quorum. Shared
- * between create-space "advanced" settings and the edit-existing-space proposal modal.
+ * The governance settings the form exposes: slow-path threshold (slider), universal
+ * (early-execution) threshold (slider), vote duration (days/hours/minutes/seconds),
+ * fast-path votes, and quorum. Shared between create-space "advanced" settings and the
+ * edit-existing-space proposal modal.
  */
 export function VotingSettingsFields({ state, onChange, disabled = false }: Props) {
   const set = <K extends keyof VotingSettingsFormState>(key: K, value: string) => {
@@ -24,6 +25,7 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
   };
 
   const thresholdValue = clampPercentForSlider(state.slowPathThresholdPercent);
+  const universalValue = clampPercentForSlider(state.universalThresholdPercent);
 
   return (
     <div className="flex flex-col gap-4">
@@ -41,6 +43,28 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
             aria-label="Slow path threshold"
           />
           <span className="w-9 text-right text-quoteMedium tabular-nums">{thresholdValue}%</span>
+        </div>
+      </SettingRow>
+
+      <Divider />
+
+      <SettingRow
+        label="Universal support threshold"
+        hint="Percentage of all editors that must vote YES for a review-path proposal to pass early, before the voting window ends. Keep it above the pass threshold."
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={universalValue}
+            disabled={disabled}
+            onChange={e => set('universalThresholdPercent', e.target.value)}
+            className="h-1 w-[100px] cursor-pointer accent-text disabled:cursor-not-allowed"
+            aria-label="Universal support threshold"
+          />
+          <span className="w-9 text-right text-quoteMedium tabular-nums">{universalValue}%</span>
         </div>
       </SettingRow>
 
