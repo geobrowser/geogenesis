@@ -2,8 +2,6 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-
 import { DebatesPageClient } from './debates-page-client';
 
 interface Props {
@@ -17,9 +15,6 @@ export default async function DebatesPage(props: Props) {
     notFound();
   }
 
-  return (
-    <EntityPageContentContainer>
-      <DebatesPageClient spaceId={params.id} />
-    </EntityPageContentContainer>
-  );
+  // Full-bleed: no content-width container. The feed fills the viewport itself.
+  return <DebatesPageClient spaceId={params.id} />;
 }
