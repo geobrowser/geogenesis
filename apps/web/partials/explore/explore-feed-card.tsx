@@ -18,7 +18,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { RankingCardBody, RankingVoteButton } from './explore-ranking-card-body';
+import { RankingCardBody } from './explore-ranking-card-body';
 
 type ExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -224,7 +224,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
 
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      {showSpace || dottedSegments.length > 0 || isRanking ? (
+      {showSpace || dottedSegments.length > 0 ? (
         <div className="flex min-w-0 flex-wrap items-center gap-y-2">
           {showSpace ? (
             <Link
@@ -242,7 +242,6 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {segment}
             </React.Fragment>
           ))}
-          {isRanking ? <RankingVoteButton item={item} /> : null}
         </div>
       ) : null}
 

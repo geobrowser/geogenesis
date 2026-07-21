@@ -121,15 +121,15 @@ export function RankingVoteButton({ item }: { item: ExploreFeedItem }) {
   return (
     <Link
       href={href}
-      aria-label={`Vote on ${item.title}`}
-      className="ml-auto flex h-8 shrink-0 items-center rounded-lg bg-text px-3 text-[16px] leading-[18px] whitespace-nowrap text-white transition-colors hover:bg-text/90"
+      aria-label={`Rank ${item.title}`}
+      className="flex h-8 shrink-0 items-center rounded-lg bg-text px-3 text-[16px] leading-[18px] whitespace-nowrap text-white transition-colors hover:bg-text/90"
     >
-      Vote
+      Rank
     </Link>
   );
 }
 
-function RankingRow({
+export function RankingRow({
   rank,
   entityId,
   spaceId,
@@ -175,7 +175,7 @@ function RankingRow({
       ) : null}
       <Link
         href={href}
-        className="min-w-0 flex-1 truncate text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text hover:underline"
+        className="min-w-0 flex-1 truncate text-[16px] font-normal leading-[20px] tracking-[-0.35px] text-grey-04 hover:underline"
         title={label}
       >
         {label}
@@ -207,11 +207,14 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
-        <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
-          {item.title}
-        </h2>
-      </Link>
+      <div className="flex min-w-0 items-center gap-3">
+        <Link href={NavUtils.toEntity(item.spaceId, item.entityId)} className="min-w-0 flex-1">
+          <h2 className="mt-0! truncate text-[19px]! font-medium! leading-[21px]! text-[#2A2B2E] hover:underline">
+            {item.title}
+          </h2>
+        </Link>
+        <RankingVoteButton item={item} />
+      </div>
 
       <div className="flex flex-col gap-2">
         {pageIds.map((entityId, index) => {
