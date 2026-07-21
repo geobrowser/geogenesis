@@ -321,6 +321,12 @@ function ControlCircle({
   );
 }
 
+// Only the keys that actually move a range thumb should pause playback. Firing on every
+// key means Tab/Shift while the slider is focused would start a scrub whose keyup lands on
+// another element, leaving playback stuck paused.
+const isScrubKey = (key: string) =>
+  key.startsWith('Arrow') || key === 'Home' || key === 'End' || key === 'PageUp' || key === 'PageDown';
+
 function FeedScrubber({
   currentTime,
   duration,
@@ -360,8 +366,8 @@ function FeedScrubber({
         onPointerDown={onScrubStart}
         onPointerUp={onScrubEnd}
         onLostPointerCapture={onScrubEnd}
-        onKeyDown={onScrubStart}
-        onKeyUp={onScrubEnd}
+        onKeyDown={e => isScrubKey(e.key) && onScrubStart()}
+        onKeyUp={e => isScrubKey(e.key) && onScrubEnd()}
       />
     </div>
   );
