@@ -16,10 +16,9 @@ export function isBlockMediaProperty(property: Property | null | undefined): pro
   return property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'VIDEO';
 }
 
-function findProperty(
-  properties: Record<string, Property> | readonly Property[] | undefined,
-  propertyId: string
-): Property | undefined {
+export type PropertyLookup = Record<string, Property> | readonly Property[] | undefined;
+
+export function findProperty(properties: PropertyLookup, propertyId: string): Property | undefined {
   if (!properties) return undefined;
 
   if (Array.isArray(properties)) {
@@ -33,12 +32,16 @@ function findProperty(
   return Object.values(byId).find(p => ID.equals(p.id, propertyId));
 }
 
+export function isBlockMediaColumn(propertyId: string, properties: PropertyLookup): boolean {
+  return isBlockMediaProperty(findProperty(properties, propertyId));
+}
+
 /**
  * Gallery / list main media: first shown Image or Video property in block order
  */
 export function resolveMainMediaProperty(
   shownColumnIds: readonly string[],
-  properties: Record<string, Property> | readonly Property[] | undefined
+  properties: PropertyLookup
 ): MainMediaProperty | null {
   for (const columnId of shownColumnIds) {
     if (ID.equals(columnId, SystemIds.NAME_PROPERTY)) continue;

@@ -1,6 +1,5 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -11,8 +10,8 @@ import type { BlockMediaKind } from '~/core/blocks/data/resolve-main-media-prope
 import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
 import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
-import { useSpaceAwareRelation } from '~/core/sync/use-store';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { useSpaceAwareRelation, useValues } from '~/core/sync/use-store';
+import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 function isDirectMediaUrl(value: string | null | undefined): value is string {
   return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
@@ -42,17 +41,10 @@ export function useBlockMainMediaUrl({
     spaceId,
   });
 
-  const coverRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === entityId,
-    spaceId,
-  });
-
-  const avatarRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === entityId,
-    spaceId,
-  });
+  const { avatarUrl, coverUrl } = useEntityMedia(mediaPropertyId ? undefined : entityId, spaceId);
 
   const selectedEntityId = selectedRelation?.toEntity.id;
+  const selectedSpaceId = selectedRelation?.toSpaceId ?? spaceId;
   const isVideoMedia = Boolean(
     mediaPropertyId && (mediaKind === 'VIDEO' || selectedRelation?.renderableType === 'VIDEO')
   );
@@ -62,7 +54,7 @@ export function useBlockMainMediaUrl({
       Boolean(isVideoMedia && selectedEntityId) &&
       r.fromEntity.id === selectedEntityId &&
       ID.equals(r.type.id, KEY_FRAME_IMAGE_PROPERTY),
-    spaceId,
+    spaceId: selectedSpaceId,
   });
 
   const [fetchedKeyframe, setFetchedKeyframe] = React.useState<{
@@ -81,9 +73,11 @@ export function useBlockMainMediaUrl({
     const fetchKeyframe = async () => {
       try {
         const relations = await cache.fetchQuery({
-          queryKey: ['network', 'relations-by-property', selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, spaceId],
+          queryKey: ['network', 'relations-by-property', selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, selectedSpaceId],
           queryFn: ({ signal }) =>
-            Effect.runPromise(getRelationsByFromEntityId(selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, spaceId, signal)),
+            Effect.runPromise(
+              getRelationsByFromEntityId(selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, selectedSpaceId, signal)
+            ),
           staleTime: 5 * 60 * 1000,
         });
 
@@ -104,28 +98,32 @@ export function useBlockMainMediaUrl({
     return () => {
       cancelled = true;
     };
-  }, [isVideoMedia, selectedEntityId, storeKeyframeRelation, spaceId, cache]);
+  }, [isVideoMedia, selectedEntityId, storeKeyframeRelation, selectedSpaceId, cache]);
 
   const keyframeFromFetch =
     fetchedKeyframe && fetchedKeyframe.videoEntityId === selectedEntityId ? fetchedKeyframe : null;
 
   const imageSource = React.useMemo(() => {
     if (isVideoMedia) {
-      const raw = storeKeyframeRelation?.toEntity.value ?? keyframeFromFetch?.imageUrl;
-      const imageEntityId = storeKeyframeRelation?.toEntity.id ?? keyframeFromFetch?.imageEntityId;
-      return { raw, imageEntityId };
+      return {
+        raw: storeKeyframeRelation?.toEntity.value ?? keyframeFromFetch?.imageUrl,
+        imageEntityId: storeKeyframeRelation?.toEntity.id ?? keyframeFromFetch?.imageEntityId,
+        imageSpaceId: storeKeyframeRelation?.toSpaceId ?? selectedSpaceId,
+      };
     }
 
     if (mediaPropertyId) {
       return {
         raw: selectedRelation?.toEntity.value,
         imageEntityId: selectedEntityId,
+        imageSpaceId: selectedSpaceId,
       };
     }
 
     return {
-      raw: coverRelation?.toEntity.value ?? avatarRelation?.toEntity.value ?? fallbackHint ?? undefined,
-      imageEntityId: coverRelation?.toEntity.id ?? avatarRelation?.toEntity.id,
+      raw: coverUrl ?? avatarUrl ?? fallbackHint ?? undefined,
+      imageEntityId: undefined,
+      imageSpaceId: spaceId,
     };
   }, [
     isVideoMedia,
@@ -134,16 +132,22 @@ export function useBlockMainMediaUrl({
     keyframeFromFetch,
     selectedRelation,
     selectedEntityId,
-    coverRelation,
-    avatarRelation,
+    selectedSpaceId,
+    coverUrl,
+    avatarUrl,
     fallbackHint,
+    spaceId,
   ]);
 
   const lookupId = isDirectMediaUrl(imageSource.raw) ? undefined : imageSource.raw || imageSource.imageEntityId;
 
-  const lookedUp = useImageUrlFromEntity(lookupId, spaceId);
+  const imageValues = useValues({ selector: v => Boolean(lookupId) && v.entity.id === lookupId });
+
+  const lookedUp = React.useMemo(() => {
+    const urls = imageValues.filter(v => isDirectMediaUrl(v.value));
+    return urls.find(v => v.spaceId === imageSource.imageSpaceId)?.value ?? urls[0]?.value;
+  }, [imageValues, imageSource.imageSpaceId]);
 
   if (isDirectMediaUrl(imageSource.raw)) return imageSource.raw;
-  if (lookedUp) return lookedUp;
-  return undefined;
+  return lookedUp ?? undefined;
 }

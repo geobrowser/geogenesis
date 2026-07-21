@@ -1,10 +1,11 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
 import { Property } from '~/core/types';
 
 import {
+  isBlockMediaColumn,
   isBlockMediaProperty,
   parsePositivePixelDimension,
   resolveMainMediaProperty,
@@ -64,6 +65,33 @@ describe('resolveMainMediaProperty', () => {
 
   it('returns null when no media property is shown', () => {
     expect(resolveMainMediaProperty([SystemIds.NAME_PROPERTY, description.id], properties)).toBeNull();
+  });
+
+  it('matches dashed column ids against undashed schema keys', () => {
+    const dashed = prop({ id: '4c81561d-1f95-4131-9cdd-dd20ab831ba2', name: 'Clip', renderableTypeStrict: 'VIDEO' });
+    const undashedKey = '4c81561d1f9541319cdddd20ab831ba2';
+
+    expect(resolveMainMediaProperty([dashed.id], { [undashedKey]: dashed })).toEqual({
+      propertyId: dashed.id,
+      kind: 'VIDEO',
+      name: 'Clip',
+    });
+  });
+});
+
+describe('isBlockMediaColumn', () => {
+  const photo = prop({ id: 'photo-prop', name: 'Photo', renderableTypeStrict: 'IMAGE' });
+  const description = prop({ id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description', dataType: 'TEXT' });
+  const properties = { [photo.id]: photo, [description.id]: description };
+
+  it('identifies media columns regardless of id formatting', () => {
+    expect(isBlockMediaColumn(photo.id, properties)).toBe(true);
+    expect(isBlockMediaColumn(description.id, properties)).toBe(false);
+  });
+
+  it('treats unknown columns as non-media', () => {
+    expect(isBlockMediaColumn('missing-prop', properties)).toBe(false);
+    expect(isBlockMediaColumn(photo.id, undefined)).toBe(false);
   });
 });
 

@@ -22,6 +22,7 @@ import {
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
 import { useSource } from '~/core/blocks/data/use-source';
+import { useBlockMainMedia } from '~/core/hooks/use-block-main-media-property';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -584,6 +585,8 @@ const ConfiguredTableBlock = ({
     reorderShownPropertyRelations,
   } = useDataBlock({ canEdit });
 
+  const mainMedia = useBlockMainMedia(shownColumnIds, propertiesSchema);
+
   const initialFiltersOpenConsumedRef = React.useRef(false);
   React.useEffect(() => {
     if (!initialFiltersOpen || initialFiltersOpenConsumedRef.current) return;
@@ -800,7 +803,7 @@ const ConfiguredTableBlock = ({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         propertiesSchema={propertiesSchema}
-        shownColumnIds={shownColumnIds}
+        mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
         entries={entries}
@@ -847,7 +850,7 @@ const ConfiguredTableBlock = ({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         propertiesSchema={propertiesSchema}
-        shownColumnIds={shownColumnIds}
+        mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
         entries={entries}

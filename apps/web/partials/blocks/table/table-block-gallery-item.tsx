@@ -5,11 +5,12 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
-import { isBlockMediaProperty, resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
+import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
-import { useBlockMediaDimensions } from '~/core/hooks/use-block-media-dimensions';
+import { type BlockMainMedia, blockMainMediaDimensions } from '~/core/hooks/use-block-main-media-property';
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -43,7 +44,7 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   isPlaceholder: boolean;
   properties?: Record<string, Property>;
-  shownColumnIds?: string[];
+  mainMedia?: BlockMainMedia | null;
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
@@ -60,7 +61,7 @@ export function TableBlockGalleryItem({
   onLinkEntry,
   isPlaceholder,
   properties,
-  shownColumnIds = [],
+  mainMedia,
   relationId,
   source,
   autoFocus = false,
@@ -82,7 +83,6 @@ export function TableBlockGalleryItem({
     nameCell.description ??
     null;
 
-  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
   const image = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
@@ -90,17 +90,17 @@ export function TableBlockGalleryItem({
     mediaKind: mainMedia?.kind,
     fallbackHint: nameCellImageHint,
   });
-  const { aspectRatio } = useBlockMediaDimensions(mainMedia?.propertyId);
 
-  const uploadPropertyId = mainMedia?.propertyId ?? SystemIds.COVER_PROPERTY;
-  const uploadPropertyName = mainMedia?.name ?? 'Cover';
+  const imageUploadProperty =
+    mainMedia && mainMedia.kind === 'IMAGE'
+      ? { id: mainMedia.propertyId, name: mainMedia.name ?? 'Image' }
+      : { id: SystemIds.COVER_PROPERTY, name: 'Cover' };
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
   const otherPropertyData = Object.values(columns).filter(c => {
     if (c.slotId === SystemIds.NAME_PROPERTY) return false;
-    const property = properties?.[c.slotId];
-    if (isBlockMediaProperty(property)) return false;
+    if (isBlockMediaColumn(c.slotId, properties)) return false;
     return true;
   });
 
@@ -113,8 +113,12 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_PROPERTY);
 
-  const mediaFrameClassName = cx('relative w-full overflow-clip rounded-lg bg-grey-01', !aspectRatio && 'aspect-2/1');
-  const mediaFrameStyle = aspectRatio ? { aspectRatio } : undefined;
+  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia));
+  const mediaFrameClassName = cx(
+    'relative w-full overflow-clip rounded-lg bg-grey-01',
+    !mediaFrame.hasCustomHeight && 'aspect-2/1'
+  );
+  const mediaFrameStyle = mediaFrame.style;
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -136,8 +140,8 @@ export function TableBlockGalleryItem({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: uploadPropertyId,
-                  relationPropertyName: uploadPropertyName,
+                  relationPropertyId: imageUploadProperty.id,
+                  relationPropertyName: imageUploadProperty.name,
                   spaceId: currentSpaceId,
                 });
               }}

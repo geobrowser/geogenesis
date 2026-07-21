@@ -5,10 +5,11 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
-import { isBlockMediaProperty, resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
+import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media-property';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -42,7 +43,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
-  shownColumnIds?: string[];
+  mainMedia?: BlockMainMedia | null;
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
@@ -59,7 +60,7 @@ export function TableBlockListItem({
   onChangeEntry,
   onLinkEntry,
   properties,
-  shownColumnIds = [],
+  mainMedia,
   relationId,
   source,
   autoFocus = false,
@@ -82,7 +83,6 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
   const image = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
@@ -91,16 +91,17 @@ export function TableBlockListItem({
     fallbackHint: nameCellImageHint,
   });
 
-  const uploadPropertyId = mainMedia?.propertyId ?? ContentIds.AVATAR_PROPERTY;
-  const uploadPropertyName = mainMedia?.name ?? 'Avatar';
+  const imageUploadProperty =
+    mainMedia && mainMedia.kind === 'IMAGE'
+      ? { id: mainMedia.propertyId, name: mainMedia.name ?? 'Image' }
+      : { id: ContentIds.AVATAR_PROPERTY, name: 'Avatar' };
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
   const otherPropertyData = Object.values(columns).filter(c => {
     if (c.slotId === SystemIds.NAME_PROPERTY) return false;
     if (c.slotId === SystemIds.DESCRIPTION_PROPERTY) return false;
-    const property = properties?.[c.slotId];
-    if (isBlockMediaProperty(property)) return false;
+    if (isBlockMediaColumn(c.slotId, properties)) return false;
     return true;
   });
 
@@ -124,8 +125,8 @@ export function TableBlockListItem({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: uploadPropertyId,
-                  relationPropertyName: uploadPropertyName,
+                  relationPropertyId: imageUploadProperty.id,
+                  relationPropertyName: imageUploadProperty.name,
                   spaceId: currentSpaceId,
                 });
               }}

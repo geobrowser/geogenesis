@@ -4,11 +4,14 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { BlockMediaKind } from '~/core/blocks/data/resolve-main-media-property';
-import { resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
-import { useBlockMediaDimensions } from '~/core/hooks/use-block-media-dimensions';
+import {
+  type BlockMainMedia,
+  blockMainMediaDimensions,
+  useBlockMainMedia,
+} from '~/core/hooks/use-block-main-media-property';
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -25,33 +28,36 @@ function RankingGalleryCard({
   spaceId,
   name,
   imageHint,
-  mediaPropertyId,
-  mediaKind,
+  mainMedia,
 }: {
   entityId: string;
   spaceId: string;
   name: string;
   imageHint?: string | null;
-  mediaPropertyId: string | null;
-  mediaKind?: BlockMediaKind;
+  mainMedia: BlockMainMedia | null;
 }) {
   const imageUrl =
     useBlockMainMediaUrl({
       entityId,
       spaceId,
-      mediaPropertyId,
-      mediaKind,
+      mediaPropertyId: mainMedia?.propertyId ?? null,
+      mediaKind: mainMedia?.kind,
       fallbackHint: imageHint,
     }) ?? PLACEHOLDER_SPACE_IMAGE;
-  const { aspectRatio } = useBlockMediaDimensions(mediaPropertyId);
+
+  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia), { allowWidth: true });
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
     <div className="w-[240px] shrink-0 select-none">
       <Link href={href} className="block" draggable={false}>
         <div
-          className={cx('relative w-[240px] overflow-hidden rounded-xl bg-grey-01', !aspectRatio && 'h-[120px]')}
-          style={aspectRatio ? { aspectRatio } : undefined}
+          className={cx(
+            'relative overflow-hidden rounded-xl bg-grey-01',
+            !mediaFrame.style?.width && 'w-[240px]',
+            !mediaFrame.hasCustomHeight && 'h-[120px]'
+          )}
+          style={mediaFrame.style}
         >
           <GeoImage value={imageUrl} className="pointer-events-none object-cover" fill alt="" draggable={false} />
         </div>
@@ -198,7 +204,7 @@ export function RankingGalleryView({ state }: Props) {
   } = state;
 
   const properties = useProperties(shownColumnIds, spaceId);
-  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
+  const mainMedia = useBlockMainMedia(shownColumnIds, properties);
 
   const cards = globalDisplayEntityIds
     .map(entityId => {
@@ -212,8 +218,7 @@ export function RankingGalleryView({ state }: Props) {
           spaceId={spaceId}
           name={entry.name}
           imageHint={entry.image}
-          mediaPropertyId={mainMedia?.propertyId ?? null}
-          mediaKind={mainMedia?.kind}
+          mainMedia={mainMedia}
         />
       );
     })
