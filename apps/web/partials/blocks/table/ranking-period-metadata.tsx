@@ -54,29 +54,36 @@ type RankingRankedByAvatar = {
 function RankingRankedByAvatarGroup({
   avatars,
   extraCount = 0,
+  size = RANKED_BY_AVATAR_SIZE,
 }: {
   avatars: RankingRankedByAvatar[];
   extraCount?: number;
+  size?: 12 | 20;
 }) {
   if (avatars.length === 0 && extraCount <= 0) return null;
+
+  const isCompact = size === 12;
 
   return (
     <AvatarGroup>
       {avatars.map(avatar => (
-        <AvatarGroup.Item key={avatar.key} size={20}>
+        <AvatarGroup.Item key={avatar.key} size={size}>
           {avatar.avatarUrl ? (
-            <FallbackImage value={avatar.avatarUrl} sizes={`${RANKED_BY_AVATAR_SIZE}px`} className="object-cover" />
+            <FallbackImage value={avatar.avatarUrl} sizes={`${size}px`} className="object-cover" />
           ) : (
-            <Avatar size={RANKED_BY_AVATAR_SIZE} value={avatar.fallbackSeed} />
+            <Avatar size={size} value={avatar.fallbackSeed} />
           )}
         </AvatarGroup.Item>
       ))}
       {extraCount > 0 ? (
         <li
           key="extra-count"
-          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] text-grey-04 tabular-nums"
+          className={cx(
+            'relative box-content flex shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 text-grey-04 tabular-nums',
+            isCompact ? 'h-3 px-1 text-[9px]' : 'h-5 px-1.5 text-[11px]'
+          )}
         >
-          <span className="block h-5 leading-[20px]">+{extraCount}</span>
+          <span className={cx('block', isCompact ? 'h-3 leading-[12px]' : 'h-5 leading-[20px]')}>+{extraCount}</span>
         </li>
       ) : null}
     </AvatarGroup>
@@ -87,10 +94,12 @@ export function RankingAggregatedSubmitterAvatars({
   submitterSpaceIds,
   totalCount,
   maxVisible = VISIBLE_RANKED_BY_AVATARS,
+  size = RANKED_BY_AVATAR_SIZE,
 }: {
   submitterSpaceIds: string[];
   totalCount?: number;
   maxVisible?: number;
+  size?: 12 | 20;
 }) {
   const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
   const { data: profilesBySpaceId = new Map() } = useQuery({
@@ -137,7 +146,7 @@ export function RankingAggregatedSubmitterAvatars({
     };
   });
 
-  return <RankingRankedByAvatarGroup avatars={avatars} extraCount={extraCount} />;
+  return <RankingRankedByAvatarGroup avatars={avatars} extraCount={extraCount} size={size} />;
 }
 
 export function RankingRankedBy({
