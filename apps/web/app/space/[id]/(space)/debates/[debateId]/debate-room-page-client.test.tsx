@@ -94,9 +94,22 @@ vi.mock('livekit-client', () => ({
   },
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
+    TrackUnsubscribed: 'trackUnsubscribed',
     ParticipantConnected: 'participantConnected',
+    Reconnecting: 'reconnecting',
+    Reconnected: 'reconnected',
+    Disconnected: 'disconnected',
+  },
+  DisconnectReason: {
+    CLIENT_INITIATED: 1,
   },
 }));
+
+function emitRoomEvent(event: string, payload?: unknown) {
+  for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
+    if (registeredEvent === event) callback(payload);
+  }
+}
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -319,6 +332,88 @@ describe('DebateRoomPageClient', () => {
     const joinedCallOrder = mocks.markJoinedMutateAsync.mock.invocationCallOrder[0];
     expect(mocks.publishTrack).toHaveBeenCalledTimes(2);
     expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
+  });
+
+  it('retries publishing when the media engine is slow to connect', async () => {
+    vi.useFakeTimers();
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    mocks.publishTrack
+      .mockRejectedValueOnce(new Error('publishing rejected as engine not connected within timeout'))
+      .mockResolvedValue(undefined);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
+    // Track 1 rejects once then succeeds on retry (2 calls); track 2 succeeds first try (1 call).
+    expect(mocks.publishTrack).toHaveBeenCalledTimes(3);
+  });
+
+  it('detaches a remote track that drops mid-debate instead of freezing the tile', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    act(() => emitRoomEvent('trackUnsubscribed', track));
+    expect(track.detach).toHaveBeenCalled();
+    expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(screen.getByText('Reconnecting to the debate room…')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('reconnected'));
+    expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument();
+  });
+
+  it('shows an error on an unexpected disconnect but ignores our own teardown', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // CLIENT_INITIATED (our own disconnect) must not surface an error.
+    act(() => emitRoomEvent('disconnected', 1));
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
