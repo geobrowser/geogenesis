@@ -605,6 +605,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const room = new livekit.Room({ adaptiveStream: false, dynacast: false }) as unknown as RoomLike;
       connectingRoom = room;
       room.on(livekit.RoomEvent.TrackSubscribed, payload => {
+        // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
+        // reject only a different room here rather than a not-yet-set one.
+        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
         const track = payload as RemoteTrackLike;
         const element = track.attach();
         if (element instanceof HTMLMediaElement) {
@@ -624,7 +627,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
       // re-subscribe attaches a fresh element rather than stacking a second one behind it.
       room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
-        if (!isCurrent() || roomRef.current !== room) return;
+        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
         const track = payload as RemoteTrackLike;
         for (const element of track.detach()) element.remove();
         if (track.kind === 'video') setRemoteVideoReady(false);
@@ -2278,7 +2281,10 @@ async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCu
       await room.localParticipant.publishTrack(track);
       return;
     } catch (error) {
-      if (attempt >= maxAttempts || !isCurrent()) throw error;
+      // A superseded attempt bails silently: throwing here would hit connect()'s catch, which runs
+      // shared-ref cleanup that could tear down a newer active room.
+      if (!isCurrent()) return;
+      if (attempt >= maxAttempts) throw error;
       await new Promise(resolve => setTimeout(resolve, attempt * 750));
     }
   }
