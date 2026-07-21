@@ -4,7 +4,6 @@ import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
 import {
   formatRollingSubmissionLabel,
   getRollingExpiryMs,
-  isCreatedWithinWindow,
   isRollingSubmissionLive,
   parseTimestampMs,
 } from './ranking-rolling';
@@ -63,21 +62,6 @@ describe('isRollingSubmissionLive', () => {
   });
 });
 
-describe('isCreatedWithinWindow', () => {
-  it('keeps entities created inside the window', () => {
-    expect(isCreatedWithinWindow(now - 2 * HOUR, 24, now)).toBe(true);
-  });
-
-  it('drops entities created before the window', () => {
-    expect(isCreatedWithinWindow(now - 48 * HOUR, 24, now)).toBe(false);
-  });
-
-  it('keeps entities with an unknown creation time', () => {
-    expect(isCreatedWithinWindow(undefined, 24, now)).toBe(true);
-    expect(isCreatedWithinWindow('', 24, now)).toBe(true);
-  });
-});
-
 describe('getRollingExpiryMs', () => {
   it('adds the frequency window to the submission time', () => {
     expect(getRollingExpiryMs(now, 24)).toBe(now + 24 * HOUR);
@@ -106,7 +90,7 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 24,
         now,
       })
-    ).toBe('Your ranking expires in 4 hrs');
+    ).toBe('Vote again in 4 hrs');
   });
 
   it('shows a days countdown for long windows', () => {
@@ -118,7 +102,7 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 168,
         now,
       })
-    ).toBe('Your ranking expires in 7 days');
+    ).toBe('Vote again in 7 days');
   });
 
   it('rolls off when the window has elapsed even if flagged live', () => {
