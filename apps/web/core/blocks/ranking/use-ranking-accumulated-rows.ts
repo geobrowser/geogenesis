@@ -59,9 +59,11 @@ export function useRankingAccumulatedRows() {
         sourceType: source.type,
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
+        filterMode,
+        pageSize,
         shownColumnIds,
       }),
-    [entityId, filterState, shownColumnIds, source]
+    [entityId, filterMode, filterState, pageSize, shownColumnIds, source]
   );
 
   React.useEffect(() => {
