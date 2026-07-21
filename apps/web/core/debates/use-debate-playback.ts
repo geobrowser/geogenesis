@@ -40,6 +40,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
+  const isScrubbingRef = React.useRef(false);
   const wasPlayingBeforeScrubRef = React.useRef(false);
   // Feed debates autoplay muted (TikTok-style): the browser blocks unmuted
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
@@ -281,6 +282,11 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   // paused overlay doesn't flash); `isScrubbing` instead keeps the autoplay effect from
   // resuming mid-drag. Playback picks back up on release if it was running.
   const beginScrub = React.useCallback(() => {
+    // Guard against re-entry (e.g. Arrow-key repeat on the range input): only the
+    // first call captures whether playback was running, so a repeated call can't
+    // overwrite it with the now-paused `playing` value.
+    if (isScrubbingRef.current) return;
+    isScrubbingRef.current = true;
     wasPlayingBeforeScrubRef.current = playing;
     setIsScrubbing(true);
     for (const video of videos()) video.pause();
@@ -288,6 +294,10 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [playing, videos]);
 
   const endScrub = React.useCallback(() => {
+    // Idempotent: pointerup and lostpointercapture can both fire, so only the
+    // first release resumes playback.
+    if (!isScrubbingRef.current) return;
+    isScrubbingRef.current = false;
     setIsScrubbing(false);
     if (wasPlayingBeforeScrubRef.current && !playbackEnded) void resumeBoth();
   }, [playbackEnded, resumeBoth]);

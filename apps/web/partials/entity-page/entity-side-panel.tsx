@@ -745,6 +745,7 @@ export function EntitySidePanel() {
           data-entity-side-panel
           role="dialog"
           aria-modal="true"
+          aria-label="Entity side panel"
           drag="y"
           dragControls={dragControls}
           dragListener={false}
