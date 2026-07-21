@@ -66,6 +66,7 @@ const OPEN = 1;
 const CAPABILITY = 'debate_invalidations_v1';
 const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
 const BROAD_INVALIDATION_KEY = 'debates:all';
 
@@ -96,6 +97,7 @@ export class DebateGatewayClient {
   private heartbeatsAwaitingAck = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private connectionGeneration = 0;
@@ -126,6 +128,7 @@ export class DebateGatewayClient {
   }
 
   stop() {
+    const accountKey = this.accountKey;
     this.enabled = false;
     this.getPrivyIdentityToken = null;
     this.accountKey = null;
@@ -137,6 +140,7 @@ export class DebateGatewayClient {
     this.sentScopes.clear();
     this.confirmedScopes.clear();
     this.pendingInvalidations.clear();
+    if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false });
   }
 
@@ -181,6 +185,7 @@ export class DebateGatewayClient {
       this.sentScopes.clear();
       this.confirmedScopes.clear();
       this.scheduleTokenRotation(session);
+      this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 
       socket.onopen = () => undefined;
       socket.onmessage = event => this.handleMessage(socket, event.data);
@@ -196,13 +201,14 @@ export class DebateGatewayClient {
   private handleMessage(socket: WebSocketLike, value: unknown) {
     if (socket !== this.socket || typeof value !== 'string') return;
 
-    let envelope: GatewayEnvelope;
+    let parsed: unknown;
     try {
-      envelope = JSON.parse(value) as GatewayEnvelope;
+      parsed = JSON.parse(value) as unknown;
     } catch {
       return;
     }
-    if (envelope.v !== 1) return;
+    if (!isGatewayEnvelope(parsed)) return;
+    const envelope = parsed;
     if (typeof envelope.seq === 'number') this.lastSequence = Math.max(this.lastSequence ?? 0, envelope.seq);
 
     switch (envelope.op) {
@@ -228,6 +234,8 @@ export class DebateGatewayClient {
           this.forceReconnect(socket, rateLimitRetryDelayMs(envelope.payload));
         } else if (isSubscriptionLimitReached(envelope.payload)) {
           this.setSnapshot({ status: 'degraded', paused: true });
+        } else {
+          this.setSnapshot({ status: 'degraded', paused: true });
         }
         break;
     }
@@ -242,6 +250,7 @@ export class DebateGatewayClient {
   }
 
   private handleReady(payload: unknown) {
+    this.clearTimer('handshake');
     const ready = isRecord(payload) ? (payload as ReadyPayload) : {};
     const supportsDebates = Array.isArray(ready.capabilities) && ready.capabilities.includes(CAPABILITY);
     if (!supportsDebates) {
@@ -252,7 +261,6 @@ export class DebateGatewayClient {
 
     const firstReadyForSocket = !this.readyForDebates;
     this.readyForDebates = true;
-    this.reconnectAttempt = 0;
     this.setSnapshot({ status: 'ready', paused: false });
 
     if (firstReadyForSocket) {
@@ -291,7 +299,7 @@ export class DebateGatewayClient {
 
     switch (payload.event_type) {
       case 'debate.activity_changed':
-        this.queueQuery(['debates', 'activity']);
+        this.queueAccountQuery('activity');
         break;
       case 'debate.claims_changed':
         if (identifiers.space_id) {
@@ -301,13 +309,13 @@ export class DebateGatewayClient {
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
-        this.queueQuery(['debates', 'activity']);
+        this.queueAccountQuery('activity');
         break;
       case 'debate.rematch_changed':
         if (identifiers.rematch_session_id) {
-          this.queueQuery(['debates', 'rematch', identifiers.rematch_session_id]);
+          this.queueAccountQuery('rematch', identifiers.rematch_session_id);
         }
-        this.queueQuery(['debates', 'activity']);
+        this.queueAccountQuery('activity');
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {
@@ -318,7 +326,7 @@ export class DebateGatewayClient {
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         break;
       case 'debate.share_prompts_changed':
-        this.queueQuery(['debates', 'share-prompts']);
+        this.queueAccountQuery('share-prompts');
         break;
     }
   }
@@ -344,6 +352,13 @@ export class DebateGatewayClient {
 
   private queueBroadReconcile() {
     this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
+  }
+
+  private queueAccountQuery(kind: 'activity' | 'rematch' | 'share-prompts', id?: string) {
+    if (!this.accountKey) return;
+    this.queueQuery(
+      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
+    );
   }
 
   private queueClaims(spaceId: string, claimEntityIds?: string[]) {
@@ -383,8 +398,24 @@ export class DebateGatewayClient {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
-      for (const queryFilters of invalidations) void this.queryClient.invalidateQueries(queryFilters);
+      void this.flushInvalidations(invalidations);
     }, INVALIDATION_COALESCE_MS);
+  }
+
+  private async flushInvalidations(invalidations: InvalidationFilters[]) {
+    const results = await Promise.allSettled(
+      invalidations.map(async queryFilters => {
+        await this.queryClient.cancelQueries(queryFilters);
+        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true });
+      })
+    );
+    if (results.some(result => result.status === 'rejected')) {
+      this.recentEventIds.clear();
+      this.recentEventIdOrder.length = 0;
+      if (this.socket) this.forceReconnect(this.socket);
+      return;
+    }
+    this.reconnectAttempt = 0;
   }
 
   private sendSubscription(scope: DebateGatewayScope, op: 'SUBSCRIBE' | 'UNSUBSCRIBE') {
@@ -458,7 +489,7 @@ export class DebateGatewayClient {
   private scheduleReconnect(minimumDelayMs = 0) {
     if (!this.enabled || this.reconnectTimer) return;
     const baseDelay = Math.min(30_000, 1_000 * 2 ** this.reconnectAttempt);
-    const delay = Math.min(30_000, Math.max(minimumDelayMs, Math.round(baseDelay + baseDelay * 0.2 * this.random())));
+    const delay = Math.max(minimumDelayMs, Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random())));
     this.reconnectAttempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -477,6 +508,7 @@ export class DebateGatewayClient {
 
   private clearConnectionTimers() {
     this.clearTimer('heartbeat');
+    this.clearTimer('handshake');
     this.clearTimer('token');
     this.heartbeatsAwaitingAck = 0;
   }
@@ -488,9 +520,15 @@ export class DebateGatewayClient {
     this.invalidationTimer = null;
   }
 
-  private clearTimer(timer: 'heartbeat' | 'reconnect' | 'token') {
+  private clearTimer(timer: 'handshake' | 'heartbeat' | 'reconnect' | 'token') {
     const field =
-      timer === 'heartbeat' ? 'heartbeatTimer' : timer === 'reconnect' ? 'reconnectTimer' : 'tokenRotationTimer';
+      timer === 'handshake'
+        ? 'handshakeTimer'
+        : timer === 'heartbeat'
+          ? 'heartbeatTimer'
+          : timer === 'reconnect'
+            ? 'reconnectTimer'
+            : 'tokenRotationTimer';
     const current = this[field];
     if (current) clearTimeout(current);
     this[field] = null;
@@ -578,6 +616,10 @@ function rateLimitRetryDelayMs(payload: unknown) {
   if (!isRecord(payload) || typeof payload.message !== 'string') return 1_000;
   const seconds = payload.message.match(/retry after (\d+) seconds/)?.[1];
   return seconds ? Number(seconds) * 1_000 : 1_000;
+}
+
+function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
+  return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
 }
 
 function isDebateEvent(value: unknown): value is DebateInvalidationEvent {

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, completeLocalRecordingUpload, getGeoChatSession, resetGeoChatSession } from './api';
+import {
+  GeoChatRequestError,
+  completeLocalRecordingUpload,
+  getDebateActivity,
+  getGeoChatSession,
+  resetGeoChatSession,
+} from './api';
 
 const completeRequest = {
   filename: 'recordings/debate-1/recording.webm',
@@ -46,7 +52,7 @@ describe('geo-chat request errors', () => {
       )
     );
 
-    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn())).rejects.toMatchObject({
+    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn(), 'user-a')).rejects.toMatchObject({
       name: 'GeoChatRequestError',
       message: 'Invalid frame rate',
       code: 'invalid_recording',
@@ -66,7 +72,7 @@ describe('geo-chat request errors', () => {
       )
     );
 
-    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn())).rejects.toMatchObject({
+    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn(), 'user-a')).rejects.toMatchObject({
       message: 'Failed to deserialize the JSON body: framerate must be a number',
       code: null,
       status: 422,
@@ -84,7 +90,7 @@ describe('geo-chat request errors', () => {
       )
     );
 
-    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn())).rejects.toMatchObject({
+    await expect(completeLocalRecordingUpload('debate-1', completeRequest, vi.fn(), 'user-a')).rejects.toMatchObject({
       message: '503 Service Unavailable',
       code: null,
       status: 503,
@@ -99,6 +105,15 @@ describe('geo-chat session sharing', () => {
       refresh_token: 'refresh-token',
       expires_at: expect.any(String),
     });
+  });
+
+  it('never reuses a stored account when an authenticated request has no current account', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(getDebateActivity(vi.fn(), null)).rejects.toThrow('Sign in to use debates.');
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it('refreshes one session for concurrent callers when expiry is near', async () => {
@@ -167,6 +182,46 @@ describe('geo-chat session sharing', () => {
     });
   });
 
+  it('uses the current account session for authenticated REST requests', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: 'user-b-access-token',
+            refresh_token: 'user-b-refresh-token',
+            expires_at: new Date(Date.now() + 60_000).toISOString(),
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ recording: {}, debate: {} }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await completeLocalRecordingUpload(
+      'debate-1',
+      completeRequest,
+      vi.fn(async () => 'user-b-identity-token'),
+      'user-b'
+    );
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/auth/session',
+      expect.objectContaining({ headers: { Authorization: 'Bearer user-b-identity-token' } })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/debates/debate-1/recordings/local-upload-complete',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer user-b-access-token' }) })
+    );
+  });
+
   it('retires an in-flight exchange when the account changes', async () => {
     resetGeoChatSession();
     let resolveFirst!: (response: Response) => void;
@@ -215,9 +270,13 @@ describe('geo-chat session sharing', () => {
   it('times out a stalled session exchange', async () => {
     resetGeoChatSession();
     vi.useFakeTimers();
+    let requestSignal: AbortSignal | null = null;
     vi.stubGlobal(
       'fetch',
-      vi.fn(() => new Promise<Response>(() => undefined))
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        requestSignal = init?.signal ?? null;
+        return new Promise<Response>(() => undefined);
+      })
     );
 
     const result = expect(
@@ -229,5 +288,6 @@ describe('geo-chat session sharing', () => {
     await vi.advanceTimersByTimeAsync(10_000);
 
     await result;
+    expect((requestSignal as AbortSignal | null)?.aborted).toBe(true);
   });
 });

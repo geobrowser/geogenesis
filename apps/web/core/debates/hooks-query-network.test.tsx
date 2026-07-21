@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
-  usePrivy: () => ({ ready: true, authenticated: mocks.authenticated }),
+  usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
 }));
 
 vi.mock('@tanstack/react-query', async importOriginal => ({
@@ -60,7 +60,7 @@ describe('debate query network ownership', () => {
 
     expect(mocks.useQuery).toHaveBeenCalledTimes(9);
     for (const [options] of mocks.useQuery.mock.calls) {
-      expect(options).toMatchObject({ refetchOnReconnect: false, refetchOnWindowFocus: false });
+      expect(options).toMatchObject({ retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false });
       expect(options).not.toHaveProperty('refetchInterval');
     }
   });

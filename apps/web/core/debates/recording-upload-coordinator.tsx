@@ -84,7 +84,7 @@ export function recordingUploadRetryDelay(attemptCount: number) {
 
 export function DebateRecordingUploadCoordinator() {
   const queryClient = useQueryClient();
-  const { ready, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [uploads, setUploads] = React.useState<DebateRecordingUpload[]>([]);
   const [activeUploadId, setActiveUploadId] = React.useState<string | null>(null);
@@ -119,7 +119,7 @@ export function DebateRecordingUploadCoordinator() {
     setUploads([]);
     let cancelled = false;
     let retryTimer: number | null = null;
-    void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
+    void resolveCurrentGeoChatUserId(getPrivyIdentityToken, accountKey)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
         if (!cancelled) {
@@ -140,7 +140,7 @@ export function DebateRecordingUploadCoordinator() {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
+  }, [accountKey, authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -193,7 +193,7 @@ export function DebateRecordingUploadCoordinator() {
 
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
-    const dependencies = recordingUploadDependencies(getPrivyIdentityToken);
+    const dependencies = recordingUploadDependencies(getPrivyIdentityToken, accountKey);
     let attemptStage = upload.stage;
     let attemptCount = upload.attemptCount;
     void withRecordingUploadLock(async () => {
@@ -251,7 +251,7 @@ export function DebateRecordingUploadCoordinator() {
           setWakeAt(Date.now());
         }
       });
-  }, [activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
+  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
 
   const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
   const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
@@ -285,7 +285,7 @@ export function DebateRecordingUploadCoordinator() {
       const debateIds = [...new Set(uploads.map(upload => upload.debateId))];
       for (const debateId of debateIds) {
         try {
-          await cancelDebateRecording(debateId, getPrivyIdentityToken);
+          await cancelDebateRecording(debateId, getPrivyIdentityToken, accountKey);
         } catch (error) {
           // Already cancelled or gone on the backend — still drop the local blob below.
           const terminal =
@@ -300,7 +300,7 @@ export function DebateRecordingUploadCoordinator() {
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [getPrivyIdentityToken, uploads]);
+  }, [accountKey, getPrivyIdentityToken, uploads]);
 
   // If the upload finishes while the prompt is open, there is nothing left to delete, so the
   // user can no longer choose to cancel — close it automatically.
@@ -451,12 +451,17 @@ export function DebateCancelUploadDialog({
   );
 }
 
-function recordingUploadDependencies(getPrivyIdentityToken: GetPrivyIdentityToken): RecordingUploadDependencies {
+function recordingUploadDependencies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+): RecordingUploadDependencies {
   return {
-    createUpload: (debateId, request) => createLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    createUpload: (debateId, request) =>
+      createLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     putRecording: putRecording,
     markUploaded: markDebateRecordingUploaded,
-    completeUpload: (debateId, request) => completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    completeUpload: (debateId, request) =>
+      completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
   };
 }
