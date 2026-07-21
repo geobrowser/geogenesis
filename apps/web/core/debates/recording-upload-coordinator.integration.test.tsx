@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
@@ -285,6 +286,20 @@ describe('DebateRecordingUploadCoordinator', () => {
     mocks.observer?.(mocks.queue);
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('drops the local blob and clears the banner when the debate can no longer be published', async () => {
+    // An aborted/cancelled debate finalizes as `recording_not_ready`, which no retry can fix.
+    mocks.completeUpload.mockRejectedValue(
+      new GeoChatRequestError('debate is not finalizable', 'recording_not_ready', 400)
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 

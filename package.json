@@ -34,7 +34,8 @@
   "overrides": {
     "permissionless": "^0.3.4",
     "@tanstack/react-query": "^5.101.1",
-    "prosemirror-model": "^1.25.9"
+    "prosemirror-model": "^1.25.9",
+    "viem": "2.54.6"
   },
   "private": true,
   "workspaces": [
