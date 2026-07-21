@@ -11,7 +11,7 @@ import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableChip } from '~/design-system/chip';
 
-const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 focus:outline-hidden', {
+const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-03 focus:outline-hidden', {
   variants: {
     variant: {
       body: 'text-body',
