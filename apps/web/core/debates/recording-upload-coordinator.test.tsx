@@ -3,15 +3,43 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import {
   DebateCancelUploadDialog,
   DebateRecordingUploadBanner,
+  isPermanentRecordingUploadError,
   processDebateRecordingUpload,
   recordingUploadRetryDelay,
 } from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 afterEach(cleanup);
+
+describe('isPermanentRecordingUploadError', () => {
+  it('treats unpublishable backend rejections as permanent', () => {
+    for (const code of [
+      'recording_cancelled',
+      'recording_not_ready',
+      'invalid_recording',
+      'invalid_recording_mime_type',
+      'recording_upload_missing',
+      'recording_upload_size_mismatch',
+      'recording_upload_type_mismatch',
+    ]) {
+      expect(isPermanentRecordingUploadError(new GeoChatRequestError('nope', code, 400))).toBe(true);
+    }
+  });
+
+  it('keeps transient failures retryable', () => {
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('down', 'object_store_not_configured', 503))).toBe(
+      false
+    );
+    // A 5xx that happens to reuse a permanent code is still transient.
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('flaky', 'recording_not_ready', 500))).toBe(false);
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('unknown 400', 'some_new_code', 400))).toBe(false);
+    expect(isPermanentRecordingUploadError(new Error('network'))).toBe(false);
+  });
+});
 
 describe('debate recording uploader', () => {
   it('uploads, persists the filename, finalizes, and deletes a queued recording', async () => {

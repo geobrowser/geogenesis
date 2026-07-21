@@ -57,6 +57,41 @@ export function Pause({ color }: Props) {
   );
 }
 
+export function Play({ color }: Props) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M5.5 3.5L14 9L5.5 14.5V3.5Z"
+        fill={resolve(color)}
+        stroke={resolve(color)}
+        strokeWidth="1"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function Speaker({ color }: Props) {
+  const themeColor = resolve(color);
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M2 6V10H4.5L8 12.5V3.5L4.5 6H2Z"
+        fill={themeColor}
+        stroke={themeColor}
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10.5 6C11.1667 6.66667 11.1667 9.33333 10.5 10M12.5 4.5C13.8333 5.83333 13.8333 10.1667 12.5 11.5"
+        stroke={themeColor}
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function SpeakerMuted({ color }: Props) {
   const themeColor = resolve(color);
   return (
