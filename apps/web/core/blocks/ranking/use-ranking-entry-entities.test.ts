@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '~/core/io/substream-schema';
 import type { Relation, Value } from '~/core/types';
 
-import { pickImage, pickRelationBySpace, pickValueBySpace } from './use-ranking-entry-entities';
+import { pickImage, pickRelationBySpace, pickValueBySpace } from './ranking-entry-pick';
 
 // Real space IDs from getSpaceRank: Root=0, Crypto=2, Software=5.
 const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
