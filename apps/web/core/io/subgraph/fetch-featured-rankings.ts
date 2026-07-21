@@ -3,6 +3,11 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 
 import {
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDateValue,
+} from '~/core/blocks/ranking/ranking-block-dates';
+import {
   type AggregatedRankingSubmitterRef,
   getAggregatedRankingSubmissionCount,
   getAggregatedRankingSubmitterRefs,
@@ -11,11 +16,7 @@ import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ran
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import type { EntityFilter } from '~/core/gql/graphql';
 import { getAllEntities, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
-import {
-  RANKING_BLOCK_TYPE_ID,
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
-} from '~/core/ranking-block-ids';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
@@ -156,8 +157,9 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
       const entity = page.entity;
       const relations = page.relations.length > 0 ? page.relations : entity.relations;
 
-      const rankingStartDate = readDateValue(entity, RANKING_START_DATE_PROPERTY_ID, spaceId);
-      const rankingEndDate = readDateValue(entity, RANKING_END_DATE_PROPERTY_ID, spaceId);
+      const readBlockDate = (propertyId: string) => readDateValue(entity, propertyId, spaceId);
+      const rankingStartDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
+      const rankingEndDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
 
       // "Live" == voting is currently open (in-progress, or no bounded window).
       const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
@@ -175,8 +177,8 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
         parentEntityId: placement.parentEntityId,
         relationId: placement.relationId,
         name: entity.name?.trim() || 'Untitled ranking',
-        rankingStartDate,
-        rankingEndDate,
+        rankingStartDate: rankingStartDate.value,
+        rankingEndDate: rankingEndDate.value,
         submitterSpaceIds,
         submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
       } satisfies FeaturedRanking;

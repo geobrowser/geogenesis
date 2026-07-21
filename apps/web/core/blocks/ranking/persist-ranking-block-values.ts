@@ -1,6 +1,6 @@
 import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
+  RANKING_END_TIME_PROPERTY_ID,
+  RANKING_START_TIME_PROPERTY_ID,
   SUBMISSION_FREQUENCY_PROPERTY_ID,
   SUBMISSION_FREQUENCY_PROPERTY_NAME,
 } from '~/core/ranking-block-ids';
@@ -9,7 +9,7 @@ import type { Value } from '~/core/types';
 
 import { writeValue } from '~/partials/blocks/table/change-entry';
 
-function upsertDateValue({
+function upsertDateTimeValue({
   storage,
   entityId,
   spaceId,
@@ -31,7 +31,14 @@ function upsertDateValue({
     return;
   }
 
-  writeValue(storage, entityId, spaceId, { id: propertyId, name: propertyName, dataType: 'DATE' }, isoDate, existing);
+  writeValue(
+    storage,
+    entityId,
+    spaceId,
+    { id: propertyId, name: propertyName, dataType: 'DATETIME' },
+    isoDate,
+    existing
+  );
 }
 
 export function persistRankingBlockDateValues({
@@ -52,24 +59,24 @@ export function persistRankingBlockDateValues({
   const findValue = (propertyId: string) =>
     existingValues.find(v => v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted) ?? null;
 
-  upsertDateValue({
+  upsertDateTimeValue({
     storage,
     entityId,
     spaceId,
-    propertyId: RANKING_START_DATE_PROPERTY_ID,
-    propertyName: 'Start date',
+    propertyId: RANKING_START_TIME_PROPERTY_ID,
+    propertyName: 'Start time',
     isoDate: startDate,
-    existing: findValue(RANKING_START_DATE_PROPERTY_ID),
+    existing: findValue(RANKING_START_TIME_PROPERTY_ID),
   });
 
-  upsertDateValue({
+  upsertDateTimeValue({
     storage,
     entityId,
     spaceId,
-    propertyId: RANKING_END_DATE_PROPERTY_ID,
-    propertyName: 'End date',
+    propertyId: RANKING_END_TIME_PROPERTY_ID,
+    propertyName: 'End time',
     isoDate: endDate,
-    existing: findValue(RANKING_END_DATE_PROPERTY_ID),
+    existing: findValue(RANKING_END_TIME_PROPERTY_ID),
   });
 }
 

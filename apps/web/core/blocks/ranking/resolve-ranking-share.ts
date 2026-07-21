@@ -7,16 +7,12 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getAllEntities, getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
-import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
-  RANK_POSITION_PROPERTY_ID,
-  RANK_TYPE_ID,
-} from '~/core/ranking-block-ids';
+import { RANK_POSITION_PROPERTY_ID, RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity, Profile, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
 import { getMyRankingOrderedEntityIds, getSubmittedBlockIdFromRank } from './my-ranking-entity';
+import { RANKING_END_PROPERTY_IDS, RANKING_START_PROPERTY_IDS, resolveRankingDate } from './ranking-block-dates';
 import { getOrderedRelationTargetIds } from './ranking-block-relations';
 import {
   type RankingOgCardData,
@@ -183,8 +179,9 @@ export async function resolvePersonalRankingShareImpl(
   if (!blockEntitySpaceId) return null;
   const blockScoped = await deps.fetchEntity(blockEntityId, blockEntitySpaceId);
   const rankingName = blockScoped?.name?.trim() || 'Untitled ranking';
-  const rankingStartDate = readDateValue(blockScoped, RANKING_START_DATE_PROPERTY_ID, blockEntitySpaceId);
-  const rankingEndDate = readDateValue(blockScoped, RANKING_END_DATE_PROPERTY_ID, blockEntitySpaceId);
+  const readBlockDate = (propertyId: string) => readDateValue(blockScoped, propertyId, blockEntitySpaceId);
+  const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readBlockDate);
+  const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readBlockDate);
 
   // 4. Build the OG card data with the resolved coordinates.
   const cardData = await deps.fetchPersonalCardData({
@@ -267,8 +264,9 @@ export async function resolveGlobalRankingShareImpl(
   const blockScoped = page?.entity ?? (await deps.fetchEntity(blockEntityId, blockEntitySpaceId));
   const relations = page?.relations?.length ? page.relations : (blockScoped?.relations ?? []);
   const rankingName = blockScoped?.name?.trim() || 'Untitled ranking';
-  const rankingStartDate = readDateValue(blockScoped, RANKING_START_DATE_PROPERTY_ID, blockEntitySpaceId);
-  const rankingEndDate = readDateValue(blockScoped, RANKING_END_DATE_PROPERTY_ID, blockEntitySpaceId);
+  const readBlockDate = (propertyId: string) => readDateValue(blockScoped, propertyId, blockEntitySpaceId);
+  const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readBlockDate);
+  const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readBlockDate);
 
   const cardData = await deps.fetchGlobalCardData({
     blockEntityId,
