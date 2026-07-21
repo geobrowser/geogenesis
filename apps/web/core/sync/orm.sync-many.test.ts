@@ -4,7 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getAllEntities, getBatchEntities } from '../io/queries';
+import { getAllEntities, getBatchEntities, getEntitiesOrderedByPropertyConnection } from '../io/queries';
 import type { Entity, Value } from '../types';
 import { E } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
@@ -123,5 +123,31 @@ describe('E.syncMany pagination', () => {
     expect(vi.mocked(getBatchEntities).mock.calls.map(call => call[0].length)).toEqual([50, 50, 17]);
     expect(result.merged.map(e => e.id)).toEqual(ids);
     expect(result.remote).toHaveLength(ids.length);
+  });
+
+  it.each([
+    ['regular queries', {}],
+    ['collection id queries', { id: { in: ['entity-a'] } }],
+  ])('forwards includeWithoutValue for sorted %s', async (_label, where) => {
+    vi.mocked(getEntitiesOrderedByPropertyConnection).mockReturnValue(
+      Effect.succeed({ entities: [], endCursor: null, hasNextPage: false })
+    );
+
+    await E.syncMany({
+      store,
+      cache,
+      where,
+      first: 9,
+      sort: {
+        propertyId: 'score-property',
+        direction: 'desc',
+        dataType: 'integer',
+        includeWithoutValue: true,
+      },
+    });
+
+    expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).toHaveBeenCalledWith(
+      expect.objectContaining({ includeWithoutValue: true })
+    );
   });
 });
