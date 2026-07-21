@@ -590,7 +590,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       const livekit = await import('livekit-client');
       if (!isCurrent()) return;
-      const room = new livekit.Room({ adaptiveStream: true, dynacast: true }) as unknown as RoomLike;
+      // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
+      // adaptiveStream pauses a subscribed remote video when it judges the element off-screen or
+      // too small, and dynacast stops publishing layers no one is consuming; together they black
+      // out a tile mid-turn.
+      const room = new livekit.Room({ adaptiveStream: false, dynacast: false }) as unknown as RoomLike;
       connectingRoom = room;
       room.on(livekit.RoomEvent.TrackSubscribed, track => {
         const element = track.attach();
@@ -646,6 +650,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         ),
         videoEnabled,
       });
+
+      // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
+      // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
+      // several seconds; that's long enough to miss the server's connecting deadline and get the
+      // debate cancelled with connection_timeout even though both participants are present.
+      await markJoined.mutateAsync();
+      if (!isCurrent()) {
+        room.disconnect();
+        stopLocalTracks(localTracksRef);
+        localMediaStreamRef.current = null;
+        if (roomRef.current === room) roomRef.current = null;
+        return;
+      }
+
       for (const track of tracks) {
         await room.localParticipant.publishTrack(track);
         if (!isCurrent()) {
@@ -665,7 +683,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await localVideoRef.current.play().catch(() => undefined);
       }
 
-      await markJoined.mutateAsync();
       if (!isCurrent()) {
         room.disconnect();
         stopLocalTracks(localTracksRef);

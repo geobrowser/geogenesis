@@ -314,9 +314,11 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
     });
+    // markJoined fires before publishTrack, so slow WebRTC media negotiation can't push us past
+    // the connecting deadline while both participants are already in the room.
     const joinedCallOrder = mocks.markJoinedMutateAsync.mock.invocationCallOrder[0];
     expect(mocks.publishTrack).toHaveBeenCalledTimes(2);
-    expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder < joinedCallOrder)).toBe(true);
+    expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
