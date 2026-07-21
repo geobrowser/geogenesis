@@ -63,7 +63,7 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
   if (series.length === 0) return null;
 
   return (
-    <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
+    <aside className="w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
       <div className="flex flex-col gap-3 pb-4">
         <div className="flex items-center justify-between">
           <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">Community calls</h2>

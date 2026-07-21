@@ -84,7 +84,7 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <EntityPageContentContainer>
-      <div className="flex items-start">
+      <div className="flex items-start gap-8">
         <div className="min-w-0 flex-1">
           <React.Suspense fallback={<SubtopicGallerySkeleton />}>
             <SubtopicGalleryContainer spaceId={params.id} />
@@ -251,7 +251,7 @@ const RootExploreSidePanelContainer = async () => {
   const data = await fetchExploreSidePanelData();
   return (
     <>
-      <div aria-hidden className="ml-8 w-px shrink-0 self-stretch bg-divider lg:hidden" />
+      <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
       <ExploreSidePanel
         featuredSpaces={data.featuredSpaces}
         featuredRankings={data.featuredRankings}
