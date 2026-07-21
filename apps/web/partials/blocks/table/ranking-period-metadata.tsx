@@ -23,6 +23,16 @@ const VISIBLE_RANKED_BY_AVATARS = 3;
 const RANKED_BY_AVATAR_SIZE = 20;
 const RANKED_BY_ROW_CLASS = 'inline-flex min-w-0 shrink-0 flex-nowrap items-center gap-[8px]';
 
+function extraCountClass(size: 16 | 20) {
+  return size === 16
+    ? 'relative box-content flex h-4 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[10px] text-grey-04 tabular-nums'
+    : 'relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] text-grey-04 tabular-nums';
+}
+
+function extraCountLineClass(size: 16 | 20) {
+  return size === 16 ? 'block h-4 leading-[16px]' : 'block h-5 leading-[20px]';
+}
+
 function dedupePreserveOrder(ids: string[]): string[] {
   const seen = new Set<string>();
   return ids.filter(id => {
@@ -54,29 +64,28 @@ type RankingRankedByAvatar = {
 function RankingRankedByAvatarGroup({
   avatars,
   extraCount = 0,
+  size = RANKED_BY_AVATAR_SIZE,
 }: {
   avatars: RankingRankedByAvatar[];
   extraCount?: number;
+  size?: 16 | 20;
 }) {
   if (avatars.length === 0 && extraCount <= 0) return null;
 
   return (
     <AvatarGroup>
       {avatars.map(avatar => (
-        <AvatarGroup.Item key={avatar.key} size={20}>
+        <AvatarGroup.Item key={avatar.key} size={size}>
           {avatar.avatarUrl ? (
-            <FallbackImage value={avatar.avatarUrl} sizes={`${RANKED_BY_AVATAR_SIZE}px`} className="object-cover" />
+            <FallbackImage value={avatar.avatarUrl} sizes={`${size}px`} className="object-cover" />
           ) : (
-            <Avatar size={RANKED_BY_AVATAR_SIZE} value={avatar.fallbackSeed} />
+            <Avatar size={size} value={avatar.fallbackSeed} />
           )}
         </AvatarGroup.Item>
       ))}
       {extraCount > 0 ? (
-        <li
-          key="extra-count"
-          className="relative box-content flex h-5 shrink-0 list-none items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1.5 text-[11px] text-grey-04 tabular-nums"
-        >
-          <span className="block h-5 leading-[20px]">+{extraCount}</span>
+        <li key="extra-count" className={extraCountClass(size)}>
+          <span className={extraCountLineClass(size)}>+{extraCount}</span>
         </li>
       ) : null}
     </AvatarGroup>
@@ -87,10 +96,12 @@ export function RankingAggregatedSubmitterAvatars({
   submitterSpaceIds,
   totalCount,
   maxVisible = VISIBLE_RANKED_BY_AVATARS,
+  size = RANKED_BY_AVATAR_SIZE,
 }: {
   submitterSpaceIds: string[];
   totalCount?: number;
   maxVisible?: number;
+  size?: 16 | 20;
 }) {
   const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
   const { data: profilesBySpaceId = new Map() } = useQuery({
@@ -137,7 +148,7 @@ export function RankingAggregatedSubmitterAvatars({
     };
   });
 
-  return <RankingRankedByAvatarGroup avatars={avatars} extraCount={extraCount} />;
+  return <RankingRankedByAvatarGroup avatars={avatars} extraCount={extraCount} size={size} />;
 }
 
 export function RankingRankedBy({

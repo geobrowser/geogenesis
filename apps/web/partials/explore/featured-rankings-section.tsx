@@ -2,12 +2,19 @@
 
 import * as React from 'react';
 
-import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
-import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
+import { useRouter } from 'next/navigation';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import type { FeaturedRanking, FeaturedRankingEntry } from '~/core/io/subgraph/fetch-featured-rankings';
+
+import { Avatar } from '~/design-system/avatar';
+import { Button } from '~/design-system/button';
+import { FallbackImage } from '~/design-system/fallback-image';
+import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
+
+import { useFeaturedRankingCompletion } from './use-featured-ranking-completion';
 
 type Props = {
   rankings: FeaturedRanking[];
@@ -53,9 +60,9 @@ export function FeaturedRankingsSection({ rankings }: Props) {
 }
 
 function FeaturedRankingCard({ ranking }: { ranking: FeaturedRanking }) {
-  // The Vote button opens the ranking's fullscreen view (mode: 'view'), from
-  // which the user can build and submit their ranking — the same target the
-  // in-page fullscreen trigger uses (table-block-ranking.tsx).
+  const router = useRouter();
+  const { hasCompleted, isLoading } = useFeaturedRankingCompletion(ranking.blockEntityId, ranking.spaceId);
+
   const href = rankingComposeHref({
     spaceId: ranking.spaceId,
     blockEntityId: ranking.blockEntityId,
@@ -63,36 +70,79 @@ function FeaturedRankingCard({ ranking }: { ranking: FeaturedRanking }) {
     parentEntityId: ranking.parentEntityId,
     rankingStartDate: ranking.rankingStartDate,
     rankingEndDate: ranking.rankingEndDate,
-    mode: 'view',
+    mode: hasCompleted ? 'view' : 'edit',
   });
 
-  // Gate on resolved submitter spaces, not the raw count: when submitters exist
-  // but none resolve to a space, the avatar group renders nothing, and keying off
-  // the count alone would leave a dangling "Ranked by" label with no avatars.
-  const hasRankedBy = ranking.submitterSpaceIds.length > 0;
+  const hasRankedBy = ranking.submitterSpaceIds.length > 0 || ranking.submissionCount > 0;
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-grey-02 px-4 py-3">
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-[16px] leading-[20px] font-medium text-text">{ranking.name}</span>
+    <div className="rounded-lg border border-grey-02 p-5">
+      <h3 className="truncate text-[16px] leading-[17px] font-medium text-[#2A2B2E]">{ranking.name}</h3>
+
+      {ranking.topEntries.length > 0 ? (
+        <ol className="mt-4 flex list-none flex-col gap-2 p-0">
+          {ranking.topEntries.map((entry, index) => (
+            <FeaturedRankingEntryRow key={entry.entityId} entry={entry} rank={index + 1} />
+          ))}
+        </ol>
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between gap-3">
         {hasRankedBy ? (
-          <span className="flex min-w-0 flex-nowrap items-center gap-2 text-metadata text-grey-04">
-            <span className="shrink-0">Ranked by</span>
+          <span className="flex min-w-0 flex-nowrap items-center">
+            <span className="sr-only">Ranked by</span>
             <RankingAggregatedSubmitterAvatars
               submitterSpaceIds={ranking.submitterSpaceIds}
               totalCount={ranking.submissionCount || ranking.submitterSpaceIds.length}
+              size={16}
             />
           </span>
-        ) : null}
-      </div>
+        ) : (
+          <span />
+        )}
 
-      <Link
-        href={href}
-        aria-label={`Vote on ${ranking.name}`}
-        className="flex h-8 shrink-0 items-center rounded-lg border border-grey-02 px-3 text-[16px] leading-[18px] text-text shadow-button transition-colors hover:border-text"
-      >
-        Vote
-      </Link>
+        {hasCompleted ? (
+          <Button
+            variant="secondary"
+            className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-3 text-[16px] whitespace-nowrap !text-text"
+            icon={<RankingChart />}
+            disabled={isLoading}
+            onClick={() => router.push(href)}
+          >
+            View
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
+            icon={<RankingChart color="white" />}
+            disabled={isLoading}
+            onClick={() => router.push(href)}
+          >
+            Add my ranking
+          </Button>
+        )}
+      </div>
     </div>
+  );
+}
+
+function FeaturedRankingEntryRow({ entry, rank }: { entry: FeaturedRankingEntry; rank: number }) {
+  return (
+    <li className="flex min-w-0 items-center">
+      <span className="w-4 shrink-0 text-[16px] leading-[18px] font-medium tracking-[-0.48px] text-[#2A2B2E] tabular-nums">
+        {rank}
+      </span>
+      <span className="ml-3 size-6 shrink-0 overflow-hidden rounded-full">
+        {entry.image ? (
+          <FallbackImage value={entry.image} sizes="24px" className="size-full object-cover" />
+        ) : (
+          <Avatar size={24} value={entry.entityId} />
+        )}
+      </span>
+      <span className="ml-2 min-w-0 truncate text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-[#2A2B2E]">
+        {entry.name}
+      </span>
+    </li>
   );
 }
