@@ -13,6 +13,7 @@ import { mergeSearchResult } from '../database/result';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
+import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
 import { useDebouncedValue } from './use-debounced-value';
 import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
@@ -24,7 +25,27 @@ interface SearchOptions {
   restrictToFilterTypes?: boolean;
   enabled?: boolean;
   pageSize?: number;
-  /** Pass `false` to restrict results to the canonical graph. Defaults to including everything. */
+  /**
+   * Tri-state, not a plain boolean — `undefined` and `true` are different.
+   * Always threaded through to E.findFuzzyPage/getResultsPage, where it
+   * drives client-side canonical gating (shouldIncludeRestSearchResult) —
+   * that part applies regardless of `filterBySpace`. The additionalSpaceIds
+   * widening described below is the part that's specific to unscoped
+   * (global) searches: when `filterBySpace` is set, additionalSpaceIds is
+   * never applied, no matter what this value is.
+   * - `false`: restrict results to the canonical graph plus the scoped spaces
+   *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
+   *   additionalSpaceIds applied).
+   * - `undefined` (omitted): same eligibility restriction as `false` —
+   *   additionalSpaceIds is still applied. Callers with no opinion on
+   *   canonical-only should just omit this.
+   * - `true` (explicit): drop the canonical/scoped-spaces eligibility
+   *   restriction — additionalSpaceIds is NOT applied. Any other filters
+   *   the caller passes (filterBySpace, filterByTypes, etc.) still apply as
+   *   normal; this only lifts the canonical-graph-and-scoped-spaces gating,
+   *   not every constraint on the search. Only pass this when the caller
+   *   genuinely wants that specific restriction lifted.
+   */
   includeNonCanonical?: boolean;
 }
 
@@ -80,7 +101,11 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  const additionalSpaceIds = filterBySpace ? undefined : globalAdditionalSpaceIds;
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+    filterBySpace,
+    includeNonCanonical,
+    globalAdditionalSpaceIds,
+  });
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);

@@ -10,7 +10,7 @@ import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
-import { propertyForSort } from '~/core/utils/column-sort';
+import { propertyForSort, shouldIncludeWithoutValueForPropertySort } from '~/core/utils/column-sort';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
@@ -144,6 +144,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
       propertyId: sortState.columnId,
       direction: sortState.direction,
       dataType: property?.dataType?.toLowerCase(),
+      includeWithoutValue: shouldIncludeWithoutValueForPropertySort(sortState.columnId),
     };
   }, [sortState, propertiesSchema, filterableProperties]);
 
@@ -427,6 +428,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
         ? queriedHasNextPage
         : false;
 
+  const isPlaceholderData =
+    source.type === 'COLLECTION'
+      ? isCollectionPlaceholder
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? isQueryEntitiesPlaceholder
+        : false;
+
   const result = {
     entityId,
     spaceId,
@@ -447,6 +455,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
     isLoading,
     isFetched,
+    isPlaceholderData,
 
     name: entity?.name ?? null,
     setName,

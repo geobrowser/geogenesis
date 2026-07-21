@@ -17,7 +17,6 @@ import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
 
-import { NoContent } from '../space-tabs/no-content';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
@@ -43,10 +42,9 @@ interface Props {
   spaceId: string;
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
-  spacePage?: boolean;
 }
 
-export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
@@ -326,23 +324,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
-    return (
-      <>
-        {spacePage && (
-          <NoContent
-            options={{
-              image: '/overview.png',
-              browse: {
-                title: 'There’s no content here yet',
-                description: 'Switch to edit mode to add content if you’re an editor of this space!',
-              },
-            }}
-            isEditing={false}
-          />
-        )}
-        <span>{placeholder}</span>
-      </>
-    );
+    return <>{placeholder}</>;
   }
 
   return (

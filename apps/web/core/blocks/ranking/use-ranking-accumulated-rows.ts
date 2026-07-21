@@ -4,49 +4,30 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { mappingToRows } from '~/core/blocks/data/use-mapping';
 import { useView } from '~/core/blocks/data/use-view';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Row } from '~/core/types';
 
-export type RowPage = { page: number; rows: Row[] };
+export type { RowPage };
+export { flattenRowPages, upsertRowPage };
 
-function rowEntityIdsSignature(rows: Row[]): string {
+export const MIN_RANKING_FEED_PAGE_SIZE = 10;
+
+export function rankingFeedPageSize(pageSize: number): number {
+  return Math.max(MIN_RANKING_FEED_PAGE_SIZE, pageSize);
+}
+
+function rowEntityIdsSignature(rows: { entityId: string }[]): string {
   return rows.map(row => row.entityId).join('|');
-}
-
-export function upsertRowPage(pages: RowPage[], page: number, rows: Row[]): RowPage[] {
-  const signature = rowEntityIdsSignature(rows);
-  const existing = pages.find(p => p.page === page);
-  if (existing && rowEntityIdsSignature(existing.rows) === signature) {
-    return pages;
-  }
-  const without = pages.filter(p => p.page !== page);
-  const next = [...without, { page, rows }];
-  next.sort((a, b) => a.page - b.page);
-  return next;
-}
-
-export function flattenRowPages(pages: RowPage[]): Row[] {
-  const ordered: Row[] = [];
-  const seen = new Set<string>();
-
-  for (const page of pages) {
-    for (const row of page.rows) {
-      if (!row.entityId || seen.has(row.entityId)) continue;
-      seen.add(row.entityId);
-      ordered.push(row);
-    }
-  }
-
-  return ordered;
 }
 
 export function useRankingAccumulatedRows() {
   const { entityId, source, filterState, filterMode, pageSize } = useDataBlock();
   const { shownColumnIds } = useView();
+  const feedPageSize = rankingFeedPageSize(pageSize);
 
   const enabled = source.type === 'SPACES' || source.type === 'GEO';
 
@@ -59,7 +40,7 @@ export function useRankingAccumulatedRows() {
   const { entities, isLoading, isFetched, isPlaceholderData, endCursor, hasNextPage } = useQueryEntities({
     where,
     enabled,
-    first: pageSize,
+    first: feedPageSize,
     after,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
@@ -67,7 +48,14 @@ export function useRankingAccumulatedRows() {
     orderBy: [EntitiesOrderBy.CreatedAtDesc],
   });
 
-  const pageRows = React.useMemo(() => mappingToRows(entities ?? [], shownColumnIds, []), [entities, shownColumnIds]);
+  // Submission frequency controls how long a user's ranking remains live; it is
+  // not an implicit filter on the entities they can rank. Keep browse mode in
+  // sync with typed search by exposing every entity that matches the block's
+  // persisted filters, including older entities in a rolling ranking.
+  const pageRows = React.useMemo(
+    () => mappingToRows(entities ?? [], shownColumnIds, []),
+    [entities, shownColumnIds]
+  );
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
@@ -78,8 +66,11 @@ export function useRankingAccumulatedRows() {
         sourceType: source.type,
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
+        filterMode,
+        feedPageSize,
+        shownColumnIds,
       }),
-    [entityId, filterState, source]
+    [entityId, feedPageSize, filterMode, filterState, shownColumnIds, source]
   );
 
   React.useEffect(() => {
@@ -92,7 +83,7 @@ export function useRankingAccumulatedRows() {
   React.useEffect(() => {
     if (!isFetched || isPlaceholderData) return;
     setRowPages(prev => upsertRowPage(prev, pageIndex, pageRows));
-  }, [pageIndex, rowsSignature, isFetched, isPlaceholderData]);
+  }, [pageIndex, rowsSignature, isFetched, isPlaceholderData, resetKey]);
 
   const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageIndex), [rowPages, pageIndex]);
 

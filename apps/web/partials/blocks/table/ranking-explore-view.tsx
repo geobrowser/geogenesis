@@ -5,8 +5,8 @@ import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending
 import { Skeleton } from '~/design-system/skeleton';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
-import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { RankingExploreFeedCard } from './ranking-explore-feed-card';
+import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
 function RankingExploreFeedCardSkeleton() {

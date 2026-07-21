@@ -6,9 +6,9 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import * as React from 'react';
 import { useCallback } from 'react';
 
-import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { DataBlockView, useView } from '~/core/blocks/data/use-view';
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 

@@ -30,10 +30,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => {
-    if (id !== 'questionsTab') throw new Error(`Unexpected feature flag: ${id}`);
-    return featureEnabled;
-  },
+  useDebatesEnabled: () => featureEnabled,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({

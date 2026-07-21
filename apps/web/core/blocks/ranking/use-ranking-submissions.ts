@@ -21,10 +21,15 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
+import { isRollingSubmissionLive, parseTimestampMs } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
+import { useRankingBlockConfig } from './use-ranking-block-config';
+import { useRankingBlockRelations } from './use-ranking-block-relations';
+
+const MS_PER_HOUR = 60 * 60 * 1000;
 
 export type RankingSubmissionPublishResult = {
   rankEntityId: string;
@@ -108,7 +113,31 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     walletAddress,
   ]);
 
-  const mySubmission = apiMySubmission;
+  const { isRolling, submissionFrequencyHours } = useRankingBlockConfig({ blockId, spaceId });
+  const { aggregatedSubmitterRefs } = useRankingBlockRelations({ blockId, spaceId });
+
+  const submittedAtMs = React.useMemo(
+    () => (myRankEntity ? parseTimestampMs(myRankEntity.updatedAt) : 0),
+    [myRankEntity]
+  );
+
+  const isSubmissionLive = React.useMemo(() => {
+    if (!isRolling || !myRankEntity) return true;
+    const windowElapsed =
+      submissionFrequencyHours != null &&
+      submittedAtMs > 0 &&
+      Date.now() >= submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
+    if (!windowElapsed) return true;
+    return isRollingSubmissionLive({
+      personalSpaceId,
+      myRankEntityId: myRankEntity.id,
+      aggregatedSubmitterRefs,
+    });
+  }, [aggregatedSubmitterRefs, isRolling, myRankEntity, personalSpaceId, submissionFrequencyHours, submittedAtMs]);
+
+  const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
+
+  const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
@@ -145,12 +174,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       try {
         const rankName = blockName.trim() || 'My ranking';
 
+        const reuseExistingRank = Boolean(myRankEntity) && !hasRolledOff;
+
         let ops;
         let rankId: string;
         try {
-          const result = myRankEntity
+          const result = reuseExistingRank
             ? await geo.ranks.update({
-                rankId: myRankEntity.id,
+                rankId: myRankEntity!.id,
                 rankType: 'WEIGHTED',
                 votes,
               })
@@ -271,6 +302,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     [
       blockId,
       blockName,
+      hasRolledOff,
       myRankEntity,
       personalSpaceId,
       profile?.avatarUrl,
@@ -291,5 +323,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     isLoading: isLoadingMyRanking,
     isSaving,
     personalSpaceId,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
   };
 }

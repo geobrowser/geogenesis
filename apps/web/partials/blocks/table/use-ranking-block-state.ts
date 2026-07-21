@@ -27,6 +27,7 @@ import {
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
@@ -149,8 +150,19 @@ export function useRankingBlockState({
     initialSharedRanking?.rankingName?.trim() ||
     'Untitled ranking';
 
-  const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
-    useRankingSubmissions(entityId, spaceId, displayName);
+  const {
+    submissions,
+    hasMySubmission,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({
     rankEntityId: sharedRankEntityId,
@@ -207,10 +219,27 @@ export function useRankingBlockState({
 
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
 
-  const periodLabel = React.useMemo(
+  const datePeriodLabel = React.useMemo(
     () => formatRankingPeriodLabel(periodState, startDate, endDate),
     [periodState, startDate, endDate]
   );
+
+  // Rolling blocks have no start/end window; surface the viewer's rolling status
+  const rollingLabel = React.useMemo(
+    () =>
+      isRolling
+        ? formatRollingSubmissionLabel({
+            hasSubmission: hasMySubmission || hasRolledOff,
+            isLive: isSubmissionLive,
+            submittedAtMs,
+            frequencyHours: submissionFrequencyHours,
+            now: Date.now(),
+          })
+        : null,
+    [isRolling, hasMySubmission, hasRolledOff, isSubmissionLive, submittedAtMs, submissionFrequencyHours]
+  );
+
+  const periodLabel = isRolling ? rollingLabel : datePeriodLabel;
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
@@ -895,6 +924,8 @@ export function useRankingBlockState({
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,
+    isRolling,
+    isRollingRolledOff: hasRolledOff,
     canSharePersonalRanking,
     sharePersonalRanking,
     globalSharePath,
