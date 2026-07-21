@@ -705,10 +705,10 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
-  // Explore still defaults to infinite scroll in browse mode; any other view can
-  // opt in via the Infinite scroll BOOLEAN on the Blocks relation entity.
+  // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
+  // relation entity (same entity that holds View and Properties).
   const infiniteScrollProperty = useBlockInfiniteScroll();
-  const isInfiniteScroll = (view === 'EXPLORE' || infiniteScrollProperty) && !isEditing;
+  const isInfiniteScroll = infiniteScrollProperty && !isEditing;
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
