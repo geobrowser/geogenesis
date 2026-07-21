@@ -14,6 +14,12 @@ import { useQueryEntities } from '~/core/sync/use-store';
 export type { RowPage };
 export { flattenRowPages, upsertRowPage };
 
+export const MIN_RANKING_FEED_PAGE_SIZE = 10;
+
+export function rankingFeedPageSize(pageSize: number): number {
+  return Math.max(MIN_RANKING_FEED_PAGE_SIZE, pageSize);
+}
+
 function rowEntityIdsSignature(rows: { entityId: string }[]): string {
   return rows.map(row => row.entityId).join('|');
 }
@@ -21,6 +27,7 @@ function rowEntityIdsSignature(rows: { entityId: string }[]): string {
 export function useRankingAccumulatedRows() {
   const { entityId, source, filterState, filterMode, pageSize } = useDataBlock();
   const { shownColumnIds } = useView();
+  const feedPageSize = rankingFeedPageSize(pageSize);
 
   const enabled = source.type === 'SPACES' || source.type === 'GEO';
 
@@ -33,7 +40,7 @@ export function useRankingAccumulatedRows() {
   const { entities, isLoading, isFetched, isPlaceholderData, endCursor, hasNextPage } = useQueryEntities({
     where,
     enabled,
-    first: pageSize,
+    first: feedPageSize,
     after,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
@@ -60,10 +67,10 @@ export function useRankingAccumulatedRows() {
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
         filterMode,
-        pageSize,
+        feedPageSize,
         shownColumnIds,
       }),
-    [entityId, filterMode, filterState, pageSize, shownColumnIds, source]
+    [entityId, feedPageSize, filterMode, filterState, shownColumnIds, source]
   );
 
   React.useEffect(() => {
