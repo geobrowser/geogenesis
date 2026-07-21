@@ -62,7 +62,7 @@ describe('FeatureFlagsDialog', () => {
     expect(await screen.findByRole('heading', { name: 'Feature flags' })).toBeTruthy();
   });
 
-  it('returns home when closing the dialog from the hidden flags route', async () => {
+  it('returns to the root space when closing the dialog from the hidden flags route', async () => {
     navigation.pathname = '/feature-flags';
 
     render(
@@ -73,6 +73,6 @@ describe('FeatureFlagsDialog', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Close feature flags' }));
 
-    expect(navigation.replace).toHaveBeenCalledWith('/');
+    expect(navigation.replace).toHaveBeenCalledWith('/root');
   });
 });

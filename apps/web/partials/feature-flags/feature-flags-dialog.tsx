@@ -23,7 +23,7 @@ export function FeatureFlagsDialog() {
 
   const close = React.useCallback(() => {
     setShortcutOpen(false);
-    if (routeOpen) router.replace('/');
+    if (routeOpen) router.replace('/root');
   }, [routeOpen, router]);
 
   React.useEffect(() => {
