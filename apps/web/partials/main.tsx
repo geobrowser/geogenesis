@@ -15,7 +15,10 @@ export const Main = ({ children }: MainProps) => {
   const { isReviewOpen } = useDiff();
   const isHidden = isReviewOpen;
   const pathname = usePathname();
-  const isFullWidth = pathname === '/explore' || /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname);
+  const isFullWidth =
+    pathname === '/explore' ||
+    /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
+    /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
 
   return (
     <motion.main
