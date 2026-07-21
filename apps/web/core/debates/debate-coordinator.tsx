@@ -10,12 +10,8 @@ import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
-import {
-  useDebateActivity,
-  useDebatePresenceHeartbeat,
-  useDebateSharePrompts,
-  useHandleDebateSharePrompt,
-} from './hooks';
+import { useDebateGateway } from './debate-gateway';
+import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
 import { ProcessedDebatePlayer } from './processed-debate-player';
 
@@ -23,7 +19,12 @@ export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
   const isDebatesEnabled = useDebatesEnabled();
-  useDebatePresenceHeartbeat(isDebatesEnabled);
+  const geoChatAuth = useGeoChatAuth();
+  const gateway = useDebateGateway(
+    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;
   const activeFlow = Boolean(activity?.match || activity?.debate || activity?.rematch);
@@ -58,6 +59,15 @@ export function DebateCoordinator() {
 
   return (
     <>
+      {gateway.paused && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card sm:w-auto"
+        >
+          Live debate updates are paused while reconnecting.
+        </div>
+      )}
       {match && (
         <DebateMatchPrompt
           spaceId={match.claim.space_id}

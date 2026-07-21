@@ -36,6 +36,7 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
+    accountKey: 'user-a',
     getPrivyIdentityToken: mocks.getToken,
   }),
   useDebateActivity: () => ({ data: undefined }),
@@ -145,7 +146,8 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.completeUpload).toHaveBeenCalledWith(
       'debate-1',
       expect.objectContaining({ framerate: 29.97 }),
-      expect.anything()
+      expect.anything(),
+      'user-a'
     );
     expect(mocks.lockRequest).toHaveBeenCalledWith(
       'geo:debate-recording-uploader',
@@ -190,15 +192,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() =>
-      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything())
+      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything(), 'user-a')
     );
     expect(screen.getByText('Uploading 2 debates')).toBeInTheDocument();
-    expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything());
+    expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a');
 
     firstCompletion.resolve();
 
     await waitFor(() =>
-      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything())
+      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a')
     );
   });
 
@@ -315,7 +317,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
-    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything()));
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
