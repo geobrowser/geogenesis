@@ -59,8 +59,9 @@ export function useRankingAccumulatedRows() {
         sourceType: source.type,
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
+        shownColumnIds,
       }),
-    [entityId, filterState, source]
+    [entityId, filterState, shownColumnIds, source]
   );
 
   React.useEffect(() => {
@@ -73,7 +74,7 @@ export function useRankingAccumulatedRows() {
   React.useEffect(() => {
     if (!isFetched || isPlaceholderData) return;
     setRowPages(prev => upsertRowPage(prev, pageIndex, pageRows));
-  }, [pageIndex, rowsSignature, isFetched, isPlaceholderData]);
+  }, [pageIndex, rowsSignature, isFetched, isPlaceholderData, resetKey]);
 
   const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageIndex), [rowPages, pageIndex]);
 
