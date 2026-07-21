@@ -5,7 +5,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { flushSync } from 'react-dom';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
@@ -17,7 +16,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
-import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
@@ -278,9 +276,6 @@ type Props = {
   onFetchNextPage: () => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  isSearchOpen: boolean;
-  onSearchOpenChange: (open: boolean) => void;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
   canCreateNew: boolean;
@@ -316,9 +311,6 @@ export function RankingComposeGlobalRanking({
   onFetchNextPage,
   searchQuery,
   onSearchQueryChange,
-  isSearchOpen,
-  onSearchOpenChange,
-  searchInputRef,
   onAddToMyRanking,
   onCreateNew,
   canCreateNew,
@@ -335,7 +327,6 @@ export function RankingComposeGlobalRanking({
   const mobileScrollRoot = useRankingComposeScrollRoot();
   const globalSectionRef = React.useRef<HTMLDivElement>(null);
   const globalSearchChromeRef = React.useRef<HTMLDivElement>(null);
-  const searchFieldContainerRef = React.useRef<HTMLDivElement>(null);
   const listContainerRef = React.useRef<HTMLDivElement>(null);
   const searchScrollTopRef = React.useRef<number | null>(null);
   const [searchListStableHeight, setSearchListStableHeight] = React.useState(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
@@ -376,11 +367,7 @@ export function RankingComposeGlobalRanking({
       const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
       if (isFirstSearchCharacter) {
         if (isMobile) {
-          // Defer the scroll-to-top until the first keystroke so it happens at the same
-          // moment results clear — feels like a focus change, not a page jump on icon tap.
-          // Use instant scroll so scrollTop updates synchronously before we size the
-          // placeholder; a smooth scroll would leave captureSearchListLayout reading the
-          // pre-scroll position and anchoring the placeholder below the new viewport.
+          // Scroll the sticky search chrome into view when search begins
           const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
           const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget, 'auto') : null;
           captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
@@ -394,11 +381,11 @@ export function RankingComposeGlobalRanking({
   );
 
   React.useEffect(() => {
-    if (!isSearchOpen && !searchQuery.trim()) {
+    if (!searchQuery.trim()) {
       searchScrollTopRef.current = null;
       setSearchListStableHeight(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
     }
-  }, [isSearchOpen, searchQuery]);
+  }, [searchQuery]);
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
@@ -454,18 +441,6 @@ export function RankingComposeGlobalRanking({
     filteredUnrankedIds.length,
     sentinelRef,
   ]);
-
-  React.useEffect(() => {
-    if (isSearchOpen) {
-      searchInputRef.current?.focus({ preventScroll: true });
-    }
-  }, [isSearchOpen, searchInputRef]);
-
-  React.useEffect(() => {
-    if (searchQuery.trim()) {
-      onSearchOpenChange(true);
-    }
-  }, [searchQuery, onSearchOpenChange]);
 
   const renderPickEntity = (id: string, globalRank?: number) => {
     const entry = rankableEntriesById.get(id);
@@ -566,12 +541,8 @@ export function RankingComposeGlobalRanking({
         className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
-        <div
-          className={cx(
-            'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-            isDesktop && 'border-b border-grey-02 pb-4'
-          )}
-        >
+        {/* Match My ranking title row height so the search top lines up with its divider. */}
+        <div className={cx('flex w-full min-w-0 items-center', isDesktop ? 'min-h-8 pb-4' : 'min-h-8')}>
           <h2
             className={cx(
               'm-0 min-w-0 truncate text-text',
@@ -580,53 +551,22 @@ export function RankingComposeGlobalRanking({
           >
             Global ranking
           </h2>
-          <div className="flex items-center justify-self-end">
-            <Button
-              type="button"
-              variant="ghost"
-              icon={<Search color={isSearchOpen ? undefined : 'grey-04'} />}
-              onClick={() => {
-                if (isSearchOpen) {
-                  onSearchOpenChange(false);
-                  return;
-                }
-
-                if (isMobile) {
-                  flushSync(() => onSearchOpenChange(true));
-                  searchInputRef.current?.focus({ preventScroll: true });
-                  return;
-                }
-
-                onSearchOpenChange(true);
-              }}
-              className={cx(
-                COMPOSE_ICON_BUTTON_CLASS,
-                'h-8 w-8 !bg-transparent text-grey-04 transition-colors hover:!border-transparent hover:!bg-transparent hover:!text-text',
-                isSearchOpen && '!text-text'
-              )}
-              aria-label={isSearchOpen ? 'Close search' : 'Search rankable entities'}
-              aria-expanded={isSearchOpen}
+        </div>
+        <div className={cx('shrink-0', isMobile && 'mt-2')}>
+          <div className="relative flex items-center">
+            <span className="pointer-events-none absolute left-2 flex">
+              <Search color="grey-04" />
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => handleSearchQueryChange(e.target.value)}
+              placeholder="Search"
+              aria-label="Search rankable entities"
+              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
             />
           </div>
         </div>
-        {isSearchOpen ? (
-          <div ref={searchFieldContainerRef} className="shrink-0 py-2">
-            <div className="relative flex items-center">
-              <span className="pointer-events-none absolute left-2 flex">
-                <Search color="grey-04" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={e => handleSearchQueryChange(e.target.value)}
-                placeholder="Search"
-                aria-label="Search rankable entities"
-                className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
       <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
