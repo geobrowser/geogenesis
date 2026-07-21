@@ -70,7 +70,7 @@ type RoomLike = {
   localParticipant: {
     publishTrack: (track: unknown) => Promise<unknown>;
   };
-  on: (event: string, callback: (payload?: unknown) => void) => void;
+  on: (event: string, callback: (payload: unknown) => void) => void;
 };
 
 type DebateCountdown = {
@@ -624,6 +624,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
       // re-subscribe attaches a fresh element rather than stacking a second one behind it.
       room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
+        if (!isCurrent() || roomRef.current !== room) return;
         const track = payload as RemoteTrackLike;
         for (const element of track.detach()) element.remove();
         if (track.kind === 'video') setRemoteVideoReady(false);
@@ -656,6 +657,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       room.on(livekit.RoomEvent.Disconnected, payload => {
         if (!isCurrent() || roomRef.current !== room) return;
         if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+        // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
+        // call room.disconnect() a second time and could re-enter this handler.
+        roomRef.current = null;
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
@@ -2268,7 +2272,8 @@ function stopTracks(tracks: LocalTrackLike[]) {
 // as a hard failure that drops the debater from the call.
 async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCurrent: () => boolean) {
   const maxAttempts = 3;
-  for (let attempt = 1; ; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (!isCurrent()) return;
     try {
       await room.localParticipant.publishTrack(track);
       return;
