@@ -11,9 +11,6 @@ import { useView } from '~/core/blocks/data/use-view';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
 
-import { isCreatedWithinWindow } from './ranking-rolling';
-import { useRankingBlockConfig } from './use-ranking-block-config';
-
 export type { RowPage };
 export { flattenRowPages, upsertRowPage };
 
@@ -24,7 +21,6 @@ function rowEntityIdsSignature(rows: { entityId: string }[]): string {
 export function useRankingAccumulatedRows() {
   const { entityId, source, filterState, filterMode, pageSize } = useDataBlock();
   const { shownColumnIds } = useView();
-  const { isRolling, submissionFrequencyHours } = useRankingBlockConfig();
 
   const enabled = source.type === 'SPACES' || source.type === 'GEO';
 
@@ -45,23 +41,13 @@ export function useRankingAccumulatedRows() {
     orderBy: [EntitiesOrderBy.CreatedAtDesc],
   });
 
-  // Rolling rankings only rank entities created within the submission-frequency window.
-  const applyCreationWindow = isRolling && submissionFrequencyHours != null;
-  const { windowedEntities, reachedWindowBoundary } = React.useMemo(() => {
-    const list = entities ?? [];
-    if (!applyCreationWindow || submissionFrequencyHours == null) {
-      return { windowedEntities: list, reachedWindowBoundary: false };
-    }
-    const now = Date.now();
-    const inWindow = list.filter(e => isCreatedWithinWindow(e.createdAt, submissionFrequencyHours, now));
-    return { windowedEntities: inWindow, reachedWindowBoundary: inWindow.length < list.length };
-  }, [entities, applyCreationWindow, submissionFrequencyHours]);
-
-  const effectiveHasNextPage = reachedWindowBoundary ? false : hasNextPage;
-
+  // Submission frequency controls how long a user's ranking remains live; it is
+  // not an implicit filter on the entities they can rank. Keep browse mode in
+  // sync with typed search by exposing every entity that matches the block's
+  // persisted filters, including older entities in a rolling ranking.
   const pageRows = React.useMemo(
-    () => mappingToRows(windowedEntities, shownColumnIds, []),
-    [windowedEntities, shownColumnIds]
+    () => mappingToRows(entities ?? [], shownColumnIds, []),
+    [entities, shownColumnIds]
   );
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
@@ -94,16 +80,16 @@ export function useRankingAccumulatedRows() {
   const accumulatedRows = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const fetchNextPage = React.useCallback(() => {
-    if (!effectiveHasNextPage || !hasCurrentPage || isPlaceholderData || !endCursor) return;
+    if (!hasNextPage || !hasCurrentPage || isPlaceholderData || !endCursor) return;
     setAfterChain(prev => (prev[prev.length - 1] === endCursor ? prev : [...prev, endCursor]));
-  }, [effectiveHasNextPage, hasCurrentPage, isPlaceholderData, endCursor]);
+  }, [hasNextPage, hasCurrentPage, isPlaceholderData, endCursor]);
 
   const isFetchingNextPage = pageIndex > 0 && !hasCurrentPage;
 
   return {
     rows: accumulatedRows,
     isLoading: isLoading && !isFetched,
-    hasNextPage: effectiveHasNextPage,
+    hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
   };
