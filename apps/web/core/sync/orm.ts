@@ -257,7 +257,7 @@ export class E {
     after?: string;
     offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   }): Promise<Entity[]> {
     const { merged } = await this.syncMany(args);
     return merged;
@@ -288,7 +288,7 @@ export class E {
     after?: string;
     offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
     orderBy?: EntitiesOrderBy[];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
@@ -301,6 +301,7 @@ export class E {
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
             limit: first,
             after,
@@ -355,6 +356,7 @@ export class E {
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
             limit: first,
             after,

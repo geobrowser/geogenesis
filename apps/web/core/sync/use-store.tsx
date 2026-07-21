@@ -316,7 +316,7 @@ export function useQueryEntities({
   sort,
   orderBy,
 }: QueryEntitiesOptions & {
-  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
   orderBy?: EntitiesOrderBy[];
 }) {
