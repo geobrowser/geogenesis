@@ -3253,6 +3253,7 @@ export type QueryEntitiesOrderedByPropertyConnectionArgs = {
   dataType?: InputMaybe<Scalars['String']['input']>;
   filter?: InputMaybe<EntityFilter>;
   first?: InputMaybe<Scalars['Int']['input']>;
+  includeWithoutValue?: InputMaybe<Scalars['Boolean']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   propertyId?: InputMaybe<Scalars['UUID']['input']>;

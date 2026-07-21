@@ -19,7 +19,7 @@ const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
 
 function parseSort(raw: string | null): ExploreSort {
   if (raw && (SORTS as string[]).includes(raw)) return raw as ExploreSort;
-  return 'new';
+  return 'top';
 }
 
 function parseTime(raw: string | null): ExploreTime {

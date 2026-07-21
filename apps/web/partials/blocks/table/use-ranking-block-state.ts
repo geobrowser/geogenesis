@@ -27,6 +27,7 @@ import {
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
@@ -120,7 +121,16 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows, pageSize } = useDataBlock();
+  const {
+    name,
+    entityId,
+    relationId,
+    rows,
+    pageSize,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
+  } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -140,8 +150,19 @@ export function useRankingBlockState({
     initialSharedRanking?.rankingName?.trim() ||
     'Untitled ranking';
 
-  const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
-    useRankingSubmissions(entityId, spaceId, displayName);
+  const {
+    submissions,
+    hasMySubmission,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const { sharedSubmission, isLoadingSharedSubmission } = useSharedRanking({
     rankEntityId: sharedRankEntityId,
@@ -198,10 +219,27 @@ export function useRankingBlockState({
 
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
 
-  const periodLabel = React.useMemo(
+  const datePeriodLabel = React.useMemo(
     () => formatRankingPeriodLabel(periodState, startDate, endDate),
     [periodState, startDate, endDate]
   );
+
+  // Rolling blocks have no start/end window; surface the viewer's rolling status
+  const rollingLabel = React.useMemo(
+    () =>
+      isRolling
+        ? formatRollingSubmissionLabel({
+            hasSubmission: hasMySubmission || hasRolledOff,
+            isLive: isSubmissionLive,
+            submittedAtMs,
+            frequencyHours: submissionFrequencyHours,
+            now: Date.now(),
+          })
+        : null,
+    [isRolling, hasMySubmission, hasRolledOff, isSubmissionLive, submittedAtMs, submissionFrequencyHours]
+  );
+
+  const periodLabel = isRolling ? rollingLabel : datePeriodLabel;
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
@@ -820,6 +858,15 @@ export function useRankingBlockState({
     aggregatedRankingCount === 0 &&
     myDisplayEntityIds.length === 0;
 
+  const embeddedBrowseDisplayEntityIds = globalRankingListEntityIds;
+  const embeddedBrowseEntryByEntityId = globalRankingEntryByEntityId;
+  const embeddedBrowseTotalCount = visibleGlobalDisplayEntityIds.length;
+  const embeddedBrowseShowPagination = showEmbeddedGlobalPagination;
+  const embeddedBrowsePageNumber = embeddedGlobalPageNumber;
+  const embeddedBrowseHasPreviousPage = hasEmbeddedGlobalPreviousPage;
+  const embeddedBrowseHasNextPage = hasEmbeddedGlobalNextPage;
+  const embeddedBrowseSetPage = setEmbeddedGlobalPage;
+
   return {
     spaceId,
     rankingStartDate,
@@ -840,6 +887,9 @@ export function useRankingBlockState({
     submissions,
     periodState,
     periodLabel,
+    view: stateView,
+    viewRelation: stateViewRelation,
+    shownColumnIds,
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
@@ -874,6 +924,8 @@ export function useRankingBlockState({
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,
+    isRolling,
+    isRollingRolledOff: hasRolledOff,
     canSharePersonalRanking,
     sharePersonalRanking,
     globalSharePath,
@@ -895,8 +947,19 @@ export function useRankingBlockState({
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
+    embeddedBrowseDisplayEntityIds,
+    embeddedBrowseEntryByEntityId,
+    embeddedBrowseTotalCount,
+    embeddedBrowseShowPagination,
+    embeddedBrowsePageNumber,
+    embeddedBrowseHasPreviousPage,
+    embeddedBrowseHasNextPage,
+    embeddedBrowseSetPage,
     hasMyRankingData,
     hasGlobalRankingData,
+    stateView,
+    stateViewRelation,
   };
 }
 

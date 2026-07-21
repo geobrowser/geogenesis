@@ -86,7 +86,7 @@ export default async function SpacePage(props0: Props) {
             <SubtopicGalleryContainer spaceId={params.id} />
           </React.Suspense>
           <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
+            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
           </React.Suspense>
           <Spacer height={24} />
           <ToggleEntityPage id={props.id} spaceId={spaceId} />
@@ -128,7 +128,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
             <SubtopicGalleryContainer spaceId={spaceId} />
           </React.Suspense>
           <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
+            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
           </React.Suspense>
           <Spacer height={24} />
           <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />

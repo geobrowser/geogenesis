@@ -8,8 +8,10 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
@@ -17,8 +19,14 @@ import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
+import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingExploreView } from './ranking-explore-view';
+import { RankingGalleryView } from './ranking-gallery-view';
+import { RankingHeaderActions } from './ranking-header-actions';
+import { RankingListView } from './ranking-list-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
+import { RankingPillView } from './ranking-pill-view';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
@@ -54,7 +62,27 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     openRankingCompose,
     globalSharePath,
     ensureGlobalRankingOg,
+    stateView,
+    stateViewRelation,
   } = state;
+
+  const isGalleryView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
+  );
+  const isListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  );
+  const isPillView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
+  );
+  const isExploreView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
+    stateView === 'EXPLORE'
+  );
+
+  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
+
+  const showBrowseChrome = !showHeaderActions || isEditing;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
@@ -64,12 +92,18 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
 
   return (
-    <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
-      <div className="mb-2 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
+    <div
+      className={cx('w-full min-w-0', isGalleryView ? 'overflow-x-visible' : 'overflow-x-hidden')}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div
+        className={cx('mb-2 flex justify-between gap-4', showHeaderActions ? 'items-center' : 'items-start')}
+        onMouseDown={e => e.stopPropagation()}
+      >
         <div className="min-w-0 flex-1">
           <h4 className="text-mediumTitle text-text">{displayName}</h4>
 
-          {periodLabel || hasRankedByOthers ? (
+          {!showHeaderActions && (periodLabel || hasRankedByOthers) ? (
             <RankingPeriodMetadata
               periodState={periodState}
               periodLabel={periodLabel}
@@ -82,28 +116,38 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
-          <IconButton
-            onClick={() => setIsFilterOpen(open => !open)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
+          {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
 
-          <IconButton
-            onClick={() => void openRankingCompose('view')}
-            icon={<Fullscreen color="grey-04" />}
-            color="grey-04"
-            aria-label="Open fullscreen ranking"
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => setIsFilterOpen(open => !open)}
+              icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+              color="grey-04"
+            />
+          ) : null}
 
-          <TableBlockContextMenu
-            sourceType={source.type}
-            globalRankingSharePath={globalSharePath}
-            onPrepareGlobalShareLink={ensureGlobalRankingOg}
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => void openRankingCompose('view')}
+              icon={<Fullscreen color="grey-04" />}
+              color="grey-04"
+              aria-label="Open fullscreen ranking"
+            />
+          ) : null}
+
+          <DataBlockViewMenu activeView={stateView} isLoading={false} isRankingBlock />
+
+          {showBrowseChrome ? (
+            <TableBlockContextMenu
+              sourceType={source.type}
+              globalRankingSharePath={globalSharePath}
+              onPrepareGlobalShareLink={ensureGlobalRankingOg}
+            />
+          ) : null}
         </div>
       </div>
 
-      {isFilterOpen && (
+      {showBrowseChrome && isFilterOpen && (
         <AnimatePresence>
           <motion.div
             initial={{ opacity: 0 }}
@@ -183,7 +227,17 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </AnimatePresence>
       )}
 
-      <RankingBlockBody state={state} presentation="embedded" />
+      {isGalleryView ? (
+        <RankingGalleryView state={state} />
+      ) : isListView ? (
+        <RankingListView state={state} />
+      ) : isPillView ? (
+        <RankingPillView state={state} />
+      ) : isExploreView ? (
+        <RankingExploreView state={state} />
+      ) : (
+        <RankingBlockBody state={state} presentation="embedded" />
+      )}
     </div>
   );
 }

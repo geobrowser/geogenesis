@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
+  authenticated: true,
+  gatewayPaused: false,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -24,15 +26,19 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useDebatePresenceHeartbeat: vi.fn(),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
   useDebateActivity: () => ({ data: mocks.activity }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts } }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
 }));
 
+vi.mock('./debate-gateway', () => ({
+  useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => true,
+  useDebatesEnabled: () => true,
 }));
 
 vi.mock('./match-prompt', () => ({
@@ -49,6 +55,8 @@ beforeEach(() => {
   mocks.activity = null;
   mocks.pathname = '/space/space-1/debates';
   mocks.prompts = [];
+  mocks.authenticated = true;
+  mocks.gatewayPaused = false;
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: mocks.clipboardWrite },
@@ -67,6 +75,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebateCoordinator', () => {
+  it('shows a non-blocking warning while live updates are paused and clears it on recovery', () => {
+    mocks.gatewayPaused = true;
+    const { rerender } = render(<DebateCoordinator />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Live debate updates are paused while reconnecting.');
+
+    mocks.gatewayPaused = false;
+    rerender(<DebateCoordinator />);
+    expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
+  });
+
   it('routes an available participant into a shared rematch browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 

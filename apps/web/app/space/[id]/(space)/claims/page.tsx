@@ -2,6 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+
 import { ClaimsPageClient } from './claims-page-client';
 
 interface Props {
@@ -15,5 +17,9 @@ export default async function ClaimsPage(props: Props) {
     notFound();
   }
 
-  return <ClaimsPageClient spaceId={params.id} />;
+  return (
+    <EntityPageContentContainer>
+      <ClaimsPageClient spaceId={params.id} />
+    </EntityPageContentContainer>
+  );
 }

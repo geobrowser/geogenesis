@@ -107,7 +107,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !rankingFullscreenActive} />
         <SearchDialog open={open} onDone={() => setOpen(false)} />
-        <div className="min-w-0 flex-1 xl:px-[2ch]">
+        <div className="min-w-0 flex-1 2xl:px-[2ch]">
           <Main>{children}</Main>
         </div>
       </div>

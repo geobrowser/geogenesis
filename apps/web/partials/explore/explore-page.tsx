@@ -38,6 +38,7 @@ export function ExplorePage({
           apiEndpoint="/api/explore/feed"
           initialSpaceOptions={initialSpaceOptions}
           initialTime="month"
+          initialSort="top"
           showSortFilter
           dividerBeforeFeed
           feedTopSpacingClassName=""

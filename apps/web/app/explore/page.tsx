@@ -27,10 +27,12 @@ export default async function ExploreRoutePage() {
 
   // Fire every fetch in parallel. Each branch handles its own failure so one
   // degraded indexer call doesn't drop the whole page.
-  const browsePromise = fetchBrowseSidebarData(memberSpaceId).catch(() =>
-    fetchBrowseSidebarData(null).catch(() => null)
-  );
   const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+  // Reuse the same in-flight Root-topic traversal for the Browse Featured-spaces
+  // section and the Explore Join-spaces panel.
+  const browsePromise = fetchBrowseSidebarData(memberSpaceId, featuredSpacesPromise).catch(() =>
+    fetchBrowseSidebarData(null, featuredSpacesPromise).catch(() => null)
+  );
   const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
   const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
   const governancePromise = memberSpaceId

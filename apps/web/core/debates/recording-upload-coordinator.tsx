@@ -4,20 +4,26 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
+import { Check } from '~/design-system/icons/check';
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { Text } from '~/design-system/text';
 
 import {
+  GeoChatRequestError,
   type GetPrivyIdentityToken,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type LocalRecordingUploadResponse,
+  cancelDebateRecording,
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
   resolveCurrentGeoChatUserId,
 } from './api';
-import { debateQueryKeys, useGeoChatAuth } from './hooks';
+import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
   type DebateRecordingUpload,
   deleteDebateRecordingUpload,
@@ -29,6 +35,8 @@ import {
 
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
+
+type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
 type RecordingUploadDependencies = {
   createUpload: (debateId: string, request: LocalRecordingUploadRequest) => Promise<LocalRecordingUploadResponse>;
@@ -42,11 +50,13 @@ export async function processDebateRecordingUpload(
   upload: DebateRecordingUpload,
   dependencies: RecordingUploadDependencies
 ) {
+  const startedAtMs = Math.round(upload.startedAtMs);
+  const endedAtMs = Math.round(upload.endedAtMs);
   let filename = upload.filename;
   if (upload.stage === 'queued' || !filename) {
     const target = await dependencies.createUpload(upload.debateId, {
       mime_type: upload.mimeType,
-      started_at_ms: upload.startedAtMs,
+      started_at_ms: startedAtMs,
     });
     await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
     filename = target.filename;
@@ -56,8 +66,8 @@ export async function processDebateRecordingUpload(
   await dependencies.completeUpload(upload.debateId, {
     filename,
     mime_type: upload.mimeType,
-    started_at_ms: upload.startedAtMs,
-    ended_at_ms: upload.endedAtMs,
+    started_at_ms: startedAtMs,
+    ended_at_ms: endedAtMs,
     duration_seconds: upload.durationSeconds,
     byte_size: upload.byteSize,
     width: upload.width,
@@ -74,17 +84,20 @@ export function recordingUploadRetryDelay(attemptCount: number) {
 
 export function DebateRecordingUploadCoordinator() {
   const queryClient = useQueryClient();
-  const { ready, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [uploads, setUploads] = React.useState<DebateRecordingUpload[]>([]);
   const [activeUploadId, setActiveUploadId] = React.useState<string | null>(null);
   const [online, setOnline] = React.useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [wakeAt, setWakeAt] = React.useState(() => Date.now());
   const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
-  const [toastDismissed, setToastDismissed] = React.useState(false);
+  const [cancelPromptOpen, setCancelPromptOpen] = React.useState(false);
+  const [cancelBusy, setCancelBusy] = React.useState(false);
+  const [cancelError, setCancelError] = React.useState<string | null>(null);
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
+  const identityAttemptsRef = React.useRef(0);
 
   React.useEffect(() => {
     mountedRef.current = true;
@@ -95,6 +108,9 @@ export function DebateRecordingUploadCoordinator() {
 
   React.useEffect(() => {
     if (!ready || !authenticated) {
+      // Signing back in starts a new identity resolution, so it shouldn't inherit the
+      // backoff the previous session had built up.
+      identityAttemptsRef.current = 0;
       setUserId(null);
       setUploads([]);
       return;
@@ -103,22 +119,28 @@ export function DebateRecordingUploadCoordinator() {
     setUploads([]);
     let cancelled = false;
     let retryTimer: number | null = null;
-    void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
+    void resolveCurrentGeoChatUserId(getPrivyIdentityToken, accountKey)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
-        if (!cancelled) setUserId(id);
+        if (!cancelled) {
+          identityAttemptsRef.current = 0;
+          setUserId(id);
+        }
       })
       .catch(error => {
         console.warn('[DebateRecordingUploadCoordinator] could not resolve user:', error);
         if (!cancelled) {
-          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), initialRetryDelayMs);
+          // A flat retry interval keeps Privy's token endpoint rate-limited, so it never recovers.
+          const delay = recordingUploadRetryDelay(identityAttemptsRef.current);
+          identityAttemptsRef.current += 1;
+          retryTimer = window.setTimeout(() => setIdentityRetrySignal(current => current + 1), delay);
         }
       });
     return () => {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
+  }, [accountKey, authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -171,11 +193,22 @@ export function DebateRecordingUploadCoordinator() {
 
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
-    const dependencies = recordingUploadDependencies(getPrivyIdentityToken);
+    const dependencies = recordingUploadDependencies(getPrivyIdentityToken, accountKey);
+    let attemptStage = upload.stage;
+    let attemptCount = upload.attemptCount;
     void withRecordingUploadLock(async () => {
       const latestUpload = await getDebateRecordingUpload(upload.id);
       if (!latestUpload || latestUpload.userId !== userId) return;
-      await processDebateRecordingUpload(latestUpload, dependencies);
+      attemptStage = latestUpload.stage;
+      attemptCount = latestUpload.attemptCount;
+      await processDebateRecordingUpload(latestUpload, {
+        ...dependencies,
+        markUploaded: async (id, filename) => {
+          await dependencies.markUploaded(id, filename);
+          attemptStage = 'uploaded';
+          attemptCount = 0;
+        },
+      });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(upload.debateId) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(upload.debateId) });
     })
@@ -186,7 +219,25 @@ export function DebateRecordingUploadCoordinator() {
         }
       })
       .catch(async error => {
+        // The opponent cancelled the upload, so this recording can never be published;
+        // drop the local blob instead of retrying it forever.
+        if (error instanceof GeoChatRequestError && error.code === 'recording_cancelled') {
+          try {
+            await deleteDebateRecordingUpload(upload.id);
+          } catch (queueError) {
+            console.warn('[DebateRecordingUploadCoordinator] could not delete cancelled upload:', queueError);
+          }
+          return;
+        }
         const nextAttemptAt = Date.now() + recordingUploadRetryDelay(upload.attemptCount);
+        console.warn('[DebateRecordingUploadCoordinator] upload attempt failed:', {
+          uploadId: upload.id,
+          debateId: upload.debateId,
+          stage: attemptStage,
+          attemptCount: attemptCount + 1,
+          nextAttemptAt,
+          error,
+        });
         try {
           await scheduleDebateRecordingRetry(upload.id, error, nextAttemptAt);
         } catch (queueError) {
@@ -200,52 +251,217 @@ export function DebateRecordingUploadCoordinator() {
           setWakeAt(Date.now());
         }
       });
-  }, [activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
+  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
 
   const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
-  if (uploads.length === 0 || toastDismissed) return null;
+  const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+    if (!upload.lastError) return latest;
+    return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
+  }, null);
+  let waitingReason: DebateRecordingUploadWaitingReason = null;
+  if (!online) {
+    waitingReason = 'offline';
+  } else if (waiting) {
+    waitingReason = latestFailedUpload ? 'retry' : 'waiting';
+  }
+
+  // Only poll debate activity while a banner might show, and hide it while the user is in a
+  // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
+  const { data: activity } = useDebateActivity(uploads.length > 0);
+  const inLiveDebate = Boolean(
+    activity?.debate && ['connecting', 'preflight', 'in_progress'].includes(activity.debate.status)
+  );
+
+  const closeCancelPrompt = React.useCallback(() => {
+    if (cancelBusy) return;
+    setCancelPromptOpen(false);
+    setCancelError(null);
+  }, [cancelBusy]);
+
+  const confirmCancel = React.useCallback(async () => {
+    setCancelBusy(true);
+    setCancelError(null);
+    try {
+      const debateIds = [...new Set(uploads.map(upload => upload.debateId))];
+      for (const debateId of debateIds) {
+        try {
+          await cancelDebateRecording(debateId, getPrivyIdentityToken, accountKey);
+        } catch (error) {
+          // Already cancelled or gone on the backend — still drop the local blob below.
+          const terminal =
+            error instanceof GeoChatRequestError && (error.code === 'recording_cancelled' || error.status === 404);
+          if (!terminal) throw error;
+        }
+      }
+      await Promise.all(uploads.map(upload => deleteDebateRecordingUpload(upload.id)));
+      if (mountedRef.current) setCancelPromptOpen(false);
+    } catch (error) {
+      if (mountedRef.current) setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
+    } finally {
+      if (mountedRef.current) setCancelBusy(false);
+    }
+  }, [accountKey, getPrivyIdentityToken, uploads]);
+
+  // If the upload finishes while the prompt is open, there is nothing left to delete, so the
+  // user can no longer choose to cancel — close it automatically.
+  React.useEffect(() => {
+    if (uploads.length === 0 && cancelPromptOpen) setCancelPromptOpen(false);
+  }, [cancelPromptOpen, uploads.length]);
+
+  if (uploads.length === 0 || inLiveDebate) return null;
 
   return (
-    <DebateRecordingUploadPill count={uploads.length} waiting={waiting} onDismiss={() => setToastDismissed(true)} />
+    <>
+      <DebateRecordingUploadBanner
+        count={uploads.length}
+        waitingReason={waitingReason}
+        errorMessage={latestFailedUpload?.lastError ?? null}
+        publishChecked={!cancelPromptOpen}
+        onUncheckPublish={() => setCancelPromptOpen(true)}
+      />
+      {cancelPromptOpen && (
+        <DebateCancelUploadDialog
+          busy={cancelBusy}
+          error={cancelError}
+          onConfirm={confirmCancel}
+          onClose={closeCancelPrompt}
+        />
+      )}
+    </>
   );
 }
 
-export function DebateRecordingUploadPill({
+export function DebateRecordingUploadBanner({
   count,
-  waiting,
-  onDismiss,
+  waitingReason,
+  errorMessage,
+  publishChecked,
+  onUncheckPublish,
 }: {
   count: number;
-  waiting: boolean;
-  onDismiss: () => void;
+  waitingReason: DebateRecordingUploadWaitingReason;
+  errorMessage: string | null;
+  publishChecked: boolean;
+  onUncheckPublish: () => void;
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
+  let message = `Uploading ${label}`;
+  if (waitingReason === 'offline') {
+    message = `Waiting to upload ${label} — waiting for a connection`;
+  } else if (waitingReason === 'retry' && errorMessage) {
+    const failure = errorMessage.trim();
+    const punctuation = /[.!?]$/.test(failure) ? '' : '.';
+    message = `Waiting to upload ${label} — ${failure}${punctuation} Retrying automatically.`;
+  } else if (waitingReason) {
+    message = `Waiting to upload ${label}`;
+  }
+
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed bottom-16 left-1/2 inline-flex -translate-x-1/2 items-center gap-3 rounded-full border border-grey-02 bg-white py-2 pr-2 pl-3 text-sm font-medium whitespace-nowrap text-text shadow-card ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
     >
-      <span aria-hidden="true" className="size-5 animate-spin rounded-full border-2 border-grey-02 border-t-grey-04" />
-      <span>{waiting ? `Waiting to upload ${label}` : `Uploading ${label}`}</span>
+      <span className="min-w-0 truncate">{message}</span>
+      <span aria-hidden="true" className="shrink-0">
+        ·
+      </span>
       <button
         type="button"
-        aria-label="Hide recording upload status"
-        onClick={onDismiss}
-        className="grid size-7 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
+        role="checkbox"
+        aria-checked={publishChecked}
+        aria-label="Publish debate"
+        onClick={() => {
+          if (publishChecked) onUncheckPublish();
+        }}
+        className="inline-flex shrink-0 items-center gap-1.5 text-text"
       >
-        <CloseSmall />
+        Publish
+        <span
+          className={cx(
+            'grid size-4 place-items-center rounded border transition-colors',
+            publishChecked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white text-transparent'
+          )}
+        >
+          <Check />
+        </span>
       </button>
     </div>
   );
 }
 
-function recordingUploadDependencies(getPrivyIdentityToken: GetPrivyIdentityToken): RecordingUploadDependencies {
+export function DebateCancelUploadDialog({
+  busy,
+  error,
+  onConfirm,
+  onClose,
+}: {
+  busy: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className={`fixed inset-0 grid place-items-center bg-black/40 px-6 ${Z_LAYER_CLASS.toast}`}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Don't want to publish?"
+        className="w-full max-w-[360px] rounded-xl bg-white p-5 text-center text-text shadow-card"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <Text as="h2" variant="smallTitle" color="text" className="flex-1 text-center">
+            Don&apos;t want to publish?
+          </Text>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="grid size-6 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
+          >
+            <CloseSmall />
+          </button>
+        </div>
+        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+          This action permanently removes this debate video on behalf of you and your opponent.
+        </Text>
+        {error && (
+          <Text as="p" variant="metadata" color="red-01" className="mt-2">
+            {error}
+          </Text>
+        )}
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          className="mt-4 flex min-h-11 w-full items-center justify-center rounded-full bg-red-01 px-5 text-metadata text-white transition-colors hover:bg-red-01/90 disabled:opacity-50"
+        >
+          {busy ? 'Removing...' : 'Delete debate forever'}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          className="mt-2 min-h-11 w-full rounded-full px-5 text-metadata text-text hover:bg-grey-01 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function recordingUploadDependencies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+): RecordingUploadDependencies {
   return {
-    createUpload: (debateId, request) => createLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    createUpload: (debateId, request) =>
+      createLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     putRecording: putRecording,
     markUploaded: markDebateRecordingUploaded,
-    completeUpload: (debateId, request) => completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    completeUpload: (debateId, request) =>
+      completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
   };
 }
