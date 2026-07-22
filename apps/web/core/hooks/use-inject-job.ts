@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import type { InjectPollResponse, SerializedOp } from '~/core/chat/inject-types';
+import type { InjectEnrichInfo, InjectPollResponse, SerializedOp } from '~/core/chat/inject-types';
 
 const POLL_INTERVAL_MS = 6_000;
 // Real news-story-single runs against the inject worker complete in ~170s
@@ -27,6 +27,7 @@ export type InjectJobState = {
   status: InjectJobStatus;
   name: string | null;
   ops: SerializedOp[] | null;
+  enrich: InjectEnrichInfo | null;
   error: string | null;
 };
 
@@ -34,6 +35,7 @@ const INITIAL_STATE: InjectJobState = {
   status: 'idle',
   name: null,
   ops: null,
+  enrich: null,
   error: null,
 };
 
@@ -60,6 +62,7 @@ export function useInjectJob(opts: { jobId: string | null; enabled: boolean }): 
       status: 'pending',
       name: null,
       ops: null,
+      enrich: null,
       error: null,
     });
 
@@ -118,12 +121,12 @@ export function useInjectJob(opts: { jobId: string | null; enabled: boolean }): 
 
       if (body.status === 'completed') {
         stopPolling();
-        setState({ status: 'completed', name: body.name, ops: body.ops, error: null });
+        setState({ status: 'completed', name: body.name, ops: body.ops, enrich: body.enrich ?? null, error: null });
         return;
       }
       if (body.status === 'failed') {
         stopPolling();
-        setState({ status: 'failed', name: null, ops: null, error: body.error ?? 'Inject job failed.' });
+        setState({ status: 'failed', name: null, ops: null, enrich: null, error: body.error ?? 'Inject job failed.' });
         return;
       }
       // Still pending — no state update; the inline progress UI animates on its
