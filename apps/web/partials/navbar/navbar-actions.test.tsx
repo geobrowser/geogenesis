@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     rematch: null,
   },
   profile: {
-    name: 'Nate',
+    name: 'Max',
     avatarUrl: 'ipfs://avatar',
   } as { name: string | null; avatarUrl: string | null } | null,
   personalSpaceId: 'personal-space' as string | null,
@@ -145,7 +145,7 @@ describe('NavbarActions debate availability menu', () => {
       debate: null,
       rematch: null,
     };
-    mocks.profile = { name: 'Nate', avatarUrl: 'ipfs://avatar' };
+    mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
@@ -177,7 +177,7 @@ describe('NavbarActions debate availability menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     expect(screen.getByTestId('profile-menu')).toHaveClass('sm:w-[322px]');
-    expect(screen.getByRole('link', { name: /Nate max@example\.com/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Max max@example\.com/ })).toHaveAttribute(
       'href',
       '/space/personal-space'
     );
