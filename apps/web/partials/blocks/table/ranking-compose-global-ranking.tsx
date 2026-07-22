@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { flushSync } from 'react-dom';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
@@ -97,11 +98,10 @@ function useMembershipRecheckSentinel({
   return setSentinelEl;
 }
 
-function RankingComposeUnrankedDivider() {
+function RankingComposeSectionDivider({ label }: { label: string }) {
   return (
-    <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
-      <div className="h-px flex-1 bg-grey-02" aria-hidden />
-      <span className="shrink-0 text-[17px] font-[600] text-text">Unranked</span>
+    <div className="my-6 flex items-center gap-3" role="separator" aria-label={label}>
+      <span className="shrink-0 text-[11px] leading-[13px] font-normal text-grey-04">{label}</span>
       <div className="h-px flex-1 bg-grey-02" aria-hidden />
     </div>
   );
@@ -522,6 +522,25 @@ export function RankingComposeGlobalRanking({
     return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
   }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
 
+  const hasExactNameMatch = React.useMemo(() => {
+    if (!isSearchActive) return false;
+    const extraNames = [...filteredRankedIds, ...filteredUnrankedIds, ...pendingPickIds].map(
+      id => rankableEntriesById.get(id)?.name ?? searchResultsById.get(id)?.name
+    );
+    return rankingSearchHasExactNameMatch(searchQuery, [...searchResultsById.values()], extraNames);
+  }, [
+    filteredRankedIds,
+    filteredUnrankedIds,
+    isSearchActive,
+    pendingPickIds,
+    rankableEntriesById,
+    searchQuery,
+    searchResultsById,
+  ]);
+
+  const showCreateNewPrompt =
+    canCreateNew && isSearchActive && !hasExactNameMatch && (isSearchSettled || isDebouncingAfterEmptySearch);
+
   const pendingDisclosure = (
     <RankingComposePendingDisclosure count={pendingPickIds.length}>
       {pendingPickIds.map(id => renderPickEntity(id))}
@@ -530,14 +549,13 @@ export function RankingComposeGlobalRanking({
 
   const searchResultList = (
     <>
+      {showCreateNewPrompt ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+      {filteredRankedIds.length > 0 ? <RankingComposeSectionDivider label="Other ranked results" /> : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
+      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Other unranked results" /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
-      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
-        <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
-      ) : null}
       {pendingDisclosure}
       {membershipSentinel}
     </>
@@ -545,8 +563,9 @@ export function RankingComposeGlobalRanking({
 
   const browseResultList = (
     <>
+      {filteredRankedIds.length > 0 ? <RankingComposeSectionDivider label="Other ranked results" /> : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
+      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Other unranked results" /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
@@ -641,7 +660,7 @@ export function RankingComposeGlobalRanking({
               <>
                 {pendingDisclosure}
                 <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                  {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                  {showCreateNewPrompt ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
                 </RankingComposeSearchListPlaceholder>
               </>
             ) : (

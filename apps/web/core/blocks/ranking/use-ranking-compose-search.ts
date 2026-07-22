@@ -102,8 +102,10 @@ export function useRankingComposeSearch({
     return rows;
   }, [searchPages, filterByTypes]);
 
-  const isLoading = hasTypedQuery && (isQuerySyncing || (shouldSearch && (isFetching || isPending)));
-  const isSettled = shouldSearch && !isQuerySyncing && !isFetching && !isPending;
+  //"loading" / "settled" as the initial response for the current query.
+  const isFetchingInitial = isPending || (isFetching && !isFetchingNextPage);
+  const isLoading = hasTypedQuery && (isQuerySyncing || (shouldSearch && isFetchingInitial));
+  const isSettled = shouldSearch && !isQuerySyncing && !isFetchingInitial;
 
   const [lastSettledHadNoResults, setLastSettledHadNoResults] = React.useState(false);
 
