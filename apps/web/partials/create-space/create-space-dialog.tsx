@@ -579,7 +579,7 @@ function StepConfigureGovernance() {
 
   return (
     <StepContents childKey="configure-governance">
-      <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-24">
+      <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-28">
         <Text variant="footnote" color="grey-04">
           Defaults are sensible for most spaces. See the governance page later for what each setting does.
         </Text>
@@ -593,7 +593,10 @@ function StepConfigureGovernance() {
           </div>
         ))}
       </div>
-      <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
+      {/* Sticky footer over the scrollable content — solid white so scrolling settings
+          don't show through, with a short gradient fade above so content doesn't hit the
+          buttons abruptly. */}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-stretch gap-2 bg-white px-4 pt-4 pb-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-6 before:h-6 before:bg-gradient-to-t before:from-white before:to-transparent before:content-['']">
         <Button disabled={!canSave} onClick={handleSave} className="w-full">
           Save settings
         </Button>
