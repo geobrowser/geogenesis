@@ -71,6 +71,7 @@ export type DebateRecording = {
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 export type DebateMediaArtifactKind =
   | 'final_video'
+  | 'final_video_hevc'
   | 'preview_image'
   | 'transcript_json'
   | 'subtitle_srt'
