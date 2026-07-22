@@ -9,9 +9,7 @@ import { encodePathSegment } from '../rest';
 import { AbortError } from './errors';
 
 export type ProposalDiffResult =
-  | { status: 'success'; entities: EntityDiff[] }
-  | { status: 'not_cached' }
-  | { status: 'encoding_error' };
+  { status: 'success'; entities: EntityDiff[] } | { status: 'not_cached' } | { status: 'encoding_error' };
 
 export async function fetchProposalDiffs(proposalId: string, spaceId: string): Promise<ProposalDiffResult> {
   const config = Environment.getConfig();

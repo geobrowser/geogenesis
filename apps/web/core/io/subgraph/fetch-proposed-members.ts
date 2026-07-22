@@ -2,24 +2,32 @@ import { Effect, Either, Schema } from 'effect';
 
 import { Environment } from '~/core/environment';
 
-import { encodePathSegment, restFetch } from '../rest';
+import { ApiProposalListResponseSchema, encodePathSegment, restFetch } from '../rest';
 import { AbortError } from './errors';
 
-const ActiveProposalResponseSchema = Schema.Struct({
-  active: Schema.Boolean,
-});
+/** Compare space ids regardless of dashes / 0x prefix / case. */
+const normalizeId = (id: string) => id.replace(/-/g, '').replace(/^0x/i, '').toLowerCase();
+
+export type ActiveMemberRequest = {
+  proposalId: string;
+  /** False while the vote is still open; true once the period elapsed (passed but not yet executed, or dead). */
+  isVotingEnded: boolean;
+};
 
 /**
- * Check whether a specific member has an active (PROPOSED or EXECUTABLE)
- * ADD_MEMBER proposal in the given space.
- *
- * Uses the targeted REST endpoint which runs a single SELECT EXISTS query
- * server-side, avoiding the need to fetch all proposals and filter client-side.
+ * Mirrors {@link fetchActiveEditorRequest} for ADD_MEMBER — returns the active
+ * request with `isVotingEnded` so the re-request flow can tell "under vote" from
+ * "stuck / dead".
  */
-export async function hasActiveMemberProposal(spaceId: string, memberSpaceId: string): Promise<boolean> {
+export async function fetchActiveMemberRequest(
+  spaceId: string,
+  memberSpaceId: string
+): Promise<ActiveMemberRequest | null> {
   const config = Environment.getConfig();
 
-  const path = `/proposals/space/${encodePathSegment(spaceId)}/members/${encodePathSegment(memberSpaceId)}/active`;
+  // One page (default limit) is plenty — a space has a handful of member
+  // requests, not hundreds. Bump to cursor paging only if that changes.
+  const path = `/proposals/space/${encodePathSegment(spaceId)}/status?actionTypes=AddMember`;
 
   const result = await Effect.runPromise(
     Effect.either(
@@ -32,24 +40,26 @@ export async function hasActiveMemberProposal(spaceId: string, memberSpaceId: st
 
   if (Either.isLeft(result)) {
     const error = result.left;
-
-    if (error instanceof AbortError) {
-      throw error;
-    }
-
-    console.error(`Failed to check active member proposal for space ${spaceId}, member ${memberSpaceId}:`, error);
-    return false;
+    if (error instanceof AbortError) throw error;
+    console.error(`Failed to fetch member requests for space ${spaceId}, member ${memberSpaceId}:`, error);
+    return null;
   }
 
-  const decoded = Schema.decodeUnknownEither(ActiveProposalResponseSchema)(result.right);
-
+  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
   if (Either.isLeft(decoded)) {
-    console.error(
-      `Failed to decode active member proposal response for space ${spaceId}, member ${memberSpaceId}:`,
-      decoded.left
-    );
-    return false;
+    console.error(`Failed to decode member requests for space ${spaceId}, member ${memberSpaceId}:`, decoded.left);
+    return null;
   }
 
-  return decoded.right.active;
+  const target = normalizeId(memberSpaceId);
+
+  const mine = decoded.right.proposals
+    .filter(p => p.status === 'PROPOSED' || p.status === 'EXECUTABLE')
+    .filter(p => p.actions.some(a => a.actionType === 'ADD_MEMBER' && a.targetId && normalizeId(a.targetId) === target))
+    .sort((a, b) => b.timing.endTime - a.timing.endTime);
+
+  const latest = mine[0];
+  if (!latest) return null;
+
+  return { proposalId: latest.proposalId, isVotingEnded: latest.timing.isVotingEnded };
 }

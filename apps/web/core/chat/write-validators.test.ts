@@ -556,7 +556,7 @@ describe('planWriteTool: setEntityImage', () => {
       id: PROPERTY,
       name: 'Director',
       dataType: 'RELATION',
-      renderableTypeStrict: 'RELATION',
+      renderableTypeStrict: 'PLACE',
     });
     findOne.mockResolvedValueOnce(makeEntity());
     const out = await planWriteTool(
@@ -1119,5 +1119,42 @@ describe('planWriteTool: toggleEditMode', () => {
   it('emits a toggleEditMode intent', async () => {
     const out = await planWriteTool('toggleEditMode', { mode: 'edit' }, ctx);
     expect(out).toEqual({ ok: true, intent: { kind: 'toggleEditMode', mode: 'edit' } });
+  });
+});
+
+describe('planWriteTool: setDataBlockView', () => {
+  // Parent entity that actually holds BLOCK via a BLOCKS relation, so
+  // resolveBlocksEdge passes and we exercise the view validation, not the edge.
+  function mockBlockEdge() {
+    const parent = makeEntity({
+      id: PARENT,
+      relations: [
+        makeRelation({
+          fromEntity: { id: PARENT, name: null },
+          toEntity: { id: BLOCK, name: null, value: BLOCK },
+          type: { id: SystemIds.BLOCKS, name: null },
+          spaceId: SPACE,
+        }),
+      ],
+    });
+    findOne.mockImplementation(async ({ id }) => (id === PARENT ? parent : makeEntity({ id: BLOCK })));
+  }
+
+  const call = (view: string) =>
+    planWriteTool('setDataBlockView', { blockId: BLOCK, parentEntityId: PARENT, spaceId: SPACE, view }, ctx);
+
+  it.each(['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE', 'PILL'])('accepts the %s view', async view => {
+    mockBlockEdge();
+    const out = await call(view);
+    expect(out).toEqual({
+      ok: true,
+      intent: { kind: 'setDataBlockView', blockId: BLOCK, parentEntityId: PARENT, spaceId: SPACE, view },
+    });
+  });
+
+  it('rejects a view outside the supported set', async () => {
+    mockBlockEdge();
+    const out = await call('NOT_A_VIEW');
+    expect(out).toMatchObject({ ok: false, error: 'invalid_input' });
   });
 });

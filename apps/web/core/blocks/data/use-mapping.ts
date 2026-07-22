@@ -103,7 +103,9 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
    */
-  return entities.map(entity => {
+  const safeEntities = entities.filter((entity): entity is Entity => Boolean(entity && entity.id));
+
+  return safeEntities.map(entity => {
     const { name, id, relations, description, values, spaces, nameTripleSpaces } = entity;
     const newSlots = slotIds.reduce(
       (acc, slotId) => {

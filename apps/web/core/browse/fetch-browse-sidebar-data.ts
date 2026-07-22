@@ -2,14 +2,17 @@ import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Environment } from '~/core/environment';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { AbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
-import { graphql } from '~/core/io/subgraph/graphql';
+import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import {
+  fetchPendingEditorshipSpaceIds,
+  fetchPendingMembershipSpaceIds,
+} from '~/core/io/subgraph/fetch-pending-membership-space-ids';
+import { normId } from '~/core/utils/norm-id';
 import { sortSpaceListByRankNameId } from '~/core/utils/space/browse-space-list-sort';
-
-import { FEATURED_BROWSE_SPACES } from './featured-spaces';
 
 export type BrowseSpaceRow = {
   id: string;
@@ -29,7 +32,23 @@ export type BrowseSidebarData = {
   personalSpaceId: string | null;
 };
 
-async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow>> {
+function toBrowseSpaceRow(space: FeaturedSpace): BrowseSpaceRow {
+  return {
+    id: space.spaceId,
+    name: space.name,
+    image: space.image === PLACEHOLDER_SPACE_IMAGE ? null : space.image,
+    unnamed: false,
+  };
+}
+
+function featuredFallbackMap(featuredSpaces: FeaturedSpace[]): Map<string, BrowseSpaceRow> {
+  return new Map(featuredSpaces.map(space => [normId(space.spaceId), toBrowseSpaceRow(space)]));
+}
+
+async function fetchSpaceRows(
+  ids: string[],
+  featuredFallbacks: Map<string, BrowseSpaceRow> = new Map()
+): Promise<Map<string, BrowseSpaceRow>> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (unique.length === 0) return new Map();
 
@@ -38,114 +57,54 @@ async function fetchSpaceRows(ids: string[]): Promise<Map<string, BrowseSpaceRow
 
   if (Either.isLeft(result)) {
     for (const id of unique) {
-      const featuredName = FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name;
-      map.set(id, {
-        id,
-        name: featuredName ?? id.slice(0, 8),
-        image: null,
-        unnamed: !featuredName,
-      });
+      const fallback = featuredFallbacks.get(normId(id));
+      map.set(id, fallback ? { ...fallback, id } : { id, name: id.slice(0, 8), image: null, unnamed: true });
     }
     return map;
   }
 
   for (const space of result.right) {
     const rawName = space.entity.name?.trim() ?? '';
-    const featuredFallback = FEATURED_BROWSE_SPACES.find(f => f.id === space.id)?.name;
+    const featuredFallback = featuredFallbacks.get(normId(space.id));
     const unnamed = rawName.length === 0 && !featuredFallback;
-    const name = rawName || featuredFallback || space.id.slice(0, 8);
+    const name = rawName || featuredFallback?.name || space.id.slice(0, 8);
+    const resolvedImage =
+      space.entity.image && space.entity.image !== PLACEHOLDER_SPACE_IMAGE
+        ? space.entity.image
+        : (featuredFallback?.image ?? null);
     map.set(space.id, {
       id: space.id,
       name,
       unnamed,
-      image: space.entity.image && space.entity.image !== PLACEHOLDER_SPACE_IMAGE ? space.entity.image : null,
+      image: resolvedImage,
     });
   }
 
   for (const id of unique) {
     if (!map.has(id)) {
-      const featuredName = FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name;
-      map.set(id, {
-        id,
-        name: featuredName ?? id.slice(0, 8),
-        image: null,
-        unnamed: !featuredName,
-      });
+      const fallback = featuredFallbacks.get(normId(id));
+      map.set(id, fallback ? { ...fallback, id } : { id, name: id.slice(0, 8), image: null, unnamed: true });
     }
   }
 
   return map;
 }
 
-type PendingSpaceIdsResult = {
-  pendingMember: { nodes: { spaceId: string }[] };
-  pendingEditor: { nodes: { spaceId: string }[] };
-};
-
-function pendingSpaceIdsQuery(memberSpaceId: string, nowSec: string): string {
-  return `query {
-    pendingMember: proposalsConnection(
-      first: 100
-      filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_MEMBER }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
-      }
-    ) {
-      nodes { spaceId }
-    }
-    pendingEditor: proposalsConnection(
-      first: 100
-      filter: {
-        executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSec}" }
-        proposalActionsConnection: {
-          some: {
-            actionType: { is: ADD_EDITOR }
-            targetId: { is: "${memberSpaceId}" }
-          }
-        }
-      }
-    ) {
-      nodes { spaceId }
-    }
-  }`;
-}
-
 async function fetchBrowseSidebarSources(memberSpaceId: string) {
-  const nowSec = String(Math.floor(Date.now() / 1000));
-
-  const [editorIds, memberSpaces, pendingResult] = await Promise.all([
+  const [editorIds, memberSpaces, pendingMemberIds, pendingEditorIds] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
     Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
-    Effect.runPromise(
-      Effect.either(
-        graphql<PendingSpaceIdsResult>({
-          endpoint: Environment.getConfig().api,
-          query: pendingSpaceIdsQuery(memberSpaceId, nowSec),
-        })
-      )
-    ),
+    fetchPendingMembershipSpaceIds(memberSpaceId).catch(() => [] as string[]),
+    fetchPendingEditorshipSpaceIds(memberSpaceId).catch(() => [] as string[]),
   ]);
-
-  const pendingMemberIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingMember?.nodes ?? []).map(n => n.spaceId)
-    : [];
-  const pendingEditorIds = Either.isRight(pendingResult)
-    ? (pendingResult.right.pendingEditor?.nodes ?? []).map(n => n.spaceId)
-    : [];
 
   return { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds };
 }
 
 async function buildBrowseSidebarDataFromSources(
   memberSpaceId: string,
-  { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds }: BrowseSidebarSources
+  { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds }: BrowseSidebarSources,
+  featuredSpaces: FeaturedSpace[]
 ): Promise<BrowseSidebarData> {
   const editorIdSet = new Set(editorIds);
   const pendingMemberIdSet = new Set(pendingMemberIds);
@@ -166,28 +125,15 @@ async function buildBrowseSidebarDataFromSources(
   }
   const memberOfIds = [...memberOfIdSet];
 
-  const excludedFromFeatured = new Set<string>([
-    ...editorIdSet,
-    ...memberOnlyIdSet,
-    ...pendingMemberIdSet,
-    ...pendingEditorIdSet,
-  ]);
-
-  const featuredIds = FEATURED_BROWSE_SPACES.map(f => f.id).filter(id => !excludedFromFeatured.has(id));
-
-  const allIds = [...new Set([...featuredIds, ...editorOfIds, ...memberOfIds, DOCUMENTATION_SPACE_ID])];
-  const rows = await fetchSpaceRows(allIds);
-
-  const featured: BrowseSpaceRow[] = sortSpaceListByRankNameId(
-    featuredIds.map(id => {
-      const base = rows.get(id)!;
-      return {
-        ...base,
-        name: FEATURED_BROWSE_SPACES.find(f => f.id === id)?.name ?? base.name,
-        unnamed: false,
-      };
-    })
+  const excludedFromFeatured = new Set(
+    [memberSpaceId, ...editorIdSet, ...memberOnlyIdSet, ...pendingMemberIdSet, ...pendingEditorIdSet].map(normId)
   );
+  const featured = featuredSpaces
+    .filter(space => !excludedFromFeatured.has(normId(space.spaceId)))
+    .map(toBrowseSpaceRow);
+
+  const allIds = [...new Set([...editorOfIds, ...memberOfIds, DOCUMENTATION_SPACE_ID])];
+  const rows = await fetchSpaceRows(allIds, featuredFallbackMap(featuredSpaces));
 
   const editorOf: BrowseSpaceRow[] = sortSpaceListByRankNameId(
     editorOfIds.map(id => {
@@ -223,32 +169,58 @@ type BrowseSidebarSources = {
   pendingEditorIds: string[];
 };
 
-export async function fetchBrowseSidebarData(memberSpaceId: string | null | undefined): Promise<BrowseSidebarData> {
+type FeaturedSpacesSource = FeaturedSpace[] | PromiseLike<FeaturedSpace[]>;
+
+function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<FeaturedSpace[]> {
+  const promise = source ? Promise.resolve(source) : fetchFeaturedSpaces();
+  return promise.catch(error => {
+    // Cancellation must keep propagating so query consumers do not replace a
+    // cancelled request with a successful-but-empty sidebar response.
+    if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
+    console.error('Unable to load Featured spaces for the Browse sidebar', error);
+    return [];
+  });
+}
+
+/**
+ * The optional source lets pages that also render the Explore Join-spaces panel
+ * share its in-flight traversal rather than querying the Root topic tree twice.
+ */
+export async function fetchBrowseSidebarData(
+  memberSpaceId: string | null | undefined,
+  featuredSpacesSource?: FeaturedSpacesSource
+): Promise<BrowseSidebarData> {
+  const featuredSpacesPromise = resolveFeaturedSpaces(featuredSpacesSource);
+
   if (!memberSpaceId) {
-    const featuredOnly = await fetchSpaceRows([...FEATURED_BROWSE_SPACES.map(s => s.id), DOCUMENTATION_SPACE_ID]);
+    const [featuredSpaces, documentationRows] = await Promise.all([
+      featuredSpacesPromise,
+      fetchSpaceRows([DOCUMENTATION_SPACE_ID]),
+    ]);
     return {
-      featured: sortSpaceListByRankNameId(
-        FEATURED_BROWSE_SPACES.map(f => {
-          const row = featuredOnly.get(f.id);
-          const base = row ?? { id: f.id, name: f.name, image: null as string | null };
-          return { ...base, name: f.name, unnamed: false };
-        })
-      ),
+      featured: featuredSpaces.map(toBrowseSpaceRow),
       editorOf: [],
       memberOf: [],
-      documentationImage: featuredOnly.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
+      documentationImage: documentationRows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
       personalSpaceId: null,
     };
   }
 
-  const sources = await fetchBrowseSidebarSources(memberSpaceId);
-  return buildBrowseSidebarDataFromSources(memberSpaceId, sources);
+  const [sources, featuredSpaces] = await Promise.all([
+    fetchBrowseSidebarSources(memberSpaceId),
+    featuredSpacesPromise,
+  ]);
+  return buildBrowseSidebarDataFromSources(memberSpaceId, sources, featuredSpaces);
 }
 
 export async function fetchBrowseSidebarDataWithMemberSpaces(
-  memberSpaceId: string
+  memberSpaceId: string,
+  featuredSpacesSource?: FeaturedSpacesSource
 ): Promise<{ sidebar: BrowseSidebarData; memberSpaces: Space[] }> {
-  const sources = await fetchBrowseSidebarSources(memberSpaceId);
-  const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources);
+  const [sources, featuredSpaces] = await Promise.all([
+    fetchBrowseSidebarSources(memberSpaceId),
+    resolveFeaturedSpaces(featuredSpacesSource),
+  ]);
+  const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources, featuredSpaces);
   return { sidebar, memberSpaces: sources.memberSpaces };
 }

@@ -12,12 +12,10 @@ const isDev = process.env.NODE_ENV === 'development';
 const turbopackOptimizations =
   isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
     ? {
-        turbopackInferModuleSideEffects: false,
-        turbopackInputSourceMaps: false,
+        turbopackTreeShaking: false,
         turbopackRemoveUnusedExports: false,
         turbopackRemoveUnusedImports: false,
-        turbopackSourceMaps: false,
-        turbopackTreeShaking: false,
+        turbopackInferModuleSideEffects: false,
       }
     : {};
 
@@ -26,6 +24,7 @@ const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 const nextConfig: NextConfig = {
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
+  agentRules: false,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   turbopack: isDev
     ? {
@@ -37,6 +36,7 @@ const nextConfig: NextConfig = {
       }
     : undefined,
   experimental: {
+    turbopackRustReactCompiler: true,
     ...turbopackOptimizations,
     optimizePackageImports,
   },
@@ -103,8 +103,21 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    // Dev-only same-origin proxy for the geo-chat (debates) API. The prod/testnet chat
+    // API only allowlists geobrowser.io origins for CORS, so a local dev server on
+    // localhost:4360 can't call it directly. Set GEO_CHAT_PROXY_TARGET to the upstream
+    // (e.g. https://chat-api-testnet.geobrowser.io) and point NEXT_PUBLIC_GEO_CHAT_API_BASE_URL
+    // at /geo-chat-proxy so browser requests stay same-origin and Next forwards them
+    // server-side, sidestepping CORS. Gated to development so a stray GEO_CHAT_PROXY_TARGET
+    // in a prod env can't accidentally ship an origin-bypassing proxy route.
+    const geoChatProxyTarget = isDev ? process.env.GEO_CHAT_PROXY_TARGET?.replace(/\/+$/, '') : undefined;
+    const geoChatProxyRewrites = geoChatProxyTarget
+      ? [{ source: '/geo-chat-proxy/:path*', destination: `${geoChatProxyTarget}/:path*` }]
+      : [];
+
     return {
       beforeFiles: [
+        ...geoChatProxyRewrites,
         {
           source: '/',
           destination: 'https://geo.framer.website/',

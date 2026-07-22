@@ -1,22 +1,37 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
+import { produce } from 'immer';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
+import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
+import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
 import { RankingCardConfigProvider } from './ranking-card-config';
+import { RankingExploreView } from './ranking-explore-view';
+import { RankingGalleryView } from './ranking-gallery-view';
+import { RankingHeaderActions } from './ranking-header-actions';
+import { RankingListView } from './ranking-list-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
+import { RankingPillView } from './ranking-pill-view';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
+import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
+import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { useRankingBlockState } from './use-ranking-block-state';
 
@@ -28,15 +43,17 @@ type Props = {
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
-
   const isEditing = useUserIsEditing(spaceId);
   const {
     cardConfig,
     menuProps,
-    canEdit,
     filterState,
+    resolvedFilterState,
+    filterMode,
     setFilterState,
+    setFilterMode,
     source,
+    setSource,
     isFilterOpen,
     setIsFilterOpen,
     displayName,
@@ -49,15 +66,48 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     openRankingCompose,
     globalSharePath,
     ensureGlobalRankingOg,
+    stateView,
+    stateViewRelation,
   } = state;
 
+  const isGalleryView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
+  );
+  const isListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  );
+  const isPillView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
+  );
+  const isExploreView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
+    stateView === 'EXPLORE'
+  );
+
+  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
+
+  const showBrowseChrome = !showHeaderActions || isEditing;
+
+  const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
+
+  const filterGroupsForToolbarPills = React.useMemo(
+    () => groupFilters(resolvedFilterState).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
+    [resolvedFilterState]
+  );
+
   return (
-    <div className="w-full min-w-0 overflow-x-hidden" onMouseDown={e => e.stopPropagation()}>
-      <div className="mb-2 flex items-start justify-between gap-4" onMouseDown={e => e.stopPropagation()}>
+    <div
+      className={cx('w-full min-w-0', isGalleryView ? 'overflow-x-visible' : 'overflow-x-hidden')}
+      onMouseDown={e => e.stopPropagation()}
+    >
+      <div
+        className={cx('mb-2 flex justify-between gap-4', showHeaderActions ? 'items-center' : 'items-start')}
+        onMouseDown={e => e.stopPropagation()}
+      >
         <div className="min-w-0 flex-1">
           <h4 className="text-mediumTitle text-text">{displayName}</h4>
 
-          {periodLabel || hasRankedByOthers ? (
+          {!showHeaderActions && (periodLabel || hasRankedByOthers) ? (
             <RankingPeriodMetadata
               periodState={periodState}
               periodLabel={periodLabel}
@@ -72,48 +122,129 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         <div className="flex shrink-0 items-center gap-5">
           {isEditing ? <TableBlockPropertiesMenu {...menuProps} /> : null}
 
-          <IconButton
-            onClick={() => setIsFilterOpen(open => !open)}
-            icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
+          {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
 
-          <IconButton
-            onClick={() => void openRankingCompose('view')}
-            icon={<Fullscreen color="grey-04" />}
-            color="grey-04"
-            aria-label="Open fullscreen ranking"
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => setIsFilterOpen(open => !open)}
+              icon={filterState.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+              color="grey-04"
+            />
+          ) : null}
 
-          <TableBlockContextMenu
-            sourceType={source.type}
-            globalRankingSharePath={globalSharePath}
-            onPrepareGlobalShareLink={ensureGlobalRankingOg}
-          />
+          {showBrowseChrome ? (
+            <IconButton
+              onClick={() => void openRankingCompose('view')}
+              icon={<Fullscreen color="grey-04" />}
+              color="grey-04"
+              aria-label="Open fullscreen ranking"
+            />
+          ) : null}
+
+          <DataBlockViewMenu activeView={stateView} isLoading={false} isRankingBlock />
+
+          {showBrowseChrome ? (
+            <TableBlockContextMenu
+              sourceType={source.type}
+              globalRankingSharePath={globalSharePath}
+              onPrepareGlobalShareLink={ensureGlobalRankingOg}
+            />
+          ) : null}
         </div>
       </div>
 
-      {isFilterOpen && (
+      {showBrowseChrome && isFilterOpen && (
         <AnimatePresence>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cx('mb-4 overflow-hidden', canEdit ? 'border-t border-divider py-4' : 'py-2')}
+            className={cx('mb-4 overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
             onMouseDown={e => e.stopPropagation()}
           >
-            <TableBlockEditableFilters
-              filterState={filterState}
-              setFilterState={setFilterState}
-              filterSuggestionSpaceId={spaceId}
-              isEditing={canEdit}
-            />
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                {isEditing && (
+                  <>
+                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                    <TableBlockEditableFilters
+                      ref={filterPromptRef}
+                      filterState={filterState}
+                      setFilterState={setFilterState}
+                      filterSuggestionSpaceId={spaceId}
+                      isEditing={isEditing}
+                    />
+                  </>
+                )}
+                {!isEditing &&
+                  filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.columnId}
+                      group={group}
+                      mode={filterMode}
+                      onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+              </div>
+              {isEditing && filterGroupsForToolbarPills.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {filterGroupsForToolbarPills.map(group => (
+                    <TableBlockFilterGroupPill
+                      key={group.columnId}
+                      group={group}
+                      mode={filterMode}
+                      onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                      onDeleteValue={originalIndex => {
+                        setFilterState(
+                          produce(resolvedFilterState, draft => {
+                            draft.splice(originalIndex, 1);
+                          })
+                        );
+                      }}
+                      onClearGroup={() => {
+                        setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                      }}
+                      onAddSimilar={anchorEl => {
+                        requestAnimationFrame(() => {
+                          requestAnimationFrame(() => {
+                            filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                          });
+                        });
+                      }}
+                      isEditing={isEditing}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         </AnimatePresence>
       )}
 
       <RankingCardConfigProvider value={cardConfig}>
-        <RankingBlockBody state={state} presentation="embedded" />
+        {isGalleryView ? (
+          <RankingGalleryView state={state} />
+        ) : isListView ? (
+          <RankingListView state={state} />
+        ) : isPillView ? (
+          <RankingPillView state={state} />
+        ) : isExploreView ? (
+          <RankingExploreView state={state} />
+        ) : (
+          <RankingBlockBody state={state} presentation="embedded" />
+        )}
       </RankingCardConfigProvider>
     </div>
   );

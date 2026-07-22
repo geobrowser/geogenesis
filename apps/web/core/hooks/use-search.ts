@@ -13,6 +13,7 @@ import { mergeSearchResult } from '../database/result';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
+import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
 import { useDebouncedValue } from './use-debounced-value';
 import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
@@ -24,6 +25,28 @@ interface SearchOptions {
   restrictToFilterTypes?: boolean;
   enabled?: boolean;
   pageSize?: number;
+  /**
+   * Tri-state, not a plain boolean — `undefined` and `true` are different.
+   * Always threaded through to E.findFuzzyPage/getResultsPage, where it
+   * drives client-side canonical gating (shouldIncludeRestSearchResult) —
+   * that part applies regardless of `filterBySpace`. The additionalSpaceIds
+   * widening described below is the part that's specific to unscoped
+   * (global) searches: when `filterBySpace` is set, additionalSpaceIds is
+   * never applied, no matter what this value is.
+   * - `false`: restrict results to the canonical graph plus the scoped spaces
+   *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
+   *   additionalSpaceIds applied).
+   * - `undefined` (omitted): same eligibility restriction as `false` —
+   *   additionalSpaceIds is still applied. Callers with no opinion on
+   *   canonical-only should just omit this.
+   * - `true` (explicit): drop the canonical/scoped-spaces eligibility
+   *   restriction — additionalSpaceIds is NOT applied. Any other filters
+   *   the caller passes (filterBySpace, filterByTypes, etc.) still apply as
+   *   normal; this only lifts the canonical-graph-and-scoped-spaces gating,
+   *   not every constraint on the search. Only pass this when the caller
+   *   genuinely wants that specific restriction lifted.
+   */
+  includeNonCanonical?: boolean;
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -32,11 +55,11 @@ const EMPTY_PAGE_PUMP_LIMIT = 3;
 type SearchPage = {
   rows: SearchResult[];
   offset: number;
-  rawCount: number;
+  serverCount: number;
   total: number;
 };
 
-const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, rawCount: 0, total: 0 });
+const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, serverCount: 0, total: 0 });
 
 function normalizeTypeId(id: string): string {
   return id.replace(/-/g, '');
@@ -70,6 +93,7 @@ export function useSearch({
   restrictToFilterTypes,
   enabled,
   pageSize = DEFAULT_SEARCH_PAGE_SIZE,
+  includeNonCanonical,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -77,7 +101,11 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  const additionalSpaceIds = filterBySpace ? undefined : globalAdditionalSpaceIds;
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+    filterBySpace,
+    includeNonCanonical,
+    globalAdditionalSpaceIds,
+  });
 
   const maybeEntityId = debouncedQuery.trim();
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
@@ -106,6 +134,7 @@ export function useSearch({
       Boolean(restrictToFilterTypes),
       additionalSpaceIds,
       pageSize,
+      includeNonCanonical,
     ],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
@@ -123,7 +152,7 @@ export function useSearch({
           if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
-          return { rows: [merged], offset: pageParam, rawCount: 1, total: 1 };
+          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1 };
         }
 
         const page = await E.findFuzzyPage({
@@ -148,13 +177,14 @@ export function useSearch({
           skip: pageParam,
           signal,
           additionalSpaceIds,
+          includeNonCanonical,
         });
 
         const rows = !filterByTypes?.length
           ? page.results
           : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-        return { rows, offset: pageParam, rawCount: page.rawCount, total: page.total };
+        return { rows, offset: pageParam, serverCount: page.serverCount, total: page.total };
       } catch (error) {
         // Re-throw cancellations so React Query treats them as a cancel, not a
         // successful empty result. Returning `emptySearchPage` here would let RQ
@@ -198,7 +228,11 @@ export function useSearch({
       return;
     }
 
-    if (lastPage.rawCount < pageSize || isFetchingNextPage || emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT) {
+    if (
+      lastPage.serverCount < pageSize ||
+      isFetchingNextPage ||
+      emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT
+    ) {
       return;
     }
 

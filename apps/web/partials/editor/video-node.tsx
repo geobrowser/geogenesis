@@ -17,6 +17,7 @@ import { useEditorStore } from '~/core/state/editor/use-editor';
 import { storage } from '~/core/sync/use-mutate';
 import { useHydrateEntity, useRelations, useValues } from '~/core/sync/use-store';
 import { NavUtils, getVideoPath } from '~/core/utils/utils';
+import { saveVideoKeyframe } from '~/core/utils/video/save-keyframe';
 
 import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -241,6 +242,8 @@ function VideoNodeChildren({
           storage.entities.name.set(entityId, spaceId, fileName);
           setLocalName(fileName);
         }
+
+        saveVideoKeyframe(file, { fromEntityId: entityId, spaceId, link: storage.images.createAndLink });
       } else {
         // IPFS URL extraction failed - show error to user
         console.error('Failed to extract IPFS URL from upload response');

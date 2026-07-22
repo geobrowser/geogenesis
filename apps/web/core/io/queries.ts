@@ -15,6 +15,7 @@ import {
   type EntityFilter,
   type EntitySpacesBatchQuery,
   SortOrder,
+  UserHasEntityVoteDocument,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -265,6 +266,7 @@ type GetEntitiesOrderedByPropertyOptions = {
   propertyId: string;
   sortDirection: SortOrder;
   dataType?: string;
+  includeWithoutValue?: boolean;
   spaceId?: string;
   spaceIds?: string[];
   typeIds?: string[];
@@ -299,6 +301,7 @@ export function getEntitiesOrderedByPropertyConnection(
     propertyId,
     sortDirection,
     dataType,
+    includeWithoutValue,
     spaceId,
     spaceIds,
     typeIds,
@@ -337,6 +340,7 @@ export function getEntitiesOrderedByPropertyConnection(
       propertyId,
       sortDirection,
       dataType,
+      includeWithoutValue,
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
@@ -453,15 +457,13 @@ export function getEntityTiebreakerBatch(entityIds: string[], signal?: AbortCont
   return graphql({
     query: entityTiebreakerBatchQuery,
     decoder: data =>
-      (data.entities ?? []).map(
-        (e): EntityTiebreakerData => ({
-          id: e.id,
-          createdAt: e.createdAt,
-          backlinksCount: e.backlinks?.totalCount ?? 0,
-          relationsCount: e.relations?.totalCount ?? 0,
-          valuesCount: e.values?.totalCount ?? 0,
-        })
-      ),
+      (data.entities ?? []).map((e): EntityTiebreakerData => ({
+        id: e.id,
+        createdAt: e.createdAt,
+        backlinksCount: e.backlinks?.totalCount ?? 0,
+        relationsCount: e.relations?.totalCount ?? 0,
+        valuesCount: e.values?.totalCount ?? 0,
+      })),
     variables: { filter: { id: { in: entityIds } } },
     signal,
   });
@@ -729,6 +731,13 @@ interface ResultsArgs {
   limit?: number;
   offset?: number;
   additionalSpaceIds?: string[];
+  /**
+   * Pass `false` to restrict results to the canonical graph plus the user's
+   * scoped spaces (`additionalSpaceIds`). Gated client-side in `getResultsPage`
+   * via each result's `inCanonicalGraph` flag — not sent to the server, so
+   * scoped-space results are never stripped before they reach us.
+   */
+  includeNonCanonical?: boolean;
 }
 
 /**
@@ -879,6 +888,13 @@ export type SearchResultsPage = {
    * read as empty, not as a full page.
    */
   rawCount: number;
+  /**
+   * Raw row count in the REST response before any exclusion or canonical
+   * gating. This is the correct "did the server hand us a full page?" signal
+   * for empty-page pumping: a full server page that gates down to zero rows
+   * still means more pages may exist, so pagination must not stop on it.
+   */
+  serverCount: number;
 };
 
 export function buildSearchPath(args: ResultsArgs): string {
@@ -913,7 +929,11 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
       signal,
     }),
     (response): SearchResultsPage => {
-      const filtered = response.results.filter(shouldIncludeRestSearchResult);
+      const scopedSpaceIds = new Set((args.additionalSpaceIds ?? []).map(stripHyphens));
+      const canonicalOnly = args.includeNonCanonical === false;
+      const filtered = response.results.filter(result =>
+        shouldIncludeRestSearchResult(result, { canonicalOnly, scopedSpaceIds })
+      );
       return {
         results: groupRestResults(filtered),
         total: response.total,
@@ -921,6 +941,9 @@ export function getResultsPage(args: ResultsArgs, signal?: AbortController['sign
         // actually reach the UI, not rows filtered out as block/system
         // types at this layer.
         rawCount: filtered.length,
+        // Pre-filter server page length — drives empty-page pumping so a full
+        // page gated down to zero canonical rows still fetches the next page.
+        serverCount: response.results.length,
       };
     }
   );
@@ -1087,6 +1110,15 @@ export function getUserEntityVote(
   });
 }
 
+export function getUserHasEntityVote(userId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: UserHasEntityVoteDocument,
+    decoder: data => (data.userVotes?.length ?? 0) > 0,
+    variables: { userId },
+    signal,
+  });
+}
+
 export type EntityVoter = { userId: string; voteType: number };
 
 export function getEntityVoters(
@@ -1126,6 +1158,12 @@ export function hasDefaultSearchExcludedType(types: Array<{ id: string }>): bool
   return types.some(type => EXCLUDED_BLOCK_TYPE_IDS.has(stripHyphens(type.id)));
 }
 
-function shouldIncludeRestSearchResult(result: RestSearchResult): boolean {
-  return !hasDefaultSearchExcludedType(result.types ?? []);
+export function shouldIncludeRestSearchResult(
+  result: RestSearchResult,
+  canonicalGate?: { canonicalOnly: boolean; scopedSpaceIds: Set<string> }
+): boolean {
+  if (hasDefaultSearchExcludedType(result.types ?? [])) return false;
+  if (!canonicalGate?.canonicalOnly) return true;
+  // Canonical-only still surfaces the user's scoped spaces, not only the canonical graph.
+  return result.inCanonicalGraph === true || canonicalGate.scopedSpaceIds.has(stripHyphens(result.space.id));
 }

@@ -26,6 +26,7 @@ import {
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
@@ -121,20 +122,42 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
-  const periodLabel = React.useMemo(
+  const datePeriodLabel = React.useMemo(
     () => formatRankingPeriodLabel(periodState, startDate, endDate),
     [periodState, startDate, endDate]
   );
-  const submissionsOpen = rankingSubmissionsOpen(periodState);
 
   const {
     submissions,
     mySubmission,
+    hasMySubmission,
     saveMySubmission,
     isSaving,
     personalSpaceId,
     isLoading: isLoadingMySubmission,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
   } = useRankingSubmissions(entityId, spaceId, displayName);
+
+  // A rolling status label
+  const submissionsOpen = isRolling || rankingSubmissionsOpen(periodState);
+  const rollingLabel = React.useMemo(
+    () =>
+      isRolling
+        ? formatRollingSubmissionLabel({
+            hasSubmission: hasMySubmission || hasRolledOff,
+            isLive: isSubmissionLive,
+            submittedAtMs,
+            frequencyHours: submissionFrequencyHours,
+            now: Date.now(),
+          })
+        : null,
+    [isRolling, hasMySubmission, hasRolledOff, isSubmissionLive, submittedAtMs, submissionFrequencyHours]
+  );
+  const periodLabel = isRolling ? rollingLabel : datePeriodLabel;
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 

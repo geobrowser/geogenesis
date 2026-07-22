@@ -16,18 +16,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpace } from '~/core/hooks/use-space';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
+import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 export type RankingComposeAccessStatus =
-  | 'loading'
-  | 'needs-login'
-  | 'needs-onboarding'
-  | 'needs-membership'
-  | 'not-found'
-  | 'ready';
+  'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
 /** Dedupes automatic membership requests across compose screen + embedded block mounts. */
 const autoRequestedMemberships = new Set<string>();
@@ -102,8 +97,11 @@ export function useRankingComposeAccess(spaceId: string) {
       const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
       if (!autoRequestedMemberships.has(requestKey) && membershipRequestStatus !== 'pending') {
         autoRequestedMemberships.add(requestKey);
-        const alreadyPending = await hasActiveMemberProposal(spaceId, personalSpaceId).catch(() => false);
-        if (!alreadyPending) {
+        // Re-request if there's no live vote — a stuck (vote-ended) request must not
+        // block a fresh one, otherwise the user is wedged out of compose access.
+        const req = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
+        const hasLiveRequest = req != null && !req.isVotingEnded;
+        if (!hasLiveRequest) {
           requestToBeMember();
         }
       }

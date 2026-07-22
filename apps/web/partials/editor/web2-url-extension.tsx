@@ -1,24 +1,18 @@
-import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension, Mark } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, Transaction } from '@tiptap/pm/state';
 import { ReplaceAroundStep, ReplaceStep } from '@tiptap/pm/transform';
-import { ReactRenderer } from '@tiptap/react';
 
-import { detectWeb2URLsInMarkdown } from '~/core/utils/url-detection';
+import { detectWeb2URLsInMarkdown, isWeb2Url, normalizeWeb2Url } from '~/core/utils/url-detection';
 
-import { Web2LinkHoverCard } from './web2-link-tooltip';
+// Re-exported so existing importers (and tests) can keep importing from here.
+export { isWeb2Url, normalizeWeb2Url } from '~/core/utils/url-detection';
 
 // ============================================================================
 // Constants
 // ============================================================================
 
-const HOVER_SHOW_DELAY_MS = 100;
-const HOVER_HIDE_DELAY_MS = 150;
 const UPDATE_DEBOUNCE_MS = 150;
-const TOOLTIP_OFFSET = 8;
-const TOOLTIP_Z_INDEX = 9999;
-const WEB2_URL_PREFIX_REGEX = /^(https?:\/\/|www\.)/i;
 
 function getChangedRanges(tr: Transaction): { from: number; to: number }[] {
   const ranges: { from: number; to: number }[] = [];
@@ -38,15 +32,6 @@ function getChangedRanges(tr: Transaction): { from: number; to: number }[] {
     }
   }
   return merged;
-}
-
-export function isWeb2Url(url: string | null | undefined): url is string {
-  return !!url?.trim() && WEB2_URL_PREFIX_REGEX.test(url.trim());
-}
-
-export function normalizeWeb2Url(url: string): string {
-  const trimmedUrl = url.trim();
-  return /^https?:\/\//i.test(trimmedUrl) ? trimmedUrl : `https://${trimmedUrl}`;
 }
 
 export function isStandaloneWeb2Text(text: string, url: string): boolean {
@@ -122,35 +107,52 @@ export const Web2URLMark = Mark.create({
           url: (element as HTMLElement).getAttribute('data-url'),
         }),
       },
+      // View mode renders the mark as an <a data-web2-url>, so parse it back
+      // symmetrically (e.g. when rendered content is copied/pasted).
+      {
+        tag: 'a[data-web2-url]',
+        getAttrs: element => ({
+          url: (element as HTMLElement).getAttribute('data-url'),
+        }),
+      },
     ];
   },
 
   renderHTML({ HTMLAttributes, mark }) {
     const cleanHTMLAttributes = stripInternalWeb2HTMLAttributes(HTMLAttributes);
 
-    // Mode-aware rendering
-    if (mark.attrs.editMode) {
-      // EDIT MODE: Subtle styling for markdown
+    const url = typeof mark.attrs.url === 'string' ? mark.attrs.url.trim() : '';
+
+    // VIEW MODE with a valid URL: render as a clickable anchor.
+    // Guard on `url` so normalizeWeb2Url is never called with a null/empty url
+    // (e.g. a <span data-web2-url> parsed without a data-url attribute), which
+    // would throw during rendering.
+    if (!mark.attrs.editMode && url) {
       return [
-        'span',
+        'a',
         {
           ...cleanHTMLAttributes,
-          class: 'web2-url-edit-mode',
+          href: normalizeWeb2Url(url),
           'data-web2-url': 'true',
-          'data-url': mark.attrs.url,
-          style: 'color: #e57373; cursor: text;',
+          'data-url': url,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          style: 'color: #202020; text-decoration: underline; cursor: pointer;',
         },
         0,
       ];
     } else {
-      // VIEW MODE: Normal text
+      // EDIT MODE (or missing URL): render as a plain span to preserve markdown
+      // syntax visibility and avoid rendering a broken anchor.
       return [
         'span',
         {
           ...cleanHTMLAttributes,
-          // Keep data attributes for persistence and re-parsing
+          // Keep data attributes for persistence and re-parsing. Use the trimmed
+          // url and omit data-url entirely when empty so we never serialize a
+          // literal "null" or whitespace that would re-parse into a dirty value.
           'data-web2-url': 'true',
-          'data-url': mark.attrs.url,
+          ...(url ? { 'data-url': url } : {}),
           // Explicitly clear class and style to ensure normal text appearance
           class: '',
           style: 'color: inherit; text-decoration: none; background-color: transparent; cursor: inherit;',
@@ -165,7 +167,8 @@ export const Web2URLMark = Mark.create({
 // Web2 URL Extension
 // ============================================================================
 
-// Links aren't clickable in browse mode but still appear in text; add external links in the properties panel.
+// Detects external (web2) URLs in editor content and renders them as clickable
+// anchors in browse mode while keeping markdown syntax visible in edit mode.
 export const Web2URLExtension = Extension.create({
   name: 'web2URLHighlight',
 
@@ -179,241 +182,6 @@ export const Web2URLExtension = Extension.create({
     const { editor } = this;
 
     return [
-      // Plugin for hover card functionality using Floating UI
-      new Plugin({
-        key: new PluginKey('web2URLHoverCard'),
-        view(editorView) {
-          let component: ReactRenderer | null = null;
-          let popupElement: HTMLDivElement | null = null;
-          let currentHoveredSpan: Element | null = null;
-          let isDestroyed = false;
-          let showTimeout: ReturnType<typeof setTimeout> | null = null;
-          let hideTimeout: ReturnType<typeof setTimeout> | null = null;
-          let cleanupAutoUpdate: (() => void) | null = null;
-
-          const updatePosition = () => {
-            if (!popupElement || !currentHoveredSpan) return;
-
-            // strategy:'fixed' is required because the popup uses
-            // `position:fixed`. Without it, computePosition returns
-            // document-relative coordinates that cause the tooltip to drift
-            // during scroll.
-            computePosition(currentHoveredSpan, popupElement, {
-              placement: 'top',
-              strategy: 'fixed',
-              middleware: [offset(TOOLTIP_OFFSET), flip(), shift({ padding: 8 })],
-            }).then(({ x, y }) => {
-              if (popupElement) {
-                popupElement.style.left = `${x}px`;
-                popupElement.style.top = `${y}px`;
-              }
-            });
-          };
-
-          const showHoverCard = (element: Element) => {
-            if (isDestroyed || !editorView) return;
-
-            // Check if editor is in edit mode
-            if (!editor.isEditable) return;
-
-            // Clean up existing popup
-            if (cleanupAutoUpdate) {
-              cleanupAutoUpdate();
-              cleanupAutoUpdate = null;
-            }
-            if (popupElement) {
-              popupElement.remove();
-              popupElement = null;
-            }
-            if (component) {
-              component.destroy();
-              component = null;
-            }
-
-            try {
-              // Create popup container. top/left are initialised to 0 so the
-              // fixed element is placed at the origin before computePosition
-              // applies the final coordinates, preventing a flash at an
-              // arbitrary browser-default scroll position.
-              popupElement = document.createElement('div');
-              popupElement.style.position = 'fixed';
-              popupElement.style.top = '0';
-              popupElement.style.left = '0';
-              popupElement.style.zIndex = String(TOOLTIP_Z_INDEX);
-
-              popupElement.addEventListener('mouseleave', () => {
-                if (hideTimeout) {
-                  clearTimeout(hideTimeout);
-                }
-
-                hideTimeout = setTimeout(() => {
-                  const isStillHovering = currentHoveredSpan?.matches(':hover');
-                  const isTooltipHovered = popupElement?.matches(':hover');
-
-                  if (!isStillHovering && !isTooltipHovered) {
-                    hideHoverCard();
-                  }
-                  hideTimeout = null;
-                }, HOVER_HIDE_DELAY_MS);
-              });
-
-              document.body.appendChild(popupElement);
-
-              // Create ReactRenderer component
-              component = new ReactRenderer(Web2LinkHoverCard, {
-                props: {},
-                editor,
-              });
-
-              // Append the renderer element to our popup container
-              if (popupElement && component?.element) {
-                popupElement.appendChild(component.element);
-              }
-
-              // Position the popup
-              currentHoveredSpan = element;
-              updatePosition();
-
-              // Set up auto-update for position
-              cleanupAutoUpdate = autoUpdate(element, popupElement, updatePosition);
-            } catch (error) {
-              console.warn('Web2URLExtension hover card error:', error);
-            }
-          };
-
-          const hideHoverCard = () => {
-            if (cleanupAutoUpdate) {
-              cleanupAutoUpdate();
-              cleanupAutoUpdate = null;
-            }
-            if (popupElement) {
-              popupElement.remove();
-              popupElement = null;
-            }
-            if (component) {
-              component.destroy();
-              component = null;
-            }
-            currentHoveredSpan = null;
-          };
-
-          const clearTimeouts = () => {
-            if (showTimeout) {
-              clearTimeout(showTimeout);
-              showTimeout = null;
-            }
-            if (hideTimeout) {
-              clearTimeout(hideTimeout);
-              hideTimeout = null;
-            }
-          };
-
-          const handleMouseEnter = (event: Event) => {
-            // Disable hover card in View Mode - check dynamically
-            if (!editor.isEditable) return;
-
-            const target = event.target as Element;
-            const web2Span = target.closest('span[data-web2-url]');
-
-            if (web2Span) {
-              // Clear any pending hide timeout
-              if (hideTimeout) {
-                clearTimeout(hideTimeout);
-                hideTimeout = null;
-              }
-
-              // If this is a different span or we don't have a current span
-              if (web2Span !== currentHoveredSpan) {
-                // Clear any pending show timeout
-                if (showTimeout) {
-                  clearTimeout(showTimeout);
-                  showTimeout = null;
-                }
-
-                // Hide current card immediately if showing different element
-                if (currentHoveredSpan) {
-                  hideHoverCard();
-                }
-
-                // Debounce show to prevent flickering on rapid hover changes
-                showTimeout = setTimeout(() => {
-                  // Double-check the element is still hovered before showing
-                  if (web2Span.matches(':hover') && editor.isEditable) {
-                    showHoverCard(web2Span);
-                  }
-                  showTimeout = null;
-                }, HOVER_SHOW_DELAY_MS);
-              }
-            }
-          };
-
-          const handleMouseLeave = (event: Event) => {
-            const target = event.target as Element;
-            const web2Span = target.closest('span[data-web2-url]');
-
-            if (web2Span === currentHoveredSpan) {
-              // Clear any pending show timeout
-              if (showTimeout) {
-                clearTimeout(showTimeout);
-                showTimeout = null;
-              }
-
-              // Clear any existing hide timeout
-              if (hideTimeout) {
-                clearTimeout(hideTimeout);
-              }
-
-              // Add a grace period before hiding to allow mouse movement to tooltip
-              hideTimeout = setTimeout(() => {
-                // Check if mouse is over the span or the tooltip
-                const isStillHovering = web2Span?.matches(':hover');
-                const isTooltipHovered = popupElement?.matches(':hover');
-
-                if (!isStillHovering && !isTooltipHovered) {
-                  hideHoverCard();
-                }
-                hideTimeout = null;
-              }, HOVER_HIDE_DELAY_MS);
-            }
-          };
-
-          // Listen for editor editable state changes to hide tooltip in read mode
-          const handleEditableChange = () => {
-            if (!editor.isEditable && popupElement) {
-              hideHoverCard();
-            }
-          };
-
-          // Listen to events to catch state changes
-          editor.on('update', handleEditableChange);
-          editor.on('focus', handleEditableChange);
-          editor.on('blur', handleEditableChange);
-
-          editorView.dom.addEventListener('mouseenter', handleMouseEnter, true);
-          editorView.dom.addEventListener('mouseleave', handleMouseLeave, true);
-
-          return {
-            destroy: () => {
-              isDestroyed = true;
-              try {
-                // Clear all pending timeouts
-                clearTimeouts();
-
-                editorView.dom.removeEventListener('mouseenter', handleMouseEnter, true);
-                editorView.dom.removeEventListener('mouseleave', handleMouseLeave, true);
-                editor.off('update', handleEditableChange);
-                editor.off('focus', handleEditableChange);
-                editor.off('blur', handleEditableChange);
-
-                // Clean up hover card
-                hideHoverCard();
-              } catch (error) {
-                console.warn('Web2URLExtension destroy cleanup warning:', error);
-              }
-            },
-          };
-        },
-      }),
       // Plugin for URL detection and marking
       new Plugin({
         key: new PluginKey('web2URLDetection'),

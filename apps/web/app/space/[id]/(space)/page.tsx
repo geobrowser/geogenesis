@@ -7,6 +7,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -20,8 +21,10 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
+import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
@@ -76,27 +79,34 @@ export default async function SpacePage(props0: Props) {
   const props = await getSpaceFrontPage(space);
 
   return (
-    <>
-      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryContainer spaceId={params.id} />
-      </React.Suspense>
-      <React.Suspense fallback={null}>
-        <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
-      </React.Suspense>
-      <Spacer height={24} />
-      <ToggleEntityPage id={props.id} spaceId={spaceId} />
-      <Spacer height={40} />
-      {/*
-        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-        boundary. We don't want to show any referenced by loading states but do want to
-        stream it in
-      */}
-      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-        <React.Suspense fallback={<div />}>
-          <BacklinksServerContainer entityId={props.id} />
+    <EntityPageContentContainer>
+      <div className="flex items-start">
+        <div className="min-w-0 flex-1">
+          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+            <SubtopicGalleryContainer spaceId={params.id} />
+          </React.Suspense>
+          <React.Suspense fallback={null}>
+            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+          </React.Suspense>
+          <Spacer height={24} />
+          <ToggleEntityPage id={props.id} spaceId={spaceId} />
+          <Spacer height={40} />
+          {/*
+            Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+            boundary. We don't want to show any referenced by loading states but do want to
+            stream it in
+          */}
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={props.id} />
+            </React.Suspense>
+          </TrackedErrorBoundary>
+        </div>
+        <React.Suspense fallback={null}>
+          <SpaceCommunityCallsContainer spaceId={spaceId} />
         </React.Suspense>
-      </TrackedErrorBoundary>
-    </>
+      </div>
+    </EntityPageContentContainer>
   );
 }
 
@@ -113,20 +123,22 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
         initialTabs={topic.tabs}
         initialCollectionItems={topic.initialCollectionItems}
       >
-        <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-          <SubtopicGalleryContainer spaceId={spaceId} />
-        </React.Suspense>
-        <React.Suspense fallback={null}>
-          <Editor spaceId={spaceId} shouldHandleOwnSpacing spacePage />
-        </React.Suspense>
-        <Spacer height={24} />
-        <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
-        <Spacer height={40} />
-        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={topicEntityId} />
+        <EntityPageContentContainer>
+          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+            <SubtopicGalleryContainer spaceId={spaceId} />
           </React.Suspense>
-        </TrackedErrorBoundary>
+          <React.Suspense fallback={null}>
+            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+          </React.Suspense>
+          <Spacer height={24} />
+          <ToggleEntityPage id={topicEntityId} spaceId={spaceId} />
+          <Spacer height={40} />
+          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+            <React.Suspense fallback={<div />}>
+              <BacklinksServerContainer entityId={topicEntityId} />
+            </React.Suspense>
+          </TrackedErrorBoundary>
+        </EntityPageContentContainer>
       </EditorProvider>
     </EntityStoreProvider>
   );
@@ -173,7 +185,16 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
   });
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...blockRelations,
+    ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(
+    allBlocks,
+    cachedFetchEntitiesBatch,
+    spaceId,
+    allBlockRelations
+  );
 
   return { blocks, blockRelations, tabs, initialCollectionItems };
 }
@@ -202,6 +223,12 @@ type SubtopicGalleryContainerProps = {
 };
 
 const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
+  const space = await cachedFetchSpace(spaceId);
+
+  if (!space) {
+    return null;
+  }
+
   const subtopics = await fetchSubtopics(spaceId);
 
   if (subtopics.length === 0) {
@@ -209,6 +236,11 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
   }
 
   return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
+};
+
+const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
+  const series = await fetchCommunityCalls(spaceId);
+  return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {

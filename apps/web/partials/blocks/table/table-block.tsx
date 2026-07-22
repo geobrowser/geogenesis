@@ -9,6 +9,7 @@ import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
@@ -23,6 +24,7 @@ import {
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePlaceholderAutofocus } from '~/core/hooks/use-placeholder-autofocus';
 import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -61,10 +63,12 @@ import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dn
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
+import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
+import TableBlockPillItemsDnd from './table-block-pill-items-dnd';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
 
@@ -550,6 +554,7 @@ const ConfiguredTableBlock = ({
     setPage,
     isLoading,
     isFetched,
+    isPlaceholderData,
     hasNextPage,
     hasPreviousPage,
     pageNumber,
@@ -699,11 +704,71 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
+  const isExploreView = view === 'EXPLORE';
+  const isInfiniteExplore = isExploreView && !isEditing;
+
+  const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
+
+  const accumulationResetKey = React.useMemo(
+    () =>
+      JSON.stringify({
+        isInfiniteExplore,
+        pageSize,
+        sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
+        filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
+        filterMode: activeFilterMode,
+        sort: sortState ?? null,
+      }),
+    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState]
+  );
+
+  React.useEffect(() => {
+    if (!isExploreView) return;
+    setRowPages([]);
+    setPage(0);
+  }, [accumulationResetKey, isExploreView, setPage]);
+
+  // Depending on the `entries` array reference (rather than a content signature)
+  // is safe here: `upsertRowPage` returns the previous `pages` reference when the
+  // page's entity-id signature is unchanged, so `setRowPages` bails and identity-only
+  // changes to `entries` can't cause a render loop.
+  React.useEffect(() => {
+    if (!isInfiniteExplore) return;
+    if (!isFetched || isPlaceholderData) return;
+    const realRows = entries.filter(row => !row.placeholder);
+    setRowPages(prev => upsertRowPage(prev, pageNumber, realRows));
+  }, [isInfiniteExplore, isFetched, isPlaceholderData, pageNumber, entries]);
+
+  const accumulatedEntries = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
+
+  const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageNumber), [rowPages, pageNumber]);
+  const isFetchingNextPage = isInfiniteExplore && pageNumber > 0 && !hasCurrentPage;
+
+  const fetchNextExplorePage = React.useCallback(() => {
+    if (!hasNextPage || !hasCurrentPage || isPlaceholderData) return;
+    setPage('next');
+  }, [hasNextPage, hasCurrentPage, isPlaceholderData, setPage]);
+
+  const infiniteScrollSentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: isInfiniteExplore && hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage: fetchNextExplorePage,
+    rootMargin: '1000px',
+  });
+
+  const displayEntries = !isInfiniteExplore
+    ? entries
+    : accumulatedEntries.length > 0
+      ? accumulatedEntries
+      : entries.filter(row => !row.placeholder);
+
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
+  // Never in infinite (explore browse) mode.
   const hasPagination =
-    hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered);
+    !isInfiniteExplore &&
+    (hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered));
 
   let EntriesComponent = (
     <TableBlockTable
@@ -796,7 +861,69 @@ const ConfiguredTableBlock = ({
       />
     );
   }
-  if (source.type !== 'COLLECTION' && entries.length === 0 && isFetched && !isLoading) {
+
+  if (view === 'PILL' && entries.length > 0) {
+    EntriesComponent = (
+      <TableBlockPillItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={entries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
+        collectionTypeFilters={collectionTypeFilters}
+      />
+    );
+  }
+
+  if (view === 'EXPLORE' && displayEntries.length > 0) {
+    EntriesComponent = (
+      <>
+        <TableBlockExploreItemsDnd
+          isEditing={isEditing}
+          onChangeEntry={onChangeEntry}
+          onLinkEntry={onLinkEntry}
+          propertiesSchema={propertiesSchema}
+          source={source}
+          spaceId={spaceId}
+          entries={displayEntries}
+          onUpdateRelation={onUpdateRelation}
+          relations={relations ?? []}
+          collectionRelations={collectionRelations ?? []}
+          collectionLength={collectionLength}
+          pageNumber={pageNumber}
+          pageSize={pageSize}
+          shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+          placeholderFocusKey={placeholderFocusKey}
+          collectionTypeFilters={collectionTypeFilters}
+        />
+        {isInfiniteExplore && (
+          <>
+            {isFetchingNextPage && (
+              <div className="flex flex-col gap-3 py-4" aria-hidden>
+                <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
+                <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
+              </div>
+            )}
+            <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
+          </>
+        )}
+      </>
+    );
+  }
+  // In infinite explore mode the current page's `entries` can momentarily be
+  // empty (e.g. a trailing empty page) while accumulated rows are still shown —
+  // gate on `displayEntries` so the empty state can't clobber the populated list.
+  if (source.type !== 'COLLECTION' && displayEntries.length === 0 && isFetched && !isLoading) {
     EntriesComponent = (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">

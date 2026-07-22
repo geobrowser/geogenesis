@@ -8,6 +8,7 @@ import * as React from 'react';
 import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { getSpaceAccess } from '~/core/access/space-access';
+import { geo } from '~/core/sdk/geo-client';
 import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
@@ -16,6 +17,7 @@ import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
+import { describeGovernanceError } from '../utils/contracts/governance-errors';
 import { isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
@@ -311,6 +313,10 @@ function makeProposal(args: MakeProposalArgs) {
 
     let to: `0x${string}`;
     let calldata: `0x${string}`;
+    // Set for DAO proposals created with FAST voting so we can auto-execute them
+    // right after the create transaction confirms, instead of leaving them pending
+    // until someone manually executes from the Governance tab.
+    let fastProposalToExecute: { spaceId: string; proposalId: `0x${string}` } | null = null;
 
     if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
@@ -353,6 +359,10 @@ function makeProposal(args: MakeProposalArgs) {
 
       to = result.to as `0x${string}`;
       calldata = result.calldata as `0x${string}`;
+
+      if (votingMode === 'FAST') {
+        fastProposalToExecute = { spaceId: space.id, proposalId: result.proposalId as `0x${string}` };
+      }
     } else {
       // Personal spaces: use personalSpace.publishEdit()
       const result = yield* Effect.retry(
@@ -406,6 +416,130 @@ function makeProposal(args: MakeProposalArgs) {
     );
 
     console.log('Transaction hash: ', result);
+
+    if (fastProposalToExecute) {
+      yield* executeFastProposal({
+        smartAccount,
+        author,
+        createUserOpHash: result,
+        ...fastProposalToExecute,
+      }).pipe(
+        Effect.catchAll(error => {
+          // Non-fatal: the edit is already proposed on-chain by this point.
+          console.error(
+            '[PUBLISH] Auto-execute of FAST proposal failed; it can still be voted on and executed from Governance.',
+            describeGovernanceError(error),
+            error
+          );
+          return Effect.void;
+        })
+      );
+    }
+
     return result;
+  });
+}
+
+interface ExecuteFastProposalArgs {
+  smartAccount: MakeProposalArgs['smartAccount'];
+  /** The proposal author's personal space ID. Also used as the executor. */
+  author: string;
+  /** The DAO space ID the proposal was created in. */
+  spaceId: string;
+  /** The proposal ID returned by `daoSpace.proposeEdit`. */
+  proposalId: `0x${string}`;
+  /** The user operation hash for the transaction that created the proposal. */
+  createUserOpHash: `0x${string}`;
+}
+
+/**
+ * Takes a freshly created FAST-voting-mode proposal all the way to executed: wait
+ * for the create transaction to confirm, cast the author's YES vote, then execute.
+ *
+ * Creating a proposal does not vote on it. A new FAST proposal starts with zero
+ * votes against a quorum of one, so executing it straight after creation reverts
+ * with `CanNotExecute` (0xdf322356). The vote is what makes it pass.
+ *
+ * Without this the proposal sits pending until someone votes and executes it from
+ * the Governance tab, and is rejected outright if nobody does so before the voting
+ * window closes.
+ */
+function executeFastProposal(args: ExecuteFastProposalArgs) {
+  const { smartAccount, author, spaceId, proposalId, createUserOpHash } = args;
+
+  const confirmUserOp = (label: string, hash: `0x${string}`) =>
+    Effect.gen(function* () {
+      const receipt = yield* Effect.tryPromise({
+        try: () => smartAccount.waitForUserOperationReceipt({ hash }),
+        catch: error => new TransactionWriteFailedError(`Timed out waiting for ${label} to confirm`, { cause: error }),
+      });
+
+      if (!receipt.success) {
+        return yield* Effect.fail(new TransactionWriteFailedError(`${label} transaction reverted`));
+      }
+    });
+
+  // Each step has to be its own confirmed transaction: the vote must be on-chain
+  // before the execute call can see the proposal as passed.
+  const sendGovernanceOp = (
+    step: { label: string; span: string; operation: string; action: string },
+    to: `0x${string}`,
+    calldata: `0x${string}`
+  ) =>
+    Effect.gen(function* () {
+      const hash = yield* Effect.retry(
+        Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to, value: 0n, data: calldata }] }),
+          catch: error => new TransactionWriteFailedError(`${step.label} failed`, { cause: error }),
+        }),
+        retrySchedule(step.label, Duration.seconds(10))
+      );
+
+      yield* confirmUserOp(step.label, hash);
+    }).pipe(
+      Effect.withSpan(step.span),
+      Effect.annotateSpans({
+        'io.operation': step.operation,
+        'space.type': 'DAO',
+        'governance.action': step.action,
+      })
+    );
+
+  return Effect.gen(function* () {
+    yield* confirmUserOp('proposal creation', createUserOpHash).pipe(
+      Effect.withSpan('web.write.waitForProposalCreated')
+    );
+
+    const vote = geo.daoSpaces.proposals.vote({
+      authorSpaceId: author,
+      spaceId,
+      proposalId,
+      vote: 'YES',
+    });
+
+    yield* sendGovernanceOp(
+      { label: 'vote on proposal', span: 'web.write.vote', operation: 'vote', action: 'proposal_voted' },
+      vote.to as `0x${string}`,
+      vote.calldata as `0x${string}`
+    );
+
+    const execute = geo.daoSpaces.proposals.execute({
+      authorSpaceId: author,
+      spaceId,
+      proposalId,
+    });
+
+    yield* sendGovernanceOp(
+      {
+        label: 'execute proposal',
+        span: 'web.write.executeProposal',
+        operation: 'execute_proposal',
+        action: 'proposal_executed',
+      },
+      execute.to as `0x${string}`,
+      execute.calldata as `0x${string}`
+    );
+
+    console.log('[PUBLISH] Auto-executed FAST proposal', { spaceId, proposalId });
   });
 }

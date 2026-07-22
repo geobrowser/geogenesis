@@ -1,6 +1,6 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
@@ -15,7 +15,6 @@ import { useDeploySpace } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useReportError } from '~/core/state/status-bar-store';
-import { useMutate } from '~/core/sync/use-mutate';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils, sleep } from '~/core/utils/utils';
@@ -34,7 +33,6 @@ import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { Animation } from '~/partials/onboarding/dialog';
-import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
@@ -47,27 +45,11 @@ type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
 
 export const stepAtom = atom<Step>('select-type');
 
-/** Externally controllable open state so non-trigger callers (e.g. the entity-page
- * "Claim topic" button) can preset the atoms above and open the dialog. */
+/** Externally controllable open state so non-trigger callers (e.g. the navbar
+ * "+" dropdowns) can preset the atoms above and open the dialog. */
 export const createSpaceDialogOpenAtom = atom<boolean>(false);
 
-/** When true, the dialog auto-fires `createSpaces` as soon as it opens at
- * step='create-space'. Used by the claim flow to skip the template-picker
- * and profile-entry steps entirely. */
-const autoRunAtom = atom<boolean>(false);
-
-/** When set, the source entity's values + relations are copied into the new
- * space after deploy succeeds. Mirrors the "Clone to new space" flow in
- * partials/entity-page/entity-to-space-dialog.tsx. */
-const cloneFromEntityAtom = atom<{ entityId: string; sourceSpaceId: string } | null>(null);
-
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
-
-// Module-level guard for the auto-run effect. A component-scoped `useRef`
-// would reset on React StrictMode's intentional double-mount in dev, firing
-// the deploy twice. Module scope persists across mounts; reset when the
-// dialog transitions to closed.
-let autoRunFired = false;
 
 type OpenDialogPreset = {
   name?: string;
@@ -76,12 +58,6 @@ type OpenDialogPreset = {
   governanceType?: SpaceGovernanceType | null;
   spaceType?: SpaceType | null;
   step?: Step;
-  /** Skip the template-picker / profile-entry steps and fire the deploy as
-   * soon as the dialog mounts. Requires `spaceType` to be set. */
-  autoRun?: boolean;
-  /** After deploy succeeds, copy this entity's content into the new space's
-   * home page entity. */
-  cloneFromEntity?: { entityId: string; sourceSpaceId: string };
 };
 
 /**
@@ -97,25 +73,18 @@ export function useOpenCreateSpaceDialog() {
   const setSpaceType = useSetAtom(spaceTypeAtom);
   const setStep = useSetAtom(stepAtom);
   const setOpen = useSetAtom(createSpaceDialogOpenAtom);
-  const setAutoRun = useSetAtom(autoRunAtom);
-  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
 
   return useCallback(
     (preset?: OpenDialogPreset) => {
-      // Reset the auto-run latch so a second claim attempt on a different
-      // topic (without an intervening close) doesn't silently no-op.
-      autoRunFired = false;
       setName(preset?.name ?? '');
       setImage(preset?.image ?? '');
       setTopicId(preset?.topicId ?? '');
       setGovernanceType(preset?.governanceType ?? null);
       setSpaceType(preset?.spaceType ?? null);
       setStep(preset?.step ?? 'select-type');
-      setAutoRun(preset?.autoRun ?? false);
-      setCloneFromEntity(preset?.cloneFromEntity ?? null);
       setOpen(true);
     },
-    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setCloneFromEntity]
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen]
   );
 }
 
@@ -125,7 +94,6 @@ export function CreateSpaceDialog() {
   const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
   const { deploy } = useDeploySpace();
   const reportError = useReportError();
-  const { storage } = useMutate();
 
   const spaceType = useAtomValue(spaceTypeAtom);
   const name = useAtomValue(nameAtom);
@@ -134,44 +102,6 @@ export function CreateSpaceDialog() {
   const setSpaceId = useSetAtom(spaceIdAtom);
   const governanceType = useAtomValue(governanceTypeAtom);
   const [step, setStep] = useAtom(stepAtom);
-  const autoRun = useAtomValue(autoRunAtom);
-  const cloneFromEntity = useAtomValue(cloneFromEntityAtom);
-
-  const setAutoRun = useSetAtom(autoRunAtom);
-  const setCloneFromEntity = useSetAtom(cloneFromEntityAtom);
-
-  // On close: clear the auto-run guard and the transient claim-flow atoms so
-  // a subsequent open from a non-claim caller (navbar "+") doesn't inherit
-  // stale values. The OpenDialogPreset always overwrites these on open, so
-  // this is hygiene more than correctness.
-  React.useEffect(() => {
-    if (!open) {
-      autoRunFired = false;
-      setAutoRun(false);
-      setCloneFromEntity(null);
-    }
-  }, [open, setAutoRun, setCloneFromEntity]);
-
-  // Auto-run path: when the dialog is opened directly at 'create-space' with
-  // autoRun, fire the deploy as soon as everything is in place. Guarded by a
-  // module-level flag so React StrictMode's dev double-mount, re-renders, and
-  // effect re-runs don't fire deploy twice. Declared above the early
-  // `return null` for !address so the hook count stays stable when the user
-  // signs in / out while the dialog is mounted.
-  //
-  // We require name + topicId to be non-empty before firing: the entity-page
-  // claim button sets name via the live entity store, which can be `''` on
-  // the first render before hydration completes. Without this check the
-  // deploy would go out with an empty space name.
-  React.useEffect(() => {
-    if (!open || !autoRun) return;
-    if (step !== 'create-space') return;
-    if (!spaceType || !address) return;
-    if (!name || !topicId) return;
-    if (autoRunFired) return;
-    autoRunFired = true;
-    createSpaces(spaceType);
-  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType, cloneFromEntity]);
 
   if (!address) return null;
 
@@ -191,32 +121,18 @@ export function CreateSpaceDialog() {
         throw new Error(`Creating space failed`);
       }
 
-      // Replicate the source entity's content into the new space's home page
-      // entity (same as "Clone to new space" — entity-to-space-dialog.tsx:156).
-      // Writes to the local sync store; the substream pushes to IPFS.
-      if (cloneFromEntity) {
-        cloneEntityIntoSpace(cloneFromEntity.entityId, cloneFromEntity.sourceSpaceId, spaceId, storage);
-      }
-
       setSpaceId(spaceId);
       setStep('completed');
     } catch (error) {
       const message = describeError(error);
-      if (autoRun) {
-        // Auto-run flow has no useful form state to recover to — close the
-        // dialog so the user can retry from the Claim button.
-        onOpenChange(false);
-        reportError(`Space creation failed: ${message}`);
-      } else {
-        // Drop back to the form step so the user has a recovery path even if
-        // they dismiss the global error toast — StepHeader hides the close
-        // button while step is 'create-space' or 'completed'.
-        setStep('enter-profile');
-        reportError(`Space creation failed: ${message}`, () => {
-          setStep('create-space');
-          createSpaces(spaceType);
-        });
-      }
+      // Drop back to the form step so the user has a recovery path even if
+      // they dismiss the global error toast — StepHeader hides the close
+      // button while step is 'create-space' or 'completed'.
+      setStep('enter-profile');
+      reportError(`Space creation failed: ${message}`, () => {
+        setStep('create-space');
+        createSpaces(spaceType);
+      });
     }
   }
 
@@ -430,20 +346,6 @@ type StepEnterProfileProps = {
   address: string;
 };
 
-const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
-  default: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE],
-  company: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.COMPANY_TYPE],
-  nonprofit: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.NONPROFIT_TYPE],
-  personal: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE],
-  'academic-field': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.ACADEMIC_FIELD_TYPE],
-  region: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.REGION_TYPE],
-  industry: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INDUSTRY_TYPE],
-  protocol: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PROTOCOL_TYPE],
-  dao: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.DAO_TYPE],
-  'government-org': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.GOVERNMENT_ORG_TYPE],
-  interest: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INTEREST_TYPE],
-};
-
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const [name, setName] = useAtom(nameAtom);
   const [topicId, setTopicId] = useAtom(topicIdAtom);
@@ -451,7 +353,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
 
-  const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -520,7 +421,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         <div className="relative z-100 w-full">
           <div className={cx(topicId && 'invisible')}>
             <FindEntity
-              allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
                 setTopicId(entity.id);

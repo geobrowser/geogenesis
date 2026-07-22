@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
@@ -49,7 +48,9 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isRollingRolledOff, isSaving, openRankingCompose } = state;
+
+  const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
 
   return showEditRankingButton ? (
     <Button
@@ -69,7 +70,7 @@ function buildMyRankingActionButton(state: RankingBlockState) {
       disabled={isSaving}
       onClick={() => void openRankingCompose('edit')}
     >
-      Add my ranking
+      {addLabel}
     </Button>
   );
 }
@@ -157,6 +158,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     setIsMyRankingDragging,
     entitySheetTarget,
     setEntitySheetTarget,
+    pageSize,
   } = state;
 
   const myRankingActionButton = buildMyRankingActionButton(state);
@@ -309,7 +311,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
-              const rank = embeddedMyPageNumber * PAGE_SIZE + index + 1;
+              const rank = embeddedMyPageNumber * pageSize + index + 1;
               const resolvedEntry = myRankingEntryByEntityId.get(entityId);
               // Mirror the global list: while a row's name is still resolving,
               // show a skeleton rather than flashing "Untitled". On a shared

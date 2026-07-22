@@ -31,6 +31,8 @@ export function useFieldWithValidation(
     }
   }, [memoizedTransformedValue, memoizedValidate]);
 
+  const set = React.useCallback((v: string) => setValue(v), []);
+
   return [
     {
       value: memoizedTransformedValue,
@@ -38,6 +40,6 @@ export function useFieldWithValidation(
       isValidating,
       isValid: error === null,
     },
-    (v: string) => setValue(v),
+    set,
   ] as const;
 }

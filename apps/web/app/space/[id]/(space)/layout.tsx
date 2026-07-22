@@ -30,6 +30,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { SpaceChromeGate } from './space-chrome-gate';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -61,50 +62,52 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
-            <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
-            <SpacePageMetadataHeader
-              spaceId={spaceId}
-              membersComponent={
-                <div className="flex items-center gap-2">
-                  <React.Suspense fallback={<MembersSkeleton />}>
-                    <SpaceEditors spaceId={spaceId} />
-                  </React.Suspense>
-                  <React.Suspense fallback={null}>
-                    <SpaceMembers spaceId={spaceId} />
-                  </React.Suspense>
-                </div>
-              }
-            />
-          </div>
-
-          <div className="mt-6 flex flex-col gap-6">
-            <AddDataPanel spaceId={spaceId} />
-
-            {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-              <>
-                <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
-              </>
-            ) : null}
-            <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-            <React.Suspense fallback={null}>
-              <SpaceTabs
+        <SpaceChromeGate>
+          <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
+          <EntityPageContentContainer>
+            <div className="space-y-2">
+              <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
+              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              <SpacePageMetadataHeader
                 spaceId={spaceId}
-                entityId={props.id}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-                typeIds={typeIds}
+                membersComponent={
+                  <div className="flex items-center gap-2">
+                    <React.Suspense fallback={<MembersSkeleton />}>
+                      <SpaceEditors spaceId={spaceId} />
+                    </React.Suspense>
+                    <React.Suspense fallback={null}>
+                      <SpaceMembers spaceId={spaceId} />
+                    </React.Suspense>
+                  </div>
+                }
               />
-            </React.Suspense>
-          </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-6">
+              <AddDataPanel spaceId={spaceId} />
+
+              {typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                <>
+                  <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                </>
+              ) : null}
+              <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+              <React.Suspense fallback={null}>
+                <SpaceTabs
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                  typeIds={typeIds}
+                />
+              </React.Suspense>
+            </div>
+          </EntityPageContentContainer>
           <Spacer height={20} />
-          {children}
-        </EntityPageContentContainer>
+        </SpaceChromeGate>
+        {children}
       </EditorProvider>
     </EntityStoreProvider>
   );
@@ -176,7 +179,16 @@ const getSpaceFrontPage = async (spaceId: string) => {
   const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...blockRelations,
+    ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(
+    allBlocks,
+    cachedFetchEntitiesBatch,
+    spaceId,
+    allBlockRelations
+  );
 
   return {
     id: entity.id,

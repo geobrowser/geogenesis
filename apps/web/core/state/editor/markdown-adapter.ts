@@ -9,6 +9,7 @@ import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
   PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
 } from '~/core/state/editor/profile-overview-tail-placeholder';
+import { tokenizeWeb2Urls } from '~/core/utils/url-detection';
 
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 
@@ -120,7 +121,45 @@ function getExtensions(): Extensions {
  */
 export function markdownToEditorJson(markdown: string, extensions?: Extensions): JSONContent {
   const html = editorMd.render(markdown);
-  return generateJSON(html, extensions ?? getExtensions());
+  const json = generateJSON(html, extensions ?? getExtensions());
+  return markWeb2UrlsInJson(json);
+}
+
+// Pre-marks raw web2 URLs (e.g. "https://x.com" typed as plain text) with the
+// web2URL mark so the editor's FIRST paint renders them as styled anchors.
+// Markdown links ([label](url)) are already converted to web2URL spans by
+// editorMd above; this closes the gap for raw URLs, which markdown-it leaves as
+// plain text (linkify is off). Without this, only the async detection plugin
+// adds the mark (~150ms after mount), so links visibly flicker from plain text
+// to styled on every editor (re)mount.
+function markWeb2UrlsInJson(node: JSONContent): JSONContent {
+  if (!node.content) return node;
+
+  const content: JSONContent[] = [];
+  for (const child of node.content) {
+    const alreadyLinked = (child.marks ?? []).some(mark => mark.type === 'link' || mark.type === 'web2URL');
+
+    if (child.type === 'text' && typeof child.text === 'string' && !alreadyLinked) {
+      const segments = tokenizeWeb2Urls(child.text);
+      if (segments.some(segment => segment.type === 'url')) {
+        for (const segment of segments) {
+          if (!segment.value) continue;
+          content.push({
+            ...child,
+            text: segment.value,
+            ...(segment.type === 'url'
+              ? { marks: [...(child.marks ?? []), { type: 'web2URL', attrs: { url: segment.value, editMode: false } }] }
+              : {}),
+          });
+        }
+        continue;
+      }
+    }
+
+    content.push(markWeb2UrlsInJson(child));
+  }
+
+  return { ...node, content };
 }
 
 // ---------------------------------------------------------------------------

@@ -28,8 +28,8 @@ interface Props {
   showHeading?: boolean;
   showHeader?: boolean;
   notice?: React.ReactNode;
-  /** Pre-computed by the parent route — avoids re-querying eligibility here. */
-  canClaimTopic?: boolean;
+  /** Replaces the cover/avatar slot above the Name (e.g. a community-call recording player). */
+  coverSlot?: React.ReactNode;
 }
 
 export default async function DefaultEntityPage({
@@ -39,12 +39,12 @@ export default async function DefaultEntityPage({
   showHeading = true,
   showHeader = true,
   notice = null,
-  canClaimTopic = false,
+  coverSlot,
 }: Props) {
   const showSpacer = showCover || showHeading || showHeader;
 
   const isEditing = searchParams?.edit === 'true';
-  const props = await fetchEntityPageData(params.id, params.entityId, { canClaimTopic });
+  const props = await fetchEntityPageData(params.id, params.entityId);
 
   return (
     <SpaceRedirect
@@ -63,7 +63,8 @@ export default async function DefaultEntityPage({
           initialTabs={props.tabs}
           initialCollectionItems={props.initialCollectionItems}
         >
-          {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+          {showCover &&
+            (coverSlot ?? <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />)}
           <EntityPageContentContainer>
             <EntityPageHeader
               showHeading={showHeading}
@@ -71,8 +72,6 @@ export default async function DefaultEntityPage({
               entityId={props.id}
               spaceId={props.spaceId}
               serverRelations={props.relationEntityRelations}
-              canClaimTopic={canClaimTopic}
-              coverUrl={props.serverCoverUrl}
             />
             <div className="mt-6 flex flex-col gap-4 empty:hidden">
               <TypeSchemaInline entityId={props.id} spaceId={props.spaceId} />
