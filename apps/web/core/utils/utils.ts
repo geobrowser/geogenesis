@@ -607,10 +607,6 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 
-export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
-}
-
 export function getProposalTimeRemaining(endTime: number) {
   const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
   const days = Math.floor(timeRemaining / 86400);

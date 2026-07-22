@@ -5,11 +5,9 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
-import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { createPublicClient, http } from 'viem';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { cachedFetchProposal } from '~/core/io/subgraph';
 import { getMembershipProposalDisplayName } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
@@ -112,7 +110,6 @@ export default async function GovernancePage(props: Props) {
     notFound();
   }
 
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
   const [votingSettings, space] = await Promise.all([fetchVotingSettings(params.id), cachedFetchSpace(params.id)]);
 
   // The four settings the governance design surfaces (design 62569-13445).
@@ -181,7 +178,7 @@ export default async function GovernancePage(props: Props) {
         </React.Suspense>
       </div>
 
-      <ActiveProposal connectedAddress={connectedAddress} spaceId={params.id} proposalId={searchParams.proposalId} />
+      <ActiveProposal spaceId={params.id} proposalId={searchParams.proposalId} />
     </>
   );
 }

@@ -11,7 +11,6 @@ import {
   getNoVotePercentage,
   getProposalName,
   getProposalTimeRemaining,
-  getUserVote,
   getYesVotePercentage,
 } from '~/core/utils/utils';
 
@@ -31,22 +30,21 @@ import { VotingSettingsProposal } from './voting-settings-proposal';
 
 interface Props {
   proposalId?: string;
-  connectedAddress: string | undefined;
   spaceId: string;
   reviewComponent?: React.ReactNode;
 }
 
-export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
+export function ActiveProposal({ proposalId, spaceId }: Props) {
   return (
     <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
-        <ReviewProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
+        <ReviewProposal proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
     </ActiveProposalSlideUp>
   );
 }
 
-async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) {
+async function ReviewProposal({ proposalId, spaceId }: Props) {
   if (!proposalId) {
     return null;
   }
@@ -63,7 +61,6 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
   const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
@@ -109,7 +106,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
             status={proposal.status}
             canExecute={proposal.canExecute}
             proposalType={proposal.type}
-            userVote={userVote}
+            votes={votes}
           />
         </div>
       </div>
@@ -174,6 +171,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                     votesCount={votesCount}
                     yesVotesPercentage={yesVotesPercentage}
                     noVotesPercentage={noVotesPercentage}
+                    proposalId={proposal.id}
                   />
                 </div>
               </div>
