@@ -219,14 +219,14 @@ function IdentityHeader({
       <Link
         href={href}
         onClick={onNavigate}
-        className="flex w-full flex-col items-start gap-4 px-3 py-2.5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+        className="flex w-full flex-col items-start gap-3 px-3 py-2.5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="flex w-full flex-col items-start gap-4 px-3 py-2.5">{content}</div>;
+  return <div className="flex w-full flex-col items-start gap-3 px-3 py-2.5">{content}</div>;
 }
 
 function shortAddress(address: string) {
