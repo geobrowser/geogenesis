@@ -183,7 +183,7 @@ describe('NavbarActions debate availability menu', () => {
     expect(screen.getByText('Max')).toHaveClass(
       'font-[family-name:var(--font-calibre)]',
       'text-[1rem]',
-      'leading-[0.9375rem]',
+      'leading-5',
       'font-medium',
       'tracking-[-0.03125rem]',
       'not-italic'
@@ -191,7 +191,7 @@ describe('NavbarActions debate availability menu', () => {
     expect(screen.getByText('max@example.com')).toHaveClass(
       'font-[family-name:var(--font-calibre)]',
       'text-[1rem]',
-      'leading-[0.9375rem]',
+      'leading-5',
       'font-medium',
       'tracking-[-0.03125rem]',
       'not-italic'
@@ -200,6 +200,7 @@ describe('NavbarActions debate availability menu', () => {
     expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveClass(
       'px-3',
       'py-2.5',
+      'gap-1',
       'font-[family-name:var(--font-calibre)]',
       'text-[1rem]',
       'leading-[0.9375rem]',

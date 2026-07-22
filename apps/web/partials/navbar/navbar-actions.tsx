@@ -134,9 +134,9 @@ export function NavbarActions() {
                 aria-checked={availableToDebate}
                 disabled={availabilityPending}
                 onClick={toggleDebateAvailability}
-                className="flex w-full items-center justify-between px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
+                className="flex w-full items-center justify-between gap-1 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
               >
-                <span>Available to debate</span>
+                <span className="min-w-0 truncate">Available to debate</span>
                 <span
                   aria-hidden="true"
                   className={cx(
@@ -204,10 +204,10 @@ function IdentityHeader({
         )}
       </div>
       <div className="min-w-0">
-        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic">
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-text not-italic">
           {displayName}
         </p>
-        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-grey-04 not-italic">
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-grey-04 not-italic">
           {detail}
         </p>
       </div>
