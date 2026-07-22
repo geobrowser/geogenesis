@@ -541,16 +541,17 @@ export function RankingComposeGlobalRanking({
         className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
-        {/* Match My ranking title row height so the search top lines up with its divider. */}
-        <div className={cx('flex w-full min-w-0 items-center', isDesktop ? 'min-h-8 pb-4' : 'min-h-8')}>
-          <h2
-            className={cx(
-              'm-0 min-w-0 truncate text-text',
-              isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
-            )}
-          >
-            Global ranking
-          </h2>
+        <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          <div className={cx('flex w-full min-w-0 items-center', isDesktop && 'h-8')}>
+            <h2
+              className={cx(
+                'm-0 min-w-0 truncate text-text',
+                isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
+              )}
+            >
+              Global ranking
+            </h2>
+          </div>
         </div>
         <div className={cx('shrink-0', isMobile && 'mt-2')}>
           <div className="relative flex items-center">
