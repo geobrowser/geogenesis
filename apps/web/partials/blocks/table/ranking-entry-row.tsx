@@ -30,7 +30,7 @@ export function RankingEntryRowSkeleton({ rank }: { rank?: number }) {
         </span>
       ) : null}
       <Skeleton className="h-16 min-h-16 w-16 min-w-16 shrink-0 rounded-md" />
-      <div className="flex min-h-16 min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-3 w-3/5" />
       </div>
@@ -39,6 +39,7 @@ export function RankingEntryRowSkeleton({ rank }: { rank?: number }) {
 }
 
 type Props = {
+  /** Omit or pass 0 to hide the rank indicator. */
   rank?: number;
   entry: RankingEntryDisplay;
   spaceId: string;
@@ -95,7 +96,7 @@ export function RankingEntryRow({
         </span>
       ) : null}
       {avatar}
-      <div className="flex min-h-16 min-w-0 flex-1 flex-col gap-1">
+      <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-1">
         {linkToEntity ? (
           <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={entry.name}>
             {entry.name}

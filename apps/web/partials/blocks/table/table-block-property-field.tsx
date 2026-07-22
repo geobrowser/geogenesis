@@ -13,7 +13,7 @@ import { Property } from '~/core/types';
 import { isUrlTemplate } from '~/core/utils/url-template';
 
 import { SquareButton } from '~/design-system/button';
-import { Checkbox, getChecked } from '~/design-system/checkbox';
+import { Checkbox, CheckboxVisual, getChecked } from '~/design-system/checkbox';
 import { LinkableRelationChip } from '~/design-system/chip';
 import { DateField } from '~/design-system/editable-fields/date-field';
 import { TableImageField, TableStringField } from '~/design-system/editable-fields/editable-fields';
@@ -114,7 +114,7 @@ const RenderedProperty = ({
 
   const isRelation = property.dataType === 'RELATION';
 
-  if (property.renderableType === 'IMAGE') {
+  if (property.renderableTypeStrict === 'IMAGE') {
     // We don't support rendering images in list or gallery views except the main image
     return null;
   }
@@ -414,6 +414,9 @@ function EditableValueGroup({
       );
     case 'BOOLEAN': {
       const checked = getChecked(value);
+      if (!isEditing) {
+        return withLabel(<CheckboxVisual checked={checked} />);
+      }
       return withLabel(<Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />, true);
     }
     case 'DATE':

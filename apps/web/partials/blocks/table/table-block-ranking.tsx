@@ -13,7 +13,7 @@ import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-
 import { Fullscreen } from '~/design-system/icons/full-screen';
 
 import { RankingBlockBody } from './ranking-block-body';
-import { RankingCardConfigProvider, useRankingShownProperties } from './ranking-card-config';
+import { RankingCardConfigProvider } from './ranking-card-config';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
@@ -28,10 +28,11 @@ type Props = {
 
 export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDate = '' }: Props) {
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
-  const { cardConfig, menuProps } = useRankingShownProperties();
 
   const isEditing = useUserIsEditing(spaceId);
   const {
+    cardConfig,
+    menuProps,
     canEdit,
     filterState,
     setFilterState,

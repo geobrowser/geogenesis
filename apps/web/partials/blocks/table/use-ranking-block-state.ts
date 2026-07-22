@@ -54,7 +54,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
-import { selectRankingCardImageProperty } from './ranking-card-config';
+import { buildRankingCardConfig } from './ranking-card-config';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
@@ -121,8 +121,47 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows, shownColumnIds } = useDataBlock();
-  const cardImageProperty = React.useMemo(() => selectRankingCardImageProperty(shownColumnIds), [shownColumnIds]);
+  const {
+    name,
+    entityId,
+    relationId,
+    rows,
+    shownColumnIds,
+    properties,
+    filterableProperties,
+    orderedShownColumnRelations,
+    toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
+    source: dataBlockSource,
+  } = useDataBlock();
+
+  const cardConfig = React.useMemo(
+    () => buildRankingCardConfig({ properties, shownColumnIds, source: dataBlockSource }),
+    [properties, shownColumnIds, dataBlockSource]
+  );
+  const cardImageProperty = cardConfig.imageProperty;
+
+  const menuProps = React.useMemo(
+    () => ({
+      sourceType: dataBlockSource.type,
+      filterableProperties,
+      shownColumnIds,
+      orderedShownColumnRelations,
+      toggleProperty,
+      hideAllShownPropertyColumns,
+      reorderShownPropertyRelations,
+    }),
+    [
+      dataBlockSource.type,
+      filterableProperties,
+      shownColumnIds,
+      orderedShownColumnRelations,
+      toggleProperty,
+      hideAllShownPropertyColumns,
+      reorderShownPropertyRelations,
+    ]
+  );
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -806,6 +845,8 @@ export function useRankingBlockState({
     setIsFilterOpen,
     displayName,
     entityId,
+    cardConfig,
+    menuProps,
     submissions,
     periodState,
     periodLabel,

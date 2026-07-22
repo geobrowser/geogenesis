@@ -42,11 +42,7 @@ import type { SearchResult } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
-import {
-  RankingCardConfigProvider,
-  selectRankingCardImageProperty,
-  selectRankingCardProperties,
-} from './ranking-card-config';
+import { RankingCardConfigProvider, buildRankingCardConfig } from './ranking-card-config';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -76,15 +72,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
-  const cardImageProperty = React.useMemo(() => selectRankingCardImageProperty(shownColumnIds), [shownColumnIds]);
   const cardConfig = React.useMemo(
-    () => ({
-      properties: selectRankingCardProperties(properties),
-      source,
-      imageProperty: cardImageProperty,
-    }),
-    [properties, cardImageProperty, source]
+    () => buildRankingCardConfig({ properties, shownColumnIds, source }),
+    [properties, shownColumnIds, source]
   );
+  const cardImageProperty = cardConfig.imageProperty;
   const { showOnboarding } = useOnboarding();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
   const {

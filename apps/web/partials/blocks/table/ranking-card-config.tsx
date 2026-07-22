@@ -5,16 +5,17 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import type { Source } from '~/core/blocks/data/source';
-import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { ID } from '~/core/id';
 import type { Property } from '~/core/types';
 
-const RANKING_CARD_EXCLUDED_PROPERTY_IDS = new Set<string>([
-  SystemIds.NAME_PROPERTY,
-  SystemIds.DESCRIPTION_PROPERTY,
-  SystemIds.COVER_PROPERTY,
-  ContentIds.AVATAR_PROPERTY,
-]);
+/**
+ * Normalized so membership matches `ID.equals` semantics
+ */
+const RANKING_CARD_EXCLUDED_PROPERTY_IDS = new Set<string>(
+  [SystemIds.NAME_PROPERTY, SystemIds.DESCRIPTION_PROPERTY, SystemIds.COVER_PROPERTY, ContentIds.AVATAR_PROPERTY].map(
+    id => ID.uuidToHex(id)
+  )
+);
 
 export type RankingCardImageProperty = 'avatar' | 'cover';
 
@@ -25,11 +26,30 @@ export type RankingCardConfig = {
 };
 
 export function selectRankingCardProperties(properties: Property[]): Property[] {
-  return properties.filter(property => !RANKING_CARD_EXCLUDED_PROPERTY_IDS.has(property.id));
+  return properties.filter(property => !RANKING_CARD_EXCLUDED_PROPERTY_IDS.has(ID.uuidToHex(property.id)));
 }
 
 export function selectRankingCardImageProperty(shownColumnIds: string[]): RankingCardImageProperty {
   return shownColumnIds.some(id => ID.equals(id, SystemIds.COVER_PROPERTY)) ? 'cover' : 'avatar';
+}
+
+/**
+ * Single definition of a ranking card's config. Callers already hold the data block fields
+ */
+export function buildRankingCardConfig({
+  properties,
+  shownColumnIds,
+  source,
+}: {
+  properties: Property[];
+  shownColumnIds: string[];
+  source: Source;
+}): RankingCardConfig {
+  return {
+    properties: selectRankingCardProperties(properties),
+    source,
+    imageProperty: selectRankingCardImageProperty(shownColumnIds),
+  };
 }
 
 const RankingCardConfigContext = React.createContext<RankingCardConfig>({
@@ -50,48 +70,4 @@ export function RankingCardConfigProvider({
 
 export function useRankingCardConfig(): RankingCardConfig {
   return React.useContext(RankingCardConfigContext);
-}
-
-export function useRankingShownProperties() {
-  const {
-    properties,
-    shownColumnIds,
-    filterableProperties,
-    orderedShownColumnRelations,
-    toggleProperty,
-    hideAllShownPropertyColumns,
-    reorderShownPropertyRelations,
-    source,
-  } = useDataBlock();
-
-  const cardProperties = React.useMemo(() => selectRankingCardProperties(properties), [properties]);
-  const imageProperty = React.useMemo(() => selectRankingCardImageProperty(shownColumnIds), [shownColumnIds]);
-
-  const cardConfig = React.useMemo<RankingCardConfig>(
-    () => ({ properties: cardProperties, source, imageProperty }),
-    [cardProperties, source, imageProperty]
-  );
-
-  const menuProps = React.useMemo(
-    () => ({
-      sourceType: source.type,
-      filterableProperties,
-      shownColumnIds,
-      orderedShownColumnRelations,
-      toggleProperty,
-      hideAllShownPropertyColumns,
-      reorderShownPropertyRelations,
-    }),
-    [
-      source.type,
-      filterableProperties,
-      shownColumnIds,
-      orderedShownColumnRelations,
-      toggleProperty,
-      hideAllShownPropertyColumns,
-      reorderShownPropertyRelations,
-    ]
-  );
-
-  return { cardConfig, menuProps };
 }

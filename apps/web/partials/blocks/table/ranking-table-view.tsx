@@ -7,7 +7,7 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { Text } from '~/design-system/text';
 
 import { RankingBlockBody } from './ranking-block-body';
-import { RankingCardConfigProvider, useRankingShownProperties } from './ranking-card-config';
+import { RankingCardConfigProvider } from './ranking-card-config';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import { type InitialGlobalRanking, type InitialSharedRanking, useRankingBlockState } from './use-ranking-block-state';
 
@@ -34,7 +34,6 @@ export function RankingTableView({
   initialSharedRanking,
 }: Props) {
   const isMobile = useIsMobileLayout();
-  const { cardConfig } = useRankingShownProperties();
   const state = useRankingBlockState({
     spaceId,
     rankingStartDate,
@@ -46,6 +45,7 @@ export function RankingTableView({
     initialSharedRanking,
   });
   const {
+    cardConfig,
     displayName,
     periodState,
     periodLabel,
