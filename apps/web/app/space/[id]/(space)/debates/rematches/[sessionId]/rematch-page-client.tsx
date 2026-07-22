@@ -118,8 +118,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     session?.participants,
     sourceDebateQuery.data,
   ]);
-  const remoteParticipant = session?.participants.find(participant => participant.user_id !== currentUserId) ?? null;
+  const remoteParticipant =
+    currentUserId === null
+      ? null
+      : (session?.participants.find(participant => participant.user_id !== currentUserId) ?? null);
   const remoteName = remoteParticipant?.display_name || remoteParticipant?.profile_space_id || 'debater';
+
+  // The opponent is whichever participant isn't the local user; with no local user there is none.
+  const opponentPositionOf = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      currentUserId === null
+        ? null
+        : (claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null),
+    [currentUserId]
+  );
 
   // Topics live on the KG claim entity (not the rematch API), so resolve them here to
   // label each card and drive the "Any topic" filter — same as the join-a-debate panel.
@@ -139,11 +151,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // "Debate now" = claims the opponent has taken a position on; the tab badge counts them.
   const opponentPositionCount = React.useMemo(
-    () =>
-      claims.filter(
-        claim => (claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null) !== null
-      ).length,
-    [claims, currentUserId]
+    () => claims.filter(claim => opponentPositionOf(claim) !== null).length,
+    [claims, opponentPositionOf]
   );
 
   const availableTopics = React.useMemo(() => {
@@ -158,16 +167,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const visibleClaims = React.useMemo(
     () =>
       claims.filter(claim => {
-        if (
-          tab === 'debate-now' &&
-          (claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null) === null
-        ) {
-          return false;
-        }
+        if (tab === 'debate-now' && opponentPositionOf(claim) === null) return false;
         if (topicFilter && topicByClaimId.get(claim.claim.claim_entity_id) !== topicFilter) return false;
         return true;
       }),
-    [claims, currentUserId, tab, topicFilter, topicByClaimId]
+    [claims, opponentPositionOf, tab, topicFilter, topicByClaimId]
   );
 
   React.useEffect(() => {
@@ -192,6 +196,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     <div className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 py-8 sm:px-8">
         <header className="mb-4 flex items-center justify-between gap-4">
+          <h1 className="sr-only">Rematch {remoteName}</h1>
           <div className="flex min-w-0 items-center gap-5">
             <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
               All
@@ -422,15 +427,7 @@ function PositionAvatars({ participants }: { participants: DebateRematchParticip
   );
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
