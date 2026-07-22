@@ -53,6 +53,11 @@ import { PageNumberContainer } from '~/design-system/table/styles';
 import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/table-pagination';
 import { Text } from '~/design-system/text';
 
+import {
+  BlockLinkIngestionChip,
+  BlockLinkIngestionPanel,
+  BlockLinkIngestionProvider,
+} from './block-link-ingestion-tool';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
@@ -965,218 +970,222 @@ const ConfiguredTableBlock = ({
   const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
 
   return (
-    <motion.div layout="position" transition={{ duration: 0.15 }}>
-      {/* Potentially stop highlight/click issues? */}
-      <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
-        <TableBlockEditableTitle spaceId={spaceId} />
-        <div className="flex items-center gap-5">
-          {isEditing && (
-            <TableBlockPropertiesMenu
-              sourceType={source.type}
-              filterableProperties={mergedBlockProperties}
-              shownColumnIds={shownColumnIds}
-              orderedShownColumnRelations={orderedShownColumnRelations}
-              toggleProperty={toggleProperty}
-              hideAllShownPropertyColumns={hideAllShownPropertyColumns}
-              reorderShownPropertyRelations={reorderShownPropertyRelations}
-              disabled={!canEdit}
-            />
-          )}
-          <IconButton
-            onClick={toggleFilterHandler}
-            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
-          <Link
-            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
-            aria-label="Open fullscreen"
-          >
-            <Fullscreen color="grey-04" />
-          </Link>
-          <DataBlockViewMenu activeView={view} isLoading={isLoading} />
-          <TableBlockContextMenu sourceType={source.type} />
-          {showCreateEntityPlus &&
-            (usesCreateEntitySpaceDropdown ? (
-              <DataBlockCreateEntitySpaceDropdown
-                source={source}
-                onPick={targetSpaceId => onAddPlaceholder(targetSpaceId)}
+    <BlockLinkIngestionProvider spaceId={spaceId}>
+      <motion.div layout="position" transition={{ duration: 0.15 }}>
+        {/* Potentially stop highlight/click issues? */}
+        <div className="mb-2 flex h-8 items-center justify-between" onMouseDown={e => e.stopPropagation()}>
+          <TableBlockEditableTitle spaceId={spaceId} trailing={<BlockLinkIngestionChip />} />
+          <div className="flex items-center gap-5">
+            {isEditing && (
+              <TableBlockPropertiesMenu
+                sourceType={source.type}
+                filterableProperties={mergedBlockProperties}
+                shownColumnIds={shownColumnIds}
+                orderedShownColumnRelations={orderedShownColumnRelations}
+                toggleProperty={toggleProperty}
+                hideAllShownPropertyColumns={hideAllShownPropertyColumns}
+                reorderShownPropertyRelations={reorderShownPropertyRelations}
+                disabled={!canEdit}
               />
-            ) : (
-              <button type="button" onClick={onAddPlaceholderClick}>
-                <Create />
-              </button>
-            ))}
+            )}
+            <IconButton
+              onClick={toggleFilterHandler}
+              icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+              color="grey-04"
+            />
+            <Link
+              href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
+              aria-label="Open fullscreen"
+            >
+              <Fullscreen color="grey-04" />
+            </Link>
+            <DataBlockViewMenu activeView={view} isLoading={isLoading} />
+            <TableBlockContextMenu sourceType={source.type} />
+            {showCreateEntityPlus &&
+              (usesCreateEntitySpaceDropdown ? (
+                <DataBlockCreateEntitySpaceDropdown
+                  source={source}
+                  onPick={targetSpaceId => onAddPlaceholder(targetSpaceId)}
+                />
+              ) : (
+                <button type="button" onClick={onAddPlaceholderClick}>
+                  <Create />
+                </button>
+              ))}
+          </div>
         </div>
-      </div>
 
-      {isFilterOpen && (
-        <AnimatePresence>
-          <motion.div
-            initial={{ opacity: 0 }}
-            exit={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className={cx('overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
-            onMouseDown={e => e.stopPropagation()}
-          >
+        <BlockLinkIngestionPanel />
+
+        {isFilterOpen && (
+          <AnimatePresence>
             <motion.div
               initial={{ opacity: 0 }}
               exit={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
-              className="flex flex-col gap-2"
+              className={cx('overflow-hidden', isEditing ? 'border-t border-divider py-4' : 'py-2')}
+              onMouseDown={e => e.stopPropagation()}
             >
-              <div className="flex flex-wrap items-center gap-2">
-                {isQueryDataBlock && (
-                  <>
-                    <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
-                    {showToolbarDividerAfterScope && (
-                      <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-                    )}
-                  </>
-                )}
-                {showToolbarSort && (
-                  <DataBlockSortMenu
-                    triggerVariant="segment"
-                    isEditing={isEditing}
-                    properties={mergedBlockProperties}
-                    shownColumnIds={shownColumnIds}
-                    sortState={sortState}
-                    onSort={handleSortChange}
-                  />
-                )}
-                {isEditing && (
-                  <>
-                    <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
-                    <TableBlockEditableFilters
-                      ref={filterPromptRef}
-                      filterState={activeFilters}
-                      setFilterState={setActiveFilters}
-                      filterSuggestionSpaceId={spaceId}
-                      orderedColumnIds={orderedFilterColumnIds}
-                      isEditing={isEditing}
-                    />
-                  </>
-                )}
-                {!isEditing &&
-                  filterGroupsForToolbarPills.length > 0 &&
-                  filterGroupsForToolbarPills.map(group => (
-                    <React.Fragment key={group.columnId}>
-                      <TableBlockFilterGroupPill
-                        group={group}
-                        mode={activeFilterMode}
-                        onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                        onDeleteValue={originalIndex => {
-                          const newFilterState = produce(activeFilters, draft => {
-                            draft.splice(originalIndex, 1);
-                          });
-                          setActiveFilters(newFilterState);
-                        }}
-                        onClearGroup={() => {
-                          setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
-                        }}
-                        isEditing={isEditing}
-                      />
-                    </React.Fragment>
-                  ))}
-              </div>
-
-              {isEditing && filterGroupsForToolbarPills.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                exit={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.15, ease: 'easeIn', delay: 0.15 }}
+                className="flex flex-col gap-2"
+              >
                 <div className="flex flex-wrap items-center gap-2">
-                  {filterGroupsForToolbarPills.map(group => (
-                    <React.Fragment key={group.columnId}>
-                      <TableBlockFilterGroupPill
-                        group={group}
-                        mode={activeFilterMode}
-                        onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                        onDeleteValue={originalIndex => {
-                          const newFilterState = produce(activeFilters, draft => {
-                            draft.splice(originalIndex, 1);
-                          });
-                          setActiveFilters(newFilterState);
-                        }}
-                        onClearGroup={() => {
-                          setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
-                        }}
-                        onAddSimilar={anchorEl => {
-                          requestAnimationFrame(() => {
-                            requestAnimationFrame(() => {
-                              filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                            });
-                          });
-                        }}
-                        isEditing={isEditing}
-                      />
-                    </React.Fragment>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        </AnimatePresence>
-      )}
-
-      <motion.div layout="position" transition={{ duration: 0.15 }}>
-        {isLoading || !isFetched ? (
-          <>
-            <TableBlockLoadingPlaceholder />
-          </>
-        ) : (
-          EntriesComponent
-        )}
-        {hasPagination && (
-          <>
-            <Spacer height={12} />
-            <PageNumberContainer>
-              {source.type === 'COLLECTION' ? (
-                (() => {
-                  let skipCounter = 0;
-
-                  return getPaginationPages(totalPages, pageNumber + 1).map(page => {
-                    return page === PagesPaginationPlaceholder.skip ? (
-                      <Text
-                        key={`ellipsis-${skipCounter++}`}
-                        color="grey-03"
-                        className="flex justify-center"
-                        variant="metadataMedium"
-                      >
-                        ...
-                      </Text>
-                    ) : (
-                      <PageNumber
-                        key={`page-${page}`}
-                        number={page}
-                        onClick={() => setPage(page - 1)}
-                        isActive={page === pageNumber + 1}
-                      />
-                    );
-                  });
-                })()
-              ) : (
-                <>
-                  {pageNumber > 1 && (
+                  {isQueryDataBlock && (
                     <>
-                      <PageNumber number={1} onClick={() => setPage(0)} />
-                      {pageNumber > 2 ? (
-                        <Text color="grey-03" variant="metadataMedium">
-                          ...
-                        </Text>
-                      ) : null}
+                      <DataBlockScopeDropdown source={source} setSource={setSource} isEditing={isEditing} />
+                      {showToolbarDividerAfterScope && (
+                        <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                      )}
                     </>
                   )}
-                  {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
-                  <PageNumber isActive number={pageNumber + 1} />
-                  {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
-                </>
-              )}
-              <Spacer width={8} />
-              <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
-              <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
-            </PageNumberContainer>
-          </>
+                  {showToolbarSort && (
+                    <DataBlockSortMenu
+                      triggerVariant="segment"
+                      isEditing={isEditing}
+                      properties={mergedBlockProperties}
+                      shownColumnIds={shownColumnIds}
+                      sortState={sortState}
+                      onSort={handleSortChange}
+                    />
+                  )}
+                  {isEditing && (
+                    <>
+                      <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+                      <TableBlockEditableFilters
+                        ref={filterPromptRef}
+                        filterState={activeFilters}
+                        setFilterState={setActiveFilters}
+                        filterSuggestionSpaceId={spaceId}
+                        orderedColumnIds={orderedFilterColumnIds}
+                        isEditing={isEditing}
+                      />
+                    </>
+                  )}
+                  {!isEditing &&
+                    filterGroupsForToolbarPills.length > 0 &&
+                    filterGroupsForToolbarPills.map(group => (
+                      <React.Fragment key={group.columnId}>
+                        <TableBlockFilterGroupPill
+                          group={group}
+                          mode={activeFilterMode}
+                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          onDeleteValue={originalIndex => {
+                            const newFilterState = produce(activeFilters, draft => {
+                              draft.splice(originalIndex, 1);
+                            });
+                            setActiveFilters(newFilterState);
+                          }}
+                          onClearGroup={() => {
+                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                          }}
+                          isEditing={isEditing}
+                        />
+                      </React.Fragment>
+                    ))}
+                </div>
+
+                {isEditing && filterGroupsForToolbarPills.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {filterGroupsForToolbarPills.map(group => (
+                      <React.Fragment key={group.columnId}>
+                        <TableBlockFilterGroupPill
+                          group={group}
+                          mode={activeFilterMode}
+                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          onDeleteValue={originalIndex => {
+                            const newFilterState = produce(activeFilters, draft => {
+                              draft.splice(originalIndex, 1);
+                            });
+                            setActiveFilters(newFilterState);
+                          }}
+                          onClearGroup={() => {
+                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                          }}
+                          onAddSimilar={anchorEl => {
+                            requestAnimationFrame(() => {
+                              requestAnimationFrame(() => {
+                                filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                              });
+                            });
+                          }}
+                          isEditing={isEditing}
+                        />
+                      </React.Fragment>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          </AnimatePresence>
         )}
+
+        <motion.div layout="position" transition={{ duration: 0.15 }}>
+          {isLoading || !isFetched ? (
+            <>
+              <TableBlockLoadingPlaceholder />
+            </>
+          ) : (
+            EntriesComponent
+          )}
+          {hasPagination && (
+            <>
+              <Spacer height={12} />
+              <PageNumberContainer>
+                {source.type === 'COLLECTION' ? (
+                  (() => {
+                    let skipCounter = 0;
+
+                    return getPaginationPages(totalPages, pageNumber + 1).map(page => {
+                      return page === PagesPaginationPlaceholder.skip ? (
+                        <Text
+                          key={`ellipsis-${skipCounter++}`}
+                          color="grey-03"
+                          className="flex justify-center"
+                          variant="metadataMedium"
+                        >
+                          ...
+                        </Text>
+                      ) : (
+                        <PageNumber
+                          key={`page-${page}`}
+                          number={page}
+                          onClick={() => setPage(page - 1)}
+                          isActive={page === pageNumber + 1}
+                        />
+                      );
+                    });
+                  })()
+                ) : (
+                  <>
+                    {pageNumber > 1 && (
+                      <>
+                        <PageNumber number={1} onClick={() => setPage(0)} />
+                        {pageNumber > 2 ? (
+                          <Text color="grey-03" variant="metadataMedium">
+                            ...
+                          </Text>
+                        ) : null}
+                      </>
+                    )}
+                    {hasPreviousPage && <PageNumber number={pageNumber} onClick={() => setPage('previous')} />}
+                    <PageNumber isActive number={pageNumber + 1} />
+                    {hasNextPage && <PageNumber number={pageNumber + 2} onClick={() => setPage('next')} />}
+                  </>
+                )}
+                <Spacer width={8} />
+                <PreviousButton isDisabled={!hasPreviousPage} onClick={() => setPage('previous')} />
+                <NextButton isDisabled={!hasNextPage} onClick={() => setPage('next')} />
+              </PageNumberContainer>
+            </>
+          )}
+        </motion.div>
       </motion.div>
-    </motion.div>
+    </BlockLinkIngestionProvider>
   );
 };
 

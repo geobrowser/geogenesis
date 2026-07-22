@@ -13,7 +13,12 @@ import { isPersonalProfileSkillsRelationFocusRegionActive } from '~/core/utils/p
 
 import { NativeGeoImage } from '~/design-system/geo-image';
 
-export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
+type Props = {
+  spaceId: string;
+  trailing?: React.ReactNode;
+};
+
+export function TableBlockEditableTitle({ spaceId, trailing }: Props) {
   const { name, setName, isLoading } = useDataBlock();
   const { filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
@@ -30,14 +35,21 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
         ? 'Query name...'
         : 'Enter a name for this table...';
 
+  const [draftName, setDraftName] = React.useState(name ?? '');
+  React.useEffect(() => {
+    setDraftName(name ?? '');
+  }, [name]);
+
   const inputRef = useAutofocus<HTMLInputElement>(!isLoading && !name, 200, {
     shouldSkipFocus: isPersonalProfileSkillsRelationFocusRegionActive,
   });
 
+  const measureText = draftName.length > 0 ? draftName : titlePlaceholder;
+
   return (
-    <div className="table-block-editable-title flex grow items-center gap-2">
+    <div className="table-block-editable-title flex w-fit max-w-full shrink-0 items-center gap-2">
       {source.type === 'SPACES' && (
-        <div className="group relative z-10 flex h-full">
+        <div className="group relative z-10 flex h-full shrink-0">
           {renderedSpaces.map(spaceId => {
             const selectedSpace = spacesById.get(spaceId);
 
@@ -88,20 +100,32 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
           <MouseCatch />
         </div>
       )}
-      <div className="relative z-0 w-full text-button text-text">
+
+      <div className="relative z-0 w-fit max-w-full text-button text-text">
         {userCanEdit ? (
-          <input
-            type="text"
-            ref={inputRef}
-            onBlur={e => setName(e.currentTarget.value)}
-            defaultValue={name ?? undefined}
-            placeholder={titlePlaceholder}
-            className="w-full shrink-0 grow appearance-none text-mediumTitle text-text outline-hidden placeholder:text-grey-03"
-          />
+          <div className="inline-grid w-fit max-w-full [grid-template-columns:minmax(0,max-content)]">
+            <span aria-hidden className="invisible col-start-1 row-start-1 text-mediumTitle whitespace-pre">
+              {measureText}
+            </span>
+            <input
+              type="text"
+              ref={inputRef}
+              // Override the browser default size=20 min-width so the mirror span
+              // alone controls width (otherwise short titles leave a large gap).
+              size={1}
+              value={draftName}
+              onChange={e => setDraftName(e.currentTarget.value)}
+              onBlur={e => setName(e.currentTarget.value)}
+              placeholder={titlePlaceholder}
+              className="col-start-1 row-start-1 w-full min-w-0 appearance-none bg-transparent text-mediumTitle text-text outline-hidden placeholder:text-grey-03"
+            />
+          </div>
         ) : (
-          <h4 className="text-mediumTitle">{name}</h4>
+          <h4 className="w-fit max-w-full truncate text-mediumTitle">{name}</h4>
         )}
       </div>
+
+      {trailing ? <div className="shrink-0">{trailing}</div> : null}
     </div>
   );
 }

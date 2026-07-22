@@ -2,32 +2,15 @@
 
 import * as React from 'react';
 
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom } from 'jotai';
 
-import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
+import { useUrlIngestionSubmit } from '~/core/hooks/use-url-ingestion-submit';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
-import { addDataPanelExpandedAtom, assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import { addDataPanelExpandedAtom } from '~/core/state/chat-store';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
-
-// Normalizes a pasted URL to a parseable http(s) URL, defaulting a bare domain
-// (`example.com/article`) to https. Returns null if it can't be made into an
-// http(s) URL (e.g. a non-web scheme like ftp:). Returns the canonical string
-// so the inject / ingestion pipelines always receive a full URL.
-function normalizeHttpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const url = new URL(withScheme);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
 
 type Props = {
   spaceId: string;
@@ -36,70 +19,12 @@ type Props = {
 export function AddDataPanel({ spaceId }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const [expanded, setExpanded] = useAtom(addDataPanelExpandedAtom);
-  const setSeed = useSetAtom(assistantSeedAtom);
-  const setChatOpen = useSetAtom(isChatOpenAtom);
-  const [url, setUrl] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
+  const { url, setUrl, canSubmit, handleSubmit } = useUrlIngestionSubmit({
+    logTag: 'AddDataPanel',
+    onComplete: () => setExpanded(false),
+  });
 
   if (!canEdit || !expanded) return null;
-
-  const normalizedUrl = normalizeHttpUrl(url);
-  const canSubmit = normalizedUrl !== null && !submitting;
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!normalizedUrl || submitting) return;
-    setSubmitting(true);
-
-    let classification: ClassifyUrlResponse = { route: 'chat' };
-    try {
-      const res = await fetch('/api/chat/classify-url', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: normalizedUrl }),
-      });
-      if (res.ok) {
-        classification = (await res.json()) as ClassifyUrlResponse;
-      } else {
-        console.warn('[AddDataPanel] classify-url returned', res.status);
-      }
-    } catch (err) {
-      console.warn('[AddDataPanel] classify-url failed; falling back to chat flow', err);
-    }
-
-    if (classification.route === 'inject') {
-      try {
-        const res = await fetch('/api/chat/inject', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: normalizedUrl, type: classification.type }),
-        });
-        if (res.ok || res.status === 202) {
-          const body = (await res.json()) as { jobId: string };
-          if (body.jobId) {
-            setSeed({ mode: 'inject', url: normalizedUrl, jobId: body.jobId, injectType: classification.type });
-            setChatOpen(true);
-            setExpanded(false);
-            setUrl('');
-            setSubmitting(false);
-            return;
-          }
-        } else {
-          console.warn('[AddDataPanel] inject submit returned', res.status);
-        }
-      } catch (err) {
-        console.warn('[AddDataPanel] inject submit failed; falling back to chat flow', err);
-      }
-    }
-
-    setSeed({ mode: 'ingestion', url: normalizedUrl });
-    setChatOpen(true);
-    setExpanded(false);
-    setUrl('');
-    setSubmitting(false);
-  };
 
   return (
     <div className="relative h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
