@@ -184,10 +184,13 @@ function RankingComposePendingDisclosure({ count, children }: { count: number; c
   );
 }
 
-function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
+function RankingComposeCreateNewPrompt({ searchQuery, onCreateNew }: { searchQuery: string; onCreateNew: () => void }) {
+  const queryLabel = searchQuery.trim();
   return (
     <div className="flex items-center justify-between gap-4 py-3">
-      <p className="text-metadata text-grey-04">Can&apos;t find what you&apos;re looking for?</p>
+      <p className="min-w-0 text-[16px] leading-[20px] font-medium text-[#2A2B2E]">
+        No results found for &quot;{queryLabel}&quot;
+      </p>
       <Button variant="secondary" small onClick={onCreateNew}>
         Create new
       </Button>
@@ -549,7 +552,9 @@ export function RankingComposeGlobalRanking({
 
   const searchResultList = (
     <>
-      {showCreateNewPrompt ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+      {showCreateNewPrompt ? (
+        <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
+      ) : null}
       {filteredRankedIds.length > 0 ? <RankingComposeSectionDivider label="Other ranked results" /> : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
       {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Other unranked results" /> : null}
@@ -660,7 +665,9 @@ export function RankingComposeGlobalRanking({
               <>
                 {pendingDisclosure}
                 <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                  {showCreateNewPrompt ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                  {showCreateNewPrompt ? (
+                    <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
+                  ) : null}
                 </RankingComposeSearchListPlaceholder>
               </>
             ) : (
