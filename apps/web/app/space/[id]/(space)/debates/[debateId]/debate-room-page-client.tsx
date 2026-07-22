@@ -14,6 +14,10 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import {
+  type DebateRoomOwnershipCoordinator,
+  createDebateRoomOwnershipCoordinator,
+} from '~/core/debates/debate-room-ownership';
+import {
   useAbortDebate,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
@@ -139,6 +143,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
+  const [connectionConflict, setConnectionConflict] = React.useState(false);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
   const [previewError, setPreviewError] = React.useState<string | null>(null);
@@ -161,6 +166,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
+  const connectingRoomRef = React.useRef<RoomLike | null>(null);
+  const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
+  const connectionInstanceIdRef = React.useRef('uncoordinated');
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
@@ -175,6 +183,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
+  const preflightEndsAtMsRef = React.useRef<number | null>(null);
   const finalizedDebateRef = React.useRef<string | null>(null);
   const recordingPersistenceStartedRef = React.useRef<string | null>(null);
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
@@ -193,12 +202,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const storagePersistenceRequestedRef = React.useRef(false);
   const recordingCancellationHandledRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
+  preflightEndsAtMsRef.current = timestampMs(debate?.preflight_ends_at ?? null);
+  const debateStatusRef = React.useRef<Debate['status'] | null>(debate?.status ?? null);
+  const roomStateRef = React.useRef(roomState);
+  roomStateRef.current = roomState;
   const rematchQuery = useDebateRematch(
     debate?.rematch_session_id ?? '',
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
   const countdown = useDebateCountdown(debate, serverClock.now);
+  debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
   const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
@@ -213,6 +227,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted
   );
+  const canTakeOverConnection =
+    connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
+  const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -226,6 +243,45 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     remoteAudioEnabledRef.current = remoteAudioEnabled;
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
+
+  React.useEffect(() => {
+    if (!currentUserId) return;
+    const coordinator = createDebateRoomOwnershipCoordinator({
+      debateId,
+      userId: currentUserId,
+      onTakeoverRequested: () => {
+        const status = debateStatusRef.current;
+        const preflightStillPending =
+          status === 'preflight' &&
+          recordingStartedAtRef.current === null &&
+          (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
+        const canReleaseOwnership = status === 'connecting' || preflightStillPending;
+        if (!canReleaseOwnership) return false;
+
+        connectionGenerationRef.current += 1;
+        disconnectConnectingRoom(connectingRoomRef);
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        setRemoteVideoReady(false);
+        setConnectionConflict(true);
+        setRoomError('This debate moved to another tab.');
+        setRoomState('idle');
+        logDebateConnectionDiagnostic('ownership-released', {
+          debateId,
+          instanceId: connectionInstanceIdRef.current,
+          roomState: roomStateRef.current,
+        });
+        return true;
+      },
+    });
+    connectionInstanceIdRef.current = coordinator.instanceId;
+    ownershipRef.current = coordinator;
+
+    return () => {
+      if (ownershipRef.current === coordinator) ownershipRef.current = null;
+      coordinator.close();
+    };
+  }, [currentUserId, debateId]);
 
   const clearRecordingTimers = React.useCallback(() => {
     if (recordingStartTimerRef.current !== null) {
@@ -567,12 +623,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [ensureLocalPreview]
   );
 
-  const connect = React.useCallback(async () => {
+  const connect = React.useCallback(async (options: { takeover?: boolean } = {}) => {
     const generation = connectionGenerationRef.current + 1;
     connectionGenerationRef.current = generation;
     const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
     let connectingRoom: RoomLike | null = null;
     let newlyCreatedTracks: LocalTrackLike[] = [];
+    const ownership = ownershipRef.current;
+    const ownsConnection = options.takeover
+      ? await ownership?.requestTakeover()
+      : await ownership?.acquire();
+    if (!isCurrent()) return;
+    if (ownsConnection === false) {
+      setConnectionConflict(true);
+      setRoomError('This debate is already open in another tab.');
+      setRoomState('idle');
+      logDebateConnectionDiagnostic('ownership-blocked', {
+        debateId,
+        instanceId: connectionInstanceIdRef.current,
+        roomState: roomStateRef.current,
+      });
+      return;
+    }
+
+    setConnectionConflict(false);
     setRoomError(null);
     setRoomState('connecting');
     setServerClockSettled(false);
@@ -604,6 +678,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       // out a tile mid-turn.
       const room = new livekit.Room({ adaptiveStream: false, dynacast: false }) as unknown as RoomLike;
       connectingRoom = room;
+      connectingRoomRef.current = room;
       room.on(livekit.RoomEvent.TrackSubscribed, payload => {
         // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
         // reject only a different room here rather than a not-yet-set one.
@@ -660,21 +735,35 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       room.on(livekit.RoomEvent.Disconnected, payload => {
         if (!isCurrent() || roomRef.current !== room) return;
         if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+        connectionGenerationRef.current += 1;
         // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
         // call room.disconnect() a second time and could re-enter this handler.
         roomRef.current = null;
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        ownershipRef.current?.release();
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
-        setRoomError('Lost connection to the debate room.');
+        const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
+        setConnectionConflict(duplicateIdentity);
+        setRoomError(
+          duplicateIdentity ? 'This debate is active in another tab or device.' : 'Lost connection to the debate room.'
+        );
         setRoomState('idle');
+        logDebateConnectionDiagnostic('livekit-disconnected', {
+          debateId,
+          instanceId: connectionInstanceIdRef.current,
+          roomState: roomStateRef.current,
+          disconnectReason: payload,
+        });
       });
 
       await room.connect(token.url, token.token);
       if (!isCurrent()) {
         room.disconnect();
+        if (connectingRoomRef.current === room) connectingRoomRef.current = null;
         return;
       }
+      connectingRoomRef.current = null;
       roomRef.current = room;
       const hasPreviewTracks = localTracksRef.current.length > 0;
       const tracks = hasPreviewTracks
@@ -740,8 +829,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (roomRef.current === room) roomRef.current = null;
         return;
       }
+      setConnectionConflict(false);
       setRoomState('connected');
     } catch (error) {
+      if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
       if (connectingRoom && roomRef.current !== connectingRoom) {
         connectingRoom.disconnect();
         stopTracks(newlyCreatedTracks);
@@ -749,6 +840,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
       if (isCurrent()) {
+        ownershipRef.current?.release();
+        setConnectionConflict(false);
         setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
         setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
       }
@@ -757,12 +850,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     audioMuted,
     countdown.activeSlot,
     countdown.effectiveStatus,
+    debateId,
     debate?.status,
     liveKitJoin,
     markJoined,
     refetchDebate,
     videoEnabled,
   ]);
+
+  const retryConnection = React.useCallback(() => {
+    void connect();
+  }, [connect]);
+
+  const takeOverConnection = React.useCallback(() => {
+    void connect({ takeover: true });
+  }, [connect]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
@@ -913,7 +1015,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     clearTimedOutDebateActivity(debateId);
     clearRecordingTimers();
     void discardLocalRecorder();
+    disconnectConnectingRoom(connectingRoomRef);
     disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+    ownershipRef.current?.release();
     localMediaStreamRef.current = null;
     setRemoteVideoReady(false);
     setRoomError('Connection failed. Finding another match.');
@@ -980,6 +1084,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       clearRecordingTimers();
       void discardLocalRecorder();
+      disconnectConnectingRoom(connectingRoomRef);
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
     };
@@ -1177,11 +1282,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {roomError && roomState === 'idle' && !['complete', 'cancelled'].includes(debate.status) && (
-                    <Button type="button" onClick={connect} disabled={liveKitJoin.isPending || markJoined.isPending}>
-                      Retry connection
-                    </Button>
-                  )}
+                  {roomError &&
+                    roomState === 'idle' &&
+                    !['complete', 'cancelled'].includes(debate.status) &&
+                    (!connectionConflict || canTakeOverConnection) && (
+                      <Button
+                        type="button"
+                        onClick={connectionConflict ? takeOverConnection : retryConnection}
+                        disabled={liveKitJoin.isPending || markJoined.isPending}
+                      >
+                        {connectionConflict ? 'Continue here' : 'Retry connection'}
+                      </Button>
+                    )}
                   <Button type="button" variant="secondary" onClick={() => router.push(`/space/${spaceId}/debates`)}>
                     Back to debates
                   </Button>
@@ -1191,6 +1303,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               {roomError && roomState === 'idle' && (
                 <div className="mt-4 rounded-lg border border-red-01 bg-white px-5 py-4">
                   <Text color="red-01">{roomError}</Text>
+                  {connectionConflictWithoutTakeover && (
+                    <Text as="p" color="grey-04" className="mt-2">
+                      Continue the debate in the original tab or device to preserve its recording.
+                    </Text>
+                  )}
                 </div>
               )}
             </section>
@@ -1217,7 +1334,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
                 onRetryFinalization={retryLiveDebateFinalization}
-                onRetryConnection={connect}
+                onRetryConnection={retryConnection}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || roomState === 'saving'}
               />
@@ -2269,6 +2386,18 @@ function stopTracks(tracks: LocalTrackLike[]) {
   }
 }
 
+function logDebateConnectionDiagnostic(
+  event: 'ownership-blocked' | 'ownership-released' | 'livekit-disconnected',
+  details: {
+    debateId: string;
+    instanceId: string;
+    roomState: string;
+    disconnectReason?: unknown;
+  }
+) {
+  console.info('[DebateRoomConnection]', { event, ...details });
+}
+
 // Mobile browsers behind cellular/symmetric NAT can take several seconds to establish the publisher
 // PeerConnection, and the first publishTrack often rejects with "engine not connected within
 // timeout" before ICE settles. Retry a couple times so a slow-but-viable connection isn't surfaced
@@ -2305,6 +2434,11 @@ function disconnectRoom(
   if (remoteMediaRef.current) {
     remoteMediaRef.current.replaceChildren();
   }
+}
+
+function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<RoomLike | null>) {
+  connectingRoomRef.current?.disconnect();
+  connectingRoomRef.current = null;
 }
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {

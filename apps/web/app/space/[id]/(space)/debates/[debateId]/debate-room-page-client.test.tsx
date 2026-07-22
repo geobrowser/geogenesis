@@ -31,6 +31,11 @@ const mocks = vi.hoisted(() => ({
   refetchDebate: vi.fn(),
   clearTimedOutDebateActivity: vi.fn(),
   roomOn: vi.fn(),
+  ownershipAcquire: vi.fn(),
+  ownershipRequestTakeover: vi.fn(),
+  ownershipRelease: vi.fn(),
+  ownershipClose: vi.fn(),
+  ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
@@ -81,6 +86,20 @@ vi.mock('~/core/debates/recording-upload-queue', () => ({
   requestPersistentRecordingStorage: mocks.requestPersistentStorage,
 }));
 
+vi.mock('~/core/debates/debate-room-ownership', () => ({
+  createDebateRoomOwnershipCoordinator: (options: { onTakeoverRequested: () => boolean | Promise<boolean> }) => {
+    mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
+    return {
+      instanceId: 'connection-instance-1',
+      acquire: mocks.ownershipAcquire,
+      requestTakeover: mocks.ownershipRequestTakeover,
+      release: mocks.ownershipRelease,
+      close: mocks.ownershipClose,
+      ownsConnection: () => true,
+    };
+  },
+}));
+
 vi.mock('livekit-client', () => ({
   createLocalTracks: mocks.createLocalTracks,
   Room: class {
@@ -102,6 +121,7 @@ vi.mock('livekit-client', () => ({
   },
   DisconnectReason: {
     CLIENT_INITIATED: 1,
+    DUPLICATE_IDENTITY: 2,
   },
 }));
 
@@ -133,6 +153,11 @@ beforeEach(() => {
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
+  mocks.ownershipAcquire.mockReset().mockResolvedValue(true);
+  mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
+  mocks.ownershipRelease.mockReset();
+  mocks.ownershipClose.mockReset();
+  mocks.ownershipTakeoverHandler = null;
   mocks.debate = completedDebate();
   mocks.rematch = null;
   mocks.featureFlags = {
@@ -334,6 +359,101 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
   });
 
+  it('does not mint a token when another tab owns the participant connection', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.roomConnect).not.toHaveBeenCalled();
+  });
+
+  it('takes over a connection-phase debate before minting a new token', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue here' }));
+
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.ownershipRequestTakeover.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.liveKitJoinMutateAsync.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('disconnects an in-flight LiveKit room before handing ownership to another tab', async () => {
+    const pendingConnection = deferred<void>();
+    mocks.roomConnect.mockReturnValue(pendingConnection.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+
+    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
+
+    pendingConnection.resolve();
+  });
+
+  it('does not allow a secondary tab to take over an active debate recording', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue here' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Continue the debate in the original tab or device to preserve its recording.')
+    ).toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not hand off a stale preflight after the first turn has started locally', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:09.000Z'));
+    const monotonicNow = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'preflight',
+      preflight_ends_at: '2026-07-02T00:00:10.000Z',
+      started_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(3));
+
+    // Cross the boundary without advancing React's 500ms countdown timer. The ownership callback
+    // must compare against the clock directly instead of trusting the last rendered status.
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
+    monotonicNow.mockReturnValue(3_000);
+    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(false);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+  });
+
   it('retries publishing when the media engine is slow to connect', async () => {
     vi.useFakeTimers();
     mocks.debate = {
@@ -414,6 +534,47 @@ describe('DebateRoomPageClient', () => {
 
     act(() => emitRoomEvent('disconnected', 99));
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+  });
+
+  it('explains when LiveKit disconnects a duplicate participant identity', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 2));
+
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    expect(mocks.ownershipRelease).toHaveBeenCalled();
+  });
+
+  it('does not resume an in-flight join after a duplicate-identity disconnect', async () => {
+    const pendingJoin = deferred<void>();
+    mocks.markJoinedMutateAsync.mockReturnValue(pendingJoin.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+
+    act(() => emitRoomEvent('disconnected', 2));
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+
+    pendingJoin.resolve();
+    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+    expect(screen.getByText('This debate is active in another tab or device.')).toBeInTheDocument();
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
