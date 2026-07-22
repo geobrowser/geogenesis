@@ -27,6 +27,12 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
   const thresholdValue = clampPercentForSlider(state.slowPathThresholdPercent);
   const universalValue = clampPercentForSlider(state.universalThresholdPercent);
 
+  // Universal must stay >= the pass threshold so a review-path proposal can't accidentally
+  // execute early. Existing spaces already configured below partial keep their current
+  // value as the floor, so they can drag UP from where they are — but once the slider
+  // crosses partial, the floor rises with it and going back below partial is blocked.
+  const universalFloor = Math.min(universalValue, thresholdValue);
+
   return (
     <div className="flex flex-col gap-4">
       <SettingRow label="Slow path threshold" hint="Percentage of YES votes needed for a review-path proposal to pass.">
@@ -50,12 +56,12 @@ export function VotingSettingsFields({ state, onChange, disabled = false }: Prop
 
       <SettingRow
         label="Universal support threshold"
-        hint="Percentage of all editors that must vote YES for a review-path proposal to pass early, before the voting window ends. Keep it above the pass threshold."
+        hint="Percentage of all editors that must vote YES for a review-path proposal to pass early, before the voting window ends. Keep it above the pass threshold — set to 100% to disable early execution entirely."
       >
         <div className="flex items-center gap-3">
           <input
             type="range"
-            min={0}
+            min={universalFloor}
             max={100}
             step={1}
             value={universalValue}

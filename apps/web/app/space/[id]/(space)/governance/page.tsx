@@ -118,7 +118,7 @@ export default async function GovernancePage(props: Props) {
   // The four settings the governance design surfaces (design 62569-13445).
   const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
   const passThreshold = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
-  const universalThreshold = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '90%';
+  const universalThreshold = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '100%';
   const fastPassThreshold = votingSettings ? String(Number(votingSettings.flatSupportThreshold)) : '—';
   const quorum = votingSettings ? String(Number(votingSettings.quorum)) : '—';
 

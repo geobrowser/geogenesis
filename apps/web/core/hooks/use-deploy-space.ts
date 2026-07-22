@@ -45,7 +45,9 @@ type DeployArgs = {
  */
 export const NEW_SPACE_DEFAULT_VOTING_SETTINGS: VotingSettingsInput = {
   partialPercentageSupportThreshold: 51,
-  universalPercentageSupportThreshold: 90,
+  // 100% disables slow-path early execution — a review-path proposal waits out
+  // its full voting window before it can be executed, matching what most creators expect.
+  universalPercentageSupportThreshold: 100,
   flatSupportThreshold: 1,
   quorum: 1,
   disableFastPathAccessForNewMembers: true,

@@ -80,7 +80,7 @@ export type HiddenVotingSettings = {
  */
 export const DEFAULT_VOTING_SETTINGS_SNAPSHOT: VotingSettingsSnapshot = {
   partialPercent: 51,
-  universalPercent: 90,
+  universalPercent: 100,
   flat: 1,
   quorum: 1,
   durationSeconds: SECONDS_PER_DAY,
