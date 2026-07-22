@@ -36,6 +36,29 @@ import {
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
 
+// Upload failures the backend will never resolve on retry. Retrying these keeps the
+// "Uploading N debate" banner up forever, so instead we drop the local blob. Transient
+// failures (network errors, 5xx, expired auth) are deliberately absent — those must keep
+// retrying.
+const permanentRecordingUploadErrorCodes = new Set([
+  'recording_cancelled', // the opponent cancelled the debate recording
+  'recording_not_ready', // the debate was aborted/cancelled and can no longer be finalized
+  'invalid_recording', // duration, timestamp, or framerate the backend rejects
+  'invalid_recording_mime_type', // an unsupported container the backend rejects
+  'recording_upload_missing', // the presigned object never landed in storage
+  'recording_upload_size_mismatch', // the stored object no longer matches the completion request
+  'recording_upload_type_mismatch',
+]);
+
+export function isPermanentRecordingUploadError(error: unknown): boolean {
+  return (
+    error instanceof GeoChatRequestError &&
+    error.status === 400 &&
+    error.code !== null &&
+    permanentRecordingUploadErrorCodes.has(error.code)
+  );
+}
+
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
 type RecordingUploadDependencies = {
@@ -219,13 +242,13 @@ export function DebateRecordingUploadCoordinator() {
         }
       })
       .catch(async error => {
-        // The opponent cancelled the upload, so this recording can never be published;
-        // drop the local blob instead of retrying it forever.
-        if (error instanceof GeoChatRequestError && error.code === 'recording_cancelled') {
+        // Drop the local blob for failures no retry can fix (see the permanent codes above)
+        // instead of leaving the banner up forever.
+        if (isPermanentRecordingUploadError(error)) {
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
-            console.warn('[DebateRecordingUploadCoordinator] could not delete cancelled upload:', queueError);
+            console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
           }
           return;
         }

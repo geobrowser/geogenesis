@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { clampSeconds, normalizeTurnDurationsMs, timelineSecondsFor, turnStateForTime } from './playback-utils';
+import {
+  clampSeconds,
+  normalizeTurnDurationsMs,
+  recordingWindowOffsetsSeconds,
+  timelineSecondsFor,
+  turnStateForTime,
+} from './playback-utils';
 
 describe('normalizeTurnDurationsMs', () => {
   it('keeps finite positive durations', () => {
@@ -70,5 +76,38 @@ describe('turnStateForTime', () => {
 
   it('clamps to the final turn past the end of the timeline', () => {
     expect(turnStateForTime(1, durations, 2.5)).toEqual({ slot: 2, progress: 1, seconds: 0 });
+  });
+});
+
+describe('recordingWindowOffsetsSeconds', () => {
+  const windowStart = '2026-07-20T00:00:00.000Z';
+  const windowStartMs = Date.parse(windowStart);
+
+  it('anchors each recording to the debate start (matching the backend composite)', () => {
+    // slot 1 started 500ms after the window opened; slot 2 started 2s after.
+    const offsets = recordingWindowOffsetsSeconds(windowStart, windowStartMs + 500, windowStartMs + 2_000);
+    expect(offsets.slot1).toBeCloseTo(0.5);
+    expect(offsets.slot2).toBeCloseTo(2);
+    // At debate-timeline P, each video plays at `P - offset`; the gap between the two
+    // recordings (1.5s here) is what keeps them from talking over each other.
+    expect(offsets.slot2 - offsets.slot1).toBeCloseTo(1.5);
+  });
+
+  it('handles a recording that began before the debate window', () => {
+    const offsets = recordingWindowOffsetsSeconds(windowStart, windowStartMs - 1_000, windowStartMs);
+    expect(offsets.slot1).toBeCloseTo(-1);
+    expect(offsets.slot2).toBeCloseTo(0);
+  });
+
+  it('falls back to the earliest recording when the debate has no start timestamp', () => {
+    const offsets = recordingWindowOffsetsSeconds(null, 10_000, 12_500);
+    expect(offsets.slot1).toBeCloseTo(0);
+    expect(offsets.slot2).toBeCloseTo(2.5);
+  });
+
+  it('treats missing or invalid timestamps as zero offset', () => {
+    const offsets = recordingWindowOffsetsSeconds('not-a-date', null, Number.NaN);
+    expect(offsets.slot1).toBe(0);
+    expect(offsets.slot2).toBe(0);
   });
 });
