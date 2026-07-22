@@ -21,11 +21,11 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -103,7 +103,7 @@ export default async function SpacePage(props0: Props) {
           </TrackedErrorBoundary>
         </div>
         <React.Suspense fallback={null}>
-          <SpaceCommunityCallsContainer spaceId={spaceId} />
+          <SpaceOverviewSidePanelContainer spaceId={spaceId} />
         </React.Suspense>
       </div>
     </EntityPageContentContainer>
@@ -238,9 +238,9 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
   return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
 };
 
-const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
+const SpaceOverviewSidePanelContainer = async ({ spaceId }: { spaceId: string }) => {
   const series = await fetchCommunityCalls(spaceId);
-  return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
+  return <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={series} />;
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {

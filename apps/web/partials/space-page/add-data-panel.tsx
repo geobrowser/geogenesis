@@ -6,6 +6,7 @@ import { useAtom, useSetAtom } from 'jotai';
 
 import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
+import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import { addDataPanelExpandedAtom, assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -81,6 +82,7 @@ export function AddDataPanel({ spaceId }: Props) {
           if (body.jobId) {
             setSeed({ mode: 'inject', url: normalizedUrl, jobId: body.jobId, injectType: classification.type });
             setChatOpen(true);
+            completeDailyUploadActivity(spaceId);
             setExpanded(false);
             setUrl('');
             setSubmitting(false);
@@ -96,6 +98,7 @@ export function AddDataPanel({ spaceId }: Props) {
 
     setSeed({ mode: 'ingestion', url: normalizedUrl });
     setChatOpen(true);
+    completeDailyUploadActivity(spaceId);
     setExpanded(false);
     setUrl('');
     setSubmitting(false);

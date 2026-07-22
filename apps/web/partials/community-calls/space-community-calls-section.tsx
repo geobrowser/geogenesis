@@ -43,7 +43,15 @@ function pickHighlight(series: CallSeries[], now: number): { row: Row; isLive: b
  * all — with no live/upcoming occurrence, the rail still renders so "View all"
  * stays reachable.
  */
-export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: string; series: CallSeries[] }) {
+export function SpaceCommunityCallsSection({
+  spaceId,
+  series,
+  embedded = false,
+}: {
+  spaceId: string;
+  series: CallSeries[];
+  embedded?: boolean;
+}) {
   // Bucket after mount so SSR/CSR clock splits can't diverge (hydration-safe), then
   // keep refreshing so a call transitions live/upcoming while the page stays open.
   const [now, setNow] = React.useState<number | null>(null);
@@ -62,8 +70,8 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
 
   if (series.length === 0) return null;
 
-  return (
-    <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
+  const content = (
+    <>
       <div className="flex flex-col gap-3 pb-4">
         <div className="flex items-center justify-between">
           <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">Community calls</h2>
@@ -83,8 +91,12 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
       ) : (
         <UpcomingCard row={highlight.row} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
       )}
-    </aside>
+    </>
   );
+
+  if (embedded) return <div>{content}</div>;
+
+  return <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">{content}</aside>;
 }
 
 function CardShell({ children }: { children: React.ReactNode }) {
