@@ -182,6 +182,26 @@ describe('NavbarActions debate availability menu', () => {
       '/space/personal-space'
     );
     expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveClass(
+      'px-3',
+      'py-2.5',
+      'font-[family-name:var(--font-calibre)]',
+      'text-[1rem]',
+      'leading-[0.9375rem]',
+      'font-medium',
+      'tracking-[-0.03125rem]',
+      'not-italic'
+    );
+    expect(screen.getByRole('button', { name: 'Sign out' })).toHaveClass(
+      'px-3',
+      'py-2.5',
+      'font-[family-name:var(--font-calibre)]',
+      'text-[1rem]',
+      'leading-[0.9375rem]',
+      'font-medium',
+      'tracking-[-0.03125rem]',
+      'not-italic'
+    );
     expect(screen.queryByText('Personal space')).not.toBeInTheDocument();
     expect(screen.getByText('Sign out')).toBeInTheDocument();
   });

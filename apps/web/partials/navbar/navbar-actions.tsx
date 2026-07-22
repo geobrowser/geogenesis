@@ -134,7 +134,7 @@ export function NavbarActions() {
                 aria-checked={availableToDebate}
                 disabled={availabilityPending}
                 onClick={toggleDebateAvailability}
-                className="flex w-full items-center justify-between px-5 py-4 text-left text-bodySemibold text-text transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
+                className="flex w-full items-center justify-between px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
               >
                 <span>Available to debate</span>
                 <span
@@ -155,7 +155,7 @@ export function NavbarActions() {
               <button
                 type="button"
                 onClick={logout}
-                className="flex w-full items-center px-5 py-4 text-left text-bodySemibold text-text transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+                className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
               >
                 Sign out
               </button>
