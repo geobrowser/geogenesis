@@ -5,6 +5,7 @@ import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession } from '~/core/debates/api';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -42,7 +43,18 @@ vi.mock('~/core/debates/hooks', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({
-    entities: [{ id: 'claim-more', name: 'A newly published claim', description: null, spaces: ['space-2'] }],
+    entities: [
+      {
+        id: 'claim-more',
+        name: 'A newly published claim',
+        description: null,
+        spaces: ['space-2'],
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
+        ],
+      },
+    ],
     isLoading: false,
     isPlaceholderData: false,
     endCursor: null,
@@ -71,7 +83,7 @@ describe('DebateRematchPageClient', () => {
       </StrictMode>
     );
 
-    expect(await screen.findByRole('heading', { name: 'Rematch Salina' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'A claim both participants chose' })).toBeInTheDocument();
     await new Promise(resolve => window.setTimeout(resolve, 0));
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
@@ -102,13 +114,14 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
-  it('does not show participant avatars in claim position controls', () => {
+  it('shows each side its holder avatar in the claim position controls', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
     expect(sharedClaimCard).not.toBeNull();
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).toBeNull();
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).toBeNull();
+    // Local picked Yes and the opponent picked No, so each pill carries one avatar.
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).not.toBeNull();
   });
 
   it('shows an incoming request with the snapshotted format details', () => {
@@ -157,10 +170,50 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
-    expect(
-      screen.getAllByRole('button', { name: 'Request debate' }).every(button => button.hasAttribute('disabled'))
-    ).toBe(true);
-    expect(screen.getAllByRole('combobox').every(select => select.hasAttribute('disabled'))).toBe(true);
+    expect(screen.getAllByRole('button', { name: /^(Yes|No)$/ }).every(button => button.hasAttribute('disabled'))).toBe(
+      true
+    );
+  });
+
+  it('filters to opponent-committed claims on the Debate now tab', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The opponent has taken a side on the shared claim but not the newly published one.
+    expect(screen.getByRole('heading', { name: 'A claim both participants chose' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'A newly published claim' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Debate now/ }));
+
+    expect(screen.getByRole('heading', { name: 'A claim both participants chose' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'A newly published claim' })).toBeNull();
+  });
+
+  it('shows the opponent-specific empty state when no claim is debate-ready', () => {
+    mocks.claims = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Debate now/ }));
+
+    expect(screen.getByText(/Salina hasn't picked a side yet/)).toBeInTheDocument();
+  });
+
+  it('narrows the list to the selected topic', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by topic' }), { target: { value: 'Governance' } });
+
+    // Only the Governance-tagged published claim survives; the untagged shared claim drops out.
+    expect(screen.getByRole('heading', { name: 'A newly published claim' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'A claim both participants chose' })).toBeNull();
+  });
+
+  it('matches the topic filter on any of a claim topics, not just the first', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The published claim is tagged Governance and Ethics; filtering on the second still matches.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by topic' }), { target: { value: 'Ethics' } });
+
+    expect(screen.getByRole('heading', { name: 'A newly published claim' })).toBeInTheDocument();
   });
 });
 
