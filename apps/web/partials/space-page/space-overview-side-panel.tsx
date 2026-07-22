@@ -15,7 +15,7 @@ type Props = {
 };
 
 /**
- * Daily activities (when present) first,
+ * Daily activities (when the viewer is signed in and tasks exist) first,
  * then the community-calls digest. Hidden entirely when neither has content.
  */
 export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {

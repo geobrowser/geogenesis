@@ -1,5 +1,6 @@
 'use client';
 
+import { usePrivy } from '@geogenesis/auth';
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
@@ -61,6 +62,8 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
   tasks: DailyActivityTask[];
   hasLinkIngestionTool: boolean;
 } {
+  const { ready, authenticated } = usePrivy();
+  const isSignedIn = ready && authenticated;
   const { blockRelations, initialBlockEntities } = useEditorStoreLite();
 
   const blockIds = React.useMemo(() => blockRelations.map(r => r.block.id), [blockRelations]);
@@ -110,6 +113,8 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
   }, [blocksRelationEntityIds, initialBlockEntities, toolRelations.length]);
 
   const tasks = React.useMemo(() => {
+    if (!isSignedIn) return [];
+
     const next: DailyActivityTask[] = [];
 
     for (const blockId of blockIds) {
@@ -186,7 +191,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
     }
 
     return next;
-  }, [blockIds, blockValues, hasLinkIngestionTool, initialBlockEntities, spaceId, typeRelations]);
+  }, [blockIds, blockValues, hasLinkIngestionTool, initialBlockEntities, isSignedIn, spaceId, typeRelations]);
 
   return { tasks, hasLinkIngestionTool };
 }
