@@ -32,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
   privyUser: {
     id: 'user-a',
-    email: { address: 'nate@geobrowser.io' },
+    email: { address: 'max@example.com' },
     linkedAccounts: [],
   } as Record<string, unknown> | null,
 }));
@@ -150,7 +150,7 @@ describe('NavbarActions debate availability menu', () => {
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
     mocks.privyUser = {
       id: 'user-a',
-      email: { address: 'nate@geobrowser.io' },
+      email: { address: 'max@example.com' },
       linkedAccounts: [],
     };
   });
@@ -165,7 +165,7 @@ describe('NavbarActions debate availability menu', () => {
     expect(screen.getByText('Personal space')).toBeInTheDocument();
     expect(screen.getByText('Sign out')).toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
-    expect(screen.queryByText('nate@geobrowser.io')).not.toBeInTheDocument();
+    expect(screen.queryByText('max@example.com')).not.toBeInTheDocument();
     expect(mocks.debateActivityHook).toHaveBeenCalledWith(false);
     expect(mocks.mutateAvailability).not.toHaveBeenCalled();
   });
@@ -177,7 +177,7 @@ describe('NavbarActions debate availability menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     expect(screen.getByTestId('profile-menu')).toHaveClass('sm:w-[322px]');
-    expect(screen.getByRole('link', { name: /Nate nate@geobrowser\.io/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Nate max@example\.com/ })).toHaveAttribute(
       'href',
       '/space/personal-space'
     );
