@@ -1,13 +1,17 @@
 import * as React from 'react';
 
+import cx from 'classnames';
+
 /** Compact speech-bubble icon for explore feed comment counts. */
+
+
 export function ExploreCommentsIcon({ className }: { className?: string }) {
   return (
     <svg
-      className={className}
+      className={cx('block', className)}
       width="12"
-      height="12"
-      viewBox="0 0 12 12"
+      height="10"
+      viewBox="0 0 12 10"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden

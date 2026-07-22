@@ -216,7 +216,9 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         href={entityHref}
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
-        <ExploreCommentsIcon className="text-grey-04" />
+        <div className="flex size-5 shrink-0 items-center justify-center">
+          <ExploreCommentsIcon className="text-grey-04" />
+        </div>
         <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
       </Link>
     </div>
