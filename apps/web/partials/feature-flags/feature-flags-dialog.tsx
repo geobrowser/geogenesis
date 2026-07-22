@@ -4,6 +4,8 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
+import { usePathname, useRouter } from 'next/navigation';
+
 import { featureFlagDefinitions, useFeatureFlags } from '~/core/state/feature-flags';
 
 import { SquareButton } from '~/design-system/button';
@@ -12,23 +14,38 @@ import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
 export function FeatureFlagsDialog() {
-  const [open, setOpen] = React.useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const [shortcutOpen, setShortcutOpen] = React.useState(false);
   const { flags, setFeatureFlag } = useFeatureFlags();
+  const routeOpen = pathname === '/feature-flags';
+  const open = shortcutOpen || routeOpen;
+
+  const close = React.useCallback(() => {
+    setShortcutOpen(false);
+    if (routeOpen) router.replace('/root');
+  }, [routeOpen, router]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || !event.shiftKey || event.key.toLowerCase() !== 'f') return;
 
       event.preventDefault();
-      setOpen(value => !value);
+      if (open) close();
+      else setShortcutOpen(true);
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [close, open]);
+
+  const onOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) setShortcutOpen(true);
+    else close();
+  };
 
   return (
-    <Root open={open} onOpenChange={setOpen}>
+    <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
@@ -41,7 +58,7 @@ export function FeatureFlagsDialog() {
                 </Text>
               </Title>
               <Description className="sr-only">Toggle local preview features for this browser.</Description>
-              <SquareButton onClick={() => setOpen(false)} icon={<Close />} aria-label="Close feature flags" />
+              <SquareButton onClick={close} icon={<Close />} aria-label="Close feature flags" />
             </div>
 
             <div className="flex flex-col divide-y divide-grey-02">

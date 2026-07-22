@@ -58,13 +58,19 @@ type MediaDeviceOption = {
   label: string;
 };
 
+type RemoteTrackLike = {
+  kind: string;
+  attach: () => HTMLElement;
+  detach: () => HTMLMediaElement[];
+};
+
 type RoomLike = {
   connect: (url: string, token: string) => Promise<void>;
   disconnect: () => void;
   localParticipant: {
     publishTrack: (track: unknown) => Promise<unknown>;
   };
-  on: (event: string, callback: (track: { attach: () => HTMLElement }) => void) => void;
+  on: (event: string, callback: (payload: unknown) => void) => void;
 };
 
 type DebateCountdown = {
@@ -129,7 +135,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
-  const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'connected' | 'saving'>('idle');
+  const [roomState, setRoomState] = React.useState<'idle' | 'connecting' | 'reconnecting' | 'connected' | 'saving'>(
+    'idle'
+  );
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
@@ -590,9 +598,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       const livekit = await import('livekit-client');
       if (!isCurrent()) return;
-      const room = new livekit.Room({ adaptiveStream: true, dynacast: true }) as unknown as RoomLike;
+      // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
+      // adaptiveStream pauses a subscribed remote video when it judges the element off-screen or
+      // too small, and dynacast stops publishing layers no one is consuming; together they black
+      // out a tile mid-turn.
+      const room = new livekit.Room({ adaptiveStream: false, dynacast: false }) as unknown as RoomLike;
       connectingRoom = room;
-      room.on(livekit.RoomEvent.TrackSubscribed, track => {
+      room.on(livekit.RoomEvent.TrackSubscribed, payload => {
+        // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
+        // reject only a different room here rather than a not-yet-set one.
+        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+        const track = payload as RemoteTrackLike;
         const element = track.attach();
         if (element instanceof HTMLMediaElement) {
           element.muted = !remoteAudioEnabledRef.current;
@@ -607,6 +623,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         remoteMediaRef.current?.appendChild(element);
         void refetchDebate();
       });
+      // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
+      // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
+      // re-subscribe attaches a fresh element rather than stacking a second one behind it.
+      room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
+        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+        const track = payload as RemoteTrackLike;
+        for (const element of track.detach()) element.remove();
+        if (track.kind === 'video') setRemoteVideoReady(false);
+      });
       room.on(livekit.RoomEvent.ParticipantConnected, () => {
         if (!isCurrent()) return;
         void refetchDebate();
@@ -614,6 +639,35 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           remoteParticipantRefetchTimerRef.current = null;
           if (isCurrent()) void refetchDebate();
         }, 250);
+      });
+      // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
+      // blips sees "Reconnecting" instead of a silently frozen call. Clear the remote
+      // tiles on the way out so stale elements from the dropped session don't linger behind the
+      // re-subscribed tracks.
+      room.on(livekit.RoomEvent.Reconnecting, () => {
+        if (!isCurrent() || roomRef.current !== room) return;
+        remoteMediaRef.current?.replaceChildren();
+        setRemoteVideoReady(false);
+        setRoomState('reconnecting');
+      });
+      room.on(livekit.RoomEvent.Reconnected, () => {
+        if (!isCurrent() || roomRef.current !== room) return;
+        setRoomState('connected');
+      });
+      // A non-client-initiated Disconnected means auto-reconnect gave up. Our own teardown always
+      // disconnects with CLIENT_INITIATED, so this branch only fires on a genuinely dropped call:
+      // tear the room down and return to idle, where the "Retry connection" affordance lives.
+      room.on(livekit.RoomEvent.Disconnected, payload => {
+        if (!isCurrent() || roomRef.current !== room) return;
+        if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+        // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
+        // call room.disconnect() a second time and could re-enter this handler.
+        roomRef.current = null;
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        setRemoteVideoReady(false);
+        setRoomError('Lost connection to the debate room.');
+        setRoomState('idle');
       });
 
       await room.connect(token.url, token.token);
@@ -646,8 +700,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         ),
         videoEnabled,
       });
+
+      // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
+      // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
+      // several seconds; that's long enough to miss the server's connecting deadline and get the
+      // debate cancelled with connection_timeout even though both participants are present.
+      await markJoined.mutateAsync();
+      if (!isCurrent()) {
+        room.disconnect();
+        stopLocalTracks(localTracksRef);
+        localMediaStreamRef.current = null;
+        if (roomRef.current === room) roomRef.current = null;
+        return;
+      }
+
       for (const track of tracks) {
-        await room.localParticipant.publishTrack(track);
+        await publishTrackWithRetry(room, track, isCurrent);
         if (!isCurrent()) {
           room.disconnect();
           stopLocalTracks(localTracksRef);
@@ -665,7 +733,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await localVideoRef.current.play().catch(() => undefined);
       }
 
-      await markJoined.mutateAsync();
       if (!isCurrent()) {
         room.disconnect();
         stopLocalTracks(localTracksRef);
@@ -1402,7 +1469,7 @@ function DebateRecordingModal({
   leaveDisabled,
 }: {
   debate: Debate;
-  roomState: 'connecting' | 'connected' | 'saving';
+  roomState: 'connecting' | 'reconnecting' | 'connected' | 'saving';
   roomError: string | null;
   countdown: DebateCountdown;
   localSlot: ParticipantSlot | null;
@@ -1564,6 +1631,12 @@ function DebateRecordingModal({
           )}
         </div>
 
+        {roomState === 'reconnecting' && (
+          <div className="mt-3 w-full rounded-lg border border-grey-02 bg-white px-4 py-3">
+            <Text>Reconnecting to the debate room…</Text>
+          </div>
+        )}
+
         {roomError && (
           <div className="mt-3 flex w-full flex-wrap items-center justify-between gap-3 rounded-lg border border-red-01 bg-white px-4 py-3">
             <Text color="red-01">{roomError}</Text>
@@ -1608,7 +1681,7 @@ function DebateDebugMenu({
 }: {
   debate: Debate;
   countdown: DebateCountdown;
-  roomState: 'connecting' | 'connected' | 'saving';
+  roomState: 'connecting' | 'reconnecting' | 'connected' | 'saving';
   audioMuted: boolean;
   remoteAudioEnabled: boolean;
   videoEnabled: boolean;
@@ -2193,6 +2266,27 @@ function stopTracks(tracks: LocalTrackLike[]) {
   for (const track of tracks) {
     track.detach?.();
     track.stop();
+  }
+}
+
+// Mobile browsers behind cellular/symmetric NAT can take several seconds to establish the publisher
+// PeerConnection, and the first publishTrack often rejects with "engine not connected within
+// timeout" before ICE settles. Retry a couple times so a slow-but-viable connection isn't surfaced
+// as a hard failure that drops the debater from the call.
+async function publishTrackWithRetry(room: RoomLike, track: LocalTrackLike, isCurrent: () => boolean) {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (!isCurrent()) return;
+    try {
+      await room.localParticipant.publishTrack(track);
+      return;
+    } catch (error) {
+      // A superseded attempt bails silently: throwing here would hit connect()'s catch, which runs
+      // shared-ref cleanup that could tear down a newer active room.
+      if (!isCurrent()) return;
+      if (attempt >= maxAttempts) throw error;
+      await new Promise(resolve => setTimeout(resolve, attempt * 750));
+    }
   }
 }
 

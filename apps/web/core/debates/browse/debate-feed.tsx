@@ -119,16 +119,14 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
     <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
   ) : null;
 
-  if (sidePanel) {
-    return (
-      <div className="flex h-[calc(100dvh-2.75rem)] items-stretch">
-        <div className="min-w-0 flex-1">{feed}</div>
-        {sidePanel}
-      </div>
-    );
-  }
-
-  return feed;
+  // Keep the feed in the same tree position whether or not a side panel is open, so
+  // toggling the claims/join panel doesn't remount the players and restart playback.
+  return (
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch">
+      <div className="min-w-0 flex-1">{feed}</div>
+      {sidePanel}
+    </div>
+  );
 }
 
 function DebateFeedItem({

@@ -130,13 +130,18 @@ export function resolveEditorTabId(
 }
 
 export function useActiveTabIdForEditor(): string | null {
+  // These hooks must stay above the early return. The resolved-tab context flips
+  // between `undefined` (no provider) and string|null (inside the editor) across
+  // renders, so a conditional return before them changes the hook count and crashes
+  // with "Rendered more hooks than during the previous render".
   const resolved = React.useContext(EditorResolvedTabContext);
+  const urlTabId = useTabIdFromSearchParams();
+  const editor = React.useContext(EditorContext);
+
   if (resolved !== undefined) {
     return resolved;
   }
 
-  const urlTabId = useTabIdFromSearchParams();
-  const editor = React.useContext(EditorContext);
   if (!editor) return urlTabId;
   return resolveEditorTabId(urlTabId, editor.initialTabs);
 }
