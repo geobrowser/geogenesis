@@ -196,11 +196,11 @@ function IdentityHeader({
 }) {
   const content = (
     <>
-      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full">
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
         {avatarValue ? (
-          <FallbackImage value={avatarValue} sizes="48px" className="object-cover" />
+          <FallbackImage value={avatarValue} sizes="32px" className="object-cover" />
         ) : (
-          <Avatar value={address} size={48} />
+          <Avatar value={address} size={32} />
         )}
       </div>
       <div className="min-w-0">
