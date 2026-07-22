@@ -11,7 +11,7 @@ import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 
 import { LinkableChip } from '~/design-system/chip';
 
-const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-02 focus:outline-hidden', {
+const webUrlFieldStyles = cva('w-full bg-transparent placeholder:text-grey-03 focus:outline-hidden', {
   variants: {
     variant: {
       body: 'text-body',
@@ -64,6 +64,7 @@ export function WebUrlField({
   format,
   className = '',
   disableLink = false,
+  placeholder = 'Add value...',
   ...props
 }: WebUrlFieldProps) {
   // We use the local value and onBlur to improve performance when WebUrlField is rendered
@@ -89,6 +90,7 @@ export function WebUrlField({
   return isEditing ? (
     <input
       {...props}
+      placeholder={placeholder}
       value={localValue}
       className={cx(
         webUrlFieldStyles({ variant, editable: isEditing, className }),
