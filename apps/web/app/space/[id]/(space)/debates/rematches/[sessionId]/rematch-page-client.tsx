@@ -134,14 +134,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   // Topics live on the KG claim entity (not the rematch API), so resolve them here to
-  // label each card and drive the "Any topic" filter — same as the join-a-debate panel.
-  const topicByClaimId = React.useMemo(() => {
-    const map = new Map<string, string>();
+  // label each card and drive the "Any topic" filter. A claim can carry several topics.
+  const topicsByClaimId = React.useMemo(() => {
+    const map = new Map<string, string[]>();
     for (const entity of publishedClaims) {
-      const topic = entity.relations.find(
-        relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true
-      );
-      if (topic) map.set(entity.id, topic.toEntity.name ?? topic.toEntity.id);
+      const topics = entity.relations
+        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
+        .map(relation => relation.toEntity.name ?? relation.toEntity.id);
+      if (topics.length > 0) map.set(entity.id, topics);
     }
     return map;
   }, [publishedClaims]);
@@ -158,20 +158,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const availableTopics = React.useMemo(() => {
     const topics = new Set<string>();
     for (const claim of claims) {
-      const topic = topicByClaimId.get(claim.claim.claim_entity_id);
-      if (topic) topics.add(topic);
+      for (const topic of topicsByClaimId.get(claim.claim.claim_entity_id) ?? []) topics.add(topic);
     }
     return [...topics].sort((a, b) => a.localeCompare(b));
-  }, [claims, topicByClaimId]);
+  }, [claims, topicsByClaimId]);
 
   const visibleClaims = React.useMemo(
     () =>
       claims.filter(claim => {
         if (tab === 'debate-now' && opponentPositionOf(claim) === null) return false;
-        if (topicFilter && topicByClaimId.get(claim.claim.claim_entity_id) !== topicFilter) return false;
+        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter)) return false;
         return true;
       }),
-    [claims, opponentPositionOf, tab, topicFilter, topicByClaimId]
+    [claims, opponentPositionOf, tab, topicFilter, topicsByClaimId]
   );
 
   React.useEffect(() => {
@@ -263,7 +262,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             <RematchClaimCard
               key={claim.claim.claim_entity_id}
               claim={claim}
-              topic={topicByClaimId.get(claim.claim.claim_entity_id) ?? null}
+              topic={topicsByClaimId.get(claim.claim.claim_entity_id)?.[0] ?? null}
               session={session}
               currentUserId={currentUserId}
               onPositionChange={position =>
@@ -432,7 +431,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     <button
       type="button"
       onClick={onClick}
-      aria-pressed={active}
+      aria-selected={active}
       className={cx(
         'flex items-center gap-2 text-[1.4rem] leading-tight font-medium transition-colors',
         active ? 'text-text' : 'text-grey-03 hover:text-grey-04'

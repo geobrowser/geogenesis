@@ -51,6 +51,7 @@ vi.mock('~/core/sync/use-store', () => ({
         spaces: ['space-2'],
         relations: [
           { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
         ],
       },
     ],
@@ -204,6 +205,15 @@ describe('DebateRematchPageClient', () => {
     // Only the Governance-tagged published claim survives; the untagged shared claim drops out.
     expect(screen.getByRole('heading', { name: 'A newly published claim' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'A claim both participants chose' })).toBeNull();
+  });
+
+  it('matches the topic filter on any of a claim topics, not just the first', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The published claim is tagged Governance and Ethics; filtering on the second still matches.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Filter by topic' }), { target: { value: 'Ethics' } });
+
+    expect(screen.getByRole('heading', { name: 'A newly published claim' })).toBeInTheDocument();
   });
 });
 
