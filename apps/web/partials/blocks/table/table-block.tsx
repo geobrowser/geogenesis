@@ -14,6 +14,7 @@ import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
+import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import {
@@ -704,59 +705,61 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
-  const isExploreView = view === 'EXPLORE';
-  const isInfiniteExplore = isExploreView && !isEditing;
+  // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
+  // relation entity (same entity that holds View and Properties).
+  const infiniteScrollProperty = useBlockInfiniteScroll();
+  const isInfiniteScroll = infiniteScrollProperty && !isEditing;
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
   const accumulationResetKey = React.useMemo(
     () =>
       JSON.stringify({
-        isInfiniteExplore,
+        isInfiniteScroll,
         pageSize,
         sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
         filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
         filterMode: activeFilterMode,
         sort: sortState ?? null,
       }),
-    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState]
+    [isInfiniteScroll, pageSize, source, activeFilters, activeFilterMode, sortState]
   );
 
   React.useEffect(() => {
-    if (!isExploreView) return;
     setRowPages([]);
+    if (!isInfiniteScroll) return;
     setPage(0);
-  }, [accumulationResetKey, isExploreView, setPage]);
+  }, [accumulationResetKey, isInfiniteScroll, setPage]);
 
   // Depending on the `entries` array reference (rather than a content signature)
   // is safe here: `upsertRowPage` returns the previous `pages` reference when the
   // page's entity-id signature is unchanged, so `setRowPages` bails and identity-only
   // changes to `entries` can't cause a render loop.
   React.useEffect(() => {
-    if (!isInfiniteExplore) return;
+    if (!isInfiniteScroll) return;
     if (!isFetched || isPlaceholderData) return;
     const realRows = entries.filter(row => !row.placeholder);
     setRowPages(prev => upsertRowPage(prev, pageNumber, realRows));
-  }, [isInfiniteExplore, isFetched, isPlaceholderData, pageNumber, entries]);
+  }, [isInfiniteScroll, isFetched, isPlaceholderData, pageNumber, entries]);
 
   const accumulatedEntries = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
   const hasCurrentPage = React.useMemo(() => rowPages.some(p => p.page === pageNumber), [rowPages, pageNumber]);
-  const isFetchingNextPage = isInfiniteExplore && pageNumber > 0 && !hasCurrentPage;
+  const isFetchingNextPage = isInfiniteScroll && pageNumber > 0 && !hasCurrentPage;
 
-  const fetchNextExplorePage = React.useCallback(() => {
+  const fetchNextInfinitePage = React.useCallback(() => {
     if (!hasNextPage || !hasCurrentPage || isPlaceholderData) return;
     setPage('next');
   }, [hasNextPage, hasCurrentPage, isPlaceholderData, setPage]);
 
   const infiniteScrollSentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: isInfiniteExplore && hasNextPage,
+    hasNextPage: isInfiniteScroll && hasNextPage,
     isFetchingNextPage,
-    fetchNextPage: fetchNextExplorePage,
+    fetchNextPage: fetchNextInfinitePage,
     rootMargin: '1000px',
   });
 
-  const displayEntries = !isInfiniteExplore
+  const displayEntries = !isInfiniteScroll
     ? entries
     : accumulatedEntries.length > 0
       ? accumulatedEntries
@@ -765,9 +768,9 @@ const ConfiguredTableBlock = ({
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
-  // Never in infinite (explore browse) mode.
+  // Never in infinite-scroll browse mode.
   const hasPagination =
-    !isInfiniteExplore &&
+    !isInfiniteScroll &&
     (hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered));
 
   let EntriesComponent = (
@@ -776,7 +779,7 @@ const ConfiguredTableBlock = ({
       space={spaceId}
       properties={properties}
       propertiesSchema={propertiesSchema}
-      rows={entries}
+      rows={displayEntries}
       placeholder={placeholder}
       isLoading={isLoading}
       isFetched={isFetched}
@@ -793,7 +796,7 @@ const ConfiguredTableBlock = ({
     />
   );
 
-  if (view === 'LIST' && entries.length > 0) {
+  if (view === 'LIST' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockListItemsDnd
         isEditing={isEditing}
@@ -802,7 +805,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -816,7 +819,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'BULLETED_LIST' && entries.length > 0) {
+  if (view === 'BULLETED_LIST' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockBulletedListItemsDnd
         isEditing={isEditing}
@@ -825,7 +828,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -839,7 +842,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'GALLERY' && entries.length > 0) {
+  if (view === 'GALLERY' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockGalleryItemsDnd
         isEditing={isEditing}
@@ -848,7 +851,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -862,7 +865,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (view === 'PILL' && entries.length > 0) {
+  if (view === 'PILL' && displayEntries.length > 0) {
     EntriesComponent = (
       <TableBlockPillItemsDnd
         isEditing={isEditing}
@@ -871,7 +874,7 @@ const ConfiguredTableBlock = ({
         propertiesSchema={propertiesSchema}
         source={source}
         spaceId={spaceId}
-        entries={entries}
+        entries={displayEntries}
         onUpdateRelation={onUpdateRelation}
         relations={relations ?? []}
         collectionRelations={collectionRelations ?? []}
@@ -887,40 +890,43 @@ const ConfiguredTableBlock = ({
 
   if (view === 'EXPLORE' && displayEntries.length > 0) {
     EntriesComponent = (
+      <TableBlockExploreItemsDnd
+        isEditing={isEditing}
+        onChangeEntry={onChangeEntry}
+        onLinkEntry={onLinkEntry}
+        propertiesSchema={propertiesSchema}
+        source={source}
+        spaceId={spaceId}
+        entries={displayEntries}
+        onUpdateRelation={onUpdateRelation}
+        relations={relations ?? []}
+        collectionRelations={collectionRelations ?? []}
+        collectionLength={collectionLength}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
+        placeholderFocusKey={placeholderFocusKey}
+        collectionTypeFilters={collectionTypeFilters}
+      />
+    );
+  }
+
+  if (isInfiniteScroll && displayEntries.length > 0) {
+    EntriesComponent = (
       <>
-        <TableBlockExploreItemsDnd
-          isEditing={isEditing}
-          onChangeEntry={onChangeEntry}
-          onLinkEntry={onLinkEntry}
-          propertiesSchema={propertiesSchema}
-          source={source}
-          spaceId={spaceId}
-          entries={displayEntries}
-          onUpdateRelation={onUpdateRelation}
-          relations={relations ?? []}
-          collectionRelations={collectionRelations ?? []}
-          collectionLength={collectionLength}
-          pageNumber={pageNumber}
-          pageSize={pageSize}
-          shouldAutoFocusPlaceholder={shouldAutoFocusPlaceholder}
-          placeholderFocusKey={placeholderFocusKey}
-          collectionTypeFilters={collectionTypeFilters}
-        />
-        {isInfiniteExplore && (
-          <>
-            {isFetchingNextPage && (
-              <div className="flex flex-col gap-3 py-4" aria-hidden>
-                <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
-                <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
-              </div>
-            )}
-            <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
-          </>
+        {EntriesComponent}
+        {isFetchingNextPage && (
+          <div className="flex flex-col gap-3 py-4" aria-hidden>
+            <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
+            <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
+          </div>
         )}
+        <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
       </>
     );
   }
-  // In infinite explore mode the current page's `entries` can momentarily be
+
+  // In infinite-scroll mode the current page's `entries` can momentarily be
   // empty (e.g. a trailing empty page) while accumulated rows are still shown —
   // gate on `displayEntries` so the empty state can't clobber the populated list.
   if (source.type !== 'COLLECTION' && displayEntries.length === 0 && isFetched && !isLoading) {
