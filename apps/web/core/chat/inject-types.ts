@@ -78,7 +78,18 @@ export type SerializedOp =
       space?: string;
     };
 
+// Enrich-track outcome surfaced by the worker when the injected URL matched a
+// story that already exists on Geo — the edit updates that entity instead of
+// creating a new one, so the UI previews the enriched target rather than
+// looking for a newly created primary entity.
+export type InjectEnrichInfo = {
+  targetGeoId: string;
+  targetHeadline: string;
+  newClaims: number;
+  sourcesMinted: number;
+};
+
 export type InjectPollResponse =
   | { status: 'pending' }
-  | { status: 'completed'; name: string; ops: SerializedOp[] }
+  | { status: 'completed'; name: string; ops: SerializedOp[]; enrich?: InjectEnrichInfo | null }
   | { status: 'failed'; error?: string };

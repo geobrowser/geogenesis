@@ -7,6 +7,7 @@ import { type Edit, decodeEdit } from '@geoprotocol/grc-20';
 import { cookies } from 'next/headers';
 
 import type {
+  InjectEnrichInfo,
   InjectPollResponse,
   SerializedOp,
   SerializedPropertyValue,
@@ -274,7 +275,29 @@ type InjectPollBody = {
   story?: { edit?: InjectEditEnvelope | null } | null;
   posts?: Array<{ edit?: InjectEditEnvelope | null } | null> | null;
   errors?: unknown;
+  enrich?: {
+    mode?: string;
+    targetGeoId?: string;
+    targetHeadline?: string;
+    newClaims?: number;
+    sourcesMinted?: number;
+  } | null;
 };
+
+// The worker sets `enrich` when the injected URL matched an existing on-chain
+// story and the edit updates it instead of creating a new entity. Only the
+// 'enriched' mode is surfaced to the UI (it carries ops to preview).
+function extractEnrichInfo(body: InjectPollBody): InjectEnrichInfo | null {
+  const e = body.enrich;
+  if (!e || e.mode !== 'enriched') return null;
+  if (typeof e.targetGeoId !== 'string' || !/^[0-9a-f]{32}$/.test(e.targetGeoId)) return null;
+  return {
+    targetGeoId: e.targetGeoId,
+    targetHeadline: typeof e.targetHeadline === 'string' ? e.targetHeadline : '',
+    newClaims: typeof e.newClaims === 'number' ? e.newClaims : 0,
+    sourcesMinted: typeof e.sourcesMinted === 'number' ? e.sourcesMinted : 0,
+  };
+}
 
 function extractEditEnvelope(body: InjectPollBody): InjectEditEnvelope | null {
   if (body.story?.edit) return body.story.edit;
@@ -391,5 +414,5 @@ export async function GET(req: Request, ctx: { params: Promise<{ jobId: string }
     console.warn('[chat/inject/poll] completed with errors', body.errors);
   }
 
-  return jsonOk({ status: 'completed', name: decoded.name ?? envelope.name ?? '', ops });
+  return jsonOk({ status: 'completed', name: decoded.name ?? envelope.name ?? '', ops, enrich: extractEnrichInfo(body) });
 }

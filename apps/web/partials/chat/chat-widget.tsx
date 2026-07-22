@@ -991,6 +991,31 @@ export function ChatWidget() {
         return;
       }
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      // Enrich outcome: the edit updates a story that already exists on Geo, so
+      // there is no newly created primary entity to key the preview off — use
+      // the worker-reported target instead for the pill and the navigation.
+      if (injectState.enrich) {
+        const enrich = injectState.enrich;
+        const targetPill = `[${(enrich.targetHeadline || 'the existing story').replace(/[\[\]]/g, '')}](geo://entity/${enrich.targetGeoId}?space=${injectJob.spaceId})`;
+        const claimsClause = `${enrich.newClaims} new ${enrich.newClaims === 1 ? 'claim' : 'claims'}`;
+        const sourcesClause =
+          enrich.sourcesMinted > 0
+            ? ` and ${enrich.sourcesMinted} ${enrich.sourcesMinted === 1 ? 'source' : 'sources'}`
+            : '';
+        updateAssistantText(`Enriched ${targetPill} with ${claimsClause}${sourcesClause}. Review and publish when ready.`);
+        setInjectInline(null);
+        void appendInjectFollowUps(injectJob.assistantMessageId, enrich.targetHeadline || injectState.name || '', injectJob.injectType);
+        modeRef.current = 'default';
+        // Navigate to the enriched entity, then open the review panel: unlike
+        // the create path (whole page is staged data), an existing story
+        // renders its claims through server-seeded data blocks, so the staged
+        // additions are only visible as a diff.
+        router.push(NavUtils.toEntity(injectJob.spaceId, enrich.targetGeoId));
+        bumpReviewVersion();
+        setIsReviewOpen(true);
+        setInjectJob({ ...injectJob, applied: true });
+        return;
+      }
       const primaryPill =
         result.primaryEntityId && result.primaryEntityName
           ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`
@@ -1032,7 +1057,7 @@ export function ChatWidget() {
       sendMessageRef.current({ text: fallbackText });
       setInjectJob(null);
     }
-  }, [injectJob, injectState, setMessages, setInjectInline, trackAssistantMessage, router, appendInjectFollowUps]);
+  }, [injectJob, injectState, setMessages, setInjectInline, trackAssistantMessage, router, appendInjectFollowUps, bumpReviewVersion, setIsReviewOpen]);
 
   React.useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
