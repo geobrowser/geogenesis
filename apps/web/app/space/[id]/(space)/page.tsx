@@ -29,6 +29,7 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { ExploreSidePanel } from '~/partials/explore/explore-side-panel';
+import { OverviewWithSideRailLayout } from '~/partials/side-panel/overview-side-rail';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -84,32 +85,36 @@ export default async function SpacePage(props0: Props) {
 
   return (
     <EntityPageContentContainer>
-      <div className="flex items-start gap-8">
-        <div className="min-w-0 flex-1">
-          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={params.id} />
-          </React.Suspense>
-          <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-          </React.Suspense>
-          <Spacer height={24} />
-          <ToggleEntityPage id={props.id} spaceId={spaceId} />
-          <Spacer height={40} />
-          {/*
-            Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-            boundary. We don't want to show any referenced by loading states but do want to
-            stream it in
-          */}
-          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={props.id} />
+      <OverviewWithSideRailLayout
+        main={
+          <>
+            <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+              <SubtopicGalleryContainer spaceId={params.id} />
             </React.Suspense>
-          </TrackedErrorBoundary>
-        </div>
-        <React.Suspense fallback={null}>
-          {isRootSpace ? <RootExploreSidePanelContainer /> : <SpaceCommunityCallsContainer spaceId={spaceId} />}
-        </React.Suspense>
-      </div>
+            <React.Suspense fallback={null}>
+              <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+            </React.Suspense>
+            <Spacer height={24} />
+            <ToggleEntityPage id={props.id} spaceId={spaceId} />
+            <Spacer height={40} />
+            {/*
+              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+              boundary. We don't want to show any referenced by loading states but do want to
+              stream it in
+            */}
+            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+              <React.Suspense fallback={<div />}>
+                <BacklinksServerContainer entityId={props.id} />
+              </React.Suspense>
+            </TrackedErrorBoundary>
+          </>
+        }
+        rail={
+          <React.Suspense fallback={null}>
+            {isRootSpace ? <RootExploreSidePanelContainer /> : <SpaceCommunityCallsContainer spaceId={spaceId} />}
+          </React.Suspense>
+        }
+      />
     </EntityPageContentContainer>
   );
 }
@@ -250,17 +255,14 @@ const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) =>
 const RootExploreSidePanelContainer = async () => {
   const data = await fetchExploreSidePanelData();
   return (
-    <>
-      <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
-      <ExploreSidePanel
-        featuredSpaces={data.featuredSpaces}
-        featuredRankings={data.featuredRankings}
-        pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
-        memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
-        editorSpaceIds={data.editorSpaceIds}
-        communityCalls={data.communityCalls}
-      />
-    </>
+    <ExploreSidePanel
+      featuredSpaces={data.featuredSpaces}
+      featuredRankings={data.featuredRankings}
+      pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
+      memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
+      editorSpaceIds={data.editorSpaceIds}
+      communityCalls={data.communityCalls}
+    />
   );
 };
 

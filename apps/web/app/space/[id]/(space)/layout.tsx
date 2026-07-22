@@ -105,7 +105,7 @@ export default async function Layout(props0: LayoutProps) {
               </React.Suspense>
             </div>
           </EntityPageContentContainer>
-          <Spacer height={20} />
+          <Spacer height={32} />
         </SpaceChromeGate>
         {children}
       </EditorProvider>

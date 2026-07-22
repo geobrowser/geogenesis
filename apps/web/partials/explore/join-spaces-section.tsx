@@ -10,6 +10,8 @@ import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { Dots } from '~/design-system/dots';
 import { FallbackImage } from '~/design-system/fallback-image';
 
+import { OverviewSideRailSection } from '~/partials/side-panel/overview-side-rail';
+
 type Props = {
   // Already filtered by the side panel to spaces the user can still join.
   spaces: FeaturedSpace[];
@@ -28,11 +30,7 @@ export function JoinSpacesSection({ spaces }: Props) {
   const hasMore = spaces.length > INITIAL_VISIBLE_COUNT;
 
   return (
-    <section className="flex flex-col">
-      <h2 className="sticky top-0 z-20 bg-white pt-1 pb-4 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
-        Join spaces
-      </h2>
-
+    <OverviewSideRailSection title="Join spaces">
       <div className="flex flex-wrap gap-2">
         {visible.map(space => (
           <JoinSpacePill key={space.spaceId} space={space} />
@@ -48,7 +46,7 @@ export function JoinSpacesSection({ spaces }: Props) {
           </button>
         ) : null}
       </div>
-    </section>
+    </OverviewSideRailSection>
   );
 }
 
