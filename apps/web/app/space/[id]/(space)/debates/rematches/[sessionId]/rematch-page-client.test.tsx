@@ -42,7 +42,9 @@ vi.mock('~/core/debates/hooks', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({
-    entities: [{ id: 'claim-more', name: 'A newly published claim', description: null, spaces: ['space-2'] }],
+    entities: [
+      { id: 'claim-more', name: 'A newly published claim', description: null, spaces: ['space-2'], relations: [] },
+    ],
     isLoading: false,
     isPlaceholderData: false,
     endCursor: null,
@@ -71,7 +73,7 @@ describe('DebateRematchPageClient', () => {
       </StrictMode>
     );
 
-    expect(await screen.findByRole('heading', { name: 'Rematch Salina' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'A claim both participants chose' })).toBeInTheDocument();
     await new Promise(resolve => window.setTimeout(resolve, 0));
     expect(mocks.mutate).not.toHaveBeenCalled();
   });
@@ -102,13 +104,14 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
-  it('does not show participant avatars in claim position controls', () => {
+  it('shows each side its holder avatar in the claim position controls', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
     expect(sharedClaimCard).not.toBeNull();
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).toBeNull();
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).toBeNull();
+    // Local picked Yes and the opponent picked No, so each pill carries one avatar.
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).not.toBeNull();
   });
 
   it('shows an incoming request with the snapshotted format details', () => {
@@ -158,9 +161,8 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
     expect(
-      screen.getAllByRole('button', { name: 'Request debate' }).every(button => button.hasAttribute('disabled'))
+      screen.getAllByRole('button', { name: /^(Yes|No)$/ }).every(button => button.hasAttribute('disabled'))
     ).toBe(true);
-    expect(screen.getAllByRole('combobox').every(select => select.hasAttribute('disabled'))).toBe(true);
   });
 });
 
