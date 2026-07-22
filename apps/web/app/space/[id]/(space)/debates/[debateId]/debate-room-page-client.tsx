@@ -183,6 +183,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
+  const preflightEndsAtMsRef = React.useRef<number | null>(null);
   const finalizedDebateRef = React.useRef<string | null>(null);
   const recordingPersistenceStartedRef = React.useRef<string | null>(null);
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
@@ -201,9 +202,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const storagePersistenceRequestedRef = React.useRef(false);
   const recordingCancellationHandledRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
+  preflightEndsAtMsRef.current = timestampMs(debate?.preflight_ends_at ?? null);
   const debateStatusRef = React.useRef<Debate['status'] | null>(debate?.status ?? null);
   const roomStateRef = React.useRef(roomState);
-  debateStatusRef.current = debate?.status ?? null;
   roomStateRef.current = roomState;
   const rematchQuery = useDebateRematch(
     debate?.rematch_session_id ?? '',
@@ -211,6 +212,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
   const countdown = useDebateCountdown(debate, serverClock.now);
+  debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
   const localSlot = joinResponse?.participant_slot ?? null;
   const recordingCancelledBy = debate?.recording_cancelled_by ?? null;
@@ -226,8 +228,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     audioMuted
   );
   const canTakeOverConnection =
-    connectionConflict && (debate?.status === 'connecting' || debate?.status === 'preflight');
-  const connectionConflictDuringActiveDebate = connectionConflict && debate?.status === 'in_progress';
+    connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
+  const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -249,7 +251,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       userId: currentUserId,
       onTakeoverRequested: () => {
         const status = debateStatusRef.current;
-        if (status !== 'connecting' && status !== 'preflight') return false;
+        const preflightStillPending =
+          status === 'preflight' &&
+          recordingStartedAtRef.current === null &&
+          (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
+        const canReleaseOwnership = status === 'connecting' || preflightStillPending;
+        if (!canReleaseOwnership) return false;
 
         connectionGenerationRef.current += 1;
         disconnectConnectingRoom(connectingRoomRef);
@@ -728,6 +735,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       room.on(livekit.RoomEvent.Disconnected, payload => {
         if (!isCurrent() || roomRef.current !== room) return;
         if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+        connectionGenerationRef.current += 1;
         // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
         // call room.disconnect() a second time and could re-enter this handler.
         roomRef.current = null;
@@ -1295,9 +1303,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               {roomError && roomState === 'idle' && (
                 <div className="mt-4 rounded-lg border border-red-01 bg-white px-5 py-4">
                   <Text color="red-01">{roomError}</Text>
-                  {connectionConflictDuringActiveDebate && (
+                  {connectionConflictWithoutTakeover && (
                     <Text as="p" color="grey-04" className="mt-2">
-                      Continue the debate in the original tab to preserve its recording.
+                      Continue the debate in the original tab or device to preserve its recording.
                     </Text>
                   )}
                 </div>
