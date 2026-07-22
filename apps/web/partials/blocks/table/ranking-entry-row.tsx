@@ -2,6 +2,8 @@
 
 import cx from 'classnames';
 
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { useView } from '~/core/blocks/data/use-view';
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -11,6 +13,8 @@ import { NavUtils } from '~/core/utils/utils';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 const ROW_NAME_CLASS = 'block truncate tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
@@ -58,6 +62,9 @@ export function RankingEntryRow({
   linkToEntity = true,
   rankStyle = 'avatar-badge',
 }: Props) {
+  const { shownColumnIds } = useView();
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
+
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
   const directIpfs =
@@ -68,6 +75,36 @@ export function RankingEntryRow({
   const href = NavUtils.toEntity(spaceId, entry.entityId);
   const showRank = rank != null && rank > 0;
   const showLeadingRank = showRank && rankStyle === 'leading';
+
+  if (showLeadingRank) {
+    return (
+      <div className="flex w-full min-w-0 items-start gap-4 overflow-hidden py-1">
+        <span className="w-5 shrink-0 pt-0.5 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-1">
+          {linkToEntity ? (
+            <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={entry.name}>
+              {entry.name}
+            </Link>
+          ) : (
+            <span className={ROW_NAME_CLASS} title={entry.name}>
+              {entry.name}
+            </span>
+          )}
+          {entry.description ? (
+            <div className={cx(ROW_DESCRIPTION_CLASS, 'line-clamp-2')} title={entry.description}>
+              {entry.description}
+            </div>
+          ) : null}
+          {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
+        </div>
+        {showVoteButtons ? (
+          <div className="shrink-0 pt-0.5">
+            <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   const avatar = (
     <div
@@ -110,6 +147,7 @@ export function RankingEntryRow({
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
       </div>
+      {showVoteButtons ? <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} /> : null}
     </div>
   );
 }

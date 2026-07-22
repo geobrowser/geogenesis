@@ -5,8 +5,10 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useView } from '~/core/blocks/data/use-view';
+import { PLACEHOLDER_SPACE_IMAGE, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -64,6 +66,8 @@ export function TableBlockGalleryItem({
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
+  const { shownColumnIds } = useView();
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -108,7 +112,8 @@ export function TableBlockGalleryItem({
     c =>
       c.slotId !== SystemIds.NAME_PROPERTY &&
       c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY
+      c.slotId !== SystemIds.COVER_PROPERTY &&
+      c.slotId !== SCORE_SYSTEM_PROPERTY
   );
 
   /**
@@ -345,7 +350,7 @@ export function TableBlockGalleryItem({
           );
         })}
         <div className="mt-2 flex items-center justify-between gap-2">
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
               {source.type === 'COLLECTION' ? (

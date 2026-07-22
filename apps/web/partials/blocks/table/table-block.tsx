@@ -11,7 +11,12 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { DEFAULT_SCORE_SORT_STATE, shouldApplyDefaultScoreSort } from '~/core/blocks/data/ensure-default-score-sort';
+import { ensureScoreShownColumn } from '~/core/blocks/data/ensure-score-shown-column';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { isScoreVisibleOnBrowseView } from '~/core/blocks/data/is-score-visible-on-browse-view';
+import { mergeBlockMenuProperties } from '~/core/blocks/data/merge-block-menu-properties';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
@@ -21,6 +26,7 @@ import {
   registerEntityBlockOwner,
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
+import { useScoreDismissed } from '~/core/blocks/data/use-score-dismissed';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
@@ -540,6 +546,7 @@ const ConfiguredTableBlock = ({
   const [isFilterOpen, setIsFilterOpen] = React.useState(false);
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
   const { entityId, relationId } = useDataBlockInstance();
+  const { storage } = useMutate();
   const blockEntityId = blockId ?? entityId;
   const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
@@ -693,16 +700,40 @@ const ConfiguredTableBlock = ({
     return [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(columnPropertyIdFromRelation)];
   }, [orderedShownColumnRelations]);
 
-  /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
-  const mergedBlockProperties = React.useMemo(() => {
-    const out = [...filterableProperties];
-    for (const p of properties) {
-      if (!out.some(x => ID.equals(x.id, p.id))) {
-        out.push(p);
-      }
-    }
-    return out;
-  }, [filterableProperties, properties]);
+  /** Schema + visible columns + always-available defaults (Description, Types, Score). */
+  const mergedBlockProperties = React.useMemo(
+    () => mergeBlockMenuProperties(filterableProperties, properties),
+    [filterableProperties, properties]
+  );
+
+  // List/gallery: persist Score when missing, unless the user durably dismissed it.
+  const hasScoreShown = isScorePropertyShown(shownColumnIds);
+  const scoreDismissed = useScoreDismissed();
+  const scoreBrowseDefault = isScoreVisibleOnBrowseView(shownColumnIds, relationId);
+  React.useEffect(() => {
+    if (!canEdit) return;
+    if (view !== 'LIST' && view !== 'GALLERY') return;
+    if (!relationId || hasScoreShown) return;
+    ensureScoreShownColumn({
+      storage,
+      blockRelationId: relationId,
+      spaceId,
+      scoreDismissed,
+      relationsIncludingDeleted: store.getResolvedRelations(relationId, true),
+    });
+  }, [canEdit, view, relationId, hasScoreShown, scoreDismissed, storage, spaceId]);
+
+  // The score sort is a seed, not an invariant.
+  const defaultScoreSortAppliedForRef = React.useRef<string | undefined>(undefined);
+  const scoreSortBlockKey = relationId ?? '';
+  React.useEffect(() => {
+    if (view !== 'LIST' && view !== 'GALLERY') return;
+    if (source.type === 'COLLECTION') return;
+    if (defaultScoreSortAppliedForRef.current === scoreSortBlockKey) return;
+    defaultScoreSortAppliedForRef.current = scoreSortBlockKey;
+    if (!shouldApplyDefaultScoreSort(sortState, scoreBrowseDefault)) return;
+    setSortState(DEFAULT_SCORE_SORT_STATE);
+  }, [view, source.type, scoreSortBlockKey, sortState, scoreBrowseDefault, setSortState]);
 
   const isExploreView = view === 'EXPLORE';
   const isInfiniteExplore = isExploreView && !isEditing;
