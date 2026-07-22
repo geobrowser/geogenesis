@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
+import { useLogout, usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -11,13 +11,16 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { useDebateActivity, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { useToast } from '~/core/hooks/use-toast';
 import { useEditable } from '~/core/state/editable-store';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -50,6 +53,11 @@ export function NavbarActions() {
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
+  const isDebatesEnabled = useDebatesEnabled();
+  const activityQuery = useDebateActivity(isDebatesEnabled);
+  const availabilityMutation = useUpdateDebateAvailability();
+  const { user } = usePrivy();
+  const [, setToast] = useToast();
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -76,6 +84,17 @@ export function NavbarActions() {
     : isPending && topicId
       ? `/space/pending/${topicId}`
       : null;
+  const displayName = profile?.name?.trim() || shortAddress(address);
+  const email = userEmail(user);
+  const identityDetail = email ?? address;
+  const availableToDebate = activityQuery.data?.available_to_debate ?? true;
+  const availabilityPending = activityQuery.isPending || availabilityMutation.isPending;
+
+  const toggleDebateAvailability = () => {
+    availabilityMutation.mutate(!availableToDebate, {
+      onError: () => setToast(<span>Couldn’t update debate availability.</span>),
+    });
+  };
 
   return (
     <div className="flex items-center gap-4">
@@ -94,20 +113,156 @@ export function NavbarActions() {
         open={open}
         onOpenChange={onOpenChange}
         sideOffset={12}
-        className="max-w-[165px]"
+        className={
+          isDebatesEnabled ? 'w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]' : 'max-w-[165px]'
+        }
       >
-        {personalHref && (
-          <AvatarMenuItem href={personalHref}>
-            <p className="text-button">Personal space</p>
-          </AvatarMenuItem>
+        {isDebatesEnabled ? (
+          <>
+            <IdentityHeader
+              address={address}
+              avatarValue={avatarValue}
+              displayName={displayName}
+              detail={identityDetail}
+              href={personalHref}
+              onNavigate={() => onOpenChange(false)}
+            />
+            <div className="border-t border-grey-02">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={availableToDebate}
+                disabled={availabilityPending}
+                onClick={toggleDebateAvailability}
+                className="flex w-full items-center justify-between px-5 py-4 text-left text-bodySemibold text-text transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
+              >
+                <span>Available to debate</span>
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'relative h-4 w-6 shrink-0 rounded-full transition-colors',
+                    availableToDebate ? 'bg-text' : 'bg-grey-03'
+                  )}
+                >
+                  <span
+                    className={cx(
+                      'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
+                      availableToDebate && 'translate-x-2'
+                    )}
+                  />
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center px-5 py-4 text-left text-bodySemibold text-text transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {personalHref && (
+              <AvatarMenuItem href={personalHref}>
+                <p className="text-button">Personal space</p>
+              </AvatarMenuItem>
+            )}
+            <AvatarMenuItem onClick={logout}>
+              <p className="text-button">Sign out</p>
+              <DisconnectWallet />
+            </AvatarMenuItem>
+          </>
         )}
-        <AvatarMenuItem onClick={logout}>
-          <p className="text-button">Sign out</p>
-          <DisconnectWallet />
-        </AvatarMenuItem>
       </Menu>
     </div>
   );
+}
+
+function IdentityHeader({
+  address,
+  avatarValue,
+  displayName,
+  detail,
+  href,
+  onNavigate,
+}: {
+  address: `0x${string}`;
+  avatarValue: string;
+  displayName: string;
+  detail: string;
+  href: string | null;
+  onNavigate: () => void;
+}) {
+  const content = (
+    <>
+      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full">
+        {avatarValue ? (
+          <FallbackImage value={avatarValue} sizes="48px" className="object-cover" />
+        ) : (
+          <Avatar value={address} size={48} />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-bodySemibold text-text">{displayName}</p>
+        <p className="truncate text-body text-grey-04">{detail}</p>
+      </div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        onClick={onNavigate}
+        className="flex w-full flex-col items-start gap-4 px-6 py-5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="flex w-full flex-col items-start gap-4 px-6 py-5">{content}</div>;
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function userEmail(user: unknown) {
+  if (!isRecord(user)) return undefined;
+  const primary = emailFromUnknown(user.email);
+  if (primary) return primary;
+  if (!Array.isArray(user.linkedAccounts)) return undefined;
+
+  for (const account of user.linkedAccounts) {
+    const email = emailFromUnknown(account);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function emailFromUnknown(value: unknown) {
+  if (typeof value === 'string') return normalizeEmail(value);
+  if (!isRecord(value)) return undefined;
+
+  for (const key of ['address', 'email', 'emailAddress']) {
+    const email = normalizeEmail(value[key]);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const email = value.trim().toLowerCase();
+  return email.includes('@') ? email : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 const avatarMenuItemStyles = cva(

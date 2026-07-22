@@ -44,6 +44,7 @@ import {
   markDebateReady,
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
+  updateDebateAvailability,
   updateDebatePreference,
   updateDebateRematchPosition,
 } from './api';
@@ -145,6 +146,34 @@ export function useDebateActivity(enabled = true) {
     queryKey: debateQueryKeys.activity(accountKey),
     queryFn: ({ signal }) => getDebateActivity(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+  });
+}
+
+export function useUpdateDebateAvailability() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const activityKey = debateQueryKeys.activity(accountKey);
+
+  return useMutation({
+    mutationFn: (availableToDebate: boolean) =>
+      updateDebateAvailability(availableToDebate, getPrivyIdentityToken, accountKey),
+    onMutate: async availableToDebate => {
+      await queryClient.cancelQueries({ queryKey: activityKey });
+      const previous = queryClient.getQueryData<DebateActivity>(activityKey);
+      queryClient.setQueryData<DebateActivity>(activityKey, current =>
+        current ? { ...current, available_to_debate: availableToDebate } : current
+      );
+      return { previous };
+    },
+    onError: (_error, _availableToDebate, context) => {
+      queryClient.setQueryData(activityKey, context?.previous);
+    },
+    onSuccess: activity => {
+      queryClient.setQueryData(activityKey, activity);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+    },
   });
 }
 
@@ -295,6 +324,7 @@ export function useConsentToDebateRematch(debateId: string) {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
         online: current?.online ?? true,
+        available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,
         match: null,
         debate: null,
