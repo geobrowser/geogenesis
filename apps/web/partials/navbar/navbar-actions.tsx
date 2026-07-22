@@ -204,8 +204,12 @@ function IdentityHeader({
         )}
       </div>
       <div className="min-w-0">
-        <p className="truncate text-bodySemibold text-text">{displayName}</p>
-        <p className="truncate text-body text-grey-04">{detail}</p>
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic">
+          {displayName}
+        </p>
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-grey-04 not-italic">
+          {detail}
+        </p>
       </div>
     </>
   );
@@ -215,14 +219,14 @@ function IdentityHeader({
       <Link
         href={href}
         onClick={onNavigate}
-        className="flex w-full flex-col items-start gap-4 px-6 py-5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+        className="flex w-full flex-col items-start gap-4 px-3 py-2.5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="flex w-full flex-col items-start gap-4 px-6 py-5">{content}</div>;
+  return <div className="flex w-full flex-col items-start gap-4 px-3 py-2.5">{content}</div>;
 }
 
 function shortAddress(address: string) {

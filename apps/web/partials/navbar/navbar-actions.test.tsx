@@ -177,9 +177,24 @@ describe('NavbarActions debate availability menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     expect(screen.getByTestId('profile-menu')).toHaveClass('sm:w-[322px]');
-    expect(screen.getByRole('link', { name: /Max max@example\.com/ })).toHaveAttribute(
-      'href',
-      '/space/personal-space'
+    const identityLink = screen.getByRole('link', { name: /Max max@example\.com/ });
+    expect(identityLink).toHaveAttribute('href', '/space/personal-space');
+    expect(identityLink).toHaveClass('px-3', 'py-2.5');
+    expect(screen.getByText('Max')).toHaveClass(
+      'font-[family-name:var(--font-calibre)]',
+      'text-[1rem]',
+      'leading-[0.9375rem]',
+      'font-medium',
+      'tracking-[-0.03125rem]',
+      'not-italic'
+    );
+    expect(screen.getByText('max@example.com')).toHaveClass(
+      'font-[family-name:var(--font-calibre)]',
+      'text-[1rem]',
+      'leading-[0.9375rem]',
+      'font-medium',
+      'tracking-[-0.03125rem]',
+      'not-italic'
     );
     expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveClass(
