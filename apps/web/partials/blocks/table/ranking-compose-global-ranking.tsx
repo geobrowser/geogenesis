@@ -555,9 +555,17 @@ export function RankingComposeGlobalRanking({
       {showCreateNewPrompt ? (
         <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
       ) : null}
-      {filteredRankedIds.length > 0 ? <RankingComposeSectionDivider label="Other ranked results" /> : null}
+      {showCreateNewPrompt && filteredRankedIds.length > 0 ? (
+        <RankingComposeSectionDivider label="Other ranked results" />
+      ) : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Other unranked results" /> : null}
+      {showRankedUnrankedDivider ? (
+        showCreateNewPrompt ? (
+          <RankingComposeSectionDivider label="Other unranked results" />
+        ) : (
+          <RankingComposeSectionDivider label="Unranked" />
+        )
+      ) : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
@@ -568,9 +576,8 @@ export function RankingComposeGlobalRanking({
 
   const browseResultList = (
     <>
-      {filteredRankedIds.length > 0 ? <RankingComposeSectionDivider label="Other ranked results" /> : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Other unranked results" /> : null}
+      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
