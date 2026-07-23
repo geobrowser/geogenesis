@@ -30,7 +30,7 @@ export function ExplorePage({
   communityCalls,
 }: Props) {
   return (
-    <div className="mx-auto w-full max-w-[1320px] px-6 lg:px-4">
+    <div className="explore-page-content">
       <OverviewWithSideRailLayout
         variant="explore"
         main={

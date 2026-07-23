@@ -16,9 +16,7 @@ export const Main = ({ children }: MainProps) => {
   const isHidden = isReviewOpen;
   const pathname = usePathname();
   const isFullWidth =
-    pathname === '/explore' ||
-    /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
-    /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
+    /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) || /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
 
   return (
     <motion.main

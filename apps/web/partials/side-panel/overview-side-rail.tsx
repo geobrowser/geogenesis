@@ -22,10 +22,10 @@ export function OverviewWithSideRailLayout({ main, rail, variant = 'space' }: Ov
   const columnTopPadding = connectDividerToTop ? OVERVIEW_SIDE_RAIL_TOP_PADDING_CLASS : undefined;
 
   return (
-    <div className={cx('flex gap-8', connectDividerToTop ? 'items-stretch' : 'items-start')}>
-      <div className={cx('min-w-0 flex-1', columnTopPadding)}>{main}</div>
+    <div className={cx('flex', connectDividerToTop && '-mt-8', connectDividerToTop ? 'items-stretch' : 'items-start')}>
+      <div className={cx('min-w-0 flex-1', columnTopPadding, 'mr-8')}>{main}</div>
       <OverviewSideRailPageDivider />
-      <div className={cx(columnTopPadding, 'shrink-0')}>{rail}</div>
+      <div className={cx('ml-8 shrink-0 lg:hidden', OVERVIEW_SIDE_RAIL_WIDTH_CLASS, columnTopPadding)}>{rail}</div>
     </div>
   );
 }
@@ -36,12 +36,7 @@ export function OverviewSideRailPageDivider() {
 
 export function OverviewSideRail({ children }: { children: React.ReactNode }) {
   return (
-    <aside
-      className={cx(
-        'sticky top-11 flex h-[calc(100dvh-2.75rem)] shrink-0 flex-col self-start lg:hidden',
-        OVERVIEW_SIDE_RAIL_WIDTH_CLASS
-      )}
-    >
+    <aside className="sticky top-11 flex h-[calc(100dvh-2.75rem)] w-full shrink-0 flex-col self-start">
       <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <div className="flex flex-col pb-6">{children}</div>
       </div>
