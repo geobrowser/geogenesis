@@ -11,10 +11,20 @@ function geoChatBaseUrl() {
   return base.replace(/\/+$/, '');
 }
 
+/** Carries geo-chat's HTTP status so the route can tell a permanent 4xx (bad id) from a transient 5xx. */
+export class GeoChatRequestError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'GeoChatRequestError';
+    this.status = status;
+  }
+}
+
 async function geoChatGet<T>(path: string): Promise<T> {
   const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`geo-chat ${path} failed (${response.status})`);
+    throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }
@@ -27,7 +37,7 @@ async function geoChatPost<T>(path: string, body: unknown): Promise<T> {
     cache: 'no-store',
   });
   if (!response.ok) {
-    throw new Error(`geo-chat ${path} failed (${response.status})`);
+    throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
   }
   return response.json() as Promise<T>;
 }

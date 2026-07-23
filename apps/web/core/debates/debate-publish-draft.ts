@@ -7,6 +7,8 @@ import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_OPPOSED_BY_PROPERTY_ID,
+  DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
@@ -128,8 +130,14 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     toEntityName: claimText,
   });
 
-  // Supported by / Opposed by participant relations are omitted until the ontology has canonical
-  // property IDs (see ontology.ts). Participants still surface via the transcript block Authors.
+  for (const p of bySlot) {
+    relate({
+      fromEntity: debateRef,
+      propertyId: p.position ? DEBATE_SUPPORTED_BY_PROPERTY_ID : DEBATE_OPPOSED_BY_PROPERTY_ID,
+      toEntityId: p.spaceEntityId,
+      toEntityName: p.displayName,
+    });
+  }
 
   // --- Video entity ---
   if (input.videoUrl) {

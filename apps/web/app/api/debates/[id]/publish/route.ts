@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { DebateNotPublishableError } from '~/core/debates/server/debate-source';
+import { DebateNotPublishableError, GeoChatRequestError } from '~/core/debates/server/debate-source';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
 /**
@@ -30,6 +30,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (error instanceof DebateNotPublishableError) {
       // The debate isn't finished processing yet; the client can retry later.
       return NextResponse.json({ error: error.message, code: error.code }, { status: 409 });
+    }
+    // A permanent upstream failure (e.g. geo-chat 404 for an unknown debate id) is terminal — surface
+    // its 4xx so the client stops retrying. An upstream 5xx falls through to a retryable 500.
+    if (error instanceof GeoChatRequestError && error.status < 500) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error(`[debate-acceptor] failed to publish debate ${id}:`, error);
     return NextResponse.json(

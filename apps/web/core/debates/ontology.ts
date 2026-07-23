@@ -23,9 +23,10 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
-// Supported by / Opposed by (participant → side) are deliberately omitted: the ontology spec left
-// their property IDs blank, and we won't publish placeholder relations on-chain. Add them here once
-// the canonical IDs exist; the participant's `position` is already carried through for that.
+/** Supported by (RELATION) → participant space entity arguing "yes". */
+export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd';
+/** Opposed by (RELATION) → participant space entity arguing "no". */
+export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
 
 /** Canonical geo-sdk ids reused by the debate ontology (verified equal to the spec). */
 export const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY; // a126ca53…

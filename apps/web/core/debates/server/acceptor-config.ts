@@ -10,8 +10,8 @@ import type { Hex } from 'viem';
  */
 export type DebateAcceptorConfig = {
   privateKey: Hex;
-  /** The acceptor's smart-account/EOA address (informational + logging). */
-  address: string;
+  /** The acceptor's smart-account/EOA address, for ops records only — not used in the publish flow. */
+  address?: string;
   /** The acceptor's registered personal-space id — used as the proposal author / caller space. */
   spaceId: string;
   /** Optional RPC override; defaults to the SDK's testnet RPC. */
@@ -25,11 +25,11 @@ export type DebateAcceptorConfig = {
  */
 export function getDebateAcceptorConfig(): DebateAcceptorConfig | null {
   const privateKey = process.env.DEBATE_ACCEPTOR_PRIVATE_KEY?.trim();
-  const address = process.env.DEBATE_ACCEPTOR_ADDRESS?.trim();
+  const address = process.env.DEBATE_ACCEPTOR_ADDRESS?.trim() || undefined;
   const spaceId = process.env.DEBATE_ACCEPTOR_SPACE_ID?.trim();
   const rpcUrl = process.env.DEBATE_ACCEPTOR_RPC_URL?.trim() || undefined;
 
-  if (!privateKey || !address || !spaceId) return null;
+  if (!privateKey || !spaceId) return null;
   if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
     throw new Error('DEBATE_ACCEPTOR_PRIVATE_KEY is set but is not a 0x-prefixed 32-byte hex key.');
   }
