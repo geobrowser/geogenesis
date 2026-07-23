@@ -1,16 +1,19 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
+import { type BlockMainMedia, blockMainMediaDimensions } from '~/core/hooks/use-block-main-media-property';
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -41,6 +44,7 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   isPlaceholder: boolean;
   properties?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
@@ -57,6 +61,7 @@ export function TableBlockGalleryItem({
   onLinkEntry,
   isPlaceholder,
   properties,
+  mainMedia,
   relationId,
   source,
   autoFocus = false,
@@ -67,7 +72,7 @@ export function TableBlockGalleryItem({
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { image } = nameCell;
+  const nameCellImageHint = nameCell?.image ?? null;
 
   const name =
     useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
@@ -78,38 +83,26 @@ export function TableBlockGalleryItem({
     nameCell.description ??
     null;
 
-  const avatarRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  const image = useBlockMainMediaUrl({
+    entityId: rowEntityId,
     spaceId: currentSpaceId,
+    mediaPropertyId: mainMedia?.propertyId ?? null,
+    mediaKind: mainMedia?.kind,
+    fallbackHint: nameCellImageHint,
   });
 
-  const maybeAvatarUrl = avatarRelation?.toEntity.value;
-
-  const coverRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
-    spaceId: currentSpaceId,
-  });
-
-  const maybeCoverUrl = coverRelation?.toEntity.value;
-
-  // Always show cover if available, then fall back to avatar.
-  // This ensures images render even when cover/avatar aren't
-  // configured as shown columns on the data block.
-  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
-
-  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
-  if (image && imageUrl) {
-    image = imageUrl;
-  }
+  const imageUploadProperty =
+    mainMedia && mainMedia.kind === 'IMAGE'
+      ? { id: mainMedia.propertyId, name: mainMedia.name ?? 'Image' }
+      : { id: SystemIds.COVER_PROPERTY, name: 'Cover' };
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
-  const otherPropertyData = Object.values(columns).filter(
-    c =>
-      c.slotId !== SystemIds.NAME_PROPERTY &&
-      c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY
-  );
+  const otherPropertyData = Object.values(columns).filter(c => {
+    if (c.slotId === SystemIds.NAME_PROPERTY) return false;
+    if (isBlockMediaColumn(c.slotId, properties)) return false;
+    return true;
+  });
 
   /**
    * We render descriptions in a specific style, but want to treat whether to render the description
@@ -120,14 +113,28 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_PROPERTY);
 
+  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia));
+  const mediaFrameClassName = cx(
+    'relative w-full overflow-clip rounded-lg bg-grey-01',
+    !mediaFrame.hasCustomHeight && 'aspect-2/1'
+  );
+
+  const mediaFrameStyle = mediaFrame.style;
+  // When a property sets explicit dimensions, keep the frame at the configured aspect ratio
+  // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
+  const mediaImageFitClassName = mediaFrame.hasCustomHeight ? 'object-contain' : 'object-cover';
+
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2">
-        <div className="relative flex aspect-2/1 w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
+        <div className={cx(mediaFrameClassName, 'flex items-center justify-center')} style={mediaFrameStyle}>
           {image ? (
             <GeoImage
               value={image}
-              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
               alt=""
               fill
             />
@@ -136,14 +143,12 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // Gallery items default to cover for new uploads since
-                // the large image area is a natural fit for cover images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: SystemIds.COVER_PROPERTY,
-                  relationPropertyName: 'Cover',
+                  relationPropertyId: imageUploadProperty.id,
+                  relationPropertyName: imageUploadProperty.name,
                   spaceId: currentSpaceId,
                 });
               }}
@@ -267,11 +272,14 @@ export function TableBlockGalleryItem({
   return (
     <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2 transition duration-200 hover:bg-grey-01">
       <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-        <div className="relative aspect-2/1 w-full overflow-clip rounded-lg bg-grey-01">
+        <div className={mediaFrameClassName} style={mediaFrameStyle}>
           {image ? (
             <GeoImage
               value={image}
-              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
               alt=""
               fill
             />

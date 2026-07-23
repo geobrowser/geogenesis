@@ -22,6 +22,7 @@ import {
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
 import { useSource } from '~/core/blocks/data/use-source';
+import { useBlockMainMedia } from '~/core/hooks/use-block-main-media-property';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -46,7 +47,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Create } from '~/design-system/icons/create';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
-import { Fullscreen } from '~/design-system/icons/full-screen';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Spacer } from '~/design-system/spacer';
 import { PageNumberContainer } from '~/design-system/table/styles';
@@ -56,6 +56,7 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
+import { DataBlockExpandControl } from './data-block-expand-control';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -459,13 +460,13 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
         <TableBlockEditableTitle spaceId={spaceId} />
         <div className="pointer-events-none flex items-center gap-5 opacity-40">
           <IconButton disabled icon={<FilterTable />} color="grey-04" />
-          <Link
-            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-            className="pointer-events-none inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04"
-            aria-label="Open fullscreen"
-          >
-            <Fullscreen color="grey-04" />
-          </Link>
+          <DataBlockExpandControl
+            spaceId={spaceId}
+            blockEntityId={entityId}
+            isEditing={false}
+            disabled
+            fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+          />
           <DataBlockViewMenu activeView="TABLE" isLoading={false} />
           <TableBlockContextMenu sourceType={source.type} />
         </div>
@@ -584,6 +585,8 @@ const ConfiguredTableBlock = ({
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
   } = useDataBlock({ canEdit });
+
+  const mainMedia = useBlockMainMedia(shownColumnIds, propertiesSchema);
 
   const initialFiltersOpenConsumedRef = React.useRef(false);
   React.useEffect(() => {
@@ -801,6 +804,7 @@ const ConfiguredTableBlock = ({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         propertiesSchema={propertiesSchema}
+        mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
         entries={entries}
@@ -847,6 +851,7 @@ const ConfiguredTableBlock = ({
         onChangeEntry={onChangeEntry}
         onLinkEntry={onLinkEntry}
         propertiesSchema={propertiesSchema}
+        mainMedia={mainMedia}
         source={source}
         spaceId={spaceId}
         entries={entries}
@@ -992,13 +997,12 @@ const ConfiguredTableBlock = ({
             icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
             color="grey-04"
           />
-          <Link
-            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
-            aria-label="Open fullscreen"
-          >
-            <Fullscreen color="grey-04" />
-          </Link>
+          <DataBlockExpandControl
+            spaceId={spaceId}
+            blockEntityId={entityId}
+            isEditing={isEditing}
+            fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+          />
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {showCreateEntityPlus &&

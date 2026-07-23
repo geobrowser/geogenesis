@@ -114,8 +114,8 @@ const RenderedProperty = ({
 
   const isRelation = property.dataType === 'RELATION';
 
-  if (property.renderableType === 'IMAGE') {
-    // We don't support rendering images in list or gallery views except the main image
+  if (property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'VIDEO') {
+    // Main media only — list/gallery render Image/Video.
     return null;
   }
 
