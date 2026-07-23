@@ -191,7 +191,7 @@ function RankingComposeCreateNewPrompt({ searchQuery, onCreateNew }: { searchQue
       <p className="min-w-0 text-[16px] leading-[20px] font-medium text-[#2A2B2E]">
         No results found for &quot;{queryLabel}&quot;
       </p>
-      <Button variant="secondary" small onClick={onCreateNew}>
+      <Button variant="secondary" small onClick={onCreateNew} className="!rounded-full">
         Create new
       </Button>
     </div>
