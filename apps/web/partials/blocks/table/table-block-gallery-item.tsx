@@ -27,6 +27,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import {
   LIST_GALLERY_BROWSE_BODY_CLASS,
+  LIST_GALLERY_BROWSE_TITLE_CLASS,
   browseListStackMarginTopForField,
   orderCellsForBrowseFigma,
 } from './table-block-browse-layout';
@@ -291,7 +292,7 @@ export function TableBlockGalleryItem({
         <div className="min-w-0">
           {source.type !== 'COLLECTION' ? (
             <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-              <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+              <div className={LIST_GALLERY_BROWSE_TITLE_CLASS}>{name || rowEntityId}</div>
             </Link>
           ) : (
             <CollectionMetadata
@@ -309,7 +310,7 @@ export function TableBlockGalleryItem({
               openedWithMainViewEditing={isEditing}
             >
               <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-                <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+                <div className={LIST_GALLERY_BROWSE_TITLE_CLASS}>{name || rowEntityId}</div>
               </Link>
             </CollectionMetadata>
           )}
@@ -344,7 +345,7 @@ export function TableBlockGalleryItem({
             </div>
           );
         })}
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="mt-1 flex items-center justify-between gap-2">
           <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
