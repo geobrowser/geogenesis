@@ -15,7 +15,7 @@ import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
-import { GeoImage } from '~/design-system/geo-image';
+import { GeoImage, NativeGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -45,7 +45,12 @@ function RankingGalleryCard({
       fallbackHint: imageHint,
     }) ?? PLACEHOLDER_SPACE_IMAGE;
 
-  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia), { allowWidth: true });
+  /**
+   * When a property sets explicit dimensions, size the card to the image itself so the full
+   * media shows with no letterboxing. Otherwise keep the fixed 240x120 thumbnail.
+   */
+  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia));
+  const hugImageToDimensions = mediaFrame.hasCustomHeight;
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
@@ -53,13 +58,20 @@ function RankingGalleryCard({
       <Link href={href} className="block" draggable={false}>
         <div
           className={cx(
-            'relative overflow-hidden rounded-xl bg-grey-01',
-            !mediaFrame.style?.width && 'w-[240px]',
-            !mediaFrame.hasCustomHeight && 'h-[120px]'
+            'relative w-[240px] overflow-hidden rounded-xl bg-grey-01',
+            !hugImageToDimensions && 'h-[120px]'
           )}
-          style={mediaFrame.style}
         >
-          <GeoImage value={imageUrl} className="pointer-events-none object-cover" fill alt="" draggable={false} />
+          {hugImageToDimensions ? (
+            <NativeGeoImage
+              value={imageUrl}
+              className="pointer-events-none block h-auto w-full"
+              alt=""
+              draggable={false}
+            />
+          ) : (
+            <GeoImage value={imageUrl} className="pointer-events-none object-cover" fill alt="" draggable={false} />
+          )}
         </div>
       </Link>
       <Link href={href} className="mt-2 block" draggable={false}>
