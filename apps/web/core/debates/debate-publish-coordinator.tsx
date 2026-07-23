@@ -26,10 +26,11 @@ export function DebatePublishCoordinator() {
       inFlightRef.current.add(debateId);
       try {
         const response = await fetch(`/api/debates/${debateId}/publish`, { method: 'POST' });
-        // 409 = media not processed yet; keep it queued and retry next tick. Everything else is
-        // terminal for this debate: 2xx published/already-published, 503 acceptor disabled, or a 5xx
-        // we don't want to hammer — drop it so a real error doesn't loop forever.
-        if (response.status !== 409) {
+        // Keep it queued to retry on 409 (media still processing) and transient 5xx (RPC/IPFS/
+        // bundler blips). 503 is the acceptor being unconfigured — terminal, retrying never helps.
+        // Everything else (2xx published/already-published/not-editor, other 4xx) is terminal too.
+        const retryable = response.status === 409 || (response.status >= 500 && response.status !== 503);
+        if (!retryable) {
           dequeueDebatePublish(debateId);
         }
       } catch (error) {

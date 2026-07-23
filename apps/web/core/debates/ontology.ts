@@ -23,14 +23,9 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
-/**
- * Supported by / Opposed by (RELATION) → participant space entity.
- *
- * PROVISIONAL: the ontology spec left these two property IDs blank, so these are
- * freshly generated placeholders. Replace with the canonical IDs before merge.
- */
-export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'e535ae29c98747e4b60a6bfd13e43f50';
-export const DEBATE_OPPOSED_BY_PROPERTY_ID = '66c95a8f5cf046599b1e2d7bbcd55329';
+// Supported by / Opposed by (participant → side) are deliberately omitted: the ontology spec left
+// their property IDs blank, and we won't publish placeholder relations on-chain. Add them here once
+// the canonical IDs exist; the participant's `position` is already carried through for that.
 
 /** Canonical geo-sdk ids reused by the debate ontology (verified equal to the spec). */
 export const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY; // a126ca53…

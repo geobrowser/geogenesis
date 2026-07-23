@@ -9,14 +9,7 @@ import {
   buildDebatePublishDraft,
   mergeTranscriptSegmentsIntoTurns,
 } from './debate-publish-draft';
-import {
-  DEBATE_OPPOSED_BY_PROPERTY_ID,
-  DEBATE_SUPPORTED_BY_PROPERTY_ID,
-  DEBATE_TYPE_ID,
-  TRANSCRIPT_TYPE_ID,
-  TYPES_PROPERTY_ID,
-  VIDEO_TYPE_ID,
-} from './ontology';
+import { DEBATE_TYPE_ID, TRANSCRIPT_TYPE_ID, TYPES_PROPERTY_ID, VIDEO_TYPE_ID } from './ontology';
 
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
 const CLAIM_ENTITY = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -65,14 +58,6 @@ describe('buildDebatePublishDraft', () => {
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
     expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
-  });
-
-  it('links Supported by to the yes participant and Opposed by to the no participant', () => {
-    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
-    const supported = draft.relations.find(r => r.type.id === DEBATE_SUPPORTED_BY_PROPERTY_ID);
-    const opposed = draft.relations.find(r => r.type.id === DEBATE_OPPOSED_BY_PROPERTY_ID);
-    expect(supported?.toEntity.id).toBe(YES_SPACE);
-    expect(opposed?.toEntity.id).toBe(NO_SPACE);
   });
 
   it('emits Debate, Video, and Transcript type relations', () => {
