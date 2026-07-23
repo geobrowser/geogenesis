@@ -4,6 +4,8 @@ import { notFound } from 'next/navigation';
 
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
+import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
@@ -34,6 +36,18 @@ export default async function EntityTemplateStrategy(props: Props) {
 
   if (entityHasOnlyPostType(result?.entity)) {
     return <PostEntityPage params={params} searchParams={searchParams} />;
+  }
+
+  // A Debate is a live video, not a value sheet: browse mode drops you into the debates feed
+  // anchored to this debate, and the raw entity page is reserved for edit mode.
+  if (result?.entity?.types.some(t => t.id === DEBATE_TYPE_ID)) {
+    return (
+      <DebateEntityView
+        spaceId={params.id}
+        debateId={params.entityId}
+        editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
+      />
+    );
   }
 
   // A community call's recording takes the cover slot; its agenda renders below as block content.
