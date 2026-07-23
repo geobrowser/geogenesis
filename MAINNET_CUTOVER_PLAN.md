@@ -141,6 +141,23 @@ mainnet gas sponsorship needs an endpoint from infra before the flip (see asks).
    `EMPTY_TOPIC`, and `EMPTY_SIGNATURE` — the app currently re-declares these
    keccak hashes because the SDK keeps them internal.
 
+## 🔴 Live infra bug — new-user signup blocked (found 2026-07-23)
+
+First-time signup fails at gas sponsorship: `zd_sponsorUserOperation` → 500.
+The client sends a well-formed EIP-7702 authorization (`nonce: "0x0"`,
+`yParity: "0x0"`), but ZeroDev's backend (running viem **2.19.7**, visible in
+the inner error) re-serializes the zero values to empty hex (`"0x"`) in its
+internal `eth_estimateUserOperationGas` call and dies with
+`Cannot convert 0x to a BigInt`. Zero-valued auth fields = a fresh EOA's
+first-ever authorization — so **every new signup fails; existing accounts are
+unaffected** (their values are non-zero). Nothing app-side serializes these
+fields; the corruption is server-side at ZeroDev.
+
+→ Escalate to whoever owns the Geo ZeroDev project
+(`d26c96b9-7ee9-4d78-b139-954470b696e5`, baked into geo-sdk's
+GeoTestnetConfig): their proxy stack appears too old for EIP-7702
+zero-nonce auths. Blocks Phase 2 smoke item "personal space create".
+
 ## Team notes
 
 - `apps/web/.env` (local-anvil template) is gone and unsupported. Anyone still
