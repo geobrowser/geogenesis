@@ -57,7 +57,7 @@ const debateQueryNetworkOptions = {
 } as const;
 
 export const debateQueryKeys = {
-  claims: (spaceId: string, claimIds: string[]) => ['debates', 'claims', spaceId, claimIds] as const,
+  claims: (spaceId: string, claimIds: string[] | null) => ['debates', 'claims', spaceId, claimIds ?? 'all'] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
@@ -82,9 +82,13 @@ export function useGeoChatAuth() {
   };
 }
 
-export function useDebateClaims(spaceId: string, claimIds: string[], enabled: boolean) {
+// Pass a claim-id array to enrich a known set, or `null` to list every debatable
+// claim in the space. geo-chat indexes them, so this skips the KG scan over all
+// the space's Claim entities that 504s on large spaces.
+export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated && claimIds.length > 0);
+  const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
+  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
   return useQuery({
     ...debateQueryNetworkOptions,
@@ -92,12 +96,12 @@ export function useDebateClaims(spaceId: string, claimIds: string[], enabled: bo
     queryFn: ({ signal }) =>
       listDebateClaims(
         spaceId,
-        claimIds,
+        claimIds ?? [],
         authenticated ? getPrivyIdentityToken : undefined,
         authenticated ? accountKey : null,
         signal
       ),
-    enabled: enabled && claimIds.length > 0,
+    enabled: shouldFetch,
   });
 }
 

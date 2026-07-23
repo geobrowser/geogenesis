@@ -4,11 +4,18 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { isClaimPublished } from '~/core/claims/publish';
+import cx from 'classnames';
+
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
-import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
+import {
+  useDebateActivity,
+  useDebateClaims,
+  useJoinDebateQueue,
+  useUpdateDebateAvailability,
+} from '~/core/debates/hooks';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Close } from '~/design-system/icons/close';
@@ -20,31 +27,44 @@ import { Text } from '~/design-system/text';
  * queue — the same mechanism the Claims tab uses.
  */
 export function JoinDebatePanel({ spaceId, onClose }: { spaceId: string; onClose: () => void }) {
-  const { entities: claims } = useQueryEntities({
-    where: {
-      spaces: [{ equals: spaceId }],
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-    },
-    first: 50,
-    placeholderData: keepPreviousData,
-    includeUnpublishedLocal: true,
-  });
-  const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
-  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
+  // geo-chat indexes the space's debatable claims, so ask it directly rather than
+  // scanning the KG for every Claim entity in the space (that scan 504s on large
+  // spaces). The KG is only needed for topic labels, fetched by id below.
+  const debateClaimsQuery = useDebateClaims(spaceId, null, true);
   const debateClaims = debateClaimsQuery.data?.claims ?? [];
+
+  const isLoading = debateClaimsQuery.isLoading;
+  const loadError = debateClaimsQuery.error;
+  const emptyMessage = isLoading
+    ? 'Loading claims…'
+    : loadError
+      ? `Could not load claims: ${loadError.message}`
+      : 'No claims are available to debate yet.';
+
+  // Only real entity ids can be looked up in the KG; the graph 400s the whole
+  // batch on a single malformed id, so drop any that aren't valid.
+  const claimEntityIds = React.useMemo(
+    () => debateClaims.map(claim => claim.claim_entity_id).filter(validateEntityId),
+    [debateClaims]
+  );
+  const { entities: claimEntities } = useQueryEntities({
+    where: { id: { in: claimEntityIds } },
+    enabled: claimEntityIds.length > 0,
+    placeholderData: keepPreviousData,
+  });
 
   // Topics live on the KG claim entity, not the debates API, so resolve them here
   // to label each card the way the frame does ("Handbags", "Fast Fashion").
   const topicByClaimId = React.useMemo(() => {
     const map = new Map<string, string>();
-    for (const claim of claims) {
+    for (const claim of claimEntities) {
       const topic = claim.relations.find(
         relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true
       );
       if (topic) map.set(claim.id, topic.toEntity.name ?? topic.toEntity.id);
     }
     return map;
-  }, [claims]);
+  }, [claimEntities]);
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -64,10 +84,11 @@ export function JoinDebatePanel({ spaceId, onClose }: { spaceId: string; onClose
           <Close />
         </button>
       </header>
+      <DebateAnythingRow />
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
         {debateClaims.length === 0 && (
           <Text as="p" variant="metadata" color="grey-04">
-            No published claims are available to debate yet.
+            {emptyMessage}
           </Text>
         )}
         {debateClaims.map(debateClaim => (
@@ -80,6 +101,38 @@ export function JoinDebatePanel({ spaceId, onClose }: { spaceId: string; onClose
         ))}
       </div>
     </aside>
+  );
+}
+
+/**
+ * For users who don't want to pick a specific claim: toggles the account's
+ * `available_to_debate` flag (the same pool the navbar toggle writes to) so
+ * matchmaking can pair them with anyone waiting.
+ */
+function DebateAnythingRow() {
+  const activityQuery = useDebateActivity();
+  const availabilityMutation = useUpdateDebateAvailability();
+  const available = activityQuery.data?.available_to_debate ?? false;
+  const pending = activityQuery.isPending || availabilityMutation.isPending;
+
+  return (
+    <div className="flex items-center justify-between gap-3 px-5 pb-4">
+      <Text as="span" variant="metadata" color="grey-04">
+        Don’t care about the subject?
+      </Text>
+      <button
+        type="button"
+        aria-pressed={available}
+        disabled={pending}
+        onClick={() => availabilityMutation.mutate(!available)}
+        className={cx(
+          'inline-flex h-7 shrink-0 items-center rounded-full border px-3 text-button transition-colors disabled:cursor-wait disabled:opacity-60',
+          available ? 'border-text bg-text text-white' : 'border-text bg-white text-text hover:bg-bg'
+        )}
+      >
+        {available ? 'Debating anything' : 'Debate anything'}
+      </button>
+    </div>
   );
 }
 
@@ -98,19 +151,20 @@ function JoinDebateCard({
   const againstChoice = debateClaim.online_choices.find(choice => choice.position === false);
 
   return (
-    <article className="rounded-lg border border-grey-02 bg-white p-4 shadow-light">
+    <article className="rounded-lg border border-grey-02 bg-white p-5">
       {topic && (
         <Text as="span" variant="metadata" color="grey-04" className="mb-1 block">
           {topic}
         </Text>
       )}
-      <Text as="h3" variant="bodySemibold" color="text" className="block">
+      <Text as="h3" variant="smallTitle" color="text" className="block">
         {debateClaim.claim}
       </Text>
       <div className="mt-3 grid grid-cols-2 gap-2">
         <PositionButton
           label={forChoice?.position_label ?? 'For'}
           choice={forChoice}
+          position={true}
           disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === true}
           selected={debateClaim.viewer_waiting_position === true}
           onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: true } })}
@@ -118,6 +172,7 @@ function JoinDebateCard({
         <PositionButton
           label={againstChoice?.position_label ?? 'Against'}
           choice={againstChoice}
+          position={false}
           disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === false}
           selected={debateClaim.viewer_waiting_position === false}
           onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: false } })}
@@ -130,12 +185,14 @@ function JoinDebateCard({
 function PositionButton({
   label,
   choice,
+  position,
   disabled,
   selected,
   onClick,
 }: {
   label: string;
   choice: DebateOnlineChoice | undefined;
+  position: boolean;
   disabled: boolean;
   selected: boolean;
   onClick: () => void;
@@ -146,7 +203,10 @@ function PositionButton({
       aria-pressed={selected}
       disabled={disabled}
       onClick={onClick}
-      className="flex min-h-9 items-center justify-between gap-2 rounded-full bg-bg px-3 text-button text-text transition-colors hover:bg-grey-01 disabled:opacity-60 aria-pressed:bg-green"
+      className={cx(
+        'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text transition-colors disabled:opacity-60',
+        selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg hover:bg-grey-01'
+      )}
     >
       <span className="truncate">{label}</span>
       {choice && choice.participant_count > 0 && <ChoiceAvatars choice={choice} />}
