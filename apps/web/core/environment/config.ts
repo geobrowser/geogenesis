@@ -20,29 +20,14 @@ if (!PRIVY_APP_ID) {
   throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is not set');
 }
 
+// RPC/API endpoints. All four are OPTIONAL raw reads here; environment.ts
+// applies the rules — testnet endpoints default from the geo-sdk's built-in
+// network config, mainnet endpoints are required only when the mainnet chain
+// is selected (the SDK has no mainnet config to fall back to).
 const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
-
-if (!RPC_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC is not set');
-}
-
 const RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
-
-if (!RPC_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET is not set');
-}
-
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
-
-if (!API_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_API_ENDPOINT is not set');
-}
-
 const API_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_API_ENDPOINT_TESTNET;
-
-if (!API_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_API_ENDPOINT_TESTNET is not set');
-}
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 

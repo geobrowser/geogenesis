@@ -57,6 +57,39 @@ server boots against staging testnet with no config errors.
       unused in `packages/auth/package.json` (removal touches the bun lockfile;
       fold into the next install churn).
 
+## Phase 1b — SDK-derivation audit ✅ DONE (2026-07-23)
+
+Everything the geo-sdk publishes is now consumed from the SDK instead of being
+duplicated in the app:
+
+- [x] Contract **ABIs**: hand-rolled minimal `SpaceRegistryAbi`/`DAOSpaceAbi`
+      replaced with re-exports from `@geoprotocol/geo-sdk/abis` (signature-
+      identical supersets; call sites unchanged).
+- [x] `EMPTY_SPACE_ID` from `@geoprotocol/geo-sdk/contracts`.
+- [x] **Testnet RPC + API endpoints** now default from `GeoTestnetConfig` —
+      `NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET` / `NEXT_PUBLIC_API_ENDPOINT_TESTNET`
+      are optional overrides. **Mainnet endpoint vars are required only when
+      `NEXT_PUBLIC_CHAIN_ID=80451`** (fail-fast in `getConfig`), so testnet
+      deploys no longer need dummy mainnet values.
+- [x] Testnet chain id + RPC in `packages/auth/chain.ts` derived from
+      `GeoTestnetConfig`; a consistency assert in `environment.ts` ties the
+      `'55516'` type literals to the SDK's chain id.
+- [x] CI stripped of the fake endpoint env vars; vitest keeps
+      `test.example.com` endpoint overrides deliberately (test isolation — an
+      unmocked fetch must never hit the real testnet API).
+- [x] Regression guard: `core/sdk/geo-network-envcheck.test.ts` pins that with
+      no endpoint/address env vars, everything resolves from the SDK.
+
+**Cannot come from the SDK (verified absent from its public exports):**
+
+| Value | Why it stays local |
+|---|---|
+| `GOVERNANCE_ACTIONS` / `PERMISSIONLESS_ACTIONS` hashes, `VOTING_MODE`, `EMPTY_TOPIC_HEX`, `EMPTY_SIGNATURE` | SDK has most of these in `dao-space/constants` but does **not** export them publicly — worth an SDK ask (#6 below) |
+| Mainnet chain id / RPC (`packages/auth/chain.ts`) | SDK ships no mainnet config at all |
+| IPFS **read** gateways (filebase/lighthouse in `constants.ts`) | App infra choice; SDK only handles uploads |
+| Privy / WalletConnect IDs, Sentry DSN, curator backend URL | App credentials/services, not protocol values |
+| `NEW_SPACE_VOTING_DURATION_DAYS` | Product default (SDK's `MINIMUM_VOTING_DURATION_DAYS` is a floor, not a default) |
+
 ## Phase 2 — v2 testnet cutover window ⏳ BLOCKED ON BACKEND INPUTS
 
 The frontend action at the window is **setting env vars**, nothing else.
@@ -103,6 +136,10 @@ mainnet gas sponsorship needs an endpoint from infra before the flip (see asks).
    from the silent-failure bug.)
 5. For mainnet later: chain id (80451 or new? GEO native gas?), RPC, API origin,
    ZeroDev sponsorship endpoint.
+6. SDK ask: publicly export the governance action constants
+   (`PROPOSAL_CREATED_ACTION` etc. in `dao-space/constants`), `VOTING_MODE`,
+   `EMPTY_TOPIC`, and `EMPTY_SIGNATURE` — the app currently re-declares these
+   keccak hashes because the SDK keeps them internal.
 
 ## Team notes
 

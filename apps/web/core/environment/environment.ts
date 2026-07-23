@@ -1,3 +1,5 @@
+import { GeoTestnetConfig } from '@geoprotocol/geo-sdk';
+
 import {
   API_ENDPOINT,
   API_ENDPOINT_TESTNET,
@@ -13,6 +15,19 @@ import {
 } from './config';
 
 type SupportedChainId = '80451' | '55516';
+
+// The '55516' literals in this module are the geo-sdk's testnet chain id. Tie
+// them together so an SDK chain change can't silently diverge from our types.
+if (String(GeoTestnetConfig.chain?.id) !== '55516') {
+  throw new Error(
+    `geo-sdk testnet chain id is ${GeoTestnetConfig.chain?.id}, but this module assumes 55516 — update SupportedChainId.`
+  );
+}
+
+const TESTNET_DEFAULT_RPC = GeoTestnetConfig.chain?.rpcUrl;
+if (!TESTNET_DEFAULT_RPC) {
+  throw new Error('geo-sdk GeoTestnetConfig no longer ships a testnet RPC URL — set NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET.');
+}
 
 export type AppConfig = {
   chainId: SupportedChainId;
@@ -51,8 +66,9 @@ type IVars = Readonly<{
   daoSpaceFactoryAddress?: string;
   walletConnectProjectId: string;
   privyAppId: string;
-  rpcEndpoint: string;
-  apiEndpoint: string;
+  /** Mainnet endpoints — required only when chainId is '80451' (validated in getConfig). */
+  rpcEndpoint?: string;
+  apiEndpoint?: string;
   rpcEndpointTestnet: string;
   apiEndpointTestnet: string;
   isTestEnv: boolean;
@@ -65,21 +81,37 @@ export const variables: IVars = {
   daoSpaceFactoryAddress: resolveAddressOverride('NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS', DAO_SPACE_FACTORY_ADDRESS),
   isTestEnv: TEST_ENV === 'true',
   privyAppId: PRIVY_APP_ID!,
-  rpcEndpoint: RPC_ENDPOINT!,
-  apiEndpoint: API_ENDPOINT!,
-  rpcEndpointTestnet: RPC_ENDPOINT_TESTNET!,
-  apiEndpointTestnet: API_ENDPOINT_TESTNET!,
+  // `|| undefined` / `||` fallbacks: empty string reads as unset.
+  rpcEndpoint: RPC_ENDPOINT || undefined,
+  apiEndpoint: API_ENDPOINT || undefined,
+  // Testnet endpoints ship inside the geo-sdk's network config; env vars are
+  // overrides, not requirements.
+  rpcEndpointTestnet: RPC_ENDPOINT_TESTNET || TESTNET_DEFAULT_RPC,
+  apiEndpointTestnet: API_ENDPOINT_TESTNET || `${GeoTestnetConfig.apiOrigin}/graphql`,
   walletConnectProjectId: WALLETCONNECT_PROJECT_ID!,
   sentryDsn: SENTRY_DSN,
 };
 
 export const getConfig = (): AppConfig => {
-  const rpc = variables.chainId === '55516' ? variables.rpcEndpointTestnet : variables.rpcEndpoint;
-  const api = variables.chainId === '55516' ? variables.apiEndpointTestnet : variables.apiEndpoint;
+  if (variables.chainId === '55516') {
+    return {
+      chainId: variables.chainId,
+      rpc: variables.rpcEndpointTestnet,
+      api: variables.apiEndpointTestnet,
+    };
+  }
+
+  // The SDK has no mainnet config, so there is nothing to fall back to — fail
+  // fast rather than let a half-configured mainnet build target the wrong place.
+  if (!variables.rpcEndpoint || !variables.apiEndpoint) {
+    throw new Error(
+      `NEXT_PUBLIC_GEOGENESIS_RPC and NEXT_PUBLIC_API_ENDPOINT are required when NEXT_PUBLIC_CHAIN_ID=${variables.chainId}`
+    );
+  }
 
   return {
     chainId: variables.chainId,
-    rpc,
-    api,
+    rpc: variables.rpcEndpoint,
+    api: variables.apiEndpoint,
   };
 };

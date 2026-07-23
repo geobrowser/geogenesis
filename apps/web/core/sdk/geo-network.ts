@@ -17,7 +17,7 @@ import { GEOGENESIS } from '../wallet/geo-chain';
 
 const config = Environment.getConfig();
 
-const IS_TESTNET = config.chainId === '55516';
+const IS_TESTNET = Number(config.chainId) === GeoTestnetConfig.chain?.id;
 
 // On testnet the SDK's built-in addresses are the defaults and env vars are
 // overrides (used by the v2 contract cutover until the SDK publishes the new
