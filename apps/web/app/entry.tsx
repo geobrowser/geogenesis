@@ -8,7 +8,6 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
-import { DebatePublishCoordinator } from '~/core/debates/debate-publish-coordinator';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -121,7 +120,6 @@ export function App({ children }: { children: React.ReactNode }) {
         <FeatureFlagsDialog />
         <DebateCoordinator />
         <DebateRecordingUploadCoordinator />
-        <DebatePublishCoordinator />
         <Persistence />
       </ClientOnly>
       {process.env.NODE_ENV === 'production' && <Analytics />}

@@ -4,6 +4,7 @@ import type { Op } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 
 import { getSpaceAccess } from '~/core/access/space-access';
+import { ID } from '~/core/id';
 import { getEntity, getSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { Publish } from '~/core/utils/publish';
@@ -14,7 +15,7 @@ import { loadDebatePublishSource } from './debate-source';
 
 export type PublishDebateResult =
   | { status: 'published'; debateEntityId: string; spaceId: string; userOpHash: string }
-  | { status: 'already_published'; debateEntityId: string; spaceId: string }
+  | { status: 'already_published'; debateEntityId: string; spaceId?: string }
   | { status: 'not_editor'; debateEntityId: string; spaceId: string }
   | { status: 'acceptor_not_configured' };
 
@@ -22,20 +23,24 @@ export type PublishDebateResult =
  * Publish a finished debate to the knowledge graph as the debate acceptor.
  *
  * Idempotent: the Debate entity id is derived deterministically from the debate id, so if it
- * already exists in the target space we skip re-publishing. Signs with the acceptor's private key
+ * already exists in the graph we skip re-publishing. Signs with the acceptor's private key
  * (never the participant's wallet), mirroring the browser publish flow in `use-publish.ts`.
  */
 export async function publishDebateAsAcceptor(debateId: string): Promise<PublishDebateResult> {
   const config = getDebateAcceptorConfig();
   if (!config) return { status: 'acceptor_not_configured' };
 
+  // Cheap idempotency check first: the Debate entity id is derived deterministically from the
+  // debate id, so a global lookup tells us it's already published without loading any source from
+  // geo-chat. This keeps the publish sweep from re-fetching media for every already-done debate.
+  const debateEntityId = ID.uuidToHex(debateId);
+  const alreadyPublished = await Effect.runPromise(getEntity(debateEntityId)).catch(() => null);
+  if (alreadyPublished) {
+    return { status: 'already_published', debateEntityId };
+  }
+
   const { input } = await loadDebatePublishSource(debateId);
   const draft = buildDebatePublishDraft(input);
-
-  const existing = await Effect.runPromise(getEntity(draft.debateEntityId, input.spaceId)).catch(() => null);
-  if (existing) {
-    return { status: 'already_published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId };
-  }
 
   const space = await Effect.runPromise(getSpace(input.spaceId));
   if (!space) {

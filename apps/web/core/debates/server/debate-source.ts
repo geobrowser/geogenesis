@@ -1,4 +1,4 @@
-import type { Debate, DebateMediaResponse, DebateTranscriptResponse } from '../api';
+import type { Debate, DebateMediaResponse, DebateTranscriptResponse, SpaceDebatesResponse } from '../api';
 import {
   type DebatePublishInput,
   type DebatePublishParticipant,
@@ -55,6 +55,16 @@ export class DebateNotPublishableError extends Error {
     this.name = 'DebateNotPublishableError';
     this.code = code;
   }
+}
+
+/**
+ * The finished debates in a space, as candidate ids for the publish sweep. Only `complete`
+ * debates can publish; media-readiness is re-checked per debate by {@link loadDebatePublishSource}.
+ * Server-side (unauthenticated) read — the cron sweep has no user session.
+ */
+export async function listSweepCandidateDebateIds(spaceId: string): Promise<string[]> {
+  const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
+  return response.debates.filter(debate => debate.status === 'complete').map(debate => debate.id);
 }
 
 /**

@@ -20,7 +20,7 @@ export type DebateAcceptorConfig = {
 
 /**
  * Returns the acceptor config, or `null` when it's unset (dev machines have no acceptor, so the
- * publish route reports "not configured" rather than failing). A key that's *set but malformed*
+ * publish sweep reports "not configured" rather than failing). A key that's *set but malformed*
  * throws — fail-fast on bad config, mirroring gaia's `membership-acceptor/config.ts`.
  */
 export function getDebateAcceptorConfig(): DebateAcceptorConfig | null {

@@ -24,7 +24,6 @@ import {
   resolveCurrentGeoChatUserId,
 } from './api';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
-import { enqueueDebatePublish } from './publish-queue';
 import {
   type DebateRecordingUpload,
   deleteDebateRecordingUpload,
@@ -233,9 +232,8 @@ export function DebateRecordingUploadCoordinator() {
           attemptCount = 0;
         },
       });
-      // The recording is fully uploaded now, so queue the debate for auto-publish. The publish
-      // route only succeeds once media processing finishes, so it's safe to enqueue eagerly.
-      enqueueDebatePublish(upload.debateId);
+      // Auto-publish to the knowledge graph is handled server-side by the debate-acceptor cron
+      // sweep (app/api/debates/publish-sweep), so nothing to enqueue here.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(upload.debateId) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(upload.debateId) });
     })
