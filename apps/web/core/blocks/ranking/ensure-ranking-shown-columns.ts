@@ -5,7 +5,6 @@ import type { Mutator } from '~/core/sync/use-mutate';
 import type { Relation } from '~/core/types';
 
 const DEFAULT_SHOWN_COLUMNS: { id: string; name: string }[] = [
-  { id: SystemIds.TYPES_PROPERTY, name: 'Types' },
   { id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description' },
 ];
 

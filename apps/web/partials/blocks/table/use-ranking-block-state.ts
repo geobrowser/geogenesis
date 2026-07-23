@@ -55,6 +55,7 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
+import { buildRankingCardConfig } from './ranking-card-config';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 import { rankingComposeReturnHrefAtom } from '~/atoms/ranking-compose-return';
 
@@ -130,7 +131,42 @@ export function useRankingBlockState({
     view: stateView,
     viewRelation: stateViewRelation,
     shownColumnIds,
+    properties,
+    filterableProperties,
+    orderedShownColumnRelations,
+    toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
+    source: dataBlockSource,
   } = useDataBlock();
+
+  const cardConfig = React.useMemo(
+    () => buildRankingCardConfig({ properties, shownColumnIds, source: dataBlockSource }),
+    [properties, shownColumnIds, dataBlockSource]
+  );
+  const cardImageProperty = cardConfig.imageProperty;
+
+  const menuProps = React.useMemo(
+    () => ({
+      sourceType: dataBlockSource.type,
+      filterableProperties,
+      shownColumnIds,
+      orderedShownColumnRelations,
+      toggleProperty,
+      hideAllShownPropertyColumns,
+      reorderShownPropertyRelations,
+    }),
+    [
+      dataBlockSource.type,
+      filterableProperties,
+      shownColumnIds,
+      orderedShownColumnRelations,
+      toggleProperty,
+      hideAllShownPropertyColumns,
+      reorderShownPropertyRelations,
+    ]
+  );
+
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
@@ -378,12 +414,14 @@ export function useRankingBlockState({
   // there; for embedded blocks it's one bounded, cached batch query.
   const { entries: globalEntries, isLoading: isLoadingGlobalEntries } = useRankingEntryEntities(
     spaceId,
-    globalDisplayEntityIds
+    globalDisplayEntityIds,
+    cardImageProperty
   );
 
   const { entries: myEntries, isLoading: isLoadingMyEntries } = useRankingEntryEntities(
     spaceId,
-    myRankingListEntityIds
+    myRankingListEntityIds,
+    cardImageProperty
   );
 
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
@@ -884,6 +922,8 @@ export function useRankingBlockState({
     setIsFilterOpen,
     displayName,
     entityId,
+    cardConfig,
+    menuProps,
     submissions,
     periodState,
     periodLabel,
