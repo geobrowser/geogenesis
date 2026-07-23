@@ -208,7 +208,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
                 : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
@@ -217,7 +217,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
           <button
-            className="min-w-[2ch] cursor-pointer text-center text-[16px]! tabular-nums hover:text-grey-04"
+            className="min-w-[2ch] cursor-pointer text-center tabular-nums hover:text-grey-04"
             title={totalVoters > 0 ? 'View voters' : undefined}
             disabled={totalVoters === 0}
           >
@@ -250,7 +250,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
                 : 'Connect wallet to vote'
         }
         className={cx(
-          'group/vote flex h-5 w-5 translate-y-px items-center justify-center rounded transition-colors',
+          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >

@@ -5,6 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
+import { getRecordingUrls } from '~/core/community-calls/recordings';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
@@ -18,6 +20,7 @@ import {
 } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Cell } from '~/core/types';
+import { getRelationVideoUrls } from '~/core/utils/relation-video';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 function entityCreatedAtSec(entity: { createdAt?: string | number; updatedAt?: string | number } | null | undefined) {
@@ -109,6 +112,11 @@ export function useBlockExploreFeedItem({
         ? descriptionOverride?.trim() || null
         : description?.trim() || nameCell?.description?.trim() || null,
     imageUrl,
+    recordingUrls: getRecordingUrls((storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId)),
+    debateVideoUrls: getRelationVideoUrls(
+      (storeEntity?.relations ?? []).filter(r => r.spaceId === entitySpaceId),
+      DEBATE_VIDEOS_PROPERTY_ID
+    ),
     commentCount,
     isMemberOrEditor,
     hasPendingMembershipRequest: false,
