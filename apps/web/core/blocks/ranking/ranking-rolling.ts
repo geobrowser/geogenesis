@@ -55,13 +55,11 @@ export function formatRollingSubmissionLabel({
   now: number;
 }): string | null {
   if (!hasSubmission) return null;
-  if (!isLive) return 'Your ranking has rolled off — submit a fresh ranking';
+  if (!isLive) return null;
 
   if (!frequencyHours || submittedAtMs === 0) return 'Your ranking is live';
 
   const expiresInMs = getRollingExpiryMs(submittedAtMs, frequencyHours) - now;
-  if (expiresInMs <= 0) return 'Your ranking has rolled off — submit a fresh ranking';
-
   const hours = Math.ceil(expiresInMs / MS_PER_HOUR);
   if (hours >= 48) return `Vote again in ${Math.ceil(hours / 24)} days`;
   if (hours === 1) return 'Vote again in 1 hr';
