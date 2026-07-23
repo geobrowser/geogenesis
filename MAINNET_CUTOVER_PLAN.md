@@ -145,18 +145,31 @@ mainnet gas sponsorship needs an endpoint from infra before the flip (see asks).
 
 First-time signup fails at gas sponsorship: `zd_sponsorUserOperation` → 500.
 The client sends a well-formed EIP-7702 authorization (`nonce: "0x0"`,
-`yParity: "0x0"`), but ZeroDev's backend (running viem **2.19.7**, visible in
-the inner error) re-serializes the zero values to empty hex (`"0x"`) in its
-internal `eth_estimateUserOperationGas` call and dies with
+`yParity: "0x0"`), but ZeroDev's **selfFunded** proxy (running viem **2.19.7**,
+visible in the inner error) re-serializes the zero values to empty hex (`"0x"`)
+in its internal `eth_estimateUserOperationGas` call and dies with
 `Cannot convert 0x to a BigInt`. Zero-valued auth fields = a fresh EOA's
 first-ever authorization — so **every new signup fails; existing accounts are
-unaffected** (their values are non-zero). Nothing app-side serializes these
-fields; the corruption is server-side at ZeroDev.
+unaffected** (their values are non-zero).
 
-→ Escalate to whoever owns the Geo ZeroDev project
-(`d26c96b9-7ee9-4d78-b139-954470b696e5`, baked into geo-sdk's
-GeoTestnetConfig): their proxy stack appears too old for EIP-7702
-zero-nonce auths. Blocks Phase 2 smoke item "personal space create".
+**Root cause isolated by replaying the exact stub request (curl, stateless,
+`shouldConsume:false`) against both endpoint modes:**
+- `…/chain/55516?selfFunded=true` → deterministic 500 `Cannot convert 0x to a BigInt`
+- `…/chain/55516` (no query param) → clean JSON-RPC response reaching real
+  simulation (`AA21 didn't pay prefund`) — the same auth serializes fine
+
+The `?selfFunded=true` mode is what **geo-sdk 0.20.0-beta.8 switched us to on
+2026-07-06** (commit `62b6b3ddd`, "SDK-owned gas sponsorship"; lockfile
+reconciled 2026-07-13). That explains "new signups worked ~2 weeks ago": the
+last working signup predates the selfFunded switch taking effect. The defect is
+ZeroDev's (their selfFunded proxy can't handle zero-nonce 7702 auths), but our
+mode switch exposed it.
+
+⚠ Reverting to the non-selfFunded URL is NOT a drop-in workaround: in normal
+mode the project doesn't apply sponsorship (hence AA21 prefund in the replay),
+so gas wouldn't be paid. Resolution is with infra/ZeroDev: fix the selfFunded
+proxy's 7702 handling, or reconfigure sponsorship on the normal path.
+Blocks Phase 2 smoke item "personal space create".
 
 ## Team notes
 
