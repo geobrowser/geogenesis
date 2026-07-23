@@ -31,4 +31,15 @@ describe('shouldShowCreateEntityAction', () => {
     expect(shouldShowCreateEntityAction({ ...singleSpaceQuery, canCreateInSingleSpace: false })).toBe(false);
     expect(shouldShowCreateEntityAction(singleSpaceQuery)).toBe(true);
   });
+
+  it('only treats null, not an empty target id, as the absence of a single-space target', () => {
+    expect(
+      shouldShowCreateEntityAction({
+        ...editableQuery,
+        isEditing: true,
+        singleSpaceTarget: '',
+        singleSpaceAccessResolved: false,
+      })
+    ).toBe(false);
+  });
 });

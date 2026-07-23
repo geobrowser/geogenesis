@@ -21,5 +21,5 @@ export function shouldShowCreateEntityAction({
     return false;
   }
 
-  return !singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace);
+  return singleSpaceTarget === null || (singleSpaceAccessResolved && canCreateInSingleSpace);
 }
