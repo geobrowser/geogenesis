@@ -22,6 +22,8 @@ describe('RankingHeaderActions', () => {
     expect(markup).toContain('View');
     expect(markup).toContain('h-7');
     expect(markup).toContain('!border-grey-02');
+    expect(markup).toContain('focus-visible:!border-text');
+    expect(markup).toContain('focus-visible:!shadow-inner-text');
     expect(markup).not.toContain('<svg');
   });
 
@@ -31,6 +33,8 @@ describe('RankingHeaderActions', () => {
     expect(markup).toContain('Rank');
     expect(markup).not.toContain('Vote');
     expect(markup).toContain('!bg-[#151515]');
+    expect(markup).toContain('focus-visible:!border-text');
+    expect(markup).toContain('focus-visible:!shadow-inner-text');
     expect(markup).not.toContain('<svg');
   });
 });

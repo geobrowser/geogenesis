@@ -10,7 +10,7 @@ type Props = {
 };
 
 const ACTION_BUTTON_CLASS =
-  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none disabled:!border-transparent disabled:!bg-divider disabled:!text-grey-03';
+  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none focus-visible:!border-text focus-visible:!shadow-inner-text disabled:!border-transparent disabled:!bg-divider disabled:!text-grey-03';
 
 /**
  * Period label + Rank/View action. Rendered by the block header so it shares a row
@@ -39,7 +39,7 @@ export function RankingHeaderActions({ state }: Props) {
       ) : (
         <Button
           variant="primary"
-          className={`${ACTION_BUTTON_CLASS} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text`}
+          className={`${ACTION_BUTTON_CLASS} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515]`}
           disabled={isSaving}
           onClick={() => void openRankingCompose('edit')}
         >
