@@ -17,7 +17,7 @@ import { Cell, Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
-import { DEFAULT_IMAGE_SIZES, GeoImage, NativeGeoImage } from '~/design-system/geo-image';
+import { DEFAULT_IMAGE_SIZES, GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 
@@ -119,32 +119,25 @@ export function TableBlockGalleryItem({
     !mediaFrame.hasCustomHeight && 'aspect-2/1'
   );
 
-  /**
-   * When a property sets explicit dimensions, size the frame to the image itself so the full
-   * media shows with no letterboxing. Blocks without dimensions keep the fixed 2:1 frame.
-   * */
-  const hugImageToDimensions = Boolean(image) && mediaFrame.hasCustomHeight;
-  const mediaFrameStyle = hugImageToDimensions ? undefined : mediaFrame.style;
+  const mediaFrameStyle = mediaFrame.style;
+  // When a property sets explicit dimensions, keep the frame at the configured aspect ratio
+  // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
+  const mediaImageFitClassName = mediaFrame.hasCustomHeight ? 'object-contain' : 'object-cover';
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
       <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2">
         <div className={cx(mediaFrameClassName, 'flex items-center justify-center')} style={mediaFrameStyle}>
           {image ? (
-            hugImageToDimensions ? (
-              <NativeGeoImage
-                value={image}
-                className="block h-auto w-full transition-transform duration-150 ease-in-out group-hover:scale-105"
-                alt=""
-              />
-            ) : (
-              <GeoImage
-                value={image}
-                className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                alt=""
-                fill
-              />
-            )
+            <GeoImage
+              value={image}
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
+              alt=""
+              fill
+            />
           ) : (
             <BlockImageField
               variant="gallery"
@@ -281,20 +274,15 @@ export function TableBlockGalleryItem({
       <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
         <div className={mediaFrameClassName} style={mediaFrameStyle}>
           {image ? (
-            hugImageToDimensions ? (
-              <NativeGeoImage
-                value={image}
-                className="block h-auto w-full transition-transform duration-150 ease-in-out group-hover:scale-105"
-                alt=""
-              />
-            ) : (
-              <GeoImage
-                value={image}
-                className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
-                alt=""
-                fill
-              />
-            )
+            <GeoImage
+              value={image}
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
+              alt=""
+              fill
+            />
           ) : (
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
