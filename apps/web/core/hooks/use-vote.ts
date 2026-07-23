@@ -10,9 +10,9 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { geo } from '~/core/sdk/geo-client';
+import { assertSpaceRegistryDeployed } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -104,6 +104,10 @@ export function useVote({ spaceId, proposalId, proposalVersion }: UseVoteArgs) {
       }
 
       const vote = option === 'ACCEPT' ? 'YES' : option === 'REJECT' ? 'NO' : 'ABSTAIN';
+
+      // Fail closed: a registry address that doesn't match this chain produces
+      // a "successful" tx that emits nothing. Catch it before sending.
+      await assertSpaceRegistryDeployed();
 
       const { to, calldata } = geo.daoSpaces.voteProposal({
         authorSpaceId: personalSpaceId,

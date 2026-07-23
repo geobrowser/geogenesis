@@ -1,6 +1,6 @@
 'use client';
 
-import { WagmiProvider, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, useGeoLogin } from '@geogenesis/auth';
 import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
 
 import * as React from 'react';
@@ -13,10 +13,13 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 
 import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
+import { GEOGENESIS } from './geo-chain';
 
 const isTestEnv = Environment.variables.isTestEnv;
 
-const CHAIN = getGeoChain('TESTNET');
+// Chain identity comes from the shared env-driven config (see
+// ~/core/wallet/geo-chain), never a hardcoded network literal.
+const CHAIN = GEOGENESIS;
 
 const realWalletConfig = createGeoWalletConfig({
   chain: CHAIN,

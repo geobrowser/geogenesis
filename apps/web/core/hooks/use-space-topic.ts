@@ -10,9 +10,9 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { buildDaoTopicDeclaredCalldata } from '~/core/utils/contracts/space-topic';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 

@@ -1,6 +1,7 @@
 import type { Hex } from 'viem';
 
-export const DAO_SPACE_FACTORY_ADDRESS = '0x322A3eD5f7f40262a95C51457f56a8c762C27226' as const;
+// The DAOSpaceFactory *address* lives in ~/core/sdk/geo-network (network
+// config, env-driven).
 
 export const EMPTY_SPACE_ID = '0x00000000000000000000000000000000' as Hex;
 

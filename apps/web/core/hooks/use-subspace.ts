@@ -18,12 +18,12 @@ import {
   encodeProposalCreatedData,
   padBytes16ToBytes32,
 } from '~/core/utils/contracts/governance';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import {
   DAOSpaceAbi,
   EMPTY_SIGNATURE,
   EMPTY_TOPIC_HEX,
   GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';

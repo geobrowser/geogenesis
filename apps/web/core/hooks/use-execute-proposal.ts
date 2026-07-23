@@ -11,13 +11,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS, assertSpaceRegistryDeployed, contractHasCode } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
   ACTION_REVERTED_SELECTOR,
   type GovernanceRevert,
   decodeGovernanceRevert,
 } from '~/core/utils/contracts/governance-errors';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -57,6 +57,10 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
     if (!personalSpaceId || !isRegistered) {
       throw new Error('You need a registered personal space to execute proposals');
     }
+
+    // Fail closed: a registry address that doesn't match this chain produces
+    // a "successful" tx that emits nothing. Catch it before sending.
+    await assertSpaceRegistryDeployed();
 
     const { to, calldata } = geo.daoSpaces.executeProposal({
       authorSpaceId: personalSpaceId,
@@ -156,6 +160,13 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
       });
 
       const publicClient = createPublicClient({ chain: GEOGENESIS, transport: http() });
+
+      // An eth_call against an address with no code "succeeds" with empty
+      // data — indistinguishable from a passing simulation. Fail closed to
+      // `blocked` (button hidden) instead of reporting a phantom `executable`.
+      if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS as Hex))) {
+        return { state: 'blocked', revert: null };
+      }
 
       try {
         await publicClient.call({ account: account as Hex, to: SPACE_REGISTRY_ADDRESS as Hex, data: calldata });

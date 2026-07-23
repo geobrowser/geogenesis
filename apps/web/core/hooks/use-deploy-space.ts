@@ -14,17 +14,14 @@ import { type Hex, createPublicClient, http } from 'viem';
 
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { geo } from '~/core/sdk/geo-client';
+import { DAO_SPACE_FACTORY_ADDRESS, SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { createPersonalSpaceOnChain, waitForSpaceIndexed } from '~/core/utils/contracts/create-personal-space-on-chain';
-import {
-  DAO_SPACE_FACTORY_ADDRESS,
-  EMPTY_SPACE_ID,
-  NEW_SPACE_VOTING_DURATION_DAYS,
-} from '~/core/utils/contracts/dao-space-factory';
+import { EMPTY_SPACE_ID, NEW_SPACE_VOTING_DURATION_DAYS } from '~/core/utils/contracts/dao-space-factory';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
-import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
+import { SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
