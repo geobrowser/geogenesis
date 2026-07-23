@@ -48,6 +48,19 @@ function MetaDot() {
   return <span className="mx-[6px] shrink-0 text-[14px] leading-none text-[#2A2B2E]">·</span>;
 }
 
+const EXPLORE_FEED_ACTION_ICON_BOX_CLASS = 'flex h-5 w-5 shrink-0 items-center justify-center overflow-visible';
+
+function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
+  return (
+    <Link href={href} className="inline-flex items-center gap-1 transition-colors hover:text-grey-04">
+      <span className={EXPLORE_FEED_ACTION_ICON_BOX_CLASS}>
+        <ExploreCommentsIcon className="text-grey-03" />
+      </span>
+      <span className="min-w-[2ch] text-center tabular-nums">{count}</span>
+    </Link>
+  );
+}
+
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
@@ -210,17 +223,9 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
   }
 
   const cardActions = (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center gap-6 text-metadataMedium text-text">
       <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
-      <Link
-        href={entityHref}
-        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-      >
-        <div className="flex size-5 shrink-0 items-center justify-center">
-          <ExploreCommentsIcon className="text-grey-04" />
-        </div>
-        <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-      </Link>
+      <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
     </div>
   );
 
