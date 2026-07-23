@@ -5,6 +5,7 @@ import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
+import { OverviewWithSideRailLayout } from '~/partials/side-panel/overview-side-rail';
 
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
@@ -29,29 +30,35 @@ export function ExplorePage({
   communityCalls,
 }: Props) {
   return (
-    <div className="mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
-      <main className="min-w-0 flex-1 pt-5">
-        <div className="mx-auto w-full max-w-[880px]">
-          <ExploreWelcomeBanner />
-        </div>
-        <EntityFeed
-          apiEndpoint="/api/explore/feed"
-          initialSpaceOptions={initialSpaceOptions}
-          initialTime="month"
-          initialSort="top"
-          showSortFilter
-          dividerBeforeFeed
-          feedTopSpacingClassName=""
-        />
-      </main>
-      <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
-      <ExploreSidePanel
-        featuredSpaces={featuredSpaces}
-        featuredRankings={featuredRankings}
-        pendingMembershipSpaceIds={pendingMembershipSpaceIds}
-        memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-        editorSpaceIds={editorSpaceIds}
-        communityCalls={communityCalls}
+    <div className="explore-page-content">
+      <OverviewWithSideRailLayout
+        variant="explore"
+        main={
+          <main className="min-w-0">
+            <div className="mx-auto w-full max-w-[880px]">
+              <ExploreWelcomeBanner />
+            </div>
+            <EntityFeed
+              apiEndpoint="/api/explore/feed"
+              initialSpaceOptions={initialSpaceOptions}
+              initialTime="month"
+              initialSort="top"
+              showSortFilter
+              dividerBeforeFeed
+              feedTopSpacingClassName=""
+            />
+          </main>
+        }
+        rail={
+          <ExploreSidePanel
+            featuredSpaces={featuredSpaces}
+            featuredRankings={featuredRankings}
+            pendingMembershipSpaceIds={pendingMembershipSpaceIds}
+            memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+            editorSpaceIds={editorSpaceIds}
+            communityCalls={communityCalls}
+          />
+        }
       />
     </div>
   );

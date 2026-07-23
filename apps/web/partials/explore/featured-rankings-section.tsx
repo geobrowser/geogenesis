@@ -8,6 +8,7 @@ import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
+import { OverviewSideRailSection } from '~/partials/side-panel/overview-side-rail';
 
 type Props = {
   rankings: FeaturedRanking[];
@@ -26,11 +27,7 @@ export function FeaturedRankingsSection({ rankings }: Props) {
   const hasMore = rankings.length > INITIAL_VISIBLE_COUNT;
 
   return (
-    <section className="flex flex-col">
-      <h2 className="sticky top-0 z-20 bg-white pt-1 pb-4 text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
-        Featured rankings
-      </h2>
-
+    <OverviewSideRailSection title="Featured rankings">
       <ul className="flex flex-col gap-3">
         {visible.map(ranking => (
           <li key={ranking.blockEntityId}>
@@ -48,7 +45,7 @@ export function FeaturedRankingsSection({ rankings }: Props) {
           {showAll ? 'Show less' : 'Show more'}
         </button>
       ) : null}
-    </section>
+    </OverviewSideRailSection>
   );
 }
 

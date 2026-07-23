@@ -16,6 +16,7 @@ import { Button } from '~/design-system/button';
 import { Select } from '~/design-system/select';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
+import { OverviewSideRailSection } from '~/partials/side-panel/overview-side-rail';
 
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
 import { RsvpButton } from './rsvp-button';
@@ -97,19 +98,15 @@ export function ExploreCommunityCallsSection({
   const hasMore = upcoming.length > INITIAL_VISIBLE_COUNT;
 
   return (
-    <section className="flex flex-col">
-      <div className="flex flex-col gap-3 pb-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">Community calls</h2>
-          <div className="w-[120px]">
-            <Select value={spaceFilter} onChange={selectSpace} options={spaceOptions} />
-          </div>
+    <OverviewSideRailSection
+      title="Community calls"
+      action={
+        <div className="w-[120px]">
+          <Select value={spaceFilter} onChange={selectSpace} options={spaceOptions} />
         </div>
-        <p className="text-[16px] leading-[20px] text-grey-04">
-          The heartbeat of the community. See what people are doing and find a way to get involved.
-        </p>
-      </div>
-
+      }
+      description="The heartbeat of the community. See what people are doing and find a way to get involved."
+    >
       {now !== null && (
         <>
           <div className="flex flex-col gap-2">
@@ -136,7 +133,7 @@ export function ExploreCommunityCallsSection({
           ) : null}
         </>
       )}
-    </section>
+    </OverviewSideRailSection>
   );
 }
 

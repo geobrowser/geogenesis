@@ -8,6 +8,8 @@ import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ROOT_SPACE } from '~/core/constants';
+import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -26,6 +28,8 @@ import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { ExploreSidePanel } from '~/partials/explore/explore-side-panel';
+import { OverviewWithSideRailLayout } from '~/partials/side-panel/overview-side-rail';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -77,35 +81,40 @@ export default async function SpacePage(props0: Props) {
   }
 
   const props = await getSpaceFrontPage(space);
+  const isRootSpace = spaceId === ROOT_SPACE;
 
   return (
     <EntityPageContentContainer>
-      <div className="flex items-start">
-        <div className="min-w-0 flex-1">
-          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={params.id} />
-          </React.Suspense>
-          <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-          </React.Suspense>
-          <Spacer height={24} />
-          <ToggleEntityPage id={props.id} spaceId={spaceId} />
-          <Spacer height={40} />
-          {/*
-            Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-            boundary. We don't want to show any referenced by loading states but do want to
-            stream it in
-          */}
-          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={props.id} />
+      <OverviewWithSideRailLayout
+        main={
+          <>
+            <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+              <SubtopicGalleryContainer spaceId={params.id} />
             </React.Suspense>
-          </TrackedErrorBoundary>
-        </div>
-        <React.Suspense fallback={null}>
-          <SpaceCommunityCallsContainer spaceId={spaceId} />
-        </React.Suspense>
-      </div>
+            <React.Suspense fallback={null}>
+              <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+            </React.Suspense>
+            <Spacer height={24} />
+            <ToggleEntityPage id={props.id} spaceId={spaceId} />
+            <Spacer height={40} />
+            {/*
+              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+              boundary. We don't want to show any referenced by loading states but do want to
+              stream it in
+            */}
+            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+              <React.Suspense fallback={<div />}>
+                <BacklinksServerContainer entityId={props.id} />
+              </React.Suspense>
+            </TrackedErrorBoundary>
+          </>
+        }
+        rail={
+          <React.Suspense fallback={null}>
+            {isRootSpace ? <RootExploreSidePanelContainer /> : <SpaceCommunityCallsContainer spaceId={spaceId} />}
+          </React.Suspense>
+        }
+      />
     </EntityPageContentContainer>
   );
 }
@@ -241,6 +250,20 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
 const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
   const series = await fetchCommunityCalls(spaceId);
   return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
+};
+
+const RootExploreSidePanelContainer = async () => {
+  const data = await fetchExploreSidePanelData();
+  return (
+    <ExploreSidePanel
+      featuredSpaces={data.featuredSpaces}
+      featuredRankings={data.featuredRankings}
+      pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
+      memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
+      editorSpaceIds={data.editorSpaceIds}
+      communityCalls={data.communityCalls}
+    />
+  );
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {

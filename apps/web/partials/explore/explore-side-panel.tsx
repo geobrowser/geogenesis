@@ -10,6 +10,7 @@ import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExploreCommunityCallsSection } from '~/partials/community-calls/explore-community-calls-section';
+import { OverviewSideRail, OverviewSideRailSections } from '~/partials/side-panel/overview-side-rail';
 
 import { CuratorOnboardingSection } from './curator-onboarding-section';
 import { FeaturedRankingsSection } from './featured-rankings-section';
@@ -80,23 +81,8 @@ export function ExploreSidePanel({
   }
 
   return (
-    // Independent scroll surface mirroring BrowseSidebar pattern
-    // (partials/browse-sidebar/browse-sidebar.tsx:323,339). The aside pins to
-    // top: 44px (navbar height) so its full height is always visible — without
-    // the offset, the panel's bottom sits below the viewport at top-of-page.
-    // `self-start` stops the flex container from stretching the aside past its
-    // declared height.
-    <aside className="sticky top-11 flex h-[calc(100dvh-2.75rem)] w-[360px] shrink-0 flex-col self-start lg:hidden">
-      <div className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
-        <div className="flex flex-col pt-5 pb-6">
-          {sections.map((section, index) => (
-            <React.Fragment key={section.key}>
-              {index > 0 ? <hr className="my-6 border-t border-divider" /> : null}
-              {section.node}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-    </aside>
+    <OverviewSideRail>
+      <OverviewSideRailSections sections={sections} />
+    </OverviewSideRail>
   );
 }

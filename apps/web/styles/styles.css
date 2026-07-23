@@ -75,6 +75,9 @@
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 
+  /* Match CONTENT_MAX_WIDTH */
+  --width-content-max: 1144px;
+
   /* Animations */
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -626,4 +629,11 @@ body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   font-style: normal;
   font-weight: 700;
   src: url('/fonts/calibre-bold.woff2') format('woff2');
+}
+
+/* Explore shell — same max width as EntityPageContentContainer, without entity-page semantics. */
+.explore-page-content {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--width-content-max);
 }
