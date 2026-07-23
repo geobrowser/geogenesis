@@ -1,7 +1,6 @@
 'use client';
 
 import { Button } from '~/design-system/button';
-import { RankingChart } from '~/design-system/icons/ranking-chart';
 
 import { getRankingPeriodIcon } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
@@ -10,8 +9,11 @@ type Props = {
   state: RankingBlockState;
 };
 
+const ACTION_BUTTON_CLASS =
+  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none disabled:!border-transparent disabled:!bg-divider disabled:!text-grey-03';
+
 /**
- * Period label + Vote/View action. Rendered by the block header so it shares a row
+ * Period label + Rank/View action. Rendered by the block header so it shares a row
  * with the block title rather than sitting above the entries.
  */
 export function RankingHeaderActions({ state }: Props) {
@@ -28,8 +30,7 @@ export function RankingHeaderActions({ state }: Props) {
       {hasMySubmission ? (
         <Button
           variant="secondary"
-          className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-3 text-[16px] whitespace-nowrap !text-text"
-          icon={<RankingChart />}
+          className={`${ACTION_BUTTON_CLASS} !border-grey-02 !bg-white !text-text hover:!border-grey-02 hover:!bg-white`}
           disabled={isSaving}
           onClick={() => void openRankingCompose('view')}
         >
@@ -38,12 +39,11 @@ export function RankingHeaderActions({ state }: Props) {
       ) : (
         <Button
           variant="primary"
-          className="h-8 shrink-0 !rounded-full border-grey-02 bg-text !px-3 text-[16px] whitespace-nowrap text-white hover:bg-text/90 focus-visible:border-text focus-visible:shadow-inner-text"
-          icon={<RankingChart color="white" />}
+          className={`${ACTION_BUTTON_CLASS} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text`}
           disabled={isSaving}
           onClick={() => void openRankingCompose('edit')}
         >
-          Vote
+          Rank
         </Button>
       )}
     </>
