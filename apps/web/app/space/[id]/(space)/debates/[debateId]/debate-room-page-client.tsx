@@ -178,6 +178,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const noiseFilterProcessorRef = React.useRef<KrispNoiseFilterProcessor | null>(null);
   const noiseFilterEnabledRef = React.useRef(true);
   const noiseFilterTogglePendingRef = React.useRef(false);
+  const sourceMediaStreamTracksRef = React.useRef(new WeakMap<LocalTrackLike, MediaStreamTrack>());
   const mountedRef = React.useRef(true);
   const previewGenerationRef = React.useRef(0);
   const connectionGenerationRef = React.useRef(0);
@@ -255,7 +256,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [serverClock]);
 
   React.useEffect(() => {
-    setLocalTrackPreferences(localTracksRef.current, { audioEnabled: localAudioEnabled, videoEnabled });
+    setLocalTrackPreferences(
+      localTracksRef.current,
+      { audioEnabled: localAudioEnabled, videoEnabled },
+      sourceMediaStreamTracksRef.current
+    );
   }, [localAudioEnabled, videoEnabled]);
 
   React.useEffect(() => {
@@ -657,6 +662,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
 
+    let processor: KrispNoiseFilterProcessor | null = null;
+    let processorAttached = false;
     try {
       const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter');
       if (!isCurrent()) return;
@@ -666,14 +673,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
 
-      const processor = KrispNoiseFilter();
+      const sourceMediaStreamTrack = audioTrack.mediaStreamTrack;
+      sourceMediaStreamTracksRef.current.set(audioTrack, sourceMediaStreamTrack);
+      processor = KrispNoiseFilter();
       await audioTrack.setProcessor(processor);
+      processorAttached = true;
       if (!isCurrent()) {
         await audioTrack.stopProcessor?.().catch(stopError => {
           console.warn('[DebateNoiseFilter] Krisp cleanup failed after the connection changed.', stopError);
         });
         return;
       }
+      audioTrack.mediaStreamTrack.enabled = sourceMediaStreamTrack.enabled;
       await processor.setEnabled(noiseFilterEnabledRef.current);
       if (!isCurrent()) {
         await audioTrack.stopProcessor?.().catch(stopError => {
@@ -685,7 +696,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       noiseFilterProcessorRef.current = processor;
       setNoiseFilterStatus(noiseFilterEnabledRef.current ? 'enabled' : 'disabled');
     } catch (error) {
-      await audioTrack.stopProcessor?.().catch(stopError => {
+      const cleanup = processorAttached ? audioTrack.stopProcessor?.() : processor?.destroy();
+      await cleanup?.catch(stopError => {
         console.warn('[DebateNoiseFilter] Krisp cleanup failed after initialization.', stopError);
       });
       if (isCurrent()) {
@@ -854,15 +866,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
       localTracksRef.current = tracks;
-      setLocalTrackPreferences(tracks, {
-        audioEnabled: shouldEnableLocalAudio(
-          countdown.effectiveStatus,
-          countdown.activeSlot,
-          token.participant_slot,
-          audioMuted
-        ),
-        videoEnabled,
-      });
+      setLocalTrackPreferences(
+        tracks,
+        {
+          audioEnabled: shouldEnableLocalAudio(
+            countdown.effectiveStatus,
+            countdown.activeSlot,
+            token.participant_slot,
+            audioMuted
+          ),
+          videoEnabled,
+        },
+        sourceMediaStreamTracksRef.current
+      );
 
       // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
       // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
@@ -984,8 +1000,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       console.warn('[DebateNoiseFilter] Krisp could not change state.', error);
     } finally {
-      noiseFilterTogglePendingRef.current = false;
-      if (mountedRef.current) setNoiseFilterTogglePending(false);
+      if (noiseFilterProcessorRef.current === processor) {
+        noiseFilterTogglePendingRef.current = false;
+        if (mountedRef.current) setNoiseFilterTogglePending(false);
+      }
     }
   }, []);
 
@@ -2477,10 +2495,15 @@ function SpeakerIcon({ disabled }: { disabled: boolean }) {
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioEnabled: boolean; videoEnabled: boolean }
+  preferences: { audioEnabled: boolean; videoEnabled: boolean },
+  sourceMediaStreamTracks?: WeakMap<LocalTrackLike, MediaStreamTrack>
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
+      const sourceMediaStreamTrack = sourceMediaStreamTracks?.get(track);
+      if (sourceMediaStreamTrack && sourceMediaStreamTrack !== track.mediaStreamTrack) {
+        sourceMediaStreamTrack.enabled = preferences.audioEnabled;
+      }
       track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {

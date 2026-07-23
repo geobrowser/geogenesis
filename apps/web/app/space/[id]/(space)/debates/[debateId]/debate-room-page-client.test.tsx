@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   krispSupported: vi.fn(),
   krispSetEnabled: vi.fn(),
   krispIsEnabled: vi.fn(),
+  krispDestroy: vi.fn(),
   roomConnect: vi.fn(),
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
@@ -161,6 +162,7 @@ beforeEach(() => {
   mocks.krispSupported.mockReset().mockReturnValue(true);
   mocks.krispSetEnabled.mockReset().mockResolvedValue(undefined);
   mocks.krispIsEnabled.mockReset().mockReturnValue(true);
+  mocks.krispDestroy.mockReset().mockResolvedValue(undefined);
   mocks.roomConnect.mockReset();
   mocks.roomDisconnect.mockReset();
   mocks.publishTrack.mockReset();
@@ -193,6 +195,7 @@ beforeEach(() => {
     processedTrack: { kind: 'audio', enabled: true, id: 'krisp-processed-audio' },
     setEnabled: mocks.krispSetEnabled,
     isEnabled: mocks.krispIsEnabled,
+    destroy: mocks.krispDestroy,
   }));
   mocks.createLocalTracks.mockResolvedValue([
     createLocalAudioTrack(),
@@ -789,6 +792,44 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByRole('switch', { name: 'Krisp noise filter' })).not.toBeInTheDocument();
   });
 
+  it('keeps the Krisp source and processed tracks aligned with turn-based microphone state', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+    const audioTrack = createLocalAudioTrack();
+    const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
+    mocks.krispNoiseFilter.mockReturnValue({
+      processedTrack,
+      setEnabled: mocks.krispSetEnabled,
+      isEnabled: mocks.krispIsEnabled,
+      destroy: mocks.krispDestroy,
+    });
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    const view = await renderLiveDebate({
+      first_participant_slot: 2,
+      current_speaker_slot: 2,
+    });
+
+    await waitFor(() => expect(audioTrack.setProcessor).toHaveBeenCalledOnce());
+    expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(false);
+    expect(processedTrack.enabled).toBe(false);
+
+    mocks.debate = {
+      ...mocks.debate!,
+      started_at: '2026-07-01T23:59:40.000Z',
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(true));
+    expect(processedTrack.enabled).toBe(true);
+  });
+
   it('toggles Krisp from the debate debug controls without restarting the recorder', async () => {
     mocks.featureFlags.debateDebugging = true;
     installRecordingMocks();
@@ -927,6 +968,8 @@ describe('DebateRoomPageClient', () => {
       '[DebateNoiseFilter] Krisp initialization failed; using the browser microphone track.',
       expect.any(Error)
     );
+    expect(mocks.krispDestroy).toHaveBeenCalledOnce();
+    expect(audioTrack.stopProcessor).not.toHaveBeenCalled();
   });
 
   it('reapplies the local Krisp preference after a manual connection retry', async () => {
@@ -962,6 +1005,68 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenLastCalledWith(false));
     expect(mocks.krispSetEnabled.mock.calls.filter(([enabled]) => enabled === false)).toHaveLength(2);
     expect(await screen.findByRole('switch', { name: 'Krisp noise filter' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('does not let an old toggle clear a newer processor toggle after reconnecting', async () => {
+    const oldDisabling = deferred<void>();
+    const newEnabling = deferred<void>();
+    const firstAudioTrack = createLocalAudioTrack();
+    const retriedAudioTrack = createLocalAudioTrack();
+    const oldSetEnabled = vi.fn((enabled: boolean) =>
+      enabled ? Promise.resolve(undefined) : oldDisabling.promise
+    );
+    const newSetEnabled = vi.fn((enabled: boolean) =>
+      enabled ? newEnabling.promise : Promise.resolve(undefined)
+    );
+    mocks.krispNoiseFilter
+      .mockReturnValueOnce({
+        processedTrack: { kind: 'audio', enabled: true, id: 'old-krisp-audio' },
+        setEnabled: oldSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
+      })
+      .mockReturnValueOnce({
+        processedTrack: { kind: 'audio', enabled: true, id: 'new-krisp-audio' },
+        setEnabled: newSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
+      });
+    mocks.createLocalTracks
+      .mockResolvedValueOnce([
+        firstAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ])
+      .mockResolvedValueOnce([
+        retriedAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+    mocks.featureFlags.debateDebugging = true;
+
+    await renderLiveDebate();
+
+    const firstSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(firstSwitch).toBeEnabled());
+    fireEvent.click(firstSwitch);
+    await waitFor(() => expect(oldSetEnabled).toHaveBeenLastCalledWith(false));
+
+    act(() => emitRoomEvent('disconnected', 99));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry connection' }));
+
+    const retriedSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(retriedSwitch).toBeEnabled());
+    expect(retriedSwitch).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(retriedSwitch);
+    expect(retriedSwitch).toBeDisabled();
+
+    oldDisabling.resolve();
+
+    await waitFor(() => expect(oldSetEnabled).toHaveResolved());
+    expect(retriedSwitch).toBeDisabled();
+
+    newEnabling.resolve();
+
+    await waitFor(() => expect(retriedSwitch).toBeEnabled());
+    expect(retriedSwitch).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows the circular phase timer during a timed debate turn', async () => {
@@ -1632,7 +1737,7 @@ describe('DebateRoomPageClient', () => {
   });
 });
 
-async function renderLiveDebate() {
+async function renderLiveDebate(overrides: Partial<Debate> = {}) {
   mocks.debate = {
     ...completedDebate(),
     status: 'in_progress',
@@ -1640,6 +1745,7 @@ async function renderLiveDebate() {
     turn_started_at: '2026-07-02T00:00:10.000Z',
     turn_ends_at: '2026-07-02T00:00:40.000Z',
     completed_at: null,
+    ...overrides,
   };
   const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
   await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
@@ -1694,6 +1800,7 @@ function createLocalAudioTrack() {
   let processor: { processedTrack?: { kind: string; enabled: boolean; id: string } } | null = null;
 
   return {
+    sourceMediaStreamTrack: browserTrack,
     get mediaStreamTrack() {
       return processor?.processedTrack ?? browserTrack;
     },
