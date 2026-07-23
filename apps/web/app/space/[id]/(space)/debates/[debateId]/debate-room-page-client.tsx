@@ -1,5 +1,7 @@
 'use client';
 
+import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -53,8 +55,20 @@ type DebateRoomPageClientProps = {
 
 type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
+  setProcessor?: (processor: KrispNoiseFilterProcessor) => Promise<void>;
+  stopProcessor?: () => Promise<void>;
   stop: () => void;
   detach?: () => void;
+};
+
+type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
+
+const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
+  initializing: 'Loading…',
+  enabled: 'On',
+  disabled: 'Off',
+  unsupported: 'Unavailable',
+  failed: 'Failed',
 };
 
 type MediaDeviceOption = {
@@ -157,8 +171,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [videoInputDevices, setVideoInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [selectedAudioInputId, setSelectedAudioInputId] = React.useState('');
   const [selectedVideoInputId, setSelectedVideoInputId] = React.useState('');
+  const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
+  const [noiseFilterTogglePending, setNoiseFilterTogglePending] = React.useState(false);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedVideoInputIdRef = React.useRef('');
+  const noiseFilterProcessorRef = React.useRef<KrispNoiseFilterProcessor | null>(null);
+  const noiseFilterEnabledRef = React.useRef(true);
+  const noiseFilterTogglePendingRef = React.useRef(false);
+  const sourceMediaStreamTracksRef = React.useRef(new WeakMap<LocalTrackLike, MediaStreamTrack>());
   const mountedRef = React.useRef(true);
   const previewGenerationRef = React.useRef(0);
   const connectionGenerationRef = React.useRef(0);
@@ -236,7 +256,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [serverClock]);
 
   React.useEffect(() => {
-    setLocalTrackPreferences(localTracksRef.current, { audioEnabled: localAudioEnabled, videoEnabled });
+    setLocalTrackPreferences(
+      localTracksRef.current,
+      { audioEnabled: localAudioEnabled, videoEnabled },
+      sourceMediaStreamTracksRef.current
+    );
   }, [localAudioEnabled, videoEnabled]);
 
   React.useEffect(() => {
@@ -623,6 +647,67 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [ensureLocalPreview]
   );
 
+  const initializeNoiseFilter = React.useCallback(async (tracks: LocalTrackLike[], isCurrent: () => boolean) => {
+    noiseFilterProcessorRef.current = null;
+    if (isCurrent()) {
+      setNoiseFilterStatus('initializing');
+      setNoiseFilterTogglePending(false);
+      noiseFilterTogglePendingRef.current = false;
+    }
+
+    const audioTrack = tracks.find(track => track.mediaStreamTrack.kind === 'audio');
+    if (!audioTrack?.setProcessor) {
+      if (isCurrent()) setNoiseFilterStatus('failed');
+      console.warn('[DebateNoiseFilter] Krisp could not attach because the local microphone track is unavailable.');
+      return;
+    }
+
+    let processor: KrispNoiseFilterProcessor | null = null;
+    let processorAttached = false;
+    try {
+      const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter');
+      if (!isCurrent()) return;
+      if (!isKrispNoiseFilterSupported()) {
+        setNoiseFilterStatus('unsupported');
+        console.info('[DebateNoiseFilter] Krisp is unavailable in this browser; using the browser microphone track.');
+        return;
+      }
+
+      const sourceMediaStreamTrack = audioTrack.mediaStreamTrack;
+      sourceMediaStreamTracksRef.current.set(audioTrack, sourceMediaStreamTrack);
+      processor = KrispNoiseFilter();
+      await audioTrack.setProcessor(processor);
+      processorAttached = true;
+      if (!isCurrent()) {
+        await audioTrack.stopProcessor?.().catch(stopError => {
+          console.warn('[DebateNoiseFilter] Krisp cleanup failed after the connection changed.', stopError);
+        });
+        return;
+      }
+      audioTrack.mediaStreamTrack.enabled = sourceMediaStreamTrack.enabled;
+      await processor.setEnabled(noiseFilterEnabledRef.current);
+      if (!isCurrent()) {
+        await audioTrack.stopProcessor?.().catch(stopError => {
+          console.warn('[DebateNoiseFilter] Krisp cleanup failed after the connection changed.', stopError);
+        });
+        return;
+      }
+
+      noiseFilterProcessorRef.current = processor;
+      setNoiseFilterStatus(noiseFilterEnabledRef.current ? 'enabled' : 'disabled');
+    } catch (error) {
+      const cleanup = processorAttached ? audioTrack.stopProcessor?.() : processor?.destroy();
+      await cleanup?.catch(stopError => {
+        console.warn('[DebateNoiseFilter] Krisp cleanup failed after initialization.', stopError);
+      });
+      if (isCurrent()) {
+        noiseFilterProcessorRef.current = null;
+        setNoiseFilterStatus('failed');
+      }
+      console.warn('[DebateNoiseFilter] Krisp initialization failed; using the browser microphone track.', error);
+    }
+  }, []);
+
   const connect = React.useCallback(async (options: { takeover?: boolean } = {}) => {
     const generation = connectionGenerationRef.current + 1;
     connectionGenerationRef.current = generation;
@@ -630,9 +715,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     let connectingRoom: RoomLike | null = null;
     let newlyCreatedTracks: LocalTrackLike[] = [];
     const ownership = ownershipRef.current;
-    const ownsConnection = options.takeover
-      ? await ownership?.requestTakeover()
-      : await ownership?.acquire();
+    const ownsConnection = options.takeover ? await ownership?.requestTakeover() : await ownership?.acquire();
     if (!isCurrent()) return;
     if (ownsConnection === false) {
       setConnectionConflict(true);
@@ -740,13 +823,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // call room.disconnect() a second time and could re-enter this handler.
         roomRef.current = null;
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        noiseFilterProcessorRef.current = null;
         ownershipRef.current?.release();
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
         const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
         setConnectionConflict(duplicateIdentity);
         setRoomError(
-          duplicateIdentity ? 'This debate is active in another tab or device.' : 'Lost connection to the debate room.'
+          duplicateIdentity
+            ? 'This debate is active in another tab or device.'
+            : 'Lost connection to the debate room.'
         );
         setRoomState('idle');
         logDebateConnectionDiagnostic('livekit-disconnected', {
@@ -780,15 +866,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return;
       }
       localTracksRef.current = tracks;
-      setLocalTrackPreferences(tracks, {
-        audioEnabled: shouldEnableLocalAudio(
-          countdown.effectiveStatus,
-          countdown.activeSlot,
-          token.participant_slot,
-          audioMuted
-        ),
-        videoEnabled,
-      });
+      setLocalTrackPreferences(
+        tracks,
+        {
+          audioEnabled: shouldEnableLocalAudio(
+            countdown.effectiveStatus,
+            countdown.activeSlot,
+            token.participant_slot,
+            audioMuted
+          ),
+          videoEnabled,
+        },
+        sourceMediaStreamTracksRef.current
+      );
 
       // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
       // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
@@ -814,6 +904,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
       }
 
+      // LiveKit supplies the audio context required by audio processors while publishing the
+      // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
+      // the same processed track used by the outbound publication.
+      await initializeNoiseFilter(tracks, isCurrent);
+      if (!isCurrent()) {
+        room.disconnect();
+        stopLocalTracks(localTracksRef);
+        localMediaStreamRef.current = null;
+        if (roomRef.current === room) roomRef.current = null;
+        return;
+      }
       const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
       localMediaStreamRef.current = stream;
       if (localVideoRef.current) {
@@ -852,6 +953,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.effectiveStatus,
     debateId,
     debate?.status,
+    initializeNoiseFilter,
     liveKitJoin,
     markJoined,
     refetchDebate,
@@ -876,6 +978,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const toggleVideoEnabled = React.useCallback(() => {
     setVideoEnabled(current => !current);
+  }, []);
+
+  const toggleNoiseFilter = React.useCallback(async () => {
+    const processor = noiseFilterProcessorRef.current;
+    if (!processor || noiseFilterTogglePendingRef.current) return;
+
+    const previousEnabled = noiseFilterEnabledRef.current;
+    const enabled = !previousEnabled;
+    noiseFilterEnabledRef.current = enabled;
+    noiseFilterTogglePendingRef.current = true;
+    setNoiseFilterTogglePending(true);
+    try {
+      await processor.setEnabled(enabled);
+      if (!mountedRef.current || noiseFilterProcessorRef.current !== processor) return;
+      setNoiseFilterStatus(enabled ? 'enabled' : 'disabled');
+    } catch (error) {
+      if (mountedRef.current && noiseFilterProcessorRef.current === processor) {
+        noiseFilterEnabledRef.current = previousEnabled;
+        setNoiseFilterStatus('failed');
+      }
+      console.warn('[DebateNoiseFilter] Krisp could not change state.', error);
+    } finally {
+      if (noiseFilterProcessorRef.current === processor) {
+        noiseFilterTogglePendingRef.current = false;
+        if (mountedRef.current) setNoiseFilterTogglePending(false);
+      }
+    }
   }, []);
 
   const finishAndPersist = React.useCallback(async () => {
@@ -1328,6 +1457,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onToggleAudioMuted={toggleAudioMuted}
                 onToggleRemoteAudioEnabled={toggleRemoteAudioEnabled}
                 onToggleVideoEnabled={toggleVideoEnabled}
+                noiseFilterStatus={noiseFilterStatus}
+                noiseFilterTogglePending={noiseFilterTogglePending}
+                onToggleNoiseFilter={toggleNoiseFilter}
                 rematchSession={rematchQuery.data ?? null}
                 currentUserId={currentUserId}
                 onRequestRematch={requestRematch}
@@ -1575,6 +1707,9 @@ function DebateRecordingModal({
   onToggleAudioMuted,
   onToggleRemoteAudioEnabled,
   onToggleVideoEnabled,
+  noiseFilterStatus,
+  noiseFilterTogglePending,
+  onToggleNoiseFilter,
   rematchSession,
   currentUserId,
   onRequestRematch,
@@ -1599,6 +1734,9 @@ function DebateRecordingModal({
   onToggleAudioMuted: () => void;
   onToggleRemoteAudioEnabled: () => void;
   onToggleVideoEnabled: () => void;
+  noiseFilterStatus: DebateNoiseFilterStatus;
+  noiseFilterTogglePending: boolean;
+  onToggleNoiseFilter: () => void;
   rematchSession: DebateRematchSession | null;
   currentUserId: string | null;
   onRequestRematch: () => void;
@@ -1724,6 +1862,9 @@ function DebateRecordingModal({
           onToggleAudioMuted={onToggleAudioMuted}
           onToggleRemoteAudioEnabled={onToggleRemoteAudioEnabled}
           onToggleVideoEnabled={onToggleVideoEnabled}
+          noiseFilterStatus={noiseFilterStatus}
+          noiseFilterTogglePending={noiseFilterTogglePending}
+          onToggleNoiseFilter={onToggleNoiseFilter}
         />
       )}
 
@@ -1795,6 +1936,9 @@ function DebateDebugMenu({
   onToggleAudioMuted,
   onToggleRemoteAudioEnabled,
   onToggleVideoEnabled,
+  noiseFilterStatus,
+  noiseFilterTogglePending,
+  onToggleNoiseFilter,
 }: {
   debate: Debate;
   countdown: DebateCountdown;
@@ -1805,8 +1949,13 @@ function DebateDebugMenu({
   onToggleAudioMuted: () => void;
   onToggleRemoteAudioEnabled: () => void;
   onToggleVideoEnabled: () => void;
+  noiseFilterStatus: DebateNoiseFilterStatus;
+  noiseFilterTogglePending: boolean;
+  onToggleNoiseFilter: () => void;
 }) {
   const phases = debateDebugPhases(debate, countdown);
+  const noiseFilterAvailable = noiseFilterStatus === 'enabled' || noiseFilterStatus === 'disabled';
+  const noiseFilterDisabled = roomState === 'saving' || noiseFilterTogglePending || !noiseFilterAvailable;
 
   return (
     <aside className="fixed top-4 right-4 z-[1010] w-[min(280px,calc(100vw-2rem))] rounded-lg border border-grey-02 bg-white/95 p-3 shadow-card backdrop-blur">
@@ -1844,6 +1993,39 @@ function DebateDebugMenu({
           </RecordingCircleButton>
         </div>
       </div>
+
+      <button
+        type="button"
+        role="switch"
+        aria-label="Krisp noise filter"
+        aria-checked={noiseFilterStatus === 'enabled'}
+        disabled={noiseFilterDisabled}
+        onClick={onToggleNoiseFilter}
+        className="mt-3 flex min-h-10 w-full items-center justify-between gap-3 border-t border-grey-02 pt-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Text as="span" variant="metadata" color="text">
+          Krisp noise filter
+        </Text>
+        <span className="flex shrink-0 items-center gap-2">
+          <Text as="span" variant="metadata" color="grey-04">
+            {noiseFilterTogglePending ? 'Saving…' : debateNoiseFilterStatusLabel[noiseFilterStatus]}
+          </Text>
+          <span
+            aria-hidden="true"
+            className={cx(
+              'relative inline-flex h-5 w-9 rounded-full transition-colors',
+              noiseFilterStatus === 'enabled' ? 'bg-ctaPrimary' : 'bg-grey-02'
+            )}
+          >
+            <span
+              className={cx(
+                'shadow-sm absolute top-0.5 size-4 rounded-full bg-white transition-transform',
+                noiseFilterStatus === 'enabled' ? 'translate-x-[18px]' : 'translate-x-0.5'
+              )}
+            />
+          </span>
+        </span>
+      </button>
 
       <ol aria-label="Debate phases" className="mt-3 grid gap-1 border-t border-grey-02 pt-3">
         {phases.map(phase => (
@@ -2313,10 +2495,15 @@ function SpeakerIcon({ disabled }: { disabled: boolean }) {
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioEnabled: boolean; videoEnabled: boolean }
+  preferences: { audioEnabled: boolean; videoEnabled: boolean },
+  sourceMediaStreamTracks?: WeakMap<LocalTrackLike, MediaStreamTrack>
 ) {
   for (const track of tracks) {
     if (track.mediaStreamTrack.kind === 'audio') {
+      const sourceMediaStreamTrack = sourceMediaStreamTracks?.get(track);
+      if (sourceMediaStreamTrack && sourceMediaStreamTrack !== track.mediaStreamTrack) {
+        sourceMediaStreamTrack.enabled = preferences.audioEnabled;
+      }
       track.mediaStreamTrack.enabled = preferences.audioEnabled;
     }
     if (track.mediaStreamTrack.kind === 'video') {
