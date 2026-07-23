@@ -31,7 +31,6 @@ import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Plus } from '~/design-system/icons/plus';
 import { Time } from '~/design-system/icons/time';
 
-import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { RecordingPlayer } from './recording-player';
 import { RsvpButton } from './rsvp-button';
 
@@ -277,14 +276,6 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
       <div className="flex items-start justify-between">
         <CallTitle row={row} />
         <div className="flex items-center gap-2">
-          <AddToCalendarMenu
-            spaceId={row.call.spaceId}
-            callId={row.call.callId}
-            name={row.call.name}
-            startMs={row.occ.startMs}
-            endMs={row.occ.endMs}
-            schedule={row.call.schedule}
-          />
           {isEditor && <RsvpButton call={row.call} />}
           <Dropdown
             trigger={<Ellipsis />}

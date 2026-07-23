@@ -17,7 +17,6 @@ import { Select } from '~/design-system/select';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
 
-import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
 import { RsvpButton } from './rsvp-button';
 
@@ -244,17 +243,7 @@ function UpcomingCard({
       </div>
       <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
         <span className="shrink-0 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
-        <div className="flex items-center gap-2">
-          <AddToCalendarMenu
-            spaceId={row.call.spaceId}
-            callId={row.call.callId}
-            name={row.call.name}
-            startMs={row.occ.startMs}
-            endMs={row.occ.endMs}
-            schedule={row.call.schedule}
-          />
-          <SpaceChip call={row.call} />
-        </div>
+        <SpaceChip call={row.call} />
       </div>
     </CardShell>
   );
