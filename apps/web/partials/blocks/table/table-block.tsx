@@ -56,7 +56,10 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
-import { shouldShowFilterAndFullscreenActions } from './data-block-header-action-visibility';
+import {
+  filterPanelOpenStateForActions,
+  shouldShowFilterAndFullscreenActions,
+} from './data-block-header-action-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -969,7 +972,11 @@ const ConfiguredTableBlock = ({
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
   const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, isEditing);
 
-  const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
+  React.useEffect(() => {
+    setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAndFullscreenActions));
+  }, [showFilterAndFullscreenActions]);
+
+  const toggleFilterHandler = () => setIsFilterOpen(current => !current);
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>

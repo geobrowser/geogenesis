@@ -4,3 +4,8 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 export function shouldShowFilterAndFullscreenActions(view: DataBlockView, isEditing: boolean): boolean {
   return isEditing || view !== 'EXPLORE';
 }
+
+/** A hidden filter toggle must not leave its panel open with no way to close it. */
+export function filterPanelOpenStateForActions(isFilterOpen: boolean, showActions: boolean): boolean {
+  return showActions && isFilterOpen;
+}
