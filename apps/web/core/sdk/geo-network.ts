@@ -54,9 +54,14 @@ export const GEO_NETWORK = defineGeoNetworkConfig({
     rpcUrl: config.rpc,
   },
   // Testnet gas sponsorship (combined bundler + paymaster) ships inside the
-  // SDK config. Mainnet has no endpoint yet — it lands here once infra
-  // provides one.
-  sponsorship: IS_TESTNET ? GeoTestnetConfig.sponsorship : undefined,
+  // SDK config; NEXT_PUBLIC_SPONSORSHIP_RPC_URL overrides it (e.g. to route
+  // around a ZeroDev-side proxy bug without waiting on a geo-sdk release).
+  // Mainnet has no endpoint yet — it lands here once infra provides one.
+  sponsorship: IS_TESTNET
+    ? Environment.variables.sponsorshipRpcUrl
+      ? { rpcUrl: Environment.variables.sponsorshipRpcUrl }
+      : GeoTestnetConfig.sponsorship
+    : undefined,
   contracts,
 });
 
