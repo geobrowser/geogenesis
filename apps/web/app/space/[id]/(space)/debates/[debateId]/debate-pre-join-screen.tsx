@@ -15,6 +15,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { CameraIcon, CloseIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
 
@@ -336,29 +337,33 @@ function DesktopSettingsPopover({
   children: React.ReactNode;
 }) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
         <PreScreenSettingsTrigger ref={triggerRef} ariaLabel={ariaLabel} icon={icon} label={label} open={open} />
       </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          role="dialog"
-          aria-label={ariaLabel}
-          side="top"
-          align="start"
-          sideOffset={-1}
-          avoidCollisions={false}
-          onCloseAutoFocus={event => {
-            event.preventDefault();
-            triggerRef.current?.focus();
-          }}
-          className="z-[1010] max-h-[360px] w-[var(--radix-popover-trigger-width)] overflow-y-auto rounded-lg border border-grey-02 bg-white p-2 text-left text-text shadow-lg outline-none"
-        >
-          {children}
-        </Popover.Content>
-      </Popover.Portal>
+      {/* The default Radix wrapper is globally capped at z-60, below this screen's z-1000 overlay. */}
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            role="dialog"
+            aria-label={ariaLabel}
+            side="top"
+            align="start"
+            sideOffset={-1}
+            avoidCollisions={false}
+            onCloseAutoFocus={event => {
+              event.preventDefault();
+              triggerRef.current?.focus();
+            }}
+            className="z-[1010] max-h-[360px] w-[var(--radix-popover-trigger-width)] overflow-y-auto rounded-lg border border-grey-02 bg-white p-2 text-left text-text shadow-lg outline-none"
+          >
+            {children}
+          </Popover.Content>
+        </Popover.Portal>
+      )}
     </Popover.Root>
   );
 }

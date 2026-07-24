@@ -355,6 +355,7 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(audioTrigger);
     const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
     expect(audioSettings).toHaveAttribute('data-side', 'top');
+    expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
     expect(audioTrigger).toHaveAttribute('data-state', 'open');
     expect(audioTrigger).toHaveAttribute('aria-controls', audioSettings.id);
     expect(screen.getByText('Select a microphone')).toBeInTheDocument();
