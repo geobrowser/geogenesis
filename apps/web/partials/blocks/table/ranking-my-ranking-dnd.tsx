@@ -5,7 +5,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -16,8 +16,8 @@ import { CSS } from '@dnd-kit/utilities';
 
 import * as React from 'react';
 
-const POINTER_ACTIVATION = { distance: 8 };
-const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
+const MOUSE_ACTIVATION = { distance: 10 };
+const TOUCH_ACTIVATION = { delay: 450, tolerance: 12 };
 
 type DragOverlaySnapshot = {
   entityId: string;
@@ -112,7 +112,7 @@ export function RankingMyRankingDndList({
   itemsRef.current = items;
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: POINTER_ACTIVATION }),
+    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
     useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION })
   );
 
