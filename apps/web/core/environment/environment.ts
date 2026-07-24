@@ -8,6 +8,7 @@ import {
   RPC_ENDPOINT_TESTNET,
   SENTRY_DSN,
   SPACE_REGISTRY_ADDRESS,
+  SPONSORSHIP_RPC_URL,
   TEST_ENV,
   WALLETCONNECT_PROJECT_ID,
 } from './config';
@@ -45,10 +46,22 @@ function resolveAddressOverride(name: string, value: string | undefined): string
   return value;
 }
 
+// Same "empty reads as no override" convention as resolveAddressOverride.
+function resolveUrlOverride(name: string, value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    new URL(value);
+  } catch {
+    throw new Error(`${name} must be a valid URL. Received: ${value}`);
+  }
+  return value;
+}
+
 type IVars = Readonly<{
   chainId: '55516' | '80451';
   spaceRegistryAddress?: string;
   daoSpaceFactoryAddress?: string;
+  sponsorshipRpcUrl?: string;
   walletConnectProjectId: string;
   privyAppId: string;
   rpcEndpoint: string;
@@ -63,6 +76,7 @@ export const variables: IVars = {
   chainId: resolveChainId(),
   spaceRegistryAddress: resolveAddressOverride('NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS', SPACE_REGISTRY_ADDRESS),
   daoSpaceFactoryAddress: resolveAddressOverride('NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS', DAO_SPACE_FACTORY_ADDRESS),
+  sponsorshipRpcUrl: resolveUrlOverride('NEXT_PUBLIC_SPONSORSHIP_RPC_URL', SPONSORSHIP_RPC_URL),
   isTestEnv: TEST_ENV === 'true',
   privyAppId: PRIVY_APP_ID!,
   rpcEndpoint: RPC_ENDPOINT!,

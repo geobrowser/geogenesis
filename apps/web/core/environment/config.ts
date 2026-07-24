@@ -14,6 +14,11 @@ const CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID;
 const SPACE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS;
 const DAO_SPACE_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS;
 
+// OPTIONAL gas-sponsorship RPC override. When unset on testnet, the geo-sdk's
+// built-in sponsorship endpoint applies. Exists so a ZeroDev-side proxy bug
+// (or endpoint change) can be routed around without waiting on a geo-sdk release.
+const SPONSORSHIP_RPC_URL = process.env.NEXT_PUBLIC_SPONSORSHIP_RPC_URL;
+
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
@@ -69,6 +74,7 @@ export {
   CHAIN_ID,
   SPACE_REGISTRY_ADDRESS,
   DAO_SPACE_FACTORY_ADDRESS,
+  SPONSORSHIP_RPC_URL,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   API_ENDPOINT,
