@@ -1,6 +1,24 @@
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
+// OPTIONAL chain selector. Defaults to testnet (55516) when unset so existing
+// deploys are unaffected; the eventual mainnet cutover flips this env var
+// instead of editing code.
+const CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID;
+
+// OPTIONAL contract address overrides. When unset on testnet, the geo-sdk's
+// built-in testnet addresses apply. REQUIRED on any non-testnet chain — the SDK
+// only ships testnet addresses, and falling back silently is exactly the
+// failure mode these exist to prevent (txs sent to a codeless address succeed
+// with no events).
+const SPACE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS;
+const DAO_SPACE_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS;
+
+// OPTIONAL gas-sponsorship RPC override. When unset on testnet, the geo-sdk's
+// built-in sponsorship endpoint applies. Exists so a ZeroDev-side proxy bug
+// (or endpoint change) can be routed around without waiting on a geo-sdk release.
+const SPONSORSHIP_RPC_URL = process.env.NEXT_PUBLIC_SPONSORSHIP_RPC_URL;
+
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
@@ -31,28 +49,10 @@ if (!API_ENDPOINT_TESTNET) {
   throw new Error('NEXT_PUBLIC_API_ENDPOINT_TESTNET is not set');
 }
 
-const BUNDLER_RPC_ENDPOINT = process.env.NEXT_PUBLIC_BUNDLER_RPC;
-
-if (!BUNDLER_RPC_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
-}
-
-const BUNDLER_RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_BUNDLER_RPC_TESTNET;
-
-if (!BUNDLER_RPC_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_BUNDLER_RPC_TESTNET is not set');
-}
-
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
 if (!WALLETCONNECT_PROJECT_ID) {
   throw new Error('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set');
-}
-
-const ACCOUNT_ABSTRACTION_API_KEY = process.env.NEXT_PUBLIC_PIMLICO_API_KEY;
-
-if (!ACCOUNT_ABSTRACTION_API_KEY) {
-  throw new Error('NEXT_PUBLIC_PIMLICO_API_KEY is not set');
 }
 
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
@@ -71,14 +71,15 @@ if (SENTRY_DSN) {
 
 export {
   TEST_ENV,
+  CHAIN_ID,
+  SPACE_REGISTRY_ADDRESS,
+  DAO_SPACE_FACTORY_ADDRESS,
+  SPONSORSHIP_RPC_URL,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   API_ENDPOINT,
-  BUNDLER_RPC_ENDPOINT,
   RPC_ENDPOINT_TESTNET,
   API_ENDPOINT_TESTNET,
-  BUNDLER_RPC_ENDPOINT_TESTNET,
   WALLETCONNECT_PROJECT_ID,
-  ACCOUNT_ABSTRACTION_API_KEY,
   SENTRY_DSN,
 };

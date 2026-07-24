@@ -2,6 +2,7 @@ import { Account, ContentIds, Graph, Op, SystemIds } from '@geoprotocol/geo-sdk/
 
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
+import { createGeoImage } from '~/core/sdk/geo-client';
 import type { SpaceType } from '~/core/types';
 import { cloneEntity } from '~/core/utils/contracts/clone-entity';
 import { validateEntityId } from '~/core/utils/utils';
@@ -205,7 +206,7 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceAvatarUri, network: 'TESTNET' });
+    const { id: imageId, ops: imageOps } = await createGeoImage({ url: spaceAvatarUri });
     ops.push(...imageOps);
 
     const { ops: imageRelationOps } = Graph.createRelation({
@@ -218,7 +219,7 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceCoverUri) {
-    const { id: imageId, ops: imageOps } = await Graph.createImage({ url: spaceCoverUri, network: 'TESTNET' });
+    const { id: imageId, ops: imageOps } = await createGeoImage({ url: spaceCoverUri });
     ops.push(...imageOps);
 
     const { ops: imageRelationOps } = Graph.createRelation({

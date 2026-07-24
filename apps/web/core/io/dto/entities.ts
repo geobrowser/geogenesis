@@ -1,4 +1,4 @@
-import { RelationDtoLive } from '~/core/io/dto/relations';
+import { hasRelationTarget, RelationDtoLive } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -7,7 +7,7 @@ import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
-  const relationsOut = remoteEntity.relationsList.map(r => RelationDtoLive(r));
+  const relationsOut = remoteEntity.relationsList.filter(hasRelationTarget).map(r => RelationDtoLive(r));
   const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
   // Drop spaces whose only contribution to this entity is a hidden property,

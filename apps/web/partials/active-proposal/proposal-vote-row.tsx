@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import pluralize from 'pluralize';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import type { VoteWithProfile } from '~/core/io/dto/proposals';
 
 import { Avatar } from '~/design-system/avatar';
@@ -14,15 +15,61 @@ import { Close } from '~/design-system/icons/close';
 import { Tick } from '~/design-system/icons/tick';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { useOptimisticVoteChoice } from '~/partials/governance/optimistic-voted-atom';
+
 interface Props {
   votes: VoteWithProfile[];
   votesCount: number;
   yesVotesPercentage: number;
   noVotesPercentage: number;
+  /** The proposal being displayed. Used to read the optimistic-vote atom so the
+   *  tally bar bumps the instant the user clicks Accept/Reject, without waiting
+   *  for the indexer + router.refresh() round-trip. */
+  proposalId: string;
 }
 
-export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotesPercentage }: Props) {
+export function ProposalVoteRow({
+  votes,
+  votesCount,
+  yesVotesPercentage,
+  noVotesPercentage,
+  proposalId,
+}: Props) {
   const [showingVoters, setShowingVoters] = React.useState(false);
+
+  // Detect whether the user's own vote is already in the server-provided list.
+  // A vote's `accountId` is a personal-space ID (bytes16 hex, no 0x prefix), NOT
+  // a wallet address, so we resolve the connected user's personal-space ID on
+  // the client and compare against that. Without this the optimistic overlay
+  // would keep adding +1 to the tally even after the server data caught up.
+  const { personalSpaceId } = usePersonalSpaceId();
+  const userHasVotedOnChain = React.useMemo(() => {
+    if (!personalSpaceId) return false;
+    const target = personalSpaceId.toLowerCase();
+    return votes.some(v => v.accountId.toLowerCase() === target);
+  }, [personalSpaceId, votes]);
+
+  const optimisticVote = useOptimisticVoteChoice(proposalId);
+  const optimisticOverlay =
+    !userHasVotedOnChain && (optimisticVote === 'ACCEPT' || optimisticVote === 'REJECT') ? optimisticVote : null;
+
+  const rawYesCount = votes.filter(v => v.vote === 'ACCEPT').length;
+  const rawNoCount = votes.filter(v => v.vote === 'REJECT').length;
+
+  const displayYesCount = optimisticOverlay === 'ACCEPT' ? rawYesCount + 1 : rawYesCount;
+  const displayNoCount = optimisticOverlay === 'REJECT' ? rawNoCount + 1 : rawNoCount;
+  const displayTotal = optimisticOverlay ? votesCount + 1 : votesCount;
+
+  const displayYesPercentage = optimisticOverlay
+    ? displayTotal === 0
+      ? 0
+      : Math.floor((displayYesCount / displayTotal) * 100)
+    : yesVotesPercentage;
+  const displayNoPercentage = optimisticOverlay
+    ? displayTotal === 0
+      ? 0
+      : Math.floor((displayNoCount / displayTotal) * 100)
+    : noVotesPercentage;
 
   const yesVoters = votes.filter(vote => vote.vote === 'ACCEPT');
   const noVoters = votes.filter(vote => vote.vote === 'REJECT');
@@ -35,9 +82,12 @@ export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotes
             <Tick />
           </div>
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute top-0 bottom-0 left-0 bg-green" style={{ width: `${yesVotesPercentage}%` }} />
+            <div
+              className="absolute top-0 bottom-0 left-0 bg-green transition-[width] duration-200 ease-out"
+              style={{ width: `${displayYesPercentage}%` }}
+            />
           </div>
-          <div className="shrink-0 tabular-nums">{yesVotesPercentage}%</div>
+          <div className="shrink-0 tabular-nums">{displayYesPercentage}%</div>
         </div>
         <button
           type="button"
@@ -46,7 +96,7 @@ export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotes
           aria-expanded={showingVoters}
         >
           <span>
-            {votesCount} {pluralize('voter', votesCount)}
+            {displayTotal} {pluralize('voter', displayTotal)}
           </span>
           <span className={cx('transition-transform', showingVoters ? 'rotate-180' : 'rotate-0')}>
             <ChevronDown />
@@ -57,9 +107,12 @@ export function ProposalVoteRow({ votes, votesCount, yesVotesPercentage, noVotes
             <Close />
           </div>
           <div className="relative h-1 w-full overflow-clip rounded-full bg-grey-02">
-            <div className="absolute top-0 bottom-0 left-0 bg-red-01" style={{ width: `${noVotesPercentage}%` }} />
+            <div
+              className="absolute top-0 bottom-0 left-0 bg-red-01 transition-[width] duration-200 ease-out"
+              style={{ width: `${displayNoPercentage}%` }}
+            />
           </div>
-          <div className="shrink-0 tabular-nums">{noVotesPercentage}%</div>
+          <div className="shrink-0 tabular-nums">{displayNoPercentage}%</div>
         </div>
       </div>
       <AnimatePresence initial={false}>

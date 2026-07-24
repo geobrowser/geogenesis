@@ -81,6 +81,7 @@ export async function MyGovernanceProposalsList({
             key={p.id}
             spaceId={p.spaceId}
             proposalId={p.id}
+            proposalVersion={p.version}
             displayTitle={p.displayTitle}
             spaceName={spaceName}
             spaceImage={spaceImage}

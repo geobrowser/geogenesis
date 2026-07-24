@@ -550,6 +550,8 @@ export function getProposalName(proposal: { name: string; type: Proposal['type']
       return `Remove space from ${proposal.space.name}`;
     case 'SET_TOPIC':
       return `Set topic for ${proposal.space.name}`;
+    case 'UPDATE_VOTING_SETTINGS':
+      return `Update governance settings for ${proposal.space.name}`;
   }
 }
 
@@ -571,13 +573,16 @@ export function getMembershipProposalDisplayName(type: Proposal['type'], targetP
 
 export function deriveProposalStatus(executedAt: string | null, endTime: number): ProposalStatus {
   if (executedAt) return 'ACCEPTED';
+  // v2 contracts: the voting window opens on the first vote, so endTime is 0
+  // until then. Treat a zero endTime as "not started" rather than "already
+  // ended" to avoid falsely reporting fresh un-voted proposals as REJECTED.
   const now = Math.floor(Date.now() / 1000);
-  if (endTime < now) return 'REJECTED';
+  if (endTime > 0 && endTime < now) return 'REJECTED';
   return 'PROPOSED';
 }
 
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
-  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+  return status === 'REJECTED' || status === 'ACCEPTED' || (endTime > 0 && endTime < GeoDate.toGeoTime(Date.now()));
 }
 
 export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
@@ -600,10 +605,6 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
   }
 
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
-}
-
-export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
 }
 
 export function getProposalTimeRemaining(endTime: number) {

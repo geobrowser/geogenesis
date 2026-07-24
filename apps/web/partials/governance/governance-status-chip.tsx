@@ -38,7 +38,7 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, 
     case 'PROPOSED': {
       const { days, hours, minutes, seconds } = getProposalTimeRemaining(endTime);
       const totalSecondsRemaining = days * 86400 + hours * 3600 + minutes * 60 + seconds;
-      const isVotingEnded = totalSecondsRemaining <= 0;
+      const isVotingEnded = endTime > 0 && totalSecondsRemaining <= 0;
 
       if (isVotingEnded && !canExecute) {
         return (
@@ -76,6 +76,14 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, 
       if (viewerVote) {
         return (
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium text-grey-04">
+            Voting period open
+          </div>
+        );
+      }
+
+      if (endTime <= 0) {
+        return (
+          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">
             Voting period open
           </div>
         );

@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex } from 'viem';
+import type { Hex } from 'viem';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -16,7 +16,6 @@ import { getIsEditorOfSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeEditorArgs {
@@ -24,6 +23,11 @@ interface UseRequestToBeEditorArgs {
   spaceId: string | null;
 }
 
+/**
+ * Hook for a user to request to become an editor of a DAO space. Encodes as a
+ * proposeAddEditor where the new editor is the requester's own personal space.
+ * Editor proposals must use slow path per the DAOSpace contract.
+ */
 export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
   const { dispatch } = useStatusBar();
 
@@ -31,9 +35,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleRequestToBeEditor = useCallback(async () => {
     if (!smartAccount) {
@@ -77,15 +79,14 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
     });
 
     // Caller proposes themselves as a new editor. Editor proposals are slow-path only.
-    const { calldata: callData } = geo.daoSpaces.proposeAddEditor({
+    const { to, calldata } = geo.daoSpaces.proposeAddEditor({
       authorSpaceId: personalSpaceId,
       spaceId,
       daoSpaceAddress: space.address as Hex,
       newEditorSpaceId: personalSpaceId,
-      votingMode: 'SLOW',
     });
 
-    const writeTxEffect = tx(callData).pipe(
+    const writeTxEffect = tx({ to, data: calldata }).pipe(
       Effect.withSpan('web.write.createProposal.requestEditorship'),
       Effect.annotateSpans({
         'io.operation': 'create_proposal',

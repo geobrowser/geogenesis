@@ -33,6 +33,7 @@ interface Props {
   proposalId: string;
   proposalName: string;
   proposalType: Proposal['type'];
+  proposalVersion?: number;
   governanceHomeReturnSearch?: string;
   endTime: number;
   isProposalEnded: boolean;
@@ -58,6 +59,7 @@ interface Props {
 export function AcceptOrRejectMember({
   spaceId,
   proposalId,
+  proposalVersion,
   proposalName,
   proposalType,
   governanceHomeReturnSearch,
@@ -76,6 +78,7 @@ export function AcceptOrRejectMember({
   const { vote, status: voteStatus } = useVote({
     spaceId,
     proposalId,
+    proposalVersion,
   });
 
   const hasVoted = voteStatus === 'success';

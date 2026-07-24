@@ -18,12 +18,12 @@ import {
   encodeProposalCreatedData,
   padBytes16ToBytes32,
 } from '~/core/utils/contracts/governance';
+import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import {
   DAOSpaceAbi,
   EMPTY_SIGNATURE,
   EMPTY_TOPIC_HEX,
   GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
   SpaceRegistryAbi,
   VOTING_MODE,
 } from '~/core/utils/contracts/space-registry';
@@ -87,9 +87,7 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleSubspace =
     (direction: SubspaceDirection) =>
@@ -187,7 +185,7 @@ export function useSubspace({ spaceId }: UseSubspaceArgs) {
                 'governance.subspace_relation_type': relationType,
               };
 
-        const hash = yield* tx(callData).pipe(
+        const hash = yield* tx({ to: SPACE_REGISTRY_ADDRESS as `0x${string}`, data: callData }).pipe(
           Effect.withSpan(`web.write.subspace.${direction}`),
           Effect.annotateSpans(telemetryAttributes)
         );

@@ -1,4 +1,4 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Draft, produce } from 'immer';
 
@@ -12,6 +12,7 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '../constants';
 import { ID } from '../id';
+import { createGeoImage } from '../sdk/geo-client';
 import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
@@ -154,11 +155,10 @@ function createMutator(store: GeoStore): Mutator {
   // and the video-keyframe flow so both mint images against the same store.
   const createAndLinkImage: Mutator['images']['createAndLink'] = async params => {
     const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
-    // Create the image entity using the Graph API. URL inputs are fetched
-    // and pinned to IPFS by the SDK; blob inputs upload directly. Use
-    // TESTNET network to upload via the alternative gateway.
-    const { id: imageId, ops: createImageOps } = await Graph.createImage(
-      'file' in params ? { blob: params.file, network: 'TESTNET' } : { url: params.url, network: 'TESTNET' }
+    // Create the image entity via the configured Geo client. URL inputs are
+    // fetched and pinned to IPFS by the SDK; blob inputs upload directly.
+    const { id: imageId, ops: createImageOps } = await createGeoImage(
+      'file' in params ? { blob: params.file } : { url: params.url }
     );
 
     for (const op of createImageOps) {
@@ -495,10 +495,7 @@ function createMutator(store: GeoStore): Mutator {
     images: {
       createAndLink: createAndLinkImage,
       createOnly: async ({ file, spaceId }) => {
-        const { id: imageId, ops: createImageOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
+        const { id: imageId, ops: createImageOps } = await createGeoImage({ blob: file });
 
         for (const op of createImageOps) {
           if (op.type === 'createRelation') {
@@ -561,12 +558,9 @@ function createMutator(store: GeoStore): Mutator {
         relationPropertyName,
         spaceId,
       }) => {
-        // Create the video entity using the Graph API (uses same upload mechanism as images)
-        // Use TESTNET network to upload via the alternative gateway
-        const { id: videoId, ops: createVideoOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
+        // Create the video entity via the configured Geo client (uses the same
+        // upload mechanism as images)
+        const { id: videoId, ops: createVideoOps } = await createGeoImage({ blob: file });
 
         let ipfsUrl: string | undefined;
         for (const op of createVideoOps) {

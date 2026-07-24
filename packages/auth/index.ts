@@ -5,6 +5,8 @@ export {
   getIdentityToken,
   PrivyProvider,
   type PrivyClientConfig,
+  useWallets,
+  toViemAccount,
 } from '@privy-io/react-auth';
 export { WagmiProvider } from '@privy-io/wagmi';
 export { useAccountEffect, useWalletClient } from 'wagmi';

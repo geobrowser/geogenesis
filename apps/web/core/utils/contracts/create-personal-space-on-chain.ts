@@ -1,10 +1,12 @@
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 
 import { Duration, Effect, Schedule } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
 import type { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceType } from '~/core/types';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
@@ -13,7 +15,7 @@ import { devLog } from '../dev-log';
 import { getImagePath } from '../utils';
 import { EMPTY_SPACE_ID } from './dao-space-factory';
 import { generateOpsForSpaceType } from './generate-ops-for-space-type';
-import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from './space-registry';
+import { SpaceRegistryAbi } from './space-registry';
 import { buildPersonalTopicDeclaredCalldata } from './space-topic';
 
 /**
@@ -126,7 +128,8 @@ export async function createPersonalSpaceOnChain({
   // 1. Register the space id if the account doesn't already have one.
   let spaceId = await readRegisteredSpaceId(walletAddress);
   if (!spaceId) {
-    const { to, calldata } = personalSpace.createSpace();
+    const to = SPACE_REGISTRY_ADDRESS_HEX;
+    const calldata = getCreatePersonalSpaceCalldata();
     const registerResult = await runEffectEither(
       Effect.tryPromise({
         try: () => smartAccount.sendUserOperation({ calls: [{ to, value: 0n, data: calldata }] }),
@@ -160,12 +163,11 @@ export async function createPersonalSpaceOnChain({
     topicId,
   });
 
-  const { to: publishTo, calldata: publishCalldata } = await personalSpace.publishEdit({
+  const { to: publishTo, calldata: publishCalldata } = await geo.personalSpaces.publishEdit({
     name: spaceName,
     spaceId,
     ops,
     author: spaceId,
-    network: 'TESTNET',
   });
 
   const topicCalldata = buildPersonalTopicDeclaredCalldata({

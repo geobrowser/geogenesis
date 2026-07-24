@@ -256,6 +256,23 @@ const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpa
     };
   }
 
+  // See layout.tsx getSpaceFrontPage for the rationale (incl. why this is gated
+  // to the test env). When the indexer's space record has no home entity id,
+  // treat spaceId as the synthetic home-entity id AND fetch the entity at that
+  // id so published values surface here (not just space.entity which is empty
+  // in that case).
+  if (!entity.id && space?.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
+    const synthetic = await cachedFetchEntityPage(space.id, space.id);
+    const syntheticEntity = synthetic?.entity ?? null;
+    return {
+      id: space.id,
+      name: syntheticEntity?.name ?? null,
+      values: syntheticEntity?.values ?? [],
+      spaceTypes: syntheticEntity?.types ?? [],
+      relationsOut: syntheticEntity?.relations ?? [],
+    };
+  }
+
   return {
     name: entity?.name ?? null,
     values: entity?.values ?? [],

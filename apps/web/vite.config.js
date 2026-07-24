@@ -15,7 +15,6 @@ export default defineConfig({
       NEXT_PUBLIC_API_ENDPOINT: 'https://test.example.com',
       NEXT_PUBLIC_API_ENDPOINT_TESTNET: 'https://test.example.com',
       NEXT_PUBLIC_BUNDLER_RPC: 'https://test.example.com',
-      NEXT_PUBLIC_BUNDLER_RPC_TESTNET: 'https://test.example.com',
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: 'a',
       NEXT_PUBLIC_PIMLICO_API_KEY: 'a',
     },

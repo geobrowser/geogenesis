@@ -11,7 +11,6 @@ import {
   getNoVotePercentage,
   getProposalName,
   getProposalTimeRemaining,
-  getUserVote,
   getYesVotePercentage,
 } from '~/core/utils/utils';
 
@@ -27,25 +26,25 @@ import { ProposalBountiesProvider, ProposalBountyHeadButton, ProposalBountyPanel
 import { ProposalVoteRow } from './proposal-vote-row';
 import { SpaceTopicProposal } from './space-topic-proposal';
 import { SubspaceProposal } from './subspace-proposal';
+import { VotingSettingsProposal } from './voting-settings-proposal';
 
 interface Props {
   proposalId?: string;
-  connectedAddress: string | undefined;
   spaceId: string;
   reviewComponent?: React.ReactNode;
 }
 
-export function ActiveProposal({ proposalId, spaceId, connectedAddress }: Props) {
+export function ActiveProposal({ proposalId, spaceId }: Props) {
   return (
     <ActiveProposalSlideUp proposalId={proposalId} spaceId={spaceId}>
       <React.Suspense fallback="Loading...">
-        <ReviewProposal connectedAddress={connectedAddress} proposalId={proposalId} spaceId={spaceId} />
+        <ReviewProposal proposalId={proposalId} spaceId={spaceId} />
       </React.Suspense>
     </ActiveProposalSlideUp>
   );
 }
 
-async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) {
+async function ReviewProposal({ proposalId, spaceId }: Props) {
   if (!proposalId) {
     return null;
   }
@@ -62,18 +61,32 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
   const yesVotesPercentage = getYesVotePercentage(votes, votesCount);
   const noVotesPercentage = getNoVotePercentage(votes, votesCount);
   const isProposalEnded = getIsProposalEnded(proposal.status, proposal.endTime);
-  const userVote = connectedAddress ? getUserVote(votes, connectedAddress) : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const isSubspaceProposal = proposal.type === 'ADD_SUBSPACE' || proposal.type === 'REMOVE_SUBSPACE';
   const isSpaceTopicProposal = proposal.type === 'SET_TOPIC';
+  const isVotingSettingsProposal = proposal.type === 'UPDATE_VOTING_SETTINGS';
   // Membership proposals are about the target person, not the proposer (which
   // for join requests is the DAO space itself) — show them in title and byline.
   const proposalTitle = proposal.targetProfile
     ? getMembershipProposalDisplayName(proposal.type, proposal.targetProfile)
-    : (proposal.name ?? getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space }));
+    : (proposal.name ??
+      (isVotingSettingsProposal
+        ? 'Change governance settings'
+        : getProposalName({ name: proposal.id, type: proposal.type, space: proposal.space })));
   const bylineProfile = proposal.targetProfile ?? proposal.createdBy;
 
   const isAddEdit = proposal.type === 'ADD_EDIT';
+  const proposalStatusLabel = isProposalEnded
+    ? proposal.status === 'ACCEPTED'
+      ? 'Accepted'
+      : proposal.status === 'REJECTED'
+        ? 'Rejected'
+        : proposal.canExecute
+          ? 'Pending execution'
+          : 'Rejected'
+    : proposal.endTime <= 0
+      ? 'Voting period open'
+      : `${hours}h ${minutes}m remaining`;
 
   const body = (
     <>
@@ -88,11 +101,12 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
           <AcceptOrReject
             spaceId={spaceId}
             proposalId={proposal.id}
+            proposalVersion={proposal.version}
             isProposalEnded={isProposalEnded}
             status={proposal.status}
             canExecute={proposal.canExecute}
             proposalType={proposal.type}
-            userVote={userVote}
+            votes={votes}
           />
         </div>
       </div>
@@ -147,15 +161,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                           ·
                         </span>
                         <span className="text-text">
-                          {isProposalEnded
-                            ? proposal.status === 'ACCEPTED'
-                              ? 'Accepted'
-                              : proposal.status === 'REJECTED'
-                                ? 'Rejected'
-                                : proposal.canExecute
-                                  ? 'Pending execution'
-                                  : 'Rejected'
-                            : `${hours}h ${minutes}m remaining`}
+                          {proposalStatusLabel}
                         </span>
                       </div>
                     </div>
@@ -165,6 +171,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
                     votesCount={votesCount}
                     yesVotesPercentage={yesVotesPercentage}
                     noVotesPercentage={noVotesPercentage}
+                    proposalId={proposal.id}
                   />
                 </div>
               </div>
@@ -175,6 +182,7 @@ async function ReviewProposal({ proposalId, spaceId, connectedAddress }: Props) 
               {isAddEdit && <ContentProposal proposal={proposal} spaceId={spaceId} />}
               {isSubspaceProposal && <SubspaceProposal proposal={proposal} />}
               {isSpaceTopicProposal && <SpaceTopicProposal proposal={proposal} />}
+              {isVotingSettingsProposal && <VotingSettingsProposal proposal={proposal} spaceId={spaceId} />}
             </div>
           </div>
         </div>

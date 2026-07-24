@@ -10,9 +10,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { ProposalType, SubstreamVote } from '~/core/io/substream-schema';
 import { geo } from '~/core/sdk/geo-client';
+import { assertSpaceRegistryDeployed } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /**
@@ -65,6 +66,12 @@ interface UseVoteArgs {
   spaceId: string;
   /** The proposal ID (bytes16 hex without 0x prefix) */
   proposalId: string;
+  /** The proposal version to vote on (REST `proposalVersion`). The vote
+   *  calldata is (proposalId, versionId, voteOption) — the SDK defaults
+   *  versionId to 1 when omitted, which targets the superseded version for
+   *  any proposal updated via PROPOSAL_UPDATED. Pass the version shown to
+   *  the user; omit only when the source genuinely doesn't have it. */
+  proposalVersion?: number;
 }
 
 /**
@@ -77,12 +84,10 @@ interface UseVoteArgs {
  * - topic: The proposal ID (as bytes32)
  * - data: Encoded (proposalId, voteOption)
  */
-export function useVote({ spaceId, proposalId }: UseVoteArgs) {
+export function useVote({ spaceId, proposalId, proposalVersion }: UseVoteArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleVote = useCallback(
     async (option: SubstreamVote['vote']) => {
@@ -100,10 +105,15 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       const vote = option === 'ACCEPT' ? 'YES' : option === 'REJECT' ? 'NO' : 'ABSTAIN';
 
-      const { calldata: callData } = geo.daoSpaces.proposals.vote({
+      // Fail closed: a registry address that doesn't match this chain produces
+      // a "successful" tx that emits nothing. Catch it before sending.
+      await assertSpaceRegistryDeployed();
+
+      const { to, calldata } = geo.daoSpaces.voteProposal({
         authorSpaceId: personalSpaceId,
         spaceId,
         proposalId,
+        versionId: proposalVersion,
         vote,
       });
 
@@ -111,11 +121,12 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         authorSpaceId: personalSpaceId,
         spaceId,
         proposalId,
+        proposalVersion,
         vote,
         action: 'PROPOSAL_VOTED',
       });
 
-      const txEffect = tx(callData).pipe(
+      const txEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.vote'),
         Effect.annotateSpans({
           'io.operation': 'vote',
@@ -145,7 +156,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       return result.right;
     },
-    [personalSpaceId, isRegistered, spaceId, proposalId, tx]
+    [personalSpaceId, isRegistered, spaceId, proposalId, proposalVersion, tx]
   );
 
   const { mutate, status, error } = useMutation({

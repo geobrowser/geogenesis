@@ -157,6 +157,7 @@ async function PendingMembershipProposal({
     <AcceptOrRejectMember
       spaceId={proposal.space.id}
       proposalId={proposal.id}
+      proposalVersion={proposal.version}
       proposalName={proposalName}
       proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
@@ -253,6 +254,11 @@ async function PendingContentProposal({
           {formatGovernanceOutcomeTime(proposal.endTime)}
         </time>
       </div>
+    ) : proposal.endTime <= 0 ? (
+      // v2 contracts don't stamp startTime/endTime until the first vote fires,
+      // so a countdown here would render negative values for freshly proposed
+      // items with zero votes.
+      <p className="text-metadataMedium">Voting opens on first vote</p>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
     );
@@ -329,6 +335,7 @@ async function PendingContentProposal({
         <AcceptOrRejectEditor
           spaceId={proposal.space.id}
           proposalId={proposal.id}
+          proposalVersion={proposal.version}
           isProposalEnded={isProposalEnded}
           canExecute={proposal.canExecute}
           status={proposal.status}

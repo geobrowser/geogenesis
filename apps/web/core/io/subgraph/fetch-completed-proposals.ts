@@ -8,6 +8,7 @@ import {
   type ApiProposalListItem,
   ApiProposalListResponseSchema,
   encodePathSegment,
+  getApiProposalCanExecute,
   mapActionTypeToProposalType,
   mapProposalStatus,
   restFetch,
@@ -38,7 +39,7 @@ function apiProposalToDto(proposal: ApiProposalListItem, profile?: Profile): Pro
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
-    canExecute: proposal.canExecute,
+    canExecute: getApiProposalCanExecute(proposal),
     space: {
       id: proposal.spaceId,
       name: null,

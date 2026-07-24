@@ -45,6 +45,14 @@ const PendingPersonalSpaceRunner = dynamic(
   { ssr: false }
 );
 
+const PendingCreatedSpaceRunner = dynamic(
+  () =>
+    import('~/partials/create-space/pending-created-space-runner').then(m => ({
+      default: m.PendingCreatedSpaceRunner,
+    })),
+  { ssr: false }
+);
+
 const SignInPrompt = dynamic(
   () => import('~/partials/sign-in-prompt/sign-in-prompt').then(m => ({ default: m.SignInPrompt })),
   { ssr: false }
@@ -109,6 +117,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <OnboardingDialog />
         <PendingPersonalSpaceRunner />
         <CreateSpaceDialog />
+        <PendingCreatedSpaceRunner />
         <SignInPrompt />
         <PostAuthRedirect />
         <Toast />

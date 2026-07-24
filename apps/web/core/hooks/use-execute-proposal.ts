@@ -11,13 +11,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS, assertSpaceRegistryDeployed, contractHasCode } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
   ACTION_REVERTED_SELECTOR,
   type GovernanceRevert,
   decodeGovernanceRevert,
 } from '~/core/utils/contracts/governance-errors';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -43,9 +43,7 @@ interface UseExecuteProposalArgs {
 export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleExecute = useCallback(async () => {
     if (!validateSpaceId(spaceId)) {
@@ -60,7 +58,11 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       throw new Error('You need a registered personal space to execute proposals');
     }
 
-    const { calldata: callData } = geo.daoSpaces.proposals.execute({
+    // Fail closed: a registry address that doesn't match this chain produces
+    // a "successful" tx that emits nothing. Catch it before sending.
+    await assertSpaceRegistryDeployed();
+
+    const { to, calldata } = geo.daoSpaces.executeProposal({
       authorSpaceId: personalSpaceId,
       spaceId,
       proposalId,
@@ -73,7 +75,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       action: 'PROPOSAL_EXECUTED',
     });
 
-    const txEffect = tx(callData).pipe(
+    const txEffect = tx({ to, data: calldata }).pipe(
       Effect.withSpan('web.write.executeProposal'),
       Effect.annotateSpans({
         'io.operation': 'execute_proposal',
@@ -151,13 +153,20 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
     // A passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
     staleTime: 30_000,
     queryFn: async (): Promise<{ state: ProposalExecutability; revert: GovernanceRevert | null }> => {
-      const { calldata } = geo.daoSpaces.proposals.execute({
+      const { calldata } = geo.daoSpaces.executeProposal({
         authorSpaceId: personalSpaceId!,
         spaceId,
         proposalId,
       });
 
       const publicClient = createPublicClient({ chain: GEOGENESIS, transport: http() });
+
+      // An eth_call against an address with no code "succeeds" with empty
+      // data — indistinguishable from a passing simulation. Fail closed to
+      // `blocked` (button hidden) instead of reporting a phantom `executable`.
+      if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS as Hex))) {
+        return { state: 'blocked', revert: null };
+      }
 
       try {
         await publicClient.call({ account: account as Hex, to: SPACE_REGISTRY_ADDRESS as Hex, data: calldata });

@@ -1,11 +1,8 @@
 import { type Hex } from 'viem';
 
-/**
- * SpaceRegistry address (Geo Testnet)
- */
-export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
-
-export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
+// The SpaceRegistry *address* lives in ~/core/sdk/geo-network (network config,
+// env-driven). This module stays pure — ABI + action constants only — so tests
+// can import it without an environment.
 
 export const EMPTY_TOPIC_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
 

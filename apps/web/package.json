@@ -25,7 +25,7 @@
     "@effect/opentelemetry": "^0.63.0",
     "@floating-ui/dom": "^1.7.5",
     "@geogenesis/auth": "workspace:*",
-    "@geoprotocol/geo-sdk": "0.19.5",
+    "@geoprotocol/geo-sdk": "^0.20.0-beta.8",
     "@geoprotocol/grc-20": "^0.4.1",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@livekit/components-react": "^2.9.21",

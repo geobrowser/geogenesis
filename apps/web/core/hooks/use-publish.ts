@@ -1,6 +1,5 @@
 'use client';
 
-import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
 import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
@@ -24,6 +23,9 @@ import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
+/** Fast path (instant execution for editors) vs review/slow path (voting period). */
+export type ProposalVotingMode = 'FAST' | 'SLOW';
+
 interface MakeProposalOptions {
   values: Value[];
   relations: Relation[];
@@ -31,6 +33,11 @@ interface MakeProposalOptions {
   name: string;
   /** Optional proposal ID (Geo entity ID format). For DAO spaces this is forwarded to daoSpace.proposeEdit. */
   proposalId?: string;
+  /**
+   * Editor-chosen path for DAO proposals (design 62501-94092). Ignored for non-editors
+   * and personal spaces — members can only ever use the slow path.
+   */
+  votingMode?: ProposalVotingMode;
   onSuccess?: () => void;
   onError?: () => void;
 }
@@ -56,6 +63,7 @@ export function usePublish() {
       name,
       spaceId,
       proposalId,
+      votingMode,
       onSuccess,
       onError,
     }: MakeProposalOptions) => {
@@ -114,6 +122,7 @@ export function usePublish() {
           name,
           author: personalSpaceId,
           proposalId,
+          votingMode,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -277,6 +286,8 @@ interface MakeProposalArgs {
   ops: Op[];
   /** Optional proposal ID (Geo entity ID format, 32 hex chars). Forwarded to daoSpace.proposeEdit as `0x${proposalId}`. */
   proposalId?: string;
+  /** Editor-chosen path for DAO proposals; only honored when the caller is an editor. */
+  votingMode?: ProposalVotingMode;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
@@ -302,7 +313,8 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, proposalId, smartAccount, space, onChangePublishState } = args;
+  const { name, author, ops, proposalId, votingMode: requestedVotingMode, smartAccount, space, onChangePublishState } =
+    args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -323,14 +335,17 @@ function makeProposal(args: MakeProposalArgs) {
       // `author` is the caller's personal space ID, already validated as non-null
       // by the guard in usePublish/useBulkPublish before makeProposal is called.
 
-      // Editors can use the fast path for immediate execution.
-      // Members must use the slow path which requires a voting period.
-      const votingMode = space.isEditor ? 'FAST' : 'SLOW';
+      // Every DAO submitter — members included — picks fast vs. slow via the review-
+      // screen selector (design 62501-94092); absent a choice we default to FAST.
+      // A member's FAST proposal still needs an editor vote to hit flatSupportThreshold,
+      // so we only auto-execute below when the caller is an editor (their create-vote
+      // can satisfy the threshold on its own).
+      const votingMode: ProposalVotingMode = requestedVotingMode ?? 'FAST';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            daoSpace.proposeEdit({
+            geo.daoSpaces.proposeEdit({
               name,
               ops,
               author,
@@ -339,7 +354,6 @@ function makeProposal(args: MakeProposalArgs) {
               daoSpaceId: `0x${space.id}`,
               votingMode,
               ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
@@ -360,7 +374,7 @@ function makeProposal(args: MakeProposalArgs) {
       to = result.to as `0x${string}`;
       calldata = result.calldata as `0x${string}`;
 
-      if (votingMode === 'FAST') {
+      if (votingMode === 'FAST' && space.isEditor) {
         fastProposalToExecute = { spaceId: space.id, proposalId: result.proposalId as `0x${string}` };
       }
     } else {
@@ -368,12 +382,11 @@ function makeProposal(args: MakeProposalArgs) {
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            personalSpace.publishEdit({
+            geo.personalSpaces.publishEdit({
               name,
               spaceId: space.id,
               ops,
               author,
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] personalSpace.publishEdit failed:', error);
@@ -510,10 +523,13 @@ function executeFastProposal(args: ExecuteFastProposalArgs) {
       Effect.withSpan('web.write.waitForProposalCreated')
     );
 
-    const vote = geo.daoSpaces.proposals.vote({
+    // geo-sdk 0.20.0-beta.8 exposes vote/execute as flat helpers, not under a
+    // `.proposals` namespace; adapt upstream's shape to the SDK we're pinned to.
+    const vote = geo.daoSpaces.voteProposal({
       authorSpaceId: author,
       spaceId,
       proposalId,
+      versionId: 1,
       vote: 'YES',
     });
 
@@ -523,7 +539,7 @@ function executeFastProposal(args: ExecuteFastProposalArgs) {
       vote.calldata as `0x${string}`
     );
 
-    const execute = geo.daoSpaces.proposals.execute({
+    const execute = geo.daoSpaces.executeProposal({
       authorSpaceId: author,
       spaceId,
       proposalId,
