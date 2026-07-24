@@ -1,12 +1,14 @@
-import { daoSpace, getSmartAccountWalletClient, personalSpace } from '@geoprotocol/geo-sdk';
+import { createGeoWalletClient, defineGeoNetworkConfig } from '@geoprotocol/geo-sdk';
 import type { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
+import { privateKeyToAccount } from 'viem/accounts';
 
 import { getSpaceAccess } from '~/core/access/space-access';
 import { ID } from '~/core/id';
 import { getEntity, getSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
+import { GEO_NETWORK } from '~/core/sdk/geo-network';
 import { Publish } from '~/core/utils/publish';
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
@@ -67,7 +69,18 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     throw new Error(`Debate ${debateId} resolved to an empty edit.`);
   }
 
-  const smartAccount = await getSmartAccountWalletClient({ privateKey: config.privateKey, rpcUrl: config.rpcUrl });
+  // geo-sdk beta.8 removed getSmartAccountWalletClient; the acceptor signs the
+  // same ZeroDev EIP-7702 kernel flow as the browser, from its private key. The
+  // env-driven GEO_NETWORK supplies chain + sponsorship; the acceptor-config
+  // rpcUrl override keeps working by rebuilding the network with it.
+  const signer = privateKeyToAccount(config.privateKey);
+  const network = config.rpcUrl
+    ? defineGeoNetworkConfig({ ...GEO_NETWORK, chain: { ...GEO_NETWORK.chain!, rpcUrl: config.rpcUrl } })
+    : GEO_NETWORK;
+  const smartAccount = await createGeoWalletClient({
+    signer: signer as Parameters<typeof createGeoWalletClient>[0]['signer'],
+    network,
+  });
 
   const userOpHash = await submitEdit({
     name: draft.debateName,
@@ -87,7 +100,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   return { status: 'published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId, userOpHash };
 }
 
-type SmartAccount = Awaited<ReturnType<typeof getSmartAccountWalletClient>>;
+type SmartAccount = Awaited<ReturnType<typeof createGeoWalletClient>>;
 
 async function submitEdit({
   name,
@@ -103,19 +116,18 @@ async function submitEdit({
   smartAccount: SmartAccount;
 }): Promise<string> {
   if (space.type === 'PERSONAL') {
-    const { to, calldata } = await personalSpace.publishEdit({
+    const { to, calldata } = await geo.personalSpaces.publishEdit({
       name,
       spaceId: space.id,
       ops,
       author,
-      network: 'TESTNET',
     });
     return sendUserOp(smartAccount, to, calldata);
   }
 
   // DAO space: the acceptor is an editor, so use FAST voting and auto vote + execute — otherwise the
   // proposal sits pending until someone acts on it from the Governance tab.
-  const proposal = await daoSpace.proposeEdit({
+  const proposal = await geo.daoSpaces.proposeEdit({
     name,
     ops,
     author,
@@ -123,13 +135,12 @@ async function submitEdit({
     callerSpaceId: `0x${author}`,
     daoSpaceId: `0x${space.id}`,
     votingMode: 'FAST',
-    network: 'TESTNET',
   });
 
   const createHash = await sendUserOp(smartAccount, proposal.to as `0x${string}`, proposal.calldata as `0x${string}`);
   await confirmUserOp(smartAccount, createHash, 'proposal creation');
 
-  const vote = geo.daoSpaces.proposals.vote({
+  const vote = geo.daoSpaces.voteProposal({
     authorSpaceId: author,
     spaceId: space.id,
     proposalId: proposal.proposalId,
@@ -138,7 +149,7 @@ async function submitEdit({
   const voteHash = await sendUserOp(smartAccount, vote.to as `0x${string}`, vote.calldata as `0x${string}`);
   await confirmUserOp(smartAccount, voteHash, 'vote');
 
-  const execute = geo.daoSpaces.proposals.execute({
+  const execute = geo.daoSpaces.executeProposal({
     authorSpaceId: author,
     spaceId: space.id,
     proposalId: proposal.proposalId,
