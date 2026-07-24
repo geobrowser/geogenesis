@@ -54,6 +54,7 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
+import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
@@ -936,8 +937,6 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
-
   const isQueryDataBlock = source.type !== 'COLLECTION';
 
   // Query data blocks let the user pick which space the new entity lives in:
@@ -952,8 +951,14 @@ const ConfiguredTableBlock = ({
     Boolean(singleSpaceTarget)
   );
   const canCreateInSingleSpace = singleSpaceTarget ? canCreateInTargetSpace(singleSpaceTarget) : true;
-  const showCreateEntityPlus =
-    renderPlusButtonAsInline && (!singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace));
+  const showCreateEntityPlus = shouldShowCreateEntityAction({
+    isEditing,
+    canEdit,
+    sourceType: source.type,
+    singleSpaceTarget,
+    singleSpaceAccessResolved,
+    canCreateInSingleSpace,
+  });
 
   const onAddPlaceholderClick = React.useCallback(() => {
     onAddPlaceholder(singleSpaceTarget ?? null);

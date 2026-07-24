@@ -107,6 +107,7 @@ describe('DebateCoordinator', () => {
     mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
     mocks.activity = {
       online: true,
+      available_to_debate: true,
       cooldown_until: null,
       match: null,
       debate: {
@@ -122,7 +123,14 @@ describe('DebateCoordinator', () => {
   });
 
   it('copies a stable recording link when native sharing is unavailable', async () => {
-    mocks.activity = { online: true, cooldown_until: null, match: null, debate: null, rematch: null };
+    mocks.activity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
     mocks.prompts = [
       {
         id: 'prompt-1',
@@ -151,7 +159,14 @@ describe('DebateCoordinator', () => {
   });
 
   it('uses the generated preview and loads the share video only after play', async () => {
-    mocks.activity = { online: true, cooldown_until: null, match: null, debate: null, rematch: null };
+    mocks.activity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
     mocks.prompts = [
       {
         id: 'prompt-1',
@@ -186,6 +201,7 @@ describe('DebateCoordinator', () => {
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   return {
     online: true,
+    available_to_debate: true,
     cooldown_until: null,
     match: null,
     debate: null,

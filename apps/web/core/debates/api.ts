@@ -71,6 +71,7 @@ export type DebateRecording = {
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 export type DebateMediaArtifactKind =
   | 'final_video'
+  | 'final_video_hevc'
   | 'preview_image'
   | 'transcript_json'
   | 'subtitle_srt'
@@ -188,6 +189,7 @@ export type Debate = {
 
 export type DebateActivity = {
   online: boolean;
+  available_to_debate: boolean;
   cooldown_until: string | null;
   match: DebateMatch | null;
   debate: Debate | null;
@@ -412,6 +414,20 @@ export async function getDebateActivity(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+export async function updateDebateAvailability(
+  availableToDebate: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateActivity>('/me/debate-availability', {
+    method: 'PUT',
+    body: { available_to_debate: availableToDebate },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
