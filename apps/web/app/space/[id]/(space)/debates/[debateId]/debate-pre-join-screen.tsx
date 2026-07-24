@@ -154,7 +154,7 @@ export function DebatePreScreen({
               {isMobile ? (
                 <>
                   <PreScreenSettingsTrigger
-                    buttonRef={audioTriggerRef}
+                    ref={audioTriggerRef}
                     ariaLabel="Audio settings"
                     icon={<MicrophoneIcon muted={false} />}
                     label="Custom combination"
@@ -162,7 +162,7 @@ export function DebatePreScreen({
                     onClick={() => setOpenSettings(current => (current === 'audio' ? null : 'audio'))}
                   />
                   <PreScreenSettingsTrigger
-                    buttonRef={videoTriggerRef}
+                    ref={videoTriggerRef}
                     ariaLabel="Video settings"
                     icon={<CameraIcon disabled={false} />}
                     label={selectedCameraLabel}
@@ -282,47 +282,43 @@ export function DebatePreScreen({
   );
 }
 
-function PreScreenSettingsTrigger({
-  buttonRef,
-  ariaLabel,
-  icon,
-  label,
-  open,
-  onClick,
-}: {
-  buttonRef?: React.Ref<HTMLButtonElement>;
+type PreScreenSettingsTriggerProps = Omit<React.ComponentPropsWithoutRef<'button'>, 'aria-label'> & {
   ariaLabel: string;
   icon: React.ReactNode;
   label: string;
   open: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      aria-label={ariaLabel}
-      aria-expanded={open}
-      onClick={onClick}
-      className={cx(
-        'relative flex min-h-9 w-full min-w-0 items-center rounded-full border bg-white px-3 py-2 text-left text-metadata text-text transition outline-none',
-        open ? 'border-text ring-1 ring-text' : 'border-grey-02 hover:border-grey-04',
-        'focus-visible:border-text focus-visible:ring-1 focus-visible:ring-text'
-      )}
-    >
-      <span className="mr-2 shrink-0 text-text">{icon}</span>
-      <span className="min-w-0 flex-1 truncate pr-6">{label}</span>
-      <span
+};
+
+const PreScreenSettingsTrigger = React.forwardRef<HTMLButtonElement, PreScreenSettingsTriggerProps>(
+  function PreScreenSettingsTrigger({ ariaLabel, icon, label, open, className, ...buttonProps }, forwardedRef) {
+    return (
+      <button
+        {...buttonProps}
+        ref={forwardedRef}
+        type="button"
+        aria-label={ariaLabel}
+        aria-expanded={open}
         className={cx(
-          'pointer-events-none absolute right-3 grid size-4 place-items-center transition-transform',
-          open && 'rotate-180'
+          'relative flex min-h-9 w-full min-w-0 items-center rounded-full border bg-white px-3 py-2 text-left text-metadata text-text transition outline-none',
+          open ? 'border-text ring-1 ring-text' : 'border-grey-02 hover:border-grey-04',
+          'focus-visible:border-text focus-visible:ring-1 focus-visible:ring-text',
+          className
         )}
       >
-        <ChevronDownSmall color={open ? 'text' : 'grey-04'} />
-      </span>
-    </button>
-  );
-}
+        <span className="mr-2 shrink-0 text-text">{icon}</span>
+        <span className="min-w-0 flex-1 truncate pr-6">{label}</span>
+        <span
+          className={cx(
+            'pointer-events-none absolute right-3 grid size-4 place-items-center transition-transform',
+            open && 'rotate-180'
+          )}
+        >
+          <ChevronDownSmall color={open ? 'text' : 'grey-04'} />
+        </span>
+      </button>
+    );
+  }
+);
 
 function DesktopSettingsPopover({
   ariaLabel,
@@ -344,7 +340,7 @@ function DesktopSettingsPopover({
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
       <Popover.Trigger asChild>
-        <PreScreenSettingsTrigger buttonRef={triggerRef} ariaLabel={ariaLabel} icon={icon} label={label} open={open} />
+        <PreScreenSettingsTrigger ref={triggerRef} ariaLabel={ariaLabel} icon={icon} label={label} open={open} />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

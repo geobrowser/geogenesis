@@ -351,8 +351,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
+    expect(audioTrigger).toHaveAttribute('data-state', 'closed');
     fireEvent.click(audioTrigger);
-    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-side', 'top');
+    const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
+    expect(audioSettings).toHaveAttribute('data-side', 'top');
+    expect(audioTrigger).toHaveAttribute('data-state', 'open');
+    expect(audioTrigger).toHaveAttribute('aria-controls', audioSettings.id);
     expect(screen.getByText('Select a microphone')).toBeInTheDocument();
     expect(screen.getByText('Select a speaker')).toBeInTheDocument();
 
@@ -551,6 +555,22 @@ describe('DebateRoomPageClient', () => {
     const settings = screen.getByRole('dialog', { name: 'Audio settings' });
 
     fireEvent.keyDown(settings, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('closes desktop settings on outside click and returns focus to the trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+    await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
+
+    fireEvent.pointerDown(document.body, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(document.body);
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
     expect(trigger).toHaveFocus();
