@@ -56,6 +56,7 @@ import { Text } from '~/design-system/text';
 import { onChangeEntryFn, writeValue } from './change-entry';
 import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
+import { shouldShowFilterAndFullscreenActions } from './data-block-header-action-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -966,6 +967,7 @@ const ConfiguredTableBlock = ({
 
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
+  const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, isEditing);
 
   const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
 
@@ -987,18 +989,22 @@ const ConfiguredTableBlock = ({
               disabled={!canEdit}
             />
           )}
-          <IconButton
-            onClick={toggleFilterHandler}
-            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
-          <Link
-            href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
-            aria-label="Open fullscreen"
-          >
-            <Fullscreen color="grey-04" />
-          </Link>
+          {showFilterAndFullscreenActions && (
+            <>
+              <IconButton
+                onClick={toggleFilterHandler}
+                icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+                color="grey-04"
+              />
+              <Link
+                href={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04 transition hover:bg-bg focus:outline-hidden focus-visible:ring-2 focus-visible:ring-grey-04"
+                aria-label="Open fullscreen"
+              >
+                <Fullscreen color="grey-04" />
+              </Link>
+            </>
+          )}
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {showCreateEntityPlus &&
