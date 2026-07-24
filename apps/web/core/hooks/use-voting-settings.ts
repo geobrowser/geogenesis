@@ -21,7 +21,16 @@ export function useVotingSettings(spaceAddress?: string, enabled = true) {
   const { data, isLoading } = useQuery({
     queryKey: ['voting-settings', spaceAddress?.toLowerCase()],
     enabled: Boolean(spaceAddress) && enabled,
+    // Governance settings change out-of-band (a slow-path proposal executes on
+    // chain, possibly from another session), and this query key is never
+    // invalidated. A plain staleTime would keep serving the old snapshot until
+    // it expired, so the review-path selector copy lagged the space's real
+    // settings until a hard refresh. Refetch on every mount instead: the cached
+    // snapshot still renders instantly (no flash), then updates in the
+    // background, so reopening the review/publish flow always reflects the
+    // current on-chain settings.
     staleTime: 60_000,
+    refetchOnMount: 'always',
     queryFn: async (): Promise<VotingSettingsSnapshot | null> => {
       if (!spaceAddress) return null;
 
