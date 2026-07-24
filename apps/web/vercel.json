@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/debates/publish-sweep",
-      "schedule": "*/15 * * * *"
-    }
-  ]
-}
