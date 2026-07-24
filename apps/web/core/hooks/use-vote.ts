@@ -13,7 +13,6 @@ import { geo } from '~/core/sdk/geo-client';
 import { assertSpaceRegistryDeployed } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
-import { describeError } from '~/core/utils/error-diagnostics';
 import { validateSpaceId } from '~/core/utils/utils';
 
 /**
@@ -42,6 +41,9 @@ function isMembershipProposalType(type: ProposalType): boolean {
 const VOTE_NOT_ACCEPTED_MESSAGE =
   'Your vote could not be cast — voting may have ended, or your vote may already be counted. Refreshing to show the latest state.';
 
+const VOTE_CHANGE_NOT_ACCEPTED_MESSAGE =
+  "Your vote couldn't be changed — this proposal may not allow changing a vote, or its voting period just ended. Your original vote still stands.";
+
 const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
   'This change could not be applied — it has likely already been made. Refreshing to show the latest state.';
 
@@ -49,11 +51,21 @@ const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
  * Toast message for a vote error caused by a stale proposal, or null when the
  * error should surface through the regular (named) error path. Callers toast the
  * message and refresh instead of raising the retry error modal.
+ *
+ * `isVoteChange` distinguishes a first vote from an attempt to *replace* an
+ * existing vote. A `CanNotVote` revert on a change is the degraded path for a
+ * DAO whose voting plugin doesn't allow replacement (or where the window just
+ * closed) — so the message says the original vote stands rather than implying
+ * the vote vanished.
  */
-export function getStaleProposalVoteToastMessage(error: unknown, proposalType: ProposalType): string | null {
+export function getStaleProposalVoteToastMessage(
+  error: unknown,
+  proposalType: ProposalType,
+  options?: { isVoteChange?: boolean }
+): string | null {
   const revert = decodeGovernanceRevert(error);
   if (revert?.name === 'CanNotVote') {
-    return VOTE_NOT_ACCEPTED_MESSAGE;
+    return options?.isVoteChange ? VOTE_CHANGE_NOT_ACCEPTED_MESSAGE : VOTE_NOT_ACCEPTED_MESSAGE;
   }
   if (revert?.name === 'ActionReverted' && isMembershipProposalType(proposalType)) {
     return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;

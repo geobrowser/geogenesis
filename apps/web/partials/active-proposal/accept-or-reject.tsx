@@ -15,6 +15,7 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 
 import { Button } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { Pending } from '~/design-system/pending';
 
 import { GovernanceReopenEditButton } from '~/partials/governance/governance-reopen-edit-button';
@@ -83,6 +84,16 @@ export function AcceptOrReject({
     return votes.find(v => v.accountId.toLowerCase() === target)?.vote;
   }, [personalSpaceId, votes]);
 
+  // The user's effective vote right now. Prefer the server view (survives page
+  // reload), then a just-succeeded local choice, then the optimistic session
+  // fallback so a modal close-then-reopen right after voting doesn't blink. We
+  // resolve to `undefined` while a tx is in-flight so the buttons stay
+  // interactive with an in-button spinner rather than snapping mid-tx.
+  const isPending = voteStatus === 'pending';
+  const txSucceeded = voteStatus === 'success';
+  const confirmedVote =
+    serverUserVote ?? (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? (isPending ? undefined : optimisticVote);
+
   // Deliberately do NOT clear the optimistic atom here even once serverUserVote
   // resolves. The governance list uses the atom (via useIsOptimisticallyVoted)
   // to sink voted cards to the bottom because the API-side sort's own
@@ -105,15 +116,19 @@ export function AcceptOrReject({
     }
   };
 
-  const onVoteError = (choice: 'ACCEPT' | 'REJECT') => (error: unknown) => {
+  const onVoteError = (choice: 'ACCEPT' | 'REJECT', isChange: boolean) => (error: unknown) => {
     setPendingChoice(null);
     removeOptimisticVote(proposalId);
-    // A stale proposal can't be voted through — retrying would revert again,
-    // so close the review window and toast instead of raising the error modal.
-    const staleMessage = getStaleProposalVoteToastMessage(error, proposalType);
+    // A stale proposal can't be voted through — retrying would revert again, so
+    // toast instead of raising the retry error modal. For a first vote we also
+    // close the review window (the proposal has moved on). For a *change* we
+    // keep the window open and tell the user their original vote stands, so a
+    // DAO that doesn't allow vote replacement degrades to a clear message
+    // instead of looking like the vote disappeared.
+    const staleMessage = getStaleProposalVoteToastMessage(error, proposalType, { isVoteChange: isChange });
     if (staleMessage) {
       setToast(<span>{staleMessage}</span>);
-      closeProposal();
+      if (!isChange) closeProposal();
       router.refresh();
       return;
     }
@@ -121,21 +136,23 @@ export function AcceptOrReject({
     reportError(`Vote failed: ${message}`, () => {
       setPendingChoice(choice);
       addOptimisticVote(proposalId, choice);
-      vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice) });
+      vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice, isChange) });
     });
   };
 
-  const onApprove = () => {
-    setPendingChoice('ACCEPT');
-    addOptimisticVote(proposalId, 'ACCEPT');
-    vote('ACCEPT', { onSuccess: onVoteSuccess, onError: onVoteError('ACCEPT') });
+  // Cast — or change — the vote. Clicking the side you already picked is a
+  // no-op: re-affirming the same choice would just spend a transaction (and, in
+  // a replacement-enabled DAO, overwrite your vote with itself).
+  const submitVote = (choice: 'ACCEPT' | 'REJECT') => {
+    if (confirmedVote === choice) return;
+    const isChange = confirmedVote != null && confirmedVote !== choice;
+    setPendingChoice(choice);
+    addOptimisticVote(proposalId, choice);
+    vote(choice, { onSuccess: onVoteSuccess, onError: onVoteError(choice, isChange) });
   };
 
-  const onReject = () => {
-    setPendingChoice('REJECT');
-    addOptimisticVote(proposalId, 'REJECT');
-    vote('REJECT', { onSuccess: onVoteSuccess, onError: onVoteError('REJECT') });
-  };
+  const onApprove = () => submitVote('ACCEPT');
+  const onReject = () => submitVote('REJECT');
 
   if (isProposalEnded) {
     if (status === 'ACCEPTED') {
@@ -182,16 +199,44 @@ export function AcceptOrReject({
     );
   }
 
-  // Prefer the server view (survives page reload). While the vote tx is
-  // in-flight we keep the Accept/Reject buttons visible with an in-button
-  // spinner — swapping to the pill mid-tx looked like the vote had already
-  // landed. `optimisticVote` is a session fallback so a modal-close-then-reopen
-  // right after voting doesn't blink back to the buttons.
-  const isPending = voteStatus === 'pending';
-  const txSucceeded = voteStatus === 'success';
-  const confirmedVote =
-    serverUserVote ?? (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? (isPending ? undefined : optimisticVote);
+  // Editors vote here — and, while the proposal is still open, can change their
+  // vote. The current choice is shown filled with a check and is inert (its
+  // handler no-ops); the other side is a live button that submits a replacement
+  // vote. We wait for the personal-space lookup so a voter reopening the page
+  // doesn't briefly see an un-highlighted pair before serverUserVote resolves.
+  if (smartAccount && isEditor && !isPersonalSpaceIdLoading) {
+    const hasAccepted = confirmedVote === 'ACCEPT';
+    const hasRejected = confirmedVote === 'REJECT';
+    return (
+      <div className="inline-flex items-center gap-2">
+        <Button
+          onClick={onReject}
+          variant="error"
+          small
+          icon={hasRejected ? <Check /> : undefined}
+          className={hasRejected ? 'cursor-default' : undefined}
+          aria-pressed={hasRejected}
+          disabled={isPending}
+        >
+          <Pending isPending={isPending && pendingChoice === 'REJECT'}>{hasRejected ? 'Rejected' : 'Reject'}</Pending>
+        </Button>
+        <Button
+          onClick={onApprove}
+          variant="success"
+          small
+          icon={hasAccepted ? <Check /> : undefined}
+          className={hasAccepted ? 'cursor-default' : undefined}
+          aria-pressed={hasAccepted}
+          disabled={isPending}
+        >
+          <Pending isPending={isPending && pendingChoice === 'ACCEPT'}>{hasAccepted ? 'Accepted' : 'Accept'}</Pending>
+        </Button>
+      </div>
+    );
+  }
 
+  // Non-editors (or before the account lookup resolves) can't vote — surface
+  // their recorded vote read-only if they have one.
   if (confirmedVote === 'ACCEPT') {
     return (
       <div className="inline-flex h-6 items-center rounded bg-successTertiary px-1.5 text-metadata leading-none text-green">
@@ -203,22 +248,6 @@ export function AcceptOrReject({
     return (
       <div className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01">
         You rejected
-      </div>
-    );
-  }
-
-  // Wait for the personal-space ID lookup before offering buttons. Otherwise a
-  // voter reopening the page briefly sees Accept/Reject before serverUserVote
-  // resolves and swaps them out for the pill.
-  if (smartAccount && isEditor && !isPersonalSpaceIdLoading) {
-    return (
-      <div className="inline-flex items-center gap-2">
-        <Button onClick={onReject} variant="error" small disabled={isPending}>
-          <Pending isPending={isPending && pendingChoice === 'REJECT'}>Reject</Pending>
-        </Button>
-        <Button onClick={onApprove} variant="success" small disabled={isPending}>
-          <Pending isPending={isPending && pendingChoice === 'ACCEPT'}>Accept</Pending>
-        </Button>
       </div>
     );
   }
