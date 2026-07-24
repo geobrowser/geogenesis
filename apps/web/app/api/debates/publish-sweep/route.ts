@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { DebateNotPublishableError, listSweepCandidateDebateIds } from '~/core/debates/server/debate-source';
+import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
 // The sweep can sign several on-chain publishes in one run, so give it room past the default.
@@ -12,22 +13,15 @@ export const dynamic = 'force-dynamic';
 // the idempotency check makes re-scanning already-published debates cheap.
 const MAX_PUBLISHES_PER_SWEEP = 5;
 
-function getSweepSpaceIds(): string[] {
-  return (process.env.DEBATE_ACCEPTOR_SWEEP_SPACE_IDS ?? '')
-    .split(',')
-    .map(id => id.trim())
-    .filter(Boolean);
-}
-
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.
  *
  * Vercel Cron hits this on a schedule (see vercel.json) with `Authorization: Bearer $CRON_SECRET`.
- * For each space in the `DEBATE_ACCEPTOR_SWEEP_SPACE_IDS` allowlist, it lists that space's
- * `complete` debates from geo-chat and publishes each one. Idempotent and self-healing: publishing
- * skips debates already in the KG, skips spaces the acceptor can't edit, and leaves debates whose
- * media is still processing for the next tick. It's the sole publisher: no browser or public route
- * is in the loop, so nothing depends on a participant keeping a tab open.
+ * It discovers its own work: the acceptor can only publish into spaces it edits, so it enumerates
+ * those from the graph, then for each lists that space's `complete` debates from geo-chat and
+ * publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
+ * leaves debates whose media is still processing for the next tick. It's the sole publisher: no
+ * browser or public route is in the loop, so nothing depends on a participant keeping a tab open.
  */
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -35,11 +29,12 @@ export async function GET(request: Request) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  if (!getDebateAcceptorConfig()) {
+  const config = getDebateAcceptorConfig();
+  if (!config) {
     return NextResponse.json({ ok: true, skipped: 'acceptor_not_configured' });
   }
 
-  const spaceIds = getSweepSpaceIds();
+  const spaceIds = await listEditorSpaceIds(config.spaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
   let alreadyPublished = 0;
