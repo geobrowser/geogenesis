@@ -169,7 +169,22 @@ mode switch exposed it.
 mode the project doesn't apply sponsorship (hence AA21 prefund in the replay),
 so gas wouldn't be paid. Resolution is with infra/ZeroDev: fix the selfFunded
 proxy's 7702 handling, or reconfigure sponsorship on the normal path.
-Blocks Phase 2 smoke item "personal space create".
+
+**Status update 2026-07-24 — MITIGATED, escalation pending:**
+- Team confirmed the diagnosis. Patrick found `?provider=ULTRA_RELAY` (without
+  `selfFunded`) routes around the bug; his commit `ebdf7fdc2` adds a
+  `NEXT_PUBLIC_SPONSORSHIP_RPC_URL` override (merged into this branch). Nik
+  confirmed `selfFunded=true&provider=ULTRA_RELAY` still 500s (combining them
+  re-enters the broken handler).
+- ⚠ **Open funding question (Nik's concern, corroborated by our replay):** a
+  raw stub estimate on the provider-only URL returns `AA21 didn't pay prefund`
+  — unclear whether ULTRA_RELAY draws from the self-funded GEO tank or
+  ZeroDev-managed credits / a relayer wallet that could run dry. Treat the
+  override as a reversible incident mitigation, not the permanent default.
+- Next: escalate to ZeroDev (repro in `ZERODEV_7702_REPRO.md`), get their
+  answer on ULTRA_RELAY funding semantics, and add a fresh-wallet signup e2e
+  as the acceptance gate before removing the override or changing
+  GeoTestnetConfig permanently.
 
 ## Team notes
 
