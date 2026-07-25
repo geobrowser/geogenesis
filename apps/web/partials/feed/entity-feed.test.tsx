@@ -79,6 +79,19 @@ afterEach(() => {
 });
 
 describe('EntityFeed Explore type filter', () => {
+  it('omits the type parameter and does not persist before the user changes the default selection', async () => {
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
+
+    await screen.findByText('11 types');
+    await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
+    expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBeNull();
+
+    const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
+    await queryFn({ pageParam: undefined });
+    const requestUrl = mocks.fetch.mock.calls[0]?.[0] as string;
+    expect(requestUrl).not.toContain('typeIds=');
+  });
+
   it('restores cached types, sends them to the feed, and persists checklist changes', async () => {
     const selectedTypeId = EXPLORE_ENTITY_TYPE_IDS[0];
     window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([selectedTypeId]));
@@ -98,5 +111,11 @@ describe('EntityFeed Explore type filter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'News story' }));
     await screen.findByText('0 types');
     await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
+  });
+
+  it('preserves the historical query key for feeds without the Explore type filter', () => {
+    render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
+
+    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', 'week', 'space-id', null]);
   });
 });

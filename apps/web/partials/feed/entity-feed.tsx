@@ -121,7 +121,8 @@ export function EntityFeed({
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...EXPLORE_ENTITY_TYPE_IDS]);
   const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
   const spaceId = lockedSpaceId ?? selectedSpaceId;
-  const typeIds = showTypeFilter ? selectedTypeIds : undefined;
+  const typeIds =
+    showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
   const showFilterRow = showSortFilter || showTimeFilter || lockedSpaceId == null || showTypeFilter;
 
@@ -131,14 +132,14 @@ export function EntityFeed({
     setTypeSelectionLoaded(true);
   }, [showTypeFilter]);
 
-  React.useEffect(() => {
-    if (!showTypeFilter || !typeSelectionLoaded) return;
-    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
-  }, [selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
-
-  const toggleType = React.useCallback((typeId: string) => {
-    setSelectedTypeIds(current => toggleExploreTypeId(current, typeId));
-  }, []);
+  const toggleType = React.useCallback(
+    (typeId: string) => {
+      const nextTypeIds = toggleExploreTypeId(selectedTypeIds, typeId);
+      setSelectedTypeIds(nextTypeIds);
+      window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(nextTypeIds));
+    },
+    [selectedTypeIds]
+  );
 
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
@@ -146,9 +147,12 @@ export function EntityFeed({
   // sign-in and leave "Join space" buttons stuck for a few seconds.
   const { smartAccount } = useSmartAccount();
   const smartAccountAddress = smartAccount?.account.address ?? null;
+  const queryKey = showTypeFilter
+    ? [apiEndpoint, sort, time, spaceId, typeIdsKey, smartAccountAddress]
+    : [apiEndpoint, sort, time, spaceId, smartAccountAddress];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: [apiEndpoint, sort, time, spaceId, typeIdsKey, smartAccountAddress],
+    queryKey,
     queryFn: ({ pageParam }) =>
       fetchFeedPage(apiEndpoint, { sort, time, spaceId, typeIds, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
