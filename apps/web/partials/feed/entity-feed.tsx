@@ -144,6 +144,13 @@ export function EntityFeed({
     setSelectedTypeIds(current => toggleExploreTypeId(current, typeId));
   }, []);
 
+  const toggleAllTypes = React.useCallback(() => {
+    shouldPersistTypeSelectionRef.current = true;
+    setSelectedTypeIds(current =>
+      current.length === EXPLORE_ENTITY_TYPE_IDS.length ? [] : [...EXPLORE_ENTITY_TYPE_IDS]
+    );
+  }, []);
+
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
   // (before the cookie is set), which caused refetches to return anonymous data on
@@ -313,7 +320,11 @@ export function EntityFeed({
                 </Menu>
               ) : null}
               {showTypeFilter ? (
-                <ExploreTypeFilterMenu selectedTypeIds={selectedTypeIds} onToggleType={toggleType} />
+                <ExploreTypeFilterMenu
+                  selectedTypeIds={selectedTypeIds}
+                  onToggleType={toggleType}
+                  onToggleAll={toggleAllTypes}
+                />
               ) : null}
             </div>
           ) : null}

@@ -14,12 +14,14 @@ import { Menu, MenuItem } from '~/design-system/menu';
 type Props = {
   selectedTypeIds: readonly string[];
   onToggleType: (typeId: string) => void;
+  onToggleAll: () => void;
 };
 
-export function ExploreTypeFilterMenu({ selectedTypeIds, onToggleType }: Props) {
+export function ExploreTypeFilterMenu({ selectedTypeIds, onToggleType, onToggleAll }: Props) {
   const [open, setOpen] = React.useState(false);
   const selected = React.useMemo(() => new Set(selectedTypeIds), [selectedTypeIds]);
   const label = exploreTypeFilterLabel(selected.size);
+  const allSelected = selected.size === EXPLORE_ENTITY_TYPES.length;
 
   return (
     <Menu
@@ -40,6 +42,9 @@ export function ExploreTypeFilterMenu({ selectedTypeIds, onToggleType }: Props) 
         </button>
       }
     >
+      <MenuItem className="border-b border-grey-02" onClick={onToggleAll}>
+        {allSelected ? 'Unselect all' : 'Select all'}
+      </MenuItem>
       {EXPLORE_ENTITY_TYPES.map(type => {
         const checked = selected.has(type.id);
         return (

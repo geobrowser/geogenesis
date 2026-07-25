@@ -131,6 +131,21 @@ describe('EntityFeed Explore type filter', () => {
     );
   });
 
+  it('selects and unselects all types from the menu action', async () => {
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
+    await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }));
+    await screen.findByText('0 types');
+    await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
+    await waitFor(() =>
+      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(JSON.stringify(EXPLORE_ENTITY_TYPE_IDS))
+    );
+  });
+
   it('preserves the historical query key for feeds without the Explore type filter', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
 
