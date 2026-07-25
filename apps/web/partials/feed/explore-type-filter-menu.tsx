@@ -46,6 +46,7 @@ export function ExploreTypeFilterMenu({ selectedTypeIds, onToggleType }: Props) 
           <MenuItem key={type.id} onClick={() => onToggleType(type.id)}>
             <CheckboxVisual checked={checked} />
             <span>{type.label}</span>
+            <span className="sr-only">{checked ? 'Selected' : 'Not selected'}</span>
           </MenuItem>
         );
       })}

@@ -120,6 +120,7 @@ export function EntityFeed({
   const [spaceMenuOpen, setSpaceMenuOpen] = React.useState(false);
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...EXPLORE_ENTITY_TYPE_IDS]);
   const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
+  const shouldPersistTypeSelectionRef = React.useRef(false);
   const spaceId = lockedSpaceId ?? selectedSpaceId;
   const typeIds =
     showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
@@ -132,14 +133,16 @@ export function EntityFeed({
     setTypeSelectionLoaded(true);
   }, [showTypeFilter]);
 
-  const toggleType = React.useCallback(
-    (typeId: string) => {
-      const nextTypeIds = toggleExploreTypeId(selectedTypeIds, typeId);
-      setSelectedTypeIds(nextTypeIds);
-      window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(nextTypeIds));
-    },
-    [selectedTypeIds]
-  );
+  React.useEffect(() => {
+    if (!showTypeFilter || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current) return;
+    shouldPersistTypeSelectionRef.current = false;
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
+  }, [selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
+
+  const toggleType = React.useCallback((typeId: string) => {
+    shouldPersistTypeSelectionRef.current = true;
+    setSelectedTypeIds(current => toggleExploreTypeId(current, typeId));
+  }, []);
 
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier

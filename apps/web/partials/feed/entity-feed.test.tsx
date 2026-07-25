@@ -1,11 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
-import { EXPLORE_TYPE_FILTER_STORAGE_KEY } from '~/core/explore/explore-type-filter';
+import { EXPLORE_TYPE_FILTER_STORAGE_KEY, exploreTypeFilterLabel } from '~/core/explore/explore-type-filter';
 
 import { EntityFeed } from './entity-feed';
 
@@ -82,7 +82,7 @@ describe('EntityFeed Explore type filter', () => {
   it('omits the type parameter and does not persist before the user changes the default selection', async () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
 
-    await screen.findByText('11 types');
+    await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
     await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
     expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBeNull();
 
@@ -108,9 +108,27 @@ describe('EntityFeed Explore type filter', () => {
       expect.objectContaining({ credentials: 'include' })
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'News story' }));
+    fireEvent.click(screen.getByRole('button', { name: /News story/ }));
     await screen.findByText('0 types');
     await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
+  });
+
+  it('applies rapid toggles to the latest selection', async () => {
+    const [first, second, third] = EXPLORE_ENTITY_TYPE_IDS;
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([first]));
+
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
+    await screen.findByText('1 type');
+
+    act(() => {
+      screen.getByRole('button', { name: /Episode/ }).click();
+      screen.getByRole('button', { name: /Post/ }).click();
+    });
+
+    await screen.findByText('3 types');
+    await waitFor(() =>
+      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(JSON.stringify([first, second, third]))
+    );
   });
 
   it('preserves the historical query key for feeds without the Explore type filter', () => {
