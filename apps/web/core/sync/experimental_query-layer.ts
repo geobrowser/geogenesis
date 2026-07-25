@@ -23,10 +23,13 @@ const compareOperators = {
 };
 
 function parseTimestampSec(value: string): number | null {
-  const numeric = Number(value);
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+
+  const numeric = Number(trimmed);
   if (Number.isFinite(numeric)) return numeric > 1e12 ? Math.floor(numeric / 1000) : numeric;
 
-  const milliseconds = Date.parse(value);
+  const milliseconds = Date.parse(trimmed);
   return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
 }
 

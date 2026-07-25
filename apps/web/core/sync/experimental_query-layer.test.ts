@@ -4,7 +4,7 @@ import type { Entity } from '~/core/types';
 
 import { EntityQuery } from './experimental_query-layer';
 
-function entity(id: string, createdAt: string | number): Entity {
+function entity(id: string, createdAt: string | number | undefined): Entity {
   return {
     id,
     name: id,
@@ -27,5 +27,16 @@ describe('EntityQuery createdAt filtering', () => {
         .execute()
         .map(item => item.id)
     ).toEqual(['new', 'iso']);
+  });
+
+  it('does not treat a missing timestamp as the Unix epoch', () => {
+    const entities = [entity('missing', undefined), entity('epoch', 0)];
+
+    expect(
+      new EntityQuery(entities)
+        .where({ createdAt: { greaterThanOrEqualTo: '0' } })
+        .execute()
+        .map(item => item.id)
+    ).toEqual(['epoch']);
   });
 });
