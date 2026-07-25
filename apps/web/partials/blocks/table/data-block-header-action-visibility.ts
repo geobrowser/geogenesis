@@ -5,6 +5,10 @@ export function shouldShowFilterAndFullscreenActions(view: DataBlockView, isEdit
   return isEditing || view !== 'EXPLORE';
 }
 
+export function shouldShowExploreBrowseFilters(view: DataBlockView, isEditing: boolean): boolean {
+  return view === 'EXPLORE' && !isEditing;
+}
+
 /** A hidden filter toggle must not leave its panel open with no way to close it. */
 export function filterPanelOpenStateForActions(isFilterOpen: boolean, showActions: boolean): boolean {
   return showActions && isFilterOpen;

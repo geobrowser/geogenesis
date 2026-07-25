@@ -4,6 +4,7 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 
 import {
   filterPanelOpenStateForActions,
+  shouldShowExploreBrowseFilters,
   shouldShowFilterAndFullscreenActions,
 } from './data-block-header-action-visibility';
 
@@ -22,6 +23,14 @@ describe('shouldShowFilterAndFullscreenActions', () => {
       expect(shouldShowFilterAndFullscreenActions(view, false)).toBe(true);
     }
   );
+});
+
+describe('shouldShowExploreBrowseFilters', () => {
+  it('only shows the controls for Explore view in browse mode', () => {
+    expect(shouldShowExploreBrowseFilters('EXPLORE', false)).toBe(true);
+    expect(shouldShowExploreBrowseFilters('EXPLORE', true)).toBe(false);
+    expect(shouldShowExploreBrowseFilters('TABLE', false)).toBe(false);
+  });
 });
 
 describe('filterPanelOpenStateForActions', () => {

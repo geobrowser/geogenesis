@@ -22,6 +22,14 @@ const compareOperators = {
   },
 };
 
+function parseTimestampSec(value: string): number | null {
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric > 1e12 ? Math.floor(numeric / 1000) : numeric;
+
+  const milliseconds = Date.parse(value);
+  return Number.isFinite(milliseconds) ? Math.floor(milliseconds / 1000) : null;
+}
+
 /**
  * Types for query conditions
  */
@@ -32,6 +40,7 @@ export type StringCondition = {
   startsWith?: string;
   endsWith?: string;
   in?: string[];
+  greaterThanOrEqualTo?: string;
 };
 
 export type NumberCondition = {
@@ -68,6 +77,7 @@ export type WhereCondition = {
   id?: StringCondition;
   name?: StringCondition;
   description?: StringCondition;
+  createdAt?: StringCondition;
   types?: { id?: StringCondition; name?: StringCondition }[];
   spaces?: StringCondition[];
   space?: { id?: StringCondition };
@@ -283,6 +293,9 @@ export class EntityQuery {
 
       case 'description':
         return this.matchesStringCondition(entity.description || '', condition);
+
+      case 'createdAt':
+        return this.matchesStringCondition(String(entity.createdAt ?? ''), condition);
 
       case 'spaces':
         if (condition === undefined) {
@@ -510,6 +523,16 @@ export class EntityQuery {
       if (!condition.in.includes(value)) {
         return false;
       }
+    }
+
+    if (condition.greaterThanOrEqualTo !== undefined) {
+      const actualNumber = parseTimestampSec(value);
+      const thresholdNumber = parseTimestampSec(condition.greaterThanOrEqualTo);
+      const matches =
+        actualNumber !== null && thresholdNumber !== null
+          ? actualNumber >= thresholdNumber
+          : value >= condition.greaterThanOrEqualTo;
+      if (!matches) return false;
     }
 
     return true;

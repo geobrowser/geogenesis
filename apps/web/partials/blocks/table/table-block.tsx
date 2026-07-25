@@ -11,6 +11,7 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { getExploreBlockTypeOptions } from '~/core/blocks/data/explore-browse-filters';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
@@ -22,6 +23,7 @@ import {
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
 import { useSource } from '~/core/blocks/data/use-source';
+import { type ExploreTime } from '~/core/explore/explore-time';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -54,10 +56,12 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
-import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
+import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
+import { DataBlockExploreBrowseFilters } from './data-block-explore-browse-filters';
 import {
   filterPanelOpenStateForActions,
+  shouldShowExploreBrowseFilters,
   shouldShowFilterAndFullscreenActions,
 } from './data-block-header-action-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
@@ -549,6 +553,8 @@ const ConfiguredTableBlock = ({
   const { setEditable } = useEditable();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
+  const [exploreTime, setExploreTime] = React.useState<ExploreTime>('all');
+  const [selectedExploreTypeIds, setSelectedExploreTypeIds] = React.useState<string[] | undefined>(undefined);
 
   // Track if unfiltered data has multiple pages (to keep pagination visible when filtering)
   const [hasMultiplePagesWhenUnfiltered, setHasMultiplePagesWhenUnfiltered] = React.useState(false);
@@ -587,7 +593,51 @@ const ConfiguredTableBlock = ({
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
-  } = useDataBlock({ canEdit });
+    resolvedFilterState: configuredFilters,
+  } = useDataBlock({
+    canEdit,
+    exploreBrowseFilters: !isEditing
+      ? {
+          time: exploreTime,
+          selectedTypeIds: selectedExploreTypeIds,
+        }
+      : undefined,
+  });
+
+  const exploreTypeOptions = React.useMemo(() => getExploreBlockTypeOptions(configuredFilters), [configuredFilters]);
+  const exploreTypeOptionsKey = React.useMemo(
+    () => exploreTypeOptions.map(option => ID.uuidToHex(option.id)).join(','),
+    [exploreTypeOptions]
+  );
+  const allExploreTypeIds = React.useMemo(() => exploreTypeOptions.map(option => option.id), [exploreTypeOptions]);
+  const visibleExploreTypeIds = selectedExploreTypeIds ?? allExploreTypeIds;
+
+  React.useEffect(() => {
+    setSelectedExploreTypeIds(undefined);
+  }, [blockEntityId, exploreTypeOptionsKey]);
+
+  React.useEffect(() => {
+    setExploreTime('all');
+  }, [blockEntityId]);
+
+  const toggleExploreType = React.useCallback(
+    (typeId: string) => {
+      setSelectedExploreTypeIds(current => {
+        const selected = new Set((current ?? allExploreTypeIds).map(ID.uuidToHex));
+        const normalizedTypeId = ID.uuidToHex(typeId);
+        if (selected.has(normalizedTypeId)) selected.delete(normalizedTypeId);
+        else selected.add(normalizedTypeId);
+        return allExploreTypeIds.filter(id => selected.has(ID.uuidToHex(id)));
+      });
+    },
+    [allExploreTypeIds]
+  );
+
+  const toggleAllExploreTypes = React.useCallback(() => {
+    setSelectedExploreTypeIds(current =>
+      (current ?? allExploreTypeIds).length === allExploreTypeIds.length ? [] : undefined
+    );
+  }, [allExploreTypeIds]);
 
   const initialFiltersOpenConsumedRef = React.useRef(false);
   React.useEffect(() => {
@@ -723,8 +773,9 @@ const ConfiguredTableBlock = ({
         filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
         filterMode: activeFilterMode,
         sort: sortState ?? null,
+        time: isInfiniteExplore ? exploreTime : 'all',
       }),
-    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState]
+    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState, exploreTime]
   );
 
   React.useEffect(() => {
@@ -971,6 +1022,7 @@ const ConfiguredTableBlock = ({
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
   const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, isEditing);
+  const showExploreBrowseFilters = shouldShowExploreBrowseFilters(view, isEditing);
 
   React.useEffect(() => {
     setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAndFullscreenActions));
@@ -1012,6 +1064,16 @@ const ConfiguredTableBlock = ({
               </Link>
             </>
           )}
+          {showExploreBrowseFilters ? (
+            <DataBlockExploreBrowseFilters
+              time={exploreTime}
+              onTimeChange={setExploreTime}
+              typeOptions={exploreTypeOptions}
+              selectedTypeIds={visibleExploreTypeIds}
+              onToggleType={toggleExploreType}
+              onToggleAllTypes={toggleAllExploreTypes}
+            />
+          ) : null}
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {showCreateEntityPlus &&

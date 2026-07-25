@@ -98,3 +98,11 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
   });
 });
+
+describe('convertWhereConditionToEntityFilter created-at filtering', () => {
+  it('passes a rolling time cutoff to the entity filter', () => {
+    expect(convertWhereConditionToEntityFilter({ createdAt: { greaterThanOrEqualTo: '1900000000' } })).toEqual({
+      and: [{ createdAt: { greaterThanOrEqualTo: '1900000000' } }, { name: { isNull: false, isNot: '' } }],
+    });
+  });
+});

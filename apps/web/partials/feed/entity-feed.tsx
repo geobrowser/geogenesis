@@ -7,12 +7,13 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import { EXPLORE_TIME_OPTIONS, type ExploreTime } from '~/core/explore/explore-time';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
   parseStoredExploreTypeIds,
   toggleExploreTypeId,
 } from '~/core/explore/explore-type-filter';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import type { ExploreFeedItem, ExploreFeedResult, ExploreSort } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -38,14 +39,6 @@ function LoadingSkeleton() {
 const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
-];
-
-const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
-  { value: 'today', label: 'Today' },
-  { value: 'week', label: 'This week' },
-  { value: 'month', label: 'Last month' },
-  { value: 'year', label: 'Last year' },
-  { value: 'all', label: 'All time' },
 ];
 
 export type SpaceOption = { value: string; label: string };
@@ -196,7 +189,7 @@ export function EntityFeed({
     return flat;
   }, [data?.pages]);
 
-  const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
+  const timeLabel = EXPLORE_TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
   const spaceLabel =
     selectedSpaceId === 'all'
@@ -259,7 +252,7 @@ export function EntityFeed({
                 </button>
               }
             >
-              {TIME_OPTIONS.map(o => (
+              {EXPLORE_TIME_OPTIONS.map(o => (
                 <MenuItem
                   key={o.value}
                   active={o.value === time}

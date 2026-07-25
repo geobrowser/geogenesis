@@ -21,9 +21,10 @@ import {
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { type ExploreTime, exploreTimeThresholdSec } from './explore-time';
 
 export type ExploreSort = 'new' | 'top';
-export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
+export type { ExploreTime } from './explore-time';
 
 export type ExploreFeedItem = {
   entityId: string;
@@ -71,23 +72,6 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
     },
   },
 } satisfies EntityFilter;
-
-function timeThresholdSec(filter: ExploreTime): number | null {
-  const now = Math.floor(Date.now() / 1000);
-  switch (filter) {
-    case 'today':
-      return now - 86400;
-    case 'week':
-      return now - 7 * 86400;
-    case 'month':
-      return now - 30 * 86400;
-    case 'year':
-      return now - 365 * 86400;
-    case 'all':
-    default:
-      return null;
-  }
-}
 
 function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
   for (const sid of entity.spaces) {
@@ -185,7 +169,7 @@ function buildFeedFilter(args: {
   requireName?: boolean;
   includeEntityScopeInFilter?: boolean;
 }): EntityFilter {
-  const t = timeThresholdSec(args.time);
+  const t = exploreTimeThresholdSec(args.time);
   return {
     ...FEED_EXCLUDED_RELATIONS_FILTER,
     ...(args.includeEntityScopeInFilter
