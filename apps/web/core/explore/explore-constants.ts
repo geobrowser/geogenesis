@@ -8,6 +8,9 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '5e24fb52856c4189a9716af4387b1b89', label: 'Paper' },
   { id: '7ed45f2bc48b419e8e4664d5ff680b0d', label: 'Person' },
   { id: '484a18c5030a499cb0f2ef588ff16d50', label: 'Project' },
+  { id: '150db6defe2344f0805afa57502e2c32', label: 'Ranking block' },
+  { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
+  { id: 'fd51f93520634617be397b672b23364c', label: 'Debate' },
 ] as const;
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);

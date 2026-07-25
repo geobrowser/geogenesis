@@ -61,6 +61,6 @@ describe('exploreTypeFilterLabel', () => {
   it('formats the selected type count', () => {
     expect(exploreTypeFilterLabel(0)).toBe('0 types');
     expect(exploreTypeFilterLabel(1)).toBe('1 type');
-    expect(exploreTypeFilterLabel(8)).toBe('8 types');
+    expect(exploreTypeFilterLabel(11)).toBe('11 types');
   });
 });
