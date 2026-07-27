@@ -453,20 +453,20 @@ export function DebateCancelUploadDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Don't want to publish?"
-        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text shadow-card"
+        aria-label="Don’t want to publish?"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-2.5">
           {/* Balances the close button so the title stays centered on the card. */}
-          <span aria-hidden="true" className="size-6 shrink-0" />
-          <Text as="h2" variant="cardEntityTitle" color="text" className="flex-1 text-center">
-            Don&apos;t want to publish?
+          <span aria-hidden="true" className="size-4 shrink-0" />
+          <Text as="h2" variant="cardEntityTitle" color="text" className="flex-1 text-center leading-none">
+            Don’t want to publish?
           </Text>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="grid size-6 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
+            className="grid size-4 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
           >
             <CloseSmall />
           </button>
@@ -491,7 +491,7 @@ export function DebateCancelUploadDialog({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="mt-4 min-h-7 w-full rounded-full px-4 text-metadata text-grey-04 hover:bg-grey-01 disabled:opacity-50"
+          className="mt-5 min-h-7 w-full rounded-full px-4 text-metadata text-grey-04 hover:bg-grey-01 disabled:opacity-50"
         >
           Cancel
         </button>

@@ -14,6 +14,7 @@ import {
   type DebateRematchSession,
   getCurrentGeoChatUserId,
 } from '~/core/debates/api';
+import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -25,7 +26,6 @@ import {
   useRejectDebateRematchRequest,
   useUpdateDebateRematchPosition,
 } from '~/core/debates/hooks';
-import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -166,7 +166,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       claims.filter(claim => {
         if (tab === 'debate-now' && opponentPositionOf(claim) === null) return false;
-        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter)) return false;
+        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter))
+          return false;
         return true;
       }),
     [claims, opponentPositionOf, tab, topicFilter, topicsByClaimId]

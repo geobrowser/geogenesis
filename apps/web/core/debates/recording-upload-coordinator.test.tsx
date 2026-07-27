@@ -282,7 +282,7 @@ describe('DebateCancelUploadDialog', () => {
     const close = vi.fn();
     render(<DebateCancelUploadDialog busy={false} error={null} onConfirm={confirm} onClose={close} />);
 
-    expect(screen.getByText("Don't want to publish?")).toBeInTheDocument();
+    expect(screen.getByText('Don’t want to publish?')).toBeInTheDocument();
     expect(
       screen.getByText('This action permanently removes this debate video on behalf of you and your opponent.')
     ).toBeInTheDocument();

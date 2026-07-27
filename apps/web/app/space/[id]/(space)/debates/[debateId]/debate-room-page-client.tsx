@@ -2014,9 +2014,9 @@ function DebateRecordingRemovedDialog({
         role="dialog"
         aria-modal="true"
         aria-label="Your debate was removed"
-        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text shadow-card"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text"
       >
-        <Text as="h2" variant="cardEntityTitle" color="text">
+        <Text as="h2" variant="cardEntityTitle" color="text" className="leading-none">
           Your debate was removed
         </Text>
         <Text as="p" variant="metadata" color="text" className="mt-2">
