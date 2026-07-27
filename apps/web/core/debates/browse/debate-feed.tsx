@@ -9,6 +9,7 @@ import type { Debate } from '~/core/debates/api';
 import { useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useSpace } from '~/core/hooks/use-space';
+import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -23,14 +24,30 @@ import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
 
-export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
+export function DebatesBrowseFeed({
+  spaceId,
+  initialDebateId,
+  fallback,
+}: {
+  spaceId: string;
+  initialDebateId?: string;
+  /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
+  fallback?: React.ReactNode;
+}) {
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
   const debates = React.useMemo(() => {
     const watchable = (debatesQuery.data?.debates ?? []).filter(isWatchableDebate);
-    return watchable.sort((a, b) => completedTime(b) - completedTime(a));
-  }, [debatesQuery.data?.debates]);
+    const sorted = watchable.sort((a, b) => completedTime(b) - completedTime(a));
+    if (!initialDebateId) return sorted;
+    // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
+    // first full-screen video, then let the rest of the space's debates scroll in below it.
+    const anchorIndex = sorted.findIndex(debate => ID.equals(debate.id, initialDebateId));
+    if (anchorIndex <= 0) return sorted;
+    const [anchor] = sorted.splice(anchorIndex, 1);
+    return [anchor, ...sorted];
+  }, [debatesQuery.data?.debates, initialDebateId]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -63,6 +80,15 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
+  // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
+  // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
+  // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
+  // Debates tab passes none and keeps its own empty/error states.
+  const anchorMissing =
+    initialDebateId != null &&
+    !debatesQuery.isLoading &&
+    !debates.some(debate => ID.equals(debate.id, initialDebateId));
+
   const visibleDebates = debates.slice(0, visibleCount);
 
   // Keep an active debate whenever the list is non-empty — including when a
@@ -74,6 +100,11 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
       setActiveId(visibleDebates[0].id);
     }
   }, [activeId, visibleDebates]);
+
+  // Runs after all hooks so the early return never skips one.
+  if (anchorMissing && fallback != null) {
+    return <>{fallback}</>;
+  }
 
   const feed = (
     <div

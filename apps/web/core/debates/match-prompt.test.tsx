@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -63,7 +63,11 @@ afterEach(() => {
 });
 
 describe('DebateMatchPrompt', () => {
-  it('opens a match modal and the first participant accepts with the default format', () => {
+  it('opens a match modal and disables accept immediately after submitting the default format', () => {
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      options.onSuccess({ match: { ...match(), debate_id: 'debate-1' }, debate: debate() });
+    });
+
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
     expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
@@ -72,12 +76,17 @@ describe('DebateMatchPrompt', () => {
 
     expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    const acceptButton = screen.getByRole('button', { name: 'Accept' });
+    expect(acceptButton).toBeEnabled();
+
+    fireEvent.click(acceptButton);
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
       { matchId: 'match-1', formatId: defaultDebateFormatId },
       expect.any(Object)
     );
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+    expect(acceptButton).toBeDisabled();
   });
 
   it('lets the first participant choose a format when the feature flag is enabled', () => {
@@ -92,6 +101,24 @@ describe('DebateMatchPrompt', () => {
       { matchId: 'match-1', formatId: 'extended-standard' },
       expect.any(Object)
     );
+  });
+
+  it('re-enables accept when submitting the match fails', () => {
+    let failRequest = () => {};
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      failRequest = () => options.onError();
+    });
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    const acceptButton = screen.getByRole('button', { name: 'Accept' });
+    fireEvent.click(acceptButton);
+
+    expect(acceptButton).toBeDisabled();
+
+    act(failRequest);
+
+    expect(acceptButton).toBeEnabled();
   });
 
   it('renders participants as avatar and name without a per-participant menu or position pill', () => {
@@ -173,6 +200,16 @@ describe('DebateMatchPrompt', () => {
 
     rerender(<DebateMatchPrompt spaceId="space-1" matches={[]} debates={[debate()]} />);
 
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  it('moves a server-accepted participant into a debate while retaining the match', () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    expect(mocks.push).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 });

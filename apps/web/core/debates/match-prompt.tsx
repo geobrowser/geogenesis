@@ -29,6 +29,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const currentUserId = getCurrentGeoChatUserId();
   const [selectedFormatIds, setSelectedFormatIds] = React.useState<Record<string, DebateFormatId>>({});
   const [acceptedMatchIds, setAcceptedMatchIds] = React.useState<string[]>([]);
+  const [acceptingMatchId, setAcceptingMatchId] = React.useState<string | null>(null);
   const [waitingClaimIds, setWaitingClaimIds] = React.useState<string[]>([]);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
@@ -46,6 +47,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   React.useEffect(() => {
     const activeIds = new Set(matches.map(match => match.id));
     setAcceptedMatchIds(current => current.filter(id => activeIds.has(id)));
+    setAcceptingMatchId(current => (current && activeIds.has(current) ? current : null));
     setDismissedMatchIds(current => current.filter(id => activeIds.has(id)));
     setMinimizedMatchIds(current => current.filter(id => activeIds.has(id)));
     setSelectedFormatIds(
@@ -68,7 +70,12 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       return;
     }
 
-    const waitingClaimIdSet = new Set(waitingClaimIds);
+    const waitingClaimIdSet = new Set([
+      ...waitingClaimIds,
+      ...matches
+        .filter(match => participantForUser(match, currentUserId)?.accepted === true)
+        .map(match => match.claim.id),
+    ]);
     if (waitingClaimIdSet.size === 0) return;
 
     const debate = debates.find(
@@ -126,13 +133,14 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       : declineMatch.error instanceof Error
         ? declineMatch.error.message
         : null;
-  const busy = acceptMatch.isPending || declineMatch.isPending;
+  const busy = acceptingMatchId === activeMatch.id || acceptMatch.isPending || declineMatch.isPending;
 
   const setSelectedFormatId = (formatId: DebateFormatId) => {
     setSelectedFormatIds(current => ({ ...current, [activeMatch.id]: formatId }));
   };
 
   const accept = () => {
+    setAcceptingMatchId(activeMatch.id);
     acceptMatch.mutate(
       {
         matchId: activeMatch.id,
@@ -146,8 +154,12 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
             navigateToDebate(debateId);
             return;
           }
+          setAcceptingMatchId(null);
           setAcceptedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
           setWaitingClaimIds(current => Array.from(new Set([...current, activeMatch.claim.id])));
+        },
+        onError: () => {
+          setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
         },
       }
     );
