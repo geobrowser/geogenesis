@@ -11,11 +11,9 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateRematchClaim,
   type DebateRematchParticipant,
-  type DebateRematchRequest,
   type DebateRematchSession,
   getCurrentGeoChatUserId,
 } from '~/core/debates/api';
-import { DebateFormatDetails } from '~/core/debates/format-details';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -27,6 +25,7 @@ import {
   useRejectDebateRematchRequest,
   useUpdateDebateRematchPosition,
 } from '~/core/debates/hooks';
+import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -311,11 +310,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )}
       </main>
 
-      {incomingRequest && session && (
-        <RematchRequestDialog
-          session={session}
-          request={incomingRequest}
+      {incomingRequest && session && currentUserId && (
+        <DebateRequestDialog
+          claim={incomingRequest.claim.claim}
+          participants={session.participants}
           currentUserId={currentUserId}
+          formatId={incomingRequest.turn_format_id}
           busy={acceptRequest.isPending || rejectRequest.isPending}
           error={
             acceptRequest.error instanceof Error
@@ -480,95 +480,5 @@ function LeaveIcon() {
       <path d="M13 12H3" />
       <path d="M6 9l-3 3 3 3" />
     </svg>
-  );
-}
-
-function RematchRequestDialog({
-  session,
-  request,
-  currentUserId,
-  busy,
-  error,
-  onAccept,
-  onReject,
-}: {
-  session: DebateRematchSession;
-  request: DebateRematchRequest;
-  currentUserId: string | null;
-  busy: boolean;
-  error: string | null;
-  onAccept: () => void;
-  onReject: () => void;
-}) {
-  const requester = session.participants.find(participant => participant.user_id === request.requester_user_id)!;
-  const recipient = session.participants.find(participant => participant.user_id === request.recipient_user_id)!;
-  const ordered = [recipient, requester];
-
-  return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center overflow-y-auto bg-text/45 p-4 backdrop-blur-sm">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="rematch-request-title"
-        className="w-[min(620px,100%)] rounded-xl bg-bg p-6 shadow-card"
-      >
-        <Text as="div" variant="body" color="grey-04" className="text-center">
-          Debate request
-        </Text>
-        <h2
-          id="rematch-request-title"
-          className="mx-auto mt-2 max-w-[500px] text-center text-[1.6rem] leading-[1.12] font-semibold"
-        >
-          {request.claim.claim}
-        </h2>
-        <div className="mt-5 grid grid-cols-2 gap-3 rounded-xl border border-grey-02 bg-white p-4">
-          {ordered.map(participant => {
-            const isRequester = participant.user_id === request.requester_user_id;
-            const position = isRequester ? request.requester_position : request.recipient_position;
-            return (
-              <div key={participant.user_id} className="grid justify-items-center gap-2 text-center">
-                <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={32} />
-                <Text variant="body">
-                  {participant.user_id === currentUserId
-                    ? 'You'
-                    : participant.display_name || participant.profile_space_id}
-                </Text>
-                <span className="rounded-full bg-grey-02 px-3 py-1 text-metadataMedium">{position ? 'Yes' : 'No'}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 rounded-lg border border-grey-02 bg-white px-4 py-3">
-          <Text variant="metadata" color="grey-04">
-            Debate format
-          </Text>
-          <div className="mt-3">
-            <DebateFormatDetails
-              formatId={request.turn_format_id}
-              participants={[requester, recipient]}
-              currentUserId={currentUserId ?? ''}
-            />
-          </div>
-        </div>
-        {error && (
-          <Text color="red-01" className="mt-3">
-            {error}
-          </Text>
-        )}
-        <div className="mt-5 grid gap-2">
-          <Button type="button" onClick={onAccept} disabled={busy}>
-            Accept
-          </Button>
-          <button
-            type="button"
-            onClick={onReject}
-            disabled={busy}
-            className="mx-auto min-h-10 px-5 text-button text-grey-04 hover:text-text disabled:opacity-50"
-          >
-            Reject
-          </button>
-        </div>
-      </section>
-    </div>
   );
 }

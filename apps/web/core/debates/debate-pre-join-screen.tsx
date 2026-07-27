@@ -9,7 +9,8 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
-import type { Debate } from '~/core/debates/api';
+import type { DebateParticipantSummary, ParticipantSlot } from '~/core/debates/api';
+import { type MediaDeviceOption, type PreJoinMediaState, systemDefaultAudioOutput } from '~/core/debates/media-session';
 
 import { Avatar } from '~/design-system/avatar';
 import { Check } from '~/design-system/icons/check';
@@ -19,25 +20,16 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { CameraIcon, CloseIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
 
-export type MediaDeviceOption = {
-  deviceId: string;
-  groupId: string;
-  kind: 'audioinput' | 'audiooutput' | 'videoinput';
-  label: string;
-};
-
-export type PreJoinMediaState = 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
-
-export const systemDefaultAudioOutput: MediaDeviceOption = {
-  deviceId: 'default',
-  groupId: 'default',
-  kind: 'audiooutput',
-  label: 'System default',
+export type DebatePreScreenParticipant = DebateParticipantSummary & {
+  participant_slot: ParticipantSlot;
 };
 
 export function DebatePreScreen({
-  debate,
+  claim,
+  participants,
   currentUserId,
+  localReady,
+  remoteReady,
   localVideoRef,
   previewStream,
   previewState,
@@ -60,8 +52,11 @@ export function DebatePreScreen({
   onLeave,
   leaveDisabled,
 }: {
-  debate: Debate;
+  claim: string;
+  participants: DebatePreScreenParticipant[];
   currentUserId: string | null;
+  localReady: boolean;
+  remoteReady: boolean;
   localVideoRef: React.RefObject<HTMLVideoElement | null>;
   previewStream: MediaStream | null;
   previewState: PreJoinMediaState;
@@ -88,13 +83,13 @@ export function DebatePreScreen({
   const [openSettings, setOpenSettings] = React.useState<'audio' | 'video' | null>(null);
   const audioTriggerRef = React.useRef<HTMLButtonElement>(null);
   const videoTriggerRef = React.useRef<HTMLButtonElement>(null);
-  const participants = [...debate.participants].sort((a, b) => a.participant_slot - b.participant_slot);
+  const sortedParticipants = [...participants].sort((a, b) => a.participant_slot - b.participant_slot);
   const localParticipant =
-    participants.find(participant => participant.user_id === currentUserId) ?? participants[0] ?? null;
+    sortedParticipants.find(participant => participant.user_id === currentUserId) ?? sortedParticipants[0] ?? null;
   const remoteParticipant =
-    participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? participants[1] ?? null;
-  const localReady = Boolean(localParticipant?.ready_at);
-  const remoteReady = Boolean(remoteParticipant?.ready_at);
+    sortedParticipants.find(participant => participant.user_id !== localParticipant?.user_id) ??
+    sortedParticipants[1] ??
+    null;
   const mediaReady = previewState === 'ready';
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
@@ -132,7 +127,7 @@ export function DebatePreScreen({
           Debate
         </Text>
         <h1 className="mt-3 max-w-[870px] text-[2.5rem] leading-[1.05] font-semibold text-text md:max-w-[560px] md:text-[2rem]">
-          {debate.claim.claim}
+          {claim}
         </h1>
 
         <div className="mt-10 w-full max-w-[272px]">
@@ -560,7 +555,7 @@ function PreScreenOpponent({
   label,
   ready,
 }: {
-  participant: Debate['participants'][number] | null;
+  participant: DebatePreScreenParticipant | null;
   label: string;
   ready: boolean;
 }) {
