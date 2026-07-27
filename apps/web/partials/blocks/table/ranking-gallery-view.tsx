@@ -5,13 +5,9 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
-import {
-  type BlockMainMedia,
-  blockMainMediaDimensions,
-  useBlockMainMedia,
-} from '~/core/hooks/use-block-main-media-property';
-import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
+import { type BlockMainMedia, useBlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
+import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -47,7 +43,7 @@ function RankingGalleryCard({
 
   // When a property sets explicit dimensions, keep the card at the configured aspect ratio
   // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
-  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia));
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
   const mediaImageFitClassName = mediaFrame.hasCustomHeight ? 'object-contain' : 'object-cover';
   const href = NavUtils.toEntity(spaceId, entityId);
 

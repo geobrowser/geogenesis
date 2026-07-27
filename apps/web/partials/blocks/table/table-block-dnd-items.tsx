@@ -16,7 +16,7 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import React from 'react';
 
 import { Source } from '~/core/blocks/data/source';
-import type { BlockMainMedia } from '~/core/hooks/use-block-main-media-property';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { Property, Relation, Row } from '~/core/types';
 
 import { PositionBox } from '~/design-system/position-box';

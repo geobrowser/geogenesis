@@ -1,153 +1,34 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { Effect } from 'effect';
+import type { MainMediaProperty, PropertyLookup } from '~/core/blocks/data/resolve-main-media-property';
+import { resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 
-import type { BlockMediaKind } from '~/core/blocks/data/resolve-main-media-property';
-import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
-import { ID } from '~/core/id';
-import { getRelationsByFromEntityId } from '~/core/io/queries';
-import { useSpaceAwareRelation, useValues } from '~/core/sync/use-store';
-import { useEntityMedia } from '~/core/utils/use-entity-media';
+import { type BlockMediaDimensions, useBlockMediaDimensions } from './use-block-media-dimensions';
 
-function isDirectMediaUrl(value: string | null | undefined): value is string {
-  return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
-}
+export type BlockMainMedia = MainMediaProperty & {
+  dimensions: BlockMediaDimensions;
+};
 
 /**
- * Resolves the gallery/list main image URL for an entity.
+ * Block-level main media for list/gallery views
  */
-export function useBlockMainMediaUrl({
-  entityId,
-  spaceId,
-  mediaPropertyId,
-  mediaKind = 'IMAGE',
-  fallbackHint,
-}: {
-  entityId: string;
-  spaceId: string;
-  mediaPropertyId: string | null;
-  mediaKind?: BlockMediaKind;
-  fallbackHint?: string | null;
-}): string | undefined {
-  const cache = useQueryClient();
+export function useBlockMainMedia(
+  shownColumnIds: readonly string[],
+  properties: PropertyLookup
+): BlockMainMedia | null {
+  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
+  const dimensions = useBlockMediaDimensions(mainMedia?.propertyId);
 
-  const selectedRelation = useSpaceAwareRelation({
-    selector: r =>
-      Boolean(mediaPropertyId) && r.fromEntity.id === entityId && ID.equals(r.type.id, mediaPropertyId as string),
-    spaceId,
-  });
+  // Callers spread this into every row, and both `shownColumnIds` and the properties map are
+  // rebuilt each render upstream, so memoize on the resolved values rather than on their identity.
+  const propertyId = mainMedia?.propertyId ?? null;
+  const kind = mainMedia?.kind ?? null;
+  const name = mainMedia?.name ?? null;
 
-  const { avatarUrl, coverUrl } = useEntityMedia(mediaPropertyId ? undefined : entityId, spaceId);
-
-  const selectedEntityId = selectedRelation?.toEntity.id;
-  const selectedSpaceId = selectedRelation?.toSpaceId ?? spaceId;
-  const isVideoMedia = Boolean(
-    mediaPropertyId && (mediaKind === 'VIDEO' || selectedRelation?.renderableType === 'VIDEO')
+  return React.useMemo(
+    () => (propertyId && kind ? { propertyId, kind, name, dimensions } : null),
+    [propertyId, kind, name, dimensions]
   );
-
-  const storeKeyframeRelation = useSpaceAwareRelation({
-    selector: r =>
-      Boolean(isVideoMedia && selectedEntityId) &&
-      r.fromEntity.id === selectedEntityId &&
-      ID.equals(r.type.id, KEY_FRAME_IMAGE_PROPERTY),
-    spaceId: selectedSpaceId,
-  });
-
-  const [fetchedKeyframe, setFetchedKeyframe] = React.useState<{
-    videoEntityId: string;
-    imageEntityId?: string;
-    imageUrl?: string;
-  } | null>(null);
-
-  React.useEffect(() => {
-    if (!isVideoMedia || !selectedEntityId || storeKeyframeRelation) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchKeyframe = async () => {
-      try {
-        const relations = await cache.fetchQuery({
-          queryKey: ['network', 'relations-by-property', selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, selectedSpaceId],
-          queryFn: ({ signal }) =>
-            Effect.runPromise(
-              getRelationsByFromEntityId(selectedEntityId, KEY_FRAME_IMAGE_PROPERTY, selectedSpaceId, signal)
-            ),
-          staleTime: 5 * 60 * 1000,
-        });
-
-        const keyframe = relations[0];
-        if (!keyframe || cancelled) return;
-
-        const imageUrl = keyframe.toEntity.value;
-        setFetchedKeyframe({
-          videoEntityId: selectedEntityId,
-          imageEntityId: keyframe.toEntity.id,
-          imageUrl: typeof imageUrl === 'string' ? imageUrl : undefined,
-        });
-      } catch {}
-    };
-
-    void fetchKeyframe();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isVideoMedia, selectedEntityId, storeKeyframeRelation, selectedSpaceId, cache]);
-
-  const keyframeFromFetch =
-    fetchedKeyframe && fetchedKeyframe.videoEntityId === selectedEntityId ? fetchedKeyframe : null;
-
-  const imageSource = React.useMemo(() => {
-    if (isVideoMedia) {
-      return {
-        raw: storeKeyframeRelation?.toEntity.value ?? keyframeFromFetch?.imageUrl,
-        imageEntityId: storeKeyframeRelation?.toEntity.id ?? keyframeFromFetch?.imageEntityId,
-        imageSpaceId: storeKeyframeRelation?.toSpaceId ?? selectedSpaceId,
-      };
-    }
-
-    if (mediaPropertyId) {
-      return {
-        raw: selectedRelation?.toEntity.value,
-        imageEntityId: selectedEntityId,
-        imageSpaceId: selectedSpaceId,
-      };
-    }
-
-    return {
-      raw: coverUrl ?? avatarUrl ?? fallbackHint ?? undefined,
-      imageEntityId: undefined,
-      imageSpaceId: spaceId,
-    };
-  }, [
-    isVideoMedia,
-    mediaPropertyId,
-    storeKeyframeRelation,
-    keyframeFromFetch,
-    selectedRelation,
-    selectedEntityId,
-    selectedSpaceId,
-    coverUrl,
-    avatarUrl,
-    fallbackHint,
-    spaceId,
-  ]);
-
-  const lookupId = isDirectMediaUrl(imageSource.raw) ? undefined : imageSource.raw || imageSource.imageEntityId;
-
-  const imageValues = useValues({ selector: v => Boolean(lookupId) && v.entity.id === lookupId });
-
-  const lookedUp = React.useMemo(() => {
-    const urls = imageValues.filter(v => isDirectMediaUrl(v.value));
-    return urls.find(v => v.spaceId === imageSource.imageSpaceId)?.value ?? urls[0]?.value;
-  }, [imageValues, imageSource.imageSpaceId]);
-
-  if (isDirectMediaUrl(imageSource.raw)) return imageSource.raw;
-  return lookedUp ?? undefined;
 }

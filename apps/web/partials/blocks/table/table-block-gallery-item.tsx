@@ -8,9 +8,9 @@ import NextImage from 'next/image';
 import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media';
-import { type BlockMainMedia, blockMainMediaDimensions } from '~/core/hooks/use-block-main-media-property';
-import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
+import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -113,7 +113,7 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_PROPERTY);
 
-  const mediaFrame = blockMediaFrame(blockMainMediaDimensions(mainMedia));
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
   const mediaFrameClassName = cx(
     'relative w-full overflow-clip rounded-lg bg-grey-01',
     !mediaFrame.hasCustomHeight && 'aspect-2/1'

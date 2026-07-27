@@ -22,7 +22,7 @@ import {
   useOptimisticRows,
 } from '~/core/blocks/data/use-optimistic-rows';
 import { useSource } from '~/core/blocks/data/use-source';
-import { useBlockMainMedia } from '~/core/hooks/use-block-main-media-property';
+import { useBlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
