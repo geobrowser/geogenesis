@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -10,12 +10,14 @@ import { setCachedIdentityToken } from '~/core/auth/identity-token';
 import type { Debate, DebateActivity, DebateRematchSession } from './api';
 import {
   debateQueryKeys,
+  useClearDebateActivity,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
   useGeoChatAuth,
   useMarkDebateReady,
+  useUpdateDebateAvailability,
 } from './hooks';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   identityToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
   markDebateReady: vi.fn(),
+  updateDebateAvailability: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -42,6 +45,7 @@ vi.mock('./api', async importOriginal => {
     ...actual,
     consentToDebateRematch: mocks.consentToDebateRematch,
     markDebateReady: mocks.markDebateReady,
+    updateDebateAvailability: mocks.updateDebateAvailability,
   };
 });
 
@@ -57,6 +61,7 @@ describe('useGeoChatAuth', () => {
     mocks.identityToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
     mocks.markDebateReady.mockReset();
+    mocks.updateDebateAvailability.mockReset();
     setCachedIdentityToken(null);
   });
 
@@ -158,12 +163,75 @@ describe('useGeoChatAuth', () => {
   });
 });
 
+describe('useUpdateDebateAvailability', () => {
+  const availableActivity: DebateActivity = {
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: null,
+    debate: null,
+    rematch: null,
+  };
+
+  it('optimistically updates then reconciles the authoritative activity', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), availableActivity);
+    let resolveUpdate!: (activity: DebateActivity) => void;
+    mocks.updateDebateAvailability.mockReturnValue(
+      new Promise<DebateActivity>(resolve => {
+        resolveUpdate = resolve;
+      })
+    );
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useUpdateDebateAvailability(), { wrapper });
+
+    let mutation!: Promise<DebateActivity>;
+    act(() => {
+      mutation = result.current.mutateAsync(false);
+    });
+    await waitFor(() =>
+      expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual({
+        ...availableActivity,
+        available_to_debate: false,
+      })
+    );
+
+    const authoritative = { ...availableActivity, online: false, available_to_debate: false };
+    resolveUpdate(authoritative);
+    await act(async () => mutation);
+
+    expect(mocks.updateDebateAvailability).toHaveBeenCalledWith(false, expect.any(Function), 'user-a');
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(authoritative);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'] });
+  });
+
+  it('rolls the optimistic activity back when the request fails', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), availableActivity);
+    mocks.updateDebateAvailability.mockRejectedValue(new Error('unavailable'));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useUpdateDebateAvailability(), { wrapper });
+
+    await act(async () => {
+      await expect(result.current.mutateAsync(false)).rejects.toThrow('unavailable');
+    });
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(availableActivity);
+  });
+});
+
 describe('useConsentToDebateRematch', () => {
   it('replaces stale debate activity with the authoritative rematch session', async () => {
     const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
     const staleActivity: DebateActivity = {
       online: true,
+      available_to_debate: true,
       cooldown_until: null,
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
@@ -182,6 +250,7 @@ describe('useConsentToDebateRematch', () => {
 
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual({
       online: true,
+      available_to_debate: true,
       cooldown_until: null,
       match: null,
       debate: null,
@@ -218,6 +287,7 @@ describe('useClearTimedOutDebateActivity', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const activity: DebateActivity = {
       online: true,
+      available_to_debate: true,
       cooldown_until: '2026-07-02T00:10:00.000Z',
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
@@ -239,7 +309,96 @@ describe('useClearTimedOutDebateActivity', () => {
   });
 });
 
+describe('useClearDebateActivity', () => {
+  it('removes only the specified debate from the coordinator cache', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const activity: DebateActivity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: '2026-07-02T00:10:00.000Z',
+      match: null,
+      debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
+      rematch: null,
+    };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useClearDebateActivity(), { wrapper });
+
+    act(() => result.current('debate-1'));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual({
+      ...activity,
+      debate: null,
+    });
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});
+
 describe('debate query refresh behavior', () => {
+  it('hydrates debate and rematch detail caches from activity responses', async () => {
+    window.localStorage.setItem(
+      'geo:chat-session',
+      JSON.stringify({
+        account_key: 'user-a',
+        session: {
+          access_token: 'access-token',
+          refresh_token: 'refresh-token',
+          expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+        },
+      })
+    );
+    const debate = { id: 'debate-1' } as Debate;
+    const rematch = rematchSession();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            online: true,
+            available_to_debate: true,
+            cooldown_until: null,
+            match: null,
+            debate,
+            rematch: null,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            online: true,
+            available_to_debate: true,
+            cooldown_until: null,
+            match: null,
+            debate: null,
+            rematch,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+    vi.stubGlobal('fetch', fetch);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useDebateActivity(), { wrapper });
+
+    await waitFor(() => expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(debate));
+
+    await act(async () => {
+      await result.current.refetch();
+    });
+
+    expect(queryClient.getQueryData(debateQueryKeys.rematch('user-a', 'rematch-1'))).toEqual(rematch);
+    vi.unstubAllGlobals();
+    window.localStorage.clear();
+  });
+
   it('does not issue periodic debate reads while time advances', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -254,10 +413,20 @@ describe('debate query refresh behavior', () => {
       })
     );
     const fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ online: true, cooldown_until: null, match: null, debate: null, rematch: null }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      new Response(
+        JSON.stringify({
+          online: true,
+          available_to_debate: true,
+          cooldown_until: null,
+          match: null,
+          debate: null,
+          rematch: null,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     );
     vi.stubGlobal('fetch', fetch);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
