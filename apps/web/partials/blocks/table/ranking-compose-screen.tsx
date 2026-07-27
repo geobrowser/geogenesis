@@ -194,7 +194,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
     entityId: string;
@@ -203,7 +202,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     previewName?: string | null;
     previewDescription?: string | null;
   } | null>(null);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const mobilePageScrollRef = React.useRef<HTMLDivElement>(null);
 
   const myRankingIdSet = React.useMemo(() => new Set(orderedIds.map(id => ID.uuidToHex(id))), [orderedIds]);
@@ -613,9 +611,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
-          isSearchOpen={isSearchOpen}
-          onSearchOpenChange={setIsSearchOpen}
-          searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
           onCreateNew={handleCreateNew}
           canCreateNew={canCreateNew}
