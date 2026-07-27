@@ -21,6 +21,7 @@ import { Fullscreen } from '~/design-system/icons/full-screen';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
+import { RankingCardConfigProvider } from './ranking-card-config';
 import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingHeaderActions } from './ranking-header-actions';
@@ -31,6 +32,7 @@ import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
+import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { useRankingBlockState } from './use-ranking-block-state';
 
 type Props = {
@@ -43,6 +45,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const state = useRankingBlockState({ spaceId, rankingStartDate, rankingEndDate, paginateEmbeddedRanking: true });
   const isEditing = useUserIsEditing(spaceId);
   const {
+    cardConfig,
+    menuProps,
     filterState,
     resolvedFilterState,
     filterMode,
@@ -116,6 +120,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </div>
 
         <div className="flex shrink-0 items-center gap-5">
+          {isEditing ? <TableBlockPropertiesMenu {...menuProps} /> : null}
+
           {showHeaderActions ? <RankingHeaderActions state={state} /> : null}
 
           {showBrowseChrome ? (
@@ -227,17 +233,19 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
         </AnimatePresence>
       )}
 
-      {isGalleryView ? (
-        <RankingGalleryView state={state} />
-      ) : isListView ? (
-        <RankingListView state={state} />
-      ) : isPillView ? (
-        <RankingPillView state={state} />
-      ) : isExploreView ? (
-        <RankingExploreView state={state} />
-      ) : (
-        <RankingBlockBody state={state} presentation="embedded" />
-      )}
+      <RankingCardConfigProvider value={cardConfig}>
+        {isGalleryView ? (
+          <RankingGalleryView state={state} />
+        ) : isListView ? (
+          <RankingListView state={state} />
+        ) : isPillView ? (
+          <RankingPillView state={state} />
+        ) : isExploreView ? (
+          <RankingExploreView state={state} />
+        ) : (
+          <RankingBlockBody state={state} presentation="embedded" />
+        )}
+      </RankingCardConfigProvider>
     </div>
   );
 }

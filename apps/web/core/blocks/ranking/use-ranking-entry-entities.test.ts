@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '~/core/io/substream-schema';
 import type { Relation, Value } from '~/core/types';
 
-import { pickImage, pickRelationBySpace, pickValueBySpace } from './use-ranking-entry-entities';
+import { pickImage, pickImageByPreference, pickRelationBySpace, pickValueBySpace } from './use-ranking-entry-entities';
 
 // Real space IDs from getSpaceRank: Root=0, Crypto=2, Software=5.
 const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
@@ -137,5 +137,36 @@ describe('pickImage', () => {
 
   it('returns null when there are no avatar or cover relations', () => {
     expect(pickImage([], UNRANKED_SPACE)).toBeNull();
+  });
+});
+
+describe('pickImageByPreference (cover)', () => {
+  it('prefers a current-space cover over a current-space avatar', () => {
+    const relations = [
+      relation(AVATAR_TYPE, UNRANKED_SPACE, 'ipfs://current-avatar'),
+      relation(COVER_TYPE, UNRANKED_SPACE, 'ipfs://current-cover'),
+    ];
+    expect(pickImageByPreference(relations, UNRANKED_SPACE, 'cover')).toBe('ipfs://current-cover');
+  });
+
+  it('falls back to the avatar when there is no cover', () => {
+    const relations = [relation(AVATAR_TYPE, UNRANKED_SPACE, 'ipfs://current-avatar')];
+    expect(pickImageByPreference(relations, UNRANKED_SPACE, 'cover')).toBe('ipfs://current-avatar');
+  });
+
+  it('prefers a current-space cover over a ranked-space avatar', () => {
+    const relations = [
+      relation(AVATAR_TYPE, ROOT_SPACE, 'ipfs://root-avatar'),
+      relation(COVER_TYPE, UNRANKED_SPACE, 'ipfs://current-cover'),
+    ];
+    expect(pickImageByPreference(relations, UNRANKED_SPACE, 'cover')).toBe('ipfs://current-cover');
+  });
+
+  it('matches the avatar-preferring pickImage when preference is avatar', () => {
+    const relations = [
+      relation(AVATAR_TYPE, ROOT_SPACE, 'ipfs://root-avatar'),
+      relation(COVER_TYPE, UNRANKED_SPACE, 'ipfs://current-cover'),
+    ];
+    expect(pickImageByPreference(relations, UNRANKED_SPACE, 'avatar')).toBe(pickImage(relations, UNRANKED_SPACE));
   });
 });

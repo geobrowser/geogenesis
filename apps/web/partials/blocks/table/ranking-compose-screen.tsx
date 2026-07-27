@@ -43,6 +43,7 @@ import type { SearchResult } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
+import { RankingCardConfigProvider, buildRankingCardConfig } from './ranking-card-config';
 import { RankingComposeCreateEntityPanel } from './ranking-compose-create-entity-panel';
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeFullscreen } from './ranking-compose-fullscreen';
@@ -67,11 +68,16 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const searchParams = useSearchParams();
   const parentEntityId = searchParams?.get('parentEntityId') ?? '';
   const relationId = searchParams?.get('relationId') ?? '';
-  const { name, entityId, filterState } = useDataBlock();
+  const { name, entityId, filterState, properties, shownColumnIds, source } = useDataBlock();
   const displayName = name?.trim() || 'Untitled ranking';
 
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
+  const cardConfig = React.useMemo(
+    () => buildRankingCardConfig({ properties, shownColumnIds, source }),
+    [properties, shownColumnIds, source]
+  );
+  const cardImageProperty = cardConfig.imageProperty;
   const { showOnboarding } = useOnboarding();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
   const {
@@ -189,7 +195,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const { entries: rankableEntries, isLoading: isLoadingRankableEntries } = useRankingEntryEntities(
     spaceId,
-    allRankableEntityIds
+    allRankableEntityIds,
+    cardImageProperty
   );
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
@@ -262,7 +269,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const filteredRankedIds = isSearchActive ? searchRankedIds : browseRankedIds;
   const filteredUnrankedIds = isSearchActive ? searchUnrankedIds : browseUnrankedIds;
 
-  const { entries: searchEntries } = useRankingEntryEntities(spaceId, isSearchActive ? searchEntityIds : []);
+  const { entries: searchEntries } = useRankingEntryEntities(
+    spaceId,
+    isSearchActive ? searchEntityIds : [],
+    cardImageProperty
+  );
 
   const mySubmissionIdsKey = (mySubmission?.orderedEntityIds ?? []).join('|');
 
@@ -278,7 +289,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const displayMyEntityIds = orderedIds;
 
-  const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds);
+  const { entries: myEntries } = useRankingEntryEntities(spaceId, displayMyEntityIds, cardImageProperty);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
   const rankableEntriesByIdRaw = React.useMemo(
@@ -636,7 +647,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   }
 
   return (
-    <>
+    <RankingCardConfigProvider value={cardConfig}>
       <RankingComposeCreateEntityPanel onFinished={addToMyRanking} rankingName={displayName} />
       <RankingComposeEntitySheet target={entitySheetTarget} onClose={() => setEntitySheetTarget(null)} />
       <RankingComposeFullscreen coverNavbar={isMobile}>
@@ -681,6 +692,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           </div>
         )}
       </RankingComposeFullscreen>
-    </>
+    </RankingCardConfigProvider>
   );
 }
