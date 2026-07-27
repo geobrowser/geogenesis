@@ -21,6 +21,7 @@ import {
 } from '~/core/debates/debate-room-ownership';
 import {
   useAbortDebate,
+  useClearDebateActivity,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
@@ -158,6 +159,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
+  const clearDebateActivity = useClearDebateActivity();
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
   const [joinResponse, setJoinResponse] = React.useState<LiveKitJoinResponse | null>(null);
@@ -225,6 +227,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const serverNowRef = React.useRef(serverClock.now);
   const preflightEndsAtMsRef = React.useRef<number | null>(null);
   const finalizedDebateRef = React.useRef<string | null>(null);
+  const debateExitStartedRef = React.useRef(false);
   const recordingPersistenceStartedRef = React.useRef<string | null>(null);
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
   const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
@@ -270,6 +273,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
+  const shouldExitTerminalDebate = Boolean(
+    debate &&
+    recordingCancelledBy === null &&
+    ((debate.status === 'complete' && !debate.rematch_session_id) ||
+      (debate.status === 'cancelled' && debate.cancellation_reason !== 'connection_timeout'))
+  );
+  const shouldReturnFromTerminalDebate = shouldExitTerminalDebate && roomState === 'idle';
+  const hasRecordingPersistenceError = Boolean(
+    debate &&
+    debate.status === 'complete' &&
+    finalizedDebateRef.current === debate.id &&
+    roomState === 'connected' &&
+    roomError
+  );
+  const shouldHideTerminalDebate =
+    (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
+    (recordingCancelledBy !== null && !opponentCancelledRecording);
+
+  const returnFromDebate = React.useCallback(() => {
+    if (debateExitStartedRef.current) return;
+    debateExitStartedRef.current = true;
+    clearDebateActivity(debateId);
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(`/space/${spaceId}/debates`);
+  }, [clearDebateActivity, debateId, router, spaceId]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -1172,8 +1203,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       router.replace(`/space/${session.source_space_id}/debates/rematches/${session.id}`);
       return;
     }
-    router.replace(`/space/${spaceId}/debates`);
-  }, [debate, finishAndPersist, rematchQuery.data, router, spaceId]);
+    returnFromDebate();
+  }, [debate, finishAndPersist, rematchQuery.data, returnFromDebate, router]);
 
   const retryLiveDebateFinalization = React.useCallback(() => {
     if (debate?.status === 'thanking') {
@@ -1248,7 +1279,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      router.push(`/space/${spaceId}/debates`);
+      returnFromDebate();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
@@ -1259,8 +1290,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     finishLiveDebate,
     leaveRematch,
     persistStoppedLocalRecording,
-    router,
-    spaceId,
+    returnFromDebate,
   ]);
 
   const handleConnectionFailure = React.useCallback(() => {
@@ -1350,6 +1380,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       localMediaStreamRef.current = null;
     };
   }, [clearRecordingTimers, discardLocalRecorder]);
+
+  React.useEffect(() => {
+    if (!shouldReturnFromTerminalDebate) return;
+    returnFromDebate();
+  }, [returnFromDebate, shouldReturnFromTerminalDebate]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
@@ -1477,22 +1512,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteVideoReady(false);
     setRoomState('idle');
     // The canceller already saw the confirmation in the upload banner; only the opponent needs
-    // the "your debate was removed" popup, so send the canceller straight back to the list.
+    // the "your debate was removed" popup, so return the canceller to their previous page.
     if (!opponentCancelledRecording) {
-      router.replace(`/space/${spaceId}/debates`);
+      returnFromDebate();
     }
-  }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, router, spaceId]);
+  }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, returnFromDebate]);
+
+  if (debate && opponentCancelledRecording) {
+    return (
+      <DebateRecordingRemovedDialog
+        cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
+        claim={debate.claim.claim}
+        onAcknowledge={returnFromDebate}
+      />
+    );
+  }
+
+  if (shouldHideTerminalDebate) return null;
 
   return (
     <div className="py-8">
-      {debate && opponentCancelledRecording && (
-        <DebateRecordingRemovedDialog
-          cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
-          claim={debate.claim.claim}
-          onAcknowledge={() => router.replace(`/space/${spaceId}/debates`)}
-        />
-      )}
-
       {debate?.status !== 'ready' && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">

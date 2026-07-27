@@ -10,8 +10,11 @@ import type { Debate, DebateRematchSession } from '~/core/debates/api';
 import { DebateRoomPageClient } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
+  abortMutateAsync: vi.fn(),
+  clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
@@ -56,7 +59,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ back: mocks.back, push: mocks.push, replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -75,7 +78,8 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 vi.mock('~/core/debates/hooks', () => ({
-  useAbortDebate: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
+  useClearDebateActivity: () => mocks.clearDebateActivity,
   useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
   useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
@@ -153,8 +157,12 @@ function emitRoomEvent(event: string, payload?: unknown) {
 }
 
 beforeEach(() => {
+  setHistoryLength(1);
+  mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
+  mocks.abortMutateAsync.mockReset().mockResolvedValue(undefined);
+  mocks.clearDebateActivity.mockReset();
   mocks.consentMutateAsync.mockReset();
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
@@ -286,6 +294,46 @@ afterEach(() => {
 });
 
 describe('DebateRoomPageClient', () => {
+  it('returns through browser history without rendering an already-completed room', async () => {
+    setHistoryLength(2);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
+    expect(mocks.back).toHaveBeenCalledOnce();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the debates page when a cancelled room has no prior history', async () => {
+    setHistoryLength(1);
+    mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+  });
+
+  it('does not render the terminal room while returning a recording canceller', async () => {
+    setHistoryLength(2);
+    mocks.debate = {
+      ...completedDebate(),
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+  });
+
   it('shows the pre-screen while the debate is waiting for readiness', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
@@ -1300,7 +1348,7 @@ describe('DebateRoomPageClient', () => {
     expect(warning).toHaveBeenCalledWith('[DebateNoiseFilter] Krisp could not change state.', expect.any(Error));
   });
 
-  it('disables the Krisp switch while the recording is being saved', async () => {
+  it('hides debate controls while the terminal recording is being saved', async () => {
     const persistence = deferred<void>();
     mocks.featureFlags.debateDebugging = true;
     mocks.enqueueRecording.mockReturnValue(persistence.promise);
@@ -1313,7 +1361,7 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
-    expect(noiseFilterSwitch).toBeDisabled();
+    expect(noiseFilterSwitch).not.toBeInTheDocument();
 
     persistence.resolve();
   });
@@ -1912,14 +1960,6 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
   });
 
-  it('does not restart completion work when revisiting an already-completed debate', async () => {
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    expect(await screen.findByText('Debate complete.')).toBeInTheDocument();
-    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
-    expect(screen.queryByText('Continue debating this claim?')).not.toBeInTheDocument();
-  });
-
   it('shows rematch consent during thanking and records local consent', async () => {
     installRecordingMocks();
     const view = await renderLiveDebate();
@@ -2035,6 +2075,39 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Saving local recording' })).toBeDisabled();
   });
 
+  it('waits for durable recording persistence before returning to the previous page', async () => {
+    const persistence = deferred<void>();
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    persistence.resolve();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not render a cancelled room while cleaning up an active debate', async () => {
+    setHistoryLength(2);
+    const view = await renderLiveDebate();
+
+    mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+  });
+
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
@@ -2103,6 +2176,19 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  it('returns to the previous page after leaving an active debate', async () => {
+    setHistoryLength(2);
+    const view = await renderLiveDebate();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(mocks.back).toHaveBeenCalledOnce();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
   it('retains an in-memory recording after a quota failure and retries the same Blob', async () => {
     mocks.enqueueRecording.mockRejectedValueOnce(new DOMException('Storage full', 'QuotaExceededError'));
     installRecordingMocks();
@@ -2138,6 +2224,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
     expect(screen.getByText('Bri cancelled the upload of your debate')).toBeInTheDocument();
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
     // The local blob must be dropped so this tab never publishes the cancelled recording.
     await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith('user-a:debate-1'));
 
@@ -2360,4 +2447,8 @@ function rematchSession(status: DebateRematchSession['status']): DebateRematchSe
     created_at: '2026-07-02T00:01:10.000Z',
     updated_at: '2026-07-02T00:01:10.000Z',
   };
+}
+
+function setHistoryLength(length: number) {
+  Object.defineProperty(window.history, 'length', { configurable: true, value: length });
 }
