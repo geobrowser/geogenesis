@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { type ExploreTime, exploreTimeThresholdSec } from '~/core/explore/explore-time';
 import { ID } from '~/core/id';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -16,6 +17,7 @@ import { sortRows } from '~/core/utils/utils';
 import { useProperties } from '../../hooks/use-properties';
 import { DEFAULT_DATA_BLOCK_PAGE_SIZE } from './block-ontology-ids';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
+import { applyExploreBrowseWhere, refineExploreBlockTypeFilters } from './explore-browse-filters';
 import { Filter, FilterMode } from './filters';
 import { Source } from './source';
 import { useBlockPageSize } from './use-block-page-size';
@@ -48,6 +50,10 @@ interface UseDataBlockOptions {
   filterState?: Filter[];
   filterMode?: FilterMode;
   canEdit?: boolean;
+  exploreBrowseFilters?: {
+    time: ExploreTime;
+    selectedTypeIds: readonly string[] | undefined;
+  };
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
@@ -99,7 +105,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
   const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
-  const effectiveFilterState = options?.filterState ?? activeFilterState;
+  const baseFilterState = options?.filterState ?? activeFilterState;
   const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
   const {
     shownColumnIds,
@@ -120,11 +126,33 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { sortState, setSortState } = useSort(options?.canEdit);
   const pageSize = useBlockPageSize();
 
+  const applyExploreBrowseFilters = view === 'EXPLORE' && options?.exploreBrowseFilters !== undefined;
+  const typeRefinement = React.useMemo(
+    () =>
+      applyExploreBrowseFilters
+        ? refineExploreBlockTypeFilters(baseFilterState, options.exploreBrowseFilters?.selectedTypeIds)
+        : { filters: baseFilterState, hasConfiguredTypes: false, hasNoSelectedTypes: false },
+    [applyExploreBrowseFilters, baseFilterState, options?.exploreBrowseFilters?.selectedTypeIds]
+  );
+  const effectiveFilterState = typeRefinement.filters;
+
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
-  const where = React.useMemo(
+  const baseWhere = React.useMemo(
     () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
     [filterStateKey, effectiveFilterMode]
   );
+  const exploreTime = applyExploreBrowseFilters ? options.exploreBrowseFilters?.time : undefined;
+  const exploreTimeThreshold = React.useMemo(
+    () => (exploreTime ? exploreTimeThresholdSec(exploreTime) : null),
+    [exploreTime]
+  );
+  const where = React.useMemo<WhereCondition>(() => {
+    return applyExploreBrowseWhere(baseWhere, {
+      hasNoSelectedTypes: typeRefinement.hasNoSelectedTypes,
+      timeThresholdSec: exploreTimeThreshold,
+    });
+  }, [baseWhere, exploreTimeThreshold, typeRefinement.hasNoSelectedTypes]);
+  const whereKey = React.useMemo(() => stableStringify(where), [where]);
 
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds, spaceId);
@@ -368,12 +396,12 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const sortKey = React.useMemo(() => stableStringify(serverSort ?? null), [serverSort]);
   const lastResetKeyRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    const key = `${filterStateKey}::${sortKey}::${pageSize}`;
+    const key = `${whereKey}::${sortKey}::${pageSize}`;
     if (lastResetKeyRef.current !== null && lastResetKeyRef.current !== key) {
       resetPagination();
     }
     lastResetKeyRef.current = key;
-  }, [filterStateKey, sortKey, pageSize, resetPagination]);
+  }, [whereKey, sortKey, pageSize, resetPagination]);
 
   const totalPages = Math.ceil(collectionData.totalCount / pageSize);
   const sortedRows = React.useMemo(

@@ -58,6 +58,10 @@ function convertStringConditionToStringFilter(condition: StringCondition | undef
     filter.in = condition.in;
   }
 
+  if (condition.greaterThanOrEqualTo !== undefined) {
+    filter.greaterThanOrEqualTo = condition.greaterThanOrEqualTo;
+  }
+
   return Object.keys(filter).length > 0 ? filter : undefined;
 }
 
@@ -262,6 +266,10 @@ function convertWhereConditionToEntityFilterInner(where: WhereCondition): Entity
 
   if (where.description) {
     filter.description = convertStringConditionToStringFilter(where.description);
+  }
+
+  if (where.createdAt) {
+    filter.createdAt = convertStringConditionToStringFilter(where.createdAt);
   }
 
   // Handle types - convert to typeIds filter field.
