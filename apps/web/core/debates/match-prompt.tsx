@@ -68,7 +68,12 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       return;
     }
 
-    const waitingClaimIdSet = new Set(waitingClaimIds);
+    const waitingClaimIdSet = new Set([
+      ...waitingClaimIds,
+      ...matches
+        .filter(match => participantForUser(match, currentUserId)?.accepted === true)
+        .map(match => match.claim.id),
+    ]);
     if (waitingClaimIdSet.size === 0) return;
 
     const debate = debates.find(

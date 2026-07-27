@@ -175,6 +175,16 @@ describe('DebateMatchPrompt', () => {
 
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
+
+  it('moves a server-accepted participant into a debate while retaining the match', () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    expect(mocks.push).toHaveBeenCalledTimes(1);
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
 });
 
 function match(): DebateMatch {

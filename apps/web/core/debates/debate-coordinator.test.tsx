@@ -104,7 +104,7 @@ describe('DebateCoordinator', () => {
     view.rerender(<DebateCoordinator />);
 
     expect(screen.getByText('Global match prompt')).toBeInTheDocument();
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    expect(mocks.push).not.toHaveBeenCalledWith('/space/space-1/debates/debate-1');
 
     mocks.pathname = '/space/space-1/debates/debate-1';
     view.rerender(<DebateCoordinator />);

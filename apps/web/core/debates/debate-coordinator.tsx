@@ -55,7 +55,9 @@ export function DebateCoordinator() {
     const debate = activity.debate;
     const viewingRematch = pathname.includes('/debates/rematches/');
     if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
-      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
+      // The retained match prompt owns this handoff so it can deduplicate
+      // navigation from the accept response and the activity update.
+      if (!visibleMatch) router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
       return;
     }
     const rematch = activity.rematch;
@@ -72,7 +74,7 @@ export function DebateCoordinator() {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
-  }, [activity, pathname, router]);
+  }, [activity, pathname, router, visibleMatch]);
 
   if (!isDebatesEnabled) return null;
 
