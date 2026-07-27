@@ -273,15 +273,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
-  const shouldReturnFromTerminalDebate = Boolean(
+  const shouldExitTerminalDebate = Boolean(
     debate &&
-    roomState === 'idle' &&
     recordingCancelledBy === null &&
     ((debate.status === 'complete' && !debate.rematch_session_id) ||
       (debate.status === 'cancelled' && debate.cancellation_reason !== 'connection_timeout'))
   );
+  const shouldReturnFromTerminalDebate = shouldExitTerminalDebate && roomState === 'idle';
+  const hasRecordingPersistenceError = Boolean(
+    debate &&
+    debate.status === 'complete' &&
+    finalizedDebateRef.current === debate.id &&
+    roomState === 'connected' &&
+    roomError
+  );
   const shouldHideTerminalDebate =
-    shouldReturnFromTerminalDebate || (recordingCancelledBy !== null && !opponentCancelledRecording);
+    (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
+    (recordingCancelledBy !== null && !opponentCancelledRecording);
 
   const returnFromDebate = React.useCallback(() => {
     if (debateExitStartedRef.current) return;
@@ -1510,18 +1518,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, returnFromDebate]);
 
+  if (debate && opponentCancelledRecording) {
+    return (
+      <DebateRecordingRemovedDialog
+        cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
+        claim={debate.claim.claim}
+        onAcknowledge={returnFromDebate}
+      />
+    );
+  }
+
   if (shouldHideTerminalDebate) return null;
 
   return (
     <div className="py-8">
-      {debate && opponentCancelledRecording && (
-        <DebateRecordingRemovedDialog
-          cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
-          claim={debate.claim.claim}
-          onAcknowledge={returnFromDebate}
-        />
-      )}
-
       {debate?.status !== 'ready' && (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">

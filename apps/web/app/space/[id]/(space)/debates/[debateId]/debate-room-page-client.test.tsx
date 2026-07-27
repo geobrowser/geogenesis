@@ -1348,7 +1348,7 @@ describe('DebateRoomPageClient', () => {
     expect(warning).toHaveBeenCalledWith('[DebateNoiseFilter] Krisp could not change state.', expect.any(Error));
   });
 
-  it('disables the Krisp switch while the recording is being saved', async () => {
+  it('hides debate controls while the terminal recording is being saved', async () => {
     const persistence = deferred<void>();
     mocks.featureFlags.debateDebugging = true;
     mocks.enqueueRecording.mockReturnValue(persistence.promise);
@@ -1361,7 +1361,7 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
-    expect(noiseFilterSwitch).toBeDisabled();
+    expect(noiseFilterSwitch).not.toBeInTheDocument();
 
     persistence.resolve();
   });
@@ -2076,7 +2076,9 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('waits for durable recording persistence before returning to the previous page', async () => {
+    const persistence = deferred<void>();
     setHistoryLength(2);
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
     installRecordingMocks();
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
@@ -2085,9 +2087,25 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    persistence.resolve();
     await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('does not render a cancelled room while cleaning up an active debate', async () => {
+    setHistoryLength(2);
+    const view = await renderLiveDebate();
+
+    mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate cancelled.')).not.toBeInTheDocument();
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
@@ -2206,6 +2224,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
     expect(screen.getByText('Bri cancelled the upload of your debate')).toBeInTheDocument();
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
     // The local blob must be dropped so this tab never publishes the cancelled recording.
     await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith('user-a:debate-1'));
 
