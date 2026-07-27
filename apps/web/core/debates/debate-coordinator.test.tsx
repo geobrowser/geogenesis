@@ -94,6 +94,24 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  it('keeps the match prompt mounted until the debate route takes over', async () => {
+    mocks.activity = activityWithMatch();
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
+  });
+
   it('waits for the debate room to finalize its recording before routing to a rematch', async () => {
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.activity = activityWithRematch('browsing');
@@ -219,5 +237,43 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
       created_at: '2026-07-02T00:00:00.000Z',
       updated_at: '2026-07-02T00:00:00.000Z',
     },
+  };
+}
+
+function activityWithMatch(): DebateActivity {
+  return {
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: {
+      id: 'match-1',
+      status: 'pending',
+      claim: {
+        id: 'claim-1',
+        space_id: 'space-1',
+        claim_entity_id: 'claim-entity-1',
+        claim: 'Debates should hand off without flashing the page',
+        description: null,
+      },
+      participants: [],
+      turn_format_id: null,
+      debate_id: null,
+      created_at: '2026-07-02T00:00:00.000Z',
+      updated_at: '2026-07-02T00:00:00.000Z',
+    },
+    debate: null,
+    rematch: null,
+  };
+}
+
+function activityWithDebate(): DebateActivity {
+  const matchActivity = activityWithMatch();
+  return {
+    ...matchActivity,
+    match: null,
+    debate: {
+      id: 'debate-1',
+      claim: matchActivity.match!.claim,
+    } as NonNullable<DebateActivity['debate']>,
   };
 }

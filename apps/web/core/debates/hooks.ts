@@ -143,12 +143,22 @@ export function useUpdateDebatePreference(spaceId: string) {
 }
 
 export function useDebateActivity(enabled = true) {
+  const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.activity(accountKey),
-    queryFn: ({ signal }) => getDebateActivity(getPrivyIdentityToken, accountKey, signal),
+    queryFn: async ({ signal }) => {
+      const activity = await getDebateActivity(getPrivyIdentityToken, accountKey, signal);
+      if (activity.debate) {
+        queryClient.setQueryData(debateQueryKeys.debate(activity.debate.id), activity.debate);
+      }
+      if (activity.rematch) {
+        queryClient.setQueryData(debateQueryKeys.rematch(accountKey, activity.rematch.id), activity.rematch);
+      }
+      return activity;
+    },
     enabled: enabled && authenticated,
   });
 }

@@ -10,6 +10,7 @@ import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
+import type { DebateMatch } from './api';
 import { useDebateGateway } from './debate-gateway';
 import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
@@ -27,8 +28,27 @@ export function DebateCoordinator() {
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;
+  const match = activity?.match ?? null;
+  const debate = activity?.debate ?? null;
+  const lastMatchRef = React.useRef<DebateMatch | null>(null);
+  const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
+  const retainedMatch =
+    !match && debate && !viewingDebate && lastMatchRef.current?.claim.id === debate.claim.id
+      ? lastMatchRef.current
+      : null;
+  const visibleMatch = match ?? retainedMatch;
   const activeFlow = Boolean(activity?.match || activity?.debate || activity?.rematch);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
+
+  React.useEffect(() => {
+    if (match) {
+      lastMatchRef.current = match;
+      return;
+    }
+    if (!debate || viewingDebate) {
+      lastMatchRef.current = null;
+    }
+  }, [debate, match, viewingDebate]);
 
   React.useEffect(() => {
     if (!activity) return;
@@ -54,7 +74,6 @@ export function DebateCoordinator() {
     }
   }, [activity, pathname, router]);
 
-  const match = activity?.match;
   if (!isDebatesEnabled) return null;
 
   return (
@@ -68,10 +87,10 @@ export function DebateCoordinator() {
           Live debate updates are paused while reconnecting.
         </div>
       )}
-      {match && (
+      {visibleMatch && (
         <DebateMatchPrompt
-          spaceId={match.claim.space_id}
-          matches={[match]}
+          spaceId={visibleMatch.claim.space_id}
+          matches={[visibleMatch]}
           debates={activity?.debate ? [activity.debate] : []}
         />
       )}

@@ -2031,6 +2031,8 @@ describe('DebateRoomPageClient', () => {
 
     persistence.resolve();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Saving local recording' })).toBeDisabled();
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {

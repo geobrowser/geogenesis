@@ -16,6 +16,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  queryClient: { setQueryData: vi.fn() },
   useQuery: vi.fn((options: unknown) => options),
   useScope: vi.fn(),
 }));
@@ -27,6 +28,7 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: mocks.useQuery,
+  useQueryClient: () => mocks.queryClient,
 }));
 
 vi.mock('~/core/auth/identity-token', () => ({
@@ -40,6 +42,7 @@ vi.mock('./debate-gateway', () => ({
 
 beforeEach(() => {
   mocks.authenticated = true;
+  mocks.queryClient.setQueryData.mockClear();
   mocks.useQuery.mockClear();
   mocks.useScope.mockClear();
 });
