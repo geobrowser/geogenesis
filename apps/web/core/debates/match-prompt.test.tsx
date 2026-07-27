@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { FeatureFlagId } from '~/core/state/feature-flags';
 
 import type { Debate, DebateMatch } from './api';
 import { defaultDebateFormatId } from './formats';
@@ -12,10 +14,17 @@ const mocks = vi.hoisted(() => ({
   currentUserId: vi.fn(),
   acceptMutate: vi.fn(),
   declineMutate: vi.fn(),
+  featureFlags: {
+    debateFormatSelector: false,
+  } as Partial<Record<FeatureFlagId, boolean>>,
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push }),
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: FeatureFlagId) => mocks.featureFlags[id] ?? false,
 }));
 
 vi.mock('./api', async importOriginal => {
@@ -42,6 +51,9 @@ beforeEach(() => {
   mocks.currentUserId.mockReturnValue('user-for');
   mocks.acceptMutate.mockReset();
   mocks.declineMutate.mockReset();
+  mocks.featureFlags = {
+    debateFormatSelector: false,
+  };
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
 });
@@ -51,23 +63,62 @@ afterEach(() => {
 });
 
 describe('DebateMatchPrompt', () => {
-  it('opens a match modal and the first participant accepts with the default format', () => {
+  it('opens a match modal and disables accept immediately after submitting the default format', () => {
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      options.onSuccess({ match: { ...match(), debate_id: 'debate-1' }, debate: debate() });
+    });
+
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
     expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Debate request')).toBeInTheDocument();
     expect(screen.getByText('Bri makes an argument')).toBeInTheDocument();
 
-    // The format selector is hidden to match the Figma design, so no format is chosen in the UI —
-    // the first participant accepts with the match's default format.
     expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    const acceptButton = screen.getByRole('button', { name: 'Accept' });
+    expect(acceptButton).toBeEnabled();
+
+    fireEvent.click(acceptButton);
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith(
       { matchId: 'match-1', formatId: defaultDebateFormatId },
       expect.any(Object)
     );
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+    expect(acceptButton).toBeDisabled();
+  });
+
+  it('lets the first participant choose a format when the feature flag is enabled', () => {
+    mocks.featureFlags.debateFormatSelector = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    fireEvent.change(screen.getByLabelText('Debate format'), { target: { value: 'extended-standard' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(mocks.acceptMutate).toHaveBeenCalledWith(
+      { matchId: 'match-1', formatId: 'extended-standard' },
+      expect.any(Object)
+    );
+  });
+
+  it('re-enables accept when submitting the match fails', () => {
+    let failRequest = () => {};
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      failRequest = () => options.onError();
+    });
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    const acceptButton = screen.getByRole('button', { name: 'Accept' });
+    fireEvent.click(acceptButton);
+
+    expect(acceptButton).toBeDisabled();
+
+    act(failRequest);
+
+    expect(acceptButton).toBeEnabled();
   });
 
   it('renders participants as avatar and name without a per-participant menu or position pill', () => {
@@ -94,6 +145,7 @@ describe('DebateMatchPrompt', () => {
 
   it('hides the format selector from the second participant', () => {
     mocks.currentUserId.mockReturnValue('user-against');
+    mocks.featureFlags.debateFormatSelector = true;
 
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
@@ -103,6 +155,17 @@ describe('DebateMatchPrompt', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(mocks.acceptMutate).toHaveBeenCalledWith({ matchId: 'match-1', formatId: undefined }, expect.any(Object));
+  });
+
+  it('hides the format selector after the first participant has accepted', () => {
+    mocks.featureFlags.debateFormatSelector = true;
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} />);
+
+    expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
   });
 
   it('rejects the matched person for the question', () => {
@@ -115,6 +178,7 @@ describe('DebateMatchPrompt', () => {
   });
 
   it('moves the first accepter into the debate once polling shows it exists', () => {
+    mocks.featureFlags.debateFormatSelector = true;
     mocks.acceptMutate.mockImplementation((_variables, options) => {
       options.onSuccess({
         match: {
@@ -132,9 +196,20 @@ describe('DebateMatchPrompt', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
     expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
 
     rerender(<DebateMatchPrompt spaceId="space-1" matches={[]} debates={[debate()]} />);
 
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  it('moves a server-accepted participant into a debate while retaining the match', () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    expect(mocks.push).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 });

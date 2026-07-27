@@ -2,13 +2,20 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
+
 import { Effect } from 'effect';
 
-import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
+import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
 import { getEntity, getEntityBacklinks } from '~/core/io/queries';
-import { useAvatar, useCover, useDescription, useEntityTypes, useName } from '~/core/state/entity-page-store/entity-store';
+import {
+  useAvatar,
+  useCover,
+  useDescription,
+  useEntityTypes,
+  useName,
+} from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Cell } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';

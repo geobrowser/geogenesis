@@ -22,6 +22,9 @@ export const HIDDEN_PROPERTIES: ReadonlySet<string> = new Set([SCORE_SYSTEM_PROP
 
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
 
+/** Image-renderable property on a Video entity that holds its extracted keyframe still. */
+export const KEY_FRAME_IMAGE_PROPERTY = '7379342cf33e48e1b54fb015b3ef0f86';
+
 // Topic taxonomy
 /** Entity type for Topic — used to identify Topic entities via the standard TYPES_PROPERTY. */
 export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';

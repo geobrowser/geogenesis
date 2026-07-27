@@ -9,9 +9,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
@@ -25,8 +25,8 @@ import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingHeaderActions } from './ranking-header-actions';
 import { RankingListView } from './ranking-list-view';
-import { RankingPillView } from './ranking-pill-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
+import { RankingPillView } from './ranking-pill-view';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
@@ -77,11 +77,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   );
   const isExploreView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
-      stateView === 'EXPLORE'
+    stateView === 'EXPLORE'
   );
 
   const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
-  
+
   const showBrowseChrome = !showHeaderActions || isEditing;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);

@@ -2,8 +2,8 @@
 
 import * as React from 'react';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -12,7 +12,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
-import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
 function RankingPillItem({
@@ -67,11 +66,6 @@ export function RankingPillView({ state }: Props) {
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
     entriesResolving,
-    hasRankedByOthers,
-    submissions,
-    aggregatedSubmitterSpaceIds,
-    aggregatedRankingCount,
-    periodState,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -106,26 +100,14 @@ export function RankingPillView({ state }: Props) {
     <div className="flex w-full min-w-0 flex-col gap-4">
       <div className="flex flex-wrap gap-2">
         {pills}
-        {showLoadingPills
-          ? globalDisplayEntityIds.map(entityId => <RankingPillItemSkeleton key={entityId} />)
-          : null}
+        {showLoadingPills ? globalDisplayEntityIds.map(entityId => <RankingPillItemSkeleton key={entityId} />) : null}
       </div>
       {!entriesResolving && pills.length === 0 && totalGlobalRankingEntityCount === 0 ? (
         <p className="text-metadata text-grey-04">No published items yet</p>
       ) : null}
 
-      <div className="mt-1 flex w-full items-end justify-between gap-3">
-        <RankingPeriodMetadata
-          className="mt-0"
-          periodState={periodState}
-          periodLabel={null}
-          hasRankedByOthers={hasRankedByOthers}
-          submissions={submissions}
-          aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
-          aggregatedRankingCount={aggregatedRankingCount}
-        />
-
-        {showEmbeddedGlobalPagination ? (
+      {showEmbeddedGlobalPagination ? (
+        <div className="mt-1 flex w-full items-end justify-end">
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
               pageNumber={embeddedGlobalPageNumber}
@@ -134,8 +116,8 @@ export function RankingPillView({ state }: Props) {
               onSetPage={setEmbeddedGlobalPage}
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -8,8 +8,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
-import { getBatchEntities } from '~/core/io/queries';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
+import { getBatchEntities } from '~/core/io/queries';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';

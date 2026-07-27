@@ -20,17 +20,33 @@ const mocks = vi.hoisted(() => ({
   requestPersistentStorage: vi.fn(),
   estimateStorage: vi.fn(),
   mediaRecorderStart: vi.fn(),
+  mediaRecorderConstruct: vi.fn(),
   readyMutateAsync: vi.fn(),
   liveKitJoinMutateAsync: vi.fn(),
   markJoinedMutateAsync: vi.fn(),
   createLocalTracks: vi.fn(),
+  krispNoiseFilter: vi.fn(),
+  krispSupported: vi.fn(),
+  krispSetEnabled: vi.fn(),
+  krispIsEnabled: vi.fn(),
+  krispDestroy: vi.fn(),
   roomConnect: vi.fn(),
+  roomConstruct: vi.fn(),
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
+  supportsAudioOutputSelection: vi.fn(),
+  selectAudioOutput: vi.fn(),
+  enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
   clearTimedOutDebateActivity: vi.fn(),
   roomOn: vi.fn(),
+  ownershipAcquire: vi.fn(),
+  ownershipRequestTakeover: vi.fn(),
+  ownershipRelease: vi.fn(),
+  ownershipClose: vi.fn(),
+  ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
@@ -81,9 +97,27 @@ vi.mock('~/core/debates/recording-upload-queue', () => ({
   requestPersistentRecordingStorage: mocks.requestPersistentStorage,
 }));
 
+vi.mock('~/core/debates/debate-room-ownership', () => ({
+  createDebateRoomOwnershipCoordinator: (options: { onTakeoverRequested: () => boolean | Promise<boolean> }) => {
+    mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
+    return {
+      instanceId: 'connection-instance-1',
+      acquire: mocks.ownershipAcquire,
+      requestTakeover: mocks.ownershipRequestTakeover,
+      release: mocks.ownershipRelease,
+      close: mocks.ownershipClose,
+      ownsConnection: () => true,
+    };
+  },
+}));
+
 vi.mock('livekit-client', () => ({
   createLocalTracks: mocks.createLocalTracks,
   Room: class {
+    constructor(options: unknown) {
+      mocks.roomConstruct(options);
+    }
+
     localParticipant = {
       publishTrack: mocks.publishTrack,
     };
@@ -92,11 +126,31 @@ vi.mock('livekit-client', () => ({
     connect = mocks.roomConnect;
     disconnect = mocks.roomDisconnect;
   },
+  supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
+    TrackUnsubscribed: 'trackUnsubscribed',
     ParticipantConnected: 'participantConnected',
+    Reconnecting: 'reconnecting',
+    Reconnected: 'reconnected',
+    Disconnected: 'disconnected',
+  },
+  DisconnectReason: {
+    CLIENT_INITIATED: 1,
+    DUPLICATE_IDENTITY: 2,
   },
 }));
+
+vi.mock('@livekit/krisp-noise-filter', () => ({
+  isKrispNoiseFilterSupported: mocks.krispSupported,
+  KrispNoiseFilter: mocks.krispNoiseFilter,
+}));
+
+function emitRoomEvent(event: string, payload?: unknown) {
+  for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
+    if (registeredEvent === event) callback(payload);
+  }
+}
 
 beforeEach(() => {
   mocks.push.mockReset();
@@ -109,17 +163,48 @@ beforeEach(() => {
   mocks.requestPersistentStorage.mockReset();
   mocks.estimateStorage.mockReset();
   mocks.mediaRecorderStart.mockReset();
+  mocks.mediaRecorderConstruct.mockReset();
   mocks.readyMutateAsync.mockReset();
   mocks.liveKitJoinMutateAsync.mockReset();
   mocks.markJoinedMutateAsync.mockReset();
   mocks.createLocalTracks.mockReset();
+  mocks.krispNoiseFilter.mockReset();
+  mocks.krispSupported.mockReset().mockReturnValue(true);
+  mocks.krispSetEnabled.mockReset().mockResolvedValue(undefined);
+  mocks.krispIsEnabled.mockReset().mockReturnValue(true);
+  mocks.krispDestroy.mockReset().mockResolvedValue(undefined);
   mocks.roomConnect.mockReset();
+  mocks.roomConstruct.mockReset();
   mocks.roomDisconnect.mockReset();
   mocks.publishTrack.mockReset();
+  mocks.supportsAudioOutputSelection.mockReset().mockReturnValue(true);
+  mocks.selectAudioOutput.mockReset().mockImplementation(({ deviceId }: { deviceId: string }) =>
+    Promise.resolve({
+      kind: 'audiooutput',
+      deviceId,
+      groupId: 'speaker-group',
+      label: deviceId === 'speaker-2' ? 'Studio Speakers' : 'System default',
+      toJSON: () => ({}),
+    })
+  );
+  mocks.enumerateDevices.mockReset().mockResolvedValue([
+    { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+    { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+    { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+    { kind: 'audiooutput', deviceId: 'speaker-2', groupId: 'speaker-group-2', label: 'Studio Speakers' },
+    { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    { kind: 'videoinput', deviceId: 'camera-2', groupId: 'camera-group-2', label: 'Desk Camera' },
+  ]);
   mocks.getServerTime.mockReset();
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
+  mocks.ownershipAcquire.mockReset().mockResolvedValue(true);
+  mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
+  mocks.ownershipRelease.mockReset();
+  mocks.ownershipClose.mockReset();
+  mocks.ownershipTakeoverHandler = null;
+  mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
   mocks.rematch = null;
   mocks.featureFlags = {
@@ -136,8 +221,14 @@ beforeEach(() => {
     position: true,
     position_label: 'Yes',
   });
+  mocks.krispNoiseFilter.mockImplementation(() => ({
+    processedTrack: { kind: 'audio', enabled: true, id: 'krisp-processed-audio' },
+    setEnabled: mocks.krispSetEnabled,
+    isEnabled: mocks.krispIsEnabled,
+    destroy: mocks.krispDestroy,
+  }));
   mocks.createLocalTracks.mockResolvedValue([
-    { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    createLocalAudioTrack(),
     { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
   ]);
   mocks.roomConnect.mockResolvedValue(undefined);
@@ -170,14 +261,17 @@ beforeEach(() => {
     configurable: true,
     value: {
       getUserMedia: vi.fn().mockResolvedValue(new MediaStream()),
-      enumerateDevices: vi.fn().mockResolvedValue([
-        { kind: 'audioinput', deviceId: 'mic-1', label: 'Shure MV7+' },
-        { kind: 'audioinput', deviceId: 'mic-2', label: 'Studio Mic' },
-        { kind: 'videoinput', deviceId: 'camera-1', label: 'HD Pro Webcam' },
-        { kind: 'videoinput', deviceId: 'camera-2', label: 'Desk Camera' },
-      ]),
+      enumerateDevices: mocks.enumerateDevices,
+      selectAudioOutput: mocks.selectAudioOutput,
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'devicechange') mocks.deviceChangeHandler = handler;
+      }),
+      removeEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'devicechange' && mocks.deviceChangeHandler === handler) mocks.deviceChangeHandler = null;
+      }),
     },
   });
+  setMobileLayout(false);
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
     configurable: true,
     value: vi.fn().mockResolvedValue(undefined),
@@ -201,7 +295,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -213,17 +307,28 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('starts the camera preview after the Strict Mode effect rehearsal', async () => {
+  it('blocks readiness while the combined camera and microphone request is pending', async () => {
+    const pendingTracks =
+      deferred<
+        Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
+      >();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
-    render(
-      <StrictMode>
-        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
-      </StrictMode>
-    );
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(screen.queryByText('Starting camera...')).not.toBeInTheDocument());
-    expect(document.querySelector('video')?.srcObject).toBeInstanceOf(MediaStream);
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: true,
+        video: true,
+      })
+    );
+    expect(screen.getByText('Requesting access to your camera and microphone…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+
+    pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -240,18 +345,23 @@ describe('DebateRoomPageClient', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
-  it('lets participants choose microphone and camera devices from the pre-screen', async () => {
+  it('lets participants choose microphone and camera devices from desktop settings menus', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Select microphone' })).toHaveValue('mic-1');
-    });
-    expect(screen.getByRole('combobox', { name: 'Select camera' })).toHaveValue('camera-1');
+    const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
+    expect(audioTrigger).toHaveAttribute('data-state', 'closed');
+    fireEvent.click(audioTrigger);
+    const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
+    expect(audioSettings).toHaveAttribute('data-side', 'top');
+    expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
+    expect(audioTrigger).toHaveAttribute('data-state', 'open');
+    expect(audioTrigger).toHaveAttribute('aria-controls', audioSettings.id);
+    expect(screen.getByText('Select a microphone')).toBeInTheDocument();
+    expect(screen.getByText('Select a speaker')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Select microphone' }), { target: { value: 'mic-2' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Select camera' }), { target: { value: 'camera-2' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
@@ -259,6 +369,13 @@ describe('DebateRoomPageClient', () => {
         video: { deviceId: 'camera-1' },
       });
     });
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Video settings' }));
+    expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
+
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },
@@ -267,22 +384,377 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
-  it('shows the opponent as ready while the local participant can still become ready', () => {
+  it('shows the designed permission recovery state and retries access', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Permission denied by system policy'), { name: 'NotAllowedError' })
+    );
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps readiness blocked when either required input is unavailable', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValueOnce([createLocalAudioTrack()]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  it('cleans up acquired tracks when device enumeration fails', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValueOnce([audioTrack, videoTrack]);
+    mocks.enumerateDevices.mockRejectedValueOnce(new Error('Device enumeration failed'));
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(
+      await screen.findByText('We could not start your camera and microphone. Check your devices and try again.')
+    ).toBeInTheDocument();
+    expect(audioTrack.stop).toHaveBeenCalled();
+    expect(videoTrack.stop).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  it('changes speaker output without restarting capture and hands the selection to LiveKit', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const selectedOutput = deferred<MediaDeviceInfo>();
+    mocks.selectAudioOutput.mockReturnValueOnce(selectedOutput.promise);
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledWith({ deviceId: 'speaker-2' }));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
+    expect(mocks.roomConstruct).not.toHaveBeenCalled();
+
+    act(() =>
+      selectedOutput.resolve({
+        kind: 'audiooutput',
+        deviceId: 'speaker-2',
+        groupId: 'speaker-group-2',
+        label: 'Studio Speakers',
+        toJSON: () => ({}),
+      })
+    );
+
+    await waitFor(() =>
+      expect(mocks.roomConstruct).toHaveBeenCalledWith({
+        adaptiveStream: false,
+        dynacast: false,
+        audioOutput: { deviceId: 'speaker-2' },
+      })
+    );
+  });
+
+  it('falls back to a non-editable System default when speaker routing is unsupported', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.supportsAudioOutputSelection.mockReturnValue(false);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
+    expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+  });
+
+  it('falls back to System default when speaker authorization is rejected', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled());
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(screen.getByText('This browser could not route audio to that speaker. Using System default.')).toBeVisible();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
+    expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
+  });
+
+  it('ignores an older speaker authorization that finishes after the latest choice', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'audiooutput', deviceId: 'speaker-2', groupId: 'speaker-group-2', label: 'Studio Speakers' },
+      { kind: 'audiooutput', deviceId: 'speaker-3', groupId: 'speaker-group-3', label: 'Display Speakers' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    ]);
+    const olderSelection = deferred<MediaDeviceInfo>();
+    const latestSelection = deferred<MediaDeviceInfo>();
+    mocks.selectAudioOutput.mockImplementation(({ deviceId }: { deviceId: string }) =>
+      deviceId === 'speaker-2' ? olderSelection.promise : latestSelection.promise
+    );
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+
+    act(() =>
+      latestSelection.resolve({
+        kind: 'audiooutput',
+        deviceId: 'speaker-3',
+        groupId: 'speaker-group-3',
+        label: 'Display Speakers',
+        toJSON: () => ({}),
+      })
+    );
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Display Speakers' })).toBeChecked());
+
+    act(() => olderSelection.reject(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' })));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Display Speakers' })).toBeChecked());
+    expect(screen.queryByText(/could not route audio/i)).not.toBeInTheDocument();
+  });
+
+  it('closes desktop settings with Escape and returns focus to the trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const settings = screen.getByRole('dialog', { name: 'Audio settings' });
+
+    fireEvent.keyDown(settings, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('closes desktop settings on outside click and returns focus to the trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+    await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
+
+    fireEvent.pointerDown(document.body, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(document.body);
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('toggles desktop settings closed from the active trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+  });
+
+  it('supports keyboard device selection without closing the desktop menu', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
+    selectedCamera.focus();
+
+    fireEvent.keyDown(selectedCamera, { key: 'ArrowDown' });
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-1' },
+        video: { deviceId: 'camera-2' },
+      })
+    );
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
+  });
+
+  it('keeps the desktop menu open while a selected input is restarting', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    const pendingTracks =
+      deferred<
+        Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
+      >();
+    mocks.createLocalTracks.mockReturnValueOnce(pendingTracks.promise);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+
+    pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+  });
+
+  it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+    const videos = document.querySelectorAll('video');
+    expect(videos).toHaveLength(2);
+    expect(videos[0]?.srcObject).toBe(videos[1]?.srcObject);
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens mobile audio settings with microphone and speaker groups', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+    expect(screen.getByText('Select a microphone')).toBeInTheDocument();
+    expect(screen.getByText('Select a speaker')).toBeInTheDocument();
+  });
+
+  it('returns focus to the mobile settings trigger after closing the sheet', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Audio settings' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('preserves valid device selections and restarts capture when a selected device is removed', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-2' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+    const callCountWithValidSelection = mocks.createLocalTracks.mock.calls.length;
+
+    act(() => mocks.deviceChangeHandler?.());
+    await waitFor(() => expect(mocks.enumerateDevices).toHaveBeenCalled());
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(callCountWithValidSelection);
+
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+      { kind: 'videoinput', deviceId: 'camera-2', groupId: 'camera-group-2', label: 'Desk Camera' },
+    ]);
+    act(() => mocks.deviceChangeHandler?.());
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-1' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+  });
+
+  it('ignores stale device enumeration results during rapid hardware changes', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await screen.findByRole('button', { name: 'Accept' });
+    const olderEnumeration = deferred<MediaDeviceInfo[]>();
+    mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
+      { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    ]);
+
+    act(() => mocks.deviceChangeHandler?.());
+    act(() => mocks.deviceChangeHandler?.());
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-2' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+
+    act(() =>
+      olderEnumeration.resolve([
+        { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+        { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+        { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+      ] as MediaDeviceInfo[])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
+  });
+
+  it('shows the opponent as ready while the local participant can still become ready', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: true });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
   });
 
-  it('disables the ready button while waiting for the opponent', () => {
+  it('disables the ready button while waiting for the opponent', async () => {
     mocks.debate = readyDebate({ localReady: true, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
     expect(screen.getAllByText('Waiting...')).toHaveLength(2);
   });
 
@@ -291,7 +763,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -314,9 +786,229 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => {
       expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
     });
+    // markJoined fires before publishTrack, so slow WebRTC media negotiation can't push us past
+    // the connecting deadline while both participants are already in the room.
     const joinedCallOrder = mocks.markJoinedMutateAsync.mock.invocationCallOrder[0];
     expect(mocks.publishTrack).toHaveBeenCalledTimes(2);
-    expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder < joinedCallOrder)).toBe(true);
+    expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
+  });
+
+  it('does not mint a token when another tab owns the participant connection', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.roomConnect).not.toHaveBeenCalled();
+  });
+
+  it('takes over a connection-phase debate before minting a new token', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue here' }));
+
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.ownershipRequestTakeover.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.liveKitJoinMutateAsync.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('disconnects an in-flight LiveKit room before handing ownership to another tab', async () => {
+    const pendingConnection = deferred<void>();
+    mocks.roomConnect.mockReturnValue(pendingConnection.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+
+    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
+    expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
+
+    pendingConnection.resolve();
+  });
+
+  it('does not allow a secondary tab to take over an active debate recording', async () => {
+    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Continue here' })).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Continue the debate in the original tab or device to preserve its recording.')
+    ).toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('does not hand off a stale preflight after the first turn has started locally', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:09.000Z'));
+    const monotonicNow = vi.spyOn(performance, 'now').mockReturnValue(1_000);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'preflight',
+      preflight_ends_at: '2026-07-02T00:00:10.000Z',
+      started_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.getServerTime).toHaveBeenCalledTimes(3));
+
+    // Cross the boundary without advancing React's 500ms countdown timer. The ownership callback
+    // must compare against the clock directly instead of trusting the last rendered status.
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
+    monotonicNow.mockReturnValue(3_000);
+    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(false);
+    expect(mocks.roomDisconnect).not.toHaveBeenCalled();
+  });
+
+  it('retries publishing when the media engine is slow to connect', async () => {
+    vi.useFakeTimers();
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    mocks.publishTrack
+      .mockRejectedValueOnce(new Error('publishing rejected as engine not connected within timeout'))
+      .mockResolvedValue(undefined);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+
+    expect(mocks.markJoinedMutateAsync).toHaveBeenCalled();
+    // Track 1 rejects once then succeeds on retry (2 calls); track 2 succeeds first try (1 call).
+    expect(mocks.publishTrack).toHaveBeenCalledTimes(3);
+  });
+
+  it('detaches a remote track that drops mid-debate instead of freezing the tile', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    act(() => emitRoomEvent('trackUnsubscribed', track));
+    expect(track.detach).toHaveBeenCalled();
+    expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(screen.getByText('Reconnecting to the debate room…')).toBeInTheDocument();
+
+    act(() => emitRoomEvent('reconnected'));
+    expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument();
+  });
+
+  it('shows an error on an unexpected disconnect but ignores our own teardown', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // CLIENT_INITIATED (our own disconnect) must not surface an error.
+    act(() => emitRoomEvent('disconnected', 1));
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+  });
+
+  it('explains when LiveKit disconnects a duplicate participant identity', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 2));
+
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    expect(mocks.ownershipRelease).toHaveBeenCalled();
+  });
+
+  it('does not resume an in-flight join after a duplicate-identity disconnect', async () => {
+    const pendingJoin = deferred<void>();
+    mocks.markJoinedMutateAsync.mockReturnValue(pendingJoin.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+
+    act(() => emitRoomEvent('disconnected', 2));
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+
+    pendingJoin.resolve();
+    await waitFor(() => expect(mocks.roomDisconnect).toHaveBeenCalled());
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+    expect(screen.getByText('This debate is active in another tab or device.')).toBeInTheDocument();
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
@@ -416,12 +1108,16 @@ describe('DebateRoomPageClient', () => {
     expect(
       document.querySelector('[data-inactive-speaker="remote"] [data-muted-indicator="true"]')
     ).toBeInTheDocument();
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
-  it('shows the yes participant above the no participant when the local participant chose no', async () => {
+  it('keeps the remote speaking turn in color and orders yes above no when the local participant chose no', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
+      first_participant_slot: 2,
       current_turn_index: 0,
       current_speaker_slot: 2,
       turn_started_at: '2026-07-02T00:00:10.000Z',
@@ -441,6 +1137,11 @@ describe('DebateRoomPageClient', () => {
     expect(tiles.map(tile => tile.getAttribute('data-debate-video-position'))).toEqual(['yes', 'no']);
     expect(tiles[0]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'remote');
     expect(tiles[1]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'local');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-black/45');
+    expect(document.querySelector('[data-inactive-speaker="local"] [data-muted-indicator="true"]')).toBeInTheDocument();
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
   it('shows recording debug controls when debate debugging is enabled', async () => {
@@ -449,8 +1150,9 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
+      first_participant_slot: 2,
       current_turn_index: 0,
-      current_speaker_slot: 1,
+      current_speaker_slot: 2,
       turn_started_at: '2026-07-02T00:00:10.000Z',
       turn_ends_at: '2026-07-02T00:00:40.000Z',
       completed_at: null,
@@ -468,6 +1170,310 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Timed turn 1').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Timed turn 2').closest('li')).not.toHaveAttribute('aria-current');
     expect(screen.getByText('Thanking').closest('li')).not.toHaveAttribute('aria-current');
+
+    const remoteVideo = document.createElement('video');
+    const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
+    act(() => trackSubscribed?.({ attach: () => remoteVideo }));
+    expect(remoteVideo.muted).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable audio' }));
+
+    await waitFor(() => expect(remoteVideo.muted).toBe(true));
+    expectDebateVideoTileInColor('remote');
+  });
+
+  it('enables Krisp by default and records the processed microphone track', async () => {
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    await waitFor(() => expect(audioTrack.setProcessor).toHaveBeenCalledOnce());
+    expect(audioTrack.setProcessor.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.publishTrack.mock.invocationCallOrder[0]
+    );
+    expect(mocks.krispSetEnabled).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+    const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+    expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+    expect(screen.queryByRole('switch', { name: 'Krisp noise filter' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the Krisp source and processed tracks aligned with turn-based microphone state', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+    const audioTrack = createLocalAudioTrack();
+    const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
+    mocks.krispNoiseFilter.mockReturnValue({
+      processedTrack,
+      setEnabled: mocks.krispSetEnabled,
+      isEnabled: mocks.krispIsEnabled,
+      destroy: mocks.krispDestroy,
+    });
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    const view = await renderLiveDebate({
+      first_participant_slot: 2,
+      current_speaker_slot: 2,
+    });
+
+    await waitFor(() => expect(audioTrack.setProcessor).toHaveBeenCalledOnce());
+    expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(false);
+    expect(processedTrack.enabled).toBe(false);
+
+    mocks.debate = {
+      ...mocks.debate!,
+      started_at: '2026-07-01T23:59:40.000Z',
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(true));
+    expect(processedTrack.enabled).toBe(true);
+  });
+
+  it('toggles Krisp from the debate debug controls without restarting the recorder', async () => {
+    mocks.featureFlags.debateDebugging = true;
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'true'));
+    expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce();
+
+    fireEvent.click(noiseFilterSwitch);
+
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenLastCalledWith(false));
+    expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'false');
+    expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce();
+
+    fireEvent.click(noiseFilterSwitch);
+
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenLastCalledWith(true));
+    expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce();
+  });
+
+  it('disables the Krisp switch while a toggle is pending', async () => {
+    const disabling = deferred<void>();
+    mocks.featureFlags.debateDebugging = true;
+
+    await renderLiveDebate();
+
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
+    mocks.krispSetEnabled.mockReturnValueOnce(disabling.promise);
+    fireEvent.click(noiseFilterSwitch);
+
+    expect(noiseFilterSwitch).toBeDisabled();
+    expect(screen.getByText('Saving…')).toBeInTheDocument();
+
+    disabling.resolve();
+
+    await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
+    expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('marks Krisp unavailable when a live toggle fails', async () => {
+    mocks.featureFlags.debateDebugging = true;
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await renderLiveDebate();
+
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
+    mocks.krispSetEnabled.mockRejectedValueOnce(new Error('Processor stopped'));
+    fireEvent.click(noiseFilterSwitch);
+
+    expect(await screen.findByText('Failed')).toBeInTheDocument();
+    expect(noiseFilterSwitch).toBeDisabled();
+    expect(warning).toHaveBeenCalledWith('[DebateNoiseFilter] Krisp could not change state.', expect.any(Error));
+  });
+
+  it('disables the Krisp switch while the recording is being saved', async () => {
+    const persistence = deferred<void>();
+    mocks.featureFlags.debateDebugging = true;
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
+
+    mocks.debate = completedDebate();
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+    expect(noiseFilterSwitch).toBeDisabled();
+
+    persistence.resolve();
+  });
+
+  it('keeps the debate connected with the browser microphone track when Krisp is unsupported', async () => {
+    const audioTrack = createLocalAudioTrack();
+    mocks.krispSupported.mockReturnValue(false);
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.featureFlags.debateDebugging = true;
+    installRecordingMocks();
+
+    await renderLiveDebate();
+
+    expect(await screen.findByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Krisp noise filter' })).toBeDisabled();
+    expect(audioTrack.setProcessor).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+    const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+    expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'browser-audio' });
+    expect(screen.queryByText(/Could not join the debate room/)).not.toBeInTheDocument();
+  });
+
+  it('shows Krisp as loading and disables the debug switch while initialization is pending', async () => {
+    const initialization = deferred<void>();
+    mocks.featureFlags.debateDebugging = true;
+    mocks.krispSetEnabled.mockReturnValue(initialization.promise);
+
+    await renderLiveDebate();
+
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    expect(noiseFilterSwitch).toBeDisabled();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+
+    initialization.resolve();
+
+    await waitFor(() => expect(noiseFilterSwitch).toBeEnabled());
+    expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('falls back to the browser microphone track when Krisp initialization fails', async () => {
+    const audioTrack = createLocalAudioTrack();
+    audioTrack.setProcessor.mockRejectedValue(new Error('Model download failed'));
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.featureFlags.debateDebugging = true;
+    installRecordingMocks();
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    await renderLiveDebate();
+
+    expect(await screen.findByText('Failed')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Krisp noise filter' })).toBeDisabled();
+    await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+    const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+    expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'browser-audio' });
+    expect(screen.queryByText(/Could not join the debate room/)).not.toBeInTheDocument();
+    expect(warning).toHaveBeenCalledWith(
+      '[DebateNoiseFilter] Krisp initialization failed; using the browser microphone track.',
+      expect.any(Error)
+    );
+    expect(mocks.krispDestroy).toHaveBeenCalledOnce();
+    expect(audioTrack.stopProcessor).not.toHaveBeenCalled();
+  });
+
+  it('reapplies the local Krisp preference after a manual connection retry', async () => {
+    const disabling = deferred<void>();
+    const firstAudioTrack = createLocalAudioTrack();
+    const retriedAudioTrack = createLocalAudioTrack();
+    mocks.krispSetEnabled.mockImplementation((enabled: boolean) =>
+      enabled ? Promise.resolve(undefined) : disabling.promise
+    );
+    mocks.createLocalTracks
+      .mockResolvedValueOnce([
+        firstAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ])
+      .mockResolvedValueOnce([
+        retriedAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+    mocks.featureFlags.debateDebugging = true;
+
+    await renderLiveDebate();
+
+    const noiseFilterSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(noiseFilterSwitch).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(noiseFilterSwitch);
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenLastCalledWith(false));
+
+    act(() => emitRoomEvent('disconnected', 99));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry connection' }));
+
+    await waitFor(() => expect(retriedAudioTrack.setProcessor).toHaveBeenCalledOnce());
+    disabling.resolve();
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenLastCalledWith(false));
+    expect(mocks.krispSetEnabled.mock.calls.filter(([enabled]) => enabled === false)).toHaveLength(2);
+    expect(await screen.findByRole('switch', { name: 'Krisp noise filter' })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('does not let an old toggle clear a newer processor toggle after reconnecting', async () => {
+    const oldDisabling = deferred<void>();
+    const newEnabling = deferred<void>();
+    const firstAudioTrack = createLocalAudioTrack();
+    const retriedAudioTrack = createLocalAudioTrack();
+    const oldSetEnabled = vi.fn((enabled: boolean) => (enabled ? Promise.resolve(undefined) : oldDisabling.promise));
+    const newSetEnabled = vi.fn((enabled: boolean) => (enabled ? newEnabling.promise : Promise.resolve(undefined)));
+    mocks.krispNoiseFilter
+      .mockReturnValueOnce({
+        processedTrack: { kind: 'audio', enabled: true, id: 'old-krisp-audio' },
+        setEnabled: oldSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
+      })
+      .mockReturnValueOnce({
+        processedTrack: { kind: 'audio', enabled: true, id: 'new-krisp-audio' },
+        setEnabled: newSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
+      });
+    mocks.createLocalTracks
+      .mockResolvedValueOnce([
+        firstAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ])
+      .mockResolvedValueOnce([
+        retriedAudioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+    mocks.featureFlags.debateDebugging = true;
+
+    await renderLiveDebate();
+
+    const firstSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(firstSwitch).toBeEnabled());
+    fireEvent.click(firstSwitch);
+    await waitFor(() => expect(oldSetEnabled).toHaveBeenLastCalledWith(false));
+
+    act(() => emitRoomEvent('disconnected', 99));
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry connection' }));
+
+    const retriedSwitch = await screen.findByRole('switch', { name: 'Krisp noise filter' });
+    await waitFor(() => expect(retriedSwitch).toBeEnabled());
+    expect(retriedSwitch).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(retriedSwitch);
+    expect(retriedSwitch).toBeDisabled();
+
+    oldDisabling.resolve();
+
+    await waitFor(() => expect(oldSetEnabled).toHaveResolved());
+    expect(retriedSwitch).toBeDisabled();
+
+    newEnabling.resolve();
+
+    await waitFor(() => expect(retriedSwitch).toBeEnabled());
+    expect(retriedSwitch).toHaveAttribute('aria-checked', 'true');
   });
 
   it('shows the circular phase timer during a timed debate turn', async () => {
@@ -505,6 +1511,10 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
     expect(screen.getAllByText('5')).not.toHaveLength(0);
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    expectDebateVideoTileInColor('local');
+    expectDebateVideoTileInColor('remote');
   });
 
   it('advances a synchronized countdown between debate refetches', async () => {
@@ -1021,6 +2031,8 @@ describe('DebateRoomPageClient', () => {
 
     persistence.resolve();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Saving local recording' })).toBeDisabled();
   });
 
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
@@ -1134,7 +2146,7 @@ describe('DebateRoomPageClient', () => {
   });
 });
 
-async function renderLiveDebate() {
+async function renderLiveDebate(overrides: Partial<Debate> = {}) {
   mocks.debate = {
     ...completedDebate(),
     status: 'in_progress',
@@ -1142,10 +2154,17 @@ async function renderLiveDebate() {
     turn_started_at: '2026-07-02T00:00:10.000Z',
     turn_ends_at: '2026-07-02T00:00:40.000Z',
     completed_at: null,
+    ...overrides,
   };
   const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
   await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
   return view;
+}
+
+function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
+  const tile = document.querySelector(`[data-inactive-speaker="${participant}"]`)?.closest('section');
+  expect(tile).not.toBeNull();
+  expect(tile).not.toHaveClass('grayscale');
 }
 
 function installRecordingMocks() {
@@ -1160,6 +2179,11 @@ function installRecordingMocks() {
       state: RecordingState = 'inactive';
       mimeType = 'video/webm';
       ondataavailable: ((event: BlobEvent) => void) | null = null;
+
+      constructor(stream: MediaStream) {
+        super();
+        mocks.mediaRecorderConstruct(stream);
+      }
 
       start() {
         this.state = 'recording';
@@ -1180,12 +2204,50 @@ function installRecordingMocks() {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
 }
 
+function createLocalAudioTrack() {
+  const browserTrack = { kind: 'audio', enabled: true, id: 'browser-audio' };
+  let processor: { processedTrack?: { kind: string; enabled: boolean; id: string } } | null = null;
+
+  return {
+    sourceMediaStreamTrack: browserTrack,
+    get mediaStreamTrack() {
+      return processor?.processedTrack ?? browserTrack;
+    },
+    setProcessor: vi.fn(async (nextProcessor: typeof processor) => {
+      processor = nextProcessor;
+    }),
+    stopProcessor: vi.fn(async () => {
+      processor = null;
+    }),
+    stop: vi.fn(),
+    detach: vi.fn(),
+  };
+}
+
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>(resolvePromise => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+function setMobileLayout(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 767px)' ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  );
 }
 
 function completedDebate(): Debate {

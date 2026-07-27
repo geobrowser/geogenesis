@@ -17,8 +17,7 @@ import { RankingBlockGlobalPagination } from './ranking-block-global-pagination'
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
-const ROW_NAME_CLASS =
-  'block text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text';
+const ROW_NAME_CLASS = 'block text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-text';
 const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3';
 const ROW_RANK_CLASS =
   'w-5 shrink-0 text-center text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 tabular-nums';
@@ -119,10 +118,7 @@ export function RankingListView({ state }: Props) {
         {rows}
         {showLoadingRows
           ? globalDisplayEntityIds.map(entityId => (
-              <RankingListRowSkeleton
-                key={entityId}
-                rank={globalRankByEntityId.get(entityId) ?? 0}
-              />
+              <RankingListRowSkeleton key={entityId} rank={globalRankByEntityId.get(entityId) ?? 0} />
             ))
           : null}
       </div>

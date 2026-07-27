@@ -41,16 +41,6 @@ export function getRollingExpiryMs(submittedAtMs: number, frequencyHours: number
   return submittedAtMs + frequencyHours * MS_PER_HOUR;
 }
 
-export function isCreatedWithinWindow(
-  createdAt: string | number | undefined | null,
-  frequencyHours: number,
-  now: number
-): boolean {
-  const createdAtMs = parseTimestampMs(createdAt);
-  if (createdAtMs === 0) return true;
-  return createdAtMs >= now - frequencyHours * MS_PER_HOUR;
-}
-
 export function formatRollingSubmissionLabel({
   hasSubmission,
   isLive,
@@ -65,15 +55,13 @@ export function formatRollingSubmissionLabel({
   now: number;
 }): string | null {
   if (!hasSubmission) return null;
-  if (!isLive) return 'Your ranking has rolled off — submit a fresh ranking';
+  if (!isLive) return null;
 
   if (!frequencyHours || submittedAtMs === 0) return 'Your ranking is live';
 
   const expiresInMs = getRollingExpiryMs(submittedAtMs, frequencyHours) - now;
-  if (expiresInMs <= 0) return 'Your ranking has rolled off — submit a fresh ranking';
-
   const hours = Math.ceil(expiresInMs / MS_PER_HOUR);
-  if (hours >= 48) return `Your ranking expires in ${Math.ceil(hours / 24)} days`;
-  if (hours === 1) return 'Your ranking expires in 1 hr';
-  return `Your ranking expires in ${hours} hrs`;
+  if (hours >= 48) return `Vote again in ${Math.ceil(hours / 24)} days`;
+  if (hours === 1) return 'Vote again in 1 hr';
+  return `Vote again in ${hours} hrs`;
 }

@@ -6,9 +6,9 @@ import * as React from 'react';
 
 import equal from 'fast-deep-equal';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
-import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reactiveRelations } from '~/core/sync/store';

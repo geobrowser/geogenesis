@@ -21,12 +21,12 @@ import {
   getRankingPeriodState,
   rankingSubmissionsOpen,
 } from '~/core/blocks/ranking/ranking-period';
-import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import {
   getRowDescription,
   getRowDisplayName,
   splitRankableEntityIds,
 } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { useRankingAccumulatedRows } from '~/core/blocks/ranking/use-ranking-accumulated-rows';
 import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-dates';
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';

@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -27,6 +29,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   const currentUserId = getCurrentGeoChatUserId();
   const [selectedFormatIds, setSelectedFormatIds] = React.useState<Record<string, DebateFormatId>>({});
   const [acceptedMatchIds, setAcceptedMatchIds] = React.useState<string[]>([]);
+  const [acceptingMatchId, setAcceptingMatchId] = React.useState<string | null>(null);
   const [waitingClaimIds, setWaitingClaimIds] = React.useState<string[]>([]);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
@@ -44,6 +47,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   React.useEffect(() => {
     const activeIds = new Set(matches.map(match => match.id));
     setAcceptedMatchIds(current => current.filter(id => activeIds.has(id)));
+    setAcceptingMatchId(current => (current && activeIds.has(current) ? current : null));
     setDismissedMatchIds(current => current.filter(id => activeIds.has(id)));
     setMinimizedMatchIds(current => current.filter(id => activeIds.has(id)));
     setSelectedFormatIds(
@@ -66,7 +70,12 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       return;
     }
 
-    const waitingClaimIdSet = new Set(waitingClaimIds);
+    const waitingClaimIdSet = new Set([
+      ...waitingClaimIds,
+      ...matches
+        .filter(match => participantForUser(match, currentUserId)?.accepted === true)
+        .map(match => match.claim.id),
+    ]);
     if (waitingClaimIdSet.size === 0) return;
 
     const debate = debates.find(
@@ -124,13 +133,14 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
       : declineMatch.error instanceof Error
         ? declineMatch.error.message
         : null;
-  const busy = acceptMatch.isPending || declineMatch.isPending;
+  const busy = acceptingMatchId === activeMatch.id || acceptMatch.isPending || declineMatch.isPending;
 
   const setSelectedFormatId = (formatId: DebateFormatId) => {
     setSelectedFormatIds(current => ({ ...current, [activeMatch.id]: formatId }));
   };
 
   const accept = () => {
+    setAcceptingMatchId(activeMatch.id);
     acceptMatch.mutate(
       {
         matchId: activeMatch.id,
@@ -144,8 +154,12 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
             navigateToDebate(debateId);
             return;
           }
+          setAcceptingMatchId(null);
           setAcceptedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
           setWaitingClaimIds(current => Array.from(new Set([...current, activeMatch.claim.id])));
+        },
+        onError: () => {
+          setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
         },
       }
     );
@@ -189,8 +203,7 @@ export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatc
   );
 }
 
-// Built but hidden: the Figma match-request design omits these controls. Flip to re-enable.
-const SHOW_FORMAT_SELECTOR = false; // first participant picking the turn format
+// Built but hidden: the Figma match-request design omits these labels. Flip to re-enable.
 const SHOW_POSITION_LABELS = false; // Yes/No pills under each name + the "You chose X." line
 
 function MatchDialog({
@@ -214,6 +227,7 @@ function MatchDialog({
   onDecline: () => void;
   onFormatChange: (formatId: DebateFormatId) => void;
 }) {
+  const debateFormatSelectorEnabled = useFeatureFlag('debateFormatSelector');
   const myParticipant = participantForUser(match, currentUserId);
   const canChooseFormat = myParticipant?.participant_slot === 1 && !waiting;
   const participants = orderedParticipants(match);
@@ -258,7 +272,7 @@ function MatchDialog({
               <Text as="h3" variant="metadata" color="text">
                 Debate format
               </Text>
-              {SHOW_FORMAT_SELECTOR && !waiting && canChooseFormat && (
+              {debateFormatSelectorEnabled && canChooseFormat && (
                 <DebateFormatSelector
                   value={selectedFormatId}
                   selectedFormatId={match.turn_format_id}

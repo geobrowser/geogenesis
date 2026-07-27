@@ -534,38 +534,9 @@ function CommentList({
 }) {
   const hi = useCommentBranchHighlight();
 
-  if (depth === 0) {
-    return (
-      <div>
-        {comments.map((comment, index) => (
-          <CommentItem
-            key={comment.id}
-            comment={comment}
-            entityId={entityId}
-            spaceId={spaceId}
-            onReply={onReply}
-            onEdit={onEdit}
-            personalSpaceId={personalSpaceId}
-            editorSpaceIds={editorSpaceIds}
-            isThreadCollapsed={isThreadCollapsed}
-            toggleThreadCollapsed={toggleThreadCollapsed}
-            sortReplies={sortReplies}
-            isLoggedIn={isLoggedIn}
-            onSignInRequired={onSignInRequired}
-            isLast={index === comments.length - 1}
-            depth={depth}
-            ancestors={ancestors}
-          />
-        ))}
-      </div>
-    );
-  }
-
-  // Nested replies with connector lines.
-  // This container lives inside the parent comment's ml-[44px] body area.
-  // The parent's avatar center is at -28px from this container's left edge.
-  // We render a single continuous vertical line spanning from top to the last reply's
-  // avatar center, then each reply gets a horizontal arm (or curve for the last one).
+  // Keep these hooks above the depth === 0 early return so the hook count stays
+  // unconditional (Rules of Hooks). They're inert on that path (containerRef never
+  // attaches there).
   const containerRef = React.useRef<HTMLDivElement>(null);
   const lastReplyRef = React.useRef<HTMLDivElement>(null);
   const [lastReplyTop, setLastReplyTop] = React.useState<number | null>(null);
@@ -602,6 +573,38 @@ function CommentList({
     };
   }, [listLayoutKey, updateLastReplyTop]);
 
+  if (depth === 0) {
+    return (
+      <div>
+        {comments.map((comment, index) => (
+          <CommentItem
+            key={comment.id}
+            comment={comment}
+            entityId={entityId}
+            spaceId={spaceId}
+            onReply={onReply}
+            onEdit={onEdit}
+            personalSpaceId={personalSpaceId}
+            editorSpaceIds={editorSpaceIds}
+            isThreadCollapsed={isThreadCollapsed}
+            toggleThreadCollapsed={toggleThreadCollapsed}
+            sortReplies={sortReplies}
+            isLoggedIn={isLoggedIn}
+            onSignInRequired={onSignInRequired}
+            isLast={index === comments.length - 1}
+            depth={depth}
+            ancestors={ancestors}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  // Nested replies with connector lines.
+  // This container lives inside the parent comment's ml-[44px] body area.
+  // The parent's avatar center is at -28px from this container's left edge.
+  // We render a single continuous vertical line spanning from top to the last reply's
+  // avatar center, then each reply gets a horizontal arm (or curve for the last one).
   const parentBundle =
     parentCommentId != null && hi.focus?.kind === 'parent-thread' && hi.focus.threadCommentId === parentCommentId;
   const listSpineLit = parentBundle || (parentCommentId != null && hi.spinePressedListParentId === parentCommentId);

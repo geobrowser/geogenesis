@@ -10,12 +10,9 @@ import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Text } from '~/design-system/text';
 
-import {
-  useDebateActivity,
-  useDebatePresenceHeartbeat,
-  useDebateSharePrompts,
-  useHandleDebateSharePrompt,
-} from './hooks';
+import type { DebateMatch } from './api';
+import { useDebateGateway } from './debate-gateway';
+import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
 import { ProcessedDebatePlayer } from './processed-debate-player';
 
@@ -23,18 +20,44 @@ export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
   const isDebatesEnabled = useDebatesEnabled();
-  useDebatePresenceHeartbeat(isDebatesEnabled);
+  const geoChatAuth = useGeoChatAuth();
+  const gateway = useDebateGateway(
+    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;
+  const match = activity?.match ?? null;
+  const debate = activity?.debate ?? null;
+  const lastMatchRef = React.useRef<DebateMatch | null>(null);
+  const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
+  const retainedMatch =
+    !match && debate && !viewingDebate && lastMatchRef.current?.claim.id === debate.claim.id
+      ? lastMatchRef.current
+      : null;
+  const visibleMatch = match ?? retainedMatch;
   const activeFlow = Boolean(activity?.match || activity?.debate || activity?.rematch);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
+
+  React.useEffect(() => {
+    if (match) {
+      lastMatchRef.current = match;
+      return;
+    }
+    if (!debate || viewingDebate) {
+      lastMatchRef.current = null;
+    }
+  }, [debate, match, viewingDebate]);
 
   React.useEffect(() => {
     if (!activity) return;
     const debate = activity.debate;
     const viewingRematch = pathname.includes('/debates/rematches/');
     if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
-      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
+      // The retained match prompt owns this handoff so it can deduplicate
+      // navigation from the accept response and the activity update.
+      if (!visibleMatch) router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
       return;
     }
     const rematch = activity.rematch;
@@ -51,17 +74,25 @@ export function DebateCoordinator() {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
-  }, [activity, pathname, router]);
+  }, [activity, pathname, router, visibleMatch]);
 
-  const match = activity?.match;
   if (!isDebatesEnabled) return null;
 
   return (
     <>
-      {match && (
+      {gateway.paused && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card sm:w-auto"
+        >
+          Live debate updates are paused while reconnecting.
+        </div>
+      )}
+      {visibleMatch && (
         <DebateMatchPrompt
-          spaceId={match.claim.space_id}
-          matches={[match]}
+          spaceId={visibleMatch.claim.space_id}
+          matches={[visibleMatch]}
           debates={activity?.debate ? [activity.debate] : []}
         />
       )}

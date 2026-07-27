@@ -41,7 +41,7 @@ function RankingGalleryCard({
         </div>
       </Link>
       <Link href={href} className="mt-2 block" draggable={false}>
-        <p className="line-clamp-2 text-[19px] font-medium leading-[1.3] text-text">{name}</p>
+        <p className="line-clamp-2 text-[19px] leading-[1.3] font-medium text-text">{name}</p>
       </Link>
     </div>
   );
