@@ -1,5 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +16,13 @@ const mocks = vi.hoisted(() => ({
   currentUserId: vi.fn(),
   acceptMutate: vi.fn(),
   declineMutate: vi.fn(),
+  markReadyMutate: vi.fn(),
+  markReadyPending: false,
+  abortMutate: vi.fn(),
+  beginMediaSession: vi.fn(),
+  promoteMediaSession: vi.fn(),
+  releaseMediaSession: vi.fn(),
+  ensurePreview: vi.fn(),
   featureFlags: {
     debateFormatSelector: false,
   } as Partial<Record<FeatureFlagId, boolean>>,
@@ -25,6 +34,10 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: FeatureFlagId) => mocks.featureFlags[id] ?? false,
+}));
+
+vi.mock('~/core/community-calls/use-is-mobile-call-layout', () => ({
+  useIsMobileCallLayout: () => false,
 }));
 
 vi.mock('./api', async importOriginal => {
@@ -43,14 +56,57 @@ vi.mock('./hooks', async importOriginal => {
     ...actual,
     useAcceptDebateMatch: () => ({ mutate: mocks.acceptMutate, isPending: false, error: null }),
     useDeclineDebateMatch: () => ({ mutate: mocks.declineMutate, isPending: false, error: null }),
+    useMarkDebateReady: () => ({ mutate: mocks.markReadyMutate, isPending: mocks.markReadyPending, error: null }),
+    useAbortDebate: () => ({ mutate: mocks.abortMutate, isPending: false, error: null }),
   };
 });
+
+vi.mock('./media-session', () => ({
+  DebateMediaSessionBoundary: ({ children }: { children: React.ReactNode }) => children,
+  debateMatchMediaSessionKey: (matchId: string) => `match:${matchId}`,
+  debateMediaSessionKey: (debateId: string) => `debate:${debateId}`,
+  systemDefaultAudioOutput: {
+    deviceId: 'default',
+    groupId: 'default',
+    kind: 'audiooutput',
+    label: 'System default',
+  },
+  useDebateMediaSession: () => ({
+    activeSessionKey: null,
+    previewState: 'ready',
+    previewBusy: false,
+    previewError: null,
+    previewStream: null,
+    audioInputDevices: [],
+    audioOutputDevices: [],
+    videoInputDevices: [],
+    selectedAudioInputId: '',
+    selectedAudioOutputId: 'default',
+    selectedVideoInputId: '',
+    audioOutputSupported: false,
+    audioOutputError: null,
+    beginSession: mocks.beginMediaSession,
+    promoteSession: mocks.promoteMediaSession,
+    releaseSession: mocks.releaseMediaSession,
+    ensurePreview: mocks.ensurePreview,
+    changeAudioInput: vi.fn(),
+    changeAudioOutput: vi.fn(),
+    changeVideoInput: vi.fn(),
+  }),
+}));
 
 beforeEach(() => {
   mocks.push.mockReset();
   mocks.currentUserId.mockReturnValue('user-for');
   mocks.acceptMutate.mockReset();
   mocks.declineMutate.mockReset();
+  mocks.markReadyMutate.mockReset();
+  mocks.markReadyPending = false;
+  mocks.abortMutate.mockReset();
+  mocks.beginMediaSession.mockReset();
+  mocks.promoteMediaSession.mockReset();
+  mocks.releaseMediaSession.mockReset();
+  mocks.ensurePreview.mockReset().mockResolvedValue(previewTracks());
   mocks.featureFlags = {
     debateFormatSelector: false,
   };
@@ -164,7 +220,8 @@ describe('DebateMatchPrompt', () => {
 
     render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} />);
 
-    expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
+    expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
   });
 
@@ -177,7 +234,7 @@ describe('DebateMatchPrompt', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('moves the first accepter into the debate once polling shows it exists', () => {
+  it('shows the device pre-screen immediately and moves the first accepter once the debate exists', () => {
     mocks.featureFlags.debateFormatSelector = true;
     mocks.acceptMutate.mockImplementation((_variables, options) => {
       options.onSuccess({
@@ -195,8 +252,10 @@ describe('DebateMatchPrompt', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
-    expect(screen.getByText('Waiting for the other person')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for the other person')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Debate format')).not.toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
 
     rerender(<DebateMatchPrompt spaceId="space-1" matches={[]} debates={[debate()]} />);
 
@@ -211,6 +270,126 @@ describe('DebateMatchPrompt', () => {
 
     expect(mocks.push).toHaveBeenCalledTimes(1);
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+    expect(mocks.beginMediaSession).toHaveBeenCalledTimes(1);
+    expect(mocks.promoteMediaSession).toHaveBeenCalledWith('match:match-1', 'debate:debate-1');
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+  });
+
+  it('queues readiness on the match pre-screen and submits it once the debate exists', async () => {
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      options.onSuccess({
+        match: {
+          ...match(),
+          participants: match().participants.map(participant =>
+            participant.user_id === 'user-for' ? { ...participant, accepted: true } : participant
+          ),
+        },
+        debate: null,
+      });
+    });
+    mocks.markReadyMutate.mockImplementation((_variables, options) => options.onSuccess(debate()));
+
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
+    expect(mocks.markReadyMutate).not.toHaveBeenCalled();
+
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+    expect(mocks.promoteMediaSession).toHaveBeenCalledWith('match:match-1', 'debate:debate-1');
+  });
+
+  it('lets the participant retry queued readiness when the first submission fails', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    let failReadiness = () => {};
+    mocks.markReadyMutate
+      .mockImplementationOnce((_variables, options) => {
+        failReadiness = () => options.onError(new Error('Readiness failed'));
+      })
+      .mockImplementationOnce((_variables, options) => options.onSuccess(debate()));
+
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
+    act(failReadiness);
+
+    expect(screen.getByText('Readiness failed')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(2));
+    expect(mocks.push).toHaveBeenCalledTimes(1);
+  });
+
+  it('revalidates media before submitting queued readiness', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    mocks.ensurePreview
+      .mockResolvedValueOnce(previewTracks())
+      .mockRejectedValueOnce(new Error('Camera disconnected'))
+      .mockResolvedValueOnce(previewTracks());
+
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByText('Camera disconnected')).toBeInTheDocument());
+    expect(mocks.markReadyMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+
+    await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
+    expect(mocks.ensurePreview).toHaveBeenCalledTimes(3);
+  });
+
+  it('prevents leaving while queued readiness is being submitted', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    mocks.markReadyPending = true;
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
+
+    await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeDisabled();
+  });
+
+  it('releases the pending media session when the participant leaves the pre-screen', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    expect(mocks.declineMutate).toHaveBeenCalledWith('match-1', expect.any(Object));
+    await waitFor(() => expect(mocks.releaseMediaSession).toHaveBeenCalledWith('match:match-1'));
+    expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+  });
+
+  it('releases the pending media session when the accepted match expires', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[]} debates={[]} />);
+
+    await waitFor(() => expect(mocks.releaseMediaSession).toHaveBeenCalledWith('match:match-1'));
+    expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
   });
 });
 
@@ -252,6 +431,13 @@ function match(): DebateMatch {
     created_at: '2026-07-02T00:00:00.000Z',
     updated_at: '2026-07-02T00:00:00.000Z',
   };
+}
+
+function previewTracks() {
+  return [
+    { mediaStreamTrack: { kind: 'audio', readyState: 'live' } },
+    { mediaStreamTrack: { kind: 'video', readyState: 'live' } },
+  ];
 }
 
 function debate(): Debate {
