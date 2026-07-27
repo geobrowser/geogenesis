@@ -111,10 +111,13 @@ let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
 
-export const isAnalyticsEnabled = true;
+// NEXT_PUBLIC_ prefix is required: this loader runs client-side, and Next only exposes
+// NEXT_PUBLIC_* env vars to the browser bundle. Set NEXT_PUBLIC_DISABLE_POSTHOG='1' to keep
+// analytics off (e.g. during local dev).
+export const isAnalyticsEnabled = process.env.NEXT_PUBLIC_DISABLE_POSTHOG !== '1';
 
 export function initAnalytics() {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !isAnalyticsEnabled) {
     return;
   }
 
@@ -384,7 +387,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
 }
 
 function callOrQueue(call: PendingCall) {
-  if (typeof window === 'undefined') {
+  if (typeof window === 'undefined' || !isAnalyticsEnabled) {
     return;
   }
 

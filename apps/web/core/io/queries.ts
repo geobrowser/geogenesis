@@ -266,6 +266,7 @@ type GetEntitiesOrderedByPropertyOptions = {
   propertyId: string;
   sortDirection: SortOrder;
   dataType?: string;
+  includeWithoutValue?: boolean;
   spaceId?: string;
   spaceIds?: string[];
   typeIds?: string[];
@@ -300,6 +301,7 @@ export function getEntitiesOrderedByPropertyConnection(
     propertyId,
     sortDirection,
     dataType,
+    includeWithoutValue,
     spaceId,
     spaceIds,
     typeIds,
@@ -338,6 +340,7 @@ export function getEntitiesOrderedByPropertyConnection(
       propertyId,
       sortDirection,
       dataType,
+      includeWithoutValue,
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
