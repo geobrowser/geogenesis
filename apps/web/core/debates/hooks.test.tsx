@@ -10,6 +10,7 @@ import { setCachedIdentityToken } from '~/core/auth/identity-token';
 import type { Debate, DebateActivity, DebateRematchSession } from './api';
 import {
   debateQueryKeys,
+  useClearDebateActivity,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
@@ -305,6 +306,34 @@ describe('useClearTimedOutDebateActivity', () => {
       cooldown_until: null,
       debate: null,
     });
+  });
+});
+
+describe('useClearDebateActivity', () => {
+  it('removes only the specified debate from the coordinator cache', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const activity: DebateActivity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: '2026-07-02T00:10:00.000Z',
+      match: null,
+      debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
+      rematch: null,
+    };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useClearDebateActivity(), { wrapper });
+
+    act(() => result.current('debate-1'));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual({
+      ...activity,
+      debate: null,
+    });
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 });
 

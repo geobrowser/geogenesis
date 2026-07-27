@@ -29,7 +29,8 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const activity = activityQuery.data ?? null;
   const match = activity?.match ?? null;
-  const debate = activity?.debate ?? null;
+  const reportedDebate = activity?.debate ?? null;
+  const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
   const lastMatchRef = React.useRef<DebateMatch | null>(null);
   const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
   const retainedMatch =
@@ -37,7 +38,7 @@ export function DebateCoordinator() {
       ? lastMatchRef.current
       : null;
   const visibleMatch = match ?? retainedMatch;
-  const activeFlow = Boolean(activity?.match || activity?.debate || activity?.rematch);
+  const activeFlow = Boolean(match || debate || activity?.rematch);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
 
   React.useEffect(() => {
@@ -52,7 +53,6 @@ export function DebateCoordinator() {
 
   React.useEffect(() => {
     if (!activity) return;
-    const debate = activity.debate;
     const viewingRematch = pathname.includes('/debates/rematches/');
     if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
       // The retained match prompt owns this handoff so it can deduplicate
@@ -74,7 +74,7 @@ export function DebateCoordinator() {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
-  }, [activity, pathname, router, visibleMatch]);
+  }, [activity, debate, pathname, router, visibleMatch]);
 
   if (!isDebatesEnabled) return null;
 
@@ -93,7 +93,7 @@ export function DebateCoordinator() {
         <DebateMatchPrompt
           spaceId={visibleMatch.claim.space_id}
           matches={[visibleMatch]}
-          debates={activity?.debate ? [activity.debate] : []}
+          debates={debate ? [debate] : []}
         />
       )}
       {!activeFlow && sharePromptsQuery.data?.prompts[0] && (
