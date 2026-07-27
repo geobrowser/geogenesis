@@ -56,6 +56,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
+import { useSetThankingDebateId } from '~/core/debates/thanking-debate-store';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -270,6 +271,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingCancelledBy !== null
       ? (debate?.participants.find(participant => participant.user_id === recordingCancelledBy) ?? null)
       : null;
+
+  // Publish opt-out in the global upload banner is only offered while the user is on this
+  // debate's thank-you screen, so tell the banner which debate that is.
+  const setThankingDebateId = useSetThankingDebateId();
+  const thankingDebateId = countdown.effectiveStatus === 'thanking' ? (debate?.id ?? null) : null;
+  React.useEffect(() => {
+    setThankingDebateId(thankingDebateId);
+    return () => setThankingDebateId(null);
+  }, [setThankingDebateId, thankingDebateId]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
@@ -1999,25 +2009,25 @@ function DebateRecordingRemovedDialog({
   onAcknowledge: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/40 px-6">
+    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/60 px-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Your debate was removed"
-        className="w-full max-w-[360px] rounded-xl bg-white p-5 text-center text-text shadow-card"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text shadow-card"
       >
-        <Text as="h2" variant="smallTitle" color="text">
+        <Text as="h2" variant="cardEntityTitle" color="text">
           Your debate was removed
         </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+        <Text as="p" variant="metadata" color="text" className="mt-2">
           {cancellerName} cancelled the upload of your debate
         </Text>
-        <div className="mt-4 rounded-lg bg-grey-01 px-4 py-3">
-          <Text as="p" variant="metadata" color="grey-04" className="line-clamp-3">
+        <div className="mt-5 rounded-lg bg-grey-01 p-2">
+          <Text as="p" variant="metadata" color="grey-04" className="line-clamp-2">
             {claim}
           </Text>
         </div>
-        <div className="mt-4 flex justify-center">
+        <div className="mt-5 flex justify-center">
           <button
             type="button"
             onClick={onAcknowledge}
