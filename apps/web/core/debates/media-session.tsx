@@ -97,10 +97,12 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
 
   const stopMedia = React.useCallback(() => {
     previewGenerationRef.current += 1;
+    audioOutputSelectionGenerationRef.current += 1;
     stopTracks(localTracksRef.current);
     localTracksRef.current = [];
     localMediaStreamRef.current = null;
     localPreviewPromiseRef.current = null;
+    audioOutputSelectionPromiseRef.current = null;
     setPreviewStreamState(null);
     setPreviewState('requesting');
     setPreviewBusy(true);
@@ -111,6 +113,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     (sessionKey: string) => {
       if (activeSessionKeyRef.current === sessionKey) return;
       stopMedia();
+      audioOutputSelectionFailedRef.current = false;
+      setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
       setActiveSessionKey(sessionKey);
     },
@@ -199,8 +203,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         videoInputId?: string;
       } = {}
     ) => {
-      const sessionKey = activeSessionKeyRef.current;
-      if (!sessionKey) return [];
+      if (!activeSessionKeyRef.current) return [];
       if (!options.forceRestart && localTracksRef.current.length > 0 && localMediaStreamRef.current) {
         setPreviewStreamState(localMediaStreamRef.current);
         setPreviewState('ready');
@@ -219,8 +222,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       if (!replacingReadyPreview) setPreviewState('requesting');
       const generation = previewGenerationRef.current + 1;
       previewGenerationRef.current = generation;
-      const isCurrent = () =>
-        mountedRef.current && activeSessionKeyRef.current === sessionKey && previewGenerationRef.current === generation;
+      const isCurrent = () => mountedRef.current && previewGenerationRef.current === generation;
       const previewPromise = (async () => {
         const livekit = await import('livekit-client');
         if (!isCurrent()) return [];
@@ -325,12 +327,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     const generation = audioOutputSelectionGenerationRef.current + 1;
     audioOutputSelectionGenerationRef.current = generation;
     setAudioOutputError(null);
-    const sessionKey = activeSessionKeyRef.current;
     const selectionPromise = (async () => {
-      const isCurrent = () =>
-        mountedRef.current &&
-        activeSessionKeyRef.current === sessionKey &&
-        audioOutputSelectionGenerationRef.current === generation;
+      const isCurrent = () => mountedRef.current && audioOutputSelectionGenerationRef.current === generation;
       try {
         let selectedId = deviceId;
         const mediaDevices = navigator.mediaDevices as MediaDevices & {

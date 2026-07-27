@@ -54,6 +54,7 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
   const navigatedDebateIdRef = React.useRef<string | null>(null);
   const readyHandoffDebateIdRef = React.useRef<string | null>(null);
+  const readyValidationDebateIdRef = React.useRef<string | null>(null);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
 
   const navigateToDebate = React.useCallback(
@@ -172,23 +173,50 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   );
 
   React.useEffect(() => {
-    if (!activeMatchId || !waiting) return;
+    if (!activeMatchId || !waiting || navigatedDebateIdRef.current) return;
     const sessionKey = debateMatchMediaSessionKey(activeMatchId);
     beginSession(sessionKey);
     void ensurePreview().catch(() => undefined);
     return () => releaseSession(sessionKey);
   }, [activeMatchId, beginSession, ensurePreview, releaseSession, waiting]);
 
+  React.useEffect(
+    () => () => {
+      readyValidationDebateIdRef.current = null;
+    },
+    [activeMatchId]
+  );
+
   React.useEffect(() => {
     if (!activeMatch || !matchedDebate || !queuedReadyMatchIds.includes(activeMatch.id) || readyError) return;
     if (debateLocalParticipant?.ready_at) {
+      readyValidationDebateIdRef.current = null;
       navigateToDebate(matchedDebate.id, activeMatch.id);
       return;
     }
-    submitReady(matchedDebate, activeMatch.id);
+    if (readyHandoffDebateIdRef.current === matchedDebate.id) return;
+    if (readyValidationDebateIdRef.current === matchedDebate.id) return;
+    readyValidationDebateIdRef.current = matchedDebate.id;
+    void ensurePreview()
+      .then(tracks => {
+        if (readyValidationDebateIdRef.current !== matchedDebate.id) return;
+        const hasLiveTrack = (kind: 'audio' | 'video') =>
+          tracks.some(track => track.mediaStreamTrack.kind === kind && track.mediaStreamTrack.readyState !== 'ended');
+        if (!hasLiveTrack('audio') || !hasLiveTrack('video')) {
+          throw new Error('Camera and microphone access is required before joining the debate.');
+        }
+        readyValidationDebateIdRef.current = null;
+        submitReady(matchedDebate, activeMatch.id);
+      })
+      .catch(error => {
+        if (readyValidationDebateIdRef.current !== matchedDebate.id) return;
+        readyValidationDebateIdRef.current = null;
+        setReadyError(error instanceof Error ? error.message : 'Could not verify your camera and microphone.');
+      });
   }, [
     activeMatch,
     debateLocalParticipant?.ready_at,
+    ensurePreview,
     matchedDebate,
     navigateToDebate,
     queuedReadyMatchIds,
@@ -262,6 +290,7 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   };
 
   const dismiss = () => {
+    readyValidationDebateIdRef.current = null;
     setDismissedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
     setAcceptedMatchIds(current => current.filter(id => id !== activeMatch.id));
     setQueuedReadyMatchIds(current => current.filter(id => id !== activeMatch.id));
@@ -282,8 +311,6 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   const ready = () => {
     setReadyError(null);
     setQueuedReadyMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
-    if (!matchedDebate) return;
-    submitReady(matchedDebate, activeMatch.id);
   };
 
   const leavePreScreen = () => {
