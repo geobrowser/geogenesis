@@ -140,6 +140,21 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
+  it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      debate: {
+        ...activityWithDebate().debate!,
+        status,
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
   it('copies a stable recording link when native sharing is unavailable', async () => {
     mocks.activity = {
       online: true,

@@ -191,7 +191,7 @@ export function useUpdateDebateAvailability() {
   });
 }
 
-export function useClearTimedOutDebateActivity() {
+function useClearDebateActivityCache({ clearCooldown, reconcile }: { clearCooldown: boolean; reconcile: boolean }) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
 
@@ -199,12 +199,22 @@ export function useClearTimedOutDebateActivity() {
     (debateId: string) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => {
         if (!current || current.debate?.id !== debateId) return current;
-        return { ...current, debate: null, cooldown_until: null };
+        return clearCooldown ? { ...current, debate: null, cooldown_until: null } : { ...current, debate: null };
       });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      if (reconcile) {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      }
     },
-    [accountKey, queryClient]
+    [accountKey, clearCooldown, queryClient, reconcile]
   );
+}
+
+export function useClearTimedOutDebateActivity() {
+  return useClearDebateActivityCache({ clearCooldown: true, reconcile: true });
+}
+
+export function useClearDebateActivity() {
+  return useClearDebateActivityCache({ clearCooldown: false, reconcile: false });
 }
 
 export function useAcceptDebateMatch(spaceId?: string) {
