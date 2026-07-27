@@ -1149,7 +1149,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
       localMediaStreamRef.current = null;
       setRemoteVideoReady(false);
-      setRoomState('idle');
       return true;
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
