@@ -107,9 +107,8 @@ export function RsvpButton({ call, className }: Props) {
   // Checked before `rsvpLabel` so a background refetch can't yank the prompt out from
   // under a user who is mid-confirm.
   if (confirming) {
-    // Column, not a row: every caller drops this into a cramped horizontal cell (a
-    // card's right-hand action slot, or beside "Add to calendar"), so keeping the
-    // prompt and its buttons on one line pushes them out of the card.
+    // Column, not a row: every caller drops this into a cramped horizontal action
+    // slot, so keeping the prompt and its buttons on one line pushes them out of the card.
     return (
       <div className={`flex min-w-0 flex-col items-end gap-2 ${className ?? ''}`}>
         <span className="text-right text-metadata [overflow-wrap:anywhere] break-words text-text">
