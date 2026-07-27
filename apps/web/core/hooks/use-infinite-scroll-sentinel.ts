@@ -21,12 +21,11 @@ export function useInfiniteScrollSentinel({
   rootMargin?: string;
   /** Scroll container for nested overflow lists; defaults to the viewport when omitted. */
   root?: Element | null;
-}) {
-  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+}): React.RefCallback<HTMLDivElement> {
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || !hasNextPage) return;
+    if (!sentinelEl || !hasNextPage) return;
     const io = new IntersectionObserver(
       entries => {
         if (entries[0]?.isIntersecting && !isFetchingNextPage) {
@@ -35,9 +34,9 @@ export function useInfiniteScrollSentinel({
       },
       { root, rootMargin }
     );
-    io.observe(el);
+    io.observe(sentinelEl);
     return () => io.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage, root, rootMargin]);
+  }, [sentinelEl, fetchNextPage, hasNextPage, isFetchingNextPage, root, rootMargin]);
 
-  return sentinelRef;
+  return setSentinelEl;
 }

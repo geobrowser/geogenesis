@@ -12,7 +12,6 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
-import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
 
 function RankingPillItem({
@@ -67,11 +66,6 @@ export function RankingPillView({ state }: Props) {
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
     entriesResolving,
-    hasRankedByOthers,
-    submissions,
-    aggregatedSubmitterSpaceIds,
-    aggregatedRankingCount,
-    periodState,
     showEmbeddedGlobalPagination,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
@@ -112,18 +106,8 @@ export function RankingPillView({ state }: Props) {
         <p className="text-metadata text-grey-04">No published items yet</p>
       ) : null}
 
-      <div className="mt-1 flex w-full items-end justify-between gap-3">
-        <RankingPeriodMetadata
-          className="mt-0"
-          periodState={periodState}
-          periodLabel={null}
-          hasRankedByOthers={hasRankedByOthers}
-          submissions={submissions}
-          aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
-          aggregatedRankingCount={aggregatedRankingCount}
-        />
-
-        {showEmbeddedGlobalPagination ? (
+      {showEmbeddedGlobalPagination ? (
+        <div className="mt-1 flex w-full items-end justify-end">
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
               pageNumber={embeddedGlobalPageNumber}
@@ -132,8 +116,8 @@ export function RankingPillView({ state }: Props) {
               onSetPage={setEmbeddedGlobalPage}
             />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

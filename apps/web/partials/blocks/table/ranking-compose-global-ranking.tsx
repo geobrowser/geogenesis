@@ -403,12 +403,20 @@ export function RankingComposeGlobalRanking({
 
   const canLoadMore = hasNextPage && hasVisibleRankableEntities;
 
-  const sentinelRef = useInfiniteScrollSentinel({
+  const setSentinelRef = useInfiniteScrollSentinel({
     hasNextPage: canLoadMore,
     isFetchingNextPage,
     fetchNextPage: onFetchNextPage,
     root: scrollRoot,
   });
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
+  const sentinelRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setSentinelEl(node);
+      setSentinelRef(node);
+    },
+    [setSentinelRef]
+  );
 
   const setMembershipSentinelEl = useMembershipRecheckSentinel({
     enabled: isAwaitingMembership && hasVisibleRankableEntities,
@@ -423,12 +431,10 @@ export function RankingComposeGlobalRanking({
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
   React.useEffect(() => {
-    if (!scrollRoot || !canLoadMore || isFetchingNextPage) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!scrollRoot || !canLoadMore || isFetchingNextPage || !sentinelEl) return;
 
     const rootRect = scrollRoot.getBoundingClientRect();
-    const sentinelRect = sentinel.getBoundingClientRect();
+    const sentinelRect = sentinelEl.getBoundingClientRect();
     if (sentinelRect.top <= rootRect.bottom + 200) {
       onFetchNextPage();
     }
@@ -439,7 +445,7 @@ export function RankingComposeGlobalRanking({
     onFetchNextPage,
     filteredRankedIds.length,
     filteredUnrankedIds.length,
-    sentinelRef,
+    sentinelEl,
   ]);
 
   const renderPickEntity = (id: string, globalRank?: number) => {

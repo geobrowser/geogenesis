@@ -44,17 +44,17 @@ import { Truncate } from '~/design-system/truncate';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
+import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
-
 // 'start' and 'create-space' linger in the type only to normalize values
 // persisted by an older version — onboarding now opens straight on name/avatar
 // and runs to 'completed' with no separate create step (see effectiveStep).
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'enter-profile');
+export const stepAtom = atomWithStorage<OnboardingStep>('onboardingStep', 'enter-profile');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the "Finalizing details…" animation plays before we route the user
@@ -183,7 +183,7 @@ export const OnboardingDialog = () => {
   return (
     // Stay open through the completion animation — `setPending` flips
     // `isOnboardingVisible` false, but we want the animation to finish first.
-    <Root open={isOnboardingVisible || step === 'completed'}>
+    <Root open={shouldOpenOnboardingDialog(isOnboardingVisible, step)}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content

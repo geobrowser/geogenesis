@@ -75,10 +75,10 @@ describe('formatRollingSubmissionLabel', () => {
     ).toBeNull();
   });
 
-  it('prompts a fresh submission once rolled off', () => {
+  it('hides the label once the submission has rolled off', () => {
     expect(
       formatRollingSubmissionLabel({ hasSubmission: true, isLive: false, submittedAtMs: now, frequencyHours: 24, now })
-    ).toBe('Your ranking has rolled off — submit a fresh ranking');
+    ).toBeNull();
   });
 
   it('shows an hours countdown while live', () => {
@@ -105,7 +105,7 @@ describe('formatRollingSubmissionLabel', () => {
     ).toBe('Vote again in 7 days');
   });
 
-  it('rolls off when the window has elapsed even if flagged live', () => {
+  it('shows a negative countdown when the backend still considers an elapsed submission live', () => {
     expect(
       formatRollingSubmissionLabel({
         hasSubmission: true,
@@ -114,6 +114,6 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 24,
         now,
       })
-    ).toBe('Your ranking has rolled off — submit a fresh ranking');
+    ).toBe('Vote again in -6 hrs');
   });
 });

@@ -6,6 +6,7 @@ import {
   getDebateActivity,
   getGeoChatSession,
   resetGeoChatSession,
+  updateDebateAvailability,
 } from './api';
 
 const completeRequest = {
@@ -95,6 +96,40 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+});
+
+describe('debate availability', () => {
+  it('updates the authenticated availability preference', async () => {
+    const activity = {
+      online: true,
+      available_to_debate: false,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(activity), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(updateDebateAvailability(false, vi.fn(), 'user-a')).resolves.toEqual(activity);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/debate-availability',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ available_to_debate: false }),
+      })
+    );
   });
 });
 
