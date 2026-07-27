@@ -42,7 +42,19 @@ type ConfigurableChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 // Defaults to testnet so existing deploys need no env change; validated so a
 // typo'd chain id fails the build instead of silently selecting a network.
 function resolveChainId(): ConfigurableChainId {
-  if (!CHAIN_ID) return '55516';
+  if (!CHAIN_ID) {
+    // The testnet default is only safe when nothing suggests a mainnet deploy.
+    // Mainnet-only endpoint vars set with no explicit chain id means the deploy
+    // is half-configured — or NEXT_PUBLIC_CHAIN_ID's name is typo'd — and
+    // silently defaulting would ship a mainnet build pointed at testnet.
+    if (RPC_ENDPOINT || API_ENDPOINT) {
+      throw new Error(
+        'NEXT_PUBLIC_GEOGENESIS_RPC / NEXT_PUBLIC_API_ENDPOINT are set but NEXT_PUBLIC_CHAIN_ID is not. ' +
+          'Set NEXT_PUBLIC_CHAIN_ID=80451 for a mainnet deploy, or unset the mainnet endpoint vars for testnet.'
+      );
+    }
+    return '55516';
+  }
   if (!(SUPPORTED_CHAIN_IDS as readonly string[]).includes(CHAIN_ID)) {
     throw new Error(`NEXT_PUBLIC_CHAIN_ID must be one of ${SUPPORTED_CHAIN_IDS.join(', ')}. Received: ${CHAIN_ID}`);
   }

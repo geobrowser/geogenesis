@@ -7,7 +7,10 @@ import { describe, expect, it } from 'vitest';
 process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'clpsvsqpt005fl70fe775owo5';
 process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID = '1234';
 // Clear the vite.config.js test-isolation endpoint overrides so the SDK
-// fallback path is what actually resolves.
+// fallback path is what actually resolves. Chain id included: this test also
+// covers the unset-chain-id → testnet default (legal only because the mainnet
+// endpoint vars are cleared too — set together they fail the build).
+delete process.env.NEXT_PUBLIC_CHAIN_ID;
 delete process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
 delete process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
 delete process.env.NEXT_PUBLIC_API_ENDPOINT;
