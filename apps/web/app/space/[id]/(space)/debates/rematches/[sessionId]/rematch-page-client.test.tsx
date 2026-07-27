@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   mutate: vi.fn(),
+  acceptMutate: vi.fn(),
+  rejectMutate: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -37,8 +39,8 @@ vi.mock('~/core/debates/hooks', () => ({
   useUpdateDebateRematchPosition: () => mutation(),
   useCreateDebateRematchRequest: () => mutation(),
   useLeaveDebateRematch: () => mutation(),
-  useAcceptDebateRematchRequest: () => mutation(),
-  useRejectDebateRematchRequest: () => mutation(),
+  useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
+  useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -62,15 +64,19 @@ vi.mock('~/core/sync/use-store', () => ({
   }),
 }));
 
-function mutation() {
-  return { mutate: mocks.mutate, mutateAsync: mocks.mutate, isPending: false, error: null };
+function mutation(mutate = mocks.mutate) {
+  return { mutate, mutateAsync: mutate, isPending: false, error: null };
 }
 
 beforeEach(() => {
   mocks.replace.mockReset();
   mocks.mutate.mockReset();
+  mocks.acceptMutate.mockReset();
+  mocks.rejectMutate.mockReset();
   mocks.session = session();
   mocks.claims = [sharedClaim()];
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
 });
 
 afterEach(cleanup);
@@ -124,7 +130,7 @@ describe('DebateRematchPageClient', () => {
     expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).not.toBeNull();
   });
 
-  it('shows an incoming request with the snapshotted format details', () => {
+  it('shows an incoming request in the shared dialog and preserves rematch actions', () => {
     mocks.session = session({
       status: 'request_pending',
       request: {
@@ -141,13 +147,30 @@ describe('DebateRematchPageClient', () => {
       },
     });
 
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    const { unmount } = render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('dialog', { name: 'A claim both participants chose' })).toBeInTheDocument();
-    expect(screen.getAllByText('1m')).toHaveLength(2);
-    expect(screen.getAllByText('45s')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Reject' })).toBeEnabled();
+    const dialog = screen.getByRole('dialog', { name: 'A claim both participants chose' });
+    expect(within(dialog).getByText('Debate request')).toBeInTheDocument();
+    expect(within(dialog).getByText('You')).toBeInTheDocument();
+    expect(within(dialog).getByText('Salina')).toBeInTheDocument();
+    expect(within(dialog).getByText('vs')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Yes')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('No')).not.toBeInTheDocument();
+    expect(within(dialog).getAllByText('1m')).toHaveLength(2);
+    expect(within(dialog).getAllByText('45s')).toHaveLength(2);
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Accept' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Reject' }));
+
+    expect(mocks.acceptMutate).toHaveBeenCalledWith('request-1');
+    expect(mocks.rejectMutate).toHaveBeenCalledWith('request-1');
+
+    unmount();
+
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
   });
 
   it('disables every claim card while a rematch request is pending', () => {
