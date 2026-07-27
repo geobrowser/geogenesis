@@ -2143,6 +2143,52 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
+  it('enters the rematch browser when the room reloads onto an already completed debate', async () => {
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('browsing');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('enters the converted rematch debate when the room reloads onto a completed debate', async () => {
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = { ...rematchSession('converted'), converted_debate_id: 'debate-2' };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2'));
+    expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+  });
+
+  it('enters the rematch browser after the live connection drops before the debate completes', async () => {
+    installRecordingMocks();
+    const view = await renderLiveDebate({ rematch_session_id: 'rematch-1' });
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+
+    mocks.rematch = rematchSession('browsing');
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('keeps the completed debate visible while its rematch session is still deciding', async () => {
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Debate complete.')).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it('waits for a deciding rematch session to resolve before finalizing the completed debate', async () => {
     installRecordingMocks();
     const view = await renderLiveDebate();

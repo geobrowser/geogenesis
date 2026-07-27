@@ -286,6 +286,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       (debate.status === 'cancelled' && debate.cancellation_reason !== 'connection_timeout'))
   );
   const shouldReturnFromTerminalDebate = shouldExitTerminalDebate && roomState === 'idle';
+  // A completed debate with a live rematch session is a dead end while the room is idle:
+  // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
+  // runs with a live connection, and an idle room has nothing left to save. Mobile reaches this
+  // whenever a backgrounded tab drops the call or remounts.
+  const idleRematchDestination =
+    debate?.status === 'complete' && debate.rematch_session_id && recordingCancelledBy === null && roomState === 'idle'
+      ? rematchDestination(rematchQuery.data)
+      : null;
   const hasRecordingPersistenceError = Boolean(
     debate &&
     debate.status === 'complete' &&
@@ -295,7 +303,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
   const shouldHideTerminalDebate =
     (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
-    (recordingCancelledBy !== null && !opponentCancelledRecording);
+    (recordingCancelledBy !== null && !opponentCancelledRecording) ||
+    idleRematchDestination !== null;
 
   const returnFromDebate = React.useCallback(() => {
     if (debateExitStartedRef.current) return;
@@ -957,12 +966,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     finalizedDebateRef.current = debate.id;
     const persisted = await finishAndPersist();
     if (!persisted) return;
-    if (session?.status === 'converted' && session.converted_debate_id) {
-      router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
-      return;
-    }
-    if (session && ['browsing', 'request_pending'].includes(session.status)) {
-      router.replace(`/space/${session.source_space_id}/debates/rematches/${session.id}`);
+    const destination = rematchDestination(session);
+    if (destination) {
+      router.replace(destination);
       return;
     }
     returnFromDebate();
@@ -1147,6 +1153,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!shouldReturnFromTerminalDebate) return;
     returnFromDebate();
   }, [returnFromDebate, shouldReturnFromTerminalDebate]);
+
+  React.useEffect(() => {
+    if (!idleRematchDestination) return;
+    router.replace(idleRematchDestination);
+  }, [idleRematchDestination, router]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
@@ -2431,6 +2442,17 @@ function speakerStatus(debate: Debate) {
 
 function statusLabel(status: Debate['status']) {
   return status.replace('_', ' ');
+}
+
+function rematchDestination(session: DebateRematchSession | null | undefined) {
+  if (!session) return null;
+  if (session.status === 'converted' && session.converted_debate_id) {
+    return `/space/${session.source_space_id}/debates/${session.converted_debate_id}`;
+  }
+  if (['browsing', 'request_pending'].includes(session.status)) {
+    return `/space/${session.source_space_id}/debates/rematches/${session.id}`;
+  }
+  return null;
 }
 
 function labelForSlot(debate: Debate, slot: ParticipantSlot) {
