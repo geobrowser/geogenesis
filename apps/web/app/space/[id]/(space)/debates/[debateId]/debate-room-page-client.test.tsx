@@ -1798,7 +1798,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
   });
 
-  it('shows wrap it up only on the active local speaker in the final five seconds', async () => {
+  it('shows wrap it up only on the active local speaker during the penultimate turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
       ...completedDebate(),
@@ -1820,6 +1820,27 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('GO!')).not.toBeInTheDocument();
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+  });
+
+  it('shows wrap it up only on the active remote speaker during the penultimate turn', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('remote')).toContainElement(wrapItUp);
+    expect(debateVideoTile('local')).not.toContainElement(wrapItUp);
   });
 
   it('does not show wrap it up before the final five seconds', async () => {
@@ -1868,6 +1889,8 @@ describe('DebateRoomPageClient', () => {
 
   it('shows final-turn warnings only on their respective speaker tiles', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    let clockElapsedMs = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clockElapsedMs);
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
@@ -1893,6 +1916,14 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+
+    clockElapsedMs = 4_000;
+
+    await waitFor(() => {
+      expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+      expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).toBeInTheDocument();
+    });
   });
 
   it('advances directly from the warning to GO without waiting for a debate refresh', async () => {
@@ -1982,8 +2013,6 @@ describe('DebateRoomPageClient', () => {
     expect(
       await screen.findByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
     ).toBeInTheDocument();
-    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
-    expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
