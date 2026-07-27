@@ -5,7 +5,7 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { type ExploreSort, type ExploreTime, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
@@ -33,6 +33,11 @@ export async function GET(request: Request) {
   const time = parseTime(searchParams.get('time'));
   const spaceId = searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
+  const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
+
+  if (typeIds.length === 0) {
+    return NextResponse.json({ items: [], nextCursor: null });
+  }
 
   const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
 
@@ -84,7 +89,7 @@ export async function GET(request: Request) {
       cursor,
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,
-      typeIds: EXPLORE_ENTITY_TYPE_IDS,
+      typeIds,
       requireName: true,
     });
     return NextResponse.json(result);

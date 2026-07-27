@@ -5,9 +5,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { flushSync } from 'react-dom';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
@@ -17,7 +17,6 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
-import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
@@ -97,11 +96,10 @@ function useMembershipRecheckSentinel({
   return setSentinelEl;
 }
 
-function RankingComposeUnrankedDivider() {
+function RankingComposeSectionDivider({ label }: { label: string }) {
   return (
-    <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
-      <div className="h-px flex-1 bg-grey-02" aria-hidden />
-      <span className="shrink-0 text-[17px] font-[600] text-text">Unranked</span>
+    <div className="my-6 flex items-center gap-3" role="separator" aria-label={label}>
+      <span className="shrink-0 text-[11px] leading-[13px] font-normal text-grey-04">{label}</span>
       <div className="h-px flex-1 bg-grey-02" aria-hidden />
     </div>
   );
@@ -184,11 +182,14 @@ function RankingComposePendingDisclosure({ count, children }: { count: number; c
   );
 }
 
-function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
+function RankingComposeCreateNewPrompt({ searchQuery, onCreateNew }: { searchQuery: string; onCreateNew: () => void }) {
+  const queryLabel = searchQuery.trim();
   return (
     <div className="flex items-center justify-between gap-4 py-3">
-      <p className="text-metadata text-grey-04">Can&apos;t find what you&apos;re looking for?</p>
-      <Button variant="secondary" small onClick={onCreateNew}>
+      <p className="min-w-0 text-[16px] leading-[20px] font-medium text-[#2A2B2E]">
+        No results found for &quot;{queryLabel}&quot;
+      </p>
+      <Button variant="secondary" small onClick={onCreateNew} className="!rounded-full">
         Create new
       </Button>
     </div>
@@ -278,9 +279,6 @@ type Props = {
   onFetchNextPage: () => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  isSearchOpen: boolean;
-  onSearchOpenChange: (open: boolean) => void;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
   canCreateNew: boolean;
@@ -316,9 +314,6 @@ export function RankingComposeGlobalRanking({
   onFetchNextPage,
   searchQuery,
   onSearchQueryChange,
-  isSearchOpen,
-  onSearchOpenChange,
-  searchInputRef,
   onAddToMyRanking,
   onCreateNew,
   canCreateNew,
@@ -335,7 +330,6 @@ export function RankingComposeGlobalRanking({
   const mobileScrollRoot = useRankingComposeScrollRoot();
   const globalSectionRef = React.useRef<HTMLDivElement>(null);
   const globalSearchChromeRef = React.useRef<HTMLDivElement>(null);
-  const searchFieldContainerRef = React.useRef<HTMLDivElement>(null);
   const listContainerRef = React.useRef<HTMLDivElement>(null);
   const searchScrollTopRef = React.useRef<number | null>(null);
   const [searchListStableHeight, setSearchListStableHeight] = React.useState(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
@@ -376,11 +370,7 @@ export function RankingComposeGlobalRanking({
       const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
       if (isFirstSearchCharacter) {
         if (isMobile) {
-          // Defer the scroll-to-top until the first keystroke so it happens at the same
-          // moment results clear — feels like a focus change, not a page jump on icon tap.
-          // Use instant scroll so scrollTop updates synchronously before we size the
-          // placeholder; a smooth scroll would leave captureSearchListLayout reading the
-          // pre-scroll position and anchoring the placeholder below the new viewport.
+          // Scroll the sticky search chrome into view when search begins
           const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
           const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget, 'auto') : null;
           captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
@@ -394,11 +384,11 @@ export function RankingComposeGlobalRanking({
   );
 
   React.useEffect(() => {
-    if (!isSearchOpen && !searchQuery.trim()) {
+    if (!searchQuery.trim()) {
       searchScrollTopRef.current = null;
       setSearchListStableHeight(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
     }
-  }, [isSearchOpen, searchQuery]);
+  }, [searchQuery]);
 
   const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
@@ -416,12 +406,20 @@ export function RankingComposeGlobalRanking({
 
   const canLoadMore = hasNextPage && hasVisibleRankableEntities;
 
-  const sentinelRef = useInfiniteScrollSentinel({
+  const setSentinelRef = useInfiniteScrollSentinel({
     hasNextPage: canLoadMore,
     isFetchingNextPage,
     fetchNextPage: onFetchNextPage,
     root: scrollRoot,
   });
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
+  const sentinelRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setSentinelEl(node);
+      setSentinelRef(node);
+    },
+    [setSentinelRef]
+  );
 
   const setMembershipSentinelEl = useMembershipRecheckSentinel({
     enabled: isAwaitingMembership && hasVisibleRankableEntities,
@@ -436,12 +434,10 @@ export function RankingComposeGlobalRanking({
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
   React.useEffect(() => {
-    if (!scrollRoot || !canLoadMore || isFetchingNextPage) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!scrollRoot || !canLoadMore || isFetchingNextPage || !sentinelEl) return;
 
     const rootRect = scrollRoot.getBoundingClientRect();
-    const sentinelRect = sentinel.getBoundingClientRect();
+    const sentinelRect = sentinelEl.getBoundingClientRect();
     if (sentinelRect.top <= rootRect.bottom + 200) {
       onFetchNextPage();
     }
@@ -452,20 +448,8 @@ export function RankingComposeGlobalRanking({
     onFetchNextPage,
     filteredRankedIds.length,
     filteredUnrankedIds.length,
-    sentinelRef,
+    sentinelEl,
   ]);
-
-  React.useEffect(() => {
-    if (isSearchOpen) {
-      searchInputRef.current?.focus({ preventScroll: true });
-    }
-  }, [isSearchOpen, searchInputRef]);
-
-  React.useEffect(() => {
-    if (searchQuery.trim()) {
-      onSearchOpenChange(true);
-    }
-  }, [searchQuery, onSearchOpenChange]);
 
   const renderPickEntity = (id: string, globalRank?: number) => {
     const entry = rankableEntriesById.get(id);
@@ -522,6 +506,25 @@ export function RankingComposeGlobalRanking({
     return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
   }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
 
+  const hasExactNameMatch = React.useMemo(() => {
+    if (!isSearchActive) return false;
+    const extraNames = [...filteredRankedIds, ...filteredUnrankedIds, ...pendingPickIds].map(
+      id => rankableEntriesById.get(id)?.name ?? searchResultsById.get(id)?.name
+    );
+    return rankingSearchHasExactNameMatch(searchQuery, [...searchResultsById.values()], extraNames);
+  }, [
+    filteredRankedIds,
+    filteredUnrankedIds,
+    isSearchActive,
+    pendingPickIds,
+    rankableEntriesById,
+    searchQuery,
+    searchResultsById,
+  ]);
+
+  const showCreateNewPrompt =
+    canCreateNew && isSearchActive && !hasExactNameMatch && (isSearchSettled || isDebouncingAfterEmptySearch);
+
   const pendingDisclosure = (
     <RankingComposePendingDisclosure count={pendingPickIds.length}>
       {pendingPickIds.map(id => renderPickEntity(id))}
@@ -530,14 +533,23 @@ export function RankingComposeGlobalRanking({
 
   const searchResultList = (
     <>
+      {showCreateNewPrompt ? (
+        <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
+      ) : null}
+      {showCreateNewPrompt && filteredRankedIds.length > 0 ? (
+        <RankingComposeSectionDivider label="Other ranked results" />
+      ) : null}
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
+      {showRankedUnrankedDivider ? (
+        showCreateNewPrompt ? (
+          <RankingComposeSectionDivider label="Other unranked results" />
+        ) : (
+          <RankingComposeSectionDivider label="Unranked" />
+        )
+      ) : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
-      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
-        <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
-      ) : null}
       {pendingDisclosure}
       {membershipSentinel}
     </>
@@ -546,7 +558,7 @@ export function RankingComposeGlobalRanking({
   const browseResultList = (
     <>
       {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
+      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
       {filteredUnrankedIds.map(id => renderPickEntity(id))}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
@@ -566,67 +578,33 @@ export function RankingComposeGlobalRanking({
         className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
-        <div
-          className={cx(
-            'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-            isDesktop && 'border-b border-grey-02 pb-4'
-          )}
-        >
-          <h2
-            className={cx(
-              'm-0 min-w-0 truncate text-text',
-              isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
-            )}
-          >
-            Global ranking
-          </h2>
-          <div className="flex items-center justify-self-end">
-            <Button
-              type="button"
-              variant="ghost"
-              icon={<Search color={isSearchOpen ? undefined : 'grey-04'} />}
-              onClick={() => {
-                if (isSearchOpen) {
-                  onSearchOpenChange(false);
-                  return;
-                }
-
-                if (isMobile) {
-                  flushSync(() => onSearchOpenChange(true));
-                  searchInputRef.current?.focus({ preventScroll: true });
-                  return;
-                }
-
-                onSearchOpenChange(true);
-              }}
+        <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          <div className={cx('flex w-full min-w-0 items-center', isDesktop && 'h-8')}>
+            <h2
               className={cx(
-                COMPOSE_ICON_BUTTON_CLASS,
-                'h-8 w-8 !bg-transparent text-grey-04 transition-colors hover:!border-transparent hover:!bg-transparent hover:!text-text',
-                isSearchOpen && '!text-text'
+                'm-0 min-w-0 truncate text-text',
+                isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
               )}
-              aria-label={isSearchOpen ? 'Close search' : 'Search rankable entities'}
-              aria-expanded={isSearchOpen}
+            >
+              Global ranking
+            </h2>
+          </div>
+        </div>
+        <div className={cx('shrink-0', isMobile && 'mt-2')}>
+          <div className="relative flex items-center">
+            <span className="pointer-events-none absolute left-2 flex">
+              <Search color="grey-04" />
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => handleSearchQueryChange(e.target.value)}
+              placeholder="Search"
+              aria-label="Search rankable entities"
+              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
             />
           </div>
         </div>
-        {isSearchOpen ? (
-          <div ref={searchFieldContainerRef} className="shrink-0 py-2">
-            <div className="relative flex items-center">
-              <span className="pointer-events-none absolute left-2 flex">
-                <Search color="grey-04" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={e => handleSearchQueryChange(e.target.value)}
-                placeholder="Search"
-                aria-label="Search rankable entities"
-                className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
       <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
@@ -641,7 +619,9 @@ export function RankingComposeGlobalRanking({
               <>
                 {pendingDisclosure}
                 <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                  {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                  {showCreateNewPrompt ? (
+                    <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
+                  ) : null}
                 </RankingComposeSearchListPlaceholder>
               </>
             ) : (

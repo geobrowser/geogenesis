@@ -8,6 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
@@ -99,39 +100,41 @@ export function App({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts(memoizedShortcuts);
 
   return (
-    <div className="flex min-h-[100dvh] items-stretch">
-      <React.Suspense fallback={null}>
-        <PageViewTracker />
-      </React.Suspense>
-      <div className="sm:hidden">{!rankingFullscreenActive && <BrowseSidebar />}</div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !rankingFullscreenActive} />
-        <SearchDialog open={open} onDone={() => setOpen(false)} />
-        <div className="min-w-0 flex-1 2xl:px-[2ch]">
-          <Main>{children}</Main>
+    <DebateMediaSessionProvider>
+      <div className="flex min-h-[100dvh] items-stretch">
+        <React.Suspense fallback={null}>
+          <PageViewTracker />
+        </React.Suspense>
+        <div className="sm:hidden">{!rankingFullscreenActive && <BrowseSidebar />}</div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !rankingFullscreenActive} />
+          <SearchDialog open={open} onDone={() => setOpen(false)} />
+          <div className="min-w-0 flex-1 2xl:px-[2ch]">
+            <Main>{children}</Main>
+          </div>
         </div>
+        <EntitySidePanel />
+        {/* Client-side rendered due to `window.localStorage` usage */}
+        <ClientOnly>
+          <OnboardingDialog />
+          <PendingPersonalSpaceRunner />
+          <CreateSpaceDialog />
+          <PendingCreatedSpaceRunner />
+          <SignInPrompt />
+          <PostAuthRedirect />
+          <Toast />
+          <GovernanceReopenEditLoadingBar />
+          <FlowBar />
+          <StatusBar />
+          <ReviewChanges />
+          <ChatWidget />
+          <FeatureFlagsDialog />
+          <DebateCoordinator />
+          <DebateRecordingUploadCoordinator />
+          <Persistence />
+        </ClientOnly>
+        {process.env.NODE_ENV === 'production' && <Analytics />}
       </div>
-      <EntitySidePanel />
-      {/* Client-side rendered due to `window.localStorage` usage */}
-      <ClientOnly>
-        <OnboardingDialog />
-        <PendingPersonalSpaceRunner />
-        <CreateSpaceDialog />
-        <PendingCreatedSpaceRunner />
-        <SignInPrompt />
-        <PostAuthRedirect />
-        <Toast />
-        <GovernanceReopenEditLoadingBar />
-        <FlowBar />
-        <StatusBar />
-        <ReviewChanges />
-        <ChatWidget />
-        <FeatureFlagsDialog />
-        <DebateCoordinator />
-        <DebateRecordingUploadCoordinator />
-        <Persistence />
-      </ClientOnly>
-      {process.env.NODE_ENV === 'production' && <Analytics />}
-    </div>
+    </DebateMediaSessionProvider>
   );
 }
