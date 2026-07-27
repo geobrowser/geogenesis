@@ -36,6 +36,29 @@ import {
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
 
+// Upload failures the backend will never resolve on retry. Retrying these keeps the
+// "Uploading N debate" banner up forever, so instead we drop the local blob. Transient
+// failures (network errors, 5xx, expired auth) are deliberately absent — those must keep
+// retrying.
+const permanentRecordingUploadErrorCodes = new Set([
+  'recording_cancelled', // the opponent cancelled the debate recording
+  'recording_not_ready', // the debate was aborted/cancelled and can no longer be finalized
+  'invalid_recording', // duration, timestamp, or framerate the backend rejects
+  'invalid_recording_mime_type', // an unsupported container the backend rejects
+  'recording_upload_missing', // the presigned object never landed in storage
+  'recording_upload_size_mismatch', // the stored object no longer matches the completion request
+  'recording_upload_type_mismatch',
+]);
+
+export function isPermanentRecordingUploadError(error: unknown): boolean {
+  return (
+    error instanceof GeoChatRequestError &&
+    error.status === 400 &&
+    error.code !== null &&
+    permanentRecordingUploadErrorCodes.has(error.code)
+  );
+}
+
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
 type RecordingUploadDependencies = {
@@ -84,7 +107,7 @@ export function recordingUploadRetryDelay(attemptCount: number) {
 
 export function DebateRecordingUploadCoordinator() {
   const queryClient = useQueryClient();
-  const { ready, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [uploads, setUploads] = React.useState<DebateRecordingUpload[]>([]);
   const [activeUploadId, setActiveUploadId] = React.useState<string | null>(null);
@@ -119,7 +142,7 @@ export function DebateRecordingUploadCoordinator() {
     setUploads([]);
     let cancelled = false;
     let retryTimer: number | null = null;
-    void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
+    void resolveCurrentGeoChatUserId(getPrivyIdentityToken, accountKey)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
         if (!cancelled) {
@@ -140,7 +163,7 @@ export function DebateRecordingUploadCoordinator() {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
+  }, [accountKey, authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -193,7 +216,7 @@ export function DebateRecordingUploadCoordinator() {
 
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
-    const dependencies = recordingUploadDependencies(getPrivyIdentityToken);
+    const dependencies = recordingUploadDependencies(getPrivyIdentityToken, accountKey);
     let attemptStage = upload.stage;
     let attemptCount = upload.attemptCount;
     void withRecordingUploadLock(async () => {
@@ -209,6 +232,8 @@ export function DebateRecordingUploadCoordinator() {
           attemptCount = 0;
         },
       });
+      // Auto-publish to the knowledge graph is handled server-side by the debate-acceptor cron
+      // sweep (app/api/debates/publish-sweep), so nothing to enqueue here.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(upload.debateId) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(upload.debateId) });
     })
@@ -219,13 +244,13 @@ export function DebateRecordingUploadCoordinator() {
         }
       })
       .catch(async error => {
-        // The opponent cancelled the upload, so this recording can never be published;
-        // drop the local blob instead of retrying it forever.
-        if (error instanceof GeoChatRequestError && error.code === 'recording_cancelled') {
+        // Drop the local blob for failures no retry can fix (see the permanent codes above)
+        // instead of leaving the banner up forever.
+        if (isPermanentRecordingUploadError(error)) {
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
-            console.warn('[DebateRecordingUploadCoordinator] could not delete cancelled upload:', queueError);
+            console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
           }
           return;
         }
@@ -251,7 +276,7 @@ export function DebateRecordingUploadCoordinator() {
           setWakeAt(Date.now());
         }
       });
-  }, [activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
+  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
 
   const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
   const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
@@ -285,7 +310,7 @@ export function DebateRecordingUploadCoordinator() {
       const debateIds = [...new Set(uploads.map(upload => upload.debateId))];
       for (const debateId of debateIds) {
         try {
-          await cancelDebateRecording(debateId, getPrivyIdentityToken);
+          await cancelDebateRecording(debateId, getPrivyIdentityToken, accountKey);
         } catch (error) {
           // Already cancelled or gone on the backend — still drop the local blob below.
           const terminal =
@@ -300,7 +325,7 @@ export function DebateRecordingUploadCoordinator() {
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [getPrivyIdentityToken, uploads]);
+  }, [accountKey, getPrivyIdentityToken, uploads]);
 
   // If the upload finishes while the prompt is open, there is nothing left to delete, so the
   // user can no longer choose to cancel — close it automatically.
@@ -451,12 +476,17 @@ export function DebateCancelUploadDialog({
   );
 }
 
-function recordingUploadDependencies(getPrivyIdentityToken: GetPrivyIdentityToken): RecordingUploadDependencies {
+function recordingUploadDependencies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+): RecordingUploadDependencies {
   return {
-    createUpload: (debateId, request) => createLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    createUpload: (debateId, request) =>
+      createLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     putRecording: putRecording,
     markUploaded: markDebateRecordingUploaded,
-    completeUpload: (debateId, request) => completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    completeUpload: (debateId, request) =>
+      completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
   };
 }
