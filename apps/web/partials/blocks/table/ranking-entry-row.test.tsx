@@ -1,3 +1,5 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +17,7 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-vote-actions />,
+  EntityVoteButtons: () => <button aria-label="Upvote" data-vote-actions />,
 }));
 
 const entry = {
@@ -36,5 +38,31 @@ describe('RankingEntryRow', () => {
     const markup = renderToStaticMarkup(<RankingEntryRow entry={entry} spaceId="space-1" />);
 
     expect(markup).not.toContain('data-vote-actions');
+  });
+
+  it('keeps vote interactions out of parent swipe and drag handlers', () => {
+    const onPointerDown = vi.fn();
+    const onMouseDown = vi.fn();
+    const onTouchStart = vi.fn();
+    const onClick = vi.fn();
+
+    render(
+      <div onPointerDown={onPointerDown} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={onClick}>
+        <RankingEntryRow entry={entry} spaceId="space-1" showVotes />
+      </div>
+    );
+
+    const voteButton = screen.getByRole('button', { name: 'Upvote' });
+    expect(voteButton.parentElement?.className).toContain('pointer-events-auto');
+
+    fireEvent.pointerDown(voteButton);
+    fireEvent.mouseDown(voteButton);
+    fireEvent.touchStart(voteButton);
+    fireEvent.click(voteButton);
+
+    expect(onPointerDown).not.toHaveBeenCalled();
+    expect(onMouseDown).not.toHaveBeenCalled();
+    expect(onTouchStart).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

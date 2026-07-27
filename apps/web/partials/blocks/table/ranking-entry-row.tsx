@@ -116,7 +116,13 @@ export function RankingEntryRow({
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
       </div>
       {showVotes ? (
-        <div className="shrink-0" onClick={event => event.stopPropagation()}>
+        <div
+          className="pointer-events-auto shrink-0"
+          onPointerDown={event => event.stopPropagation()}
+          onMouseDown={event => event.stopPropagation()}
+          onTouchStart={event => event.stopPropagation()}
+          onClick={event => event.stopPropagation()}
+        >
           <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
         </div>
       ) : null}
