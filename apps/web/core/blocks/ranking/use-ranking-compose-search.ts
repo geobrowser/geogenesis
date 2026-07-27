@@ -102,7 +102,7 @@ export function useRankingComposeSearch({
     return rows;
   }, [searchPages, filterByTypes]);
 
-  //"loading" / "settled" as the initial response for the current query.
+  // Treat "loading" / "settled" as the initial response for the current query.
   const isFetchingInitial = isPending || (isFetching && !isFetchingNextPage);
   const isLoading = hasTypedQuery && (isQuerySyncing || (shouldSearch && isFetchingInitial));
   const isSettled = shouldSearch && !isQuerySyncing && !isFetchingInitial;
