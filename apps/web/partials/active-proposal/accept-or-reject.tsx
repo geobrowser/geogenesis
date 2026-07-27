@@ -84,15 +84,19 @@ export function AcceptOrReject({
     return votes.find(v => v.accountId.toLowerCase() === target)?.vote;
   }, [personalSpaceId, votes]);
 
-  // The user's effective vote right now. Prefer the server view (survives page
-  // reload), then a just-succeeded local choice, then the optimistic session
+  // The user's effective vote right now. A just-succeeded local choice wins
+  // over the server view: after a vote *change* the server list still carries
+  // the old vote until the indexer catches up (seconds to minutes), and letting
+  // it win would snap the UI back to the old choice — and let the user submit a
+  // duplicate replacement tx. The server view (which survives page reload)
+  // applies when nothing succeeded locally, then the optimistic session
   // fallback so a modal close-then-reopen right after voting doesn't blink. We
   // resolve to `undefined` while a tx is in-flight so the buttons stay
   // interactive with an in-button spinner rather than snapping mid-tx.
   const isPending = voteStatus === 'pending';
   const txSucceeded = voteStatus === 'success';
   const confirmedVote =
-    serverUserVote ?? (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? (isPending ? undefined : optimisticVote);
+    (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? serverUserVote ?? (isPending ? undefined : optimisticVote);
 
   // Deliberately do NOT clear the optimistic atom here even once serverUserVote
   // resolves. The governance list uses the atom (via useIsOptimisticallyVoted)

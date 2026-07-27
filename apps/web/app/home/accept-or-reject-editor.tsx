@@ -59,11 +59,14 @@ export function AcceptOrRejectEditor({
 
   const isPending = voteStatus === 'pending';
   const txSucceeded = voteStatus === 'success';
-  // The viewer's effective vote: the server view wins (survives refresh), then
-  // a just-succeeded local choice. Held `undefined` while a tx is in-flight so
-  // the buttons stay interactive with an in-button spinner.
+  // The viewer's effective vote: a just-succeeded local choice wins over the
+  // server view, which after a vote *change* still carries the old vote until
+  // the indexer catches up — letting it win would snap the UI back to the old
+  // choice and allow a duplicate replacement tx. The server view (survives
+  // refresh) applies when nothing succeeded locally. Held `undefined` while a
+  // tx is in-flight so the buttons stay interactive with an in-button spinner.
   const currentVote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' | undefined =
-    userVote?.vote ?? (txSucceeded && pendingChoice ? pendingChoice : undefined);
+    (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? userVote?.vote;
 
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
