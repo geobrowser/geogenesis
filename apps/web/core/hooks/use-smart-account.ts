@@ -1,6 +1,7 @@
 'use client';
 
 import { toViemAccount, useWalletClient, useWallets } from '@geogenesis/auth';
+import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
 import { useCookies } from 'react-cookie';
@@ -8,6 +9,16 @@ import { useCookies } from 'react-cookie';
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import { MAX_QUEUE_WAIT_MS, enqueueFor } from './smart-account-send-queue';
+
+class RevertedUserOperationError extends Error {
+  constructor(hash: `0x${string}`) {
+    super(
+      `UserOperation ${hash} was included on-chain but reverted — the transaction had no effect. ` +
+        'Check permissions and proposal state before retrying.'
+    );
+    this.name = 'RevertedUserOperationError';
+  }
+}
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
@@ -74,11 +85,10 @@ export function useSmartAccount() {
       //    after submission we only ever retry the receipt *wait*, and if the
       //    receipt still hasn't arrived we keep waiting until well past every
       //    caller's retry window before surfacing the failure (with the hash, so
-      //    it's diagnosable). Submission is at-most-once by construction.
-      const kernel = zeroDevAccount as unknown as {
-        waitForUserOperationReceipt: (a: { hash: `0x${string}` }) => Promise<unknown>;
-      };
-
+      //    it's diagnosable). Submission is at-most-once by construction. An
+      //    included-but-REVERTED op is different: nothing landed on-chain, so
+      //    surfacing it immediately is safe (a retry can't duplicate anything)
+      //    and required (receipt.success=false must not read as success).
       const eoaAddress = zeroDevAccount.account.address;
 
       // Longer than every caller retry window (max 10s today) plus slack, so a
@@ -92,9 +102,17 @@ export function useSmartAccount() {
         // RPC errors mid-poll. Retry the wait — never the submission.
         for (;;) {
           try {
-            await kernel.waitForUserOperationReceipt({ hash });
+            const receipt = await zeroDevAccount.waitForUserOperationReceipt({ hash });
+            if (!receipt.success) {
+              throw new RevertedUserOperationError(hash);
+            }
             return;
           } catch (error) {
+            if (error instanceof RevertedUserOperationError) {
+              // Terminal, not transient — don't burn the deadline re-polling a
+              // receipt that already says the op reverted.
+              throw error;
+            }
             lastError = error;
             if (Date.now() - startedAt >= RECEIPT_DEADLINE_MS) {
               throw new Error(
@@ -109,8 +127,13 @@ export function useSmartAccount() {
         }
       };
 
-      const wrapped = {
+      // Typed against the GeoWalletClient contract (no cast) so a consumer
+      // reaching for a method this wrapper doesn't provide fails to compile
+      // instead of throwing `undefined is not a function` at runtime.
+      const wrapped: GeoWalletClient = {
         account: zeroDevAccount.account,
+        // Reads don't contend for nonces — delegate straight through, no queue.
+        waitForUserOperationReceipt: args => zeroDevAccount.waitForUserOperationReceipt(args),
         // Queue-wait bounded: sendTransaction callers sit under
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
@@ -137,7 +160,7 @@ export function useSmartAccount() {
         await Cookie.onConnectionChange({ type: 'connect', address: wrapped.account.address });
       }
 
-      return wrapped as unknown as import('@geogenesis/auth/account').GeoWalletClient;
+      return wrapped;
     },
   });
 
