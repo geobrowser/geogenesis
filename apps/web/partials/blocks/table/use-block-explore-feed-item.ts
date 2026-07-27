@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useSpace } from '~/core/hooks/use-space';
-import { getEntity, getEntityBacklinks } from '~/core/io/queries';
+import { getEntity, getEntityCommentCount } from '~/core/io/queries';
 import {
   useAvatar,
   useCover,
@@ -84,11 +84,8 @@ export function useBlockExploreFeedItem({
   const { space } = useSpace(hideSpaceLink ? undefined : entitySpaceId);
 
   const { data: commentCount = 0 } = useQuery({
-    queryKey: ['entity-backlink-count', rowEntityId],
-    queryFn: async ({ signal }) => {
-      const backlinks = await Effect.runPromise(getEntityBacklinks(rowEntityId, undefined, signal));
-      return backlinks.length;
-    },
+    queryKey: ['entity-comment-count', rowEntityId],
+    queryFn: ({ signal }) => Effect.runPromise(getEntityCommentCount(rowEntityId, signal)),
     staleTime: 60_000,
     enabled,
   });
