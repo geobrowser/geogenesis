@@ -31,8 +31,12 @@ const mocks = vi.hoisted(() => ({
   krispIsEnabled: vi.fn(),
   krispDestroy: vi.fn(),
   roomConnect: vi.fn(),
+  roomConstruct: vi.fn(),
   roomDisconnect: vi.fn(),
   publishTrack: vi.fn(),
+  supportsAudioOutputSelection: vi.fn(),
+  selectAudioOutput: vi.fn(),
+  enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
   clearTimedOutDebateActivity: vi.fn(),
@@ -42,6 +46,7 @@ const mocks = vi.hoisted(() => ({
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
@@ -109,6 +114,10 @@ vi.mock('~/core/debates/debate-room-ownership', () => ({
 vi.mock('livekit-client', () => ({
   createLocalTracks: mocks.createLocalTracks,
   Room: class {
+    constructor(options: unknown) {
+      mocks.roomConstruct(options);
+    }
+
     localParticipant = {
       publishTrack: mocks.publishTrack,
     };
@@ -117,6 +126,7 @@ vi.mock('livekit-client', () => ({
     connect = mocks.roomConnect;
     disconnect = mocks.roomDisconnect;
   },
+  supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
   RoomEvent: {
     TrackSubscribed: 'trackSubscribed',
     TrackUnsubscribed: 'trackUnsubscribed',
@@ -164,8 +174,27 @@ beforeEach(() => {
   mocks.krispIsEnabled.mockReset().mockReturnValue(true);
   mocks.krispDestroy.mockReset().mockResolvedValue(undefined);
   mocks.roomConnect.mockReset();
+  mocks.roomConstruct.mockReset();
   mocks.roomDisconnect.mockReset();
   mocks.publishTrack.mockReset();
+  mocks.supportsAudioOutputSelection.mockReset().mockReturnValue(true);
+  mocks.selectAudioOutput.mockReset().mockImplementation(({ deviceId }: { deviceId: string }) =>
+    Promise.resolve({
+      kind: 'audiooutput',
+      deviceId,
+      groupId: 'speaker-group',
+      label: deviceId === 'speaker-2' ? 'Studio Speakers' : 'System default',
+      toJSON: () => ({}),
+    })
+  );
+  mocks.enumerateDevices.mockReset().mockResolvedValue([
+    { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+    { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+    { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+    { kind: 'audiooutput', deviceId: 'speaker-2', groupId: 'speaker-group-2', label: 'Studio Speakers' },
+    { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    { kind: 'videoinput', deviceId: 'camera-2', groupId: 'camera-group-2', label: 'Desk Camera' },
+  ]);
   mocks.getServerTime.mockReset();
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
@@ -175,6 +204,7 @@ beforeEach(() => {
   mocks.ownershipRelease.mockReset();
   mocks.ownershipClose.mockReset();
   mocks.ownershipTakeoverHandler = null;
+  mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
   mocks.rematch = null;
   mocks.featureFlags = {
@@ -231,14 +261,17 @@ beforeEach(() => {
     configurable: true,
     value: {
       getUserMedia: vi.fn().mockResolvedValue(new MediaStream()),
-      enumerateDevices: vi.fn().mockResolvedValue([
-        { kind: 'audioinput', deviceId: 'mic-1', label: 'Shure MV7+' },
-        { kind: 'audioinput', deviceId: 'mic-2', label: 'Studio Mic' },
-        { kind: 'videoinput', deviceId: 'camera-1', label: 'HD Pro Webcam' },
-        { kind: 'videoinput', deviceId: 'camera-2', label: 'Desk Camera' },
-      ]),
+      enumerateDevices: mocks.enumerateDevices,
+      selectAudioOutput: mocks.selectAudioOutput,
+      addEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'devicechange') mocks.deviceChangeHandler = handler;
+      }),
+      removeEventListener: vi.fn((event: string, handler: () => void) => {
+        if (event === 'devicechange' && mocks.deviceChangeHandler === handler) mocks.deviceChangeHandler = null;
+      }),
     },
   });
+  setMobileLayout(false);
   Object.defineProperty(HTMLMediaElement.prototype, 'play', {
     configurable: true,
     value: vi.fn().mockResolvedValue(undefined),
@@ -262,7 +295,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -274,17 +307,28 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('starts the camera preview after the Strict Mode effect rehearsal', async () => {
+  it('blocks readiness while the combined camera and microphone request is pending', async () => {
+    const pendingTracks =
+      deferred<
+        Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
+      >();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
-    render(
-      <StrictMode>
-        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
-      </StrictMode>
-    );
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(screen.queryByText('Starting camera...')).not.toBeInTheDocument());
-    expect(document.querySelector('video')?.srcObject).toBeInstanceOf(MediaStream);
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: true,
+        video: true,
+      })
+    );
+    expect(screen.getByText('Requesting access to your camera and microphone…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+
+    pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -301,18 +345,23 @@ describe('DebateRoomPageClient', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
-  it('lets participants choose microphone and camera devices from the pre-screen', async () => {
+  it('lets participants choose microphone and camera devices from desktop settings menus', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('combobox', { name: 'Select microphone' })).toHaveValue('mic-1');
-    });
-    expect(screen.getByRole('combobox', { name: 'Select camera' })).toHaveValue('camera-1');
+    const audioTrigger = await screen.findByRole('button', { name: 'Audio settings' });
+    expect(audioTrigger).toHaveAttribute('data-state', 'closed');
+    fireEvent.click(audioTrigger);
+    const audioSettings = screen.getByRole('dialog', { name: 'Audio settings' });
+    expect(audioSettings).toHaveAttribute('data-side', 'top');
+    expect(audioSettings.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
+    expect(audioTrigger).toHaveAttribute('data-state', 'open');
+    expect(audioTrigger).toHaveAttribute('aria-controls', audioSettings.id);
+    expect(screen.getByText('Select a microphone')).toBeInTheDocument();
+    expect(screen.getByText('Select a speaker')).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Select microphone' }), { target: { value: 'mic-2' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Select camera' }), { target: { value: 'camera-2' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
@@ -320,6 +369,13 @@ describe('DebateRoomPageClient', () => {
         video: { deviceId: 'camera-1' },
       });
     });
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Video settings' }));
+    expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Desk Camera' }));
+
     await waitFor(() => {
       expect(mocks.createLocalTracks).toHaveBeenCalledWith({
         audio: { deviceId: 'mic-2' },
@@ -328,22 +384,377 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
-  it('shows the opponent as ready while the local participant can still become ready', () => {
+  it('shows the designed permission recovery state and retries access', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Permission denied by system policy'), { name: 'NotAllowedError' })
+    );
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
+
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps readiness blocked when either required input is unavailable', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValueOnce([createLocalAudioTrack()]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  it('cleans up acquired tracks when device enumeration fails', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = {
+      mediaStreamTrack: { kind: 'video', enabled: true },
+      stop: vi.fn(),
+      detach: vi.fn(),
+    };
+    mocks.createLocalTracks.mockResolvedValueOnce([audioTrack, videoTrack]);
+    mocks.enumerateDevices.mockRejectedValueOnce(new Error('Device enumeration failed'));
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(
+      await screen.findByText('We could not start your camera and microphone. Check your devices and try again.')
+    ).toBeInTheDocument();
+    expect(audioTrack.stop).toHaveBeenCalled();
+    expect(videoTrack.stop).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+  });
+
+  it('changes speaker output without restarting capture and hands the selection to LiveKit', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const selectedOutput = deferred<MediaDeviceInfo>();
+    mocks.selectAudioOutput.mockReturnValueOnce(selectedOutput.promise);
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+    await waitFor(() => expect(mocks.selectAudioOutput).toHaveBeenCalledWith({ deviceId: 'speaker-2' }));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalled());
+    expect(mocks.roomConstruct).not.toHaveBeenCalled();
+
+    act(() =>
+      selectedOutput.resolve({
+        kind: 'audiooutput',
+        deviceId: 'speaker-2',
+        groupId: 'speaker-group-2',
+        label: 'Studio Speakers',
+        toJSON: () => ({}),
+      })
+    );
+
+    await waitFor(() =>
+      expect(mocks.roomConstruct).toHaveBeenCalledWith({
+        adaptiveStream: false,
+        dynacast: false,
+        audioOutput: { deviceId: 'speaker-2' },
+      })
+    );
+  });
+
+  it('falls back to a non-editable System default when speaker routing is unsupported', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.supportsAudioOutputSelection.mockReturnValue(false);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
+    expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+  });
+
+  it('falls back to System default when speaker authorization is rejected', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.selectAudioOutput.mockRejectedValueOnce(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' }));
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled());
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
+    expect(screen.getByText('This browser could not route audio to that speaker. Using System default.')).toBeVisible();
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
+    expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
+  });
+
+  it('ignores an older speaker authorization that finishes after the latest choice', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'audiooutput', deviceId: 'speaker-2', groupId: 'speaker-group-2', label: 'Studio Speakers' },
+      { kind: 'audiooutput', deviceId: 'speaker-3', groupId: 'speaker-group-3', label: 'Display Speakers' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    ]);
+    const olderSelection = deferred<MediaDeviceInfo>();
+    const latestSelection = deferred<MediaDeviceInfo>();
+    mocks.selectAudioOutput.mockImplementation(({ deviceId }: { deviceId: string }) =>
+      deviceId === 'speaker-2' ? olderSelection.promise : latestSelection.promise
+    );
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Speakers' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Display Speakers' }));
+
+    act(() =>
+      latestSelection.resolve({
+        kind: 'audiooutput',
+        deviceId: 'speaker-3',
+        groupId: 'speaker-group-3',
+        label: 'Display Speakers',
+        toJSON: () => ({}),
+      })
+    );
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Display Speakers' })).toBeChecked());
+
+    act(() => olderSelection.reject(Object.assign(new Error('Not allowed'), { name: 'NotAllowedError' })));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Display Speakers' })).toBeChecked());
+    expect(screen.queryByText(/could not route audio/i)).not.toBeInTheDocument();
+  });
+
+  it('closes desktop settings with Escape and returns focus to the trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const settings = screen.getByRole('dialog', { name: 'Audio settings' });
+
+    fireEvent.keyDown(settings, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('closes desktop settings on outside click and returns focus to the trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+    await act(() => new Promise(resolve => window.setTimeout(resolve, 0)));
+
+    fireEvent.pointerDown(document.body, { button: 0, pointerType: 'mouse' });
+    fireEvent.click(document.body);
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('toggles desktop settings closed from the active trigger', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+  });
+
+  it('supports keyboard device selection without closing the desktop menu', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+    const selectedCamera = screen.getByRole('radio', { name: 'HD Pro Webcam' });
+    selectedCamera.focus();
+
+    fireEvent.keyDown(selectedCamera, { key: 'ArrowDown' });
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-1' },
+        video: { deviceId: 'camera-2' },
+      })
+    );
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toBeInTheDocument();
+  });
+
+  it('keeps the desktop menu open while a selected input is restarting', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    const pendingTracks =
+      deferred<
+        Array<ReturnType<typeof createLocalAudioTrack> | { mediaStreamTrack: { kind: string }; stop: () => void }>
+      >();
+    mocks.createLocalTracks.mockReturnValueOnce(pendingTracks.promise);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+
+    pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+  });
+
+  it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Video settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Video settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+    const videos = document.querySelectorAll('video');
+    expect(videos).toHaveLength(2);
+    expect(videos[0]?.srcObject).toBe(videos[1]?.srcObject);
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens mobile audio settings with microphone and speaker groups', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+    expect(screen.getByText('Select a microphone')).toBeInTheDocument();
+    expect(screen.getByText('Select a speaker')).toBeInTheDocument();
+  });
+
+  it('returns focus to the mobile settings trigger after closing the sheet', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    setMobileLayout(true);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    const trigger = await screen.findByRole('button', { name: 'Audio settings' });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close Audio settings' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Audio settings' })).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+  });
+
+  it('preserves valid device selections and restarts capture when a selected device is removed', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-2' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+    const callCountWithValidSelection = mocks.createLocalTracks.mock.calls.length;
+
+    act(() => mocks.deviceChangeHandler?.());
+    await waitFor(() => expect(mocks.enumerateDevices).toHaveBeenCalled());
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(callCountWithValidSelection);
+
+    mocks.enumerateDevices.mockResolvedValue([
+      { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+      { kind: 'videoinput', deviceId: 'camera-2', groupId: 'camera-group-2', label: 'Desk Camera' },
+    ]);
+    act(() => mocks.deviceChangeHandler?.());
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-1' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+  });
+
+  it('ignores stale device enumeration results during rapid hardware changes', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await screen.findByRole('button', { name: 'Accept' });
+    const olderEnumeration = deferred<MediaDeviceInfo[]>();
+    mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
+      { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
+      { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+      { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+    ]);
+
+    act(() => mocks.deviceChangeHandler?.());
+    act(() => mocks.deviceChangeHandler?.());
+
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith({
+        audio: { deviceId: 'mic-2' },
+        video: { deviceId: 'camera-1' },
+      })
+    );
+
+    act(() =>
+      olderEnumeration.resolve([
+        { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
+        { kind: 'audiooutput', deviceId: 'default', groupId: 'speaker-group-1', label: 'System default' },
+        { kind: 'videoinput', deviceId: 'camera-1', groupId: 'camera-group-1', label: 'HD Pro Webcam' },
+      ] as MediaDeviceInfo[])
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
+  });
+
+  it('shows the opponent as ready while the local participant can still become ready', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: true });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
   });
 
-  it('disables the ready button while waiting for the opponent', () => {
+  it('disables the ready button while waiting for the opponent', async () => {
     mocks.debate = readyDebate({ localReady: true, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
     expect(screen.getAllByText('Waiting...')).toHaveLength(2);
   });
 
@@ -352,7 +763,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -1012,12 +1423,8 @@ describe('DebateRoomPageClient', () => {
     const newEnabling = deferred<void>();
     const firstAudioTrack = createLocalAudioTrack();
     const retriedAudioTrack = createLocalAudioTrack();
-    const oldSetEnabled = vi.fn((enabled: boolean) =>
-      enabled ? Promise.resolve(undefined) : oldDisabling.promise
-    );
-    const newSetEnabled = vi.fn((enabled: boolean) =>
-      enabled ? newEnabling.promise : Promise.resolve(undefined)
-    );
+    const oldSetEnabled = vi.fn((enabled: boolean) => (enabled ? Promise.resolve(undefined) : oldDisabling.promise));
+    const newSetEnabled = vi.fn((enabled: boolean) => (enabled ? newEnabling.promise : Promise.resolve(undefined)));
     mocks.krispNoiseFilter
       .mockReturnValueOnce({
         processedTrack: { kind: 'audio', enabled: true, id: 'old-krisp-audio' },
@@ -1817,10 +2224,28 @@ function createLocalAudioTrack() {
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>(resolvePromise => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+function setMobileLayout(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 767px)' ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  );
 }
 
 function completedDebate(): Debate {

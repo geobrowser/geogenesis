@@ -42,11 +42,24 @@ import {
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
-import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
+
+import {
+  DebatePreScreen,
+  type MediaDeviceOption,
+  type PreJoinMediaState,
+  systemDefaultAudioOutput,
+} from './debate-pre-join-screen';
+import {
+  CameraIcon,
+  LeaveIcon,
+  MicrophoneIcon,
+  MutedMicrophoneIndicator,
+  RecordingCircleButton,
+  SpeakerIcon,
+} from './debate-room-controls';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -69,11 +82,6 @@ const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   disabled: 'Off',
   unsupported: 'Unavailable',
   failed: 'Failed',
-};
-
-type MediaDeviceOption = {
-  deviceId: string;
-  label: string;
 };
 
 type RemoteTrackLike = {
@@ -159,8 +167,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [roomError, setRoomError] = React.useState<string | null>(null);
   const [connectionConflict, setConnectionConflict] = React.useState(false);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
-  const [previewState, setPreviewState] = React.useState<'idle' | 'starting' | 'ready'>('idle');
+  const [previewState, setPreviewState] = React.useState<PreJoinMediaState>('requesting');
+  const [previewBusy, setPreviewBusy] = React.useState(true);
   const [previewError, setPreviewError] = React.useState<string | null>(null);
+  const [previewStream, setPreviewStream] = React.useState<MediaStream | null>(null);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
@@ -168,19 +178,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [audioInputDevices, setAudioInputDevices] = React.useState<MediaDeviceOption[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = React.useState<MediaDeviceOption[]>([systemDefaultAudioOutput]);
   const [videoInputDevices, setVideoInputDevices] = React.useState<MediaDeviceOption[]>([]);
   const [selectedAudioInputId, setSelectedAudioInputId] = React.useState('');
+  const [selectedAudioOutputId, setSelectedAudioOutputId] = React.useState(systemDefaultAudioOutput.deviceId);
   const [selectedVideoInputId, setSelectedVideoInputId] = React.useState('');
+  const [audioOutputSupported, setAudioOutputSupported] = React.useState(false);
+  const [audioOutputError, setAudioOutputError] = React.useState<string | null>(null);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
   const [noiseFilterTogglePending, setNoiseFilterTogglePending] = React.useState(false);
   const selectedAudioInputIdRef = React.useRef('');
+  const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
   const selectedVideoInputIdRef = React.useRef('');
+  const audioOutputSupportedRef = React.useRef(false);
+  const audioOutputSelectionFailedRef = React.useRef(false);
   const noiseFilterProcessorRef = React.useRef<KrispNoiseFilterProcessor | null>(null);
   const noiseFilterEnabledRef = React.useRef(true);
   const noiseFilterTogglePendingRef = React.useRef(false);
   const sourceMediaStreamTracksRef = React.useRef(new WeakMap<LocalTrackLike, MediaStreamTrack>());
   const mountedRef = React.useRef(true);
   const previewGenerationRef = React.useRef(0);
+  const mediaDeviceRefreshGenerationRef = React.useRef(0);
+  const audioOutputSelectionGenerationRef = React.useRef(0);
   const connectionGenerationRef = React.useRef(0);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
@@ -192,6 +211,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const recordingChunksRef = React.useRef<Blob[]>([]);
   const recordingStartedAtRef = React.useRef<number | null>(null);
@@ -509,35 +529,56 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const refreshMediaDevices = React.useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return;
+    const generation = mediaDeviceRefreshGenerationRef.current + 1;
+    mediaDeviceRefreshGenerationRef.current = generation;
     const devices = await navigator.mediaDevices.enumerateDevices();
-    if (!mountedRef.current) return;
+    if (!mountedRef.current || mediaDeviceRefreshGenerationRef.current !== generation) return;
     const audioInputs = devices
       .filter(device => device.kind === 'audioinput')
       .map((device, index) => ({
         deviceId: device.deviceId,
+        groupId: device.groupId,
+        kind: 'audioinput' as const,
         label: device.label || `Microphone ${index + 1}`,
       }));
+    const audioOutputs = audioOutputSupportedRef.current
+      ? devices
+          .filter(device => device.kind === 'audiooutput')
+          .map((device, index) => ({
+            deviceId: device.deviceId,
+            groupId: device.groupId,
+            kind: 'audiooutput' as const,
+            label: device.label || `Speaker ${index + 1}`,
+          }))
+      : [systemDefaultAudioOutput];
     const videoInputs = devices
       .filter(device => device.kind === 'videoinput')
       .map((device, index) => ({
         deviceId: device.deviceId,
+        groupId: device.groupId,
+        kind: 'videoinput' as const,
         label: device.label || `Camera ${index + 1}`,
       }));
 
-    setAudioInputDevices(audioInputs);
-    setVideoInputDevices(videoInputs);
-    setSelectedAudioInputId(current => {
-      const next =
-        current && audioInputs.some(device => device.deviceId === current) ? current : (audioInputs[0]?.deviceId ?? '');
-      selectedAudioInputIdRef.current = next;
-      return next;
-    });
-    setSelectedVideoInputId(current => {
-      const next =
-        current && videoInputs.some(device => device.deviceId === current) ? current : (videoInputs[0]?.deviceId ?? '');
-      selectedVideoInputIdRef.current = next;
-      return next;
-    });
+    const availableOutputs = audioOutputs.length > 0 ? audioOutputs : [systemDefaultAudioOutput];
+    setAudioInputDevices(current => (sameMediaDeviceOptions(current, audioInputs) ? current : audioInputs));
+    setAudioOutputDevices(current => (sameMediaDeviceOptions(current, availableOutputs) ? current : availableOutputs));
+    setVideoInputDevices(current => (sameMediaDeviceOptions(current, videoInputs) ? current : videoInputs));
+    const nextAudioInputId = retainOrPreferDefaultDevice(selectedAudioInputIdRef.current, audioInputs);
+    const nextAudioOutputId = retainOrPreferDefaultDevice(selectedAudioOutputIdRef.current, availableOutputs);
+    const nextVideoInputId = retainOrPreferDefaultDevice(selectedVideoInputIdRef.current, videoInputs);
+
+    selectedAudioInputIdRef.current = nextAudioInputId;
+    selectedAudioOutputIdRef.current = nextAudioOutputId;
+    selectedVideoInputIdRef.current = nextVideoInputId;
+    setSelectedAudioInputId(nextAudioInputId);
+    setSelectedAudioOutputId(nextAudioOutputId);
+    setSelectedVideoInputId(nextVideoInputId);
+
+    return {
+      audioInputId: nextAudioInputId,
+      videoInputId: nextVideoInputId,
+    };
   }, []);
 
   const ensureLocalPreview = React.useCallback(
@@ -554,7 +595,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           localVideoRef.current.muted = true;
           await localVideoRef.current.play().catch(() => undefined);
         }
+        setPreviewStream(localMediaStreamRef.current);
         setPreviewState('ready');
+        setPreviewBusy(false);
         return localTracksRef.current;
       }
       if (localPreviewPromiseRef.current) {
@@ -562,16 +605,31 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await localPreviewPromiseRef.current.catch(() => undefined);
       }
 
+      const replacingReadyPreview =
+        Boolean(options.forceRestart) && localTracksRef.current.length > 0 && localMediaStreamRef.current !== null;
       setPreviewError(null);
-      setPreviewState('starting');
+      setPreviewBusy(true);
+      if (!replacingReadyPreview) setPreviewState('requesting');
       const generation = previewGenerationRef.current + 1;
       previewGenerationRef.current = generation;
       const isCurrent = () => mountedRef.current && previewGenerationRef.current === generation;
       const previewPromise = (async () => {
         const livekit = await import('livekit-client');
         if (!isCurrent()) return [];
+        const supportsOutput =
+          !audioOutputSelectionFailedRef.current &&
+          typeof livekit.supportsAudioOutputSelection === 'function' &&
+          livekit.supportsAudioOutputSelection();
+        audioOutputSupportedRef.current = supportsOutput;
+        setAudioOutputSupported(supportsOutput);
+        if (!supportsOutput) {
+          selectedAudioOutputIdRef.current = systemDefaultAudioOutput.deviceId;
+          setSelectedAudioOutputId(systemDefaultAudioOutput.deviceId);
+          setAudioOutputDevices([systemDefaultAudioOutput]);
+        }
         stopLocalTracks(localTracksRef);
         localMediaStreamRef.current = null;
+        if (!replacingReadyPreview) setPreviewStream(null);
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
         const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
         const tracks = (await livekit.createLocalTracks({
@@ -582,6 +640,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           stopTracks(tracks);
           return [];
         }
+        if (
+          !tracks.some(track => track.mediaStreamTrack.kind === 'audio') ||
+          !tracks.some(track => track.mediaStreamTrack.kind === 'video')
+        ) {
+          stopTracks(tracks);
+          throw Object.assign(new Error('Required media tracks are unavailable.'), { name: 'NotFoundError' });
+        }
         localTracksRef.current = tracks;
         setLocalTrackPreferences(tracks, {
           audioEnabled: shouldEnableLocalAudio(countdown.effectiveStatus, countdown.activeSlot, localSlot, audioMuted),
@@ -589,6 +654,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         });
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         localMediaStreamRef.current = stream;
+        setPreviewStream(stream);
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
           localVideoRef.current.muted = true;
@@ -598,9 +664,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (!isCurrent()) {
           stopLocalTracks(localTracksRef);
           localMediaStreamRef.current = null;
+          setPreviewStream(null);
           return [];
         }
         setPreviewState('ready');
+        setPreviewBusy(false);
         return tracks;
       })();
       localPreviewPromiseRef.current = previewPromise;
@@ -608,8 +676,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         return await previewPromise;
       } catch (error) {
         if (isCurrent()) {
-          setPreviewError(error instanceof Error ? error.message : 'Could not start your camera preview.');
-          setPreviewState('idle');
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          const failure = preJoinMediaFailure(error);
+          setPreviewError(failure.message);
+          setPreviewState(failure.state);
+          setPreviewBusy(false);
+          setPreviewStream(null);
         }
         throw error;
       } finally {
@@ -646,6 +719,58 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     },
     [ensureLocalPreview]
   );
+
+  const changeAudioOutput = React.useCallback(async (deviceId: string) => {
+    if (!audioOutputSupportedRef.current) return;
+    const generation = audioOutputSelectionGenerationRef.current + 1;
+    audioOutputSelectionGenerationRef.current = generation;
+    setAudioOutputError(null);
+
+    const selectionPromise = (async () => {
+      const isCurrent = () => mountedRef.current && audioOutputSelectionGenerationRef.current === generation;
+      try {
+        let selectedId = deviceId;
+        const mediaDevices = navigator.mediaDevices as MediaDevices & {
+          selectAudioOutput?: (options: { deviceId: string }) => Promise<MediaDeviceInfo>;
+        };
+        if (deviceId !== systemDefaultAudioOutput.deviceId && mediaDevices.selectAudioOutput) {
+          const authorizedDevice = await mediaDevices.selectAudioOutput({ deviceId });
+          if (!isCurrent()) return;
+          selectedId = authorizedDevice.deviceId;
+          setAudioOutputDevices(current =>
+            current.some(device => device.deviceId === selectedId)
+              ? current
+              : [
+                  ...current,
+                  {
+                    deviceId: authorizedDevice.deviceId,
+                    groupId: authorizedDevice.groupId,
+                    kind: 'audiooutput',
+                    label: authorizedDevice.label || 'Selected speaker',
+                  },
+                ]
+          );
+        }
+        if (!isCurrent()) return;
+        selectedAudioOutputIdRef.current = selectedId;
+        setSelectedAudioOutputId(selectedId);
+      } catch {
+        if (!isCurrent()) return;
+        audioOutputSelectionFailedRef.current = true;
+        audioOutputSupportedRef.current = false;
+        selectedAudioOutputIdRef.current = systemDefaultAudioOutput.deviceId;
+        setAudioOutputSupported(false);
+        setAudioOutputDevices([systemDefaultAudioOutput]);
+        setSelectedAudioOutputId(systemDefaultAudioOutput.deviceId);
+        setAudioOutputError('This browser could not route audio to that speaker. Using System default.');
+      }
+    })();
+    audioOutputSelectionPromiseRef.current = selectionPromise;
+    await selectionPromise;
+    if (audioOutputSelectionPromiseRef.current === selectionPromise) {
+      audioOutputSelectionPromiseRef.current = null;
+    }
+  }, []);
 
   const initializeNoiseFilter = React.useCallback(async (tracks: LocalTrackLike[], isCurrent: () => boolean) => {
     noiseFilterProcessorRef.current = null;
@@ -708,193 +833,187 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const connect = React.useCallback(async (options: { takeover?: boolean } = {}) => {
-    const generation = connectionGenerationRef.current + 1;
-    connectionGenerationRef.current = generation;
-    const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
-    let connectingRoom: RoomLike | null = null;
-    let newlyCreatedTracks: LocalTrackLike[] = [];
-    const ownership = ownershipRef.current;
-    const ownsConnection = options.takeover ? await ownership?.requestTakeover() : await ownership?.acquire();
-    if (!isCurrent()) return;
-    if (ownsConnection === false) {
-      setConnectionConflict(true);
-      setRoomError('This debate is already open in another tab.');
-      setRoomState('idle');
-      logDebateConnectionDiagnostic('ownership-blocked', {
-        debateId,
-        instanceId: connectionInstanceIdRef.current,
-        roomState: roomStateRef.current,
-      });
-      return;
-    }
-
-    setConnectionConflict(false);
-    setRoomError(null);
-    setRoomState('connecting');
-    setServerClockSettled(false);
-    setRemoteVideoReady(false);
-    if (remoteParticipantRefetchTimerRef.current !== null) {
-      window.clearTimeout(remoteParticipantRefetchTimerRef.current);
-      remoteParticipantRefetchTimerRef.current = null;
-    }
-    remoteMediaRef.current?.replaceChildren();
-    void synchronizeServerClock(getServerTime)
-      .then(clock => {
-        if (isCurrent()) setServerClock(clock);
-      })
-      .catch(() => null)
-      .finally(() => {
-        if (isCurrent()) setServerClockSettled(true);
-      });
-
-    try {
-      const token = await liveKitJoin.mutateAsync();
+  const connect = React.useCallback(
+    async (options: { takeover?: boolean } = {}) => {
+      const generation = connectionGenerationRef.current + 1;
+      connectionGenerationRef.current = generation;
+      const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
+      let connectingRoom: RoomLike | null = null;
+      let newlyCreatedTracks: LocalTrackLike[] = [];
+      const ownership = ownershipRef.current;
+      const ownsConnection = options.takeover ? await ownership?.requestTakeover() : await ownership?.acquire();
       if (!isCurrent()) return;
-      setJoinResponse(token);
-
-      const livekit = await import('livekit-client');
-      if (!isCurrent()) return;
-      // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
-      // adaptiveStream pauses a subscribed remote video when it judges the element off-screen or
-      // too small, and dynacast stops publishing layers no one is consuming; together they black
-      // out a tile mid-turn.
-      const room = new livekit.Room({ adaptiveStream: false, dynacast: false }) as unknown as RoomLike;
-      connectingRoom = room;
-      connectingRoomRef.current = room;
-      room.on(livekit.RoomEvent.TrackSubscribed, payload => {
-        // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
-        // reject only a different room here rather than a not-yet-set one.
-        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
-        const track = payload as RemoteTrackLike;
-        const element = track.attach();
-        if (element instanceof HTMLMediaElement) {
-          element.muted = !remoteAudioEnabledRef.current;
-        }
-        if (element instanceof HTMLVideoElement) {
-          element.className = 'h-full w-full object-contain';
-          element.playsInline = true;
-          setRemoteVideoReady(true);
-        } else if (element instanceof HTMLAudioElement) {
-          element.className = 'hidden';
-        }
-        remoteMediaRef.current?.appendChild(element);
-        void refetchDebate();
-      });
-      // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
-      // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
-      // re-subscribe attaches a fresh element rather than stacking a second one behind it.
-      room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
-        if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
-        const track = payload as RemoteTrackLike;
-        for (const element of track.detach()) element.remove();
-        if (track.kind === 'video') setRemoteVideoReady(false);
-      });
-      room.on(livekit.RoomEvent.ParticipantConnected, () => {
-        if (!isCurrent()) return;
-        void refetchDebate();
-        remoteParticipantRefetchTimerRef.current = window.setTimeout(() => {
-          remoteParticipantRefetchTimerRef.current = null;
-          if (isCurrent()) void refetchDebate();
-        }, 250);
-      });
-      // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
-      // blips sees "Reconnecting" instead of a silently frozen call. Clear the remote
-      // tiles on the way out so stale elements from the dropped session don't linger behind the
-      // re-subscribed tracks.
-      room.on(livekit.RoomEvent.Reconnecting, () => {
-        if (!isCurrent() || roomRef.current !== room) return;
-        remoteMediaRef.current?.replaceChildren();
-        setRemoteVideoReady(false);
-        setRoomState('reconnecting');
-      });
-      room.on(livekit.RoomEvent.Reconnected, () => {
-        if (!isCurrent() || roomRef.current !== room) return;
-        setRoomState('connected');
-      });
-      // A non-client-initiated Disconnected means auto-reconnect gave up. Our own teardown always
-      // disconnects with CLIENT_INITIATED, so this branch only fires on a genuinely dropped call:
-      // tear the room down and return to idle, where the "Retry connection" affordance lives.
-      room.on(livekit.RoomEvent.Disconnected, payload => {
-        if (!isCurrent() || roomRef.current !== room) return;
-        if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
-        connectionGenerationRef.current += 1;
-        // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
-        // call room.disconnect() a second time and could re-enter this handler.
-        roomRef.current = null;
-        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
-        noiseFilterProcessorRef.current = null;
-        ownershipRef.current?.release();
-        localMediaStreamRef.current = null;
-        setRemoteVideoReady(false);
-        const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
-        setConnectionConflict(duplicateIdentity);
-        setRoomError(
-          duplicateIdentity
-            ? 'This debate is active in another tab or device.'
-            : 'Lost connection to the debate room.'
-        );
+      if (ownsConnection === false) {
+        setConnectionConflict(true);
+        setRoomError('This debate is already open in another tab.');
         setRoomState('idle');
-        logDebateConnectionDiagnostic('livekit-disconnected', {
+        logDebateConnectionDiagnostic('ownership-blocked', {
           debateId,
           instanceId: connectionInstanceIdRef.current,
           roomState: roomStateRef.current,
-          disconnectReason: payload,
         });
-      });
-
-      await room.connect(token.url, token.token);
-      if (!isCurrent()) {
-        room.disconnect();
-        if (connectingRoomRef.current === room) connectingRoomRef.current = null;
-        return;
-      }
-      connectingRoomRef.current = null;
-      roomRef.current = room;
-      const hasPreviewTracks = localTracksRef.current.length > 0;
-      const tracks = hasPreviewTracks
-        ? localTracksRef.current
-        : ((await livekit.createLocalTracks({
-            audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
-            video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
-          })) as LocalTrackLike[]);
-      if (!hasPreviewTracks) newlyCreatedTracks = tracks;
-      if (!isCurrent()) {
-        room.disconnect();
-        stopTracks(newlyCreatedTracks);
-        if (roomRef.current === room) roomRef.current = null;
-        return;
-      }
-      localTracksRef.current = tracks;
-      setLocalTrackPreferences(
-        tracks,
-        {
-          audioEnabled: shouldEnableLocalAudio(
-            countdown.effectiveStatus,
-            countdown.activeSlot,
-            token.participant_slot,
-            audioMuted
-          ),
-          videoEnabled,
-        },
-        sourceMediaStreamTracksRef.current
-      );
-
-      // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
-      // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
-      // several seconds; that's long enough to miss the server's connecting deadline and get the
-      // debate cancelled with connection_timeout even though both participants are present.
-      await markJoined.mutateAsync();
-      if (!isCurrent()) {
-        room.disconnect();
-        stopLocalTracks(localTracksRef);
-        localMediaStreamRef.current = null;
-        if (roomRef.current === room) roomRef.current = null;
         return;
       }
 
-      for (const track of tracks) {
-        await publishTrackWithRetry(room, track, isCurrent);
+      setConnectionConflict(false);
+      setRoomError(null);
+      setRoomState('connecting');
+      setServerClockSettled(false);
+      setRemoteVideoReady(false);
+      if (remoteParticipantRefetchTimerRef.current !== null) {
+        window.clearTimeout(remoteParticipantRefetchTimerRef.current);
+        remoteParticipantRefetchTimerRef.current = null;
+      }
+      remoteMediaRef.current?.replaceChildren();
+      void synchronizeServerClock(getServerTime)
+        .then(clock => {
+          if (isCurrent()) setServerClock(clock);
+        })
+        .catch(() => null)
+        .finally(() => {
+          if (isCurrent()) setServerClockSettled(true);
+        });
+
+      try {
+        const token = await liveKitJoin.mutateAsync();
+        if (!isCurrent()) return;
+        setJoinResponse(token);
+
+        const livekit = await import('livekit-client');
+        if (!isCurrent()) return;
+        await audioOutputSelectionPromiseRef.current;
+        if (!isCurrent()) return;
+        // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
+        // adaptiveStream pauses a subscribed remote video when it judges the element off-screen or
+        // too small, and dynacast stops publishing layers no one is consuming; together they black
+        // out a tile mid-turn.
+        const roomOptions = debateRoomOptions(audioOutputSupportedRef.current, selectedAudioOutputIdRef.current);
+        const room = new livekit.Room(roomOptions) as unknown as RoomLike;
+        connectingRoom = room;
+        connectingRoomRef.current = room;
+        room.on(livekit.RoomEvent.TrackSubscribed, payload => {
+          // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
+          // reject only a different room here rather than a not-yet-set one.
+          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          const track = payload as RemoteTrackLike;
+          const element = track.attach();
+          if (element instanceof HTMLMediaElement) {
+            element.muted = !remoteAudioEnabledRef.current;
+          }
+          if (element instanceof HTMLVideoElement) {
+            element.className = 'h-full w-full object-contain';
+            element.playsInline = true;
+            setRemoteVideoReady(true);
+          } else if (element instanceof HTMLAudioElement) {
+            element.className = 'hidden';
+          }
+          remoteMediaRef.current?.appendChild(element);
+          void refetchDebate();
+        });
+        // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
+        // tile. Resetting remoteVideoReady flips the tile back to "Waiting for video" so a later
+        // re-subscribe attaches a fresh element rather than stacking a second one behind it.
+        room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
+          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          const track = payload as RemoteTrackLike;
+          for (const element of track.detach()) element.remove();
+          if (track.kind === 'video') setRemoteVideoReady(false);
+        });
+        room.on(livekit.RoomEvent.ParticipantConnected, () => {
+          if (!isCurrent()) return;
+          void refetchDebate();
+          remoteParticipantRefetchTimerRef.current = window.setTimeout(() => {
+            remoteParticipantRefetchTimerRef.current = null;
+            if (isCurrent()) void refetchDebate();
+          }, 250);
+        });
+        // LiveKit runs its own ICE-restart reconnection; surface it so a debater whose connection
+        // blips sees "Reconnecting" instead of a silently frozen call. Clear the remote
+        // tiles on the way out so stale elements from the dropped session don't linger behind the
+        // re-subscribed tracks.
+        room.on(livekit.RoomEvent.Reconnecting, () => {
+          if (!isCurrent() || roomRef.current !== room) return;
+          remoteMediaRef.current?.replaceChildren();
+          setRemoteVideoReady(false);
+          setRoomState('reconnecting');
+        });
+        room.on(livekit.RoomEvent.Reconnected, () => {
+          if (!isCurrent() || roomRef.current !== room) return;
+          setRoomState('connected');
+        });
+        // A non-client-initiated Disconnected means auto-reconnect gave up. Our own teardown always
+        // disconnects with CLIENT_INITIATED, so this branch only fires on a genuinely dropped call:
+        // tear the room down and return to idle, where the "Retry connection" affordance lives.
+        room.on(livekit.RoomEvent.Disconnected, payload => {
+          if (!isCurrent() || roomRef.current !== room) return;
+          if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+          connectionGenerationRef.current += 1;
+          // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
+          // call room.disconnect() a second time and could re-enter this handler.
+          roomRef.current = null;
+          disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+          noiseFilterProcessorRef.current = null;
+          ownershipRef.current?.release();
+          localMediaStreamRef.current = null;
+          setRemoteVideoReady(false);
+          const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
+          setConnectionConflict(duplicateIdentity);
+          setRoomError(
+            duplicateIdentity
+              ? 'This debate is active in another tab or device.'
+              : 'Lost connection to the debate room.'
+          );
+          setRoomState('idle');
+          logDebateConnectionDiagnostic('livekit-disconnected', {
+            debateId,
+            instanceId: connectionInstanceIdRef.current,
+            roomState: roomStateRef.current,
+            disconnectReason: payload,
+          });
+        });
+
+        await room.connect(token.url, token.token);
+        if (!isCurrent()) {
+          room.disconnect();
+          if (connectingRoomRef.current === room) connectingRoomRef.current = null;
+          return;
+        }
+        connectingRoomRef.current = null;
+        roomRef.current = room;
+        const hasPreviewTracks = localTracksRef.current.length > 0;
+        const tracks = hasPreviewTracks
+          ? localTracksRef.current
+          : ((await livekit.createLocalTracks({
+              audio: selectedAudioInputIdRef.current ? { deviceId: selectedAudioInputIdRef.current } : true,
+              video: selectedVideoInputIdRef.current ? { deviceId: selectedVideoInputIdRef.current } : true,
+            })) as LocalTrackLike[]);
+        if (!hasPreviewTracks) newlyCreatedTracks = tracks;
+        if (!isCurrent()) {
+          room.disconnect();
+          stopTracks(newlyCreatedTracks);
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
+        localTracksRef.current = tracks;
+        setLocalTrackPreferences(
+          tracks,
+          {
+            audioEnabled: shouldEnableLocalAudio(
+              countdown.effectiveStatus,
+              countdown.activeSlot,
+              token.participant_slot,
+              audioMuted
+            ),
+            videoEnabled,
+          },
+          sourceMediaStreamTracksRef.current
+        );
+
+        // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
+        // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
+        // several seconds; that's long enough to miss the server's connecting deadline and get the
+        // debate cancelled with connection_timeout even though both participants are present.
+        await markJoined.mutateAsync();
         if (!isCurrent()) {
           room.disconnect();
           stopLocalTracks(localTracksRef);
@@ -902,63 +1021,75 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
-      }
 
-      // LiveKit supplies the audio context required by audio processors while publishing the
-      // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
-      // the same processed track used by the outbound publication.
-      await initializeNoiseFilter(tracks, isCurrent);
-      if (!isCurrent()) {
-        room.disconnect();
-        stopLocalTracks(localTracksRef);
-        localMediaStreamRef.current = null;
-        if (roomRef.current === room) roomRef.current = null;
-        return;
-      }
-      const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
-      localMediaStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.muted = true;
-        await localVideoRef.current.play().catch(() => undefined);
-      }
+        for (const track of tracks) {
+          await publishTrackWithRetry(room, track, isCurrent);
+          if (!isCurrent()) {
+            room.disconnect();
+            stopLocalTracks(localTracksRef);
+            localMediaStreamRef.current = null;
+            if (roomRef.current === room) roomRef.current = null;
+            return;
+          }
+        }
 
-      if (!isCurrent()) {
-        room.disconnect();
-        stopLocalTracks(localTracksRef);
-        localMediaStreamRef.current = null;
-        if (roomRef.current === room) roomRef.current = null;
-        return;
-      }
-      setConnectionConflict(false);
-      setRoomState('connected');
-    } catch (error) {
-      if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
-      if (connectingRoom && roomRef.current !== connectingRoom) {
-        connectingRoom.disconnect();
-        stopTracks(newlyCreatedTracks);
-      }
-      disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
-      localMediaStreamRef.current = null;
-      if (isCurrent()) {
-        ownershipRef.current?.release();
+        // LiveKit supplies the audio context required by audio processors while publishing the
+        // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
+        // the same processed track used by the outbound publication.
+        await initializeNoiseFilter(tracks, isCurrent);
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
+        const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
+        localMediaStreamRef.current = stream;
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+          localVideoRef.current.muted = true;
+          await localVideoRef.current.play().catch(() => undefined);
+        }
+
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
         setConnectionConflict(false);
-        setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-        setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
+        setRoomState('connected');
+      } catch (error) {
+        if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
+        if (connectingRoom && roomRef.current !== connectingRoom) {
+          connectingRoom.disconnect();
+          stopTracks(newlyCreatedTracks);
+        }
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        if (isCurrent()) {
+          ownershipRef.current?.release();
+          setConnectionConflict(false);
+          setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
+          setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
+        }
       }
-    }
-  }, [
-    audioMuted,
-    countdown.activeSlot,
-    countdown.effectiveStatus,
-    debateId,
-    debate?.status,
-    initializeNoiseFilter,
-    liveKitJoin,
-    markJoined,
-    refetchDebate,
-    videoEnabled,
-  ]);
+    },
+    [
+      audioMuted,
+      countdown.activeSlot,
+      countdown.effectiveStatus,
+      debateId,
+      debate?.status,
+      initializeNoiseFilter,
+      liveKitJoin,
+      markJoined,
+      refetchDebate,
+      videoEnabled,
+    ]
+  );
 
   const retryConnection = React.useCallback(() => {
     void connect();
@@ -1202,6 +1333,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     return () => {
       mountedRef.current = false;
       previewGenerationRef.current += 1;
+      mediaDeviceRefreshGenerationRef.current += 1;
+      audioOutputSelectionGenerationRef.current += 1;
       connectionGenerationRef.current += 1;
       if (connectionFailureRedirectTimerRef.current !== null) {
         window.clearTimeout(connectionFailureRedirectTimerRef.current);
@@ -1230,6 +1363,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
     void ensureLocalPreview().catch(() => undefined);
   }, [debate, ensureLocalPreview, roomState]);
+
+  React.useEffect(() => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.addEventListener) return;
+    const handleDeviceChange = () => {
+      const previousAudioInputId = selectedAudioInputIdRef.current;
+      const previousVideoInputId = selectedVideoInputIdRef.current;
+      void refreshMediaDevices()
+        .then(selection => {
+          if (!selection || localTracksRef.current.length === 0) return;
+          if (selection.audioInputId === previousAudioInputId && selection.videoInputId === previousVideoInputId) {
+            return;
+          }
+          void ensureLocalPreview({
+            forceRestart: true,
+            audioInputId: selection.audioInputId,
+            videoInputId: selection.videoInputId,
+          }).catch(() => undefined);
+        })
+        .catch(() => undefined);
+    };
+    mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+  }, [ensureLocalPreview, refreshMediaDevices]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
@@ -1373,14 +1530,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             debate={debate}
             currentUserId={currentUserId}
             localVideoRef={localVideoRef}
+            previewStream={previewStream}
             previewState={previewState}
+            previewBusy={previewBusy}
             error={roomError ?? previewError}
             audioInputDevices={audioInputDevices}
+            audioOutputDevices={audioOutputDevices}
             videoInputDevices={videoInputDevices}
             selectedAudioInputId={selectedAudioInputId}
+            selectedAudioOutputId={selectedAudioOutputId}
             selectedVideoInputId={selectedVideoInputId}
+            audioOutputSupported={audioOutputSupported}
+            audioOutputError={audioOutputError}
             onAudioInputChange={changeAudioInput}
+            onAudioOutputChange={changeAudioOutput}
             onVideoInputChange={changeVideoInput}
+            onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
             readyBusy={markReady.isPending}
             onReady={markLocalReady}
             onLeave={leave}
@@ -1473,221 +1638,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             )}
           </>
         ))}
-    </div>
-  );
-}
-
-function DebatePreScreen({
-  debate,
-  currentUserId,
-  localVideoRef,
-  previewState,
-  error,
-  audioInputDevices,
-  videoInputDevices,
-  selectedAudioInputId,
-  selectedVideoInputId,
-  onAudioInputChange,
-  onVideoInputChange,
-  readyBusy,
-  onReady,
-  onLeave,
-  leaveDisabled,
-}: {
-  debate: Debate;
-  currentUserId: string | null;
-  localVideoRef: React.RefObject<HTMLVideoElement | null>;
-  previewState: 'idle' | 'starting' | 'ready';
-  error: string | null;
-  audioInputDevices: MediaDeviceOption[];
-  videoInputDevices: MediaDeviceOption[];
-  selectedAudioInputId: string;
-  selectedVideoInputId: string;
-  onAudioInputChange: (deviceId: string) => void;
-  onVideoInputChange: (deviceId: string) => void;
-  readyBusy: boolean;
-  onReady: () => void;
-  onLeave: () => void;
-  leaveDisabled: boolean;
-}) {
-  const participants = [...debate.participants].sort((a, b) => a.participant_slot - b.participant_slot);
-  const localParticipant =
-    participants.find(participant => participant.user_id === currentUserId) ?? participants[0] ?? null;
-  const remoteParticipant =
-    participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? participants[1] ?? null;
-  const localReady = Boolean(localParticipant?.ready_at);
-  const remoteReady = Boolean(remoteParticipant?.ready_at);
-
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Debate readiness"
-      className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text"
-    >
-      <section className="mx-auto flex min-h-dvh w-full max-w-[920px] flex-col items-center justify-start px-5 py-6 text-center md:justify-center">
-        <Text as="p" variant="cardEntityTitle" color="grey-04">
-          Debate
-        </Text>
-        <h1 className="mt-3 max-w-[560px] text-[2.5rem] leading-[1.05] font-semibold text-text md:max-w-[870px] md:text-[3.625rem] md:leading-[0.93]">
-          {debate.claim.claim}
-        </h1>
-
-        <div className="mt-10 w-full max-w-[272px]">
-          <PreScreenOpponent
-            participant={remoteParticipant}
-            label={remoteParticipant ? speakerName(remoteParticipant) : 'Other speaker'}
-            ready={remoteReady}
-          />
-        </div>
-
-        <div className="mt-3 w-full max-w-[272px] rounded-lg border border-grey-02 bg-white p-3">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded bg-grey-01">
-            <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-            {previewState !== 'ready' && (
-              <div className="absolute inset-0 grid place-items-center bg-grey-01">
-                <Text variant="body" color="grey-04">
-                  {previewState === 'starting' ? 'Starting camera...' : 'Camera preview unavailable'}
-                </Text>
-              </div>
-            )}
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <PreScreenDeviceSelect
-              ariaLabel="Select microphone"
-              icon={<MicrophoneIcon muted={false} />}
-              value={selectedAudioInputId}
-              options={audioInputDevices}
-              fallbackLabel="Microphone"
-              onChange={onAudioInputChange}
-            />
-            <PreScreenDeviceSelect
-              ariaLabel="Select camera"
-              icon={<CameraIcon disabled={false} />}
-              value={selectedVideoInputId}
-              options={videoInputDevices}
-              fallbackLabel="Camera"
-              onChange={onVideoInputChange}
-            />
-          </div>
-        </div>
-
-        {error && (
-          <Text as="p" variant="metadata" color="red-01" className="mt-3">
-            {error}
-          </Text>
-        )}
-
-        <button
-          type="button"
-          onClick={onReady}
-          disabled={readyBusy || localReady}
-          className="mt-3 flex min-h-11 w-full max-w-[272px] items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-        >
-          {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : 'Accept'}
-        </button>
-
-        <div className="mt-5">
-          <RecordingCircleButton
-            ariaLabel="Leave debate"
-            title="Leave debate"
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function PreScreenDeviceSelect({
-  ariaLabel,
-  icon,
-  value,
-  options,
-  fallbackLabel,
-  onChange,
-}: {
-  ariaLabel: string;
-  icon: React.ReactNode;
-  value: string;
-  options: MediaDeviceOption[];
-  fallbackLabel: string;
-  onChange: (deviceId: string) => void;
-}) {
-  const selectOptions = options.length > 0 ? options : [{ deviceId: '', label: fallbackLabel }];
-
-  return (
-    <label className="relative flex min-w-0 items-center rounded-full border border-grey-02 bg-white px-3 py-2 text-left text-metadata text-text">
-      <span className="mr-2 shrink-0 text-text">{icon}</span>
-      <select
-        aria-label={ariaLabel}
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        disabled={options.length === 0}
-        className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-metadata text-text outline-none disabled:text-grey-04"
-      >
-        {selectOptions.map(device => (
-          <option key={device.deviceId || fallbackLabel} value={device.deviceId}>
-            {device.label}
-          </option>
-        ))}
-      </select>
-      <span className="pointer-events-none absolute right-3 grid size-4 place-items-center">
-        <ChevronDownSmall color="grey-04" />
-      </span>
-    </label>
-  );
-}
-
-function PreScreenOpponent({
-  participant,
-  label,
-  ready,
-}: {
-  participant: Debate['participants'][number] | null;
-  label: string;
-  ready: boolean;
-}) {
-  return (
-    <div className="flex min-h-[52px] w-full items-center justify-between gap-4 rounded-lg border border-grey-02 bg-white px-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="h-5 w-5 shrink-0 overflow-hidden rounded-full">
-          <Avatar
-            avatarUrl={participant?.avatar_cid ?? null}
-            value={participant?.profile_space_id ?? label}
-            alt={label}
-            size={20}
-          />
-        </span>
-        <Text as="div" variant="metadata" color="text" className="min-w-0 truncate text-left">
-          {label}
-        </Text>
-      </div>
-      <span
-        className={cx(
-          'inline-flex shrink-0 items-center gap-2 rounded-full px-3 py-1.5 text-metadata leading-none',
-          ready ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
-        )}
-      >
-        {ready && <Check />}
-        {ready ? 'Ready' : 'Waiting...'}
-      </span>
     </div>
   );
 }
@@ -2391,108 +2341,6 @@ function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
   );
 }
 
-function RecordingCircleButton({
-  ariaLabel,
-  title,
-  onClick,
-  disabled,
-  active = false,
-  className,
-  children,
-}: {
-  ariaLabel: string;
-  title: string;
-  onClick: () => void;
-  disabled?: boolean;
-  active?: boolean;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={ariaLabel}
-      title={title}
-      onClick={onClick}
-      disabled={disabled}
-      className={cx(
-        'grid size-10 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition disabled:opacity-50',
-        active && 'bg-bg',
-        className
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function LeaveIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M9 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
-      <path d="M13 12H3" />
-      <path d="M6 9l-3 3 3 3" />
-    </svg>
-  );
-}
-
-function MicrophoneIcon({ muted }: { muted: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 14a4 4 0 0 0 4-4V6a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Z" />
-      <path d="M5 10a7 7 0 0 0 14 0" />
-      <path d="M12 17v4" />
-      <path d="M9 21h6" />
-      {muted && <path d="M4 4l16 16" />}
-    </svg>
-  );
-}
-
-function MutedMicrophoneIndicator() {
-  return (
-    <svg
-      width="45"
-      height="45"
-      viewBox="0 0 45 45"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      data-muted-indicator="true"
-      className="size-[45px]"
-    >
-      <rect width="45" height="44.9989" rx="22.4994" fill="white" />
-      <rect x="17.6431" y="12.2852" width="9.71429" height="17.75" rx="4.85714" stroke="#151515" />
-      <path
-        d="M14.4644 24.1055V25.1769C14.4644 29.6149 18.0621 33.2126 22.5001 33.2126C26.9381 33.2126 30.5358 29.6149 30.5358 25.1769V24.1055"
-        stroke="#151515"
-        strokeLinecap="round"
-      />
-      <path d="M27.3216 16.6094L17.6787 25.7165" stroke="#151515" />
-    </svg>
-  );
-}
-
-function CameraIcon({ disabled }: { disabled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M4 7h10a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z" />
-      <path d="M16 10l5-3v10l-5-3" />
-      {disabled && <path d="M3 3l18 18" />}
-    </svg>
-  );
-}
-
-function SpeakerIcon({ disabled }: { disabled: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M4 9v6h4l5 4V5L8 9H4Z" />
-      <path d="M16 9.5a4 4 0 0 1 0 5" />
-      <path d="M19 7a8 8 0 0 1 0 10" />
-      {disabled && <path d="M3 3l18 18" />}
-    </svg>
-  );
-}
-
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
   preferences: { audioEnabled: boolean; videoEnabled: boolean },
@@ -2559,6 +2407,61 @@ function localTurnStartsInSeconds(
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {
   if (turnIndex % 2 === 0) return firstParticipantSlot;
   return firstParticipantSlot === 1 ? 2 : 1;
+}
+
+function retainOrPreferDefaultDevice(current: string, devices: MediaDeviceOption[]) {
+  if (current && devices.some(device => device.deviceId === current)) return current;
+  return devices.find(device => device.deviceId === 'default')?.deviceId ?? devices[0]?.deviceId ?? '';
+}
+
+function debateRoomOptions(audioOutputSupported: boolean, selectedAudioOutputId: string) {
+  return {
+    adaptiveStream: false,
+    dynacast: false,
+    ...(audioOutputSupported ? { audioOutput: { deviceId: selectedAudioOutputId } } : {}),
+  };
+}
+
+function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceOption[]) {
+  return (
+    current.length === next.length &&
+    current.every(
+      (device, index) =>
+        device.deviceId === next[index]?.deviceId &&
+        device.groupId === next[index]?.groupId &&
+        device.kind === next[index]?.kind &&
+        device.label === next[index]?.label
+    )
+  );
+}
+
+function preJoinMediaFailure(error: unknown): {
+  state: Exclude<PreJoinMediaState, 'requesting' | 'ready'>;
+  message: string;
+} {
+  const name = error instanceof DOMException || error instanceof Error ? error.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') {
+    return {
+      state: 'denied',
+      message: 'Allow access to your camera and microphone to continue.',
+    };
+  }
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return {
+      state: 'unavailable',
+      message: 'Connect a camera and microphone, then try again.',
+    };
+  }
+  if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
+    return {
+      state: 'error',
+      message: 'Your camera or microphone may be in use by another app. Close it and try again.',
+    };
+  }
+  return {
+    state: 'error',
+    message: 'We could not start your camera and microphone. Check your devices and try again.',
+  };
 }
 
 function stopLocalTracks(localTracksRef: React.MutableRefObject<LocalTrackLike[]>) {
