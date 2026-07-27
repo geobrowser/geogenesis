@@ -54,8 +54,13 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
+import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
 import { DataBlockExpandControl } from './data-block-expand-control';
+import {
+  filterPanelOpenStateForActions,
+  shouldShowFilterAndFullscreenActions,
+} from './data-block-header-action-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -941,8 +946,6 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  const renderPlusButtonAsInline = source.type !== 'RELATIONS' && canEdit;
-
   const isQueryDataBlock = source.type !== 'COLLECTION';
 
   // Query data blocks let the user pick which space the new entity lives in:
@@ -957,8 +960,14 @@ const ConfiguredTableBlock = ({
     Boolean(singleSpaceTarget)
   );
   const canCreateInSingleSpace = singleSpaceTarget ? canCreateInTargetSpace(singleSpaceTarget) : true;
-  const showCreateEntityPlus =
-    renderPlusButtonAsInline && (!singleSpaceTarget || (singleSpaceAccessResolved && canCreateInSingleSpace));
+  const showCreateEntityPlus = shouldShowCreateEntityAction({
+    isEditing,
+    canEdit,
+    sourceType: source.type,
+    singleSpaceTarget,
+    singleSpaceAccessResolved,
+    canCreateInSingleSpace,
+  });
 
   const onAddPlaceholderClick = React.useCallback(() => {
     onAddPlaceholder(singleSpaceTarget ?? null);
@@ -966,8 +975,13 @@ const ConfiguredTableBlock = ({
 
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
+  const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, isEditing);
 
-  const toggleFilterHandler = () => setIsFilterOpen(!isFilterOpen);
+  React.useEffect(() => {
+    setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAndFullscreenActions));
+  }, [showFilterAndFullscreenActions]);
+
+  const toggleFilterHandler = () => setIsFilterOpen(current => !current);
 
   return (
     <motion.div layout="position" transition={{ duration: 0.15 }}>
@@ -987,17 +1001,21 @@ const ConfiguredTableBlock = ({
               disabled={!canEdit}
             />
           )}
-          <IconButton
-            onClick={toggleFilterHandler}
-            icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-            color="grey-04"
-          />
-          <DataBlockExpandControl
-            spaceId={spaceId}
-            blockEntityId={entityId}
-            isEditing={isEditing}
-            fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-          />
+          {showFilterAndFullscreenActions && (
+            <>
+              <IconButton
+                onClick={toggleFilterHandler}
+                icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+                color="grey-04"
+              />
+              <DataBlockExpandControl
+                spaceId={spaceId}
+                blockEntityId={entityId}
+                isEditing={isEditing}
+                fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+              />
+            </>
+          )}
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
           {showCreateEntityPlus &&

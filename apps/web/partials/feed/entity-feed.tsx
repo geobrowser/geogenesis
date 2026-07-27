@@ -6,6 +6,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import {
+  EXPLORE_TYPE_FILTER_STORAGE_KEY,
+  parseStoredExploreTypeIds,
+  toggleExploreTypeId,
+} from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
@@ -14,6 +20,8 @@ import { Menu, MenuItem } from '~/design-system/menu';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+
+import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
 
 function LoadingSkeleton() {
   return (
@@ -57,6 +65,8 @@ type EntityFeedProps = {
   showTimeFilter?: boolean;
   /** Whether to render the sort dropdown (New / Top). Defaults to false. */
   showSortFilter?: boolean;
+  /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
+  showTypeFilter?: boolean;
   /** Override the spacing between the filter row and the feed. Defaults to `mt-8`. */
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
@@ -69,6 +79,7 @@ async function fetchFeedPage(
     sort: ExploreSort;
     time: ExploreTime;
     spaceId: string;
+    typeIds: readonly string[] | undefined;
     cursor: string | undefined;
   }
 ): Promise<ExploreFeedResult> {
@@ -76,6 +87,7 @@ async function fetchFeedPage(
   sp.set('sort', params.sort);
   sp.set('time', params.time);
   sp.set('spaceId', params.spaceId);
+  if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.cursor) sp.set('cursor', params.cursor);
   const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
   if (!res.ok) {
@@ -96,6 +108,7 @@ export function EntityFeed({
   initialSort = 'new',
   showTimeFilter = true,
   showSortFilter = false,
+  showTypeFilter = false,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
 }: EntityFeedProps) {
@@ -105,7 +118,38 @@ export function EntityFeed({
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   const [spaceMenuOpen, setSpaceMenuOpen] = React.useState(false);
+  const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...EXPLORE_ENTITY_TYPE_IDS]);
+  const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
+  const shouldPersistTypeSelectionRef = React.useRef(false);
   const spaceId = lockedSpaceId ?? selectedSpaceId;
+  const typeIds =
+    showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
+  const typeIdsKey = typeIds?.join(',') ?? null;
+  const showFilterRow = showSortFilter || showTimeFilter || lockedSpaceId == null || showTypeFilter;
+
+  React.useEffect(() => {
+    if (!showTypeFilter) return;
+    setSelectedTypeIds(parseStoredExploreTypeIds(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)));
+    setTypeSelectionLoaded(true);
+  }, [showTypeFilter]);
+
+  React.useEffect(() => {
+    if (!showTypeFilter || !typeSelectionLoaded || !shouldPersistTypeSelectionRef.current) return;
+    shouldPersistTypeSelectionRef.current = false;
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(selectedTypeIds));
+  }, [selectedTypeIds, showTypeFilter, typeSelectionLoaded]);
+
+  const toggleType = React.useCallback((typeId: string) => {
+    shouldPersistTypeSelectionRef.current = true;
+    setSelectedTypeIds(current => toggleExploreTypeId(current, typeId));
+  }, []);
+
+  const toggleAllTypes = React.useCallback(() => {
+    shouldPersistTypeSelectionRef.current = true;
+    setSelectedTypeIds(current =>
+      current.length === EXPLORE_ENTITY_TYPE_IDS.length ? [] : [...EXPLORE_ENTITY_TYPE_IDS]
+    );
+  }, []);
 
   // Key the query on the smart-account address because that hook is what writes the
   // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
@@ -113,15 +157,19 @@ export function EntityFeed({
   // sign-in and leave "Join space" buttons stuck for a few seconds.
   const { smartAccount } = useSmartAccount();
   const smartAccountAddress = smartAccount?.account.address ?? null;
+  const queryKey = showTypeFilter
+    ? [apiEndpoint, sort, time, spaceId, typeIdsKey, smartAccountAddress]
+    : [apiEndpoint, sort, time, spaceId, smartAccountAddress];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
-    queryKey: [apiEndpoint, sort, time, spaceId, smartAccountAddress],
+    queryKey,
     queryFn: ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, { sort, time, spaceId, cursor: pageParam as string | undefined }),
+      fetchFeedPage(apiEndpoint, { sort, time, spaceId, typeIds, cursor: pageParam as string | undefined }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
+    enabled: typeSelectionLoaded,
   });
 
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
@@ -157,7 +205,7 @@ export function EntityFeed({
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
-      {showSortFilter || showTimeFilter || lockedSpaceId == null ? (
+      {showFilterRow ? (
         <div className="flex flex-wrap items-center gap-3">
           {showSortFilter ? (
             <Menu
@@ -225,64 +273,69 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {lockedSpaceId == null ? (
-            <div className="ml-auto">
-              <Menu
-                asChild
-                open={spaceMenuOpen}
-                onOpenChange={setSpaceMenuOpen}
-                sideOffset={8}
-                className="max-w-60 bg-white"
-                trigger={
-                  <button
-                    type="button"
-                    className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
-                  >
-                    <span>{spaceLabel}</span>
-                    <span
-                      className={cx('inline-flex transition-transform duration-200', spaceMenuOpen && 'rotate-180')}
+          {lockedSpaceId == null || showTypeFilter ? (
+            <div className="ml-auto flex items-center gap-3">
+              {lockedSpaceId == null ? (
+                <Menu
+                  asChild
+                  open={spaceMenuOpen}
+                  onOpenChange={setSpaceMenuOpen}
+                  sideOffset={8}
+                  className="max-w-60 bg-white"
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                     >
-                      <ChevronDownSmall color="grey-04" />
-                    </span>
-                  </button>
-                }
-              >
-                <MenuItem
-                  active={selectedSpaceId === 'all'}
-                  onClick={() => {
-                    setSelectedSpaceId('all');
-                    setSpaceMenuOpen(false);
-                  }}
+                      <span>{spaceLabel}</span>
+                      <span
+                        className={cx('inline-flex transition-transform duration-200', spaceMenuOpen && 'rotate-180')}
+                      >
+                        <ChevronDownSmall color="grey-04" />
+                      </span>
+                    </button>
+                  }
                 >
-                  Any space
-                </MenuItem>
-                {initialSpaceOptions.map(o => (
                   <MenuItem
-                    key={o.value}
-                    active={o.value === selectedSpaceId}
+                    active={selectedSpaceId === 'all'}
                     onClick={() => {
-                      setSelectedSpaceId(o.value);
+                      setSelectedSpaceId('all');
                       setSpaceMenuOpen(false);
                     }}
                   >
-                    {o.label}
+                    Any space
                   </MenuItem>
-                ))}
-              </Menu>
+                  {initialSpaceOptions.map(o => (
+                    <MenuItem
+                      key={o.value}
+                      active={o.value === selectedSpaceId}
+                      onClick={() => {
+                        setSelectedSpaceId(o.value);
+                        setSpaceMenuOpen(false);
+                      }}
+                    >
+                      {o.label}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              ) : null}
+              {showTypeFilter ? (
+                <ExploreTypeFilterMenu
+                  selectedTypeIds={selectedTypeIds}
+                  onToggleType={toggleType}
+                  onToggleAll={toggleAllTypes}
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
       ) : null}
 
       {dividerBeforeFeed ? <hr className="mt-5 border-t border-divider" /> : null}
-      <div
-        className={
-          feedTopSpacingClassName ?? (showSortFilter || showTimeFilter || lockedSpaceId == null ? 'mt-8' : '-mt-1')
-        }
-      >
+      <div className={feedTopSpacingClassName ?? (showFilterRow ? 'mt-8' : '-mt-1')}>
         {error ? (
           <p className="text-browseMenu text-red-01">Could not load the feed.</p>
-        ) : isLoading ? (
+        ) : isLoading || !typeSelectionLoaded ? (
           <div className="space-y-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <LoadingSkeleton key={i} />

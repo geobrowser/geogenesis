@@ -90,7 +90,6 @@ export default function PendingPersonalSpacePage() {
 
           <Editor
             spaceId={spaceId}
-            spacePage
             placeholder={<p className="text-body text-grey-04">There is no overview here yet.</p>}
           />
         </EntityPageContentContainer>

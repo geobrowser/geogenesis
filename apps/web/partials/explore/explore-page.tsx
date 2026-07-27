@@ -40,6 +40,7 @@ export function ExplorePage({
           initialTime="month"
           initialSort="top"
           showSortFilter
+          showTypeFilter
           dividerBeforeFeed
           feedTopSpacingClassName=""
         />
