@@ -1153,6 +1153,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('bg-black/45');
     expect(document.querySelector('[data-muted-indicator="true"]')).not.toBeInTheDocument();
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
