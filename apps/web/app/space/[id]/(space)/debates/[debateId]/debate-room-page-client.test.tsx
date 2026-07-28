@@ -1151,9 +1151,11 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
     expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
+    expectActiveDebateVideoTile('local');
+    expect(debateVideoTile('remote')).toHaveAttribute('data-active-speaker', 'false');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
-    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('bg-black/45');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('bg-[#151515]/75');
     expect(document.querySelector('[data-muted-indicator="true"]')).not.toBeInTheDocument();
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
@@ -1184,8 +1186,10 @@ describe('DebateRoomPageClient', () => {
     expect(tiles.map(tile => tile.getAttribute('data-debate-video-position'))).toEqual(['yes', 'no']);
     expect(tiles[0]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'remote');
     expect(tiles[1]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'local');
+    expectActiveDebateVideoTile('remote');
+    expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'false');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
-    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-black/45');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-[#151515]/75');
     expect(document.querySelector('[data-muted-indicator="true"]')).not.toBeInTheDocument();
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
@@ -2373,6 +2377,11 @@ async function renderLiveDebate(overrides: Partial<Debate> = {}) {
 
 function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
   expect(debateVideoTile(participant)).not.toHaveClass('grayscale');
+}
+
+function expectActiveDebateVideoTile(participant: 'local' | 'remote') {
+  expect(debateVideoTile(participant)).toHaveAttribute('data-active-speaker', 'true');
+  expect(debateVideoTile(participant)).toHaveClass('outline-[3px]', 'outline-purple');
 }
 
 function debateVideoTile(participant: 'local' | 'remote') {

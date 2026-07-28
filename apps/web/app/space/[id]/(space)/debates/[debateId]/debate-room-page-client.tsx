@@ -1862,16 +1862,19 @@ function DebateVideoTile({
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
-      className="relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card"
+      data-active-speaker={active ? 'true' : 'false'}
+      className={cx(
+        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
+        active && 'outline-[3px] outline-offset-0 outline-purple'
+      )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
       <div
         aria-hidden="true"
         data-inactive-speaker={inactiveOverlayId}
         data-visible={inactive && !revealInactive ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 bg-black/45 transition-opacity duration-700 ease-out',
+          'pointer-events-none absolute inset-0 z-10 bg-[#151515]/75 transition-opacity duration-700 ease-out',
           inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
         )}
       />
