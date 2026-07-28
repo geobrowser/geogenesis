@@ -52,10 +52,21 @@ export function mapDiffChunks(chunks: readonly { value: string; added?: boolean;
   }));
 }
 
+// The gaia diff API emits GRC-20 data-type names (BOOL/INT64/FLOAT64); the
+// frontend's SimpleValueType vocabulary uses BOOLEAN/INTEGER/FLOAT. Normalize the
+// few that differ so e.g. booleans render as a checkbox. Names not listed pass
+// through unchanged (DECIMAL, BYTES, DATE, TIME, DATETIME, SCHEDULE, POINT, RECT, EMBEDDING).
+const API_VALUE_TYPE_TO_SIMPLE: Record<string, SimpleValueType> = {
+  BOOL: 'BOOLEAN',
+  INT64: 'INTEGER',
+  FLOAT64: 'FLOAT',
+};
+
 export function mapValueDiff(v: ApiValueDiff): ValueChange {
   if (v.type === 'TEXT' && v.diff) {
     return {
       propertyId: v.propertyId,
+      propertyName: v.propertyName ?? null,
       spaceId: v.spaceId,
       type: 'TEXT',
       before: v.before,
@@ -66,8 +77,9 @@ export function mapValueDiff(v: ApiValueDiff): ValueChange {
 
   return {
     propertyId: v.propertyId,
+    propertyName: v.propertyName ?? null,
     spaceId: v.spaceId,
-    type: v.type as SimpleValueType,
+    type: (API_VALUE_TYPE_TO_SIMPLE[v.type] ?? v.type) as SimpleValueType,
     before: v.before,
     after: v.after,
   };
@@ -77,20 +89,27 @@ export function mapRelationDiff(r: ApiRelationDiff): RelationChange {
   return {
     relationId: r.relationId,
     typeId: r.typeId,
+    typeName: r.typeName ?? null,
     spaceId: r.spaceId,
     changeType: r.changeType,
     before: r.before
       ? {
           toEntityId: r.before.toEntityId,
+          toEntityName: r.before.toEntityName ?? null,
           toSpaceId: r.before.toSpaceId,
           position: r.before.position,
+          imageUrl: r.before.imageUrl ?? null,
+          videoUrl: r.before.videoUrl ?? null,
         }
       : null,
     after: r.after
       ? {
           toEntityId: r.after.toEntityId,
+          toEntityName: r.after.toEntityName ?? null,
           toSpaceId: r.after.toSpaceId,
           position: r.after.position,
+          imageUrl: r.after.imageUrl ?? null,
+          videoUrl: r.after.videoUrl ?? null,
         }
       : null,
   };
@@ -104,6 +123,20 @@ export function mapBlockDiff(b: ApiBlockDiff): BlockChange {
       before: b.before,
       after: b.after,
       diff: b.diff ? mapDiffChunks(b.diff) : [],
+    };
+  }
+
+  if (b.type === 'dataBlock') {
+    // v2 folds the rich data-block shape server-side: blockName + the block's own
+    // (and merged config) value/relation changes.
+    return {
+      id: b.id,
+      type: 'dataBlock',
+      before: b.before,
+      after: b.after,
+      blockName: b.blockName ?? null,
+      ...(b.values ? { values: b.values.map(mapValueDiff) } : {}),
+      ...(b.relations ? { relations: b.relations.map(mapRelationDiff) } : {}),
     };
   }
 
