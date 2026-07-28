@@ -13,6 +13,7 @@ const participants: DebateRequestDialogParticipant[] = [
     display_name: 'Local speaker',
     avatar_cid: null,
     participant_slot: 1,
+    position_label: 'Yes',
   },
   {
     user_id: 'user-remote',
@@ -20,6 +21,7 @@ const participants: DebateRequestDialogParticipant[] = [
     display_name: 'Remote speaker',
     avatar_cid: null,
     participant_slot: 2,
+    position_label: 'No',
   },
 ];
 
@@ -60,8 +62,8 @@ describe('DebateRequestDialog', () => {
     expect(within(dialog).getByText('You')).toBeInTheDocument();
     expect(within(dialog).getByText('Remote speaker')).toBeInTheDocument();
     expect(within(dialog).getByText('vs')).toBeInTheDocument();
-    expect(within(dialog).queryByText('Yes')).not.toBeInTheDocument();
-    expect(within(dialog).queryByText('No')).not.toBeInTheDocument();
+    expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Remote speaker').parentElement!).getByText('No')).toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);
     expect(within(dialog).getAllByText('45s')).toHaveLength(2);
 

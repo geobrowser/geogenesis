@@ -13,6 +13,7 @@ import { speakerLabel } from './playback-utils';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
+  position_label: string;
 };
 
 type DebateRequestDialogFormatSelector = {
@@ -177,6 +178,9 @@ function ParticipantSummary({
       </span>
       <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
         {label}
+      </Text>
+      <Text as="span" variant="smallButton" color="text" className="rounded-full bg-grey-02 px-2 py-0.5">
+        {participant.position_label}
       </Text>
     </div>
   );

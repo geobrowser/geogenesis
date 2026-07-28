@@ -154,8 +154,8 @@ describe('DebateRematchPageClient', () => {
     expect(within(dialog).getByText('You')).toBeInTheDocument();
     expect(within(dialog).getByText('Salina')).toBeInTheDocument();
     expect(within(dialog).getByText('vs')).toBeInTheDocument();
-    expect(within(dialog).queryByText('Yes')).not.toBeInTheDocument();
-    expect(within(dialog).queryByText('No')).not.toBeInTheDocument();
+    expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('No')).toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);
     expect(within(dialog).getAllByText('45s')).toHaveLength(2);
     expect(document.body.style.overflow).toBe('hidden');

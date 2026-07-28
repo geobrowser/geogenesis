@@ -190,6 +190,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
+  const incomingRequestParticipants =
+    incomingRequest && session
+      ? session.participants.map(participant => ({
+          ...participant,
+          position_label:
+            participant.user_id === incomingRequest.requester_user_id
+              ? incomingRequest.requester_position
+                ? 'Yes'
+                : 'No'
+              : incomingRequest.recipient_position
+                ? 'Yes'
+                : 'No',
+        }))
+      : [];
 
   return (
     <div className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text">
@@ -314,7 +328,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
           claim={incomingRequest.claim.claim}
-          participants={session.participants}
+          participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
           busy={acceptRequest.isPending || rejectRequest.isPending}

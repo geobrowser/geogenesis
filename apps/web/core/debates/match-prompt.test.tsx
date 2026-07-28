@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -177,14 +177,13 @@ describe('DebateMatchPrompt', () => {
     expect(acceptButton).toBeEnabled();
   });
 
-  it('renders participants as avatar and name without a per-participant menu or position pill', () => {
+  it('renders each participant position without a per-participant menu', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    // The design shows only the avatar + name in the VS card — no "..." menu, no Yes/No pill.
     expect(screen.queryByRole('button', { name: 'More actions for You' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More actions for Bri' })).not.toBeInTheDocument();
-    expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.queryByText('You chose Yes.')).not.toBeInTheDocument();
+    expect(within(screen.getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
+    expect(within(screen.getByText('Bri').parentElement!).getByText('No')).toBeInTheDocument();
   });
 
   it('locks background scrolling while the match dialog is open', () => {
