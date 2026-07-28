@@ -1875,7 +1875,7 @@ function DebateVideoTile({
         data-visible={inactive && !revealInactive ? 'true' : 'false'}
         className={cx(
           'pointer-events-none absolute inset-0 z-10 bg-[#151515]/75 transition-opacity duration-700 ease-out',
-          inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
+          inactive && !revealInactive ? 'opacity-60' : 'opacity-0'
         )}
       />
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
