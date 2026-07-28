@@ -123,17 +123,25 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
       className="flex scroll-mt-24 flex-col gap-5 rounded-xl border border-grey-02 bg-white p-4 shadow-light md:p-6"
     >
       <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <Text as="h2" variant="smallTitle" className="max-w-3xl">
-            {debate.claim.claim}
-          </Text>
-          {!mediaQuery.isLoading && !mediaQuery.error && <ProcessingBadge status={status} />}
-        </div>
+        <Text as="h2" variant="smallTitle" className="max-w-3xl">
+          {debate.claim.claim}
+        </Text>
 
         <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <DiagnosticField label="Debate ID" value={debate.id} code />
           <DiagnosticField label="Created" value={formatDate(debate.created_at)} />
-          <DiagnosticField label="Lifecycle" value={debate.status} />
+          <div className="min-w-0">
+            <dt className="text-grey-04">Lifecycle</dt>
+            <dd>{debate.status}</dd>
+            <dd className="mt-2">
+              <ProcessingDetails
+                isLoading={mediaQuery.isLoading}
+                error={mediaQuery.error}
+                media={media}
+                status={status}
+              />
+            </dd>
+          </div>
           <DiagnosticField
             label="Media job"
             value={mediaQuery.isLoading ? 'loading' : mediaQuery.error ? 'unavailable' : (media?.job?.status ?? 'none')}
@@ -156,22 +164,6 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
           ))}
       </section>
 
-      <section aria-label="Processing details" className="flex flex-col gap-2">
-        {mediaQuery.isLoading && <StateMessage compact>Loading processing status…</StateMessage>}
-        {mediaQuery.error && (
-          <StateMessage compact tone="error">
-            Could not load media: {errorMessage(mediaQuery.error)}
-          </StateMessage>
-        )}
-        {media && (
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <span>Processing: {status}</span>
-            <span>Attempts: {media.job?.attempt_count ?? 0}</span>
-            {media.job?.last_error && <span className="text-red-02">Latest error: {media.job.last_error}</span>}
-          </div>
-        )}
-      </section>
-
       {status === 'processed' && media && (
         <section aria-label="Processed videos" className="grid gap-4 lg:grid-cols-2">
           {renditions.map(rendition => (
@@ -187,6 +179,36 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
 
       <TranscriptSection debateId={debate.id} segmentCount={media?.transcript_segment_count} />
     </article>
+  );
+}
+
+function ProcessingDetails({
+  isLoading,
+  error,
+  media,
+  status,
+}: {
+  isLoading: boolean;
+  error: Error | null;
+  media: DebateMediaResponse | undefined;
+  status: ProcessingStatus;
+}) {
+  return (
+    <section aria-label="Processing details" className="flex flex-col items-start gap-1">
+      {isLoading && <StateMessage compact>Loading processing status…</StateMessage>}
+      {error && (
+        <StateMessage compact tone="error">
+          Could not load media: {errorMessage(error)}
+        </StateMessage>
+      )}
+      {!isLoading && !error && <ProcessingBadge status={status} />}
+      {media && (
+        <div className="flex flex-col gap-1 text-sm">
+          <span>Attempts: {media.job?.attempt_count ?? 0}</span>
+          {media.job?.last_error && <span className="text-red-02">Latest error: {media.job.last_error}</span>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -261,7 +283,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
             playsInline
             preload="metadata"
             onError={() => setPlaybackError(true)}
-            className="aspect-video w-full rounded bg-black object-contain"
+            className="aspect-[8/9] w-1/4 rounded bg-white object-contain sm:aspect-video sm:w-full"
           />
           {playbackError && <StateMessage compact tone="error">{rendition.label} playback failed.</StateMessage>}
           <a

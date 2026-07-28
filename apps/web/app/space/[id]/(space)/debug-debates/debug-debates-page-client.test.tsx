@@ -154,6 +154,10 @@ describe('DebugDebatesPageClient', () => {
       const card = screen.getByTestId(`debate-card-${id}`);
       expect(card).toHaveTextContent(`Processing: ${label}`);
       expect(card).toHaveTextContent('Lifecyclecomplete');
+
+      const lifecycleField = within(card).getByText('Lifecycle').parentElement;
+      const processingDetails = within(card).getByRole('region', { name: 'Processing details' });
+      expect(lifecycleField?.querySelector('dd')?.nextElementSibling).toContainElement(processingDetails);
     }
   });
 
@@ -184,8 +188,16 @@ describe('DebugDebatesPageClient', () => {
     render(<DebugDebatesPageClient spaceId="space-1" />);
 
     const both = screen.getByTestId('debate-card-both');
-    expect(await within(both).findByLabelText('WebM processed video')).toHaveAttribute('src', 'https://media.test/both.webm');
-    expect(within(both).getByLabelText('MOV processed video')).toHaveAttribute('src', 'https://media.test/both.mov');
+    const webm = await within(both).findByLabelText('WebM processed video');
+    expect(webm).toHaveAttribute('src', 'https://media.test/both.webm');
+
+    const mov = within(both).getByLabelText('MOV processed video');
+    expect(mov).toHaveAttribute('src', 'https://media.test/both.mov');
+
+    for (const video of [webm, mov]) {
+      expect(video).toHaveClass('aspect-[8/9]', 'w-1/4', 'bg-white', 'sm:aspect-video', 'sm:w-full');
+      expect(video).not.toHaveClass('bg-black');
+    }
     expect(within(both).getByRole('link', { name: 'Open WebM directly' })).toHaveAttribute(
       'href',
       'https://media.test/both.webm'
