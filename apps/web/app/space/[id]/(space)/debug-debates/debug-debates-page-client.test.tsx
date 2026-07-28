@@ -64,7 +64,8 @@ vi.mock('~/core/debates/hooks', () => ({
 beforeEach(() => {
   mocks.debugEnabled = true;
   mocks.replace.mockReset();
-  mocks.invalidateQueries.mockClear();
+  mocks.invalidateQueries.mockReset();
+  mocks.invalidateQueries.mockResolvedValue(undefined);
   mocks.listResult = { data: { debates: [], matches: [] }, isLoading: false, isFetching: false, error: null };
   mocks.mediaByDebate.clear();
   mocks.transcriptByDebate.clear();
@@ -120,6 +121,22 @@ describe('DebugDebatesPageClient', () => {
     expect(screen.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
   });
 
+  it('keeps the refresh state until both list and media invalidations finish', async () => {
+    let resolveRefresh: (() => void) | undefined;
+    const refreshFinished = new Promise<void>(resolve => {
+      resolveRefresh = resolve;
+    });
+    mocks.invalidateQueries.mockReturnValue(refreshFinished);
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh diagnostics' }));
+
+    expect(screen.getByRole('button', { name: 'Refreshing…' })).toBeDisabled();
+
+    resolveRefresh?.();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Refresh diagnostics' })).toBeEnabled());
+  });
+
   it('shows all simplified processing states alongside raw debate lifecycles', () => {
     const statuses: Array<[string, DebateMediaJobStatus | null, string]> = [
       ['not-started', null, 'not started'],
@@ -149,8 +166,10 @@ describe('DebugDebatesPageClient', () => {
     render(<DebugDebatesPageClient spaceId="space-1" />);
 
     expect(screen.getByTestId('debate-card-loading')).toHaveTextContent('Loading processing status…');
+    expect(screen.getByTestId('debate-card-loading')).toHaveTextContent('Media jobloading');
     expect(screen.getByTestId('debate-card-loading')).toHaveTextContent('Transcript · count unavailable');
     expect(screen.getByTestId('debate-card-media-error')).toHaveTextContent('Could not load media: Media failed');
+    expect(screen.getByTestId('debate-card-media-error')).toHaveTextContent('Media jobunavailable');
     expect(screen.getByTestId('debate-card-failed')).toHaveTextContent('Attempts: 3');
     expect(screen.getByTestId('debate-card-failed')).toHaveTextContent('Latest error: ffmpeg exited 1');
   });

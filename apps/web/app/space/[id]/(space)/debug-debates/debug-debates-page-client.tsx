@@ -44,6 +44,7 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   const router = useRouter();
   const queryClient = useQueryClient();
   const debatesQuery = useSpaceDebates(spaceId, enabled);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   React.useEffect(() => {
     if (!enabled) router.replace(`/space/${spaceId}`);
@@ -55,10 +56,15 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   );
 
   const refresh = React.useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) }),
-      queryClient.invalidateQueries({ queryKey: ['debates', 'media'] }),
-    ]);
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) }),
+        queryClient.invalidateQueries({ queryKey: ['debates', 'media'] }),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [queryClient, spaceId]);
 
   if (!enabled) return null;
@@ -75,8 +81,13 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
             to the signed-in participant.
           </Text>
         </div>
-        <Button type="button" variant="secondary" disabled={debatesQuery.isFetching} onClick={() => void refresh()}>
-          {debatesQuery.isFetching ? 'Refreshing…' : 'Refresh diagnostics'}
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={debatesQuery.isFetching || isRefreshing}
+          onClick={() => void refresh()}
+        >
+          {debatesQuery.isFetching || isRefreshing ? 'Refreshing…' : 'Refresh diagnostics'}
         </Button>
       </header>
 
@@ -123,7 +134,10 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
           <DiagnosticField label="Debate ID" value={debate.id} code />
           <DiagnosticField label="Created" value={formatDate(debate.created_at)} />
           <DiagnosticField label="Lifecycle" value={debate.status} />
-          <DiagnosticField label="Media job" value={media?.job?.status ?? 'none'} />
+          <DiagnosticField
+            label="Media job"
+            value={mediaQuery.isLoading ? 'loading' : mediaQuery.error ? 'unavailable' : (media?.job?.status ?? 'none')}
+          />
         </dl>
       </header>
 
