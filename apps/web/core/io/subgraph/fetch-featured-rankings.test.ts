@@ -1,7 +1,12 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { RANKING_END_DATE_PROPERTY_ID, RANKING_START_DATE_PROPERTY_ID } from '~/core/ranking-block-ids';
+import {
+  LEGACY_RANKING_END_DATE_PROPERTY_ID,
+  LEGACY_RANKING_START_DATE_PROPERTY_ID,
+  RANKING_END_TIME_PROPERTY_ID,
+  RANKING_START_TIME_PROPERTY_ID,
+} from '~/core/ranking-block-ids';
 
 import { fetchFeaturedRankings } from './fetch-featured-rankings';
 
@@ -43,14 +48,18 @@ function entityPage({
   name = 'Best Pizza',
   startDate,
   endDate,
+  legacy = false,
 }: {
   name?: string;
   startDate?: string;
   endDate?: string;
+  legacy?: boolean;
 }) {
+  const startProperty = legacy ? LEGACY_RANKING_START_DATE_PROPERTY_ID : RANKING_START_TIME_PROPERTY_ID;
+  const endProperty = legacy ? LEGACY_RANKING_END_DATE_PROPERTY_ID : RANKING_END_TIME_PROPERTY_ID;
   const values = [];
-  if (startDate) values.push(dateValue(RANKING_START_DATE_PROPERTY_ID, startDate));
-  if (endDate) values.push(dateValue(RANKING_END_DATE_PROPERTY_ID, endDate));
+  if (startDate) values.push(dateValue(startProperty, startDate));
+  if (endDate) values.push(dateValue(endProperty, endDate));
   return { entity: { name, values, relations: [] }, relations: [] };
 }
 
@@ -91,6 +100,16 @@ describe('fetchFeaturedRankings', () => {
         submissionCount: 3,
       },
     ]);
+  });
+
+  it('resolves the window from the legacy date properties when the current ones are absent', async () => {
+    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE, legacy: true })));
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].rankingStartDate).toBe(PAST);
+    expect(result[0].rankingEndDate).toBe(FUTURE);
   });
 
   it('treats a ranking with no date window as live', async () => {
