@@ -9,7 +9,7 @@ interface Props {
 
 type AvatarGroupItemProps = {
   children: React.ReactNode;
-  size?: 12 | 20;
+  size?: 12 | 16 | 20;
 };
 
 export function AvatarGroup({ children, variant = 'overlap' }: Props) {
@@ -34,7 +34,7 @@ function AvatarGroupItem({ children, size = 12 }: AvatarGroupItemProps) {
     <li
       className={cx(
         'relative box-content list-none overflow-hidden rounded-full border-2 border-white',
-        size === 20 ? 'h-5 w-5' : 'h-3 w-3'
+        size === 20 ? 'h-5 w-5' : size === 16 ? 'h-4 w-4' : 'h-3 w-3'
       )}
     >
       {children}

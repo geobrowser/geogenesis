@@ -20,6 +20,12 @@ vi.mock('~/core/io/queries', () => ({
 vi.mock('~/core/blocks/ranking/ranking-block-relations', () => ({
   getAggregatedRankingSubmitterRefs: (...args: unknown[]) => getSubmitterRefsMock(...args),
   getAggregatedRankingSubmissionCount: (...args: unknown[]) => getSubmissionCountMock(...args),
+  getOrderedRelationTargetIds: () => [],
+}));
+
+vi.mock('~/core/blocks/ranking/ranking-entry-pick', () => ({
+  pickImage: () => null,
+  pickValueBySpace: () => null,
 }));
 
 const BLOCK = 'cb5afff8d4f04436ab8110c238008926';
@@ -89,6 +95,7 @@ describe('fetchFeaturedRankings', () => {
         rankingEndDate: FUTURE,
         submitterSpaceIds: [SUBMITTER_SPACE],
         submissionCount: 3,
+        topEntries: [],
       },
     ]);
   });

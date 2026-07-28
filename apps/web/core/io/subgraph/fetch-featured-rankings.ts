@@ -6,7 +6,9 @@ import {
   type AggregatedRankingSubmitterRef,
   getAggregatedRankingSubmissionCount,
   getAggregatedRankingSubmitterRefs,
+  getOrderedRelationTargetIds,
 } from '~/core/blocks/ranking/ranking-block-relations';
+import { pickImage, pickValueBySpace } from '~/core/blocks/ranking/ranking-entry-pick';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import type { EntityFilter } from '~/core/gql/graphql';
@@ -15,6 +17,7 @@ import {
   RANKING_BLOCK_TYPE_ID,
   RANKING_END_DATE_PROPERTY_ID,
   RANKING_START_DATE_PROPERTY_ID,
+  RANK_POSITION_PROPERTY_ID,
 } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -23,6 +26,12 @@ import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 // to the Featured tag entity. We surface only the ones whose voting window is
 // currently open ("live"), each resolved down to the coordinates the fullscreen
 // vote view needs (space + block + parent placement).
+export interface FeaturedRankingEntry {
+  entityId: string;
+  name: string;
+  image: string | null;
+}
+
 export interface FeaturedRanking {
   blockEntityId: string;
   spaceId: string;
@@ -36,6 +45,7 @@ export interface FeaturedRanking {
   /** Personal spaces that submitted a ranking — feeds the "Ranked by" avatars. */
   submitterSpaceIds: string[];
   submissionCount: number;
+  topEntries: FeaturedRankingEntry[];
 }
 
 // Pull a small window of candidates, then keep only the live ones. A handful of
@@ -44,6 +54,7 @@ export interface FeaturedRanking {
 const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
 const RESOLVE_CONCURRENCY = 6;
+const TOP_ENTRIES_COUNT = 3;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
@@ -102,6 +113,32 @@ async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): 
   return dedupePreserveOrder(
     refs.map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId)).filter((id): id is string => Boolean(id))
   );
+}
+
+async function resolveTopEntries(
+  relations: Entity['relations'],
+  blockEntityId: string,
+  spaceId: string
+): Promise<FeaturedRankingEntry[]> {
+  const topIds = getOrderedRelationTargetIds(relations, blockEntityId, RANK_POSITION_PROPERTY_ID, spaceId).slice(
+    0,
+    TOP_ENTRIES_COUNT
+  );
+  if (topIds.length === 0) return [];
+
+  const { entities } = await Effect.runPromise(
+    getAllEntities({ filter: { id: { in: topIds } }, limit: topIds.length })
+  );
+  const byId = new Map(entities.map(entity => [entity.id, entity]));
+
+  return topIds.map(entityId => {
+    const entity = byId.get(entityId);
+    return {
+      entityId,
+      name: (entity ? pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId) : null) ?? 'Untitled',
+      image: entity ? pickImage(entity.relations, spaceId) : null,
+    };
+  });
 }
 
 /**
@@ -167,7 +204,10 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
       if (!placement) return null;
 
       const submitterRefs = getAggregatedRankingSubmitterRefs(relations, blockEntityId, spaceId);
-      const submitterSpaceIds = await resolveSubmitterSpaceIds(submitterRefs);
+      const [submitterSpaceIds, topEntries] = await Promise.all([
+        resolveSubmitterSpaceIds(submitterRefs),
+        resolveTopEntries(relations, blockEntityId, spaceId),
+      ]);
 
       return {
         blockEntityId,
@@ -179,6 +219,7 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
         rankingEndDate,
         submitterSpaceIds,
         submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
+        topEntries,
       } satisfies FeaturedRanking;
     } catch (error) {
       // Best-effort per ranking: a single block that fails to resolve is skipped
