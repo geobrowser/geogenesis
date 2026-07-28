@@ -12,6 +12,11 @@ export const featureFlagDefinitions = [
     description: 'Show the Claims and Debates tabs on spaces.',
   },
   {
+    id: 'debugDebatesPage',
+    label: 'Debug debates',
+    description: 'Enable per-space debate processing diagnostics.',
+  },
+  {
     id: 'debateDebugging',
     label: 'Debate debugging',
     description: 'Show manual debugging controls during debate recording.',
@@ -29,6 +34,7 @@ type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>
 
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
+  debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
 };
@@ -36,6 +42,7 @@ export const defaultFeatureFlags: FeatureFlags = {
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
     questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
+    debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
     debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
   };
@@ -65,6 +72,10 @@ export function useFeatureFlag(id: FeatureFlagId) {
  */
 export function useDebatesEnabled() {
   return useFeatureFlag('questionsTab');
+}
+
+export function useDebugDebatesPageEnabled() {
+  return useFeatureFlag('debugDebatesPage');
 }
 
 export function useFeatureFlags() {
