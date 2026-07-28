@@ -1822,7 +1822,7 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
   });
 
-  it('shows wrap it up only on the active remote speaker during the penultimate turn', async () => {
+  it('does not show the remote speaker wrap-up warning to the inactive local participant', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
       ...completedDebate(),
@@ -1838,9 +1838,8 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    const wrapItUp = await screen.findByText('Wrap it up!');
-    expect(debateVideoTile('remote')).toContainElement(wrapItUp);
-    expect(debateVideoTile('local')).not.toContainElement(wrapItUp);
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
   });
 
   it('does not show wrap it up before the final five seconds', async () => {
@@ -1887,7 +1886,7 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
   });
 
-  it('shows final-turn warnings only on their respective speaker tiles', async () => {
+  it('shows only debate ends soon to the inactive local participant on the final turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
     let clockElapsedMs = 0;
     vi.spyOn(performance, 'now').mockImplementation(() => clockElapsedMs);
@@ -1907,9 +1906,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     const debateEndsSoon = await screen.findByText('Debate ends soon');
-    const wrapItUp = screen.getByText('Wrap it up!');
-    expect(debateVideoTile('remote')).toContainElement(wrapItUp);
-    expect(debateVideoTile('local')).not.toContainElement(wrapItUp);
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
     expect(debateVideoTile('local')).toContainElement(debateEndsSoon);
     expect(debateVideoTile('remote')).not.toContainElement(debateEndsSoon);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
@@ -1924,6 +1921,29 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
       expect(screen.getByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).toBeInTheDocument();
     });
+  });
+
+  it('shows wrap it up to the active local participant on the final turn', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 3,
+      current_speaker_slot: 1,
+      turn_durations_ms: [45_000, 45_000, 30_000, 30_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:02:00.000Z',
+      turn_ends_at: '2026-07-02T00:02:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('local')).toContainElement(wrapItUp);
+    expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
+    expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
   });
 
   it('advances directly from the warning to GO without waiting for a debate refresh', async () => {
