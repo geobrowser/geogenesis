@@ -78,6 +78,46 @@ describe('DebateRequestDialog', () => {
     expect(reject).toHaveBeenCalledOnce();
   });
 
+  it('keeps the Yes participant on the left and the No participant on the right', () => {
+    render(
+      <DebateRequestDialog
+        claim="Position order should be stable"
+        participants={[
+          {
+            ...participants[0]!,
+            avatar_cid: 'https://example.com/local-avatar.png',
+            position_label: 'No',
+          },
+          {
+            ...participants[1]!,
+            avatar_cid: 'https://example.com/remote-avatar.png',
+            position_label: 'Yes',
+          },
+        ]}
+        currentUserId="user-local"
+        formatId="standard"
+        busy={false}
+        error={null}
+        onAccept={() => undefined}
+        onReject={() => undefined}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Position order should be stable' });
+    const localParticipant = within(dialog).getByText('You').parentElement!;
+    const remoteParticipant = within(dialog).getByText('Remote speaker').parentElement!;
+
+    expect(remoteParticipant.compareDocumentPosition(localParticipant) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(remoteParticipant).getByText('Yes')).toBeInTheDocument();
+    expect(within(remoteParticipant).getByAltText('Remote speaker')).toBeInTheDocument();
+    expect(within(localParticipant).getByText('No')).toBeInTheDocument();
+    expect(within(localParticipant).getByAltText('Local speaker')).toBeInTheDocument();
+
+    const localFirstTurn = within(dialog).getByText('You make an argument');
+    const remoteFirstTurn = within(dialog).getByText('Remote speaker makes an argument');
+    expect(localFirstTurn.compareDocumentPosition(remoteFirstTurn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('locks scrolling and surfaces busy and error states', () => {
     const { unmount } = render(
       <DebateRequestDialog
