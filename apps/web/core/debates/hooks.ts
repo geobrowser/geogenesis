@@ -1,7 +1,7 @@
 'use client';
 
 import { usePrivy } from '@geogenesis/auth';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -49,6 +49,7 @@ import {
   updateDebateRematchPosition,
 } from './api';
 import { useDebateGatewayScope } from './debate-gateway';
+import { hasProcessedVideo } from './playback-utils';
 
 const debateQueryNetworkOptions = {
   retry: false,
@@ -530,6 +531,37 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
         signal
       ),
     enabled,
+  });
+}
+
+/**
+ * Which of the given debates have a processed `final_video`. The space debates endpoint carries
+ * recordings but no media artifacts, so readiness can only be answered one debate at a time — pass
+ * only already-watchable debates to bound the fan-out. Shares `debateQueryKeys.media` with the
+ * player's own lookup, and opens no gateway scope since it's a one-shot check.
+ */
+export function useProcessedVideoDebateIds(debateIds: string[], enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQueries({
+    queries: debateIds.map(debateId => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.media(debateId),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        getDebateMedia(
+          debateId,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled,
+    })),
+    combine: results => ({
+      // Only a positive answer counts, so an in-flight or failed lookup keeps the debate hidden
+      // rather than rendering it and pulling it away a moment later.
+      processedIds: new Set(debateIds.filter((_, index) => hasProcessedVideo(results[index].data))),
+      isLoading: enabled && results.some(result => result.isPending),
+    }),
   });
 }
 

@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
-import { useSpaceDebates } from '~/core/debates/hooks';
+import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
@@ -37,9 +37,19 @@ export function DebatesBrowseFeed({
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
+  // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
+  // whose media job failed or never ran still passes it, so readiness decides what renders.
+  const candidates = React.useMemo(
+    () => (debatesQuery.data?.debates ?? []).filter(isWatchableDebate),
+    [debatesQuery.data?.debates]
+  );
+  const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
+  const { processedIds, isLoading: mediaLoading } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
+
   const debates = React.useMemo(() => {
-    const watchable = (debatesQuery.data?.debates ?? []).filter(isWatchableDebate);
-    const sorted = watchable.sort((a, b) => completedTime(b) - completedTime(a));
+    const sorted = candidates
+      .filter(debate => processedIds.has(debate.id))
+      .sort((a, b) => completedTime(b) - completedTime(a));
     if (!initialDebateId) return sorted;
     // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
     // first full-screen video, then let the rest of the space's debates scroll in below it.
@@ -47,7 +57,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [debatesQuery.data?.debates, initialDebateId]);
+  }, [candidates, processedIds, initialDebateId]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -80,14 +90,16 @@ export function DebatesBrowseFeed({
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
+  // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
+  // flashes "no debates" and strands a valid anchor.
+  const isLoading = debatesQuery.isLoading || mediaLoading;
+
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
   // Debates tab passes none and keeps its own empty/error states.
   const anchorMissing =
-    initialDebateId != null &&
-    !debatesQuery.isLoading &&
-    !debates.some(debate => ID.equals(debate.id, initialDebateId));
+    initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
 
   const visibleDebates = debates.slice(0, visibleCount);
 
@@ -111,11 +123,11 @@ export function DebatesBrowseFeed({
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
-      {debatesQuery.isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
+      {isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
       {debatesQuery.error instanceof Error && debates.length === 0 && (
         <FeedMessage>Could not load debates: {debatesQuery.error.message}</FeedMessage>
       )}
-      {!debatesQuery.isLoading && !debatesQuery.error && debates.length === 0 && (
+      {!isLoading && !debatesQuery.error && debates.length === 0 && (
         <FeedMessage>No debates to watch yet. Start one from the Claims tab.</FeedMessage>
       )}
       {visibleDebates.map(debate => (
