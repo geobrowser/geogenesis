@@ -96,7 +96,22 @@ export function AcceptOrReject({
   const isPending = voteStatus === 'pending';
   const txSucceeded = voteStatus === 'success';
   const confirmedVote =
-    (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? serverUserVote ?? (isPending ? undefined : optimisticVote);
+    (txSucceeded && pendingChoice ? pendingChoice : undefined) ??
+    serverUserVote ??
+    (isPending ? undefined : optimisticVote);
+
+  // Retire the local override the moment the server agrees with it. Without
+  // this the override is permanent (nothing else clears pendingChoice on the
+  // success path), so a LATER change made elsewhere — another tab, the home
+  // card — stays masked forever: the modal shows the superseded vote and
+  // submitVote's no-op guard renders the correct button inert, unrecoverable
+  // without a reload. Clearing here keeps local precedence for exactly the
+  // window it's needed: after our tx, until the indexer catches up.
+  React.useEffect(() => {
+    if (pendingChoice && serverUserVote === pendingChoice) {
+      setPendingChoice(null);
+    }
+  }, [pendingChoice, serverUserVote]);
 
   // Deliberately do NOT clear the optimistic atom here even once serverUserVote
   // resolves. The governance list uses the atom (via useIsOptimisticallyVoted)

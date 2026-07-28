@@ -325,9 +325,7 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
  * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
  * such action or it carries none of them.
  */
-export function getVotingSettingsProposalDetails(
-  actions: readonly ApiAction[]
-): VotingSettingsProposalDetails | null {
+export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]): VotingSettingsProposalDetails | null {
   const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');
   if (!action) {
     return null;
@@ -412,10 +410,29 @@ export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']
   }
 }
 
+/**
+ * Whether the UI should offer to execute this proposal.
+ *
+ * SLOW proposals pass a percentage quorum and support threshold, and `quorum`/
+ * `threshold` describe exactly those — so requiring all three is the correct
+ * conservative read of the API.
+ *
+ * FAST proposals do not: they clear on `flatSupportThreshold` (a single editor
+ * vote can satisfy it), with no percentage gate to reach. ANDing the percentage
+ * flags in would report `false` for a FAST proposal that legitimately passed,
+ * and the caller renders that as "Rejected" with no Execute button — an
+ * unrecoverable false negative. So FAST defers to the API's own `canExecute`.
+ *
+ * The asymmetry is safe in the direction that matters: a false *positive* only
+ * shows a button whose click is caught by the on-chain executability simulation
+ * in execute.tsx, whereas a false negative hides the affordance entirely.
+ */
 export function getApiProposalCanExecute(
-  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold'>
+  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold' | 'votingMode'>
 ): boolean {
-  return proposal.canExecute && proposal.quorum.reached && proposal.threshold.reached;
+  if (!proposal.canExecute) return false;
+  if (proposal.votingMode === 'FAST') return true;
+  return proposal.quorum.reached && proposal.threshold.reached;
 }
 
 /**

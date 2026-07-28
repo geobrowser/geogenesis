@@ -99,6 +99,19 @@ export function AcceptOrRejectMember({
   const currentVote: 'ACCEPT' | 'REJECT' | 'ABSTAIN' | undefined =
     (txSucceeded && pendingChoice ? pendingChoice : undefined) ?? userVote?.vote;
 
+  // Retire the local override the moment the server agrees with it. Without
+  // this the override is permanent (nothing else clears pendingChoice on the
+  // success path), so a LATER change made elsewhere — another tab, the proposal
+  // modal — stays masked forever: the card shows the superseded vote and
+  // castVote's no-op guard renders the correct button inert, unrecoverable
+  // without a reload. Clearing here keeps local precedence for exactly the
+  // window it's needed: after our tx, until the indexer catches up.
+  useEffect(() => {
+    if (pendingChoice && userVote?.vote === pendingChoice) {
+      setPendingChoice(null);
+    }
+  }, [pendingChoice, userVote?.vote]);
+
   // Drop the optimistic entry once router.refresh has caught up and userVote
   // is reflected on the prop — server render now naturally places the card
   // at the bottom of its bucket without our artificial order bump.
@@ -118,7 +131,7 @@ export function AcceptOrRejectMember({
     if (currentVote === choice) return;
     const isChange = currentVote != null && currentVote !== choice;
     setPendingChoice(choice);
-    addOptimisticVote(proposalId);
+    addOptimisticVote(proposalId, choice);
     vote(choice, {
       onSuccess: onVoteSuccess,
       onError: (error: unknown) => {
@@ -199,7 +212,7 @@ export function AcceptOrRejectMember({
           onClick={onReject}
           disabled={isPending}
           icon={rejected ? <Check /> : undefined}
-          className={rejected ? 'border-text! bg-bg! cursor-default' : undefined}
+          className={rejected ? 'cursor-default border-text! bg-bg!' : undefined}
           aria-pressed={rejected}
         >
           <Pending isPending={isPending && pendingChoice === 'REJECT'}>{rejected ? 'Rejected' : 'Reject'}</Pending>
@@ -209,7 +222,7 @@ export function AcceptOrRejectMember({
           onClick={onApprove}
           disabled={isPending}
           icon={accepted ? <Check /> : undefined}
-          className={accepted ? 'border-text! bg-bg! cursor-default' : undefined}
+          className={accepted ? 'cursor-default border-text! bg-bg!' : undefined}
           aria-pressed={accepted}
         >
           <Pending isPending={isPending && pendingChoice === 'ACCEPT'}>{accepted ? 'Approved' : 'Approve'}</Pending>
