@@ -13,6 +13,8 @@ import { speakerLabel } from './playback-utils';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
+  position: boolean;
+  position_label: string;
 };
 
 type DebateRequestDialogFormatSelector = {
@@ -46,12 +48,19 @@ export function DebateRequestDialog({
   onReject,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
-  const orderedParticipants = React.useMemo(
+  const turnParticipants = React.useMemo(
     () => [...participants].sort((a, b) => a.participant_slot - b.participant_slot),
     [participants]
   );
-  const firstParticipant = orderedParticipants[0];
-  const secondParticipant = orderedParticipants[1] ?? firstParticipant;
+  const positionParticipants = React.useMemo(
+    () =>
+      [...turnParticipants].sort(
+        (a, b) => Number(b.position) - Number(a.position) || a.participant_slot - b.participant_slot
+      ),
+    [turnParticipants]
+  );
+  const firstParticipant = positionParticipants[0];
+  const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
   React.useEffect(() => {
     const originalBodyOverflow = document.body.style.overflow;
@@ -120,7 +129,7 @@ export function DebateRequestDialog({
             <div className="px-1 pb-1">
               <DebateFormatDetails
                 formatId={formatId}
-                participants={orderedParticipants}
+                participants={turnParticipants}
                 currentUserId={currentUserId}
               />
             </div>
@@ -177,6 +186,9 @@ function ParticipantSummary({
       </span>
       <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
         {label}
+      </Text>
+      <Text as="span" variant="smallButton" color="text" className="rounded-full bg-grey-02 px-2 py-0.5">
+        {participant.position_label}
       </Text>
     </div>
   );

@@ -38,9 +38,7 @@ export function createDebateRoomOwnershipCoordinator({
   const instanceId = createInstanceId();
   const coordinationName = `geo:debate-room:${debateId}:${userId}`;
   const canCoordinate =
-    typeof navigator !== 'undefined' &&
-    Boolean(navigator.locks?.request) &&
-    typeof BroadcastChannel !== 'undefined';
+    typeof navigator !== 'undefined' && Boolean(navigator.locks?.request) && typeof BroadcastChannel !== 'undefined';
   let channel: BroadcastChannel | null = null;
   if (canCoordinate) {
     try {

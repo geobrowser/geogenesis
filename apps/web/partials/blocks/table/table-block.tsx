@@ -54,8 +54,8 @@ import { NextButton, PageNumber, PreviousButton } from '~/design-system/table/ta
 import { Text } from '~/design-system/text';
 
 import { onChangeEntryFn, writeValue } from './change-entry';
-import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import { DataBlockCreateEntitySpaceDropdown } from './data-block-create-entity-space-dropdown';
+import { shouldShowCreateEntityAction } from './data-block-create-entity-visibility';
 import {
   filterPanelOpenStateForActions,
   shouldShowFilterAndFullscreenActions,

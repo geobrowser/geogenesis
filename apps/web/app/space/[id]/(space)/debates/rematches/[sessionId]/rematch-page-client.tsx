@@ -14,6 +14,7 @@ import {
   type DebateRematchSession,
   getCurrentGeoChatUserId,
 } from '~/core/debates/api';
+import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -25,7 +26,6 @@ import {
   useRejectDebateRematchRequest,
   useUpdateDebateRematchPosition,
 } from '~/core/debates/hooks';
-import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -166,7 +166,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       claims.filter(claim => {
         if (tab === 'debate-now' && opponentPositionOf(claim) === null) return false;
-        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter)) return false;
+        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter))
+          return false;
         return true;
       }),
     [claims, opponentPositionOf, tab, topicFilter, topicsByClaimId]
@@ -189,6 +190,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
+  const incomingRequestParticipants =
+    incomingRequest && session
+      ? session.participants.map(participant => {
+          const position =
+            participant.user_id === incomingRequest.requester_user_id
+              ? incomingRequest.requester_position
+              : incomingRequest.recipient_position;
+
+          return {
+            ...participant,
+            position,
+            position_label: position ? 'Yes' : 'No',
+          };
+        })
+      : [];
 
   return (
     <div className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text">
@@ -313,7 +329,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
           claim={incomingRequest.claim.claim}
-          participants={session.participants}
+          participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
           busy={acceptRequest.isPending || rejectRequest.isPending}
