@@ -5,17 +5,18 @@ import * as React from 'react';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
@@ -30,7 +31,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { SpaceChromeGate } from './space-chrome-gate';
+import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -48,9 +49,13 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const props = await getSpaceFrontPage(spaceId);
+  const [props, communityCalls] = await Promise.all([
+    getSpaceFrontPage(spaceId),
+    fetchCommunityCalls(spaceId).catch(() => []),
+  ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
+  const hasCommunityCallsSidebar = !Spaces.hasExternalTopic(props.space) && communityCalls.length > 0;
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -64,7 +69,7 @@ export default async function Layout(props0: LayoutProps) {
       >
         <SpaceChromeGate>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <EntityPageContentContainer>
+          <SpaceHeaderContentContainer spaceId={spaceId} hasSidebar={hasCommunityCallsSidebar}>
             <div className="space-y-2">
               <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
@@ -104,7 +109,7 @@ export default async function Layout(props0: LayoutProps) {
                 />
               </React.Suspense>
             </div>
-          </EntityPageContentContainer>
+          </SpaceHeaderContentContainer>
           <Spacer height={20} />
         </SpaceChromeGate>
         {children}

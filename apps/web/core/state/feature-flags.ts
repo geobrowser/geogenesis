@@ -21,6 +21,11 @@ export const featureFlagDefinitions = [
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
   },
+  {
+    id: 'debugDebatesPage',
+    label: 'Debates debug tab per space',
+    description: 'Enable per-space debate processing diagnostics.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -29,6 +34,7 @@ type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>
 
 export const defaultFeatureFlags: FeatureFlags = {
   questionsTab: false,
+  debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
 };
@@ -36,6 +42,7 @@ export const defaultFeatureFlags: FeatureFlags = {
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
     questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
+    debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
     debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
   };
@@ -65,6 +72,10 @@ export function useFeatureFlag(id: FeatureFlagId) {
  */
 export function useDebatesEnabled() {
   return useFeatureFlag('questionsTab');
+}
+
+export function useDebugDebatesPageEnabled() {
+  return useFeatureFlag('debugDebatesPage');
 }
 
 export function useFeatureFlags() {

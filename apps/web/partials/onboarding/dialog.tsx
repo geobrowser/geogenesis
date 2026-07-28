@@ -42,9 +42,8 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
-import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
-
 import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
 export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');

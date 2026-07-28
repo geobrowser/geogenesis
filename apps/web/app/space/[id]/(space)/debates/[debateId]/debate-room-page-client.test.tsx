@@ -343,7 +343,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -372,11 +372,11 @@ describe('DebateRoomPageClient', () => {
       })
     );
     expect(screen.getByText('Requesting access to your camera and microphone…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -441,12 +441,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
 
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
   });
 
@@ -458,7 +458,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
   });
 
   it('cleans up acquired tracks when device enumeration fails', async () => {
@@ -479,7 +479,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(audioTrack.stop).toHaveBeenCalled();
     expect(videoTrack.stop).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
   });
 
   it('changes speaker output without restarting capture and hands the selection to LiveKit', async () => {
@@ -534,7 +534,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
@@ -671,11 +671,11 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeDisabled();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
@@ -757,7 +757,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await screen.findByRole('button', { name: 'Accept' });
+    await screen.findByRole('button', { name: "I'm ready" });
     const olderEnumeration = deferred<MediaDeviceInfo[]>();
     mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
       { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -794,7 +794,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('disables the ready button while waiting for the opponent', async () => {
@@ -811,7 +811,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
@@ -1145,17 +1145,30 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.roomOn.mock.calls.some(([event]) => event === 'trackSubscribed')).toBe(true));
+    const remoteVideo = document.createElement('video');
+    const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
+    act(() => trackSubscribed?.({ attach: () => remoteVideo }));
+
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
     expect(screen.queryByText(/has the floor/i)).not.toBeInTheDocument();
+    expectActiveDebateVideoTile('local');
+    expectInactiveDebateVideoTile('remote');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('opacity-0');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
-    expect(
-      document.querySelector('[data-inactive-speaker="remote"] [data-muted-indicator="true"]')
-    ).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('top-3', 'right-3', 'opacity-100');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).not.toHaveClass(
+      'inset-0',
+      'bg-[#151515]/75',
+      'opacity-60'
+    );
+    expectMutedIndicator('remote');
+    expectNoMutedIndicator('local');
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
   });
@@ -1185,9 +1198,19 @@ describe('DebateRoomPageClient', () => {
     expect(tiles.map(tile => tile.getAttribute('data-debate-video-position'))).toEqual(['yes', 'no']);
     expect(tiles[0]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'remote');
     expect(tiles[1]?.querySelector('[data-inactive-speaker]')).toHaveAttribute('data-inactive-speaker', 'local');
+    expectActiveDebateVideoTile('remote');
+    expectInactiveDebateVideoTile('local');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
-    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-black/45');
-    expect(document.querySelector('[data-inactive-speaker="local"] [data-muted-indicator="true"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('top-3', 'right-3', 'opacity-100');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).not.toHaveClass(
+      'inset-0',
+      'bg-[#151515]/75',
+      'opacity-60'
+    );
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('opacity-0');
+    expectMutedIndicator('local');
+    expectNoMutedIndicator('remote');
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
   });
@@ -1538,7 +1561,9 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByLabelText('Phase timer: 19 seconds remaining')).toBeInTheDocument();
+    const phaseTimer = await screen.findByLabelText('Phase timer: 19 seconds remaining');
+    expect(debateVideoTile('local')).toContainElement(phaseTimer);
+    expectActiveDebateVideoTile('local');
     expect(screen.getByText('19')).toBeInTheDocument();
     expect(document.querySelector('circle[stroke="var(--color-white)"]')).toBeInTheDocument();
   });
@@ -1560,7 +1585,9 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getAllByText('5')).not.toHaveLength(0);
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
-    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('local');
+    expectNoMutedIndicator('remote');
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
   });
@@ -1651,6 +1678,8 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Connecting')).toBeInTheDocument();
     expect(screen.queryByLabelText(/Phase timer/)).not.toBeInTheDocument();
     expect(screen.queryByText('00:10')).not.toBeInTheDocument();
+    expectNoMutedIndicator('local');
+    expectNoMutedIndicator('remote');
   });
 
   it('stops media at the deadline and returns to matching after backend cancellation', async () => {
@@ -1755,6 +1784,10 @@ describe('DebateRoomPageClient', () => {
     expect(
       screen.queryByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
     ).not.toBeInTheDocument();
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('local');
+    expectNoMutedIndicator('remote');
   });
 
   it('shows a large local countdown before the participant is up', async () => {
@@ -1777,6 +1810,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getAllByText('1')).toHaveLength(2);
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('local');
   });
 
   it('shows GO when the local participant turn begins', async () => {
@@ -1798,7 +1832,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
   });
 
-  it('shows wrap it up with a red ring on the active speaker in the final five seconds', async () => {
+  it('shows wrap it up only on the active local speaker during the penultimate turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
       ...completedDebate(),
@@ -1814,10 +1848,52 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Wrap it up!')).toBeInTheDocument();
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('local')).toContainElement(wrapItUp);
+    expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('GO!')).not.toBeInTheDocument();
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+  });
+
+  it('does not show the remote speaker wrap-up warning to the inactive local participant', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+  });
+
+  it('does not show wrap it up before the final five seconds', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:24.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
   });
 
   it('labels the upcoming turn as a rebuttal in the final round', async () => {
@@ -1844,8 +1920,10 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
   });
 
-  it('shows debate ends soon to the inactive speaker on the final turn', async () => {
+  it('shows only debate ends soon to the inactive local participant on the final turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    let clockElapsedMs = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clockElapsedMs);
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
@@ -1861,11 +1939,46 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate ends soon')).toBeInTheDocument();
+    const debateEndsSoon = await screen.findByText('Debate ends soon');
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+    expect(debateVideoTile('local')).toContainElement(debateEndsSoon);
+    expect(debateVideoTile('remote')).not.toContainElement(debateEndsSoon);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('local');
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+
+    clockElapsedMs = 4_000;
+
+    await waitFor(() => {
+      expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+      expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).toBeInTheDocument();
+    });
+  });
+
+  it('shows wrap it up to the active local participant on the final turn', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 3,
+      current_speaker_slot: 1,
+      turn_durations_ms: [45_000, 45_000, 30_000, 30_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:02:00.000Z',
+      turn_ends_at: '2026-07-02T00:02:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('local')).toContainElement(wrapItUp);
+    expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
+    expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
   });
 
   it('advances directly from the warning to GO without waiting for a debate refresh', async () => {
@@ -1892,7 +2005,8 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByText('GO!')).toBeInTheDocument();
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
-    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('remote');
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
 
     mocks.debate = {
@@ -1957,6 +2071,8 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expectNoMutedIndicator('local');
+    expectNoMutedIndicator('remote');
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
   });
 
@@ -2088,6 +2204,8 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
     expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
+    expectNoMutedIndicator('local');
+    expectNoMutedIndicator('remote');
     expect(mocks.back).not.toHaveBeenCalled();
 
     persistence.resolve();
@@ -2295,9 +2413,68 @@ async function renderLiveDebate(overrides: Partial<Debate> = {}) {
 }
 
 function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
+  expect(debateVideoTile(participant)).not.toHaveClass('grayscale');
+}
+
+function expectActiveDebateVideoTile(participant: 'local' | 'remote') {
+  expect(debateVideoTile(participant)).toHaveAttribute('data-active-speaker', 'true');
+  expect(debateVideoTile(participant)).toHaveClass('outline-[3px]', 'outline-offset-0', 'outline-purple');
+}
+
+function expectInactiveDebateVideoTile(participant: 'local' | 'remote') {
+  const tile = debateVideoTile(participant);
+  expect(tile).toHaveAttribute('data-active-speaker', 'false');
+  expect(tile).not.toHaveClass('outline-[3px]');
+  expect(tile).not.toHaveClass('outline-offset-0');
+  expect(tile).not.toHaveClass('outline-purple');
+}
+
+function expectMutedIndicator(participant: 'local' | 'remote') {
+  const indicator = document.querySelector(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`);
+  expect(indicator).toBeInTheDocument();
+  expect(indicator).toHaveAttribute('aria-hidden', 'true');
+  expect(indicator).toHaveAttribute('width', '51');
+  expect(indicator).toHaveAttribute('height', '51');
+  expect(indicator).toHaveAttribute('viewBox', '0 0 51 51');
+  expect(indicator).toHaveClass('size-[51px]');
+
+  const paths = indicator?.querySelectorAll('path');
+  const background = paths?.[0];
+  const gradient = indicator?.querySelector('linearGradient');
+  expect(background).toHaveAttribute(
+    'd',
+    'M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z'
+  );
+  expect(background).toHaveAttribute('fill', `url(#${gradient?.id})`);
+  expect(background).toHaveAttribute('fill-opacity', '0.5');
+  expect(gradient).toHaveAttribute('x1', '25.5');
+  expect(gradient).toHaveAttribute('y1', '0');
+  expect(gradient).toHaveAttribute('x2', '25.5');
+  expect(gradient).toHaveAttribute('y2', '51');
+  expect(gradient).toHaveAttribute('gradientUnits', 'userSpaceOnUse');
+  const stops = gradient?.querySelectorAll('stop');
+  expect(stops?.[0]).not.toHaveAttribute('offset');
+  expect(stops?.[1]).toHaveAttribute('offset', '1');
+  expect(stops?.[1]).toHaveAttribute('stop-opacity', '0.5');
+  expect(indicator?.querySelectorAll('[stroke="white"]')).toHaveLength(3);
+  expect(paths?.[1]).toHaveAttribute(
+    'd',
+    'M19.5 26L19.5 27C19.5 30.3137 22.1863 33 25.5 33C28.8137 33 31.5 30.3137 31.5 27V26'
+  );
+  expect(paths?.[1]).toHaveAttribute('stroke-linecap', 'round');
+  expect(paths?.[2]).toHaveAttribute('d', 'M28.5 19.5L22.5 29');
+}
+
+function expectNoMutedIndicator(participant: 'local' | 'remote') {
+  expect(
+    document.querySelector(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`)
+  ).not.toBeInTheDocument();
+}
+
+function debateVideoTile(participant: 'local' | 'remote') {
   const tile = document.querySelector(`[data-inactive-speaker="${participant}"]`)?.closest('section');
-  expect(tile).not.toBeNull();
-  expect(tile).not.toHaveClass('grayscale');
+  if (!(tile instanceof HTMLElement)) throw new Error(`Missing ${participant} debate video tile`);
+  return tile;
 }
 
 function installRecordingMocks() {

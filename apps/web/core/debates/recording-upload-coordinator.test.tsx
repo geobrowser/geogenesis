@@ -138,6 +138,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason={null}
         errorMessage={null}
+        canPublishOptOut
         publishChecked
         onUncheckPublish={() => undefined}
       />
@@ -147,12 +148,44 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('iterates the count while several debates upload at once', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={2}
+        waitingReason={null}
+        errorMessage={null}
+        canPublishOptOut
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Uploading 2 debates')).toBeInTheDocument();
+  });
+
+  it('drops the publish checkbox once the thank-you period is over', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        canPublishOptOut={false}
+        publishChecked
+        onUncheckPublish={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Uploading 1 debate...')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+  });
+
   it('shows generic plural waiting copy when no reason is available', () => {
     render(
       <DebateRecordingUploadBanner
         count={2}
         waitingReason="waiting"
         errorMessage={null}
+        canPublishOptOut
         publishChecked
         onUncheckPublish={() => undefined}
       />
@@ -167,6 +200,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason="offline"
         errorMessage="stale upload failure"
+        canPublishOptOut
         publishChecked
         onUncheckPublish={() => undefined}
       />
@@ -182,6 +216,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={2}
         waitingReason="retry"
         errorMessage="Finalization unavailable"
+        canPublishOptOut
         publishChecked
         onUncheckPublish={() => undefined}
       />
@@ -199,6 +234,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason="retry"
         errorMessage={longError}
+        canPublishOptOut
         publishChecked
         onUncheckPublish={() => undefined}
       />
@@ -216,6 +252,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason={null}
         errorMessage={null}
+        canPublishOptOut
         publishChecked
         onUncheckPublish={uncheck}
       />
@@ -229,6 +266,7 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason={null}
         errorMessage={null}
+        canPublishOptOut
         publishChecked={false}
         onUncheckPublish={uncheck}
       />
@@ -244,7 +282,7 @@ describe('DebateCancelUploadDialog', () => {
     const close = vi.fn();
     render(<DebateCancelUploadDialog busy={false} error={null} onConfirm={confirm} onClose={close} />);
 
-    expect(screen.getByText("Don't want to publish?")).toBeInTheDocument();
+    expect(screen.getByText('Don’t want to publish?')).toBeInTheDocument();
     expect(
       screen.getByText('This action permanently removes this debate video on behalf of you and your opponent.')
     ).toBeInTheDocument();

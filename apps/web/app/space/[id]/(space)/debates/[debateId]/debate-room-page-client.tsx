@@ -56,6 +56,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
+import { useSetThankingDebateId } from '~/core/debates/thanking-debate-store';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -270,6 +271,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     recordingCancelledBy !== null
       ? (debate?.participants.find(participant => participant.user_id === recordingCancelledBy) ?? null)
       : null;
+
+  // Publish opt-out in the global upload banner is only offered while the user is on this
+  // debate's thank-you screen, so tell the banner which debate that is.
+  const setThankingDebateId = useSetThankingDebateId();
+  const thankingDebateId = countdown.effectiveStatus === 'thanking' ? (debate?.id ?? null) : null;
+  React.useEffect(() => {
+    setThankingDebateId(thankingDebateId);
+    return () => setThankingDebateId(null);
+  }, [setThankingDebateId, thankingDebateId]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
@@ -1498,7 +1508,6 @@ function DebateRecordingModal({
   const localUpcomingLabel = upcomingTurnIsRebuttal(debate, countdown) ? 'Rebut in' : "You're up in";
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
-  const showRemoteWrapItUp = wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
@@ -1542,7 +1551,7 @@ function DebateRecordingModal({
       showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
-      inactiveOverlayId="local"
+      inactiveIndicatorId="local"
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -1570,9 +1579,8 @@ function DebateRecordingModal({
             ? null
             : 'Waiting for video'
       }
-      showWrapItUp={showRemoteWrapItUp}
       inactive={remoteInactive}
-      inactiveOverlayId="remote"
+      inactiveIndicatorId="remote"
       countdown={remoteCountdown}
     >
       <div
@@ -1832,7 +1840,7 @@ function DebateVideoTile({
   showDebateEndsSoon = false,
   inactive = false,
   revealInactive = false,
-  inactiveOverlayId,
+  inactiveIndicatorId,
   countdown,
   closingMessage = false,
   children,
@@ -1847,28 +1855,33 @@ function DebateVideoTile({
   showDebateEndsSoon?: boolean;
   inactive?: boolean;
   revealInactive?: boolean;
-  inactiveOverlayId: 'local' | 'remote';
+  inactiveIndicatorId: 'local' | 'remote';
   countdown?: React.ReactNode;
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
+  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText;
+
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
-      className="relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card"
+      data-active-speaker={active ? 'true' : 'false'}
+      className={cx(
+        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
+        active && 'outline-[3px] outline-offset-0 outline-purple'
+      )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
       <div
         aria-hidden="true"
-        data-inactive-speaker={inactiveOverlayId}
-        data-visible={inactive && !revealInactive ? 'true' : 'false'}
+        data-inactive-speaker={inactiveIndicatorId}
+        data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 grid place-items-center bg-black/45 transition-opacity duration-700 ease-out',
-          inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
+          'pointer-events-none absolute top-3 right-3 z-20',
+          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
         )}
       >
-        <MutedMicrophoneIndicator />
+        {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
@@ -1999,25 +2012,25 @@ function DebateRecordingRemovedDialog({
   onAcknowledge: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/40 px-6">
+    <div className="fixed inset-0 z-[1100] grid place-items-center bg-black/60 px-4">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Your debate was removed"
-        className="w-full max-w-[360px] rounded-xl bg-white p-5 text-center text-text shadow-card"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text"
       >
-        <Text as="h2" variant="smallTitle" color="text">
+        <Text as="h2" variant="cardEntityTitle" color="text" className="leading-none">
           Your debate was removed
         </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+        <Text as="p" variant="metadata" color="text" className="mt-2">
           {cancellerName} cancelled the upload of your debate
         </Text>
-        <div className="mt-4 rounded-lg bg-grey-01 px-4 py-3">
-          <Text as="p" variant="metadata" color="grey-04" className="line-clamp-3">
+        <div className="mt-5 rounded-lg bg-grey-01 p-2">
+          <Text as="p" variant="metadata" color="grey-04" className="line-clamp-2">
             {claim}
           </Text>
         </div>
-        <div className="mt-4 flex justify-center">
+        <div className="mt-5 flex justify-center">
           <button
             type="button"
             onClick={onAcknowledge}
