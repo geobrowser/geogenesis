@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Value } from '~/core/types';
 
+import { DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID } from './block-ontology-ids';
 import { parseBlockInfiniteScroll, readBlockInfiniteScrollFromValues } from './parse-block-infinite-scroll';
 
 const SPACE_ID = 'space-1';
@@ -10,7 +11,7 @@ function infiniteScrollValue(value: string): Value {
   return {
     id: 'value-1',
     entity: { id: 'block-rel-1', name: null },
-    property: { id: '456d585279fd4915aca820ff0a97b389', name: 'Infinite scroll', dataType: 'BOOLEAN' },
+    property: { id: DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID, name: 'Infinite scroll', dataType: 'BOOLEAN' },
     value,
     spaceId: SPACE_ID,
     isDeleted: false,

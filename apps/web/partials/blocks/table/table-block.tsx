@@ -726,7 +726,7 @@ const ConfiguredTableBlock = ({
   );
 
   React.useEffect(() => {
-    setRowPages([]);
+    setRowPages(prev => (prev.length === 0 ? prev : []));
     if (!isInfiniteScroll) return;
     setPage(0);
   }, [accumulationResetKey, isInfiniteScroll, setPage]);
