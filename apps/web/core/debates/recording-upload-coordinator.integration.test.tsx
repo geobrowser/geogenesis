@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   queue: [] as DebateRecordingUpload[],
   resolveUser: vi.fn(),
   scheduleRetry: vi.fn(),
+  thankingDebateId: null as string | null,
 }));
 
 vi.mock('@tanstack/react-query', async importOriginal => ({
@@ -36,9 +38,14 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
+    accountKey: 'user-a',
     getPrivyIdentityToken: mocks.getToken,
   }),
   useDebateActivity: () => ({ data: undefined }),
+}));
+
+vi.mock('./thanking-debate-store', () => ({
+  useThankingDebateId: () => mocks.thankingDebateId,
 }));
 
 vi.mock('./api', async importOriginal => ({
@@ -99,6 +106,7 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
 }));
 
 beforeEach(() => {
+  mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
   mocks.completeUpload.mockReset().mockResolvedValue(undefined);
   mocks.createUpload.mockReset().mockImplementation(async (debateId: string) => ({
@@ -145,7 +153,8 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.completeUpload).toHaveBeenCalledWith(
       'debate-1',
       expect.objectContaining({ framerate: 29.97 }),
-      expect.anything()
+      expect.anything(),
+      'user-a'
     );
     expect(mocks.lockRequest).toHaveBeenCalledWith(
       'geo:debate-recording-uploader',
@@ -190,15 +199,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() =>
-      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything())
+      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything(), 'user-a')
     );
     expect(screen.getByText('Uploading 2 debates')).toBeInTheDocument();
-    expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything());
+    expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a');
 
     firstCompletion.resolve();
 
     await waitFor(() =>
-      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything())
+      expect(mocks.completeUpload).toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a')
     );
   });
 
@@ -286,6 +295,20 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  it('drops the local blob and clears the banner when the debate can no longer be published', async () => {
+    // An aborted/cancelled debate finalizes as `recording_not_ready`, which no retry can fix.
+    mocks.completeUpload.mockRejectedValue(
+      new GeoChatRequestError('debate is not finalizable', 'recording_not_ready', 400)
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
   it('keeps retrying entries with very high attempt counts', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     mocks.completeUpload.mockRejectedValueOnce(new Error('Still unavailable'));
@@ -315,9 +338,62 @@ describe('DebateRecordingUploadCoordinator', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
-    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything()));
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('cancels only the debate whose thank-you screen the user is on', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    // The user is thanking for debate-2 while an earlier recording is still uploading.
+    mocks.thankingDebateId = 'debate-2';
+    mocks.queue = [queuedRecording('debate-1'), queuedRecording('debate-2')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading 2 debates')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-2'));
+    expect(mocks.cancelRecording).toHaveBeenCalledTimes(1);
+    expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a');
+    expect(mocks.deleteUpload).not.toHaveBeenCalledWith('user-a:debate-1');
+    // The untouched recording keeps uploading, now without an opt-out.
+    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+  });
+
+  it('matches the thank-you debate even though the queue stores ids dashless', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    // The queue stores `debateId` dashless; the room page reports it dashed, as the debate API does.
+    mocks.thankingDebateId = '019fa4c0-664c-7dc0-ac08-9e0d45b6c04b';
+    mocks.queue = [queuedRecording('019fa4c0664c7dc0ac089e0d45b6c04b')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    // The cancel request uses the dashless id the queue and backend already agree on.
+    await waitFor(() =>
+      expect(mocks.cancelRecording).toHaveBeenCalledWith(
+        '019fa4c0664c7dc0ac089e0d45b6c04b',
+        expect.anything(),
+        'user-a'
+      )
+    );
+  });
+
+  it('offers no publish opt-out once the thank-you period is over', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
   });
 
   it('retries transient user resolution failures when the browser reconnects', async () => {

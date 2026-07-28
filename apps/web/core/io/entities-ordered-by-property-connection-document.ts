@@ -25,6 +25,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
     $propertyId: UUID
     $sortDirection: SortOrder
     $dataType: String
+    $includeWithoutValue: Boolean
     $spaceId: UUID
     $spaceIds: [UUID!]
     $typeIds: [UUID!]
@@ -37,6 +38,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
       propertyId: $propertyId
       sortDirection: $sortDirection
       dataType: $dataType
+      includeWithoutValue: $includeWithoutValue
       spaceIds: $spaceIds
       typeIds: $typeIds
       first: $limit
