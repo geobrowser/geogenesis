@@ -1,5 +1,14 @@
 export type OnboardingStep =
-  'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
+  | 'start'
+  | 'existing-entity-match'
+  | 'describe-you'
+  | 'interested-in'
+  | 'completed'
+  | 'done'
+  // Legacy values that may still be persisted in localStorage from an older
+  // version of the flow. They are normalized to 'start' (see effectiveStep).
+  | 'enter-profile'
+  | 'create-space';
 
 /**
  * The completion screen intentionally stays mounted after optimistic setup hides
