@@ -23,6 +23,7 @@ import {
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
+import { RankingEntryVoteControls } from './ranking-entry-vote-controls';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -152,6 +153,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     isSharedRankingView,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
     activeSwipeRowKey,
     setActiveSwipeRowKey,
     isMyRankingDragging,
@@ -242,19 +244,24 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
                 return (
                   <div key={entityId} className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
               const rowContent = (
-                <RankingEntryRow
-                  rank={rank}
-                  rankStyle="leading"
-                  entry={entry}
-                  spaceId={spaceId}
-                  linkToEntity={!isMobile}
-                  pending={pendingEntityIds.has(entityId)}
-                />
+                <div className="flex w-full min-w-0 items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <RankingEntryRow
+                      rank={rank}
+                      rankStyle="leading"
+                      entry={entry}
+                      spaceId={spaceId}
+                      linkToEntity={!isMobile}
+                      pending={pendingEntityIds.has(entityId)}
+                    />
+                  </div>
+                  <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                </div>
               );
               return (
                 <div key={entityId} className="w-full">
@@ -310,6 +317,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             }}
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
+            renderTrailing={(entityId, _index, isDragActive) => {
+              const entry = myRankingEntryByEntityId.get(entityId);
+              if (isDragActive || !entry || (entriesResolving && isPlaceholderRankingEntry(entry))) return null;
+              return <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />;
+            }}
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const rank = embeddedMyPageNumber * pageSize + index + 1;
               const resolvedEntry = myRankingEntryByEntityId.get(entityId);
@@ -320,7 +332,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!resolvedEntry || (entriesResolving && isPlaceholderRankingEntry(resolvedEntry))) {
                 return (
                   <div className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
