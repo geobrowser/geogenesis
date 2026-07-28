@@ -69,30 +69,6 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
   );
 }
 
-export function MutedMicrophoneIndicator() {
-  return (
-    <svg
-      width="45"
-      height="45"
-      viewBox="0 0 45 45"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      data-muted-indicator="true"
-      className="size-[45px]"
-    >
-      <rect width="45" height="44.9989" rx="22.4994" fill="white" />
-      <rect x="17.6431" y="12.2852" width="9.71429" height="17.75" rx="4.85714" stroke="#151515" />
-      <path
-        d="M14.4644 24.1055V25.1769C14.4644 29.6149 18.0621 33.2126 22.5001 33.2126C26.9381 33.2126 30.5358 29.6149 30.5358 25.1769V24.1055"
-        stroke="#151515"
-        strokeLinecap="round"
-      />
-      <path d="M27.3216 16.6094L17.6787 25.7165" stroke="#151515" />
-    </svg>
-  );
-}
-
 export function CameraIcon({ disabled }: { disabled: boolean }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
