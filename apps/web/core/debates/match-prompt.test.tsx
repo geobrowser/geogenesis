@@ -294,7 +294,7 @@ describe('DebateMatchPrompt', () => {
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
     expect(mocks.markReadyMutate).not.toHaveBeenCalled();
@@ -318,14 +318,14 @@ describe('DebateMatchPrompt', () => {
 
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
     act(failReadiness);
 
     expect(screen.getByText('Readiness failed')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(2));
     expect(mocks.push).toHaveBeenCalledTimes(1);
@@ -342,14 +342,14 @@ describe('DebateMatchPrompt', () => {
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('Camera disconnected')).toBeInTheDocument());
     expect(mocks.markReadyMutate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
     expect(mocks.ensurePreview).toHaveBeenCalledTimes(3);
@@ -360,7 +360,7 @@ describe('DebateMatchPrompt', () => {
     acceptedMatch.participants[0]!.accepted = true;
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     mocks.markReadyPending = true;
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 
