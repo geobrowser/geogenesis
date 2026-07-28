@@ -1,3 +1,5 @@
+import type React from 'react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -17,9 +19,11 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 describe('RankingListView', () => {
   it('always renders vote actions without requiring a shown Score property', () => {
     const entityId = 'entity-1';
-    const spaceId = 'space-1';
+    const spaceId = 'block-space';
+    const voteSpaceId = 'entity-space';
     const state = {
       spaceId,
+      resolveEntitySpaceId: vi.fn(() => voteSpaceId),
       globalDisplayEntityIds: [entityId],
       globalRankingEntryByEntityId: new Map([[entityId, { name: 'First entity' }]]),
       globalRankByEntityId: new Map([[entityId, 1]]),
@@ -42,6 +46,7 @@ describe('RankingListView', () => {
     expect(markup).toContain('First entity');
     expect(markup).toContain('data-vote-actions="true"');
     expect(markup).toContain(`data-entity-id="${entityId}"`);
-    expect(markup).toContain(`data-space-id="${spaceId}"`);
+    expect(markup).toContain(`data-space-id="${voteSpaceId}"`);
+    expect(markup).toContain(`/space/${spaceId}/${entityId}`);
   });
 });

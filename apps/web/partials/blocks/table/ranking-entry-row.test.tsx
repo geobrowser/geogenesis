@@ -1,11 +1,14 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 
+import type React from 'react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 
-import { RankingEntryRow } from './ranking-entry-row';
+import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
+import { RankingEntryVoteControls } from './ranking-entry-vote-controls';
 
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMedia: () => ({ avatarUrl: null, coverUrl: null }),
@@ -17,7 +20,9 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <button aria-label="Upvote" data-vote-actions />,
+  EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
+    <button aria-label="Upvote" data-entity-id={entityId} data-space-id={spaceId} data-vote-actions />
+  ),
 }));
 
 const entry = {
@@ -28,19 +33,19 @@ const entry = {
 } as RankingEntryDisplay;
 
 describe('RankingEntryRow', () => {
-  it('renders vote actions when used in a ranking browse view', () => {
-    const markup = renderToStaticMarkup(<RankingEntryRow entry={entry} spaceId="space-1" showVotes />);
-
-    expect(markup).toContain('data-vote-actions="true"');
-  });
-
-  it('keeps vote actions out of compose rows by default', () => {
+  it('keeps browse-only vote actions out of the reusable row', () => {
     const markup = renderToStaticMarkup(<RankingEntryRow entry={entry} spaceId="space-1" />);
 
     expect(markup).not.toContain('data-vote-actions');
   });
 
-  it('keeps vote interactions out of parent swipe and drag handlers', () => {
+  it('reserves vote-control width in browse loading rows', () => {
+    const markup = renderToStaticMarkup(<RankingEntryRowSkeleton rank={1} reserveVoteControls />);
+
+    expect(markup).toContain('w-16');
+  });
+
+  it('passes the resolved entity space to votes and isolates their interactions', () => {
     const onPointerDown = vi.fn();
     const onMouseDown = vi.fn();
     const onTouchStart = vi.fn();
@@ -48,12 +53,14 @@ describe('RankingEntryRow', () => {
 
     render(
       <div onPointerDown={onPointerDown} onMouseDown={onMouseDown} onTouchStart={onTouchStart} onClick={onClick}>
-        <RankingEntryRow entry={entry} spaceId="space-1" showVotes />
+        <RankingEntryVoteControls entityId="entity-1" spaceId="entity-space-1" />
       </div>
     );
 
     const voteButton = screen.getByRole('button', { name: 'Upvote' });
     expect(voteButton.parentElement?.className).toContain('pointer-events-auto');
+    expect(voteButton.dataset.entityId).toBe('entity-1');
+    expect(voteButton.dataset.spaceId).toBe('entity-space-1');
 
     fireEvent.pointerDown(voteButton);
     fireEvent.mouseDown(voteButton);

@@ -21,11 +21,13 @@ import type { RankingBlockState } from './use-ranking-block-state';
 function RankingGalleryCard({
   entityId,
   spaceId,
+  voteSpaceId,
   name,
   imageHint,
 }: {
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
   imageHint?: string | null;
 }) {
@@ -50,7 +52,7 @@ function RankingGalleryCard({
         onPointerDown={event => event.stopPropagation()}
         onClick={event => event.stopPropagation()}
       >
-        <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
       </div>
     </div>
   );
@@ -174,6 +176,7 @@ type Props = {
 export function RankingGalleryView({ state }: Props) {
   const {
     spaceId,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
@@ -200,6 +203,7 @@ export function RankingGalleryView({ state }: Props) {
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
           name={entry.name}
           imageHint={entry.image}
         />

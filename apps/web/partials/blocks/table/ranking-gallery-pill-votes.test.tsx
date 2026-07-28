@@ -1,3 +1,5 @@
+import type React from 'react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -20,13 +22,16 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-vote-actions />,
+  EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
+    <div data-entity-id={entityId} data-space-id={spaceId} data-vote-actions />
+  ),
 }));
 
 function state(): RankingBlockState {
   const entityId = 'entity-1';
   return {
-    spaceId: 'space-1',
+    spaceId: 'block-space',
+    resolveEntitySpaceId: vi.fn(() => 'entity-space'),
     globalDisplayEntityIds: [entityId],
     globalRankingEntryByEntityId: new Map([
       [entityId, { entityId, name: 'First entity', description: null, image: null }],
@@ -51,6 +56,9 @@ describe('ranking specialized view votes', () => {
     const markup = renderToStaticMarkup(<RankingGalleryView state={state()} />);
 
     expect(markup).toContain('data-vote-actions="true"');
+    expect(markup).toContain('data-entity-id="entity-1"');
+    expect(markup).toContain('data-space-id="entity-space"');
+    expect(markup).toContain('/space/block-space/entity-1');
   });
 
   it('does not render vote actions in Pill view', () => {

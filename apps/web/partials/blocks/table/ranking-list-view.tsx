@@ -37,10 +37,11 @@ type ListRowProps = {
   rank: number;
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
 };
 
-function RankingListRow({ rank, entityId, spaceId, name }: ListRowProps) {
+function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowProps) {
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
@@ -50,7 +51,7 @@ function RankingListRow({ rank, entityId, spaceId, name }: ListRowProps) {
         {name}
       </Link>
       <div className="flex h-5 shrink-0 items-center">
-        <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
       </div>
     </div>
   );
@@ -63,6 +64,7 @@ type Props = {
 export function RankingListView({ state }: Props) {
   const {
     spaceId,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
@@ -90,7 +92,16 @@ export function RankingListView({ state }: Props) {
         return <RankingListRowSkeleton key={entityId} rank={rank} />;
       }
 
-      return <RankingListRow key={entityId} rank={rank} entityId={entityId} spaceId={spaceId} name={entry.name} />;
+      return (
+        <RankingListRow
+          key={entityId}
+          rank={rank}
+          entityId={entityId}
+          spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
+          name={entry.name}
+        />
+      );
     })
     .filter(Boolean);
 

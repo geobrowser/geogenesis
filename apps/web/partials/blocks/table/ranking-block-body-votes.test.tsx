@@ -1,3 +1,5 @@
+import type React from 'react';
+
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,20 +11,37 @@ vi.mock('./ranking-compose-entity-sheet', () => ({
 }));
 
 vi.mock('./ranking-entry-row', () => ({
-  RankingEntryRow: ({ entry, showVotes }: { entry: { entityId: string }; showVotes?: boolean }) => (
-    <div data-entity-id={entry.entityId} data-vote-actions={showVotes || undefined} />
+  RankingEntryRow: ({ entry, spaceId }: { entry: { entityId: string }; spaceId: string }) => (
+    <div data-row-entity-id={entry.entityId} data-row-space-id={spaceId} />
   ),
   RankingEntryRowSkeleton: () => <div data-row-skeleton />,
+}));
+
+vi.mock('./ranking-entry-vote-controls', () => ({
+  RankingEntryVoteControls: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
+    <div data-vote-entity-id={entityId} data-vote-space-id={spaceId} data-vote-actions />
+  ),
 }));
 
 vi.mock('./ranking-my-ranking-dnd', () => ({
   RankingMyRankingDndList: ({
     entityIds,
     renderItem,
+    renderTrailing,
   }: {
     entityIds: string[];
     renderItem: (entityId: string, index: number, isDragActive: boolean, imageUrl: null) => React.ReactNode;
-  }) => <>{entityIds.map((entityId, index) => renderItem(entityId, index, false, null))}</>,
+    renderTrailing?: (entityId: string, index: number, isDragActive: boolean) => React.ReactNode;
+  }) => (
+    <>
+      {entityIds.map((entityId, index) => (
+        <div key={entityId}>
+          {renderItem(entityId, index, false, null)}
+          {renderTrailing?.(entityId, index, false)}
+        </div>
+      ))}
+    </>
+  ),
 }));
 
 function state(activeTab: 'global' | 'my'): RankingBlockState {
@@ -64,6 +83,7 @@ function state(activeTab: 'global' | 'my'): RankingBlockState {
     isSharedRankingView: false,
     reorderMyRanking: vi.fn(),
     openEntitySheet: vi.fn(),
+    resolveEntitySpaceId: vi.fn(id => `entity-space-${id}`),
     activeSwipeRowKey: null,
     setActiveSwipeRowKey: vi.fn(),
     isMyRankingDragging: false,
@@ -83,7 +103,11 @@ function state(activeTab: 'global' | 'my'): RankingBlockState {
 describe('RankingBlockBody votes', () => {
   it.each(['global', 'my'] as const)('shows vote actions on %s ranking rows', activeTab => {
     const markup = renderToStaticMarkup(<RankingBlockBody state={state(activeTab)} />);
+    const entityId = `${activeTab}-entity`;
 
     expect(markup).toContain('data-vote-actions="true"');
+    expect(markup).toContain(`data-vote-entity-id="${entityId}"`);
+    expect(markup).toContain(`data-vote-space-id="entity-space-${entityId}"`);
+    expect(markup).toContain(`data-row-space-id="space-1"`);
   });
 });
