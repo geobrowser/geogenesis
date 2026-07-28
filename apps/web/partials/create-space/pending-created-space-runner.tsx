@@ -54,8 +54,14 @@ export function PendingCreatedSpaceRunner() {
     if (runningRef.current === pending.jobId) return;
     runningRef.current = pending.jobId;
 
-    let cancelled = false;
-
+    // Deliberately NO `cancelled` flag / cleanup guard. This component is mounted
+    // globally and the deploy is un-abortable, so a cleanup (StrictMode's dev
+    // double-mount, or any dep change mid-flight) does not mean the work stopped
+    // — it only means this effect run was superseded. Bailing on that signal
+    // stranded the job: the space was minted on-chain, but the atom was never
+    // cleared and runningRef was never released, so nothing navigated, no retry
+    // could re-enter, and the stuck 'pending' job blocked every future create.
+    // runningRef alone is the dedupe; the finally below always releases it.
     void (async () => {
       try {
         devLog('[create-space] background deploy started, jobId=%s', pending.jobId);
@@ -69,7 +75,6 @@ export function PendingCreatedSpaceRunner() {
         });
 
         if (!spaceId) throw new Error('Creating space failed');
-        if (cancelled) return;
 
         // `useDeploySpace.onSuccess` already invalidates ['spaces'] etc.; the
         // space is indexed by the time deploy() resolves, so navigation lands
@@ -79,19 +84,18 @@ export function PendingCreatedSpaceRunner() {
         router.push(NavUtils.toSpace(spaceId));
       } catch (error) {
         console.error('[PendingCreatedSpace] deploy failed', error);
-        if (cancelled) return;
-        // Allow a retry to re-enter the effect.
-        runningRef.current = null;
         setPending({ ...pending, status: 'failed' });
         reportError(`Space creation failed: ${describeError(error)}`, () => {
-          setPending({ ...pending, status: 'pending' });
+          // Revive only if this job is still the one on deck. The status-bar
+          // retry outlives the job, so without this check a click after a newer
+          // create was queued would restore THIS job's stale snapshot over it.
+          setPending(current => (current?.jobId === pending.jobId ? { ...current, status: 'pending' } : current));
         });
+      } finally {
+        // Always release, so a failed job's retry can re-enter the effect.
+        runningRef.current = null;
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [address, pending, deploy, router, reportError, setPending]);
 
   return null;

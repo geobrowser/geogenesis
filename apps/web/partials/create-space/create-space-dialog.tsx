@@ -1,6 +1,5 @@
 'use client';
 
-import { Ipfs } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
@@ -14,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { type VotingSettingsInput } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -31,7 +31,6 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
-import { Animation } from '~/partials/onboarding/dialog';
 import {
   DEFAULT_VOTING_SETTINGS_SNAPSHOT,
   type VotingSettingsFormState,
@@ -42,6 +41,7 @@ import {
   votingSettingsWarnings,
 } from '~/partials/governance/voting-settings';
 import { VotingSettingsFields } from '~/partials/governance/voting-settings-fields';
+import { Animation } from '~/partials/onboarding/dialog';
 
 export const spaceTypeAtom = atom<SpaceType | null>(null);
 export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
@@ -185,16 +185,26 @@ export function CreateSpaceDialog() {
     // instead of blocking on it. The runner routes the user into the space once
     // it's indexed (the space page notFound()s before then), and surfaces a
     // retryable error via the status bar on failure.
-    setPendingCreatedSpace({
-      jobId: crypto.randomUUID(),
-      type: spaceType,
-      spaceName: name,
-      spaceImage: image || undefined,
-      governanceType: governanceType ?? undefined,
-      topicId: topicId || undefined,
-      votingSettings: votingSettings ?? undefined,
-      address,
-      status: 'pending',
+    // Refuse to start a second deploy while one is in flight. DAO deploy is NOT
+    // idempotent — a second job mints a SECOND space on-chain — and the runner's
+    // dedupe cannot catch this on its own: it keys on jobId, so a re-create looks
+    // like new work no matter what. Checked via the updater rather than a read of
+    // the atom so a stale render closure can't race past it. A 'failed' job is
+    // replaceable; only 'pending' blocks.
+    setPendingCreatedSpace(current => {
+      if (current?.status === 'pending') return current;
+
+      return {
+        jobId: crypto.randomUUID(),
+        type: spaceType,
+        spaceName: name,
+        spaceImage: image || undefined,
+        governanceType: governanceType ?? undefined,
+        topicId: topicId || undefined,
+        votingSettings: votingSettings ?? undefined,
+        address,
+        status: 'pending',
+      };
     });
 
     onOpenChange(false);
@@ -428,7 +438,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
+      const { cid } = await uploadGeoImage({ blob: file });
       setImage(cid);
     }
   };
