@@ -1508,7 +1508,6 @@ function DebateRecordingModal({
   const localUpcomingLabel = upcomingTurnIsRebuttal(debate, countdown) ? 'Rebut in' : "You're up in";
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
-  const showRemoteWrapItUp = wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
@@ -1580,7 +1579,6 @@ function DebateRecordingModal({
             ? null
             : 'Waiting for video'
       }
-      showWrapItUp={showRemoteWrapItUp}
       inactive={remoteInactive}
       inactiveOverlayId="remote"
       countdown={remoteCountdown}

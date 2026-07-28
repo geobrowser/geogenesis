@@ -1798,7 +1798,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
   });
 
-  it('shows wrap it up with a red ring on the active speaker in the final five seconds', async () => {
+  it('shows wrap it up only on the active local speaker during the penultimate turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
       ...completedDebate(),
@@ -1814,10 +1814,52 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Wrap it up!')).toBeInTheDocument();
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('local')).toContainElement(wrapItUp);
+    expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('GO!')).not.toBeInTheDocument();
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+  });
+
+  it('does not show the remote speaker wrap-up warning to the inactive local participant', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+  });
+
+  it('does not show wrap it up before the final five seconds', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:24.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
   });
 
   it('labels the upcoming turn as a rebuttal in the final round', async () => {
@@ -1844,8 +1886,10 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
   });
 
-  it('shows debate ends soon to the inactive speaker on the final turn', async () => {
+  it('shows only debate ends soon to the inactive local participant on the final turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    let clockElapsedMs = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clockElapsedMs);
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
@@ -1861,11 +1905,45 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate ends soon')).toBeInTheDocument();
+    const debateEndsSoon = await screen.findByText('Debate ends soon');
+    expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+    expect(debateVideoTile('local')).toContainElement(debateEndsSoon);
+    expect(debateVideoTile('remote')).not.toContainElement(debateEndsSoon);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+
+    clockElapsedMs = 4_000;
+
+    await waitFor(() => {
+      expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+      expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
+      expect(screen.getByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).toBeInTheDocument();
+    });
+  });
+
+  it('shows wrap it up to the active local participant on the final turn', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:02:26.500Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 3,
+      current_speaker_slot: 1,
+      turn_durations_ms: [45_000, 45_000, 30_000, 30_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:02:00.000Z',
+      turn_ends_at: '2026-07-02T00:02:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const wrapItUp = await screen.findByText('Wrap it up!');
+    expect(debateVideoTile('local')).toContainElement(wrapItUp);
+    expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
+    expect(screen.queryByText('Debate ends soon')).not.toBeInTheDocument();
   });
 
   it('advances directly from the warning to GO without waiting for a debate refresh', async () => {
@@ -2295,9 +2373,13 @@ async function renderLiveDebate(overrides: Partial<Debate> = {}) {
 }
 
 function expectDebateVideoTileInColor(participant: 'local' | 'remote') {
+  expect(debateVideoTile(participant)).not.toHaveClass('grayscale');
+}
+
+function debateVideoTile(participant: 'local' | 'remote') {
   const tile = document.querySelector(`[data-inactive-speaker="${participant}"]`)?.closest('section');
-  expect(tile).not.toBeNull();
-  expect(tile).not.toHaveClass('grayscale');
+  if (!(tile instanceof HTMLElement)) throw new Error(`Missing ${participant} debate video tile`);
+  return tile;
 }
 
 function installRecordingMocks() {
