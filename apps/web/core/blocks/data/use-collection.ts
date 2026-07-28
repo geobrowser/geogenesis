@@ -36,7 +36,7 @@ export interface CollectionProps {
   /** Forward offset (in *rows*) to apply on top of `after`. */
   offset?: number;
   where?: WhereCondition;
-  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
 }
 
 export function useCollection({ source, first, pageNumber = 0, after, offset, where, sort }: CollectionProps) {

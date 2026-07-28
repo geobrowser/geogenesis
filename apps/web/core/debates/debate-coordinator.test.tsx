@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   clipboardWrite: vi.fn(),
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
+  authenticated: true,
+  gatewayPaused: false,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -24,11 +26,15 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useDebatePresenceHeartbeat: vi.fn(),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
   useDebateActivity: () => ({ data: mocks.activity }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts } }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
+}));
+
+vi.mock('./debate-gateway', () => ({
+  useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -49,6 +55,8 @@ beforeEach(() => {
   mocks.activity = null;
   mocks.pathname = '/space/space-1/debates';
   mocks.prompts = [];
+  mocks.authenticated = true;
+  mocks.gatewayPaused = false;
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: mocks.clipboardWrite },
@@ -67,12 +75,41 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebateCoordinator', () => {
+  it('shows a non-blocking warning while live updates are paused and clears it on recovery', () => {
+    mocks.gatewayPaused = true;
+    const { rerender } = render(<DebateCoordinator />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Live debate updates are paused while reconnecting.');
+
+    mocks.gatewayPaused = false;
+    rerender(<DebateCoordinator />);
+    expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
+  });
+
   it('routes an available participant into a shared rematch browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('keeps the match prompt mounted until the debate route takes over', async () => {
+    mocks.activity = activityWithMatch();
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
   });
 
   it('waits for the debate room to finalize its recording before routing to a rematch', async () => {
@@ -88,6 +125,7 @@ describe('DebateCoordinator', () => {
     mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
     mocks.activity = {
       online: true,
+      available_to_debate: true,
       cooldown_until: null,
       match: null,
       debate: {
@@ -102,8 +140,30 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
+  it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      debate: {
+        ...activityWithDebate().debate!,
+        status,
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+  });
+
   it('copies a stable recording link when native sharing is unavailable', async () => {
-    mocks.activity = { online: true, cooldown_until: null, match: null, debate: null, rematch: null };
+    mocks.activity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
     mocks.prompts = [
       {
         id: 'prompt-1',
@@ -132,7 +192,14 @@ describe('DebateCoordinator', () => {
   });
 
   it('uses the generated preview and loads the share video only after play', async () => {
-    mocks.activity = { online: true, cooldown_until: null, match: null, debate: null, rematch: null };
+    mocks.activity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
     mocks.prompts = [
       {
         id: 'prompt-1',
@@ -167,6 +234,7 @@ describe('DebateCoordinator', () => {
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   return {
     online: true,
+    available_to_debate: true,
     cooldown_until: null,
     match: null,
     debate: null,
@@ -184,5 +252,43 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
       created_at: '2026-07-02T00:00:00.000Z',
       updated_at: '2026-07-02T00:00:00.000Z',
     },
+  };
+}
+
+function activityWithMatch(): DebateActivity {
+  return {
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: {
+      id: 'match-1',
+      status: 'pending',
+      claim: {
+        id: 'claim-1',
+        space_id: 'space-1',
+        claim_entity_id: 'claim-entity-1',
+        claim: 'Debates should hand off without flashing the page',
+        description: null,
+      },
+      participants: [],
+      turn_format_id: null,
+      debate_id: null,
+      created_at: '2026-07-02T00:00:00.000Z',
+      updated_at: '2026-07-02T00:00:00.000Z',
+    },
+    debate: null,
+    rematch: null,
+  };
+}
+
+function activityWithDebate(): DebateActivity {
+  const matchActivity = activityWithMatch();
+  return {
+    ...matchActivity,
+    match: null,
+    debate: {
+      id: 'debate-1',
+      claim: matchActivity.match!.claim,
+    } as NonNullable<DebateActivity['debate']>,
   };
 }

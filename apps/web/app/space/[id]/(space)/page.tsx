@@ -77,7 +77,10 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, communityCalls] = await Promise.all([getSpaceFrontPage(space), fetchCommunityCalls(spaceId)]);
+  const [props, communityCalls] = await Promise.all([
+    getSpaceFrontPage(space),
+    fetchCommunityCalls(spaceId).catch(() => []),
+  ]);
 
   return (
     <EntityPageSidebarLayout

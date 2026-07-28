@@ -10,13 +10,13 @@ import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
@@ -31,6 +31,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -48,10 +49,13 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const [props, communityCalls] = await Promise.all([getSpaceFrontPage(spaceId), fetchCommunityCalls(spaceId)]);
+  const [props, communityCalls] = await Promise.all([
+    getSpaceFrontPage(spaceId),
+    fetchCommunityCalls(spaceId).catch(() => []),
+  ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-  const contentVariant = communityCalls.length > 0 ? 'with-sidebar' : 'content';
+  const hasCommunityCallsSidebar = !Spaces.hasExternalTopic(props.space) && communityCalls.length > 0;
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -63,49 +67,51 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-        <EntityPageContentContainer variant={contentVariant}>
-          <div className="space-y-2">
-            <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
-            <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
-            <SpacePageMetadataHeader
-              spaceId={spaceId}
-              membersComponent={
-                <div className="flex items-center gap-2">
-                  <React.Suspense fallback={<MembersSkeleton />}>
-                    <SpaceEditors spaceId={spaceId} />
-                  </React.Suspense>
-                  <React.Suspense fallback={null}>
-                    <SpaceMembers spaceId={spaceId} />
-                  </React.Suspense>
-                </div>
-              }
-            />
-          </div>
-
-          <div className="mt-6 flex flex-col gap-6">
-            <AddDataPanel spaceId={spaceId} />
-
-            {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-              <>
-                <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
-              </>
-            ) : null}
-            <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-            <React.Suspense fallback={null}>
-              <SpaceTabs
+        <SpaceChromeGate>
+          <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
+          <SpaceHeaderContentContainer spaceId={spaceId} hasSidebar={hasCommunityCallsSidebar}>
+            <div className="space-y-2">
+              <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
+              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              <SpacePageMetadataHeader
                 spaceId={spaceId}
-                entityId={props.id}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-                typeIds={typeIds}
+                membersComponent={
+                  <div className="flex items-center gap-2">
+                    <React.Suspense fallback={<MembersSkeleton />}>
+                      <SpaceEditors spaceId={spaceId} />
+                    </React.Suspense>
+                    <React.Suspense fallback={null}>
+                      <SpaceMembers spaceId={spaceId} />
+                    </React.Suspense>
+                  </div>
+                }
               />
-            </React.Suspense>
-          </div>
-        </EntityPageContentContainer>
-        <Spacer height={20} />
+            </div>
+
+            <div className="mt-6 flex flex-col gap-6">
+              <AddDataPanel spaceId={spaceId} />
+
+              {typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                <>
+                  <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                </>
+              ) : null}
+              <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+              <React.Suspense fallback={null}>
+                <SpaceTabs
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                  typeIds={typeIds}
+                />
+              </React.Suspense>
+            </div>
+          </SpaceHeaderContentContainer>
+          <Spacer height={20} />
+        </SpaceChromeGate>
         {children}
       </EditorProvider>
     </EntityStoreProvider>

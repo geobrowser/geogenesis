@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Row } from '~/core/types';
 
-import { flattenRowPages, upsertRowPage } from './use-ranking-accumulated-rows';
+import { flattenRowPages, rankingFeedPageSize, upsertRowPage } from './use-ranking-accumulated-rows';
 
 function row(entityId: string): Row {
   return { entityId, placeholder: false, columns: {} } as Row;
@@ -30,5 +30,17 @@ describe('flattenRowPages', () => {
       { page: 1, rows: [row('b'), row('c')] },
     ];
     expect(flattenRowPages(pages).map(r => r.entityId)).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('rankingFeedPageSize', () => {
+  it('uses at least ten rows for the infinite feed', () => {
+    expect(rankingFeedPageSize(1)).toBe(10);
+    expect(rankingFeedPageSize(9)).toBe(10);
+  });
+
+  it('preserves configured page sizes above the minimum', () => {
+    expect(rankingFeedPageSize(10)).toBe(10);
+    expect(rankingFeedPageSize(25)).toBe(25);
   });
 });

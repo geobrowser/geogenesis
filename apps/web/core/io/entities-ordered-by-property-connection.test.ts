@@ -154,4 +154,10 @@ describe('getEntitiesOrderedByPropertyConnection', () => {
       filter: { name: { isNull: false, isNot: '' } },
     });
   });
+
+  it('forwards includeWithoutValue to the property-ordering query', async () => {
+    await runQuery({ includeWithoutValue: true });
+
+    expect(lastVariables()).toMatchObject({ includeWithoutValue: true });
+  });
 });

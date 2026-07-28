@@ -266,6 +266,7 @@ type GetEntitiesOrderedByPropertyOptions = {
   propertyId: string;
   sortDirection: SortOrder;
   dataType?: string;
+  includeWithoutValue?: boolean;
   spaceId?: string;
   spaceIds?: string[];
   typeIds?: string[];
@@ -300,6 +301,7 @@ export function getEntitiesOrderedByPropertyConnection(
     propertyId,
     sortDirection,
     dataType,
+    includeWithoutValue,
     spaceId,
     spaceIds,
     typeIds,
@@ -338,6 +340,7 @@ export function getEntitiesOrderedByPropertyConnection(
       propertyId,
       sortDirection,
       dataType,
+      includeWithoutValue,
       spaceId: topLevelSpaceId,
       spaceIds: topLevelSpaceIds,
       typeIds: topLevelTypeIds,
@@ -519,14 +522,7 @@ export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortC
   });
 }
 
-/**
- * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
- * Nested replies are included when they also backlink to the parent (same index pattern).
- */
-export function getCommentEntitiesViaParentEntityReplyBacklinks(
-  parentEntityId: string,
-  signal?: AbortController['signal']
-) {
+function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
   return Effect.gen(function* () {
     const seen = new Set<string>();
     const ids: string[] = [];
@@ -550,16 +546,34 @@ export function getCommentEntitiesViaParentEntityReplyBacklinks(
 
       for (const row of page) {
         const rawId = row?.fromEntity?.id;
-        if (typeof rawId !== 'string' || !rawId) continue;
-        if (!seen.has(rawId)) {
-          seen.add(rawId);
-          ids.push(rawId);
-        }
+        if (typeof rawId !== 'string' || !rawId || seen.has(rawId)) continue;
+        seen.add(rawId);
+        ids.push(rawId);
       }
 
       if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
       offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
     }
+
+    return ids;
+  });
+}
+
+/** Counts distinct Comment entities connected to the target by incoming "Reply to" relations. */
+export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
+  return Effect.map(getCommentEntityIdsViaParentEntityReplyBacklinks(entityId, signal), ids => ids.length);
+}
+
+/**
+ * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
+ * Nested replies are included when they also backlink to the parent (same index pattern).
+ */
+export function getCommentEntitiesViaParentEntityReplyBacklinks(
+  parentEntityId: string,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const ids = yield* getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId, signal);
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);
