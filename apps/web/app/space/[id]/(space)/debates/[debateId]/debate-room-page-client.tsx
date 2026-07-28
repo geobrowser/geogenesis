@@ -20,6 +20,7 @@ import {
   CameraIcon,
   LeaveIcon,
   MicrophoneIcon,
+  MutedMicrophoneIndicator,
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
@@ -1550,7 +1551,7 @@ function DebateRecordingModal({
       showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
-      inactiveOverlayId="local"
+      inactiveIndicatorId="local"
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -1579,7 +1580,7 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      inactiveOverlayId="remote"
+      inactiveIndicatorId="remote"
       countdown={remoteCountdown}
     >
       <div
@@ -1839,7 +1840,7 @@ function DebateVideoTile({
   showDebateEndsSoon = false,
   inactive = false,
   revealInactive = false,
-  inactiveOverlayId,
+  inactiveIndicatorId,
   countdown,
   closingMessage = false,
   children,
@@ -1854,11 +1855,13 @@ function DebateVideoTile({
   showDebateEndsSoon?: boolean;
   inactive?: boolean;
   revealInactive?: boolean;
-  inactiveOverlayId: 'local' | 'remote';
+  inactiveIndicatorId: 'local' | 'remote';
   countdown?: React.ReactNode;
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
+  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText;
+
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
@@ -1871,13 +1874,15 @@ function DebateVideoTile({
       <div className="absolute inset-0 z-0">{children}</div>
       <div
         aria-hidden="true"
-        data-inactive-speaker={inactiveOverlayId}
-        data-visible={inactive && !revealInactive ? 'true' : 'false'}
+        data-inactive-speaker={inactiveIndicatorId}
+        data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 bg-[#151515]/75 transition-opacity duration-700 ease-out',
-          inactive && !revealInactive ? 'opacity-60' : 'opacity-0'
+          'pointer-events-none absolute top-3 right-3 z-20',
+          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
         )}
-      />
+      >
+        {showInactiveIndicator && <MutedMicrophoneIndicator />}
+      </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
       {closingMessage && (
