@@ -12,11 +12,6 @@ export const featureFlagDefinitions = [
     description: 'Show the Claims and Debates tabs on spaces.',
   },
   {
-    id: 'debugDebatesPage',
-    label: 'Debug debates',
-    description: 'Enable per-space debate processing diagnostics.',
-  },
-  {
     id: 'debateDebugging',
     label: 'Debate debugging',
     description: 'Show manual debugging controls during debate recording.',
@@ -25,6 +20,11 @@ export const featureFlagDefinitions = [
     id: 'debateFormatSelector',
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
+  },
+  {
+    id: 'debugDebatesPage',
+    label: 'Debates debug tab per space',
+    description: 'Enable per-space debate processing diagnostics.',
   },
 ] as const;
 
