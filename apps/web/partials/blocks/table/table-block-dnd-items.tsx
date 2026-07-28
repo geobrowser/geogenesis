@@ -3,7 +3,8 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -21,6 +22,9 @@ import { Property, Relation, Row } from '~/core/types';
 import { PositionBox } from '~/design-system/position-box';
 
 import { onChangeEntryFn, onLinkEntryFn } from './change-entry';
+
+const MOUSE_ACTIVATION = { distance: 10 };
+const TOUCH_ACTIVATION = { delay: 450, tolerance: 12 };
 
 export type RenderItemProps = {
   row: Row;
@@ -92,11 +96,8 @@ export const TableBlockDndItems = ({
   const sortableEntries = entries.filter(r => !r.placeholder);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
+    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
+    useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION })
   );
 
   const [activeId, setActiveId] = React.useState<string | null>(null);
@@ -311,6 +312,7 @@ const SortableItem = ({
 }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.entityId,
+    disabled: !isEditing,
   });
 
   const [hovered, setHovered] = React.useState(false);
@@ -370,7 +372,7 @@ const SortableItem = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <div {...attributes} {...listeners} className={config.sortableItemInnerClassName}>
+      <div {...attributes} {...(isEditing ? listeners : {})} className={config.sortableItemInnerClassName}>
         {hovered && isEditing && (
           <PositionBox
             handleMove={handleMove}
