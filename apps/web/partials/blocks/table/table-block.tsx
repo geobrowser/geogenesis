@@ -970,7 +970,7 @@ const ConfiguredTableBlock = ({
 
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
-  const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, isEditing);
+  const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, source.type, isEditing);
 
   React.useEffect(() => {
     setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAndFullscreenActions));
