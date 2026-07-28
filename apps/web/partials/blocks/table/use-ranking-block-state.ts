@@ -129,7 +129,6 @@ export function useRankingBlockState({
     pageSize,
     view: stateView,
     viewRelation: stateViewRelation,
-    shownColumnIds,
   } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
@@ -867,7 +866,6 @@ export function useRankingBlockState({
     periodLabel,
     view: stateView,
     viewRelation: stateViewRelation,
-    shownColumnIds,
     hasRankedByOthers,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
