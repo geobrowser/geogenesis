@@ -1154,6 +1154,7 @@ describe('DebateRoomPageClient', () => {
     expectActiveDebateVideoTile('local');
     expectInactiveDebateVideoTile('remote');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('opacity-0');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'true');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('bg-[#151515]/75', 'opacity-60');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).not.toHaveClass('opacity-100');
@@ -1192,6 +1193,8 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'true');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveClass('bg-[#151515]/75', 'opacity-60');
     expect(document.querySelector('[data-inactive-speaker="local"]')).not.toHaveClass('opacity-100');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
+    expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveClass('opacity-0');
     expect(document.querySelector('[data-muted-indicator="true"]')).not.toBeInTheDocument();
     expectDebateVideoTileInColor('local');
     expectDebateVideoTileInColor('remote');
