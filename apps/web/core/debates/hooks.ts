@@ -1,7 +1,7 @@
 'use client';
 
 import { usePrivy } from '@geogenesis/auth';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -11,6 +11,7 @@ import {
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
+  type DebateMediaResponse,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -49,6 +50,7 @@ import {
   updateDebateRematchPosition,
 } from './api';
 import { useDebateGatewayScope } from './debate-gateway';
+import { hasProcessedVideo } from './playback-utils';
 
 const debateQueryNetworkOptions = {
   retry: false,
@@ -530,6 +532,51 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
         signal
       ),
     enabled,
+  });
+}
+
+/**
+ * Which of the given debates have a processed `final_video`. The space debates endpoint carries
+ * recordings but no media artifacts, so readiness can only be answered one debate at a time — pass
+ * only already-watchable debates to bound the fan-out. Shares `debateQueryKeys.media` with the
+ * player's own lookup, and opens no gateway scope since it's a one-shot check.
+ */
+export function useProcessedVideoDebateIds(debateIds: string[], enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // `combine` has to be stable: react-query re-runs it whenever its identity changes, and the
+  // result is diffed with `replaceEqualDeep`, which compares arrays structurally but treats every
+  // new Set as changed. An inline closure returning a Set therefore hands callers a fresh object
+  // each render and defeats their `useMemo`s — hence the callback, and ids as an array.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateMediaResponse>[]) => ({
+      processedIds: debateIds.filter((_, index) => hasProcessedVideo(results[index]?.data)),
+      isLoading: enabled && results.some(result => result.isPending),
+      // A failed lookup is "unknown", not "not ready". It still withholds the debate — nothing
+      // should render that can't play — but callers need to tell the two apart, or a geo-chat blip
+      // reads to the viewer as "this space has no debates".
+      hasError: results.some(result => result.isError),
+    }),
+    [debateIds, enabled]
+  );
+
+  return useQueries({
+    queries: debateIds.map(debateId => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.media(debateId),
+      // Readiness only moves when the media worker finishes, so don't re-ask on every remount of
+      // the feed — that's one request per candidate, up to the list endpoint's 50.
+      staleTime: 30_000,
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        getDebateMedia(
+          debateId,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled,
+    })),
+    combine,
   });
 }
 
