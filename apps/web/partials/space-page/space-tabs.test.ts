@@ -19,6 +19,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
       isDebatesEnabled: false,
+      isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Governance', 'Activity']);
@@ -31,6 +32,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
       isDebatesEnabled: true,
+      isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
@@ -53,6 +55,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
       isDebatesEnabled: true,
+      isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Debates', 'Activity']);
@@ -65,6 +68,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs: [...dynamicTabs, { label: 'Claims', href: `${overviewHref}?tabId=dynamic-claims` }],
       typeIds: [SystemIds.SPACE_TYPE],
       isDebatesEnabled: true,
+      isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
@@ -86,6 +90,7 @@ describe('buildSpaceTabs', () => {
       dynamicTabs: [...dynamicTabs, { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
       isDebatesEnabled: true,
+      isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual([
@@ -98,5 +103,76 @@ describe('buildSpaceTabs', () => {
       'Activity',
     ]);
     expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`/space/${spaceId}/debates`);
+  });
+
+  it('inserts Debug debates after authored tabs when only its flag is enabled', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs,
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebatesEnabled: false,
+      isDebugDebatesPageEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Debug debates',
+      'Governance',
+      'Activity',
+    ]);
+    expect(tabs.find(tab => tab.label === 'Debug debates')?.href).toBe(`/space/${spaceId}/debug-debates`);
+  });
+
+  it('inserts Debug debates after Debates when both flags are enabled', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs,
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebatesEnabled: true,
+      isDebugDebatesPageEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual([
+      'Overview',
+      'Facts',
+      'Sources',
+      'Claims',
+      'Debates',
+      'Debug debates',
+      'Governance',
+      'Activity',
+    ]);
+  });
+
+  it('shows Debug debates in personal spaces without Governance', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs,
+      typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
+      isDebatesEnabled: false,
+      isDebugDebatesPageEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Debug debates', 'Activity']);
+  });
+
+  it('keeps the system Debug debates route when an authored tab has the same label', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Debug debates', href: `${overviewHref}?tabId=debug-debates` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebatesEnabled: false,
+      isDebugDebatesPageEnabled: true,
+    });
+
+    expect(tabs.filter(tab => tab.label === 'Debug debates')).toEqual([
+      { label: 'Debug debates', href: `/space/${spaceId}/debug-debates`, priority: 3 },
+    ]);
   });
 });
