@@ -20,7 +20,6 @@ import {
   CameraIcon,
   LeaveIcon,
   MicrophoneIcon,
-  MutedMicrophoneIndicator,
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
@@ -1872,12 +1871,10 @@ function DebateVideoTile({
         data-inactive-speaker={inactiveOverlayId}
         data-visible={inactive && !revealInactive ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 grid place-items-center bg-black/45 transition-opacity duration-700 ease-out',
+          'pointer-events-none absolute inset-0 z-10 bg-black/45 transition-opacity duration-700 ease-out',
           inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
         )}
-      >
-        <MutedMicrophoneIndicator />
-      </div>
+      />
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
 
       {closingMessage && (
