@@ -13,6 +13,7 @@ import { speakerLabel } from './playback-utils';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
+  position: boolean;
   position_label: string;
 };
 
@@ -54,9 +55,7 @@ export function DebateRequestDialog({
   const positionParticipants = React.useMemo(
     () =>
       [...turnParticipants].sort(
-        (a, b) =>
-          positionRank(a.position_label) - positionRank(b.position_label) ||
-          a.participant_slot - b.participant_slot
+        (a, b) => Number(b.position) - Number(a.position) || a.participant_slot - b.participant_slot
       ),
     [turnParticipants]
   );
@@ -164,12 +163,6 @@ export function DebateRequestDialog({
       </section>
     </div>
   );
-}
-
-function positionRank(positionLabel: string) {
-  if (positionLabel === 'Yes') return 0;
-  if (positionLabel === 'No') return 1;
-  return 2;
 }
 
 function ParticipantSummary({

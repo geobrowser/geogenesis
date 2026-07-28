@@ -192,17 +192,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
   const incomingRequestParticipants =
     incomingRequest && session
-      ? session.participants.map(participant => ({
-          ...participant,
-          position_label:
+      ? session.participants.map(participant => {
+          const position =
             participant.user_id === incomingRequest.requester_user_id
               ? incomingRequest.requester_position
-                ? 'Yes'
-                : 'No'
-              : incomingRequest.recipient_position
-                ? 'Yes'
-                : 'No',
-        }))
+              : incomingRequest.recipient_position;
+
+          return {
+            ...participant,
+            position,
+            position_label: position ? 'Yes' : 'No',
+          };
+        })
       : [];
 
   return (
