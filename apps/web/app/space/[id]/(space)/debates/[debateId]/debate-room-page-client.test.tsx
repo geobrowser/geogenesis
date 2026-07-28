@@ -343,7 +343,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByText('Debate')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -372,11 +372,11 @@ describe('DebateRoomPageClient', () => {
       })
     );
     expect(screen.getByText('Requesting access to your camera and microphone…')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
 
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('locks background scrolling while the pre-screen modal is open', () => {
@@ -441,12 +441,12 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Allow access to your camera and microphone to continue.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Audio settings' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Allow access' }));
 
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
     expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2);
   });
 
@@ -458,7 +458,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Connect a camera and microphone, then try again.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
   });
 
   it('cleans up acquired tracks when device enumeration fails', async () => {
@@ -479,7 +479,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(audioTrack.stop).toHaveBeenCalled();
     expect(videoTrack.stop).toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "I'm ready" })).not.toBeInTheDocument();
   });
 
   it('changes speaker output without restarting capture and hands the selection to LiveKit', async () => {
@@ -534,7 +534,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('radio', { name: 'System default' })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'System default' })).toBeDisabled();
     expect(screen.queryByRole('radio', { name: 'Studio Speakers' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('falls back to System default when speaker authorization is rejected', async () => {
@@ -671,11 +671,11 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Studio Mic' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeDisabled();
 
     pendingTracks.resolve([createLocalAudioTrack(), { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Studio Mic' })).toBeChecked());
-    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('opens mobile video settings as a bottom sheet using the existing preview stream', async () => {
@@ -757,7 +757,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    await screen.findByRole('button', { name: 'Accept' });
+    await screen.findByRole('button', { name: "I'm ready" });
     const olderEnumeration = deferred<MediaDeviceInfo[]>();
     mocks.enumerateDevices.mockReturnValueOnce(olderEnumeration.promise).mockResolvedValueOnce([
       { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -794,7 +794,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(screen.getByText('Ready')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Accept' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: "I'm ready" })).toBeEnabled();
   });
 
   it('disables the ready button while waiting for the opponent', async () => {
@@ -811,7 +811,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Accept' }));
+    fireEvent.click(await screen.findByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => {
       expect(mocks.readyMutateAsync).toHaveBeenCalled();
