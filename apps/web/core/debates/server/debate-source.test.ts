@@ -54,10 +54,11 @@ describe('loadDebatePublishSource media gating', () => {
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/no processed final_video/);
   });
 
-  it('does not count a raw recording as the processed video', async () => {
+  // The hevc rendition is a companion to final_video, never a substitute for it.
+  it('does not count the hevc rendition as the processed video', async () => {
     mockGeoChat({
       job: { status: 'succeeded' },
-      artifacts: [{ kind: 'raw_recording' }, { kind: 'preview_image' }],
+      artifacts: [{ kind: 'final_video_hevc' }, { kind: 'preview_image' }],
     });
 
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(DebateNotPublishableError);

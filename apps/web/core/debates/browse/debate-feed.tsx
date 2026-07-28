@@ -44,11 +44,16 @@ export function DebatesBrowseFeed({
     [debatesQuery.data?.debates]
   );
   const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
-  const { processedIds, isLoading: mediaLoading } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
+  const {
+    processedIds,
+    isLoading: mediaLoading,
+    hasError: mediaError,
+  } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
 
   const debates = React.useMemo(() => {
+    const processed = new Set(processedIds);
     const sorted = candidates
-      .filter(debate => processedIds.has(debate.id))
+      .filter(debate => processed.has(debate.id))
       .sort((a, b) => completedTime(b) - completedTime(a));
     if (!initialDebateId) return sorted;
     // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
@@ -94,6 +99,16 @@ export function DebatesBrowseFeed({
   // flashes "no debates" and strands a valid anchor.
   const isLoading = debatesQuery.isLoading || mediaLoading;
 
+  // One message at a time, most specific first. A readiness lookup that failed has to read as an
+  // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
+  const emptyMessage = isLoading
+    ? 'Loading debates…'
+    : debatesQuery.error instanceof Error
+      ? `Could not load debates: ${debatesQuery.error.message}`
+      : mediaError
+        ? 'Could not check which debates are ready to watch. Try again shortly.'
+        : 'No debates to watch yet. Start one from the Claims tab.';
+
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
@@ -123,13 +138,7 @@ export function DebatesBrowseFeed({
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
-      {isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
-      {debatesQuery.error instanceof Error && debates.length === 0 && (
-        <FeedMessage>Could not load debates: {debatesQuery.error.message}</FeedMessage>
-      )}
-      {!isLoading && !debatesQuery.error && debates.length === 0 && (
-        <FeedMessage>No debates to watch yet. Start one from the Claims tab.</FeedMessage>
-      )}
+      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
         <DebateFeedItem
           key={debate.id}
