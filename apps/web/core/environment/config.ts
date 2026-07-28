@@ -1,9 +1,9 @@
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
-// OPTIONAL chain selector. Defaults to testnet (55516) when unset so existing
-// deploys are unaffected; the eventual mainnet cutover flips this env var
-// instead of editing code.
+// REQUIRED chain selector — '55516' (Geo testnet) or '80451' (mainnet). There is
+// no default: see resolveChainId in environment.ts for why an implicit network is
+// unsafe. The mainnet cutover flips this env var instead of editing code.
 const CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID;
 
 // OPTIONAL contract address overrides. When unset on testnet, the geo-sdk's

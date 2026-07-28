@@ -27,7 +27,9 @@ if (String(GeoTestnetConfig.chain?.id) !== '55516') {
 
 const TESTNET_DEFAULT_RPC = GeoTestnetConfig.chain?.rpcUrl;
 if (!TESTNET_DEFAULT_RPC) {
-  throw new Error('geo-sdk GeoTestnetConfig no longer ships a testnet RPC URL — set NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET.');
+  throw new Error(
+    'geo-sdk GeoTestnetConfig no longer ships a testnet RPC URL — set NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET.'
+  );
 }
 
 export type AppConfig = {
@@ -39,21 +41,20 @@ export type AppConfig = {
 const SUPPORTED_CHAIN_IDS = ['55516', '80451'] as const;
 type ConfigurableChainId = (typeof SUPPORTED_CHAIN_IDS)[number];
 
-// Defaults to testnet so existing deploys need no env change; validated so a
-// typo'd chain id fails the build instead of silently selecting a network.
+// The target network is always explicit. There is deliberately NO default:
+// no env var positively signals "mainnet" (the endpoint vars were mandatory
+// upstream and every existing deploy points them at testnet; the contract
+// address overrides are also used for testnet contract cutovers), so any
+// default here is a guess — and a guess is how a deploy ends up silently
+// serving the wrong chain's data. Unset fails the build with the fix in the
+// message; a typo'd value fails the same way.
 function resolveChainId(): ConfigurableChainId {
   if (!CHAIN_ID) {
-    // The testnet default is only safe when nothing suggests a mainnet deploy.
-    // Mainnet-only endpoint vars set with no explicit chain id means the deploy
-    // is half-configured — or NEXT_PUBLIC_CHAIN_ID's name is typo'd — and
-    // silently defaulting would ship a mainnet build pointed at testnet.
-    if (RPC_ENDPOINT || API_ENDPOINT) {
-      throw new Error(
-        'NEXT_PUBLIC_GEOGENESIS_RPC / NEXT_PUBLIC_API_ENDPOINT are set but NEXT_PUBLIC_CHAIN_ID is not. ' +
-          'Set NEXT_PUBLIC_CHAIN_ID=80451 for a mainnet deploy, or unset the mainnet endpoint vars for testnet.'
-      );
-    }
-    return '55516';
+    throw new Error(
+      `NEXT_PUBLIC_CHAIN_ID is not set. Set it to one of ${SUPPORTED_CHAIN_IDS.join(
+        ', '
+      )} (55516 = Geo testnet, 80451 = mainnet). There is no default — an implicit network is how a deploy ends up pointed at the wrong chain.`
+    );
   }
   if (!(SUPPORTED_CHAIN_IDS as readonly string[]).includes(CHAIN_ID)) {
     throw new Error(`NEXT_PUBLIC_CHAIN_ID must be one of ${SUPPORTED_CHAIN_IDS.join(', ')}. Received: ${CHAIN_ID}`);
