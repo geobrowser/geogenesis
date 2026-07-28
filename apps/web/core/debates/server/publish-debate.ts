@@ -1,4 +1,5 @@
-import { createGeoWalletClient, defineGeoNetworkConfig } from '@geoprotocol/geo-sdk';
+import { type GeoWalletClient, generateZeroDevAccount } from '@geogenesis/auth/account';
+import { defineGeoNetworkConfig } from '@geoprotocol/geo-sdk';
 import type { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
@@ -73,14 +74,18 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   // same ZeroDev EIP-7702 kernel flow as the browser, from its private key. The
   // env-driven GEO_NETWORK supplies chain + sponsorship; the acceptor-config
   // rpcUrl override keeps working by rebuilding the network with it.
+  //
+  // Goes through generateZeroDevAccount rather than createGeoWalletClient so this
+  // path gets the same pre-signing guards as the browser: RPC-serves-the-expected-
+  // chain and sponsorship-is-configured. It needs them more, not less — it is the
+  // only caller that accepts an operator-supplied rpcUrl override, and a mismatch
+  // here signs authorizations for the wrong chain and fails with AA10 at submit,
+  // after the debate edit is already on IPFS.
   const signer = privateKeyToAccount(config.privateKey);
   const network = config.rpcUrl
     ? defineGeoNetworkConfig({ ...GEO_NETWORK, chain: { ...GEO_NETWORK.chain!, rpcUrl: config.rpcUrl } })
     : GEO_NETWORK;
-  const smartAccount = await createGeoWalletClient({
-    signer: signer as Parameters<typeof createGeoWalletClient>[0]['signer'],
-    network,
-  });
+  const smartAccount = await generateZeroDevAccount({ signer, network });
 
   const userOpHash = await submitEdit({
     name: draft.debateName,
@@ -100,7 +105,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   return { status: 'published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId, userOpHash };
 }
 
-type SmartAccount = Awaited<ReturnType<typeof createGeoWalletClient>>;
+type SmartAccount = GeoWalletClient;
 
 async function submitEdit({
   name,

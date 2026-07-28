@@ -84,20 +84,29 @@ export const DAO_SPACE_FACTORY_ADDRESS = contracts.DAO_SPACE_FACTORY_ADDRESS as 
 const codeCache = new Map<string, Promise<boolean>>();
 
 /**
- * Whether `address` has contract code on the configured chain. Cached for the
- * session; resolves `true` on RPC failure so a flaky RPC can never block a
- * healthy network (the tx itself would surface a real connectivity problem).
+ * Whether `address` has contract code on the configured chain. Successful probes
+ * are cached for the session.
+ *
+ * An RPC failure resolves `true` — fail-open, so a flaky RPC can never block a
+ * healthy network (the tx itself would surface a real connectivity problem) —
+ * but that answer is NOT cached. Baking the fallback into the cached promise
+ * meant one transient blip on the first probe pinned `true` for the rest of the
+ * session, silently disabling the guard below for every later write.
  */
 export function contractHasCode(address: Hex): Promise<boolean> {
-  let cached = codeCache.get(address);
-  if (!cached) {
-    cached = createPublicClient({ chain: GEOGENESIS, transport: http() })
-      .getCode({ address })
-      .then(code => Boolean(code && code !== '0x'))
-      .catch(() => true);
-    codeCache.set(address, cached);
-  }
-  return cached;
+  const cached = codeCache.get(address);
+  if (cached) return cached;
+
+  const probe = createPublicClient({ chain: GEOGENESIS, transport: http() })
+    .getCode({ address })
+    .then(code => Boolean(code && code !== '0x'));
+
+  codeCache.set(address, probe);
+  // Evict on failure so the next call re-probes rather than inheriting the
+  // fail-open answer; the caller still gets `true` for this attempt.
+  probe.catch(() => codeCache.delete(address));
+
+  return probe.catch(() => true);
 }
 
 /** Throws before a write can be sent to a SpaceRegistry address with no code. */

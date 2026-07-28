@@ -2,6 +2,7 @@
 
 import { toViemAccount, useWalletClient, useWallets } from '@geogenesis/auth';
 import type { GeoWalletClient } from '@geogenesis/auth/account';
+import { RevertedUserOperationError } from '@geogenesis/auth/account';
 import { useQuery } from '@tanstack/react-query';
 
 import { useCookies } from 'react-cookie';
@@ -9,16 +10,6 @@ import { useCookies } from 'react-cookie';
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import { MAX_QUEUE_WAIT_MS, enqueueFor } from './smart-account-send-queue';
-
-class RevertedUserOperationError extends Error {
-  constructor(hash: `0x${string}`) {
-    super(
-      `UserOperation ${hash} was included on-chain but reverted — the transaction had no effect. ` +
-        'Check permissions and proposal state before retrying.'
-    );
-    this.name = 'RevertedUserOperationError';
-  }
-}
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
@@ -92,8 +83,17 @@ export function useSmartAccount() {
       const eoaAddress = zeroDevAccount.account.address;
 
       // Longer than every caller retry window (max 10s today) plus slack, so a
-      // surfaced receipt failure can't trigger a re-submission.
+      // surfaced receipt failure can't trigger a re-submission. This is also the
+      // number MAX_QUEUE_WAIT_MS is sized against — a sendUserOperation holds its
+      // queue slot for this long in the worst case.
       const RECEIPT_DEADLINE_MS = 90_000;
+
+      // viem's waitForUserOperationReceipt defaults to its own ~120s timeout, so
+      // without an explicit per-attempt bound the deadline check below could not
+      // run until well past RECEIPT_DEADLINE_MS — the slot hold would silently
+      // exceed the budget the queue is sized against. Slice it instead: each
+      // attempt is bounded, and the loop owns the total.
+      const RECEIPT_ATTEMPT_TIMEOUT_MS = 30_000;
 
       const confirmInclusion = async (hash: `0x${string}`) => {
         const startedAt = Date.now();
@@ -102,7 +102,10 @@ export function useSmartAccount() {
         // RPC errors mid-poll. Retry the wait — never the submission.
         for (;;) {
           try {
-            const receipt = await zeroDevAccount.waitForUserOperationReceipt({ hash });
+            const receipt = await zeroDevAccount.waitForUserOperationReceipt({
+              hash,
+              timeout: RECEIPT_ATTEMPT_TIMEOUT_MS,
+            });
             if (!receipt.success) {
               throw new RevertedUserOperationError(hash);
             }

@@ -7,7 +7,8 @@ export type GeoWalletClient = {
   account: { address: Address };
   sendTransaction: (args: { to: Address; data: Hex; value?: bigint }) => Promise<Hex>;
   sendUserOperation: (args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }) => Promise<Hex>;
-  waitForUserOperationReceipt: (args: { hash: Hex }) => Promise<{ success: boolean }>;
+  /** `timeout` bounds a single wait so the caller — not viem's ~120s default — owns the total budget. */
+  waitForUserOperationReceipt: (args: { hash: Hex; timeout?: number }) => Promise<{ success: boolean }>;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -32,6 +33,42 @@ type GenerateZeroDevAccountParams = {
    */
   network?: GeoNetworkConfig;
 };
+
+/**
+ * A UserOperation that was included on-chain but reverted. Terminal by nature:
+ * nothing landed, and re-submitting the identical op reverts identically.
+ * Callers that wrap sends in a retry schedule MUST NOT retry this — see
+ * `isRevertedUserOperationError`.
+ */
+export class RevertedUserOperationError extends Error {
+  readonly hash: Hex;
+
+  constructor(hash: Hex) {
+    super(
+      `UserOperation ${hash} was included on-chain but reverted — the transaction had no effect. ` +
+        'Check permissions and proposal state before retrying.'
+    );
+    this.name = 'RevertedUserOperationError';
+    this.hash = hash;
+  }
+}
+
+/**
+ * Whether `error`, or anything in its `cause` chain, is a reverted UserOperation.
+ * The chain walk matters: every send site wraps failures in its own error type
+ * (TransactionWriteFailedError et al.), so the revert is never the outermost
+ * error by the time a retry schedule inspects it.
+ */
+export function isRevertedUserOperationError(error: unknown): boolean {
+  // Bounded so a self-referential `cause` can't spin.
+  for (let current = error, depth = 0; current != null && depth < 10; depth++) {
+    // Name check as well as instanceof: this class crosses a workspace package
+    // boundary and a duplicated module instance would break identity.
+    if (current instanceof Error && current.name === 'RevertedUserOperationError') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
 
 // One successful verification per RPC URL per session. Only successes are
 // cached: a rejected probe is evicted so a transient RPC error neither wedges
@@ -68,18 +105,39 @@ function assertRpcMatchesChain(chain: { id: number; rpcUrl?: string }): Promise<
   return probe;
 }
 
+/**
+ * Every UserOperation is submitted through the sponsorship endpoint (combined
+ * bundler + paymaster). Without one there is no bundler to submit to at all, so
+ * a network config missing it produces a client that can read but fails opaquely
+ * on the first write. Fail at construction, where the message can name the fix.
+ *
+ * Deliberately checked here rather than at module load in geo-network.ts: an
+ * unsponsored network should still serve read-only traffic.
+ */
+function assertSponsorshipConfigured(network: GeoNetworkConfig): void {
+  if (!network.sponsorship?.rpcUrl) {
+    throw new Error(
+      `Network ${network.id ?? 'unknown'} (chain ${network.chain?.id ?? 'unknown'}) has no gas-sponsorship endpoint. ` +
+        'UserOperations cannot be submitted without a bundler — set NEXT_PUBLIC_SPONSORSHIP_RPC_URL for this chain.'
+    );
+  }
+}
+
 export async function generateZeroDevAccount({
   signer,
   network,
 }: GenerateZeroDevAccountParams): Promise<GeoWalletClient> {
-  const chain = (network ?? GeoTestnetConfig).chain;
-  if (chain) {
-    await assertRpcMatchesChain(chain);
+  const resolvedNetwork = network ?? GeoTestnetConfig;
+
+  assertSponsorshipConfigured(resolvedNetwork);
+
+  if (resolvedNetwork.chain) {
+    await assertRpcMatchesChain(resolvedNetwork.chain);
   }
 
   const kernelClient = await createGeoWalletClient({
     signer: signer as Parameters<typeof createGeoWalletClient>[0]['signer'],
-    network: network ?? GeoTestnetConfig,
+    network: resolvedNetwork,
   });
 
   return kernelClient as unknown as GeoWalletClient;

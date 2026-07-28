@@ -27,11 +27,18 @@ export class QueuedSendTimeoutError extends Error {
  * Longest a send may sit queued before it is abandoned (pre-submission, so abandoning
  * is safe). This guarantees the invariant useSmartAccountTransaction's timeout relies
  * on: a send that errors while queued NEVER submits later, so a user retry after a
- * timeout cannot double-submit. Must stay below that hook's outer timeout.
+ * timeout cannot double-submit.
+ *
+ * Sized to EXCEED the longest a slot can be held. A sendUserOperation holds its slot
+ * through receipt confirmation (RECEIPT_DEADLINE_MS = 90s in useSmartAccount), so the
+ * earlier 45s bound guaranteed the opposite of what it intended: a vote queued behind
+ * a publish was rejected as "timed out" at 45s having never been submitted, every time
+ * inclusion was slow. Any change to RECEIPT_DEADLINE_MS must move this too, and
+ * useSmartAccountTransaction's outer timeout must stay above both combined.
  */
-export const MAX_QUEUE_WAIT_MS = 45_000;
+export const MAX_QUEUE_WAIT_MS = 120_000;
 
-export const enqueueFor = <T,>(
+export const enqueueFor = <T>(
   address: string,
   task: () => Promise<T>,
   { maxQueueWaitMs }: { maxQueueWaitMs?: number } = {}
@@ -48,6 +55,9 @@ export const enqueueFor = <T,>(
   // A failed send must not block the next one, so the stored continuation swallows
   // the error (the caller still sees it via the returned promise).
   const run = prev.then(guarded, guarded);
-  sendChainByAddress.set(address, run.catch(() => undefined));
+  sendChainByAddress.set(
+    address,
+    run.catch(() => undefined)
+  );
   return run;
 };

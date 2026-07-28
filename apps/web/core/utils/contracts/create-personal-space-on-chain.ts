@@ -1,3 +1,4 @@
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 
 import { Duration, Effect, Schedule } from 'effect';
@@ -97,11 +98,15 @@ export async function waitForSpaceIndexed(
   return false;
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function publishRetrySchedule() {
   return Schedule.exponential(Duration.millis(500)).pipe(
     Schedule.jittered,
     Schedule.tapInput(() => Effect.sync(() => devLog('[CREATE_SPACE] Retrying publish + topic'))),
-    Schedule.intersect(Schedule.recurs(2))
+    Schedule.intersect(Schedule.recurs(2)),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
@@ -17,7 +18,7 @@ import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
 import { describeGovernanceError } from '../utils/contracts/governance-errors';
-import { isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
+import { describeError, isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -302,19 +303,34 @@ interface MakeProposalArgs {
  * Retry schedule for network calls during publish.
  * Exponential backoff starting at 100ms with jitter, retries for up to the
  * given duration. Logs each retry attempt with a label for diagnostics.
+ *
+ * A reverted UserOperation short-circuits the schedule. It is terminal — the op
+ * was included and had no effect, so re-submitting the identical calldata
+ * reverts identically. Without this the 10s windows below burn four to five
+ * sponsored operations against the paymaster on every revert (lost editor
+ * rights, fast-path disabled for new members) before surfacing anything.
  */
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
     Schedule.tapInput(() => Effect.succeed(console.log(`[PUBLISH][${label}] Retrying`))),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, proposalId, votingMode: requestedVotingMode, smartAccount, space, onChangePublishState } =
-    args;
+  const {
+    name,
+    author,
+    ops,
+    proposalId,
+    votingMode: requestedVotingMode,
+    smartAccount,
+    space,
+    onChangePublishState,
+  } = args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -417,7 +433,13 @@ function makeProposal(args: MakeProposalArgs) {
           }),
         catch: error => {
           console.error('[PUBLISH] sendUserOperation failed:', error);
-          return new TransactionWriteFailedError('Publish failed', { cause: error });
+          // A revert carries the only actionable detail (which op, and that it
+          // landed but did nothing); the generic label would bury it one `cause`
+          // level down where no UI reads it.
+          return new TransactionWriteFailedError(
+            isRevertedUserOperationError(error) ? describeError(error) : 'Publish failed',
+            { cause: error }
+          );
         },
       }).pipe(
         Effect.withSpan('web.write.submitUserOperation'),

@@ -17,12 +17,12 @@ type SendTxArgs = {
  *
  * Sends are serialized with all other smart-account writes (see useSmartAccount), so
  * this call may queue behind a pending publish before it submits. Timeout layering:
- * the queue itself abandons any send that waits > 45s before starting
+ * the queue abandons any send that waits > MAX_QUEUE_WAIT_MS (120s) before starting
  * (QueuedSendTimeoutError — guaranteed never submitted, safe to retry), and the
  * post-submission receipt wait is bounded at 90s inside useSmartAccount. The outer
  * timeout below is only a backstop for a hung submission, so it must exceed both
- * bounds combined — if it raced them (as the old 45s did), it would report failure
- * for a still-queued send that later executes, and a user retry double-submits.
+ * bounds combined — if it raced them, it would report failure for a still-queued
+ * send that later executes, and a user retry double-submits.
  */
 export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
@@ -56,7 +56,8 @@ export function useSmartAccountTransaction() {
         catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
       }).pipe(
         Effect.timeoutFail({
-          duration: Duration.seconds(150),
+          // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
+          duration: Duration.seconds(240),
           onTimeout: () =>
             new TransactionWriteFailedError(
               'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'

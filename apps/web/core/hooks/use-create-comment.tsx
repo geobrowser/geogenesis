@@ -1,5 +1,6 @@
 'use client';
 
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -44,11 +45,15 @@ function getCommentName(markdown: string): string {
   return plain.slice(0, 20).trimEnd() + '...';
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
