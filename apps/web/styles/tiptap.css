@@ -159,8 +159,9 @@
   margin-bottom: 16px;
 }
 
-.ProseMirror .node-tableNode {
-  @apply not-first:mt-12;
+.ProseMirror .node-tableNode,
+.ProseMirror .node-rankingNode {
+  @apply not-first:mt-8;
 }
 
 .ProseMirror ul {

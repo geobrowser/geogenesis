@@ -136,7 +136,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     pendingEntityIds,
     entriesResolving,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
@@ -214,7 +213,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const globalRankingPagination =
     presentation === 'embedded' && showEmbeddedGlobalPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedGlobalPageNumber}
         hasPreviousPage={hasEmbeddedGlobalPreviousPage}
         hasNextPage={hasEmbeddedGlobalNextPage}
         onSetPage={setEmbeddedGlobalPage}
@@ -290,7 +288,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingPagination =
     presentation === 'embedded' && showEmbeddedMyPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedMyPageNumber}
         hasPreviousPage={hasEmbeddedMyPreviousPage}
         hasNextPage={hasEmbeddedMyNextPage}
         onSetPage={setEmbeddedMyPage}
