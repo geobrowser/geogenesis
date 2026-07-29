@@ -1534,6 +1534,7 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
+      positionLabel={localParticipant?.position_label ?? null}
       active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
       overlayText={
         connecting
@@ -1567,6 +1568,7 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
+      positionLabel={remoteParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
       }
@@ -1831,6 +1833,7 @@ function formatDebugDuration(durationMs: number) {
 
 function DebateVideoTile({
   participantPosition,
+  positionLabel,
   active,
   overlayText,
   upcomingSeconds,
@@ -1846,6 +1849,7 @@ function DebateVideoTile({
   children,
 }: {
   participantPosition: boolean | null;
+  positionLabel: string | null;
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
@@ -1884,6 +1888,12 @@ function DebateVideoTile({
         {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+
+      {positionLabel && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          {positionLabel}
+        </div>
+      )}
 
       {closingMessage && (
         <div
