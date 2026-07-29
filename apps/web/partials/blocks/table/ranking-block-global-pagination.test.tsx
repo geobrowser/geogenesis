@@ -10,13 +10,14 @@ describe('RankingBlockGlobalPagination', () => {
 
     const { container } = render(<RankingBlockGlobalPagination hasPreviousPage hasNextPage onSetPage={onSetPage} />);
 
-    const buttons = screen.getAllByRole('button');
+    const previousButton = screen.getByRole('button', { name: 'Previous page' });
+    const nextButton = screen.getByRole('button', { name: 'Next page' });
 
-    expect(buttons).toHaveLength(2);
+    expect(screen.getAllByRole('button')).toHaveLength(2);
     expect(container.textContent).toBe('');
 
-    fireEvent.click(buttons[0]);
-    fireEvent.click(buttons[1]);
+    fireEvent.click(previousButton);
+    fireEvent.click(nextButton);
 
     expect(onSetPage).toHaveBeenNthCalledWith(1, 'previous');
     expect(onSetPage).toHaveBeenNthCalledWith(2, 'next');
