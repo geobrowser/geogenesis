@@ -9,6 +9,7 @@ import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { USER_ENTITY_VOTES_QUERY_KEY_ROOT } from '~/core/hooks/use-user-voted-entity-ids';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
   type VoteDirection,
@@ -96,6 +97,7 @@ export function useEntityVote({ entityId, spaceId, objectType = 0 }: UseEntityVo
   const onSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['entity-vote-count', entityId, objectType] });
     queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, objectType] });
+    queryClient.invalidateQueries({ queryKey: [USER_ENTITY_VOTES_QUERY_KEY_ROOT, personalSpaceId ?? null] });
   };
 
   const { mutate: upvote } = useMutation({

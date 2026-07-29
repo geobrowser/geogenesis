@@ -65,6 +65,7 @@ import {
 import { restFetch } from './rest';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
+import { UserEntityVotesByTypeDocument } from './user-entity-votes-by-type-document';
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
@@ -1147,6 +1148,52 @@ export function getEntityVoters(
     signal,
   });
 }
+
+const USER_ENTITY_VOTES_PAGE_SIZE = 200;
+
+type UserEntityVotesPage = {
+  nodes: Array<{ objectId: string }>;
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+};
+
+export function getUserEntityVoteObjectIds(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const objectIds: string[] = [];
+    let after: string | null | undefined = undefined;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const page: UserEntityVotesPage = yield* graphql({
+        query: UserEntityVotesByTypeDocument,
+        decoder: (data): UserEntityVotesPage =>
+          data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+        variables: {
+          userId,
+          voteType,
+          objectType,
+          first: USER_ENTITY_VOTES_PAGE_SIZE,
+          after: after ?? null,
+        },
+        signal,
+      });
+
+      for (const node of page.nodes) {
+        if (node.objectId) objectIds.push(node.objectId);
+      }
+
+      hasNextPage = Boolean(page.pageInfo.hasNextPage && page.pageInfo.endCursor);
+      after = page.pageInfo.endCursor;
+    }
+
+    return objectIds;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,

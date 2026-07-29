@@ -9,6 +9,8 @@ import cx from 'classnames';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
+import { ID } from '~/core/id';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
 
@@ -20,6 +22,14 @@ import { RankingGlobalDesktopRow } from './ranking-block-ui';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
+
+type ComposeBrowseTab = 'global' | 'upvoted' | 'downvoted';
+
+const COMPOSE_BROWSE_TABS: Array<{ id: ComposeBrowseTab; label: string }> = [
+  { id: 'global', label: 'Global ranking' },
+  { id: 'upvoted', label: 'Upvoted' },
+  { id: 'downvoted', label: 'Downvoted' },
+];
 
 const MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX = 8;
 const SEARCH_LIST_ROW_HEIGHT_PX = 88;
@@ -267,7 +277,6 @@ type Props = {
   rankableEntriesById: Map<string, RankingEntryDisplay>;
   searchResultsById: Map<string, SearchResult>;
   rowsByEntityId: Map<string, Row>;
-  showRankedUnrankedDivider: boolean;
   hasVisibleRankableEntities: boolean;
   isSearchActive: boolean;
   isSearchSettled: boolean;
@@ -302,7 +311,6 @@ export function RankingComposeGlobalRanking({
   rankableEntriesById,
   searchResultsById,
   rowsByEntityId,
-  showRankedUnrankedDivider,
   hasVisibleRankableEntities,
   isSearchActive,
   isSearchSettled,
@@ -326,6 +334,36 @@ export function RankingComposeGlobalRanking({
   onViewEntity,
 }: Props) {
   const isDesktop = !isMobile;
+
+  const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+  const { votedIdSet: upvotedIdSet, isLoading: isLoadingUpvoted } = useUserVotedEntityIds(
+    'up',
+    browseTab === 'upvoted'
+  );
+  const { votedIdSet: downvotedIdSet, isLoading: isLoadingDownvoted } = useUserVotedEntityIds(
+    'down',
+    browseTab === 'downvoted'
+  );
+
+  const voteFilterSet = browseTab === 'upvoted' ? upvotedIdSet : browseTab === 'downvoted' ? downvotedIdSet : null;
+  const isLoadingVoteFilter =
+    (browseTab === 'upvoted' && isLoadingUpvoted) || (browseTab === 'downvoted' && isLoadingDownvoted);
+
+  const tabFilteredRankedIds = React.useMemo(
+    () => (voteFilterSet ? filteredRankedIds.filter(id => voteFilterSet.has(ID.uuidToHex(id))) : filteredRankedIds),
+    [filteredRankedIds, voteFilterSet]
+  );
+  const tabFilteredUnrankedIds = React.useMemo(
+    () => (voteFilterSet ? filteredUnrankedIds.filter(id => voteFilterSet.has(ID.uuidToHex(id))) : filteredUnrankedIds),
+    [filteredUnrankedIds, voteFilterSet]
+  );
+
+  const tabShowRankedUnrankedDivider = tabFilteredRankedIds.length > 0 && tabFilteredUnrankedIds.length > 0;
+  const tabHasVisibleRankableEntities = tabFilteredRankedIds.length > 0 || tabFilteredUnrankedIds.length > 0;
+  // "Create new" belongs to the global browse flow — a vote tab can only ever show
+  // things the user already voted on.
+  const canCreateNewOnTab = canCreateNew && browseTab === 'global';
+
   const mobileScrollRootRef = useRankingComposeScrollRootRef();
   const mobileScrollRoot = useRankingComposeScrollRoot();
   const globalSectionRef = React.useRef<HTMLDivElement>(null);
@@ -390,9 +428,12 @@ export function RankingComposeGlobalRanking({
     }
   }, [searchQuery]);
 
-  const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
+  const isSearchingWithNoResults = !tabHasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
-    isSearchActive && !isSearchingWithNoResults && !hasVisibleRankableEntities && (isLoadingRows || !isSearchSettled);
+    isSearchActive &&
+    !isSearchingWithNoResults &&
+    !tabHasVisibleRankableEntities &&
+    (isLoadingRows || !isSearchSettled);
   const needsSearchStablePlaceholder = isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
 
   React.useLayoutEffect(() => {
@@ -404,7 +445,7 @@ export function RankingComposeGlobalRanking({
     setSearchListStableHeight(computeSearchListStableHeight(pageScrollRoot, listContainerRef.current));
   }, [getPageScrollRoot, needsSearchStablePlaceholder]);
 
-  const canLoadMore = hasNextPage && hasVisibleRankableEntities;
+  const canLoadMore = hasNextPage && (browseTab !== 'global' || hasVisibleRankableEntities);
 
   const setSentinelRef = useInfiniteScrollSentinel({
     hasNextPage: canLoadMore,
@@ -442,6 +483,7 @@ export function RankingComposeGlobalRanking({
       onFetchNextPage();
     }
   }, [
+    browseTab,
     scrollRoot,
     canLoadMore,
     isFetchingNextPage,
@@ -499,22 +541,29 @@ export function RankingComposeGlobalRanking({
     ) : null;
 
   // When searching, only reveal pending entries whose name matches the query.
+  // On a vote tab they must also be in the user's voted set.
   const pendingPickIds = React.useMemo(() => {
     if (revealablePendingIds.length === 0) return [];
     const query = isSearchActive ? searchQuery.trim().toLowerCase() : '';
-    if (!query) return revealablePendingIds;
-    return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
-  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
+    let ids = revealablePendingIds;
+    if (query) {
+      ids = ids.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
+    }
+    if (voteFilterSet) {
+      ids = ids.filter(id => voteFilterSet.has(ID.uuidToHex(id)));
+    }
+    return ids;
+  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById, voteFilterSet]);
 
   const hasExactNameMatch = React.useMemo(() => {
     if (!isSearchActive) return false;
-    const extraNames = [...filteredRankedIds, ...filteredUnrankedIds, ...pendingPickIds].map(
+    const extraNames = [...tabFilteredRankedIds, ...tabFilteredUnrankedIds, ...pendingPickIds].map(
       id => rankableEntriesById.get(id)?.name ?? searchResultsById.get(id)?.name
     );
     return rankingSearchHasExactNameMatch(searchQuery, [...searchResultsById.values()], extraNames);
   }, [
-    filteredRankedIds,
-    filteredUnrankedIds,
+    tabFilteredRankedIds,
+    tabFilteredUnrankedIds,
     isSearchActive,
     pendingPickIds,
     rankableEntriesById,
@@ -523,7 +572,7 @@ export function RankingComposeGlobalRanking({
   ]);
 
   const showCreateNewPrompt =
-    canCreateNew && isSearchActive && !hasExactNameMatch && (isSearchSettled || isDebouncingAfterEmptySearch);
+    canCreateNewOnTab && isSearchActive && !hasExactNameMatch && (isSearchSettled || isDebouncingAfterEmptySearch);
 
   const pendingDisclosure = (
     <RankingComposePendingDisclosure count={pendingPickIds.length}>
@@ -531,25 +580,31 @@ export function RankingComposeGlobalRanking({
     </RankingComposePendingDisclosure>
   );
 
+  const loadMoreFooter = (
+    <>
+      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+    </>
+  );
+
   const searchResultList = (
     <>
       {showCreateNewPrompt ? (
         <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
       ) : null}
-      {showCreateNewPrompt && filteredRankedIds.length > 0 ? (
+      {showCreateNewPrompt && tabFilteredRankedIds.length > 0 ? (
         <RankingComposeSectionDivider label="Other ranked results" />
       ) : null}
-      {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? (
+      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {tabShowRankedUnrankedDivider ? (
         showCreateNewPrompt ? (
           <RankingComposeSectionDivider label="Other unranked results" />
         ) : (
           <RankingComposeSectionDivider label="Unranked" />
         )
       ) : null}
-      {filteredUnrankedIds.map(id => renderPickEntity(id))}
-      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
     </>
@@ -557,13 +612,25 @@ export function RankingComposeGlobalRanking({
 
   const browseResultList = (
     <>
-      {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
-      {filteredUnrankedIds.map(id => renderPickEntity(id))}
-      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {browseTab !== 'global' && tabShowRankedUnrankedDivider ? (
+        <RankingComposeSectionDivider label="Already ranked" />
+      ) : null}
+      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {tabShowRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
+      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
+    </>
+  );
+
+  const voteTabEmptyState = (
+    <>
+      {isFetchingNextPage || canLoadMore ? (
+        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
+      ) : null}
+      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+      {pendingDisclosure}
     </>
   );
 
@@ -579,15 +646,24 @@ export function RankingComposeGlobalRanking({
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
-          <div className={cx('flex w-full min-w-0 items-center', isDesktop && 'h-8')}>
-            <h2
-              className={cx(
-                'm-0 min-w-0 truncate text-text',
-                isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
-              )}
-            >
-              Global ranking
-            </h2>
+          {/* Typography matches the "My ranking" heading; the active tab is picked out
+              by colour rather than an underline. */}
+          <div className={cx('flex w-full min-w-0 items-center gap-6 overflow-x-auto', isDesktop && 'h-8')}>
+            {COMPOSE_BROWSE_TABS.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setBrowseTab(tab.id)}
+                aria-selected={browseTab === tab.id}
+                className={cx(
+                  'm-0 shrink-0 whitespace-nowrap transition-colors',
+                  isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold',
+                  browseTab === tab.id ? 'text-text' : 'text-grey-04 hover:text-text'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
         <div className={cx('shrink-0', isMobile && 'mt-2')}>
@@ -635,8 +711,14 @@ export function RankingComposeGlobalRanking({
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
-          ) : !hasVisibleRankableEntities ? (
-            pendingDisclosure
+          ) : browseTab !== 'global' && isLoadingVoteFilter ? (
+            <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
+          ) : !tabHasVisibleRankableEntities ? (
+            browseTab === 'global' ? (
+              pendingDisclosure
+            ) : (
+              voteTabEmptyState
+            )
           ) : (
             browseResultList
           )}
