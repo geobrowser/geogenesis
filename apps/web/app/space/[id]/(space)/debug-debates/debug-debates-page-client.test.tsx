@@ -276,7 +276,7 @@ describe('DebugDebatesPageClient', () => {
     expect(within(card).queryByText('Could not reprocess video: Reprocessing unavailable')).not.toBeInTheDocument();
   });
 
-  it('loads WebM, MOV, and share-video renditions independently in a responsive three-column layout', async () => {
+  it('loads all renditions in equal-size cards that wrap without stretching', async () => {
     mocks.listResult.data.debates = [debate('both'), debate('webm-only')];
     mocks.mediaByDebate.set('both', mediaResult('succeeded', {}, ['final_video', 'final_video_hevc', 'social_video']));
     mocks.mediaByDebate.set('webm-only', mediaResult('succeeded', {}, ['final_video']));
@@ -296,13 +296,17 @@ describe('DebugDebatesPageClient', () => {
     const shareVideo = within(both).getByLabelText('Share video processed video');
     expect(shareVideo).toHaveAttribute('src', 'https://media.test/both-social.mp4');
 
-    expect(within(both).getByRole('region', { name: 'Processed videos' })).toHaveClass('lg:grid-cols-3');
+    expect(within(both).getByRole('region', { name: 'Processed videos' })).toHaveClass(
+      'flex',
+      'flex-wrap',
+      'items-start'
+    );
 
-    for (const video of [webm, mov]) {
-      expect(video).toHaveClass('aspect-[8/9]', 'w-1/4', 'bg-white', 'sm:aspect-video', 'sm:w-full');
+    for (const video of [webm, mov, shareVideo]) {
+      expect(video).toHaveClass('aspect-video', 'w-full', 'bg-white', 'object-contain');
       expect(video).not.toHaveClass('bg-black');
+      expect(video.parentElement).toHaveClass('w-full', 'max-w-xs', 'flex-none');
     }
-    expect(shareVideo).toHaveClass('aspect-[9/16]', 'w-full', 'bg-white', 'object-contain');
     expect(within(both).getByRole('link', { name: 'Open WebM directly' })).toHaveAttribute(
       'href',
       'https://media.test/both.webm'

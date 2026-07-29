@@ -32,15 +32,14 @@ type DebugDebatesPageClientProps = {
 type Rendition = {
   kind: 'final_video' | 'final_video_hevc' | 'social_video';
   label: 'WebM' | 'MOV' | 'Share video';
-  videoClassName: string;
 };
 
 type ProcessingStatus = 'not started' | 'processing' | 'processed' | 'failed';
 
 const renditions: Rendition[] = [
-  { kind: 'final_video', label: 'WebM', videoClassName: 'aspect-[8/9] w-1/4 sm:aspect-video sm:w-full' },
-  { kind: 'final_video_hevc', label: 'MOV', videoClassName: 'aspect-[8/9] w-1/4 sm:aspect-video sm:w-full' },
-  { kind: 'social_video', label: 'Share video', videoClassName: 'aspect-[9/16] w-full' },
+  { kind: 'final_video', label: 'WebM' },
+  { kind: 'final_video_hevc', label: 'MOV' },
+  { kind: 'social_video', label: 'Share video' },
 ];
 
 export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps) {
@@ -207,7 +206,7 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
       </section>
 
       {status === 'processed' && media && (
-        <section aria-label="Processed videos" className="grid gap-4 lg:grid-cols-3">
+        <section aria-label="Processed videos" className="flex flex-wrap items-start gap-4">
           {renditions.map(rendition => (
             <ProcessedRendition
               key={rendition.kind}
@@ -305,7 +304,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
   }, [available, debateId, rendition.kind]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-grey-02 p-3">
+    <div className="flex w-full max-w-xs min-w-0 flex-none flex-col gap-2 rounded-lg border border-grey-02 p-3">
       <Text as="h3" variant="bodySemibold">
         {rendition.label}
       </Text>
@@ -325,7 +324,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
             playsInline
             preload="metadata"
             onError={() => setPlaybackError(true)}
-            className={`${rendition.videoClassName} rounded bg-white object-contain`}
+            className="aspect-video w-full rounded bg-white object-contain"
           />
           {playbackError && <StateMessage compact tone="error">{rendition.label} playback failed.</StateMessage>}
           <a
