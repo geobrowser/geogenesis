@@ -14,6 +14,7 @@ export type PreparedSocialVideo = {
   previewFailed: boolean;
   file: File | null;
   playbackUrl: string | null;
+  downloadUrl: string | null;
   progressPercent: number | null;
   error: string | null;
   retry: () => void;
@@ -26,21 +27,25 @@ type DownloadProgress = {
 
 const SOCIAL_VIDEO_DOWNLOAD_STALL_TIMEOUT_MS = 30_000;
 
+const EMPTY_PREPARED_SOCIAL_VIDEO: Omit<PreparedSocialVideo, 'retry'> = {
+  status: 'preparing',
+  previewUrl: null,
+  previewFailed: false,
+  file: null,
+  playbackUrl: null,
+  downloadUrl: null,
+  progressPercent: null,
+  error: null,
+};
+
 export function usePreparedSocialVideo(debateId: string, enabled = true): PreparedSocialVideo {
   const previewArtifact = useDebateMediaArtifactUrl();
   const videoArtifact = useDebateMediaArtifactUrl();
   const previewMutateRef = React.useRef(previewArtifact.mutate);
   const videoMutateRef = React.useRef(videoArtifact.mutate);
+  const playbackDebateIdRef = React.useRef<string | null>(null);
   const [retryCount, setRetryCount] = React.useState(0);
-  const [state, setState] = React.useState<Omit<PreparedSocialVideo, 'retry'>>({
-    status: 'preparing',
-    previewUrl: null,
-    previewFailed: false,
-    file: null,
-    playbackUrl: null,
-    progressPercent: null,
-    error: null,
-  });
+  const [state, setState] = React.useState<Omit<PreparedSocialVideo, 'retry'>>(EMPTY_PREPARED_SOCIAL_VIDEO);
 
   React.useEffect(() => {
     previewMutateRef.current = previewArtifact.mutate;
@@ -51,20 +56,27 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
   }, [videoArtifact.mutate]);
 
   React.useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      playbackDebateIdRef.current = null;
+      setState(EMPTY_PREPARED_SOCIAL_VIDEO);
+      return;
+    }
 
     let active = true;
-    let playbackUrl: string | null = null;
+    let downloadUrl: string | null = null;
     const controller = new AbortController();
-    setState({
+    const retainPlayback = playbackDebateIdRef.current === debateId;
+    playbackDebateIdRef.current = debateId;
+    setState(current => ({
       status: 'preparing',
-      previewUrl: null,
+      previewUrl: retainPlayback ? current.previewUrl : null,
       previewFailed: false,
       file: null,
-      playbackUrl: null,
+      playbackUrl: retainPlayback ? current.playbackUrl : null,
+      downloadUrl: null,
       progressPercent: null,
       error: null,
-    });
+    }));
 
     previewMutateRef.current(
       { debateId, request: { kind: 'social_preview_image' } },
@@ -87,6 +99,11 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
       { debateId, request: { kind: 'social_video' } },
       {
         onSuccess: response => {
+          if (active) {
+            setState(current =>
+              current.playbackUrl ? current : { ...current, playbackUrl: response.upload.url }
+            );
+          }
           void downloadSocialVideo(response.upload.url, controller.signal, progress => {
             if (!active) return;
             const progressPercent = progress.totalBytes
@@ -102,12 +119,12 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
                 type: 'video/mp4',
                 lastModified: Date.now(),
               });
-              playbackUrl = URL.createObjectURL(file);
+              downloadUrl = URL.createObjectURL(file);
               setState(current => ({
                 ...current,
                 status: 'ready',
                 file,
-                playbackUrl,
+                downloadUrl,
                 progressPercent: 100,
                 error: null,
               }));
@@ -145,7 +162,7 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
     return () => {
       active = false;
       controller.abort();
-      if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     };
   }, [debateId, enabled, retryCount]);
 

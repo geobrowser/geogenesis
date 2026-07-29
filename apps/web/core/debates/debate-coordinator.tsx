@@ -173,7 +173,7 @@ function DebateSharePromptDialog({
       finishPrompt('shared');
       return;
     }
-    if (!preparedVideo.file || !preparedVideo.playbackUrl) return;
+    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
     if (sharingRef.current) return;
     sharingRef.current = true;
     setIsSharing(true);
@@ -182,7 +182,7 @@ function DebateSharePromptDialog({
       if (canShareFile) {
         await navigator.share({ title: prompt.claim, files: [preparedVideo.file] });
       } else {
-        downloadPreparedVideo(preparedVideo.playbackUrl, preparedVideo.file.name);
+        downloadPreparedVideo(preparedVideo.downloadUrl, preparedVideo.file.name);
       }
       captureSocialVideoEvent('debate_social_video_handoff_resolved', {
         debate_id: prompt.debate_id,

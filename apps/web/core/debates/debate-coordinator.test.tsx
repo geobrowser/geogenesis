@@ -184,8 +184,8 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    expect(await screen.findByAltText('Social video preview for Debates are useful')).toHaveAttribute(
-      'src',
+    expect(await screen.findByLabelText('Social video for Debates are useful')).toHaveAttribute(
+      'poster',
       'https://video.test/social-preview.jpg'
     );
     expect(mocks.mediaMutate).toHaveBeenCalledWith(
@@ -202,6 +202,20 @@ describe('DebateCoordinator', () => {
 
     resolveDownload?.(videoResponse());
     expect(await screen.findByRole('button', { name: 'Download video' })).toBeEnabled();
+  });
+
+  it('allows the social video to play while share preparation is still in progress', async () => {
+    showSharePrompt();
+    mockArtifactUrls();
+    mocks.fetch.mockReturnValue(new Promise(() => undefined));
+
+    render(<DebateCoordinator />);
+
+    const player = await screen.findByLabelText('Social video for Debates are useful');
+    expect(player).toBeInstanceOf(HTMLVideoElement);
+    expect(player).toHaveAttribute('src', 'https://video.test/social.mp4');
+    expect(player).toHaveAttribute('controls');
+    expect(screen.getByRole('button', { name: 'Preparing video…' })).toBeDisabled();
   });
 
   it('shares only the prepared MP4 and claim through the native share sheet', async () => {
@@ -276,6 +290,9 @@ describe('DebateCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
 
     expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.href).toBe('blob:https://geo.test/social-video');
+    expect(downloadLink.download).toBe('debate-debate-1-social.mp4');
     expect(mocks.share).not.toHaveBeenCalled();
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
@@ -301,6 +318,34 @@ describe('DebateCoordinator', () => {
 
     expect(await screen.findByRole('button', { name: 'Download video' })).toBeEnabled();
     expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps active playback mounted while retrying share preparation', async () => {
+    showSharePrompt();
+    let socialVideoRequests = 0;
+    mocks.mediaMutate.mockImplementation((variables, options) => {
+      if (variables.request.kind === 'social_preview_image') {
+        options.onSuccess({ upload: { url: 'https://video.test/social-preview.jpg' } });
+        return;
+      }
+      socialVideoRequests += 1;
+      if (socialVideoRequests === 1) {
+        options.onSuccess({ upload: { url: 'https://video.test/social.mp4' } });
+      }
+    });
+    mocks.fetch.mockRejectedValueOnce(new Error('Network interrupted'));
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Network interrupted')).toBeInTheDocument();
+    const player = screen.getByLabelText('Social video for Debates are useful') as HTMLVideoElement;
+    player.currentTime = 23;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry preparation' }));
+    await waitFor(() => expect(socialVideoRequests).toBe(2));
+
+    expect(screen.getByLabelText('Social video for Debates are useful')).toBe(player);
+    expect(player.currentTime).toBe(23);
   });
 
   it('revokes prepared playback URLs when the prompt closes', async () => {
