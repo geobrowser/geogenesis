@@ -70,25 +70,37 @@ export function MicrophoneIcon({ muted }: { muted: boolean }) {
 }
 
 export function MutedMicrophoneIndicator() {
+  const gradientId = React.useId();
+
   return (
     <svg
-      width="45"
-      height="45"
-      viewBox="0 0 45 45"
+      width="51"
+      height="51"
+      viewBox="0 0 51 51"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden="true"
       data-muted-indicator="true"
-      className="size-[45px]"
+      className="size-[51px]"
     >
-      <rect width="45" height="44.9989" rx="22.4994" fill="white" />
-      <rect x="17.6431" y="12.2852" width="9.71429" height="17.75" rx="4.85714" stroke="#151515" />
       <path
-        d="M14.4644 24.1055V25.1769C14.4644 29.6149 18.0621 33.2126 22.5001 33.2126C26.9381 33.2126 30.5358 29.6149 30.5358 25.1769V24.1055"
-        stroke="#151515"
+        d="M0 25.5C0 11.4167 11.4167 0 25.5 0C39.5833 0 51 11.4167 51 25.5C51 39.5833 39.5833 51 25.5 51C11.4167 51 0 39.5833 0 25.5Z"
+        fill={`url(#${gradientId})`}
+        fillOpacity="0.5"
+      />
+      <rect x="22" y="18" width="7" height="12.5" rx="3.5" stroke="white" />
+      <path
+        d="M19.5 26L19.5 27C19.5 30.3137 22.1863 33 25.5 33C28.8137 33 31.5 30.3137 31.5 27V26"
+        stroke="white"
         strokeLinecap="round"
       />
-      <path d="M27.3216 16.6094L17.6787 25.7165" stroke="#151515" />
+      <path d="M28.5 19.5L22.5 29" stroke="white" />
+      <defs>
+        <linearGradient id={gradientId} x1="25.5" y1="0" x2="25.5" y2="51" gradientUnits="userSpaceOnUse">
+          <stop />
+          <stop offset="1" stopOpacity="0.5" />
+        </linearGradient>
+      </defs>
     </svg>
   );
 }

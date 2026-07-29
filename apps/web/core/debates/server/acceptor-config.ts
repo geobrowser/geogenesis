@@ -18,21 +18,51 @@ export type DebateAcceptorConfig = {
   rpcUrl?: string;
 };
 
+/** Secrets UIs and shell exports often keep the wrapping quotes as part of the value. */
+function readEnv(name: string): string {
+  const value = process.env[name]?.trim() ?? '';
+  const quoted = /^(['"])([\s\S]*)\1$/.exec(value);
+  return quoted ? quoted[2].trim() : value;
+}
+
+/** A correct key also arrives bare, without the `0x` prefix. Returns `null` for anything else. */
+function toPrivateKey(value: string): Hex | null {
+  const body = value.replace(/^0[xX]/, '');
+  return /^[0-9a-fA-F]{64}$/.test(body) ? (`0x${body}` as Hex) : null;
+}
+
+/**
+ * Describes a rejected key by prefix, length, and whether the body is hex, so an operator can tell
+ * a truncated key from a non-hex one. Never includes the value; this message lands in server logs.
+ */
+function describeKeyShape(value: string): string {
+  const body = value.replace(/^0[xX]/, '');
+  const prefix = body.length === value.length ? 'no 0x prefix' : '0x prefix';
+  const kind = /^[0-9a-fA-F]*$/.test(body) ? 'hex' : 'non-hex';
+  return `${prefix}, body of ${body.length} ${kind} character(s)`;
+}
+
 /**
  * Returns the acceptor config, or `null` when it's unset (dev machines have no acceptor, so the
  * publish sweep reports "not configured" rather than failing). A key that's *set but malformed*
- * throws — fail-fast on bad config, mirroring gaia's `membership-acceptor/config.ts`.
+ * throws — fail-fast on bad config, mirroring gaia's `membership-acceptor/config.ts`. Every value
+ * is unquoted, since a quoted space id would otherwise reach the chain as a broken UUID.
  */
 export function getDebateAcceptorConfig(): DebateAcceptorConfig | null {
-  const privateKey = process.env.DEBATE_ACCEPTOR_PRIVATE_KEY?.trim();
-  const address = process.env.DEBATE_ACCEPTOR_ADDRESS?.trim() || undefined;
-  const spaceId = process.env.DEBATE_ACCEPTOR_SPACE_ID?.trim();
-  const rpcUrl = process.env.DEBATE_ACCEPTOR_RPC_URL?.trim() || undefined;
+  const rawPrivateKey = readEnv('DEBATE_ACCEPTOR_PRIVATE_KEY');
+  const address = readEnv('DEBATE_ACCEPTOR_ADDRESS') || undefined;
+  const spaceId = readEnv('DEBATE_ACCEPTOR_SPACE_ID');
+  const rpcUrl = readEnv('DEBATE_ACCEPTOR_RPC_URL') || undefined;
 
-  if (!privateKey || !spaceId) return null;
-  if (!/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
-    throw new Error('DEBATE_ACCEPTOR_PRIVATE_KEY is set but is not a 0x-prefixed 32-byte hex key.');
+  if (!rawPrivateKey || !spaceId) return null;
+
+  const privateKey = toPrivateKey(rawPrivateKey);
+  if (!privateKey) {
+    throw new Error(
+      `DEBATE_ACCEPTOR_PRIVATE_KEY is set but is not a 0x-prefixed 32-byte hex key (${describeKeyShape(rawPrivateKey)}). ` +
+        'Expected 64 hex characters, with or without the 0x prefix.'
+    );
   }
 
-  return { privateKey: privateKey as Hex, address, spaceId, rpcUrl };
+  return { privateKey, address, spaceId, rpcUrl };
 }

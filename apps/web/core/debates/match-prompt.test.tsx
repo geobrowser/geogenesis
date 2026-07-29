@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -177,14 +177,13 @@ describe('DebateMatchPrompt', () => {
     expect(acceptButton).toBeEnabled();
   });
 
-  it('renders participants as avatar and name without a per-participant menu or position pill', () => {
+  it('renders each participant position without a per-participant menu', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
-    // The design shows only the avatar + name in the VS card — no "..." menu, no Yes/No pill.
     expect(screen.queryByRole('button', { name: 'More actions for You' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More actions for Bri' })).not.toBeInTheDocument();
-    expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.queryByText('You chose Yes.')).not.toBeInTheDocument();
+    expect(within(screen.getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
+    expect(within(screen.getByText('Bri').parentElement!).getByText('No')).toBeInTheDocument();
   });
 
   it('locks background scrolling while the match dialog is open', () => {
@@ -294,7 +293,7 @@ describe('DebateMatchPrompt', () => {
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} debates={[]} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     expect(screen.getByRole('button', { name: 'Waiting...' })).toBeDisabled();
     expect(mocks.markReadyMutate).not.toHaveBeenCalled();
@@ -318,14 +317,14 @@ describe('DebateMatchPrompt', () => {
 
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
     act(failReadiness);
 
     expect(screen.getByText('Readiness failed')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(2));
     expect(mocks.push).toHaveBeenCalledTimes(1);
@@ -342,14 +341,14 @@ describe('DebateMatchPrompt', () => {
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByText('Camera disconnected')).toBeInTheDocument());
     expect(mocks.markReadyMutate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
 
     await waitFor(() => expect(mocks.markReadyMutate).toHaveBeenCalledTimes(1));
     expect(mocks.ensurePreview).toHaveBeenCalledTimes(3);
@@ -360,7 +359,7 @@ describe('DebateMatchPrompt', () => {
     acceptedMatch.participants[0]!.accepted = true;
     const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }));
     mocks.markReadyPending = true;
     view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[debate()]} />);
 

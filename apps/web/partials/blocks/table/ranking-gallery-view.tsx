@@ -12,6 +12,8 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
 import type { RankingBlockState } from './use-ranking-block-state';
@@ -19,11 +21,13 @@ import type { RankingBlockState } from './use-ranking-block-state';
 function RankingGalleryCard({
   entityId,
   spaceId,
+  voteSpaceId,
   name,
   imageHint,
 }: {
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
   imageHint?: string | null;
 }) {
@@ -43,6 +47,13 @@ function RankingGalleryCard({
       <Link href={href} className="mt-2 block" draggable={false}>
         <p className="line-clamp-2 text-[19px] leading-[1.3] font-medium text-text">{name}</p>
       </Link>
+      <div
+        className="mt-2 flex h-5 items-center"
+        onPointerDown={event => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
+      >
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+      </div>
     </div>
   );
 }
@@ -52,6 +63,7 @@ function RankingGalleryCardSkeleton({ keyId }: { keyId: string }) {
     <div key={keyId} className="w-[240px] shrink-0">
       <Skeleton className="h-[120px] w-[240px] rounded-xl" />
       <Skeleton className="mt-2 h-6 w-[180px]" />
+      <Skeleton className="mt-2 h-5 w-16" />
     </div>
   );
 }
@@ -164,6 +176,7 @@ type Props = {
 export function RankingGalleryView({ state }: Props) {
   const {
     spaceId,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
@@ -174,7 +187,6 @@ export function RankingGalleryView({ state }: Props) {
     aggregatedRankingCount,
     periodState,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
@@ -190,6 +202,7 @@ export function RankingGalleryView({ state }: Props) {
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
           name={entry.name}
           imageHint={entry.image}
         />
@@ -225,7 +238,6 @@ export function RankingGalleryView({ state }: Props) {
         {showEmbeddedGlobalPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
               hasNextPage={hasEmbeddedGlobalNextPage}
               onSetPage={setEmbeddedGlobalPage}

@@ -18,6 +18,7 @@ import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
 import { describeGovernanceError } from '../utils/contracts/governance-errors';
+import { isProposalExecuted } from '../utils/contracts/proposal-execution';
 import { describeError, isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
@@ -456,6 +457,7 @@ function makeProposal(args: MakeProposalArgs) {
       yield* executeFastProposal({
         smartAccount,
         author,
+        daoSpaceAddress: space.address as `0x${string}`,
         createUserOpHash: result,
         ...fastProposalToExecute,
       }).pipe(
@@ -481,6 +483,8 @@ interface ExecuteFastProposalArgs {
   author: string;
   /** The DAO space ID the proposal was created in. */
   spaceId: string;
+  /** The DAO space's contract address, for reading the proposal's state back from the chain. */
+  daoSpaceAddress: `0x${string}`;
   /** The proposal ID returned by `daoSpace.proposeEdit`. */
   proposalId: `0x${string}`;
   /** The user operation hash for the transaction that created the proposal. */
@@ -500,7 +504,7 @@ interface ExecuteFastProposalArgs {
  * window closes.
  */
 function executeFastProposal(args: ExecuteFastProposalArgs) {
-  const { smartAccount, author, spaceId, proposalId, createUserOpHash } = args;
+  const { smartAccount, author, spaceId, daoSpaceAddress, proposalId, createUserOpHash } = args;
 
   const confirmUserOp = (label: string, hash: `0x${string}`) =>
     Effect.gen(function* () {
@@ -560,6 +564,14 @@ function executeFastProposal(args: ExecuteFastProposalArgs) {
       vote.to as `0x${string}`,
       vote.calldata as `0x${string}`
     );
+
+    // The author's own vote normally executes the proposal, leaving nothing to execute here.
+    const executedByVote = yield* Effect.promise(() => isProposalExecuted({ daoSpaceAddress, proposalId }));
+
+    if (executedByVote) {
+      console.log('[PUBLISH] FAST proposal executed by its vote', { spaceId, proposalId });
+      return;
+    }
 
     const execute = geo.daoSpaces.executeProposal({
       authorSpaceId: author,

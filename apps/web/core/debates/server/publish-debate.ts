@@ -10,6 +10,7 @@ import { ID } from '~/core/id';
 import { getEntity, getSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { GEO_NETWORK } from '~/core/sdk/geo-network';
+import { isProposalExecuted } from '~/core/utils/contracts/proposal-execution';
 import { Publish } from '~/core/utils/publish';
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
@@ -93,6 +94,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     ops,
     space: { id: space.id, type: space.type, address: space.address },
     smartAccount,
+    rpcUrl: config.rpcUrl,
   });
 
   console.log('[debate-acceptor] published debate', {
@@ -113,12 +115,14 @@ async function submitEdit({
   ops,
   space,
   smartAccount,
+  rpcUrl,
 }: {
   name: string;
   author: string;
   ops: Op[];
   space: { id: string; type: string; address: string };
   smartAccount: SmartAccount;
+  rpcUrl?: string;
 }): Promise<string> {
   if (space.type === 'PERSONAL') {
     const { to, calldata } = await geo.personalSpaces.publishEdit({
@@ -154,13 +158,32 @@ async function submitEdit({
   const voteHash = await sendUserOp(smartAccount, vote.to as `0x${string}`, vote.calldata as `0x${string}`);
   await confirmUserOp(smartAccount, voteHash, 'vote');
 
+  // The acceptor's own vote normally executes the proposal, leaving nothing to execute here.
+  const executedByVote = await isProposalExecuted({
+    daoSpaceAddress: space.address as `0x${string}`,
+    proposalId: proposal.proposalId,
+    rpcUrl,
+  });
+  if (executedByVote) return createHash;
+
   const execute = geo.daoSpaces.executeProposal({
     authorSpaceId: author,
     spaceId: space.id,
     proposalId: proposal.proposalId,
   });
-  const executeHash = await sendUserOp(smartAccount, execute.to as `0x${string}`, execute.calldata as `0x${string}`);
-  await confirmUserOp(smartAccount, executeHash, 'execute');
+  try {
+    const executeHash = await sendUserOp(smartAccount, execute.to as `0x${string}`, execute.calldata as `0x${string}`);
+    await confirmUserOp(smartAccount, executeHash, 'execute');
+  } catch (error) {
+    // The check above returns `null` from an unreachable RPC and can read stale state, so re-read
+    // before calling the publish a failure.
+    const executed = await isProposalExecuted({
+      daoSpaceAddress: space.address as `0x${string}`,
+      proposalId: proposal.proposalId,
+      rpcUrl,
+    });
+    if (!executed) throw error;
+  }
 
   return createHash;
 }

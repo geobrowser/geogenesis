@@ -13,11 +13,7 @@ class FakeLockManager {
   private held = false;
   private queue: QueuedLock[] = [];
 
-  request(
-    _name: string,
-    options: LockOptions,
-    callback: (lock: Lock | null) => Promise<void> | void
-  ): Promise<void> {
+  request(_name: string, options: LockOptions, callback: (lock: Lock | null) => Promise<void> | void): Promise<void> {
     if (options.ifAvailable && this.held) {
       return Promise.resolve(callback(null));
     }

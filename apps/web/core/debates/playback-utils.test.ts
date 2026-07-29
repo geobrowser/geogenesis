@@ -1,12 +1,37 @@
 import { describe, expect, it } from 'vitest';
 
+import type { DebateMediaArtifactKind, DebateMediaResponse } from './api';
 import {
   clampSeconds,
+  hasProcessedVideo,
   normalizeTurnDurationsMs,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
   turnStateForTime,
 } from './playback-utils';
+
+describe('hasProcessedVideo', () => {
+  const media = (...kinds: DebateMediaArtifactKind[]) =>
+    ({ artifacts: kinds.map(kind => ({ kind })) }) as unknown as DebateMediaResponse;
+
+  it('accepts media carrying a composed final_video', () => {
+    expect(hasProcessedVideo(media('final_video', 'preview_image'))).toBe(true);
+  });
+
+  it('rejects media without a final_video', () => {
+    expect(hasProcessedVideo(media('preview_image', 'subtitle_vtt'))).toBe(false);
+    expect(hasProcessedVideo(media())).toBe(false);
+  });
+
+  it('rejects an unresolved media lookup rather than assuming ready', () => {
+    expect(hasProcessedVideo(undefined)).toBe(false);
+  });
+
+  // The hevc rendition is a companion to final_video, never a substitute for it.
+  it('does not accept final_video_hevc alone', () => {
+    expect(hasProcessedVideo(media('final_video_hevc'))).toBe(false);
+  });
+});
 
 describe('normalizeTurnDurationsMs', () => {
   it('keeps finite positive durations', () => {

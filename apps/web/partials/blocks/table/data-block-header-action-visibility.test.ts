@@ -9,17 +9,28 @@ import {
 
 describe('shouldShowFilterAndFullscreenActions', () => {
   it('hides both actions for Explore view in browse mode', () => {
-    expect(shouldShowFilterAndFullscreenActions('EXPLORE', false)).toBe(false);
+    expect(shouldShowFilterAndFullscreenActions('EXPLORE', 'SPACES', false)).toBe(false);
   });
 
   it('keeps both actions for Explore view in edit mode', () => {
-    expect(shouldShowFilterAndFullscreenActions('EXPLORE', true)).toBe(true);
+    expect(shouldShowFilterAndFullscreenActions('EXPLORE', 'SPACES', true)).toBe(true);
+  });
+
+  it.each<DataBlockView>(['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'PILL', 'EXPLORE'])(
+    'hides both actions for a Collection source using %s view in browse mode',
+    view => {
+      expect(shouldShowFilterAndFullscreenActions(view, 'COLLECTION', false)).toBe(false);
+    }
+  );
+
+  it('keeps both actions for a Collection source in edit mode', () => {
+    expect(shouldShowFilterAndFullscreenActions('TABLE', 'COLLECTION', true)).toBe(true);
   });
 
   it.each<DataBlockView>(['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'PILL'])(
-    'keeps both actions for %s view in browse mode',
+    'keeps both actions for a query source using %s view in browse mode',
     view => {
-      expect(shouldShowFilterAndFullscreenActions(view, false)).toBe(true);
+      expect(shouldShowFilterAndFullscreenActions(view, 'SPACES', false)).toBe(true);
     }
   );
 });
