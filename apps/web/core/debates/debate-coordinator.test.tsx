@@ -227,7 +227,7 @@ describe('DebateCoordinator', () => {
       throw new Error('Analytics unavailable');
     });
 
-    render(<DebateCoordinator />);
+    const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Share video' }));
 
     const file = mocks.canShare.mock.calls.at(-1)?.[0].files[0] as File;
@@ -244,6 +244,13 @@ describe('DebateCoordinator', () => {
       });
       expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
     });
+
+    mocks.prompts = [];
+    view.rerender(<DebateCoordinator />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the prompt open when the native share sheet is cancelled', async () => {
@@ -286,7 +293,7 @@ describe('DebateCoordinator', () => {
     mockArtifactUrls();
     mocks.canShare.mockReturnValue(false);
 
-    render(<DebateCoordinator />);
+    const view = render(<DebateCoordinator />);
     fireEvent.click(await screen.findByRole('button', { name: 'Download video' }));
 
     expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
@@ -299,6 +306,13 @@ describe('DebateCoordinator', () => {
       method: 'download',
     });
     expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
+
+    mocks.prompts = [];
+    view.rerender(<DebateCoordinator />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.handleMutate).toHaveBeenCalledTimes(1);
   });
 
   it('shows a retryable preparation error and retries the same social MP4', async () => {
@@ -427,7 +441,9 @@ describe('DebateCoordinator', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Finish sharing' }));
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Done' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.share).toHaveBeenCalledTimes(1);
     expect(mocks.handleMutate).toHaveBeenCalledTimes(2);
   });
