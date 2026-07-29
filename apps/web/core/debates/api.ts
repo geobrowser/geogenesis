@@ -73,6 +73,8 @@ export type DebateMediaArtifactKind =
   | 'final_video'
   | 'final_video_hevc'
   | 'preview_image'
+  | 'social_video'
+  | 'social_preview_image'
   | 'transcript_json'
   | 'subtitle_srt'
   | 'subtitle_vtt'

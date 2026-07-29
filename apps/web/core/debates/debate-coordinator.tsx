@@ -8,13 +8,14 @@ import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { DebateMatch } from './api';
 import { useDebateGateway } from './debate-gateway';
 import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
-import { ProcessedDebatePlayer } from './processed-debate-player';
+import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
 
 export function DebateCoordinator() {
   const router = useRouter();
@@ -115,13 +116,17 @@ function DebateSharePromptDialog({
   stackCount: number;
 }) {
   const handlePrompt = useHandleDebateSharePrompt();
+  const [visible, setVisible] = React.useState(true);
   const [shareError, setShareError] = React.useState<string | null>(null);
-  const publicUrl =
-    typeof window === 'undefined'
-      ? ''
-      : `${window.location.origin}/space/${prompt.source_space_id}/debates/${prompt.debate_id}/recording`;
+  const [isSharing, setIsSharing] = React.useState(false);
+  const [isUpdatingPrompt, setIsUpdatingPrompt] = React.useState(false);
+  const [handoffCompleted, setHandoffCompleted] = React.useState(false);
+  const sharingRef = React.useRef(false);
+  const promptActionRef = React.useRef(false);
+  const preparedVideo = usePreparedSocialVideo(prompt.debate_id, visible);
 
   React.useEffect(() => {
+    if (!visible) return;
     const previousBodyOverflow = document.body.style.overflow;
     const previousDocumentOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -130,23 +135,85 @@ function DebateSharePromptDialog({
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousDocumentOverflow;
     };
-  }, []);
+  }, [visible]);
 
-  const dismiss = () => handlePrompt.mutate({ promptId: prompt.id, action: 'dismissed' });
+  if (!visible) return null;
+
+  const finishPrompt = (action: 'shared' | 'dismissed') => {
+    if (promptActionRef.current) return;
+    promptActionRef.current = true;
+    setIsUpdatingPrompt(true);
+    setShareError(null);
+    handlePrompt.mutate(
+      { promptId: prompt.id, action },
+      {
+        onSuccess: () => {
+          promptActionRef.current = false;
+          setIsUpdatingPrompt(false);
+          setVisible(false);
+        },
+        onError: () => {
+          promptActionRef.current = false;
+          setIsUpdatingPrompt(false);
+          setShareError(
+            action === 'shared'
+              ? "The video was handed off, but Geo couldn't finish updating this prompt. Try again."
+              : 'Could not dismiss the share prompt. Try again.'
+          );
+        },
+      }
+    );
+  };
+  const dismiss = () => {
+    finishPrompt(handoffCompleted ? 'shared' : 'dismissed');
+  };
+  const canShareFile = preparedVideo.file ? canNativeShareFile(preparedVideo.file) : false;
   const share = async () => {
+    if (handoffCompleted) {
+      finishPrompt('shared');
+      return;
+    }
+    if (!preparedVideo.file || !preparedVideo.playbackUrl) return;
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+    setIsSharing(true);
     setShareError(null);
     try {
-      if (navigator.share) {
-        await navigator.share({ title: prompt.claim, url: publicUrl });
+      if (canShareFile) {
+        await navigator.share({ title: prompt.claim, files: [preparedVideo.file] });
       } else {
-        await navigator.clipboard.writeText(publicUrl);
+        downloadPreparedVideo(preparedVideo.playbackUrl, preparedVideo.file.name);
       }
-      handlePrompt.mutate({ promptId: prompt.id, action: 'shared' });
+      captureSocialVideoEvent('debate_social_video_handoff_resolved', {
+        debate_id: prompt.debate_id,
+        method: canShareFile ? 'native_share' : 'download',
+      });
+      setHandoffCompleted(true);
+      finishPrompt('shared');
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') return;
-      setShareError(error instanceof Error ? error.message : 'Could not share the debate.');
+      if (isAbortError(error)) return;
+      captureSocialVideoEvent('debate_social_video_handoff_failed', {
+        debate_id: prompt.debate_id,
+        method: canShareFile ? 'native_share' : 'download',
+        error_name: error instanceof Error ? error.name : 'UnknownError',
+      });
+      setShareError(error instanceof Error ? error.message : 'Could not share the video.');
+    } finally {
+      sharingRef.current = false;
+      setIsSharing(false);
     }
   };
+  const shareButtonLabel = isSharing
+    ? 'Sharing…'
+    : isUpdatingPrompt
+      ? 'Finishing…'
+      : handoffCompleted
+        ? 'Finish sharing'
+        : preparedVideo.status !== 'ready'
+          ? 'Preparing video…'
+          : canShareFile
+            ? 'Share video'
+            : 'Download video';
 
   return (
     <div className="fixed inset-0 z-[1300] flex items-center justify-center overflow-y-auto bg-text/55 p-4 backdrop-blur-sm">
@@ -170,27 +237,74 @@ function DebateSharePromptDialog({
             type="button"
             aria-label="Close share prompt"
             onClick={dismiss}
-            disabled={handlePrompt.isPending}
+            disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending}
             className="grid size-9 shrink-0 place-items-center rounded-full text-2xl text-grey-04 hover:bg-grey-02"
           >
             ×
           </button>
         </header>
 
-        <div className="mx-auto mt-5 w-full max-w-[270px] overflow-hidden rounded-lg bg-text text-white shadow-card">
-          <div className="bg-purple px-4 py-3 text-center">
-            <Text as="div" variant="smallButton" color="white">
-              Geo
-            </Text>
-            <div className="mt-1 text-[1.25rem] leading-[1.2] font-medium">{prompt.claim}</div>
-          </div>
-          <ProcessedDebatePlayer
-            debateId={prompt.debate_id}
-            label={`Processed video for ${prompt.claim}`}
-            className="w-full rounded-none shadow-none"
-          />
+        <div className="relative mx-auto mt-5 aspect-[9/16] w-full max-w-[270px] overflow-hidden rounded-lg bg-text text-white shadow-card">
+          {preparedVideo.playbackUrl ? (
+            <video
+              src={preparedVideo.playbackUrl}
+              poster={preparedVideo.previewUrl ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              aria-label={`Social video for ${prompt.claim}`}
+              className="size-full object-contain"
+            />
+          ) : preparedVideo.previewUrl ? (
+            // The preview is extracted from the MP4, so this is the exact social composition.
+            <img
+              src={preparedVideo.previewUrl}
+              alt={`Social video preview for ${prompt.claim}`}
+              className="size-full object-cover"
+            />
+          ) : (
+            <div className="grid size-full place-items-center bg-purple px-6 text-center">
+              <Text color="white">{preparedVideo.previewFailed ? 'Preview unavailable' : 'Loading preview…'}</Text>
+            </div>
+          )}
         </div>
 
+        {preparedVideo.status === 'preparing' && (
+          <div aria-live="polite" className="mt-4">
+            <div className="flex items-center justify-center gap-2 text-center">
+              <Spinner />
+              <Text>
+                Preparing video…
+                {preparedVideo.progressPercent !== null ? ` ${preparedVideo.progressPercent}%` : ''}
+              </Text>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Preparing social video"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={preparedVideo.progressPercent ?? undefined}
+              className="mt-2 h-1.5 overflow-hidden rounded-full bg-grey-02"
+            >
+              <div
+                className={`h-full rounded-full bg-purple transition-[width] ${
+                  preparedVideo.progressPercent === null ? 'w-1/3 animate-pulse' : ''
+                }`}
+                style={
+                  preparedVideo.progressPercent === null ? undefined : { width: `${preparedVideo.progressPercent}%` }
+                }
+              />
+            </div>
+          </div>
+        )}
+        {preparedVideo.error && (
+          <div className="mt-3 text-center">
+            <Text color="red-01">{preparedVideo.error}</Text>
+            <Button type="button" variant="secondary" onClick={preparedVideo.retry} className="mt-2 rounded-full">
+              Retry preparation
+            </Button>
+          </div>
+        )}
         {shareError && (
           <Text color="red-01" className="mt-3 text-center">
             {shareError}
@@ -200,14 +314,36 @@ function DebateSharePromptDialog({
           <Button
             type="button"
             onClick={share}
-            disabled={handlePrompt.isPending || !publicUrl}
+            disabled={isSharing || isUpdatingPrompt || handlePrompt.isPending || preparedVideo.status !== 'ready'}
             icon={<Upload />}
             className="gap-2 rounded-full"
           >
-            Share
+            {shareButtonLabel}
           </Button>
         </div>
       </section>
     </div>
   );
+}
+
+function downloadPreparedVideo(url: string, filename: string) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function canNativeShareFile(file: File) {
+  if (typeof navigator === 'undefined') return false;
+  const share = navigator.share as typeof navigator.share | undefined;
+  const canShare = navigator.canShare as typeof navigator.canShare | undefined;
+  if (typeof share !== 'function' || typeof canShare !== 'function') return false;
+  try {
+    return canShare.call(navigator, { files: [file] });
+  } catch {
+    return false;
+  }
 }
