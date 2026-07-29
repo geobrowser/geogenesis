@@ -30,15 +30,17 @@ type DebugDebatesPageClientProps = {
 };
 
 type Rendition = {
-  kind: 'final_video' | 'final_video_hevc';
-  label: 'WebM' | 'MOV';
+  kind: 'final_video' | 'final_video_hevc' | 'social_video';
+  label: 'WebM' | 'MOV' | 'Share video';
+  videoClassName: string;
 };
 
 type ProcessingStatus = 'not started' | 'processing' | 'processed' | 'failed';
 
 const renditions: Rendition[] = [
-  { kind: 'final_video', label: 'WebM' },
-  { kind: 'final_video_hevc', label: 'MOV' },
+  { kind: 'final_video', label: 'WebM', videoClassName: 'aspect-[8/9] w-1/4 sm:aspect-video sm:w-full' },
+  { kind: 'final_video_hevc', label: 'MOV', videoClassName: 'aspect-[8/9] w-1/4 sm:aspect-video sm:w-full' },
+  { kind: 'social_video', label: 'Share video', videoClassName: 'aspect-[9/16] w-full' },
 ];
 
 export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps) {
@@ -205,7 +207,7 @@ function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; curr
       </section>
 
       {status === 'processed' && media && (
-        <section aria-label="Processed videos" className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Processed videos" className="grid gap-4 lg:grid-cols-3">
           {renditions.map(rendition => (
             <ProcessedRendition
               key={rendition.kind}
@@ -323,7 +325,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
             playsInline
             preload="metadata"
             onError={() => setPlaybackError(true)}
-            className="aspect-[8/9] w-1/4 rounded bg-white object-contain sm:aspect-video sm:w-full"
+            className={`${rendition.videoClassName} rounded bg-white object-contain`}
           />
           {playbackError && <StateMessage compact tone="error">{rendition.label} playback failed.</StateMessage>}
           <a
