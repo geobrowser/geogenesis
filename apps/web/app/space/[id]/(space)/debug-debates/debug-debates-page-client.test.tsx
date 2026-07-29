@@ -9,8 +9,11 @@ import { DebugDebatesPageClient } from './debug-debates-page-client';
 
 const mocks = vi.hoisted(() => ({
   debugEnabled: true,
+  currentUserId: 'user-1' as string | null,
   replace: vi.fn(),
   invalidateQueries: vi.fn(() => Promise.resolve()),
+  reprocess: vi.fn<(debateId: string, request: { force?: boolean }) => Promise<void>>().mockResolvedValue(undefined),
+  reprocessPending: new Set<string>(),
   listResult: {
     data: { debates: [] as Debate[], matches: [] },
     isLoading: false,
@@ -32,6 +35,11 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
 
+vi.mock('~/core/debates/api', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/api')>();
+  return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
+});
+
 vi.mock('~/core/state/feature-flags', () => ({
   useDebugDebatesPageEnabled: () => mocks.debugEnabled,
 }));
@@ -43,6 +51,10 @@ vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => mocks.listResult,
   useDebateMedia: (debateId: string) =>
     mocks.mediaByDebate.get(debateId) ?? { data: undefined, isLoading: false, error: null },
+  useRequestDebateMediaProcessing: (debateId: string) => ({
+    mutateAsync: (request: { force?: boolean }) => mocks.reprocess(debateId, request),
+    isPending: mocks.reprocessPending.has(debateId),
+  }),
   useDebateMediaArtifactUrl: () => ({
     mutate: (
       { debateId, request }: { debateId: string; request: { kind: DebateMediaArtifactKind } },
@@ -63,9 +75,13 @@ vi.mock('~/core/debates/hooks', () => ({
 
 beforeEach(() => {
   mocks.debugEnabled = true;
+  mocks.currentUserId = 'user-1';
   mocks.replace.mockReset();
   mocks.invalidateQueries.mockReset();
   mocks.invalidateQueries.mockResolvedValue(undefined);
+  mocks.reprocess.mockReset();
+  mocks.reprocess.mockResolvedValue(undefined);
+  mocks.reprocessPending.clear();
   mocks.listResult = { data: { debates: [], matches: [] }, isLoading: false, isFetching: false, error: null };
   mocks.mediaByDebate.clear();
   mocks.transcriptByDebate.clear();
@@ -176,6 +192,88 @@ describe('DebugDebatesPageClient', () => {
     expect(screen.getByTestId('debate-card-media-error')).toHaveTextContent('Media jobunavailable');
     expect(screen.getByTestId('debate-card-failed')).toHaveTextContent('Attempts: 3');
     expect(screen.getByTestId('debate-card-failed')).toHaveTextContent('Latest error: ffmpeg exited 1');
+  });
+
+  it('lets a participant force reprocess a completed debate', async () => {
+    mocks.listResult.data.debates = [debate('reprocess')];
+    mocks.mediaByDebate.set('reprocess', mediaResult('succeeded'));
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    fireEvent.click(
+      within(screen.getByTestId('debate-card-reprocess')).getByRole('button', { name: 'Reprocess video' })
+    );
+
+    await waitFor(() => expect(mocks.reprocess).toHaveBeenCalledWith('reprocess', { force: true }));
+  });
+
+  it('hides reprocessing from non-participants and incomplete debates', () => {
+    const notParticipant = debate('not-participant');
+    notParticipant.participants = notParticipant.participants.map((participant, index) => ({
+      ...participant,
+      user_id: `other-user-${index}`,
+    }));
+    const ready = debate('ready');
+    ready.status = 'ready';
+    const cancelled = debate('cancelled');
+    cancelled.status = 'cancelled';
+    mocks.listResult.data.debates = [notParticipant, ready, cancelled];
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    expect(
+      within(screen.getByTestId('debate-card-not-participant')).queryByRole('button', { name: 'Reprocess video' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('debate-card-ready')).queryByRole('button', { name: 'Reprocess video' })
+    ).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('debate-card-cancelled')).queryByRole('button', { name: 'Reprocess video' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides reprocessing when there is no signed-in user', () => {
+    mocks.currentUserId = null;
+    mocks.listResult.data.debates = [debate('signed-out')];
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    expect(
+      within(screen.getByTestId('debate-card-signed-out')).queryByRole('button', { name: 'Reprocess video' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables reprocessing while the media job or request is in progress', () => {
+    mocks.listResult.data.debates = [debate('queued'), debate('running'), debate('pending')];
+    mocks.mediaByDebate.set('queued', mediaResult('queued'));
+    mocks.mediaByDebate.set('running', mediaResult('running'));
+    mocks.mediaByDebate.set('pending', mediaResult('succeeded'));
+    mocks.reprocessPending.add('pending');
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    for (const debateId of ['queued', 'running', 'pending']) {
+      expect(
+        within(screen.getByTestId(`debate-card-${debateId}`)).getByRole('button', { name: 'Processing…' })
+      ).toBeDisabled();
+    }
+  });
+
+  it('shows a reprocessing error on the affected card and clears it when retrying', async () => {
+    mocks.listResult.data.debates = [debate('retry'), debate('unaffected')];
+    mocks.reprocess.mockRejectedValueOnce(new Error('Reprocessing unavailable')).mockResolvedValueOnce(undefined);
+
+    render(<DebugDebatesPageClient spaceId="space-1" />);
+
+    const card = screen.getByTestId('debate-card-retry');
+    const unaffectedCard = screen.getByTestId('debate-card-unaffected');
+    fireEvent.click(within(card).getByRole('button', { name: 'Reprocess video' }));
+    expect(await within(card).findByText('Could not reprocess video: Reprocessing unavailable')).toBeInTheDocument();
+    expect(within(unaffectedCard).queryByText('Could not reprocess video: Reprocessing unavailable')).not.toBeInTheDocument();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Reprocess video' }));
+    await waitFor(() => expect(mocks.reprocess).toHaveBeenCalledTimes(2));
+    expect(within(card).queryByText('Could not reprocess video: Reprocessing unavailable')).not.toBeInTheDocument();
   });
 
   it('loads available WebM and MOV renditions independently with links and fallbacks', async () => {
