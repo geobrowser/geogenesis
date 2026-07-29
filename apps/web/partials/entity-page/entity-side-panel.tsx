@@ -124,18 +124,18 @@ const variants = {
   },
 };
 
-function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
+function AnimatedTogglePill({ editable }: { editable: boolean }) {
   return (
     <motion.div
-      animate={controls}
-      variants={variants}
+      aria-hidden
+      initial={false}
+      animate={{ x: editable ? 30 : 0 }}
       transition={{
         duration: 0.5,
         type: 'spring',
         bounce: 0,
       }}
-      layoutId="entity-side-panel-edit-toggle-pill"
-      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+      className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
     />
   );
 }
@@ -170,34 +170,31 @@ function EntitySidePanelModeToggle() {
   const editable = panelCtx.panelWantsEdit;
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onToggle}
       aria-label={editable ? 'Switch to view mode' : 'Switch to edit mode'}
-      className="flex w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1"
+      animate={controls}
+      variants={variants}
+      className="relative flex w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1"
     >
-      <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && <AnimatedTogglePill controls={controls} />}
-        <motion.div
-          animate={controls}
-          variants={variants}
-          className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
-        >
+      <AnimatedTogglePill editable={editable} />
+      <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
           <EyeSmall />
-        </motion.div>
+        </div>
       </div>
-      <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && <AnimatedTogglePill controls={controls} />}
+      <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
         <div
           className={cx(
-            'z-10 transition-colors duration-300',
+            'transition-colors duration-300',
             editable ? 'text-text' : canEditSpace ? 'text-grey-03' : 'text-grey-04'
           )}
         >
           <BulkEdit />
         </div>
       </div>
-    </button>
+    </motion.button>
   );
 }
 
