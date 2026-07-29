@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   activity: null as DebateActivity | null,
   pathname: '/space/space-1/debates',
   prompts: [] as DebateSharePrompt[],
+  promptsFetching: false,
   mediaMutate: vi.fn(),
   handleMutate: vi.fn(),
   fetch: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
   useDebateActivity: () => ({ data: mocks.activity }),
-  useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts } }),
+  useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
 }));
@@ -66,6 +67,7 @@ beforeEach(() => {
   mocks.activity = null;
   mocks.pathname = '/space/space-1/debates';
   mocks.prompts = [];
+  mocks.promptsFetching = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
@@ -251,6 +253,35 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.handleMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not reopen a cached share prompt after an active debate flow', async () => {
+    showSharePrompt();
+    mockArtifactUrls();
+    const view = render(<DebateCoordinator />);
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+
+    mocks.activity = activityWithMatch();
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.activity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: null,
+    };
+    mocks.promptsFetching = true;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    mocks.prompts = [];
+    mocks.promptsFetching = false;
+    view.rerender(<DebateCoordinator />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('keeps the prompt open when the native share sheet is cancelled', async () => {

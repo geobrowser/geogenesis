@@ -236,6 +236,9 @@ export async function downloadSocialVideo(
     return new Blob(chunks, { type: 'video/mp4' });
   } catch (error) {
     if (stalled) throw new Error('Video preparation stalled. Check your connection and try again.');
+    if (error instanceof TypeError) {
+      throw new Error('Could not download the social video. Check your connection and try again.');
+    }
     throw error;
   } finally {
     if (stallTimer !== null) clearTimeout(stallTimer);

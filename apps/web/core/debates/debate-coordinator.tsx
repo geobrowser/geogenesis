@@ -41,7 +41,8 @@ export function DebateCoordinator() {
   const visibleMatch = match ?? retainedMatch;
   const activeFlow = Boolean(match || debate || activity?.rematch);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
-  const queriedSharePrompt = sharePromptsQuery.data?.prompts[0] ?? null;
+  const queriedSharePrompt =
+    activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
 
@@ -49,6 +50,10 @@ export function DebateCoordinator() {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
     setRetainedSharePrompt(queriedSharePrompt);
   }, [closedSharePromptId, queriedSharePrompt, retainedSharePrompt]);
+
+  React.useEffect(() => {
+    if (activeFlow) setRetainedSharePrompt(null);
+  }, [activeFlow]);
 
   React.useEffect(() => {
     if (match) {

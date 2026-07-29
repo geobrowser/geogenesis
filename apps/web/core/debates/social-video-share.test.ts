@@ -64,6 +64,14 @@ describe('downloadSocialVideo', () => {
     ).rejects.toThrow('Could not download the social video (503).');
   });
 
+  it('turns browser fetch failures into an actionable preparation error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+
+    await expect(
+      downloadSocialVideo('https://video.test/social.mp4', new AbortController().signal, vi.fn())
+    ).rejects.toThrow('Could not download the social video. Check your connection and try again.');
+  });
+
   it('rejects an empty or truncated successful response', async () => {
     vi.stubGlobal(
       'fetch',
