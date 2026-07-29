@@ -1,8 +1,13 @@
+import type { Source } from '~/core/blocks/data/source';
 import type { DataBlockView } from '~/core/blocks/data/use-view';
 
-/** Explore browse is an infinite feed and does not expose filter/fullscreen header actions. */
-export function shouldShowFilterAndFullscreenActions(view: DataBlockView, isEditing: boolean): boolean {
-  return isEditing || view !== 'EXPLORE';
+/** Explore and collection browse surfaces do not expose filter/fullscreen header actions. */
+export function shouldShowFilterAndFullscreenActions(
+  view: DataBlockView,
+  sourceType: Source['type'],
+  isEditing: boolean
+): boolean {
+  return isEditing || (view !== 'EXPLORE' && sourceType !== 'COLLECTION');
 }
 
 /** A hidden filter toggle must not leave its panel open with no way to close it. */

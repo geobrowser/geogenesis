@@ -4,6 +4,7 @@ import {
   type DebatePublishParticipant,
   mergeTranscriptSegmentsIntoTurns,
 } from '../debate-publish-draft';
+import { hasProcessedVideo } from '../playback-utils';
 
 function geoChatBaseUrl() {
   const base =
@@ -89,7 +90,12 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     );
   }
 
-  const videoUrl = await resolveFinalVideoUrl(debateId, media);
+  // A job can succeed without composing a `final_video`; publishing then yields a videoless Debate.
+  if (!hasProcessedVideo(media)) {
+    throw new DebateNotPublishableError('media_not_ready', `Debate ${debateId} has no processed final_video artifact.`);
+  }
+
+  const videoUrl = await resolveFinalVideoUrl(debateId);
   const transcriptTurns = await loadTranscriptTurns(debateId, debate);
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
@@ -112,9 +118,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   return { debate, media, input };
 }
 
-async function resolveFinalVideoUrl(debateId: string, media: DebateMediaResponse): Promise<string | null> {
-  const hasFinalVideo = media.artifacts.some(artifact => artifact.kind === 'final_video');
-  if (!hasFinalVideo) return null;
+async function resolveFinalVideoUrl(debateId: string): Promise<string> {
   // NOTE: this is a presigned (expiring) URL. Flagged in TICKET.md — production needs a stable
   // public/CDN URL for the final video before this is durable on-chain.
   const { upload } = await geoChatPost<{ upload: { url: string } }>(`/debates/${debateId}/media/artifacts/url`, {

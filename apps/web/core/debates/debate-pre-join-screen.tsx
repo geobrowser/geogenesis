@@ -221,7 +221,7 @@ export function DebatePreScreen({
             disabled={readyBusy || localReady || previewBusy}
             className="mt-3 flex min-h-11 w-full max-w-[272px] items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
           >
-            {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : 'Accept'}
+            {localReady ? 'Waiting...' : readyBusy ? 'Saving...' : "I'm ready"}
           </button>
         )}
 

@@ -1,4 +1,4 @@
-import type { Debate, DebateParticipant, ParticipantSlot } from './api';
+import type { Debate, DebateMediaResponse, DebateParticipant, ParticipantSlot } from './api';
 
 export type TurnState = {
   slot: ParticipantSlot;
@@ -6,12 +6,21 @@ export type TurnState = {
   seconds: number;
 } | null;
 
+/**
+ * Has both per-slot recordings. A debate whose media job failed still passes this, so the feed
+ * pairs it with {@link hasProcessedVideo} before rendering.
+ */
 export function isWatchableDebate(debate: Debate) {
   return (
     debate.status === 'complete' &&
     debate.recordings.some(recording => recording.participant_slot === 1) &&
     debate.recordings.some(recording => recording.participant_slot === 2)
   );
+}
+
+/** The media worker composed the two per-slot recordings into a single `final_video`. */
+export function hasProcessedVideo(media: DebateMediaResponse | undefined): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
 }
 
 export function normalizeTurnDurationsMs(values: number[]) {

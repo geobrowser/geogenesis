@@ -3,8 +3,10 @@ import { GraphQLClient } from 'graphql-request';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { getConfig } from '~/core/environment/environment';
 
+// `memberSpaceId` is a UUID column, so the variable must be typed `UUID!` or the request fails
+// schema validation before it executes. This query is hand-written, so codegen can't catch that.
 const EDITOR_SPACES_QUERY = `
-  query DebateAcceptorEditorSpaces($memberSpaceId: String!) {
+  query DebateAcceptorEditorSpaces($memberSpaceId: UUID!) {
     editors(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 500) {
       spaceId
     }
