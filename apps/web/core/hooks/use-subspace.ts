@@ -300,7 +300,7 @@ function buildDaoSubspaceCalldata({
 
   const proposalActions = [
     {
-      to: spaceAddress,
+      toAddress: spaceAddress,
       value: 0n,
       data: pingCallData,
     },
