@@ -8,6 +8,7 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -204,7 +205,7 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const [vote, setVote] = React.useState<DebateVote>(null);
-  const [hasVoted, setHasVoted] = React.useState(false);
+  const winnerVotes = useDebateVotes(debate);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -258,12 +259,7 @@ function DebateFeedItem({
             topics={topics}
             onOpenJoin={onOpenJoin}
           />
-          <DebateFeedPlayer
-            debate={debate}
-            active={active}
-            hasVoted={hasVoted}
-            onSelectWinner={() => setHasVoted(true)}
-          />
+          <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
           <div className="hidden md:block">

@@ -28,6 +28,18 @@ export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd
 /** Opposed by (RELATION) → participant space entity arguing "no". */
 export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
 
+/**
+ * Vote (TYPE) — one viewer's pick of who won a debate. Lives in the voter's personal
+ * space and is auto-published there, the same way comments are.
+ */
+export const VOTE_TYPE_ID = '4e7fde53712f4e489e83e7f4e15de964';
+
+/** Debates (RELATION) → Debate. Which debate a Vote is about. */
+export const VOTE_DEBATES_PROPERTY_ID = 'b96bf701a399430da072f5e910cdeda9';
+
+/** Vote (RELATION) → the chosen winner's personal-space system entity. */
+export const VOTE_WINNER_PROPERTY_ID = 'bcbbc60a72fd433d841725ce62ce85f5';
+
 /** Canonical geo-sdk ids reused by the debate ontology (verified equal to the spec). */
 export const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY; // a126ca53…
 export const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY; // 8f151ba4…

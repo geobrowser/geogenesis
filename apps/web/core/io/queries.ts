@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
+import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -24,6 +25,7 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -496,7 +498,7 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
   });
 }
 
-const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+const BACKLINKS_PAGE_SIZE = 1000;
 
 /**
  * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
@@ -522,41 +524,47 @@ export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortC
   });
 }
 
-function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
+/**
+ * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
+ * `id` is typed loosely because codegen maps the UUID scalar to `any`.
+ */
+function collectBacklinkSourceIds<E>(
+  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
+) {
   return Effect.gen(function* () {
     const seen = new Set<string>();
     const ids: string[] = [];
-    let offset = 0;
 
-    for (;;) {
-      const page = yield* graphql({
-        query: EntityCommentReplyBacklinksPageDocument,
-        decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
-        variables: {
-          id: parentEntityId,
-          replyToTypeId: COMMENT_REPLY_TO_ID,
-          commentTypeId: COMMENT_TYPE_ID,
-          first: COMMENT_REPLY_BACKLINKS_PAGE_SIZE,
-          offset,
-        },
-        signal,
-      });
-
-      if (page.length === 0) break;
+    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
+      const page = yield* fetchPage(offset);
 
       for (const row of page) {
-        const rawId = row?.fromEntity?.id;
-        if (typeof rawId !== 'string' || !rawId || seen.has(rawId)) continue;
-        seen.add(rawId);
-        ids.push(rawId);
+        const id = row?.fromEntity?.id;
+        if (typeof id !== 'string' || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
       }
 
-      if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
-      offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
+      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
     }
-
-    return ids;
   });
+}
+
+function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
+  return collectBacklinkSourceIds(offset =>
+    graphql({
+      query: EntityCommentReplyBacklinksPageDocument,
+      decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+      variables: {
+        id: parentEntityId,
+        replyToTypeId: COMMENT_REPLY_TO_ID,
+        commentTypeId: COMMENT_TYPE_ID,
+        first: BACKLINKS_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    })
+  );
 }
 
 /** Counts distinct Comment entities connected to the target by incoming "Reply to" relations. */
@@ -574,6 +582,33 @@ export function getCommentEntitiesViaParentEntityReplyBacklinks(
 ) {
   return Effect.gen(function* () {
     const ids = yield* getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId, signal);
+
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
+/**
+ * Loads the Vote entities cast on a debate, from incoming "Debates" relations on entities
+ * typed Vote. Each vote lives in its own voter's personal space, so the tally is read across
+ * spaces rather than from one.
+ */
+export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
+  return Effect.gen(function* () {
+    const ids = yield* collectBacklinkSourceIds(offset =>
+      graphql({
+        query: debateVoteBacklinksPageDocument,
+        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+        variables: {
+          id: debateEntityId,
+          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+          voteTypeId: VOTE_TYPE_ID,
+          first: BACKLINKS_PAGE_SIZE,
+          offset,
+        },
+        signal,
+      })
+    );
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);
