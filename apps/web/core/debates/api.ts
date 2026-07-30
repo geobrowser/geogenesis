@@ -902,6 +902,24 @@ export class GeoChatRequestError extends Error {
   }
 }
 
+const debatePhaseBoundaryRetryCodes = new Set([
+  'rematch_not_ready',
+  'recording_not_cancellable',
+  'recording_not_ready',
+]);
+
+export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (!(error instanceof GeoChatRequestError) || !error.code || !debatePhaseBoundaryRetryCodes.has(error.code)) {
+      throw error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+    return request();
+  }
+}
+
 async function requestError(response: Response) {
   let code: string | null = null;
   let message = `${response.status} ${response.statusText}`;

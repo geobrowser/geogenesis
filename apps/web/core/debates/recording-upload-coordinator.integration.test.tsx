@@ -8,6 +8,7 @@ import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 const mocks = vi.hoisted(() => ({
+  activityDebate: null as null | { id: string; status: string },
   cancelRecording: vi.fn(),
   completeUpload: vi.fn(),
   createUpload: vi.fn(),
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   resolveUser: vi.fn(),
   scheduleRetry: vi.fn(),
   thankingDebateId: null as string | null,
+  thankingHasPendingLocalRecording: false,
   thankingHasUploadedRecording: false,
   thankingRecordingCancelled: false,
   // Set to hold the presigned PUT open, so a test can read the banner mid-transfer and drive
@@ -70,7 +72,7 @@ vi.mock('./hooks', () => ({
     accountKey: 'user-a',
     getPrivyIdentityToken: mocks.getToken,
   }),
-  useDebateActivity: () => ({ data: undefined }),
+  useDebateActivity: () => ({ data: mocks.activityDebate ? { debate: mocks.activityDebate } : undefined }),
 }));
 
 vi.mock('./thanking-debate-store', () => ({
@@ -78,6 +80,7 @@ vi.mock('./thanking-debate-store', () => ({
     mocks.thankingDebateId
       ? {
           debateId: mocks.thankingDebateId,
+          hasPendingLocalRecording: mocks.thankingHasPendingLocalRecording,
           hasUploadedRecording: mocks.thankingHasUploadedRecording,
           recordingCancelled: mocks.thankingRecordingCancelled,
         }
@@ -142,6 +145,7 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
 }));
 
 beforeEach(() => {
+  mocks.activityDebate = null;
   mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
   mocks.completeUpload.mockReset().mockResolvedValue(undefined);
@@ -165,6 +169,7 @@ beforeEach(() => {
   mocks.resolveUser.mockReset().mockResolvedValue('user-a');
   mocks.scheduleRetry.mockReset().mockResolvedValue(undefined);
   mocks.thankingHasUploadedRecording = false;
+  mocks.thankingHasPendingLocalRecording = false;
   mocks.thankingRecordingCancelled = false;
   mocks.holdUpload = null;
   mocks.reportProgress = null;
@@ -183,6 +188,27 @@ afterEach(() => {
 });
 
 describe('DebateRecordingUploadCoordinator', () => {
+  it('shows the publish choice while the recording is still being prepared and ignores stale activity for that debate', async () => {
+    mocks.queue = [];
+    mocks.thankingHasPendingLocalRecording = true;
+    mocks.activityDebate = { id: 'debate-1', status: 'in_progress' };
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Preparing debate upload')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('still hides the pending thank-you banner during an unrelated live debate', async () => {
+    mocks.queue = [];
+    mocks.thankingHasPendingLocalRecording = true;
+    mocks.activityDebate = { id: 'debate-2', status: 'in_progress' };
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
   it('recovers a persisted upload on app startup under the browser-wide lock', async () => {
     // App startup, not the thank-you screen, so nothing holds the banner open.
     mocks.thankingDebateId = null;
@@ -386,6 +412,25 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  it('drops a recording row that finishes persisting after publication was cancelled', async () => {
+    mocks.thankingHasPendingLocalRecording = true;
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+
+    mocks.queue = [queuedRecording('debate-1')];
+    mocks.observer?.(mocks.queue);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
   it('cancels only the debate whose thank-you screen the user is on', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     // The user is thanking for debate-2 while an earlier recording is still uploading.
@@ -494,14 +539,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debate', 'debate-1'] });
   });
 
-  it('does not offer publication again when a cancelled snapshot still has a stale local upload', async () => {
-    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+  it('removes a stale local upload restored for an already cancelled debate', async () => {
     mocks.thankingRecordingCancelled = true;
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
+    expect(mocks.completeUpload).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
   });
 
@@ -525,6 +571,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.deleteUpload.mockRejectedValue(new Error('IndexedDB unavailable'));
     mocks.queue = [queuedRecording('debate-1')];
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     render(<DebateRecordingUploadCoordinator />);
 
@@ -537,7 +584,7 @@ describe('DebateRecordingUploadCoordinator', () => {
       )
     ).toBeInTheDocument();
     expect(mocks.cancelRecording).toHaveBeenCalledOnce();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument());

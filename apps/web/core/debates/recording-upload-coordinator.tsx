@@ -22,6 +22,7 @@ import {
   completeLocalRecordingUpload,
   createLocalRecordingUpload,
   resolveCurrentGeoChatUserId,
+  retryDebatePhaseBoundaryRequest,
 } from './api';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
@@ -87,18 +88,20 @@ export async function processDebateRecordingUpload(
     await dependencies.markUploaded(upload.id, filename);
   }
 
-  await dependencies.completeUpload(upload.debateId, {
-    filename,
-    mime_type: upload.mimeType,
-    started_at_ms: startedAtMs,
-    ended_at_ms: endedAtMs,
-    duration_seconds: upload.durationSeconds,
-    byte_size: upload.byteSize,
-    width: upload.width,
-    height: upload.height,
-    framerate: upload.framerate,
-    video_bits_per_second: upload.videoBitsPerSecond,
-  });
+  await retryDebatePhaseBoundaryRequest(() =>
+    dependencies.completeUpload(upload.debateId, {
+      filename,
+      mime_type: upload.mimeType,
+      started_at_ms: startedAtMs,
+      ended_at_ms: endedAtMs,
+      duration_seconds: upload.durationSeconds,
+      byte_size: upload.byteSize,
+      width: upload.width,
+      height: upload.height,
+      framerate: upload.framerate,
+      video_bits_per_second: upload.videoBitsPerSecond,
+    })
+  );
   await dependencies.deleteUpload(upload.id);
 }
 
@@ -124,6 +127,23 @@ export function DebateRecordingUploadCoordinator() {
   // publish opt-out, on screen for the rest of the thank-you period.
   const [uploadedDebateIds, setUploadedDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const [cancelledDebateIds, setCancelledDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
+  const thankingDebate = useThankingDebate();
+  const thankingDebateId = thankingDebate?.debateId ?? null;
+  const normalizedThankingDebateId = thankingDebateId ? normalizeDebateId(thankingDebateId) : null;
+  const isUploadCancelled = React.useCallback(
+    (upload: DebateRecordingUpload) => {
+      const debateId = normalizeDebateId(upload.debateId);
+      return (
+        cancelledDebateIds.has(debateId) ||
+        (thankingDebate?.recordingCancelled === true && debateId === normalizedThankingDebateId)
+      );
+    },
+    [cancelledDebateIds, normalizedThankingDebateId, thankingDebate?.recordingCancelled]
+  );
+  const publishableUploads = React.useMemo(
+    () => uploads.filter(upload => !isUploadCancelled(upload)),
+    [isUploadCancelled, uploads]
+  );
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -186,6 +206,18 @@ export function DebateRecordingUploadCoordinator() {
     return () => subscription.unsubscribe();
   }, [userId]);
 
+  // Recording persistence and the publish opt-out can finish in either order at the phase
+  // boundary. If a cancelled debate appears in IndexedDB afterward, keep it hidden, never start
+  // its upload, and remove the late row as soon as the observer reports it.
+  React.useEffect(() => {
+    for (const upload of uploads) {
+      if (!isUploadCancelled(upload)) continue;
+      void deleteDebateRecordingUpload(upload.id).catch(error =>
+        console.warn('[DebateRecordingUploadCoordinator] could not remove cancelled upload:', error)
+      );
+    }
+  }, [isUploadCancelled, uploads]);
+
   React.useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
@@ -210,17 +242,17 @@ export function DebateRecordingUploadCoordinator() {
   }, [userId]);
 
   React.useEffect(() => {
-    if (activeUploadId || uploads.length === 0) return;
-    const nextAttemptAt = Math.min(...uploads.map(upload => upload.nextAttemptAt));
+    if (activeUploadId || publishableUploads.length === 0) return;
+    const nextAttemptAt = Math.min(...publishableUploads.map(upload => upload.nextAttemptAt));
     const delay = Math.max(0, nextAttemptAt - Date.now());
     if (delay === 0) return;
     const timer = window.setTimeout(() => setWakeAt(Date.now()), delay);
     return () => window.clearTimeout(timer);
-  }, [activeUploadId, uploads]);
+  }, [activeUploadId, publishableUploads]);
 
   React.useEffect(() => {
     if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
-    const upload = uploads.find(candidate => candidate.nextAttemptAt <= Date.now());
+    const upload = publishableUploads.find(candidate => candidate.nextAttemptAt <= Date.now());
     if (!upload) return;
 
     activeUploadIdRef.current = upload.id;
@@ -291,10 +323,10 @@ export function DebateRecordingUploadCoordinator() {
           setWakeAt(Date.now());
         }
       });
-  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
+  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
-  const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
-  const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+  const waiting = !online || (!activeUploadId && publishableUploads.every(upload => upload.nextAttemptAt > Date.now()));
+  const latestFailedUpload = publishableUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
   }, null);
@@ -305,10 +337,6 @@ export function DebateRecordingUploadCoordinator() {
     waitingReason = latestFailedUpload ? 'retry' : 'waiting';
   }
 
-  const thankingDebate = useThankingDebate();
-  const thankingDebateId = thankingDebate?.debateId ?? null;
-  const normalizedThankingDebateId = thankingDebateId ? normalizeDebateId(thankingDebateId) : null;
-
   // Opting out of publishing is offered only during the thank-you period, and only for the debate
   // whose thank-you screen the user is on. Every other queued upload keeps going. The target is the
   // upload's own id, which is the form the queue and the cancel request use.
@@ -316,7 +344,7 @@ export function DebateRecordingUploadCoordinator() {
     normalizedThankingDebateId &&
     !thankingDebate?.recordingCancelled &&
     !cancelledDebateIds.has(normalizedThankingDebateId)
-      ? (uploads.find(upload => normalizeDebateId(upload.debateId) === normalizedThankingDebateId) ?? null)
+      ? (publishableUploads.find(upload => normalizeDebateId(upload.debateId) === normalizedThankingDebateId) ?? null)
       : null;
   // A fast connection finishes the upload before the user can reach the checkbox, so an already
   // uploaded debate keeps the banner open until thanking ends. The backend still accepts a cancel
@@ -327,19 +355,32 @@ export function DebateRecordingUploadCoordinator() {
     !thankingDebate?.recordingCancelled &&
     !cancelledDebateIds.has(normalizedThankingDebateId) &&
     (uploadedDebateIds.has(normalizedThankingDebateId) || Boolean(thankingDebate?.hasUploadedRecording));
-  const cancellableDebateId = thankingUpload?.debateId ?? (thankingUploadFinished ? thankingDebateId : null);
+  const thankingRecordingPending =
+    normalizedThankingDebateId !== null &&
+    !thankingUpload &&
+    !thankingUploadFinished &&
+    Boolean(thankingDebate?.hasPendingLocalRecording) &&
+    !thankingDebate?.recordingCancelled &&
+    !cancelledDebateIds.has(normalizedThankingDebateId);
+  const cancellableDebateId =
+    thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
-  const { data: activity } = useDebateActivity(uploads.length > 0 || thankingUploadFinished);
+  const { data: activity } = useDebateActivity(
+    publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending
+  );
+  const activityDebateId = activity?.debate ? normalizeDebateId(activity.debate.id) : null;
   const inLiveDebate = Boolean(
-    activity?.debate && ['connecting', 'preflight', 'in_progress'].includes(activity.debate.status)
+    activity?.debate &&
+    ['connecting', 'preflight', 'in_progress'].includes(activity.debate.status) &&
+    activityDebateId !== normalizedThankingDebateId
   );
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
-  const queuedBytes = uploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = uploads.reduce((transferred, upload) => {
+  const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
+  const transferredBytes = publishableUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
     if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
     return transferred;
@@ -362,7 +403,9 @@ export function DebateRecordingUploadCoordinator() {
     setCancelError(null);
     try {
       try {
-        await cancelDebateRecording(cancelTargetDebateId, getPrivyIdentityToken, accountKey);
+        await retryDebatePhaseBoundaryRequest(() =>
+          cancelDebateRecording(cancelTargetDebateId, getPrivyIdentityToken, accountKey)
+        );
       } catch (error) {
         // Already cancelled or gone on the backend — still drop the local blob below.
         const terminal =
@@ -413,20 +456,26 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
-  if ((uploads.length === 0 && !thankingUploadFinished) || inLiveDebate) return null;
+  const bannerVisible = publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending;
+  if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
+    return null;
+  }
 
   return (
     <>
-      <DebateRecordingUploadBanner
-        count={uploads.length}
-        thankingUploadFinished={thankingUploadFinished}
-        percent={uploadPercent}
-        waitingReason={waitingReason}
-        errorMessage={latestFailedUpload?.lastError ?? null}
-        canPublishOptOut={cancellableDebateId !== null || cancelPromptOpen}
-        publishChecked={!cancelPromptOpen}
-        onUncheckPublish={() => setCancelTargetDebateId(cancellableDebateId)}
-      />
+      {bannerVisible && (
+        <DebateRecordingUploadBanner
+          count={publishableUploads.length}
+          thankingRecordingPending={thankingRecordingPending}
+          thankingUploadFinished={thankingUploadFinished}
+          percent={uploadPercent}
+          waitingReason={waitingReason}
+          errorMessage={latestFailedUpload?.lastError ?? null}
+          canPublishOptOut={cancellableDebateId !== null || cancelPromptOpen}
+          publishChecked={!cancelPromptOpen}
+          onUncheckPublish={() => setCancelTargetDebateId(cancellableDebateId)}
+        />
+      )}
       {cancelPromptOpen && (
         <DebateCancelUploadDialog
           busy={cancelBusy}
@@ -441,6 +490,7 @@ export function DebateRecordingUploadCoordinator() {
 
 export function DebateRecordingUploadBanner({
   count,
+  thankingRecordingPending = false,
   thankingUploadFinished = false,
   percent = null,
   waitingReason,
@@ -450,6 +500,7 @@ export function DebateRecordingUploadBanner({
   onUncheckPublish,
 }: {
   count: number;
+  thankingRecordingPending?: boolean;
   thankingUploadFinished?: boolean;
   percent?: number | null;
   waitingReason: DebateRecordingUploadWaitingReason;
@@ -460,7 +511,9 @@ export function DebateRecordingUploadBanner({
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
   let message: string;
-  if (thankingUploadFinished) {
+  if (thankingRecordingPending) {
+    message = 'Preparing debate upload';
+  } else if (thankingUploadFinished) {
     // The actionable thank-you debate takes priority while unrelated recordings keep uploading.
     message = 'Debate uploaded';
   } else if (waitingReason === 'offline') {

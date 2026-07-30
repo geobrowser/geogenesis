@@ -239,6 +239,10 @@ describe('useConsentToDebateRematch', () => {
     };
     const session = rematchSession();
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), staleActivity);
+    queryClient.setQueryData(debateQueryKeys.debate('debate-1'), {
+      id: 'debate-1',
+      rematch_session_id: null,
+    } as Debate);
     mocks.consentToDebateRematch.mockResolvedValue(session);
 
     const wrapper = ({ children }: { children: ReactNode }) => (
@@ -259,6 +263,7 @@ describe('useConsentToDebateRematch', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.activity('user-a') });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.rematch('user-a', session.id) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    expect(queryClient.getQueryData<Debate>(debateQueryKeys.debate('debate-1'))?.rematch_session_id).toBe(session.id);
   });
 });
 
