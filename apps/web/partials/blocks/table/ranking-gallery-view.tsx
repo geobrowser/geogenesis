@@ -214,7 +214,6 @@ export function RankingGalleryView({ state }: Props) {
     aggregatedRankingCount,
     periodState,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
@@ -271,7 +270,6 @@ export function RankingGalleryView({ state }: Props) {
         {showEmbeddedGlobalPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
               hasNextPage={hasEmbeddedGlobalNextPage}
               onSetPage={setEmbeddedGlobalPage}

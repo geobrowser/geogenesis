@@ -276,12 +276,13 @@ describe('DebugDebatesPageClient', () => {
     expect(within(card).queryByText('Could not reprocess video: Reprocessing unavailable')).not.toBeInTheDocument();
   });
 
-  it('loads available WebM and MOV renditions independently with links and fallbacks', async () => {
+  it('loads all renditions in equal-size cards that wrap without stretching', async () => {
     mocks.listResult.data.debates = [debate('both'), debate('webm-only')];
-    mocks.mediaByDebate.set('both', mediaResult('succeeded', {}, ['final_video', 'final_video_hevc']));
+    mocks.mediaByDebate.set('both', mediaResult('succeeded', {}, ['final_video', 'final_video_hevc', 'social_video']));
     mocks.mediaByDebate.set('webm-only', mediaResult('succeeded', {}, ['final_video']));
     mocks.artifactUrls.set('both:final_video', 'https://media.test/both.webm');
     mocks.artifactUrls.set('both:final_video_hevc', 'https://media.test/both.mov');
+    mocks.artifactUrls.set('both:social_video', 'https://media.test/both-social.mp4');
 
     render(<DebugDebatesPageClient spaceId="space-1" />);
 
@@ -292,9 +293,19 @@ describe('DebugDebatesPageClient', () => {
     const mov = within(both).getByLabelText('MOV processed video');
     expect(mov).toHaveAttribute('src', 'https://media.test/both.mov');
 
-    for (const video of [webm, mov]) {
-      expect(video).toHaveClass('aspect-[8/9]', 'w-1/4', 'bg-white', 'sm:aspect-video', 'sm:w-full');
+    const shareVideo = within(both).getByLabelText('Share video processed video');
+    expect(shareVideo).toHaveAttribute('src', 'https://media.test/both-social.mp4');
+
+    expect(within(both).getByRole('region', { name: 'Processed videos' })).toHaveClass(
+      'flex',
+      'flex-wrap',
+      'items-start'
+    );
+
+    for (const video of [webm, mov, shareVideo]) {
+      expect(video).toHaveClass('aspect-video', 'w-full', 'bg-white', 'object-contain');
       expect(video).not.toHaveClass('bg-black');
+      expect(video.parentElement).toHaveClass('w-full', 'max-w-xs', 'flex-none');
     }
     expect(within(both).getByRole('link', { name: 'Open WebM directly' })).toHaveAttribute(
       'href',
@@ -304,9 +315,14 @@ describe('DebugDebatesPageClient', () => {
       'href',
       'https://media.test/both.mov'
     );
+    expect(within(both).getByRole('link', { name: 'Open Share video directly' })).toHaveAttribute(
+      'href',
+      'https://media.test/both-social.mp4'
+    );
 
     const webmOnly = screen.getByTestId('debate-card-webm-only');
     expect(webmOnly).toHaveTextContent('MOV rendition is missing.');
+    expect(webmOnly).toHaveTextContent('Share video rendition is missing.');
   });
 
   it('shows independent URL and playback errors for a rendition', async () => {
