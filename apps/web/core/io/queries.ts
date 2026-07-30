@@ -838,9 +838,13 @@ interface ResultsArgs {
   additionalSpaceIds?: string[];
   /**
    * Pass `false` to restrict results to the canonical graph plus the user's
-   * scoped spaces (`additionalSpaceIds`). Gated client-side in `getResultsPage`
-   * via each result's `inCanonicalGraph` flag — not sent to the server, so
-   * scoped-space results are never stripped before they reach us.
+   * scoped spaces (`additionalSpaceIds`).
+   *
+   * Where that gate runs depends on whether the request scopes spaces — see
+   * `buildSearchPath`. Scoped requests gate client-side in `getResultsPage` via each
+   * result's `inCanonicalGraph` flag, so scoped-space results are never stripped
+   * before they reach us; unscoped requests gate server-side, so the canonical rows
+   * can't be pushed off the endpoint's 100-row page by non-canonical ones.
    */
   includeNonCanonical?: boolean;
 }
@@ -1019,8 +1023,32 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length && !args.spaceId) {
-    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;
+
+  if (scopesAdditionalSpaces) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('additional_space_ids', args.additionalSpaceIds!.map(toUuid).join(','));
+  }
+
+  // Canonical filtering runs server-side only when we aren't widening to scoped spaces.
+  // The endpoint documents `additional_space_ids` as "ignored when
+  // include_non_canonical=false" and means it literally — sending both silently drops
+  // the scoped spaces, which is why #1949 stopped emitting this param and moved the
+  // gate into `shouldIncludeRestSearchResult`.
+  //
+  // A client-side gate can only filter the page it was handed, though, and the endpoint
+  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for an
+  // unscoped caller listing a type dominated by non-canonical entities: the
+  // community-calls digest requested every Community Call, got 100 test-space rows of
+  // 382 with none canonical, and filtered down to nothing while all 8 curated calls sat
+  // past offset 100 — so the Explore panel vanished entirely (GEO-2480).
+  //
+  // Unscoped callers therefore filter at the source; the client-side gate stays as a
+  // no-op safety net. Search-dialog requests are unaffected — they always carry
+  // ROOT_SPACE in `additionalSpaceIds` (see buildGlobalSearchSpaceIds), so they take the
+  // branch above and emit a byte-identical URL.
+  if (args.includeNonCanonical === false && !scopesAdditionalSpaces) {
+    params.set('include_non_canonical', 'false');
   }
 
   return `/search?${params.toString()}`;
