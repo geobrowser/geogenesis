@@ -344,6 +344,11 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
+    expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -697,6 +702,9 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByText('Speak to test your mic')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
