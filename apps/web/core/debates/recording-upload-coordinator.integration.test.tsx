@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   resolveUser: vi.fn(),
   scheduleRetry: vi.fn(),
   thankingDebateId: null as string | null,
+  thankingHasUploadedRecording: false,
+  thankingRecordingCancelled: false,
   // Set to hold the presigned PUT open, so a test can read the banner mid-transfer and drive
   // progress itself through `reportProgress`.
   holdUpload: null as Promise<void> | null,
@@ -72,7 +74,14 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./thanking-debate-store', () => ({
-  useThankingDebateId: () => mocks.thankingDebateId,
+  useThankingDebate: () =>
+    mocks.thankingDebateId
+      ? {
+          debateId: mocks.thankingDebateId,
+          hasUploadedRecording: mocks.thankingHasUploadedRecording,
+          recordingCancelled: mocks.thankingRecordingCancelled,
+        }
+      : null,
 }));
 
 vi.mock('./api', async importOriginal => ({
@@ -155,6 +164,8 @@ beforeEach(() => {
   mocks.queue = [];
   mocks.resolveUser.mockReset().mockResolvedValue('user-a');
   mocks.scheduleRetry.mockReset().mockResolvedValue(undefined);
+  mocks.thankingHasUploadedRecording = false;
+  mocks.thankingRecordingCancelled = false;
   mocks.holdUpload = null;
   mocks.reportProgress = null;
   vi.stubGlobal('XMLHttpRequest', FakeUploadRequest);
@@ -437,6 +448,99 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('restores the uploaded banner from the debate snapshot after a remount', async () => {
+    mocks.queue = [];
+    mocks.thankingHasUploadedRecording = true;
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it('keeps the uploaded thank-you message while an unrelated debate continues uploading', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingHasUploadedRecording = true;
+    mocks.queue = [queuedRecording('debate-2')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mocks.createUpload).toHaveBeenCalledWith(
+        'debate-2',
+        expect.objectContaining({ mime_type: 'video/webm' }),
+        expect.anything(),
+        'user-a'
+      )
+    );
+  });
+
+  it('cancels an uploaded recording restored from the debate snapshot', async () => {
+    mocks.queue = [];
+    mocks.thankingHasUploadedRecording = true;
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debate', 'debate-1'] });
+  });
+
+  it('does not offer publication again when a cancelled snapshot still has a stale local upload', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingRecordingCancelled = true;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the confirmation and local upload when cancellation fails', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.cancelRecording.mockRejectedValue(new Error('Cancellation failed'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    expect(await screen.findByText('Cancellation failed')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Don’t want to publish?' })).toBeInTheDocument();
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.queue).toHaveLength(1);
+  });
+
+  it('keeps publication cancelled when server cancellation succeeds but local cleanup fails', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.deleteUpload.mockRejectedValue(new Error('IndexedDB unavailable'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    expect(
+      await screen.findByText(
+        'Publication was cancelled, but this device could not remove its local recording. Try again.'
+      )
+    ).toBeInTheDocument();
+    expect(mocks.cancelRecording).toHaveBeenCalledOnce();
+    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument());
   });
 
   it('still cancels an already uploaded recording when publish is unchecked during thanking', async () => {

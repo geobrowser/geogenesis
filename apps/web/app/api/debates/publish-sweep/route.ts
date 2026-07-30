@@ -40,6 +40,7 @@ export async function GET(request: Request) {
   let alreadyPublished = 0;
   let notEditor = 0;
   let pending = 0;
+  let skipped = 0;
 
   for (const spaceId of spaceIds) {
     let debateIds: string[];
@@ -59,8 +60,14 @@ export async function GET(request: Request) {
         else if (result.status === 'not_editor') notEditor += 1;
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
-          // Media still processing — retried next tick, not a failure.
-          pending += 1;
+          if (error.code === 'media_not_ready' || error.code === 'not_complete') {
+            // Media still processing or lifecycle state changed — retry next tick.
+            pending += 1;
+          } else {
+            // Cancelled or still settling: candidate discovery normally filters these, and a
+            // repeated source check keeps a stale sweep snapshot from publishing them.
+            skipped += 1;
+          }
           continue;
         }
         console.error(`[debate-acceptor] sweep failed to publish debate ${debateId}:`, error);
@@ -69,5 +76,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, published, alreadyPublished, notEditor, pending, failed });
+  return NextResponse.json({ ok: true, published, alreadyPublished, notEditor, pending, skipped, failed });
 }

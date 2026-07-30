@@ -2,11 +2,17 @@
 
 import { atom, useAtomValue, useSetAtom } from 'jotai';
 
-// The debate whose post-debate thank-you screen the user is currently on, or null. The room page
-// is the only thing that knows. `/me/debate-activity` nulls `active_debate_id` as soon as the
-// thank-you period starts, so the global upload banner can't read it back off the API.
-const thankingDebateIdAtom = atom<string | null>(null);
+export type ThankingDebate = {
+  debateId: string;
+  hasUploadedRecording: boolean;
+  recordingCancelled: boolean;
+};
 
-export const useThankingDebateId = () => useAtomValue(thankingDebateIdAtom);
+// The debate whose post-debate thank-you screen the user is currently on. The room page also
+// carries the authoritative server recording state so the global banner survives a remount after
+// IndexedDB's completed upload row has been removed.
+const thankingDebateAtom = atom<ThankingDebate | null>(null);
 
-export const useSetThankingDebateId = () => useSetAtom(thankingDebateIdAtom);
+export const useThankingDebate = () => useAtomValue(thankingDebateAtom);
+
+export const useSetThankingDebate = () => useSetAtom(thankingDebateAtom);

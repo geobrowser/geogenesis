@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
 
-import { DebateRoomPageClient } from './debate-room-page-client';
+import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   back: vi.fn(),
@@ -291,6 +291,36 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+describe('isDebateInThankYouPeriod', () => {
+  const deadline = Date.parse('2026-07-02T00:01:30.000Z');
+
+  it('keeps an early-completed debate in thanking until its authoritative deadline', () => {
+    expect(
+      isDebateInThankYouPeriod(
+        {
+          status: 'complete',
+          turn_ends_at: '2026-07-02T00:01:30.000Z',
+          completed_at: '2026-07-02T00:01:10.000Z',
+        },
+        deadline - 1
+      )
+    ).toBe(true);
+  });
+
+  it('ends thanking exactly at the authoritative deadline', () => {
+    expect(
+      isDebateInThankYouPeriod(
+        {
+          status: 'thanking',
+          turn_ends_at: '2026-07-02T00:01:30.000Z',
+          completed_at: null,
+        },
+        deadline
+      )
+    ).toBe(false);
+  });
 });
 
 describe('DebateRoomPageClient', () => {

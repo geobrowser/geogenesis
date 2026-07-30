@@ -6,6 +6,8 @@ import {
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
 
+const debatePublishSettlementMs = 60_000;
+
 function geoChatBaseUrl() {
   const base =
     process.env.GEO_CHAT_API_BASE_URL || process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080';
@@ -50,8 +52,11 @@ export type DebateSource = {
 };
 
 export class DebateNotPublishableError extends Error {
-  code: 'not_complete' | 'media_not_ready';
-  constructor(code: 'not_complete' | 'media_not_ready', message: string) {
+  code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready';
+  constructor(
+    code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready',
+    message: string
+  ) {
     super(message);
     this.name = 'DebateNotPublishableError';
     this.code = code;
@@ -59,19 +64,22 @@ export class DebateNotPublishableError extends Error {
 }
 
 /**
- * The finished debates in a space, as candidate ids for the publish sweep. Only `complete`
- * debates can publish; media-readiness is re-checked per debate by {@link loadDebatePublishSource}.
- * Server-side (unauthenticated) read — the cron sweep has no user session.
+ * The finished debates in a space, as candidate ids for the publish sweep. Cancelled debates and
+ * debates still inside their settlement window are excluded; media-readiness is re-checked per
+ * debate by {@link loadDebatePublishSource}. Server-side (unauthenticated) read — the cron sweep
+ * has no user session.
  */
 export async function listSweepCandidateDebateIds(spaceId: string): Promise<string[]> {
   const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
-  return response.debates.filter(debate => debate.status === 'complete').map(debate => debate.id);
+  const now = Date.now();
+  return response.debates.filter(debate => isDebatePublishableNow(debate, now)).map(debate => debate.id);
 }
 
 /**
  * Gather everything the KG publish needs for a finished debate straight from geo-chat, and
  * assemble the pure `DebatePublishInput`. Throws {@link DebateNotPublishableError} unless the
- * debate is complete and its media job has succeeded (the reliable "processing done" signal).
+ * debate is complete, its cancellation window has settled, and its media job has succeeded (the
+ * reliable "processing done" signal).
  */
 export async function loadDebatePublishSource(debateId: string): Promise<DebateSource> {
   const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
@@ -81,6 +89,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
       `Debate ${debateId} is not complete (status ${debate.status}).`
     );
   }
+  assertDebateRecordingPublishable(debate, Date.now());
 
   const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
   if (media.job?.status !== 'succeeded') {
@@ -116,6 +125,35 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   };
 
   return { debate, media, input };
+}
+
+export function isDebatePublishableNow(debate: Debate, now: number): boolean {
+  if (debate.status !== 'complete' || debate.recording_cancelled_at !== null) return false;
+  const deadline = debatePublicationDeadline(debate);
+  return deadline !== null && now >= deadline + debatePublishSettlementMs;
+}
+
+function assertDebateRecordingPublishable(debate: Debate, now: number) {
+  if (debate.recording_cancelled_at !== null) {
+    throw new DebateNotPublishableError(
+      'recording_cancelled',
+      `Debate ${debate.id} recording was cancelled and must never be published.`
+    );
+  }
+  const deadline = debatePublicationDeadline(debate);
+  if (deadline === null || now < deadline + debatePublishSettlementMs) {
+    throw new DebateNotPublishableError(
+      'cancellation_window_open',
+      `Debate ${debate.id} is still inside its recording cancellation settlement window.`
+    );
+  }
+}
+
+function debatePublicationDeadline(debate: Debate): number | null {
+  const value = debate.turn_ends_at ?? debate.completed_at;
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
 }
 
 async function resolveFinalVideoUrl(debateId: string): Promise<string> {
