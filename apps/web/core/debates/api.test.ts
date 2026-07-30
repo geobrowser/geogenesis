@@ -6,6 +6,7 @@ import {
   getDebateActivity,
   getGeoChatSession,
   resetGeoChatSession,
+  retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
 } from './api';
 
@@ -96,6 +97,31 @@ describe('geo-chat request errors', () => {
       code: null,
       status: 503,
     });
+  });
+});
+
+describe('debate phase boundary retries', () => {
+  it('retries a readiness error once after the boundary delay', async () => {
+    vi.useFakeTimers();
+    const request = vi
+      .fn<() => Promise<string>>()
+      .mockRejectedValueOnce(new GeoChatRequestError('Not ready', 'rematch_not_ready', 400))
+      .mockResolvedValueOnce('ready');
+
+    const result = retryDebatePhaseBoundaryRequest(request);
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(200);
+
+    await expect(result).resolves.toBe('ready');
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry unrelated request errors', async () => {
+    const error = new GeoChatRequestError('Invalid', 'invalid_recording', 400);
+    const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
+
+    await expect(retryDebatePhaseBoundaryRequest(request)).rejects.toBe(error);
+    expect(request).toHaveBeenCalledOnce();
   });
 });
 

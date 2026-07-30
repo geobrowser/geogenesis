@@ -10,9 +10,9 @@ function resolve(color?: ColorName) {
   return color ? colors.light[color] : 'currentColor';
 }
 
-export function Crown({ color }: Props) {
+export function Crown({ color, size = 16 }: Props & { size?: number }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M2 4.5L4.5 7L8 2.5L11.5 7L14 4.5V12.5C14 12.7761 13.7761 13 13.5 13H2.5C2.22386 13 2 12.7761 2 12.5V4.5Z"
         fill={resolve(color)}

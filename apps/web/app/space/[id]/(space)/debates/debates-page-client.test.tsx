@@ -15,6 +15,20 @@ const mocks = vi.hoisted(() => ({
   openSidePanel: vi.fn(),
   // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
   media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
+  castVote: vi.fn(),
+}));
+
+// Voting reaches the chain and the user's personal space, neither of which exists here. The
+// tally logic has its own unit tests; this suite only cares that the feed renders the pills.
+vi.mock('~/core/debates/use-debate-votes', () => ({
+  useDebateVotes: () => ({
+    sharePercentFor: () => null,
+    isMyPick: () => false,
+    hasVoted: false,
+    isVoting: false,
+    castVote: mocks.castVote,
+  }),
+  useDebateVotesByVoter: () => new Map(),
 }));
 
 vi.mock('next/navigation', () => ({

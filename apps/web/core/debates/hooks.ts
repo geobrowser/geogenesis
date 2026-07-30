@@ -8,6 +8,7 @@ import * as React from 'react';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
 import {
+  type Debate,
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
@@ -45,6 +46,7 @@ import {
   markDebateReady,
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
+  retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
   updateDebatePreference,
   updateDebateRematchPosition,
@@ -345,9 +347,13 @@ export function useConsentToDebateRematch(debateId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => consentToDebateRematch(debateId, getPrivyIdentityToken, accountKey),
+    mutationFn: () =>
+      retryDebatePhaseBoundaryRequest(() => consentToDebateRematch(debateId, getPrivyIdentityToken, accountKey)),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
+      queryClient.setQueryData<Debate>(debateQueryKeys.debate(debateId), current =>
+        current ? { ...current, rematch_session_id: session.id } : current
+      );
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
         online: current?.online ?? true,
         available_to_debate: current?.available_to_debate ?? true,

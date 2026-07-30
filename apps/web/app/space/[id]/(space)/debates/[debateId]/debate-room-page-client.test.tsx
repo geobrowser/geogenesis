@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
 
-import { DebateRoomPageClient } from './debate-room-page-client';
+import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   back: vi.fn(),
@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   publishTrack: vi.fn(),
   supportsAudioOutputSelection: vi.fn(),
   selectAudioOutput: vi.fn(),
+  setThankingDebate: vi.fn(),
   enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
@@ -99,6 +100,10 @@ vi.mock('~/core/debates/recording-upload-queue', () => ({
   isStorageQuotaError: (error: unknown) =>
     typeof error === 'object' && error !== null && 'name' in error && error.name === 'QuotaExceededError',
   requestPersistentRecordingStorage: mocks.requestPersistentStorage,
+}));
+
+vi.mock('~/core/debates/thanking-debate-store', () => ({
+  useSetThankingDebate: () => mocks.setThankingDebate,
 }));
 
 vi.mock('~/core/debates/debate-room-ownership', () => ({
@@ -195,6 +200,7 @@ beforeEach(() => {
       toJSON: () => ({}),
     })
   );
+  mocks.setThankingDebate.mockReset();
   mocks.enumerateDevices.mockReset().mockResolvedValue([
     { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
     { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -293,6 +299,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('isDebateInThankYouPeriod', () => {
+  const deadline = Date.parse('2026-07-02T00:01:30.000Z');
+
+  it('keeps an early-completed debate in thanking until its authoritative deadline', () => {
+    expect(
+      isDebateInThankYouPeriod(
+        {
+          status: 'complete',
+          turn_ends_at: '2026-07-02T00:01:30.000Z',
+          completed_at: '2026-07-02T00:01:10.000Z',
+        },
+        deadline - 1
+      )
+    ).toBe(true);
+  });
+
+  it('ends thanking exactly at the authoritative deadline', () => {
+    expect(
+      isDebateInThankYouPeriod(
+        {
+          status: 'thanking',
+          turn_ends_at: '2026-07-02T00:01:30.000Z',
+          completed_at: null,
+        },
+        deadline
+      )
+    ).toBe(false);
+  });
+});
+
 describe('DebateRoomPageClient', () => {
   it('returns through browser history without rendering an already-completed room', async () => {
     setHistoryLength(2);
@@ -344,6 +380,11 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: "I'm ready" })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Video settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
+    expect(screen.getByText('Speak to test your mic')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toBeInTheDocument();
     expect(screen.getByText('Waiting...')).toBeInTheDocument();
     expect(screen.queryByText('Not ready')).not.toBeInTheDocument();
     expect(screen.queryByText('VS')).not.toBeInTheDocument();
@@ -697,6 +738,9 @@ describe('DebateRoomPageClient', () => {
     setMobileLayout(true);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    expect(await screen.findByText('Speak to test your mic')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Audio settings' }).parentElement).toHaveClass('gap-[6px]');
     fireEvent.click(await screen.findByRole('button', { name: 'Audio settings' }));
 
     expect(screen.getByRole('dialog', { name: 'Audio settings' })).toHaveAttribute('data-layout', 'bottom-sheet');
@@ -2069,11 +2113,57 @@ describe('DebateRoomPageClient', () => {
     expect(
       await screen.findByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
     ).toBeInTheDocument();
+    expect(screen.getByText('Debate again?')).toBeInTheDocument();
+    expect(screen.getByText('Bri')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yes' })).toBeEnabled();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
     expectNoMutedIndicator('remote');
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+  });
+
+  it('renders thanking on the scheduled final-turn boundary instead of the display interval', async () => {
+    const now = Date.now();
+    const finalTurnEndsAt = now + 100;
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_durations_ms: [10_000, 10_000],
+      started_at: new Date(finalTurnEndsAt - 20_000).toISOString(),
+      turn_started_at: new Date(finalTurnEndsAt - 10_000).toISOString(),
+      turn_ends_at: new Date(finalTurnEndsAt).toISOString(),
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
+    expect(await screen.findByText('Debate again?', undefined, { timeout: 350 })).toBeInTheDocument();
+    expect(mocks.refetchDebate).not.toHaveBeenCalled();
+  });
+
+  it('clears an early-completed thank-you snapshot on its authoritative deadline', async () => {
+    const now = Date.now();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'complete',
+      turn_started_at: new Date(now - 19_900).toISOString(),
+      turn_ends_at: new Date(now + 100).toISOString(),
+      completed_at: new Date(now - 5_000).toISOString(),
+      rematch_session_id: 'rematch-1',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() =>
+      expect(mocks.setThankingDebate).toHaveBeenCalledWith(expect.objectContaining({ debateId: 'debate-1' }))
+    );
+    await waitFor(() => expect(mocks.setThankingDebate).toHaveBeenLastCalledWith(null), { timeout: 350 });
+    expect(mocks.refetchDebate).not.toHaveBeenCalled();
   });
 
   it('shows rematch consent during thanking and records local consent', async () => {

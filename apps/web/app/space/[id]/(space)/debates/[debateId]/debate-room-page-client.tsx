@@ -56,7 +56,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useSetThankingDebateId } from '~/core/debates/thanking-debate-store';
+import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -274,12 +274,37 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
   // debate's thank-you screen, so tell the banner which debate that is.
-  const setThankingDebateId = useSetThankingDebateId();
-  const thankingDebateId = countdown.effectiveStatus === 'thanking' ? (debate?.id ?? null) : null;
+  const setThankingDebate = useSetThankingDebate();
+  const locallyThanking = countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0;
+  const thankingDebateId =
+    debate && (locallyThanking || isDebateInThankYouPeriod(debate, serverClock.now())) ? debate.id : null;
+  const thankingHasUploadedRecording = Boolean(thankingDebateId && debate?.recordings.length);
+  const thankingRecordingCancelled = Boolean(thankingDebateId && debate?.recording_cancelled_at);
+  const thankingHasPendingLocalRecording = Boolean(
+    thankingDebateId &&
+    !thankingHasUploadedRecording &&
+    !thankingRecordingCancelled &&
+    (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
+  );
   React.useEffect(() => {
-    setThankingDebateId(thankingDebateId);
-    return () => setThankingDebateId(null);
-  }, [setThankingDebateId, thankingDebateId]);
+    setThankingDebate(
+      thankingDebateId
+        ? {
+            debateId: thankingDebateId,
+            hasPendingLocalRecording: thankingHasPendingLocalRecording,
+            hasUploadedRecording: thankingHasUploadedRecording,
+            recordingCancelled: thankingRecordingCancelled,
+          }
+        : null
+    );
+    return () => setThankingDebate(null);
+  }, [
+    setThankingDebate,
+    thankingDebateId,
+    thankingHasPendingLocalRecording,
+    thankingHasUploadedRecording,
+    thankingRecordingCancelled,
+  ]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
@@ -1626,10 +1651,14 @@ function DebateRecordingModal({
         <div className="relative grid w-full gap-2">
           {orderedVideoTiles}
 
-          {countdown.effectiveStatus === 'thanking' && rematchSession && (
+          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && (
             <DebateAgainCard
               opponentName={
-                remoteRematchParticipant?.display_name || remoteRematchParticipant?.profile_space_id || 'Other debater'
+                remoteRematchParticipant?.display_name ||
+                remoteRematchParticipant?.profile_space_id ||
+                remoteParticipant?.display_name ||
+                remoteParticipant?.profile_space_id ||
+                'Other debater'
               }
               localConsented={localConsented || rematchConsentRequested}
               remoteConsented={remoteConsented}
@@ -2299,14 +2328,27 @@ function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<Room
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
   const [now, setNow] = React.useState(serverNow);
+  const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
+  const completedThankYouDeadlineMs =
+    debate?.status === 'complete' && isDebateInThankYouPeriod(debate, now)
+      ? timestampMs(debate.turn_ends_at ?? debate.completed_at)
+      : null;
+  const boundaryAtMs = countdownWindow?.targetMs ?? completedThankYouDeadlineMs;
 
   React.useEffect(() => {
-    setNow(serverNow());
+    const currentNow = serverNow();
+    setNow(currentNow);
     const timer = window.setInterval(() => setNow(serverNow()), 500);
-    return () => window.clearInterval(timer);
-  }, [serverNow]);
+    const boundaryTimer =
+      boundaryAtMs !== null && boundaryAtMs > currentNow
+        ? window.setTimeout(() => setNow(serverNow()), boundaryAtMs - currentNow + 1)
+        : null;
+    return () => {
+      window.clearInterval(timer);
+      if (boundaryTimer !== null) window.clearTimeout(boundaryTimer);
+    };
+  }, [boundaryAtMs, serverNow]);
 
-  const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   if (!countdownWindow || countdownWindow.targetMs === null) {
     return {
       label: '00:00',
@@ -2413,6 +2455,15 @@ function countdownWindowForDebate(
     effectiveStatus: debate.status,
     turnIndex: null,
   };
+}
+
+export function isDebateInThankYouPeriod(
+  debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>,
+  now: number
+) {
+  if (debate.status !== 'thanking' && debate.status !== 'complete') return false;
+  const deadline = timestampMs(debate.turn_ends_at ?? debate.completed_at);
+  return deadline !== null && now < deadline;
 }
 
 function timedDebateCountdownWindow(
