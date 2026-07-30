@@ -21,6 +21,7 @@ import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useIsFastPathRestricted } from '~/core/hooks/use-fast-path-restricted';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
@@ -455,13 +456,23 @@ export const ReviewChanges = () => {
     activeSpaceMetadata?.address,
     canChoosePath
   );
+  // A space with disableFastPathAccessForNewMembers grants incoming members the
+  // FAST_PATH_RESTRICTED role; a fast-path proposal from one reverts during simulation.
+  const { isFastPathRestricted } = useIsFastPathRestricted(
+    activeSpaceMetadata?.address,
+    personalSpaceId,
+    canChoosePath
+  );
   const [votingMode, setVotingMode] = React.useState<ProposalVotingMode>('FAST');
 
   // Reset to the default fast path whenever the active space changes so a slow-path
-  // choice for one space doesn't silently carry over to the next.
+  // choice for one space doesn't silently carry over to the next. Restricted authors
+  // start on — and stay on — the review path: the role resolves asynchronously, so
+  // this also corrects a FAST default that was chosen before the answer arrived,
+  // which is what otherwise submits a proposal doomed to revert.
   React.useEffect(() => {
-    setVotingMode('FAST');
-  }, [activeSpace]);
+    setVotingMode(isFastPathRestricted ? 'SLOW' : 'FAST');
+  }, [activeSpace, isFastPathRestricted]);
 
   const { settled: slideUpEnterSettled, onEnterAnimationComplete: onSlideUpEnterAnimationComplete } =
     useEnterAnimationSettled(isReviewOpen);
@@ -860,6 +871,7 @@ export const ReviewChanges = () => {
                     votingMode={votingMode}
                     onChange={setVotingMode}
                     votingSettings={activeSpaceVotingSettings}
+                    isFastPathRestricted={isFastPathRestricted}
                   />
                 )}
                 <Button

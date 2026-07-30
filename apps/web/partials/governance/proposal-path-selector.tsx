@@ -15,6 +15,12 @@ type Props = {
   onChange: (mode: ProposalVotingMode) => void;
   /** Current on-chain settings, used to fill in the option copy. Null while loading. */
   votingSettings: VotingSettingsSnapshot | null;
+  /**
+   * Whether this author holds the space's FAST_PATH_RESTRICTED role. Shown disabled
+   * rather than hidden: a silently missing option reads as a bug, while an explained
+   * one tells the user the rule exists and that it lifts.
+   */
+  isFastPathRestricted?: boolean;
 };
 
 /**
@@ -22,7 +28,7 @@ type Props = {
  * the review/slow path (a timed vote). Design 62501-94092. The option copy reflects the
  * space's actual voting settings.
  */
-export function ProposalPathSelector({ votingMode, onChange, votingSettings }: Props) {
+export function ProposalPathSelector({ votingMode, onChange, votingSettings, isFastPathRestricted = false }: Props) {
   // flatSupportThreshold of 0 still means a single editor vote approves, so show at least 1.
   const fastEditors = Math.max(1, votingSettings?.flat ?? 1);
   const durationHours = votingSettings ? Math.max(1, Math.round(votingSettings.durationSeconds / 3600)) : 24;
@@ -31,13 +37,20 @@ export function ProposalPathSelector({ votingMode, onChange, votingSettings }: P
   const options = [
     {
       value: 'FAST',
-      disabled: false,
-      onClick: () => onChange('FAST'),
+      disabled: isFastPathRestricted,
+      onClick: () => {
+        if (isFastPathRestricted) return;
+        onChange('FAST');
+      },
       label: (
         <OptionLabel
           icon={<FastPath />}
           title="Fast path"
-          description={`Only requires ${fastEditors} editor${fastEditors === 1 ? '' : 's'} to instantly approve the proposal`}
+          description={
+            isFastPathRestricted
+              ? 'Not available to you yet — this space restricts the fast path for new members'
+              : `Only requires ${fastEditors} editor${fastEditors === 1 ? '' : 's'} to instantly approve the proposal`
+          }
         />
       ),
     },

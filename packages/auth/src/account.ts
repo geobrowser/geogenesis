@@ -54,17 +54,37 @@ export class RevertedUserOperationError extends Error {
 }
 
 /**
- * Whether `error`, or anything in its `cause` chain, is a reverted UserOperation.
+ * A bundler/paymaster rejecting an op because it reverted during simulation. The op
+ * never left the client, so there is no hash and no `RevertedUserOperationError` — but
+ * it is just as terminal: the same calldata simulates the same way every time.
+ *
+ * Matched on the message because the failure arrives as a generic viem
+ * `RpcRequestError` from `zd_sponsorUserOperation`; the bundler gives us no typed
+ * error to hold onto.
+ */
+const SIMULATION_REVERT_PATTERN = /reverted during simulation/i;
+
+/**
+ * Whether `error`, or anything in its `cause` chain, is a UserOperation that reverted
+ * — either on-chain after inclusion, or during the bundler's pre-submission simulation.
+ *
  * The chain walk matters: every send site wraps failures in its own error type
- * (TransactionWriteFailedError et al.), so the revert is never the outermost
- * error by the time a retry schedule inspects it.
+ * (TransactionWriteFailedError et al.), so the revert is never the outermost error by
+ * the time a retry schedule inspects it.
+ *
+ * Both cases are terminal and must not be retried. Missing the simulation case cost us
+ * seven identical submissions of a proposal that reverted `FastPathRestricted()` — a
+ * deterministic permission failure that no amount of retrying could fix.
  */
 export function isRevertedUserOperationError(error: unknown): boolean {
   // Bounded so a self-referential `cause` can't spin.
   for (let current = error, depth = 0; current != null && depth < 10; depth++) {
-    // Name check as well as instanceof: this class crosses a workspace package
-    // boundary and a duplicated module instance would break identity.
-    if (current instanceof Error && current.name === 'RevertedUserOperationError') return true;
+    if (current instanceof Error) {
+      // Name check as well as instanceof: this class crosses a workspace package
+      // boundary and a duplicated module instance would break identity.
+      if (current.name === 'RevertedUserOperationError') return true;
+      if (SIMULATION_REVERT_PATTERN.test(current.message)) return true;
+    }
     current = (current as { cause?: unknown }).cause;
   }
   return false;
