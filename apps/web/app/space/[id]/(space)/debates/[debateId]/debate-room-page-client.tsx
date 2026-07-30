@@ -56,7 +56,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useSetThankingDebateId } from '~/core/debates/thanking-debate-store';
+import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -274,12 +274,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
   // debate's thank-you screen, so tell the banner which debate that is.
-  const setThankingDebateId = useSetThankingDebateId();
-  const thankingDebateId = countdown.effectiveStatus === 'thanking' ? (debate?.id ?? null) : null;
+  const setThankingDebate = useSetThankingDebate();
+  const thankingDebateId = debate && isDebateInThankYouPeriod(debate, serverClock.now()) ? debate.id : null;
+  const thankingHasUploadedRecording = Boolean(thankingDebateId && debate?.recordings.length);
+  const thankingRecordingCancelled = Boolean(thankingDebateId && debate?.recording_cancelled_at);
   React.useEffect(() => {
-    setThankingDebateId(thankingDebateId);
-    return () => setThankingDebateId(null);
-  }, [setThankingDebateId, thankingDebateId]);
+    setThankingDebate(
+      thankingDebateId
+        ? {
+            debateId: thankingDebateId,
+            hasUploadedRecording: thankingHasUploadedRecording,
+            recordingCancelled: thankingRecordingCancelled,
+          }
+        : null
+    );
+    return () => setThankingDebate(null);
+  }, [setThankingDebate, thankingDebateId, thankingHasUploadedRecording, thankingRecordingCancelled]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
@@ -2413,6 +2423,15 @@ function countdownWindowForDebate(
     effectiveStatus: debate.status,
     turnIndex: null,
   };
+}
+
+export function isDebateInThankYouPeriod(
+  debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>,
+  now: number
+) {
+  if (debate.status !== 'thanking' && debate.status !== 'complete') return false;
+  const deadline = timestampMs(debate.turn_ends_at ?? debate.completed_at);
+  return deadline !== null && now < deadline;
 }
 
 function timedDebateCountdownWindow(
