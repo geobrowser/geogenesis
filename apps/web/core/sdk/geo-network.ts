@@ -109,6 +109,52 @@ export function contractHasCode(address: Hex): Promise<boolean> {
   return probe.catch(() => true);
 }
 
+const ACTIVE_SPACE_IDS_ABI = [
+  {
+    type: 'function',
+    name: 'activeSpaceIds',
+    stateMutability: 'view',
+    inputs: [{ name: 'spaceId', type: 'bytes16' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const;
+
+const activeSpaceCache = new Map<string, Promise<boolean>>();
+
+/**
+ * Whether the registry still considers `spaceId` active.
+ *
+ * The registry is the authority on which space an account owns, and it can retire
+ * one: `overrideSpaceId` zeroes an account's previous id when reassigning it, which
+ * the indexer does not currently reflect — it keeps serving the retired row. An
+ * account with both rows indexed can therefore be handed a dead space id, and every
+ * write authored by it reverts `SpaceNotActive()`.
+ *
+ * Failure resolves `false` rather than fail-open: this only runs to break a tie
+ * between duplicate rows, and a wrong "active" answer would pick the dead space and
+ * brick writes, while a wrong "inactive" answer just falls back to index order.
+ * Successful probes are cached for the session; failures are evicted so the next
+ * call re-probes.
+ */
+export function isSpaceActiveOnChain(spaceId: string): Promise<boolean> {
+  const normalized = spaceId.startsWith('0x') ? spaceId : `0x${spaceId}`;
+
+  const cached = activeSpaceCache.get(normalized);
+  if (cached) return cached;
+
+  const probe = createPublicClient({ chain: GEOGENESIS, transport: http() }).readContract({
+    address: SPACE_REGISTRY_ADDRESS_HEX,
+    abi: ACTIVE_SPACE_IDS_ABI,
+    functionName: 'activeSpaceIds',
+    args: [normalized as Hex],
+  });
+
+  activeSpaceCache.set(normalized, probe);
+  probe.catch(() => activeSpaceCache.delete(normalized));
+
+  return probe.catch(() => false);
+}
+
 /** Throws before a write can be sent to a SpaceRegistry address with no code. */
 export async function assertSpaceRegistryDeployed(): Promise<void> {
   if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS_HEX))) {

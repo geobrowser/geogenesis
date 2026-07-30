@@ -709,18 +709,77 @@ export function getSpaceEditorsPage(
   });
 }
 
-/** Get a personal space by wallet address. Returns the space owned by this address, or null if none exists. */
+/**
+ * Get a personal space by wallet address. Returns the space owned by this address, or
+ * null if none exists.
+ *
+ * An address can have MORE than one indexed space. `overrideSpaceId` retires an
+ * account's previous space id on-chain, but the indexer keeps serving the retired row,
+ * so the same account appears twice — often under different address casing, which the
+ * case-insensitive filter (deliberately kept: addresses are stored both checksummed and
+ * lowercase) collapses into one result set. Taking `spaces[0]` from an unordered query
+ * then picks the dead space about half the time, and because the personal space is the
+ * *author* of every write, that bricks the account entirely — every publish, vote, and
+ * comment reverts `SpaceNotActive()` no matter which space it targets.
+ *
+ * So when the index returns more than one row, ask the registry which id is still
+ * active. The single-row case — every healthy account — costs no extra RPC.
+ */
 export function getSpaceByAddress(address: string, signal?: AbortController['signal']) {
   return graphql({
     query: spacesQuery,
-    decoder: data => {
-      const firstSpace = data.spaces?.[0];
-      if (!firstSpace) return null;
-      return SpaceDecoder.decode(firstSpace);
-    },
+    decoder: data => data.spaces ?? [],
     // Use case-insensitive matching since Ethereum addresses can be checksummed or lowercase
-    variables: { filter: { address: { isInsensitive: address } }, limit: 1 },
+    variables: { filter: { address: { isInsensitive: address } }, limit: DUPLICATE_SPACE_SCAN_LIMIT },
     signal,
+  }).pipe(Effect.flatMap(spaces => resolveActiveSpace(spaces, address)));
+}
+
+/** Bounds the duplicate scan. Real accounts have 1; the sweep that created these produced 2. */
+const DUPLICATE_SPACE_SCAN_LIMIT = 10;
+
+/** Exported for testing; call `getSpaceByAddress`. */
+export function resolveActiveSpace(spaces: readonly unknown[], address: string) {
+  return Effect.gen(function* () {
+    if (spaces.length === 0) return null;
+    if (spaces.length === 1) return SpaceDecoder.decode(spaces[0] as never);
+
+    const decoded = spaces.map(space => SpaceDecoder.decode(space as never)).filter(space => space !== null);
+    if (decoded.length <= 1) return decoded[0] ?? null;
+
+    const active = yield* Effect.tryPromise({
+      // Imported lazily on purpose. geo-network pulls in the chain config, which
+      // resolves an RPC at module scope and throws when none is configured — a
+      // static import would make this shared query module unloadable in any
+      // context without a live chain, including unit tests. Duplicate rows are
+      // rare, so paying for the module only here costs nothing in practice.
+      try: async () => {
+        const { isSpaceActiveOnChain } = await import('~/core/sdk/geo-network');
+        return Promise.all(decoded.map(space => isSpaceActiveOnChain(space.id)));
+      },
+      // isSpaceActiveOnChain already swallows RPC failures to `false`; this guards
+      // only against an unexpected throw, and index order is the safe fallback.
+      catch: () => new Error('failed to resolve active space'),
+    }).pipe(Effect.orElseSucceed(() => decoded.map(() => false)));
+
+    const activeSpace = decoded.find((_, index) => active[index]);
+
+    if (!activeSpace) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}, none active on-chain. ` +
+          `Falling back to index order (${decoded[0].id}).`
+      );
+      return decoded[0];
+    }
+
+    if (activeSpace.id !== decoded[0].id) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}; index order returned the ` +
+          `retired ${decoded[0].id}, using the on-chain active ${activeSpace.id}.`
+      );
+    }
+
+    return activeSpace;
   });
 }
 
