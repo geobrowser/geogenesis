@@ -13,6 +13,7 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  GeoChatRequestError,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -26,6 +27,7 @@ import {
   createDebateRematchRequest,
   createLocalRecordingUpload,
   declineDebateMatch,
+  endDebateTurn,
   getDebate,
   getDebateActivity,
   getDebateMedia,
@@ -309,6 +311,23 @@ export function useMarkDebateReady(debateId: string) {
 
   return useMutation({
     mutationFn: () => markDebateReady(debateId, getPrivyIdentityToken, accountKey),
+    onSuccess: debate => {
+      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
+export function useEndDebateTurn(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ turnIndex, endedAtMs }: { turnIndex: number; endedAtMs: number }) =>
+      endDebateTurn(debateId, turnIndex, endedAtMs, getPrivyIdentityToken, accountKey),
+    retry: (failureCount, error) =>
+      failureCount < 2 &&
+      (!(error instanceof GeoChatRequestError) || error.status === 408 || error.status === 429 || error.status >= 500),
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });

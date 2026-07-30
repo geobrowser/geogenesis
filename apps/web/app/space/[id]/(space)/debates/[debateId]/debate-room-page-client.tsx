@@ -35,6 +35,7 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateRematch,
+  useEndDebateTurn,
   useLeaveDebateRematch,
   useLiveKitJoin,
   useMarkDebateJoined,
@@ -101,6 +102,17 @@ type DebateCountdown = {
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
   elapsedMs: number;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
+};
+
+type PendingTurnYield = {
+  turnIndex: number;
+  participantSlot: ParticipantSlot;
+  endedAtMs: number;
 };
 
 type DebateRecordingWindow = {
@@ -186,6 +198,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
+  const endDebateTurn = useEndDebateTurn(debateId);
   const clearDebateActivity = useClearDebateActivity();
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
@@ -198,6 +211,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
+  const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
@@ -248,6 +262,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const storagePersistenceRequestedRef = React.useRef(false);
   const recordingCancellationHandledRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
+  const countdownDebate = debate ? debateWithPendingYield(debate, pendingTurnYield) : null;
   preflightEndsAtMsRef.current = timestampMs(debate?.preflight_ends_at ?? null);
   const debateStatusRef = React.useRef<Debate['status'] | null>(debate?.status ?? null);
   const roomStateRef = React.useRef(roomState);
@@ -257,7 +272,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
-  const countdown = useDebateCountdown(debate, serverClock.now);
+  const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
   const preScreenLocalParticipant =
@@ -311,7 +326,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
     localSlot,
-    audioMuted
+    audioMuted || pendingTurnYield !== null
   );
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
@@ -365,6 +380,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       sourceMediaStreamTracksRef.current
     );
   }, [localAudioEnabled, videoEnabled]);
+
+  React.useEffect(() => {
+    if (!pendingTurnYield) return;
+    if (
+      debate?.turn_yields?.some(turnYield => turnYield.turn_index === pendingTurnYield.turnIndex) ||
+      debate?.status === 'thanking'
+    ) {
+      setPendingTurnYield(null);
+    }
+  }, [debate?.status, debate?.turn_yields, pendingTurnYield]);
 
   React.useEffect(() => {
     remoteAudioEnabledRef.current = remoteAudioEnabled;
@@ -950,6 +975,50 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setVideoEnabled(current => !current);
   }, []);
 
+  const endLocalTurn = React.useCallback(async () => {
+    if (
+      !localSlot ||
+      pendingTurnYield ||
+      countdown.effectiveStatus !== 'in_progress' ||
+      countdown.activeSlot !== localSlot ||
+      countdown.turnIndex === null
+    ) {
+      return;
+    }
+
+    const pendingYield = {
+      turnIndex: countdown.turnIndex,
+      participantSlot: localSlot,
+      endedAtMs: serverClock.now(),
+    };
+    setRoomError(null);
+    setPendingTurnYield(pendingYield);
+    try {
+      await endDebateTurn.mutateAsync({
+        turnIndex: pendingYield.turnIndex,
+        endedAtMs: pendingYield.endedAtMs,
+      });
+    } catch (error) {
+      const refreshedDebate = await refetchDebate();
+      setPendingTurnYield(null);
+      const authoritativeYield = refreshedDebate.data?.turn_yields?.some(
+        turnYield => turnYield.turn_index === pendingYield.turnIndex
+      );
+      if (!authoritativeYield) {
+        setRoomError(error instanceof Error ? error.message : 'Could not end the turn.');
+      }
+    }
+  }, [
+    countdown.activeSlot,
+    countdown.effectiveStatus,
+    countdown.turnIndex,
+    endDebateTurn,
+    localSlot,
+    pendingTurnYield,
+    refetchDebate,
+    serverClock,
+  ]);
+
   const toggleNoiseFilter = React.useCallback(async () => {
     const processor = noiseFilterProcessorRef.current;
     if (!processor || noiseFilterTogglePendingRef.current) return;
@@ -1457,6 +1526,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRequestRematch={requestRematch}
                 rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
+                endTurnPending={pendingTurnYield !== null}
+                onEndTurn={endLocalTurn}
                 onRetryFinalization={retryLiveDebateFinalization}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
@@ -1492,6 +1563,8 @@ function DebateRecordingModal({
   onRequestRematch,
   rematchConsentRequested,
   rematchBusy,
+  endTurnPending,
+  onEndTurn,
   onRetryFinalization,
   onRetryConnection,
   onLeave,
@@ -1519,6 +1592,8 @@ function DebateRecordingModal({
   onRequestRematch: () => void;
   rematchConsentRequested: boolean;
   rematchBusy: boolean;
+  endTurnPending: boolean;
+  onEndTurn: () => void;
   onRetryFinalization: () => void;
   onRetryConnection: () => void;
   onLeave: () => void;
@@ -1532,7 +1607,12 @@ function DebateRecordingModal({
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
-  const localUpcomingLabel = upcomingTurnIsRebuttal(debate, countdown) ? 'Rebut in' : "You're up in";
+  const localUpcomingLabel =
+    countdown.yieldingSlot && !countdown.preservesExistingCountIn
+      ? 'Your turn in'
+      : upcomingTurnIsRebuttal(debate, countdown)
+        ? 'Rebut in'
+        : "You're up in";
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
@@ -1544,10 +1624,28 @@ function DebateRecordingModal({
     countdown.activeSlot
   );
   const countdownRing = countdown.remainingSeconds > 0 ? <RecordingCountdownRing countdown={countdown} /> : null;
-  const sharedPhaseCountdown = countdown.activeSlot === null ? countdownRing : null;
-  const localCountdown = countdown.activeSlot === localSlot ? countdownRing : sharedPhaseCountdown;
+  const yieldedCountdownRing =
+    countdown.yieldedRemainingSeconds !== null && countdown.yieldedProgress !== null ? (
+      <RecordingCountdownRing
+        countdown={countdown}
+        remainingSeconds={countdown.yieldedRemainingSeconds}
+        progress={countdown.yieldedProgress}
+        muted
+      />
+    ) : null;
+  const sharedPhaseCountdown = countdown.activeSlot === null && countdown.yieldingSlot === null ? countdownRing : null;
+  const localCountdown =
+    countdown.yieldingSlot === localSlot
+      ? yieldedCountdownRing
+      : countdown.activeSlot === localSlot
+        ? countdownRing
+        : sharedPhaseCountdown;
   const remoteCountdown =
-    countdown.activeSlot === remoteParticipant?.participant_slot ? countdownRing : sharedPhaseCountdown;
+    countdown.yieldingSlot === remoteParticipant?.participant_slot
+      ? yieldedCountdownRing
+      : countdown.activeSlot === remoteParticipant?.participant_slot
+        ? countdownRing
+        : sharedPhaseCountdown;
   const localRematchParticipant = rematchSession?.participants.find(
     participant => participant.user_id === currentUserId
   );
@@ -1557,12 +1655,23 @@ function DebateRecordingModal({
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const connecting = countdown.effectiveStatus === 'connecting';
+  const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
+  const remoteEndingTurn =
+    countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  const canEndLocalTurn =
+    countdown.effectiveStatus === 'in_progress' &&
+    countdown.activeSlot === localSlot &&
+    countdown.turnIndex !== null &&
+    countdown.yieldingSlot === null;
   const localVideoTile = (
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
       positionLabel={localParticipant?.position_label ?? null}
-      active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
+      active={
+        countdown.effectiveStatus === 'in_progress' &&
+        (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
+      }
       overlayText={
         connecting
           ? roomState === 'connected' || Boolean(localParticipant?.joined_at)
@@ -1574,11 +1683,24 @@ function DebateRecordingModal({
       }
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
+      endingTurn={localEndingTurn}
+      endTurnAction={
+        canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
+          <button
+            type="button"
+            onClick={onEndTurn}
+            disabled={endTurnPending || localEndingTurn}
+            className="min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl"
+          >
+            End turn
+          </button>
+        ) : null
+      }
       showGo={showLocalGo}
       showWrapItUp={showLocalWrapItUp}
       showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
-      revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
+      revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
       inactiveIndicatorId="local"
       countdown={localCountdown}
       closingMessage={
@@ -1597,7 +1719,9 @@ function DebateRecordingModal({
       participantPosition={remoteParticipant?.position ?? null}
       positionLabel={remoteParticipant?.position_label ?? null}
       active={
-        countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
+        countdown.effectiveStatus === 'in_progress' &&
+        (countdown.activeSlot === remoteParticipant?.participant_slot ||
+          countdown.yieldingSlot === remoteParticipant?.participant_slot)
       }
       overlayText={
         connecting
@@ -1609,6 +1733,8 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
+      endingTurn={remoteEndingTurn}
+      revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
       countdown={remoteCountdown}
     >
@@ -1645,8 +1771,8 @@ function DebateRecordingModal({
         />
       )}
 
-      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-5 py-8">
-        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[930px] flex-col items-center justify-center px-2 py-8 sm:px-5">
+        <h1 className="mb-7 max-w-[820px] text-center text-[1.75rem] leading-[1.05] font-semibold text-text md:mb-12 md:text-[3rem]">
           {debate.claim.claim}
         </h1>
 
@@ -1872,6 +1998,8 @@ function DebateVideoTile({
   showGo = false,
   showWrapItUp = false,
   showDebateEndsSoon = false,
+  endingTurn = false,
+  endTurnAction,
   inactive = false,
   revealInactive = false,
   inactiveIndicatorId,
@@ -1888,6 +2016,8 @@ function DebateVideoTile({
   showGo?: boolean;
   showWrapItUp?: boolean;
   showDebateEndsSoon?: boolean;
+  endingTurn?: boolean;
+  endTurnAction?: React.ReactNode;
   inactive?: boolean;
   revealInactive?: boolean;
   inactiveIndicatorId: 'local' | 'remote';
@@ -1895,7 +2025,7 @@ function DebateVideoTile({
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
-  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText;
+  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText && !endingTurn;
 
   return (
     <section
@@ -1907,6 +2037,7 @@ function DebateVideoTile({
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
+      {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
       <div
         aria-hidden="true"
         data-inactive-speaker={inactiveIndicatorId}
@@ -1934,6 +2065,15 @@ function DebateVideoTile({
           Nice debate!
           <br />
           Say thanks
+        </div>
+      )}
+
+      {endingTurn && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+          style={recordingLabelTextShadow}
+        >
+          Ending turn…
         </div>
       )}
 
@@ -2134,19 +2274,32 @@ function DebateAgainCard({
   );
 }
 
-function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
-  const remainingRatio = Math.max(0, Math.min(1, 1 - countdown.progress));
+function RecordingCountdownRing({
+  countdown,
+  remainingSeconds = countdown.remainingSeconds,
+  progress = countdown.progress,
+  muted = false,
+}: {
+  countdown: DebateCountdown;
+  remainingSeconds?: number;
+  progress?: number;
+  muted?: boolean;
+}) {
+  const remainingRatio = Math.max(0, Math.min(1, 1 - progress));
   const danger =
+    !muted &&
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot !== null &&
-    countdown.remainingSeconds > 0 &&
-    countdown.remainingSeconds <= 5;
-  const ringColor = danger ? 'var(--color-red-01)' : 'var(--color-white)';
+    remainingSeconds > 0 &&
+    remainingSeconds <= 5;
+  const ringColor = muted ? 'rgba(190,190,190,0.92)' : danger ? 'var(--color-red-01)' : 'var(--color-white)';
   const dashOffset = recordingCountdownCircumference * (1 - remainingRatio);
 
   return (
     <div
-      aria-label={`Phase timer: ${countdown.remainingSeconds} seconds remaining`}
+      aria-label={`Phase timer: ${remainingSeconds} seconds remaining`}
+      data-muted-timer={muted ? 'true' : 'false'}
+      data-timer-progress={progress}
       className="relative grid place-items-center"
       style={{ width: recordingCountdownRenderSize, height: recordingCountdownRenderSize }}
     >
@@ -2178,8 +2331,10 @@ function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
           transform="rotate(-90 34 34)"
         />
       </svg>
-      <span className="relative z-10 text-[1.625rem] leading-none font-medium text-white">
-        {countdown.remainingSeconds}
+      <span
+        className={cx('relative z-10 text-[1.625rem] leading-none font-medium', muted ? 'text-grey-02' : 'text-white')}
+      >
+        {remainingSeconds}
       </span>
     </div>
   );
@@ -2238,6 +2393,9 @@ function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  if (countdown.yieldingSlot !== null) {
+    return countdown.incomingSlot === localSlot ? countdown.remainingSeconds : null;
+  }
   if (countdown.activeSlot === localSlot) return null;
 
   const nextTurnIndex = countdown.turnIndex + 1;
@@ -2360,6 +2518,11 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
       effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
       turnIndex: countdownWindow?.turnIndex ?? null,
       elapsedMs: 0,
+      yieldingSlot: countdownWindow?.yieldingSlot ?? null,
+      incomingSlot: countdownWindow?.incomingSlot ?? null,
+      yieldedRemainingSeconds: countdownWindow?.yieldedRemainingSeconds ?? null,
+      yieldedProgress: countdownWindow?.yieldedProgress ?? null,
+      preservesExistingCountIn: countdownWindow?.preservesExistingCountIn ?? false,
     };
   }
 
@@ -2378,17 +2541,58 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     effectiveStatus: countdownWindow.effectiveStatus,
     turnIndex: countdownWindow.turnIndex,
     elapsedMs,
+    yieldingSlot: countdownWindow.yieldingSlot,
+    incomingSlot: countdownWindow.incomingSlot,
+    yieldedRemainingSeconds: countdownWindow.yieldedRemainingSeconds,
+    yieldedProgress: countdownWindow.yieldedProgress,
+    preservesExistingCountIn: countdownWindow.preservesExistingCountIn,
   };
 }
 
 function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null {
   const startAtMs = timestampMs(debate.started_at ?? debate.preflight_ends_at);
-  const durationMs = debate.turn_durations_ms.reduce((sum, durationMs) => sum + Math.max(0, durationMs), 0);
-  if (startAtMs === null || durationMs <= 0) return null;
+  if (startAtMs === null || debate.turn_durations_ms.length === 0) return null;
+
+  let endAtMs = startAtMs;
+  for (const [turnIndex, durationMs] of debate.turn_durations_ms.entries()) {
+    const naturalTurnEndMs = endAtMs + Math.max(0, durationMs);
+    const handoffDeadlineMs = timestampMs(
+      debate.turn_yields?.find(turnYield => turnYield.turn_index === turnIndex)?.handoff_deadline_at ?? null
+    );
+    endAtMs = handoffDeadlineMs === null ? naturalTurnEndMs : Math.min(naturalTurnEndMs, handoffDeadlineMs);
+  }
+
+  if (endAtMs <= startAtMs) return null;
 
   return {
     startAtMs,
-    endAtMs: startAtMs + durationMs,
+    endAtMs,
+  };
+}
+
+function debateWithPendingYield(debate: Debate, pendingTurnYield: PendingTurnYield | null): Debate {
+  if (!pendingTurnYield || debate.status !== 'in_progress') return debate;
+  if (debate.turn_yields?.some(turnYield => turnYield.turn_index === pendingTurnYield.turnIndex)) return debate;
+
+  const naturalDeadlineMs = timestampMs(debate.turn_ends_at) ?? pendingTurnYield.endedAtMs + 5_000;
+  const endedAt = new Date(pendingTurnYield.endedAtMs).toISOString();
+
+  return {
+    ...debate,
+    turn_yields: [
+      ...(debate.turn_yields ?? []),
+      {
+        turn_index: pendingTurnYield.turnIndex,
+        user_id: '__pending__',
+        participant_slot: pendingTurnYield.participantSlot,
+        yielded_at: endedAt,
+        accepted_at: endedAt,
+        // The real five-second handoff starts at server acceptance, which is unknowable while
+        // this request is pending. Preserve the current deadline so a slow request cannot make
+        // the optimistic UI advance before the authoritative response arrives.
+        handoff_deadline_at: new Date(naturalDeadlineMs).toISOString(),
+      },
+    ],
   };
 }
 
@@ -2401,6 +2605,11 @@ function countdownWindowForDebate(
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
 } {
   if (debate.status === 'connecting') {
     return {
@@ -2409,6 +2618,11 @@ function countdownWindowForDebate(
       activeSlot: null,
       effectiveStatus: 'connecting',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2423,6 +2637,11 @@ function countdownWindowForDebate(
       activeSlot: debate.first_participant_slot,
       effectiveStatus: 'preflight',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2437,6 +2656,11 @@ function countdownWindowForDebate(
       activeSlot: debate.current_speaker_slot,
       effectiveStatus: 'in_progress',
       turnIndex: debate.current_turn_index,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2447,6 +2671,11 @@ function countdownWindowForDebate(
       activeSlot: null,
       effectiveStatus: 'thanking',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2456,6 +2685,11 @@ function countdownWindowForDebate(
     activeSlot: null,
     effectiveStatus: debate.status,
     turnIndex: null,
+    yieldingSlot: null,
+    incomingSlot: null,
+    yieldedRemainingSeconds: null,
+    yieldedProgress: null,
+    preservesExistingCountIn: false,
   };
 }
 
@@ -2478,21 +2712,71 @@ function timedDebateCountdownWindow(
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
 } {
   let turnStartMs = debateStartMs;
 
   for (const [turnIndex, configuredDurationMs] of debate.turn_durations_ms.entries()) {
-    const turnEndMs = turnStartMs + Math.max(0, configuredDurationMs);
-    if (now < turnEndMs) {
+    const naturalTurnEndMs = turnStartMs + Math.max(0, configuredDurationMs);
+    const turnYield = debate.turn_yields?.find(candidate => candidate.turn_index === turnIndex);
+    const yieldedAtMs = turnYield ? timestampMs(turnYield.yielded_at) : null;
+    const handoffDeadlineMs = turnYield ? timestampMs(turnYield.handoff_deadline_at) : null;
+    const validYieldedAtMs =
+      yieldedAtMs !== null && yieldedAtMs >= turnStartMs && yieldedAtMs <= naturalTurnEndMs ? yieldedAtMs : null;
+    const validHandoffDeadlineMs =
+      validYieldedAtMs !== null && handoffDeadlineMs !== null
+        ? Math.max(validYieldedAtMs, Math.min(naturalTurnEndMs, handoffDeadlineMs))
+        : null;
+
+    if (
+      validYieldedAtMs !== null &&
+      validHandoffDeadlineMs !== null &&
+      (now >= validYieldedAtMs || turnYield?.user_id === '__pending__')
+    ) {
+      if (now < validHandoffDeadlineMs) {
+        const yieldingSlot = participantSlotForTurn(debate.first_participant_slot, turnIndex);
+        return {
+          startMs: validYieldedAtMs,
+          targetMs: validHandoffDeadlineMs,
+          activeSlot: null,
+          effectiveStatus: 'in_progress',
+          turnIndex,
+          yieldingSlot,
+          incomingSlot:
+            turnIndex + 1 < debate.turn_durations_ms.length
+              ? participantSlotForTurn(debate.first_participant_slot, turnIndex + 1)
+              : null,
+          yieldedRemainingSeconds: Math.max(0, Math.ceil((naturalTurnEndMs - validYieldedAtMs) / 1_000)),
+          yieldedProgress:
+            configuredDurationMs > 0
+              ? Math.max(0, Math.min(1, (validYieldedAtMs - turnStartMs) / configuredDurationMs))
+              : 0,
+          preservesExistingCountIn: validHandoffDeadlineMs === naturalTurnEndMs,
+        };
+      }
+      turnStartMs = validHandoffDeadlineMs;
+      continue;
+    }
+
+    if (now < naturalTurnEndMs) {
       return {
         startMs: turnStartMs,
-        targetMs: turnEndMs,
+        targetMs: naturalTurnEndMs,
         activeSlot: participantSlotForTurn(debate.first_participant_slot, turnIndex),
         effectiveStatus: 'in_progress',
         turnIndex,
+        yieldingSlot: null,
+        incomingSlot: null,
+        yieldedRemainingSeconds: null,
+        yieldedProgress: null,
+        preservesExistingCountIn: false,
       };
     }
-    turnStartMs = turnEndMs;
+    turnStartMs = validHandoffDeadlineMs ?? naturalTurnEndMs;
   }
 
   return {
@@ -2501,6 +2785,11 @@ function timedDebateCountdownWindow(
     activeSlot: null,
     effectiveStatus: 'thanking',
     turnIndex: null,
+    yieldingSlot: null,
+    incomingSlot: null,
+    yieldedRemainingSeconds: null,
+    yieldedProgress: null,
+    preservesExistingCountIn: false,
   };
 }
 
