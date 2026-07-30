@@ -4,7 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-export const OVERVIEW_SIDE_RAIL_WIDTH_CLASS = 'w-[360px]';
+/** Shared width for overview / explore / debates side rails. */
+export const OVERVIEW_SIDE_RAIL_WIDTH_PX = 360;
+export const OVERVIEW_SIDE_RAIL_WIDTH_CLASS = 'w-[var(--width-overview-side-rail)]';
 export const OVERVIEW_SIDE_RAIL_TOP_PADDING_CLASS = 'pt-8';
 export const OVERVIEW_SIDE_RAIL_DIVIDER_CLASS = 'my-8 border-t border-divider';
 export const OVERVIEW_SIDE_RAIL_TITLE_CLASS = 'text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text';
@@ -17,21 +19,36 @@ type OverviewWithSideRailLayoutProps = {
   variant?: 'space' | 'explore';
 };
 
+/**
+ * Two-column overview layout shared by Explore and space home. Empty rails
+ * (panels that return null) do not reserve the divider + width column — see
+ * `.overview-side-rail-layout` rules in styles.css.
+ */
 export function OverviewWithSideRailLayout({ main, rail, variant = 'space' }: OverviewWithSideRailLayoutProps) {
   const connectDividerToTop = variant === 'explore';
   const columnTopPadding = connectDividerToTop ? OVERVIEW_SIDE_RAIL_TOP_PADDING_CLASS : undefined;
 
   return (
-    <div className={cx('flex', connectDividerToTop && '-mt-8', connectDividerToTop ? 'items-stretch' : 'items-start')}>
-      <div className={cx('min-w-0 flex-1', columnTopPadding, 'mr-8')}>{main}</div>
+    <div
+      className={cx(
+        'overview-side-rail-layout flex',
+        connectDividerToTop && '-mt-8',
+        connectDividerToTop ? 'items-stretch' : 'items-start',
+      )}
+    >
+      <div className={cx('overview-side-rail-main min-w-0 flex-1', columnTopPadding, 'mr-8')}>{main}</div>
       <OverviewSideRailPageDivider />
-      <div className={cx('ml-8 shrink-0 lg:hidden', OVERVIEW_SIDE_RAIL_WIDTH_CLASS, columnTopPadding)}>{rail}</div>
+      <div className={cx('overview-side-rail-slot ml-8 shrink-0 lg:hidden', OVERVIEW_SIDE_RAIL_WIDTH_CLASS, columnTopPadding)}>
+        {rail}
+      </div>
     </div>
   );
 }
 
 export function OverviewSideRailPageDivider() {
-  return <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />;
+  return (
+    <div aria-hidden className="overview-side-rail-divider w-px shrink-0 self-stretch bg-divider lg:hidden" />
+  );
 }
 
 export function OverviewSideRail({ children }: { children: React.ReactNode }) {

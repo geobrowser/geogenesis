@@ -77,6 +77,8 @@
 
   /* Match CONTENT_MAX_WIDTH */
   --width-content-max: 1144px;
+  /* Match OVERVIEW_SIDE_RAIL_WIDTH_PX — overview, explore, and debates side rails */
+  --width-overview-side-rail: 360px;
 
   /* Animations */
   --animate-fade-in: fadeIn 0.15s ease-in-out;
@@ -636,4 +638,18 @@ body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   margin-inline: auto;
   width: 100%;
   max-width: var(--width-content-max);
+}
+
+/*
+ * Overview side rail (Explore + space home): when the rail panel returns null
+ * (no <aside>), drop the reserved column, divider, and main gutter so the page
+ * is full-width instead of an empty sidebar.
+ */
+.overview-side-rail-layout:not(:has(aside)) .overview-side-rail-main {
+  margin-right: 0;
+}
+
+.overview-side-rail-layout:not(:has(aside)) .overview-side-rail-divider,
+.overview-side-rail-layout:not(:has(aside)) .overview-side-rail-slot {
+  display: none;
 }

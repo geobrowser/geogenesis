@@ -4,6 +4,8 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
 import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
@@ -13,6 +15,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { Avatar } from '~/design-system/avatar';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
+
+import { OVERVIEW_SIDE_RAIL_WIDTH_CLASS } from '~/partials/side-panel/overview-side-rail';
 
 /**
  * "Join a debate" panel opened from the browse feed's Join debate button. Lists
@@ -55,7 +59,7 @@ export function JoinDebatePanel({ spaceId, onClose }: { spaceId: string; onClose
   }, [onClose]);
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-divider bg-white md:w-full">
+    <aside className={cx('flex shrink-0 flex-col border-l border-divider bg-white md:w-full', OVERVIEW_SIDE_RAIL_WIDTH_CLASS)}>
       <header className="flex items-center justify-between px-5 py-4">
         <Text as="h2" variant="cardEntityTitle" color="text">
           Join a debate
