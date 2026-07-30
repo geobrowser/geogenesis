@@ -286,7 +286,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     !thankingRecordingCancelled &&
     (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
   );
-  React.useEffect(() => {
+  // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
+  // upload banner joins the rematch card in the same browser paint at the countdown boundary.
+  React.useLayoutEffect(() => {
     setThankingDebate(
       thankingDebateId
         ? {
@@ -297,7 +299,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         : null
     );
-    return () => setThankingDebate(null);
   }, [
     setThankingDebate,
     thankingDebateId,
@@ -305,6 +306,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     thankingHasUploadedRecording,
     thankingRecordingCancelled,
   ]);
+  React.useLayoutEffect(() => () => setThankingDebate(null), [setThankingDebate]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
