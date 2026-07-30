@@ -6,9 +6,10 @@ import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
-import { useSpaceDebates } from '~/core/debates/hooks';
+import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useSpace } from '~/core/hooks/use-space';
+import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -23,14 +24,45 @@ import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
 
-export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
+export function DebatesBrowseFeed({
+  spaceId,
+  initialDebateId,
+  fallback,
+}: {
+  spaceId: string;
+  initialDebateId?: string;
+  /** Rendered instead of the feed when {@link initialDebateId} can't be resolved in this space. */
+  fallback?: React.ReactNode;
+}) {
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
+  // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
+  // whose media job failed or never ran still passes it, so readiness decides what renders.
+  const candidates = React.useMemo(
+    () => (debatesQuery.data?.debates ?? []).filter(isWatchableDebate),
+    [debatesQuery.data?.debates]
+  );
+  const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
+  const {
+    processedIds,
+    isLoading: mediaLoading,
+    hasError: mediaError,
+  } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
+
   const debates = React.useMemo(() => {
-    const watchable = (debatesQuery.data?.debates ?? []).filter(isWatchableDebate);
-    return watchable.sort((a, b) => completedTime(b) - completedTime(a));
-  }, [debatesQuery.data?.debates]);
+    const processed = new Set(processedIds);
+    const sorted = candidates
+      .filter(debate => processed.has(debate.id))
+      .sort((a, b) => completedTime(b) - completedTime(a));
+    if (!initialDebateId) return sorted;
+    // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
+    // first full-screen video, then let the rest of the space's debates scroll in below it.
+    const anchorIndex = sorted.findIndex(debate => ID.equals(debate.id, initialDebateId));
+    if (anchorIndex <= 0) return sorted;
+    const [anchor] = sorted.splice(anchorIndex, 1);
+    return [anchor, ...sorted];
+  }, [candidates, processedIds, initialDebateId]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -63,6 +95,27 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
+  // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
+  // flashes "no debates" and strands a valid anchor.
+  const isLoading = debatesQuery.isLoading || mediaLoading;
+
+  // One message at a time, most specific first. A readiness lookup that failed has to read as an
+  // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
+  const emptyMessage = isLoading
+    ? 'Loading debates…'
+    : debatesQuery.error instanceof Error
+      ? `Could not load debates: ${debatesQuery.error.message}`
+      : mediaError
+        ? 'Could not check which debates are ready to watch. Try again shortly.'
+        : 'No debates to watch yet. Start one from the Claims tab.';
+
+  // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
+  // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
+  // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
+  // Debates tab passes none and keeps its own empty/error states.
+  const anchorMissing =
+    initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
+
   const visibleDebates = debates.slice(0, visibleCount);
 
   // Keep an active debate whenever the list is non-empty — including when a
@@ -75,18 +128,17 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
     }
   }, [activeId, visibleDebates]);
 
+  // Runs after all hooks so the early return never skips one.
+  if (anchorMissing && fallback != null) {
+    return <>{fallback}</>;
+  }
+
   const feed = (
     <div
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
-      {debatesQuery.isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
-      {debatesQuery.error instanceof Error && debates.length === 0 && (
-        <FeedMessage>Could not load debates: {debatesQuery.error.message}</FeedMessage>
-      )}
-      {!debatesQuery.isLoading && !debatesQuery.error && debates.length === 0 && (
-        <FeedMessage>No debates to watch yet. Start one from the Claims tab.</FeedMessage>
-      )}
+      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
         <DebateFeedItem
           key={debate.id}
@@ -119,16 +171,14 @@ export function DebatesBrowseFeed({ spaceId }: { spaceId: string }) {
     <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
   ) : null;
 
-  if (sidePanel) {
-    return (
-      <div className="flex h-[calc(100dvh-2.75rem)] items-stretch">
-        <div className="min-w-0 flex-1">{feed}</div>
-        {sidePanel}
-      </div>
-    );
-  }
-
-  return feed;
+  // Keep the feed in the same tree position whether or not a side panel is open, so
+  // toggling the claims/join panel doesn't remount the players and restart playback.
+  return (
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch">
+      <div className="min-w-0 flex-1">{feed}</div>
+      {sidePanel}
+    </div>
+  );
 }
 
 function DebateFeedItem({

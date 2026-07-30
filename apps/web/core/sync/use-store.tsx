@@ -316,7 +316,7 @@ export function useQueryEntities({
   sort,
   orderBy,
 }: QueryEntitiesOptions & {
-  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
   orderBy?: EntitiesOrderBy[];
 }) {
@@ -339,7 +339,7 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
+  const { isFetched, isLoading, isPlaceholderData, data, error } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
@@ -457,6 +457,12 @@ export function useQueryEntities({
      * the prior page.
      */
     isPlaceholderData,
+    /**
+     * The sync error, if the remote fetch failed. Callers rendering an empty
+     * state need it to tell "nothing matched" from "the query never came back";
+     * a KG timeout otherwise reads as no results.
+     */
+    error,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
   };

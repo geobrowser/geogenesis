@@ -13,9 +13,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { Button } from '~/design-system/button';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
-import { OverviewSideRail, OverviewSideRailSection } from '~/partials/side-panel/overview-side-rail';
 
-import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
 import { RsvpButton } from './rsvp-button';
 
@@ -64,25 +62,27 @@ export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: strin
   if (series.length === 0) return null;
 
   return (
-    <OverviewSideRail>
-      <OverviewSideRailSection
-        title="Community calls"
-        action={
+    <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
+      <div className="flex flex-col gap-3 pb-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">Community calls</h2>
           <Link href={`/space/${spaceId}/community`} className="shrink-0 text-[16px] leading-[20px] text-ctaPrimary">
             View all
           </Link>
-        }
-        description="The heartbeat of the community. See what people are doing and find a way to get involved."
-      >
-        {now === null ? null : highlight === null ? (
-          <p className="text-[16px] leading-[20px] text-grey-04">No live or upcoming calls.</p>
-        ) : highlight.isLive ? (
-          <LiveCard spaceId={spaceId} row={highlight.row} />
-        ) : (
-          <UpcomingCard row={highlight.row} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
-        )}
-      </OverviewSideRailSection>
-    </OverviewSideRail>
+        </div>
+        <p className="text-[16px] leading-[20px] text-grey-04">
+          The heartbeat of the community. See what people are doing and find a way to get involved.
+        </p>
+      </div>
+
+      {now === null ? null : highlight === null ? (
+        <p className="text-[16px] leading-[20px] text-grey-04">No live or upcoming calls.</p>
+      ) : highlight.isLive ? (
+        <LiveCard spaceId={spaceId} row={highlight.row} />
+      ) : (
+        <UpcomingCard row={highlight.row} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
+      )}
+    </aside>
   );
 }
 
@@ -134,17 +134,7 @@ function UpcomingCard({
         <Title row={row} />
         <CardAction call={row.call} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
       </div>
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
-        <AddToCalendarMenu
-          spaceId={row.call.spaceId}
-          callId={row.call.callId}
-          name={row.call.name}
-          startMs={row.occ.startMs}
-          endMs={row.occ.endMs}
-          schedule={row.call.schedule}
-        />
-      </div>
+      <div className="mt-6 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</div>
     </CardShell>
   );
 }

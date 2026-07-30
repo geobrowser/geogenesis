@@ -31,7 +31,6 @@ export function RankingExploreView({ state }: Props) {
     embeddedBrowseEntryByEntityId,
     embeddedBrowseTotalCount,
     embeddedBrowseShowPagination,
-    embeddedBrowsePageNumber,
     embeddedBrowseHasPreviousPage,
     embeddedBrowseHasNextPage,
     embeddedBrowseSetPage,
@@ -91,7 +90,6 @@ export function RankingExploreView({ state }: Props) {
         {embeddedBrowseShowPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedBrowsePageNumber}
               hasPreviousPage={embeddedBrowseHasPreviousPage}
               hasNextPage={embeddedBrowseHasNextPage}
               onSetPage={embeddedBrowseSetPage}

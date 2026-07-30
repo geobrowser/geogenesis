@@ -2,16 +2,12 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { Debate } from '~/core/debates/api';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
-
-import { OVERVIEW_SIDE_RAIL_WIDTH_CLASS } from '~/partials/side-panel/overview-side-rail';
 
 import { Crown } from './icons';
 
@@ -32,7 +28,7 @@ export function DebateClaimsPanel({ debate, count, onClose }: { debate: Debate; 
   }, [onClose]);
 
   return (
-    <aside className={cx('flex shrink-0 flex-col border-l border-divider bg-white md:w-full', OVERVIEW_SIDE_RAIL_WIDTH_CLASS)}>
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-divider bg-white md:w-full">
       <header className="flex items-center justify-between px-5 py-4">
         <Text as="h2" variant="cardEntityTitle" color="text">
           Claims · {count}

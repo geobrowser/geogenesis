@@ -32,9 +32,33 @@ import {
   observeDebateRecordingUploads,
   scheduleDebateRecordingRetry,
 } from './recording-upload-queue';
+import { useThankingDebateId } from './thanking-debate-store';
 
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
+
+// Upload failures the backend will never resolve on retry. Retrying these keeps the
+// "Uploading N debate" banner up forever, so instead we drop the local blob. Transient
+// failures (network errors, 5xx, expired auth) are deliberately absent — those must keep
+// retrying.
+const permanentRecordingUploadErrorCodes = new Set([
+  'recording_cancelled', // the opponent cancelled the debate recording
+  'recording_not_ready', // the debate was aborted/cancelled and can no longer be finalized
+  'invalid_recording', // duration, timestamp, or framerate the backend rejects
+  'invalid_recording_mime_type', // an unsupported container the backend rejects
+  'recording_upload_missing', // the presigned object never landed in storage
+  'recording_upload_size_mismatch', // the stored object no longer matches the completion request
+  'recording_upload_type_mismatch',
+]);
+
+export function isPermanentRecordingUploadError(error: unknown): boolean {
+  return (
+    error instanceof GeoChatRequestError &&
+    error.status === 400 &&
+    error.code !== null &&
+    permanentRecordingUploadErrorCodes.has(error.code)
+  );
+}
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
@@ -84,16 +108,21 @@ export function recordingUploadRetryDelay(attemptCount: number) {
 
 export function DebateRecordingUploadCoordinator() {
   const queryClient = useQueryClient();
-  const { ready, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const [userId, setUserId] = React.useState<string | null>(null);
   const [uploads, setUploads] = React.useState<DebateRecordingUpload[]>([]);
   const [activeUploadId, setActiveUploadId] = React.useState<string | null>(null);
   const [online, setOnline] = React.useState(() => typeof navigator === 'undefined' || navigator.onLine);
   const [wakeAt, setWakeAt] = React.useState(() => Date.now());
   const [identityRetrySignal, setIdentityRetrySignal] = React.useState(0);
-  const [cancelPromptOpen, setCancelPromptOpen] = React.useState(false);
+  const [cancelTargetDebateId, setCancelTargetDebateId] = React.useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
+  // Debates whose recording finished uploading in this session and is still publishable. The queue
+  // row is deleted as soon as an upload completes, so nothing else can keep the banner, and its
+  // publish opt-out, on screen for the rest of the thank-you period.
+  const [uploadedDebateIds, setUploadedDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -113,13 +142,14 @@ export function DebateRecordingUploadCoordinator() {
       identityAttemptsRef.current = 0;
       setUserId(null);
       setUploads([]);
+      setUploadedDebateIds(new Set());
       return;
     }
     setUserId(null);
     setUploads([]);
     let cancelled = false;
     let retryTimer: number | null = null;
-    void resolveCurrentGeoChatUserId(getPrivyIdentityToken)
+    void resolveCurrentGeoChatUserId(getPrivyIdentityToken, accountKey)
       .then(id => {
         if (!id) throw new Error('The debate upload user could not be resolved.');
         if (!cancelled) {
@@ -140,7 +170,7 @@ export function DebateRecordingUploadCoordinator() {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
+  }, [accountKey, authenticated, getPrivyIdentityToken, identityRetrySignal, ready]);
 
   React.useEffect(() => {
     if (!userId) {
@@ -193,7 +223,9 @@ export function DebateRecordingUploadCoordinator() {
 
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
-    const dependencies = recordingUploadDependencies(getPrivyIdentityToken);
+    const dependencies = recordingUploadDependencies(getPrivyIdentityToken, accountKey, loaded => {
+      if (mountedRef.current) setUploadProgress({ id: upload.id, loaded });
+    });
     let attemptStage = upload.stage;
     let attemptCount = upload.attemptCount;
     void withRecordingUploadLock(async () => {
@@ -209,6 +241,11 @@ export function DebateRecordingUploadCoordinator() {
           attemptCount = 0;
         },
       });
+      if (mountedRef.current) {
+        setUploadedDebateIds(current => new Set(current).add(normalizeDebateId(latestUpload.debateId)));
+      }
+      // Auto-publish to the knowledge graph is handled server-side by the debate-acceptor cron
+      // sweep (app/api/debates/publish-sweep), so nothing to enqueue here.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(upload.debateId) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(upload.debateId) });
     })
@@ -219,13 +256,13 @@ export function DebateRecordingUploadCoordinator() {
         }
       })
       .catch(async error => {
-        // The opponent cancelled the upload, so this recording can never be published;
-        // drop the local blob instead of retrying it forever.
-        if (error instanceof GeoChatRequestError && error.code === 'recording_cancelled') {
+        // Drop the local blob for failures no retry can fix (see the permanent codes above)
+        // instead of leaving the banner up forever.
+        if (isPermanentRecordingUploadError(error)) {
           try {
             await deleteDebateRecordingUpload(upload.id);
           } catch (queueError) {
-            console.warn('[DebateRecordingUploadCoordinator] could not delete cancelled upload:', queueError);
+            console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
           }
           return;
         }
@@ -248,10 +285,11 @@ export function DebateRecordingUploadCoordinator() {
         activeUploadIdRef.current = null;
         if (mountedRef.current) {
           setActiveUploadId(null);
+          setUploadProgress(null);
           setWakeAt(Date.now());
         }
       });
-  }, [activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
+  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, queryClient, uploads, userId, wakeAt]);
 
   const waiting = !online || (!activeUploadId && uploads.every(upload => upload.nextAttemptAt > Date.now()));
   const latestFailedUpload = uploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
@@ -265,59 +303,103 @@ export function DebateRecordingUploadCoordinator() {
     waitingReason = latestFailedUpload ? 'retry' : 'waiting';
   }
 
+  const thankingDebateId = useThankingDebateId();
+  const normalizedThankingDebateId = thankingDebateId ? normalizeDebateId(thankingDebateId) : null;
+
+  // Opting out of publishing is offered only during the thank-you period, and only for the debate
+  // whose thank-you screen the user is on. Every other queued upload keeps going. The target is the
+  // upload's own id, which is the form the queue and the cancel request use.
+  const thankingUpload = normalizedThankingDebateId
+    ? (uploads.find(upload => normalizeDebateId(upload.debateId) === normalizedThankingDebateId) ?? null)
+    : null;
+  // A fast connection finishes the upload before the user can reach the checkbox, so an already
+  // uploaded debate keeps the banner open until thanking ends. The backend still accepts a cancel
+  // for it. Debates dropped as unpublishable never enter `uploadedDebateIds`, so they get no opt-out.
+  const thankingUploadFinished =
+    normalizedThankingDebateId !== null && !thankingUpload && uploadedDebateIds.has(normalizedThankingDebateId);
+  const cancellableDebateId = thankingUpload?.debateId ?? (thankingUploadFinished ? thankingDebateId : null);
+  const cancelPromptOpen = cancelTargetDebateId !== null;
+
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
-  const { data: activity } = useDebateActivity(uploads.length > 0);
+  const { data: activity } = useDebateActivity(uploads.length > 0 || thankingUploadFinished);
   const inLiveDebate = Boolean(
     activity?.debate && ['connecting', 'preflight', 'in_progress'].includes(activity.debate.status)
   );
 
+  // Percent covers every queued recording, matching the "N debates" the banner names.
+  const queuedBytes = uploads.reduce((total, upload) => total + upload.byteSize, 0);
+  const transferredBytes = uploads.reduce((transferred, upload) => {
+    if (upload.stage === 'uploaded') return transferred + upload.byteSize;
+    if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
+    return transferred;
+  }, 0);
+  // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
+  // stuck, so fall back to the plain in-progress copy.
+  const uploadPercent =
+    queuedBytes > 0 && transferredBytes < queuedBytes ? Math.round((transferredBytes / queuedBytes) * 100) : null;
+
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
-    setCancelPromptOpen(false);
+    setCancelTargetDebateId(null);
     setCancelError(null);
   }, [cancelBusy]);
 
   const confirmCancel = React.useCallback(async () => {
+    if (!cancelTargetDebateId) return;
     setCancelBusy(true);
     setCancelError(null);
     try {
-      const debateIds = [...new Set(uploads.map(upload => upload.debateId))];
-      for (const debateId of debateIds) {
-        try {
-          await cancelDebateRecording(debateId, getPrivyIdentityToken);
-        } catch (error) {
-          // Already cancelled or gone on the backend — still drop the local blob below.
-          const terminal =
-            error instanceof GeoChatRequestError && (error.code === 'recording_cancelled' || error.status === 404);
-          if (!terminal) throw error;
-        }
+      try {
+        await cancelDebateRecording(cancelTargetDebateId, getPrivyIdentityToken, accountKey);
+      } catch (error) {
+        // Already cancelled or gone on the backend — still drop the local blob below.
+        const terminal =
+          error instanceof GeoChatRequestError && (error.code === 'recording_cancelled' || error.status === 404);
+        if (!terminal) throw error;
       }
-      await Promise.all(uploads.map(upload => deleteDebateRecordingUpload(upload.id)));
-      if (mountedRef.current) setCancelPromptOpen(false);
+      await Promise.all(
+        uploads
+          .filter(upload => isSameDebateId(upload.debateId, cancelTargetDebateId))
+          .map(upload => deleteDebateRecordingUpload(upload.id))
+      );
+      if (mountedRef.current) {
+        // Nothing left to publish, so the banner and its checkbox should go with it.
+        setUploadedDebateIds(current => {
+          const next = new Set(current);
+          next.delete(normalizeDebateId(cancelTargetDebateId));
+          return next;
+        });
+        setCancelTargetDebateId(null);
+      }
     } catch (error) {
       if (mountedRef.current) setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [getPrivyIdentityToken, uploads]);
+  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, uploads]);
 
-  // If the upload finishes while the prompt is open, there is nothing left to delete, so the
-  // user can no longer choose to cancel — close it automatically.
+  // Close the prompt only when there is nothing left to cancel. The upload finishing mid-prompt
+  // must not close it, since the backend still cancels an uploaded recording.
   React.useEffect(() => {
-    if (uploads.length === 0 && cancelPromptOpen) setCancelPromptOpen(false);
-  }, [cancelPromptOpen, uploads.length]);
+    if (!cancelTargetDebateId) return;
+    const target = normalizeDebateId(cancelTargetDebateId);
+    const stillQueued = uploads.some(upload => normalizeDebateId(upload.debateId) === target);
+    if (!stillQueued && !uploadedDebateIds.has(target)) setCancelTargetDebateId(null);
+  }, [cancelTargetDebateId, uploadedDebateIds, uploads]);
 
-  if (uploads.length === 0 || inLiveDebate) return null;
+  if ((uploads.length === 0 && !thankingUploadFinished) || inLiveDebate) return null;
 
   return (
     <>
       <DebateRecordingUploadBanner
         count={uploads.length}
+        percent={uploadPercent}
         waitingReason={waitingReason}
         errorMessage={latestFailedUpload?.lastError ?? null}
+        canPublishOptOut={cancellableDebateId !== null || cancelPromptOpen}
         publishChecked={!cancelPromptOpen}
-        onUncheckPublish={() => setCancelPromptOpen(true)}
+        onUncheckPublish={() => setCancelTargetDebateId(cancellableDebateId)}
       />
       {cancelPromptOpen && (
         <DebateCancelUploadDialog
@@ -333,20 +415,27 @@ export function DebateRecordingUploadCoordinator() {
 
 export function DebateRecordingUploadBanner({
   count,
+  percent = null,
   waitingReason,
   errorMessage,
+  canPublishOptOut,
   publishChecked,
   onUncheckPublish,
 }: {
   count: number;
+  percent?: number | null;
   waitingReason: DebateRecordingUploadWaitingReason;
   errorMessage: string | null;
+  canPublishOptOut: boolean;
   publishChecked: boolean;
   onUncheckPublish: () => void;
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
-  let message = `Uploading ${label}`;
-  if (waitingReason === 'offline') {
+  let message: string;
+  if (count === 0) {
+    // The queue is empty but the thank-you screen and its opt-out are still up.
+    message = 'Debate uploaded';
+  } else if (waitingReason === 'offline') {
     message = `Waiting to upload ${label} — waiting for a connection`;
   } else if (waitingReason === 'retry' && errorMessage) {
     const failure = errorMessage.trim();
@@ -354,6 +443,12 @@ export function DebateRecordingUploadBanner({
     message = `Waiting to upload ${label} — ${failure}${punctuation} Retrying automatically.`;
   } else if (waitingReason) {
     message = `Waiting to upload ${label}`;
+  } else if (percent !== null) {
+    message = `Uploading ${label} · ${percent}%`;
+  } else {
+    // With no checkbox or percent after it the message is the whole line, so the ellipsis is what
+    // keeps it reading as in progress.
+    message = canPublishOptOut ? `Uploading ${label}` : `Uploading ${label}...`;
   }
 
   return (
@@ -363,29 +458,33 @@ export function DebateRecordingUploadBanner({
       className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
     >
       <span className="min-w-0 truncate">{message}</span>
-      <span aria-hidden="true" className="shrink-0">
-        ·
-      </span>
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={publishChecked}
-        aria-label="Publish debate"
-        onClick={() => {
-          if (publishChecked) onUncheckPublish();
-        }}
-        className="inline-flex shrink-0 items-center gap-1.5 text-text"
-      >
-        Publish
-        <span
-          className={cx(
-            'grid size-4 place-items-center rounded border transition-colors',
-            publishChecked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white text-transparent'
-          )}
-        >
-          <Check />
-        </span>
-      </button>
+      {canPublishOptOut && (
+        <>
+          <span aria-hidden="true" className="shrink-0">
+            ·
+          </span>
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={publishChecked}
+            aria-label="Publish debate"
+            onClick={() => {
+              if (publishChecked) onUncheckPublish();
+            }}
+            className="inline-flex shrink-0 items-center gap-1.5 text-text"
+          >
+            Publish
+            <span
+              className={cx(
+                'grid size-3 place-items-center rounded-sm border transition-colors *:size-2.5',
+                publishChecked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white text-transparent'
+              )}
+            >
+              <Check />
+            </span>
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -402,27 +501,29 @@ export function DebateCancelUploadDialog({
   onClose: () => void;
 }) {
   return (
-    <div className={`fixed inset-0 grid place-items-center bg-black/40 px-6 ${Z_LAYER_CLASS.toast}`}>
+    <div className={`fixed inset-0 grid place-items-center bg-black/60 px-4 ${Z_LAYER_CLASS.toast}`}>
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Don't want to publish?"
-        className="w-full max-w-[360px] rounded-xl bg-white p-5 text-center text-text shadow-card"
+        aria-label="Don’t want to publish?"
+        className="w-full max-w-[370px] rounded-lg bg-white p-5 text-center text-text"
       >
-        <div className="flex items-start justify-between gap-3">
-          <Text as="h2" variant="smallTitle" color="text" className="flex-1 text-center">
-            Don&apos;t want to publish?
+        <div className="flex items-center justify-between gap-2.5">
+          {/* Balances the close button so the title stays centered on the card. */}
+          <span aria-hidden="true" className="size-4 shrink-0" />
+          <Text as="h2" variant="cardEntityTitle" color="text" className="flex-1 text-center leading-none">
+            Don’t want to publish?
           </Text>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="grid size-6 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
+            className="grid size-4 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-01"
           >
             <CloseSmall />
           </button>
         </div>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+        <Text as="p" variant="metadata" color="text" className="mt-2">
           This action permanently removes this debate video on behalf of you and your opponent.
         </Text>
         {error && (
@@ -434,7 +535,7 @@ export function DebateCancelUploadDialog({
           type="button"
           onClick={onConfirm}
           disabled={busy}
-          className="mt-4 flex min-h-11 w-full items-center justify-center rounded-full bg-red-01 px-5 text-metadata text-white transition-colors hover:bg-red-01/90 disabled:opacity-50"
+          className="mt-5 flex min-h-7 w-full items-center justify-center rounded-full bg-red-01 px-4 text-metadata text-white transition-colors hover:bg-red-01/90 disabled:opacity-50"
         >
           {busy ? 'Removing...' : 'Delete debate forever'}
         </button>
@@ -442,7 +543,7 @@ export function DebateCancelUploadDialog({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="mt-2 min-h-11 w-full rounded-full px-5 text-metadata text-text hover:bg-grey-01 disabled:opacity-50"
+          className="mt-5 min-h-7 w-full rounded-full px-4 text-metadata text-grey-04 hover:bg-grey-01 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -451,21 +552,54 @@ export function DebateCancelUploadDialog({
   );
 }
 
-function recordingUploadDependencies(getPrivyIdentityToken: GetPrivyIdentityToken): RecordingUploadDependencies {
+function normalizeDebateId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
+function isSameDebateId(a: string, b: string) {
+  return normalizeDebateId(a) === normalizeDebateId(b);
+}
+
+function recordingUploadDependencies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  onProgress?: (loadedBytes: number) => void
+): RecordingUploadDependencies {
   return {
-    createUpload: (debateId, request) => createLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
-    putRecording: putRecording,
+    createUpload: (debateId, request) =>
+      createLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
+    putRecording: (upload, blob, mimeType) => putRecording(upload, blob, mimeType, onProgress),
     markUploaded: markDebateRecordingUploaded,
-    completeUpload: (debateId, request) => completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken),
+    completeUpload: (debateId, request) =>
+      completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
   };
 }
 
-async function putRecording(upload: LocalRecordingUploadResponse['upload'], blob: Blob, mimeType: string) {
+// XHR rather than `fetch`: only XHR reports upload progress, which the banner's percent needs.
+function putRecording(
+  upload: LocalRecordingUploadResponse['upload'],
+  blob: Blob,
+  mimeType: string,
+  onProgress?: (loadedBytes: number) => void
+) {
   const headers = new Headers(upload.headers);
   headers.set('Content-Type', mimeType);
-  const response = await fetch(upload.url, { method: upload.method, headers, body: blob });
-  if (!response.ok) throw new Error(`Recording upload failed (${response.status})`);
+
+  return new Promise<void>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(upload.method, upload.url);
+    headers.forEach((value, key) => request.setRequestHeader(key, value));
+    request.upload.onprogress = event => {
+      if (event.lengthComputable) onProgress?.(event.loaded);
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) resolve();
+      else reject(new Error(`Recording upload failed (${request.status})`));
+    };
+    request.onerror = () => reject(new Error('Recording upload failed.'));
+    request.send(blob);
+  });
 }
 
 async function withRecordingUploadLock(task: () => Promise<void>) {

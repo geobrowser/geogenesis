@@ -9,6 +9,7 @@ import { notFound } from 'next/navigation';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
+import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
@@ -27,9 +28,9 @@ import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-com
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { ExploreSidePanel } from '~/partials/explore/explore-side-panel';
-import { OverviewWithSideRailLayout } from '~/partials/side-panel/overview-side-rail';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -80,42 +81,53 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const props = await getSpaceFrontPage(space);
   const isRootSpace = spaceId === ROOT_SPACE;
+  const [props, communityCalls, exploreSidePanelData] = await Promise.all([
+    getSpaceFrontPage(space),
+    isRootSpace ? Promise.resolve([]) : fetchCommunityCalls(spaceId).catch(() => []),
+    isRootSpace ? fetchExploreSidePanelData().catch(() => null) : Promise.resolve(null),
+  ]);
+
+  let sidebar: React.ReactNode = null;
+  if (isRootSpace) {
+    if (exploreSidePanelData && exploreSidePanelHasServerContent(exploreSidePanelData)) {
+      sidebar = (
+        <ExploreSidePanel
+          featuredSpaces={exploreSidePanelData.featuredSpaces}
+          featuredRankings={exploreSidePanelData.featuredRankings}
+          pendingMembershipSpaceIds={exploreSidePanelData.pendingMembershipSpaceIds}
+          memberOrEditorSpaceIds={exploreSidePanelData.memberOrEditorSpaceIds}
+          editorSpaceIds={exploreSidePanelData.editorSpaceIds}
+          communityCalls={exploreSidePanelData.communityCalls}
+        />
+      );
+    }
+  } else if (communityCalls.length > 0) {
+    sidebar = <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />;
+  }
 
   return (
-    <EntityPageContentContainer>
-      <OverviewWithSideRailLayout
-        main={
-          <>
-            <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-              <SubtopicGalleryContainer spaceId={params.id} />
-            </React.Suspense>
-            <React.Suspense fallback={null}>
-              <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-            </React.Suspense>
-            <Spacer height={24} />
-            <ToggleEntityPage id={props.id} spaceId={spaceId} />
-            <Spacer height={40} />
-            {/*
-              Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-              boundary. We don't want to show any referenced by loading states but do want to
-              stream it in
-            */}
-            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-              <React.Suspense fallback={<div />}>
-                <BacklinksServerContainer entityId={props.id} />
-              </React.Suspense>
-            </TrackedErrorBoundary>
-          </>
-        }
-        rail={
-          <React.Suspense fallback={null}>
-            {isRootSpace ? <RootExploreSidePanelContainer /> : <SpaceCommunityCallsContainer spaceId={spaceId} />}
-          </React.Suspense>
-        }
-      />
-    </EntityPageContentContainer>
+    <EntityPageSidebarLayout sidebar={sidebar}>
+      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+        <SubtopicGalleryContainer spaceId={params.id} />
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+      <Spacer height={24} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} />
+      <Spacer height={40} />
+      {/*
+        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+        boundary. We don't want to show any referenced by loading states but do want to
+        stream it in
+      */}
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={props.id} />
+        </React.Suspense>
+      </TrackedErrorBoundary>
+    </EntityPageSidebarLayout>
   );
 }
 
@@ -245,25 +257,6 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
   }
 
   return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
-};
-
-const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
-  const series = await fetchCommunityCalls(spaceId);
-  return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
-};
-
-const RootExploreSidePanelContainer = async () => {
-  const data = await fetchExploreSidePanelData();
-  return (
-    <ExploreSidePanel
-      featuredSpaces={data.featuredSpaces}
-      featuredRankings={data.featuredRankings}
-      pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
-      memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
-      editorSpaceIds={data.editorSpaceIds}
-      communityCalls={data.communityCalls}
-    />
-  );
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
