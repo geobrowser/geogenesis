@@ -20,6 +20,7 @@ import {
   CameraIcon,
   LeaveIcon,
   MicrophoneIcon,
+  MutedMicrophoneIndicator,
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
@@ -1533,6 +1534,7 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
+      positionLabel={localParticipant?.position_label ?? null}
       active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
       overlayText={
         connecting
@@ -1550,7 +1552,7 @@ function DebateRecordingModal({
       showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
-      inactiveOverlayId="local"
+      inactiveIndicatorId="local"
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -1566,6 +1568,7 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
+      positionLabel={remoteParticipant?.position_label ?? null}
       active={
         countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
       }
@@ -1579,7 +1582,7 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      inactiveOverlayId="remote"
+      inactiveIndicatorId="remote"
       countdown={remoteCountdown}
     >
       <div
@@ -1830,6 +1833,7 @@ function formatDebugDuration(durationMs: number) {
 
 function DebateVideoTile({
   participantPosition,
+  positionLabel,
   active,
   overlayText,
   upcomingSeconds,
@@ -1839,12 +1843,13 @@ function DebateVideoTile({
   showDebateEndsSoon = false,
   inactive = false,
   revealInactive = false,
-  inactiveOverlayId,
+  inactiveIndicatorId,
   countdown,
   closingMessage = false,
   children,
 }: {
   participantPosition: boolean | null;
+  positionLabel: string | null;
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
@@ -1854,28 +1859,41 @@ function DebateVideoTile({
   showDebateEndsSoon?: boolean;
   inactive?: boolean;
   revealInactive?: boolean;
-  inactiveOverlayId: 'local' | 'remote';
+  inactiveIndicatorId: 'local' | 'remote';
   countdown?: React.ReactNode;
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
+  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText;
+
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
-      className="relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card"
+      data-active-speaker={active ? 'true' : 'false'}
+      className={cx(
+        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
+        active && 'outline-[3px] outline-offset-0 outline-purple'
+      )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
       <div
         aria-hidden="true"
-        data-inactive-speaker={inactiveOverlayId}
-        data-visible={inactive && !revealInactive ? 'true' : 'false'}
+        data-inactive-speaker={inactiveIndicatorId}
+        data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 bg-black/45 transition-opacity duration-700 ease-out',
-          inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
+          'pointer-events-none absolute top-3 right-3 z-20',
+          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
         )}
-      />
+      >
+        {showInactiveIndicator && <MutedMicrophoneIndicator />}
+      </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+
+      {positionLabel && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          {positionLabel}
+        </div>
+      )}
 
       {closingMessage && (
         <div

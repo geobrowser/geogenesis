@@ -11,11 +11,13 @@ import type {
   DebateMediaResponse,
   DebateTranscriptSegment,
 } from '~/core/debates/api';
+import { getCurrentGeoChatUserId } from '~/core/debates/api';
 import {
   debateQueryKeys,
   useDebateMedia,
   useDebateMediaArtifactUrl,
   useDebateTranscript,
+  useRequestDebateMediaProcessing,
   useSpaceDebates,
 } from '~/core/debates/hooks';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
@@ -28,8 +30,8 @@ type DebugDebatesPageClientProps = {
 };
 
 type Rendition = {
-  kind: 'final_video' | 'final_video_hevc';
-  label: 'WebM' | 'MOV';
+  kind: 'final_video' | 'final_video_hevc' | 'social_video';
+  label: 'WebM' | 'MOV' | 'Share video';
 };
 
 type ProcessingStatus = 'not started' | 'processing' | 'processed' | 'failed';
@@ -37,6 +39,7 @@ type ProcessingStatus = 'not started' | 'processing' | 'processed' | 'failed';
 const renditions: Rendition[] = [
   { kind: 'final_video', label: 'WebM' },
   { kind: 'final_video_hevc', label: 'MOV' },
+  { kind: 'social_video', label: 'Share video' },
 ];
 
 export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps) {
@@ -44,6 +47,7 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   const router = useRouter();
   const queryClient = useQueryClient();
   const debatesQuery = useSpaceDebates(spaceId, enabled);
+  const currentUserId = getCurrentGeoChatUserId();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   React.useEffect(() => {
@@ -102,7 +106,7 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
       {debates.length > 0 && (
         <div className="flex flex-col gap-5">
           {debates.map(debate => (
-            <DebateDiagnosticsCard key={debate.id} debate={debate} />
+            <DebateDiagnosticsCard key={debate.id} debate={debate} currentUserId={currentUserId} />
           ))}
         </div>
       )}
@@ -110,10 +114,27 @@ export function DebugDebatesPageClient({ spaceId }: DebugDebatesPageClientProps)
   );
 }
 
-function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
+function DebateDiagnosticsCard({ debate, currentUserId }: { debate: Debate; currentUserId: string | null }) {
   const mediaQuery = useDebateMedia(debate.id, true);
+  const reprocessMedia = useRequestDebateMediaProcessing(debate.id);
+  const [reprocessError, setReprocessError] = React.useState<string | null>(null);
   const media = mediaQuery.data;
   const status = processingStatus(media);
+  const mediaJobStatus = media?.job?.status ?? null;
+  const isMediaProcessing = mediaJobStatus === 'queued' || mediaJobStatus === 'running';
+  const canReprocess =
+    debate.status === 'complete' &&
+    !!currentUserId &&
+    debate.participants.some(participant => participant.user_id === currentUserId);
+
+  const reprocessVideo = async () => {
+    setReprocessError(null);
+    try {
+      await reprocessMedia.mutateAsync({ force: true });
+    } catch (error) {
+      setReprocessError(`Could not reprocess video: ${errorMessage(error)}`);
+    }
+  };
 
   return (
     <article
@@ -123,9 +144,29 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
       className="flex scroll-mt-24 flex-col gap-5 rounded-xl border border-grey-02 bg-white p-4 shadow-light md:p-6"
     >
       <header className="flex flex-col gap-3">
-        <Text as="h2" variant="smallTitle" className="max-w-3xl">
-          {debate.claim.claim}
-        </Text>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <Text as="h2" variant="smallTitle" className="max-w-3xl">
+            {debate.claim.claim}
+          </Text>
+          {canReprocess && (
+            <div className="flex flex-col items-start gap-1 sm:items-end">
+              <Button
+                type="button"
+                variant="secondary"
+                small
+                disabled={isMediaProcessing || reprocessMedia.isPending}
+                onClick={() => void reprocessVideo()}
+              >
+                {isMediaProcessing || reprocessMedia.isPending ? 'Processing…' : 'Reprocess video'}
+              </Button>
+              {reprocessError && (
+                <Text as="p" variant="metadata" color="red-01" className="max-w-sm sm:text-right">
+                  {reprocessError}
+                </Text>
+              )}
+            </div>
+          )}
+        </div>
 
         <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <DiagnosticField label="Debate ID" value={debate.id} code />
@@ -165,7 +206,7 @@ function DebateDiagnosticsCard({ debate }: { debate: Debate }) {
       </section>
 
       {status === 'processed' && media && (
-        <section aria-label="Processed videos" className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Processed videos" className="flex flex-wrap items-start gap-4">
           {renditions.map(rendition => (
             <ProcessedRendition
               key={rendition.kind}
@@ -263,7 +304,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
   }, [available, debateId, rendition.kind]);
 
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-lg border border-grey-02 p-3">
+    <div className="flex w-full max-w-xs min-w-0 flex-none flex-col gap-2 rounded-lg border border-grey-02 p-3">
       <Text as="h3" variant="bodySemibold">
         {rendition.label}
       </Text>
@@ -283,7 +324,7 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
             playsInline
             preload="metadata"
             onError={() => setPlaybackError(true)}
-            className="aspect-[8/9] w-1/4 rounded bg-white object-contain sm:aspect-video sm:w-full"
+            className="aspect-video w-full rounded bg-white object-contain"
           />
           {playbackError && <StateMessage compact tone="error">{rendition.label} playback failed.</StateMessage>}
           <a
