@@ -140,7 +140,6 @@ async function submitEdit({
     name,
     ops,
     author,
-    daoSpaceAddress: space.address as `0x${string}`,
     callerSpaceId: `0x${author}`,
     daoSpaceId: `0x${space.id}`,
     votingMode: 'FAST',

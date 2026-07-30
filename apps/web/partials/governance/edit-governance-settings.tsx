@@ -26,7 +26,6 @@ import {
 
 type Props = {
   spaceId: string;
-  daoSpaceAddress: string;
   /** Current on-chain settings, used to prefill the form and preserve hidden fields. */
   snapshot: VotingSettingsSnapshot;
 };
@@ -35,7 +34,7 @@ type Props = {
  * Editor-only affordance on the governance page. Opens the "Edit space governance" modal
  * and, on submit, creates a SLOW-path proposal to update the space's voting settings.
  */
-export function EditGovernanceSettings({ spaceId, daoSpaceAddress, snapshot }: Props) {
+export function EditGovernanceSettings({ spaceId, snapshot }: Props) {
   const { isEditor } = useAccessControl(spaceId);
   const { propose, isPending } = useProposeVotingSettings();
 
@@ -68,7 +67,7 @@ export function EditGovernanceSettings({ spaceId, daoSpaceAddress, snapshot }: P
     if (parsed.kind !== 'ok' || isPending) return;
     setError(null);
     try {
-      await propose({ spaceId, daoSpaceAddress: daoSpaceAddress as `0x${string}`, votingSettings: parsed.value });
+      await propose({ spaceId, votingSettings: parsed.value });
       setSubmitted(true);
       window.setTimeout(() => setOpen(false), 2500);
     } catch (e) {

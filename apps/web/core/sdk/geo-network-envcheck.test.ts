@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 // truly-required vars set, RPC/API/contract addresses must resolve from the
 // geo-sdk's built-in testnet config. If an SDK bump changes any of these
 // values, this failing is the signal to review the cutover implications.
+//
+// Values below are geo-sdk 0.20.0-beta.9. That bump moved all three: the API
+// origin was renamed (both hostnames still serve identical data), and the
+// contract addresses now point at the 2026-07-29 redeploy instead of the
+// abandoned one beta.8 shipped.
 process.env.NEXT_PUBLIC_PRIVY_APP_ID = 'clpsvsqpt005fl70fe775owo5';
 process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID = '1234';
 // Clear the vite.config.js test-isolation endpoint overrides so the SDK
@@ -23,14 +28,14 @@ describe('geo-network env resolution (SDK defaults)', () => {
     const config = Environment.getConfig();
     expect(config.chainId).toBe('55516');
     expect(config.rpc).toBe('https://rpc-geo-testnet-irdc0cgb0w.t.conduit.xyz');
-    expect(config.api).toBe('https://testnet-api-v2.geobrowser.io/graphql');
+    expect(config.api).toBe('https://api-testnet.geobrowser.io/graphql');
 
     expect(GEO_NETWORK.id).toBe('TESTNET');
-    expect(GEO_NETWORK.apiOrigin).toBe('https://testnet-api-v2.geobrowser.io');
+    expect(GEO_NETWORK.apiOrigin).toBe('https://api-testnet.geobrowser.io');
     expect(GEO_NETWORK.chain?.id).toBe(55516);
     expect(GEO_NETWORK.sponsorship?.rpcUrl).toBeTruthy();
 
-    expect(SPACE_REGISTRY_ADDRESS).toBe('0x364231615dcEA33D13C823b13B449DD9F55381E7');
-    expect(DAO_SPACE_FACTORY_ADDRESS).toBe('0x322A3eD5f7f40262a95C51457f56a8c762C27226');
+    expect(SPACE_REGISTRY_ADDRESS).toBe('0xCF13491802747e759e1BB8E364bc43045398d1DD');
+    expect(DAO_SPACE_FACTORY_ADDRESS).toBe('0x323aF429B85c954D4a161b2A6281c26DF45b7128');
   });
 });

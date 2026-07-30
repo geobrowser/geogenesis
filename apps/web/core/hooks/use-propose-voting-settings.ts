@@ -16,8 +16,6 @@ import { useSmartAccount } from './use-smart-account';
 type ProposeVotingSettingsArgs = {
   /** The DAO space's Geo ID (32 hex chars, no dashes). */
   spaceId: string;
-  /** The DAO space contract address. */
-  daoSpaceAddress: `0x${string}`;
   votingSettings: VotingSettingsInput;
 };
 
@@ -35,7 +33,7 @@ export function useProposeVotingSettings() {
   const [isPending, setIsPending] = React.useState(false);
 
   const propose = React.useCallback(
-    async ({ spaceId, daoSpaceAddress, votingSettings }: ProposeVotingSettingsArgs) => {
+    async ({ spaceId, votingSettings }: ProposeVotingSettingsArgs) => {
       if (!smartAccount) {
         throw new TransactionWriteFailedError(
           'Unable to propose: wallet is not connected. Please reconnect and try again.'
@@ -55,7 +53,6 @@ export function useProposeVotingSettings() {
               geo.daoSpaces.proposeUpdateVotingSettings({
                 authorSpaceId: `0x${personalSpaceId}`,
                 spaceId: `0x${spaceId}`,
-                daoSpaceAddress,
                 votingSettings,
               }),
             catch: error =>

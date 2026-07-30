@@ -165,12 +165,10 @@ export default async function GovernancePage(props: Props) {
         </div>
         <div className="flex items-center justify-between">
           <GovernanceProposalTypeFilter spaceId={params.id} />
+          {/* space.address gates on the space being a deployed DAO — the proposal no longer
+              carries the address, but a space without one can't be governed. */}
           {canEditGovernance && space?.address && votingSettingsSnapshot && (
-            <EditGovernanceSettings
-              spaceId={params.id}
-              daoSpaceAddress={space.address}
-              snapshot={votingSettingsSnapshot}
-            />
+            <EditGovernanceSettings spaceId={params.id} snapshot={votingSettingsSnapshot} />
           )}
         </div>
         <React.Suspense fallback="Loading initial...">

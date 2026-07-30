@@ -20,7 +20,7 @@
     "clean-node-modules": "rimraf --glob \"**/node_modules\""
   },
   "dependencies": {
-    "@geoprotocol/geo-sdk": "^0.20.0-beta.8"
+    "@geoprotocol/geo-sdk": "^0.20.0-beta.9"
   },
   "devDependencies": {
     "@graphql-codegen/client-preset": "^6.0.1",
@@ -32,6 +32,7 @@
     "web": "workspace:*"
   },
   "overrides": {
+    "@geoprotocol/geo-sdk": "file:./vendor/geoprotocol-geo-sdk-0.20.0-beta.9.tgz",
     "permissionless": "^0.3.4",
     "@tanstack/react-query": "^5.101.1",
     "prosemirror-model": "^1.25.9",

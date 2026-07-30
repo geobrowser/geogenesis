@@ -5,7 +5,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import type { Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -71,7 +70,9 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
         throw new Error(message);
       }
 
-      // The proposal's addEditor action must call the DAO space contract directly.
+      // The action targets the space by id and the contract resolves it at execution time, so
+      // the address is no longer passed. Still required as a precondition: no address means the
+      // space isn't a resolvable deployed DAO, and the proposal would be unexecutable.
       if (!space?.address) {
         const message = 'No space address found. Please try again.';
         console.error('No space address found for space:', spaceId);
@@ -88,7 +89,6 @@ export function useProposeAddEditor({ spaceId }: UseProposeAddEditorArgs) {
       const { to, calldata } = geo.daoSpaces.proposeAddEditor({
         authorSpaceId: personalSpaceId,
         spaceId,
-        daoSpaceAddress: space.address as Hex,
         newEditorSpaceId: targetEditorSpaceId,
       });
 
