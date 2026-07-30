@@ -5,6 +5,12 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
+  RANKING_DATE_PROPERTY_IDS,
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDateValue,
+} from '~/core/blocks/ranking/ranking-block-dates';
+import {
   getAggregatedRankingSubmissionCount,
   getAggregatedRankingSubmitterRefs,
   getOrderedRelationTargetIds,
@@ -14,11 +20,7 @@ import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry
 import { useResolvedRankingSubmitterSpaceIds } from '~/core/blocks/ranking/use-ranking-submitter-space-ids';
 import { resolveBlockPlacement } from '~/core/blocks/resolve-block-placement';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
-  RANK_POSITION_PROPERTY_ID,
-} from '~/core/ranking-block-ids';
+import { RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -35,15 +37,14 @@ const ROW_IMAGE_SIZE = 32;
 function useRankingBlockDatesForExplore(blockId: string, spaceId: string) {
   const values = useValues({
     selector: v =>
-      v.entity.id === blockId &&
-      v.spaceId === spaceId &&
-      !v.isDeleted &&
-      (v.property.id === RANKING_START_DATE_PROPERTY_ID || v.property.id === RANKING_END_DATE_PROPERTY_ID),
+      v.entity.id === blockId && v.spaceId === spaceId && !v.isDeleted && RANKING_DATE_PROPERTY_IDS.has(v.property.id),
   });
 
+  const readValue = (propertyId: string) => values.find(v => v.property.id === propertyId)?.value;
+
   return {
-    startDate: values.find(v => v.property.id === RANKING_START_DATE_PROPERTY_ID)?.value ?? '',
-    endDate: values.find(v => v.property.id === RANKING_END_DATE_PROPERTY_ID)?.value ?? '',
+    startDate: resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readValue).value,
+    endDate: resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readValue).value,
   };
 }
 
@@ -231,7 +232,6 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
           {showPagination ? (
             <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
               <RankingBlockGlobalPagination
-                pageNumber={safePage}
                 hasPreviousPage={safePage > 0}
                 hasNextPage={safePage < totalPages - 1}
                 onSetPage={next => {
