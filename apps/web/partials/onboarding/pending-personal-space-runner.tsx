@@ -11,6 +11,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
@@ -63,7 +64,28 @@ export function PendingPersonalSpaceRunner() {
     if (runningRef.current === topicId) return;
     runningRef.current = topicId;
 
-    let cancelled = false;
+    // Deliberately NO `cancelled` flag. This component is mounted globally and the
+    // creation chain is un-abortable, so a cleanup (StrictMode's dev double-mount, or
+    // any dep change mid-flight) does not mean the work stopped — only that this effect
+    // run was superseded. Bailing on that signal stranded the account: the space was
+    // created on-chain, but the cache was never seeded, pending was never cleared, and
+    // runningRef was never released, so nothing could re-enter and the user stayed
+    // unregistered until a reload. runningRef alone is the dedupe, released in a
+    // finally. Re-entry is safe because creation is idempotent — it returns the
+    // existing id when registration already landed.
+    const resolve = (spaceId: string) => {
+      // Flip every signal in one synchronous batch so the user never sees an
+      // in-between frame (registered but still "pending"). The pending page
+      // redirects itself onto the real space the moment `setPending(null)`
+      // clears the pending state, so no navigation is needed here.
+      store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
+      queryClient.setQueryData(['personal-space-id', address], { isRegistered: true, personalSpaceId: spaceId });
+      setResolvedSpaceId(spaceId);
+      setPending(null);
+
+      // Refresh the profile chip in the background — resolution shouldn't block on it.
+      void queryClient.invalidateQueries({ queryKey: ['profile', address] });
+    };
 
     void (async () => {
       try {
@@ -75,36 +97,36 @@ export function PendingPersonalSpaceRunner() {
         });
 
         if (!spaceId) throw new Error('Creating space failed');
-        if (cancelled) return;
 
-        // Flip every signal in one synchronous batch so the user never sees an
-        // in-between frame (registered but still "pending"). The pending page
-        // redirects itself onto the real space the moment `setPending(null)`
-        // clears the pending state, so no navigation is needed here.
-        store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
-        queryClient.setQueryData(['personal-space-id', address], { isRegistered: true, personalSpaceId: spaceId });
-        setResolvedSpaceId(spaceId);
-        setPending(null);
+        resolve(spaceId);
         devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
-
-        // Refresh the profile chip in the background — resolution shouldn't block on it.
-        void queryClient.invalidateQueries({ queryKey: ['profile', address] });
       } catch (error) {
+        // The registry is the authority on whether the account has a space, and
+        // several failures land *after* registration succeeds (a publish retry
+        // exhausting, an indexer read erroring). Reporting those as "account setup
+        // failed" leaves the user unregistered in the UI while their space exists
+        // on-chain. Ask the chain before believing the error.
+        try {
+          const registered = await readRegisteredSpaceId(address);
+          if (registered) {
+            console.warn('[PendingPersonalSpace] creation reported an error but the space is registered', error);
+            resolve(registered);
+            return;
+          }
+        } catch {
+          // Fall through to the real failure path below.
+        }
+
         console.error('[PendingPersonalSpace] creation failed', error);
-        if (cancelled) return;
-        // Allow a retry to re-enter the effect. The `pending:` edits stay safe
-        // in IndexedDB regardless.
-        runningRef.current = null;
         setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
           setPending({ topicId, address, status: 'pending' });
         });
+      } finally {
+        // Always release, so a failed job's retry can re-enter the effect.
+        runningRef.current = null;
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     address,
     pending,

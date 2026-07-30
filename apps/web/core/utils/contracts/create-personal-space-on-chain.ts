@@ -209,9 +209,23 @@ export async function createPersonalSpaceOnChain({
   devLog('[CREATE_SPACE] publish + topic userOp sent, waiting for index…');
 
   // 4. Wait for both content and topic to index (one merged loop).
+  //
+  // A timeout here is NOT a creation failure. The space is registered on-chain — we
+  // read its id from the registry above — and the content userOp was accepted; all
+  // that's outstanding is the indexer catching up, which it does on its own schedule.
+  // Throwing reported "Account setup failed: Timed out waiting for personal space to
+  // index" for a space that already existed, and left the account wedged: the runner's
+  // catch never seeds the personal-space cache, so the app kept the user unregistered
+  // and refused every write until a hard reload.
+  //
+  // Return the id either way. Callers treat it as created, and usePersonalSpaceId
+  // polls until the indexer serves it.
   const indexed = await waitForSpaceIndexed(spaceId, resolvedTopicId);
-  if (!indexed) throw new Error('Timed out waiting for personal space to index.');
-  devLog('[CREATE_SPACE] indexed, spaceId=%s', spaceId);
+  if (indexed) {
+    devLog('[CREATE_SPACE] indexed, spaceId=%s', spaceId);
+  } else {
+    devLog('[CREATE_SPACE] created but not yet indexed, spaceId=%s — resolving anyway', spaceId);
+  }
 
   return spaceId;
 }
