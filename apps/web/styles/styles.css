@@ -630,8 +630,3 @@ body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   font-weight: 700;
   src: url('/fonts/calibre-bold.woff2') format('woff2');
 }
-
-/* Explore shell — hide the vertical divider when the side panel has no content. */
-.explore-page-layout:not(:has(aside)) .explore-page-divider {
-  display: none;
-}

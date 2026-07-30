@@ -1,9 +1,11 @@
 'use client';
 
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
+import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
 import { ExploreSidePanel } from './explore-side-panel';
@@ -28,9 +30,31 @@ export function ExplorePage({
   editorSpaceIds,
   communityCalls,
 }: Props) {
+  const hasSidebar = exploreSidePanelHasServerContent({
+    featuredSpaces,
+    featuredRankings,
+    pendingMembershipSpaceIds,
+    memberOrEditorSpaceIds,
+    editorSpaceIds,
+    communityCalls,
+  });
+
   return (
-    <div className="explore-page-layout mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
-      <main className="min-w-0 flex-1 pt-5">
+    <EntityPageSidebarLayout
+      sidebar={
+        hasSidebar ? (
+          <ExploreSidePanel
+            featuredSpaces={featuredSpaces}
+            featuredRankings={featuredRankings}
+            pendingMembershipSpaceIds={pendingMembershipSpaceIds}
+            memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+            editorSpaceIds={editorSpaceIds}
+            communityCalls={communityCalls}
+          />
+        ) : null
+      }
+    >
+      <main className="min-w-0 pt-5">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />
         </div>
@@ -45,15 +69,6 @@ export function ExplorePage({
           feedTopSpacingClassName=""
         />
       </main>
-      <div aria-hidden className="explore-page-divider w-px shrink-0 self-stretch bg-divider lg:hidden" />
-      <ExploreSidePanel
-        featuredSpaces={featuredSpaces}
-        featuredRankings={featuredRankings}
-        pendingMembershipSpaceIds={pendingMembershipSpaceIds}
-        memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-        editorSpaceIds={editorSpaceIds}
-        communityCalls={communityCalls}
-      />
-    </div>
+    </EntityPageSidebarLayout>
   );
 }
