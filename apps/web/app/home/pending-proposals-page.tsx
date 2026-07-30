@@ -10,6 +10,7 @@ import {
   formatGovernanceOutcomeDate,
   formatGovernanceOutcomeTime,
   getIsProposalEnded,
+  getProposalName,
   getProposalTimeRemaining,
 } from '~/core/utils/utils';
 
@@ -214,19 +215,17 @@ async function PendingContentProposal({
   const [space, proposalName] = await Promise.all([
     cachedFetchSpace(proposal.space.id),
     (async () => {
-      switch (proposal.type) {
-        case 'ADD_EDIT':
-          return proposal.name;
-        case 'ADD_EDITOR':
-        case 'REMOVE_EDITOR':
-          return await getMembershipProposalName(proposal.type, proposal);
-        case 'ADD_SUBSPACE':
-        case 'REMOVE_SUBSPACE':
-        case 'SET_TOPIC':
-          return proposal.name;
-        default:
-          throw new Error('Unsupported proposal type');
+      // This component is the `default` branch of the caller's switch, so it receives
+      // every type except ADD_MEMBER/REMOVE_MEMBER — including any added later. It is
+      // also a server component, so throwing here takes down the whole Review-proposals
+      // tab rather than degrading one card: UPDATE_VOTING_SETTINGS was missing from the
+      // old switch and one such proposal crashed Home into "Reconnecting". Never throw;
+      // defer to the shared name formatter, which covers every known type.
+      if (proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') {
+        return await getMembershipProposalName(proposal.type, proposal);
       }
+
+      return getProposalName({ ...proposal, name: proposal.name ?? '' }) ?? proposal.name ?? 'Proposal';
     })(),
   ]);
 
