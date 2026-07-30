@@ -1,11 +1,8 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
-
-import { Effect } from 'effect';
 
 import {
   getAggregatedRankingSubmissionCount,
@@ -15,8 +12,8 @@ import {
 import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useResolvedRankingSubmitterSpaceIds } from '~/core/blocks/ranking/use-ranking-submitter-space-ids';
+import { resolveBlockPlacement } from '~/core/blocks/resolve-block-placement';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import { getRelationsByToEntityIds } from '~/core/io/queries';
 import {
   RANKING_END_DATE_PROPERTY_ID,
   RANKING_START_DATE_PROPERTY_ID,
@@ -34,13 +31,6 @@ import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranki
 
 const EXPLORE_RANKING_PAGE_SIZE = 4;
 const ROW_IMAGE_SIZE = 32;
-
-type ToEntityRelation = {
-  id: string;
-  fromEntityId: string;
-  toEntityId: string;
-  spaceId: string;
-};
 
 function useRankingBlockDatesForExplore(blockId: string, spaceId: string) {
   const values = useValues({
@@ -62,15 +52,7 @@ function useRankingBlockPlacement(blockEntityId: string, spaceId: string) {
     queryKey: ['explore-ranking-block-placement', blockEntityId, spaceId],
     enabled: Boolean(blockEntityId && spaceId),
     staleTime: 60_000,
-    queryFn: async () => {
-      const relations = (await Effect.runPromise(
-        getRelationsByToEntityIds([blockEntityId], SystemIds.BLOCKS, spaceId)
-      )) as unknown as ToEntityRelation[];
-      if (!relations?.length) return null;
-      const match = relations.find(r => r.spaceId === spaceId) ?? relations[0];
-      if (!match?.id || !match.fromEntityId) return null;
-      return { parentEntityId: match.fromEntityId, relationId: match.id };
-    },
+    queryFn: () => resolveBlockPlacement(blockEntityId, spaceId),
   });
 }
 
@@ -175,7 +157,7 @@ export function RankingRow({
       ) : null}
       <Link
         href={href}
-        className="min-w-0 flex-1 truncate text-[16px] font-normal leading-[20px] tracking-[-0.35px] text-grey-04 hover:underline"
+        className="min-w-0 flex-1 truncate text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 hover:underline"
         title={label}
       >
         {label}
@@ -209,7 +191,7 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex min-w-0 items-center gap-3">
         <Link href={NavUtils.toEntity(item.spaceId, item.entityId)} className="min-w-0 flex-1">
-          <h2 className="mt-0! truncate text-[19px]! font-medium! leading-[21px]! text-[#2A2B2E] hover:underline">
+          <h2 className="mt-0! truncate text-[19px]! leading-[21px]! font-medium! text-[#2A2B2E] hover:underline">
             {item.title}
           </h2>
         </Link>
@@ -253,8 +235,12 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
                 hasPreviousPage={safePage > 0}
                 hasNextPage={safePage < totalPages - 1}
                 onSetPage={next => {
-                  if (next === 'previous') setPageNumber(p => Math.max(0, p - 1));
-                  else if (next === 'next') setPageNumber(p => Math.min(totalPages - 1, p + 1));
+                  // Step from `safePage`, not the raw `pageNumber`. When the id list shrinks
+                  // (sync update, entries unpublished) `safePage` clamps for rendering but
+                  // `pageNumber` stays high, so stepping from it burns clicks with no visible
+                  // move — pageNumber 5 against totalPages 2 costs three dead "Previous" taps.
+                  if (next === 'previous') setPageNumber(Math.max(0, safePage - 1));
+                  else if (next === 'next') setPageNumber(Math.min(totalPages - 1, safePage + 1));
                   else setPageNumber(next);
                 }}
               />

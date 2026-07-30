@@ -78,7 +78,7 @@ function CardTitle({ item }: { item: ExploreFeedItem }) {
 
 type CardBodyProps = {
   item: ExploreFeedItem;
-  /** The vote / comment row, owned by the shell so every body renders it identically. */
+  /** The vote / comment row, owned by the shell so bodies render it identically. Not every body takes it. */
   actions: React.ReactNode;
 };
 
@@ -257,6 +257,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       ) : isDebate ? (
         <DebateCardBody item={item} actions={cardActions} />
       ) : isRanking ? (
+        // No `actions`: this body renders its own RankingVoteButton in the ranking title row.
         <RankingCardBody item={item} />
       ) : (
         <DefaultCardBody item={item} actions={cardActions} />
