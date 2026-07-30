@@ -7,6 +7,22 @@ import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingPillView } from './ranking-pill-view';
 import type { RankingBlockState } from './use-ranking-block-state';
 
+vi.mock('~/core/blocks/data/use-view', () => ({
+  useView: () => ({ shownColumnIds: [] }),
+}));
+
+vi.mock('~/core/hooks/use-properties', () => ({
+  useProperties: () => ({}),
+}));
+
+vi.mock('~/core/hooks/use-block-main-media', () => ({
+  useBlockMainMedia: () => null,
+}));
+
+vi.mock('~/core/hooks/use-block-main-media-url', () => ({
+  useBlockMainMediaUrl: () => null,
+}));
+
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMedia: () => ({ avatarUrl: null, coverUrl: null }),
   useImageUrlFromEntity: () => null,
