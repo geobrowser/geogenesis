@@ -4,6 +4,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai';
 
 export type ThankingDebate = {
   debateId: string;
+  hasPendingLocalRecording: boolean;
   hasUploadedRecording: boolean;
   recordingCancelled: boolean;
 };
