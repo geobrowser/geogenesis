@@ -7,7 +7,6 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -16,11 +15,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Create } from '~/design-system/icons/create';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
 import { HistoryEmpty } from '../history/history-empty';
@@ -28,6 +23,7 @@ import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
+import { EntityPageTitle } from './entity-page-title';
 
 export function EditableHeading({
   spaceId,
@@ -71,29 +67,12 @@ export function EditableHeading({
   return (
     <>
       <div className="relative flex items-center justify-between gap-4">
-        {isEditing ? (
-          <div className="min-w-0 flex-1 text-text">
-            <PageStringField
-              variant="mainPage"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onChange={onNameChange}
-            />
-            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
-            <Spacer height={3.5} />
-          </div>
-        ) : (
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
-                <Text as="h1" variant="mainPage">
-                  {name ?? fallbackName ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </Truncate>
-            </div>
-            <Spacer height={12} />
-          </div>
-        )}
+        <EntityPageTitle
+          value={name ?? fallbackName ?? ''}
+          isEditing={isEditing}
+          onChange={onNameChange}
+          className="min-w-0 flex-1"
+        />
 
         <div className="flex shrink-0 items-center gap-5">
           {isEditing && (
