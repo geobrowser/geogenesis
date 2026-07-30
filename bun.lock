@@ -5,7 +5,7 @@
     "": {
       "name": "geogenesis",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.9",
+        "@geoprotocol/geo-sdk": "0.20.0-beta.10",
       },
       "devDependencies": {
         "@graphql-codegen/client-preset": "^6.0.1",
@@ -31,7 +31,7 @@
         "@effect/opentelemetry": "^0.63.0",
         "@floating-ui/dom": "^1.7.5",
         "@geogenesis/auth": "workspace:*",
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.9",
+        "@geoprotocol/geo-sdk": "0.20.0-beta.10",
         "@geoprotocol/grc-20": "^0.4.1",
         "@graphql-typed-document-node/core": "^3.2.0",
         "@livekit/components-react": "^2.9.21",
@@ -163,7 +163,7 @@
       "name": "@geogenesis/auth",
       "version": "1.0.0",
       "dependencies": {
-        "@geoprotocol/geo-sdk": "^0.20.0-beta.9",
+        "@geoprotocol/geo-sdk": "0.20.0-beta.10",
         "@privy-io/react-auth": "^3.21.0",
         "@privy-io/wagmi": "^4.0.4",
         "@rhinestone/module-sdk": "^0.4.0",
@@ -178,7 +178,6 @@
     },
   },
   "overrides": {
-    "@geoprotocol/geo-sdk": "file:./vendor/geoprotocol-geo-sdk-0.20.0-beta.9.tgz",
     "@radix-ui/react-dialog": "1.1.19",
     "@tanstack/react-query": "^5.101.1",
     "permissionless": "^0.3.4",
@@ -420,7 +419,7 @@
 
     "@geogenesis/auth": ["@geogenesis/auth@workspace:packages/auth"],
 
-    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@./vendor/geoprotocol-geo-sdk-0.20.0-beta.9.tgz", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "@zerodev/sdk": "^5.5.10", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-XlS64Swb2qTVYsNAfKpf6hKgEBK1OqvE9gz0z6fkNs41zk064VXGlqcX6/SKRvig86jsZQfQizy1o1f1bNzUfA=="],
+    "@geoprotocol/geo-sdk": ["@geoprotocol/geo-sdk@0.20.0-beta.10", "", { "dependencies": { "@geoprotocol/grc-20": "^0.4.1", "@zerodev/sdk": "^5.5.10", "effect": "^3.17.13", "fflate": "^0.8.2", "fractional-indexing-jittered": "^1.0.0", "image-size": "^2.0.2", "uuid": "^13.0.0", "viem": "^2.37.6" } }, "sha512-dO1CPhxbUovPF4NRPP3a4EZ85K1VQpkiFChetAbWFh4GN+txSAVuY/dI82oObPwSuwE5UwBJrPVbvUvzdurcHQ=="],
 
     "@geoprotocol/grc-20": ["@geoprotocol/grc-20@0.4.1", "", { "dependencies": { "@bokuweb/zstd-wasm": "^0.0.27" } }, "sha512-J5trJZBydDOO5GsEMzy9ukX9GetblBMLnn4ugpTFOcwS4akA54Lxg/uYJbXUDh5EVPir3PAzC6UN6EiBz0K/Ww=="],
 
