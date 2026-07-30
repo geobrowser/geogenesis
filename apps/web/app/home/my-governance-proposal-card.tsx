@@ -4,18 +4,13 @@ import * as React from 'react';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Address, ProposalStatus, ProposalType, type SubstreamVote } from '~/core/io/substream-schema';
-import {
-  NavUtils,
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getIsProposalEnded,
-  getProposalTimeRemaining,
-} from '~/core/utils/utils';
+import { NavUtils, getIsProposalEnded, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { GovernanceProposalVoteState } from '~/partials/governance/governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from '~/partials/governance/governance-status-chip';
@@ -88,13 +83,11 @@ export function MyGovernanceProposalCard({
   const footerDateTime =
     status === 'ACCEPTED' || status === 'REJECTED' || votingEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={endTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={endTime} className="shrink-0 tabular-nums" />
       </div>
     ) : endTime <= 0 ? (
       // v2 contracts don't stamp startTime/endTime until the first vote fires,

@@ -20,6 +20,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
@@ -245,13 +246,11 @@ async function PendingContentProposal({
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={proposal.endTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(proposal.endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(proposal.endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={proposal.endTime} className="shrink-0 tabular-nums" />
       </div>
     ) : proposal.endTime <= 0 ? (
       // v2 contracts don't stamp startTime/endTime until the first vote fires,

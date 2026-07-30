@@ -4,8 +4,6 @@ import { redirect } from 'next/navigation';
 
 import { fetchProposal } from '~/core/io/subgraph';
 import {
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
   getIsProposalEnded,
   getMembershipProposalDisplayName,
   getNoVotePercentage,
@@ -16,6 +14,8 @@ import {
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 
 import { AcceptOrReject } from './accept-or-reject';
 import { MetadataMotionContainer } from './active-proposal-metadata-motion-container';
@@ -143,18 +143,17 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
                             <span aria-hidden className="shrink-0 text-grey-04 select-none">
                               ·
                             </span>
-                            <span className="shrink-0 text-grey-04">
-                              {formatGovernanceOutcomeDate(proposal.endTime)}
-                            </span>
+                            <GovernanceOutcomeDate
+                              geoTimeSeconds={proposal.endTime}
+                              className="shrink-0 text-grey-04"
+                            />
                             <span aria-hidden className="shrink-0 text-grey-04 select-none">
                               ·
                             </span>
-                            <time
+                            <GovernanceOutcomeTime
+                              geoTimeSeconds={proposal.endTime}
                               className="shrink-0 text-grey-04 tabular-nums"
-                              dateTime={new Date(proposal.endTime * 1000).toISOString()}
-                            >
-                              {formatGovernanceOutcomeTime(proposal.endTime)}
-                            </time>
+                            />
                           </>
                         )}
                         <span aria-hidden className="shrink-0 text-grey-04 select-none">

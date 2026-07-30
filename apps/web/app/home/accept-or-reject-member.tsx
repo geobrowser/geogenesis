@@ -11,12 +11,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
-import {
-  NavUtils,
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getProposalTimeRemaining,
-} from '~/core/utils/utils';
+import { NavUtils, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -26,6 +21,7 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
@@ -161,13 +157,11 @@ export function AcceptOrRejectMember({
   const footerLeft =
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={endTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={endTime} className="shrink-0 tabular-nums" />
       </div>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
