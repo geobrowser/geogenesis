@@ -66,7 +66,8 @@ describe('MicrophoneLevelMeter', () => {
     audioHarness.amplitude = amplitude;
     render(<MicrophoneLevelMeter stream={audioStream().stream} />);
 
-    runNextAnimationFrame();
+    runNextAnimationFrame(0);
+    runNextAnimationFrame(100);
 
     const meter = screen.getByRole('meter');
     const renderedSegments = [...meter.querySelectorAll('[data-microphone-level-segment]')];
@@ -76,25 +77,83 @@ describe('MicrophoneLevelMeter', () => {
     expect(renderedSegments.filter(segment => segment.classList.contains('bg-grey-02'))).toHaveLength(16 - segments);
   });
 
-  it('releases gradually after applying louder samples immediately', () => {
-    audioHarness.amplitude = 0.1;
+  it('keeps ambient noise and brief spikes at one steady silent segment', () => {
+    audioHarness.amplitude = amplitudeForDecibels(-53);
     render(<MicrophoneLevelMeter stream={audioStream().stream} />);
-    runNextAnimationFrame();
-    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '13');
 
-    audioHarness.amplitude = 0.001;
-    runNextAnimationFrame();
+    runNextAnimationFrame(0);
+    runNextAnimationFrame(500);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'No microphone signal');
 
-    expect(Number(screen.getByRole('meter').getAttribute('aria-valuenow'))).toBeGreaterThan(4);
+    audioHarness.amplitude = amplitudeForDecibels(-40);
+    runNextAnimationFrame(600);
+    runNextAnimationFrame(699);
+    audioHarness.amplitude = amplitudeForDecibels(-53);
+    runNextAnimationFrame(700);
+
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'No microphone signal');
+  });
+
+  it('opens after 100ms of sustained speech and closes after 300ms of sustained quiet', () => {
+    audioHarness.amplitude = amplitudeForDecibels(-40);
+    render(<MicrophoneLevelMeter stream={audioStream().stream} />);
+
+    runNextAnimationFrame(0);
+    runNextAnimationFrame(99);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1');
+
+    runNextAnimationFrame(100);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '7');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Microphone volume too low');
+
+    audioHarness.amplitude = amplitudeForDecibels(-53);
+    runNextAnimationFrame(110);
+    runNextAnimationFrame(409);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '3');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Microphone volume too low');
+
+    runNextAnimationFrame(410);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'No microphone signal');
+  });
+
+  it('cancels a pending close when the signal recovers', () => {
+    audioHarness.amplitude = amplitudeForDecibels(-40);
+    render(<MicrophoneLevelMeter stream={audioStream().stream} />);
+    runNextAnimationFrame(0);
+    runNextAnimationFrame(100);
+
+    audioHarness.amplitude = amplitudeForDecibels(-53);
+    runNextAnimationFrame(110);
+    audioHarness.amplitude = amplitudeForDecibels(-40);
+    runNextAnimationFrame(300);
+    runNextAnimationFrame(410);
+
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '7');
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Microphone volume too low');
+  });
+
+  it('releases consistently for the same elapsed time at different frame rates', () => {
+    const singleFrameValue = releasedValueAfter([200]);
+    const splitFrameValue = releasedValueAfter([150, 200]);
+
+    expect(singleFrameValue).toBe(11);
+    expect(splitFrameValue).toBe(singleFrameValue);
   });
 
   it('tears down the old analyser on stream replacement and never stops supplied tracks', () => {
     const first = audioStream();
     const second = audioStream();
+    audioHarness.amplitude = 0.1;
     const view = render(<MicrophoneLevelMeter stream={first.stream} />);
     const firstContext = audioHarness.contexts[0];
 
     expect(firstContext?.createMediaStreamSource).toHaveBeenCalledWith(first.stream);
+    runNextAnimationFrame(0);
+    runNextAnimationFrame(100);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '13');
 
     view.rerender(<MicrophoneLevelMeter stream={second.stream} />);
 
@@ -105,9 +164,11 @@ describe('MicrophoneLevelMeter', () => {
     expect(cancelAnimationFrame).toHaveBeenCalled();
     expect(audioHarness.contexts[1]?.createMediaStreamSource).toHaveBeenCalledWith(second.stream);
     expect(first.track.stop).not.toHaveBeenCalled();
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '0');
 
-    audioHarness.amplitude = 0.1;
-    runNextAnimationFrame();
+    runNextAnimationFrame(200);
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '1');
+    runNextAnimationFrame(300);
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '13');
     expect(screen.getByRole('meter')).toHaveAttribute('aria-valuetext', 'Microphone volume good');
 
@@ -164,11 +225,29 @@ describe('MicrophoneLevelMeter', () => {
   });
 });
 
-function runNextAnimationFrame() {
+function runNextAnimationFrame(timestamp = performance.now()) {
   const entry = animationFrames.entries().next().value as [number, FrameRequestCallback] | undefined;
   if (!entry) throw new Error('Expected a queued animation frame');
   animationFrames.delete(entry[0]);
-  act(() => entry[1](performance.now()));
+  act(() => entry[1](timestamp));
+}
+
+function releasedValueAfter(frameTimes: number[]) {
+  audioHarness.amplitude = 0.1;
+  const view = render(<MicrophoneLevelMeter stream={audioStream().stream} />);
+  runNextAnimationFrame(0);
+  runNextAnimationFrame(100);
+
+  audioHarness.amplitude = 0.01;
+  for (const frameTime of frameTimes) runNextAnimationFrame(frameTime);
+
+  const value = Number(screen.getByRole('meter').getAttribute('aria-valuenow'));
+  view.unmount();
+  return value;
+}
+
+function amplitudeForDecibels(decibels: number) {
+  return 10 ** (decibels / 20);
 }
 
 function audioStream() {
