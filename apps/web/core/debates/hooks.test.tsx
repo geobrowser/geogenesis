@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
 
-import type { Debate, DebateActivity, DebateRematchSession } from './api';
+import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import {
   debateQueryKeys,
   useClearDebateActivity,
@@ -15,6 +15,7 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
+  useEndDebateTurn,
   useGeoChatAuth,
   useMarkDebateReady,
   useUpdateDebateAvailability,
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
+  endDebateTurn: vi.fn(),
   markDebateReady: vi.fn(),
   updateDebateAvailability: vi.fn(),
 }));
@@ -44,6 +46,7 @@ vi.mock('./api', async importOriginal => {
   return {
     ...actual,
     consentToDebateRematch: mocks.consentToDebateRematch,
+    endDebateTurn: mocks.endDebateTurn,
     markDebateReady: mocks.markDebateReady,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
@@ -60,6 +63,7 @@ describe('useGeoChatAuth', () => {
     mocks.getIdentityToken.mockReset();
     mocks.identityToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
+    mocks.endDebateTurn.mockReset();
     mocks.markDebateReady.mockReset();
     mocks.updateDebateAvailability.mockReset();
     setCachedIdentityToken(null);
@@ -284,6 +288,69 @@ describe('authoritative mutation reconciliation', () => {
     expect(setQueryData).toHaveBeenCalledWith(debateQueryKeys.debate('debate-1'), debate);
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
     expect(setQueryData.mock.invocationCallOrder[0]).toBeLessThan(invalidateQueries.mock.invocationCallOrder[0]!);
+  });
+
+  it('reconciles an ended turn from the authoritative debate response', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    const debate = {
+      id: 'debate-1',
+      status: 'in_progress',
+      turn_yields: [{ turn_index: 0 }],
+    } as unknown as Debate;
+    mocks.endDebateTurn.mockResolvedValue(debate);
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useEndDebateTurn('debate-1'), { wrapper });
+
+    await act(() => result.current.mutateAsync({ turnIndex: 0, endedAtMs: 1_784_542_272_505 }));
+
+    expect(mocks.endDebateTurn).toHaveBeenCalledWith('debate-1', 0, 1_784_542_272_505, expect.any(Function), 'user-a');
+    expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(debate);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+  });
+
+  it('retries transient end-turn failures with the same cutoff', async () => {
+    mocks.endDebateTurn.mockClear();
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retryDelay: 0 }, queries: { retry: false } },
+    });
+    const debate = { id: 'debate-1', status: 'in_progress', turn_yields: [{ turn_index: 0 }] } as unknown as Debate;
+    mocks.endDebateTurn
+      .mockRejectedValueOnce(new GeoChatRequestError('Unavailable', 'service_unavailable', 503))
+      .mockRejectedValueOnce(new GeoChatRequestError('Unavailable', 'service_unavailable', 503))
+      .mockResolvedValue(debate);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useEndDebateTurn('debate-1'), { wrapper });
+
+    await act(() => result.current.mutateAsync({ turnIndex: 0, endedAtMs: 1_784_542_272_505 }));
+
+    expect(mocks.endDebateTurn).toHaveBeenCalledTimes(3);
+    expect(mocks.endDebateTurn.mock.calls.map(call => call.slice(0, 3))).toEqual([
+      ['debate-1', 0, 1_784_542_272_505],
+      ['debate-1', 0, 1_784_542_272_505],
+      ['debate-1', 0, 1_784_542_272_505],
+    ]);
+  });
+
+  it('does not retry a rejected end-turn request', async () => {
+    mocks.endDebateTurn.mockClear();
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retryDelay: 0 }, queries: { retry: false } },
+    });
+    mocks.endDebateTurn.mockRejectedValue(new GeoChatRequestError('Stale turn', 'turn_yield_stale', 400));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useEndDebateTurn('debate-1'), { wrapper });
+
+    await expect(
+      act(() => result.current.mutateAsync({ turnIndex: 0, endedAtMs: 1_784_542_272_505 }))
+    ).rejects.toMatchObject({ code: 'turn_yield_stale', status: 400 });
+    expect(mocks.endDebateTurn).toHaveBeenCalledOnce();
   });
 });
 
