@@ -41,13 +41,18 @@ function BountyGeoIcon() {
   );
 }
 
-/** Card box from the design: 249×143 including its 20px padding and 1px border. */
-const CARD_STYLE = {
-  boxSizing: 'border-box',
-  width: 249,
-  height: 143,
-  padding: 20,
-} as const satisfies React.CSSProperties;
+export const CARD_WIDTH_PX = 249;
+export const COMPLETED_CARD_HEIGHT_PX = 143;
+export const IN_PROGRESS_CARD_HEIGHT_PX = 110;
+export const AVAILABLE_CARD_WIDTH_PX = 378;
+export const AVAILABLE_CARD_HEIGHT_PX = 240;
+const CARD_PADDING_PX = 20;
+
+function cardStyle(height: number, width: number = CARD_WIDTH_PX): React.CSSProperties {
+  return { boxSizing: 'border-box', width, height, padding: CARD_PADDING_PX };
+}
+
+const CARD_CLASS = 'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white';
 
 const AVATAR_SIZE_PX = 16;
 
@@ -55,6 +60,7 @@ const MAX_CONTRIBUTORS_WITH_NAMES = 1;
 const MAX_AVATARS = 3;
 
 const TITLE_CLASS = 'text-[19px] leading-[21px] font-medium tracking-[-0.5px] text-[#2A2B2E]';
+const DESCRIPTION_CLASS = 'text-[18px] leading-[21px] font-normal tracking-[-0.35px] text-grey-04';
 const NAME_CLASS = 'text-[16px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
 const COUNT_CLASS = 'text-[16px] leading-[13px] font-normal tracking-[-0.35px] text-purple';
 
@@ -127,7 +133,7 @@ function BudgetBadge({ budget }: { budget: number | null }) {
 
 export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
   return (
-    <article style={CARD_STYLE} className="flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white">
+    <article style={cardStyle(COMPLETED_CARD_HEIGHT_PX)} className={CARD_CLASS}>
       <div>
         <BudgetBadge budget={bounty.budget} />
       </div>
@@ -135,6 +141,112 @@ export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
       <h3 className={`mt-3 line-clamp-2 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
       <div className="mt-3">
+        <ContributorRow contributors={bounty.contributors} />
+      </div>
+    </article>
+  );
+}
+
+function SkillPills({ skills }: { skills: string[] }) {
+  if (skills.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 overflow-hidden">
+      {skills.map(skill => (
+        <span
+          key={skill}
+          className="inline-flex shrink-0 items-center rounded-full border border-grey-02 bg-white px-2 py-1 text-[16px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04"
+        >
+          {skill}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const INTEREST_BUTTON_CLASS =
+  'inline-flex shrink-0 items-center rounded-full px-[10px] py-[7px] text-[16px] leading-[20px] font-normal';
+
+/**
+ * Two states, driven by whether an `Interested in` relation already exists from
+ * the viewer to this bounty:
+ */
+function InterestButton({
+  isInterested,
+  isPending,
+  canRegisterInterest,
+  onClick,
+}: {
+  isInterested: boolean;
+  isPending: boolean;
+  canRegisterInterest: boolean;
+  onClick: () => void;
+}) {
+  if (isInterested) {
+    return <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>Awaiting allocation</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={isPending || !canRegisterInterest}
+      title={canRegisterInterest ? undefined : 'You need a registered personal space to register interest'}
+      className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
+    >
+      {isPending ? 'Saving…' : "I'm interested"}
+    </button>
+  );
+}
+
+/**
+ * Available card.
+ */
+export function AvailableBountyCard({
+  bounty,
+  isInterested,
+  isPending,
+  canRegisterInterest,
+  onRegisterInterest,
+}: {
+  bounty: SpaceBounty;
+  isInterested: boolean;
+  isPending: boolean;
+  canRegisterInterest: boolean;
+  onRegisterInterest: (bounty: SpaceBounty) => void;
+}) {
+  return (
+    <article style={cardStyle(AVAILABLE_CARD_HEIGHT_PX, AVAILABLE_CARD_WIDTH_PX)} className={CARD_CLASS}>
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <BudgetBadge budget={bounty.budget} />
+        <InterestButton
+          isInterested={isInterested}
+          isPending={isPending}
+          canRegisterInterest={canRegisterInterest}
+          onClick={() => onRegisterInterest(bounty)}
+        />
+      </div>
+
+      {/* 12px badge row → title, 8px title → description, 20px description → skills. */}
+      <h3 className={`mt-3 line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
+
+      {bounty.description ? (
+        <p className={`mt-2 line-clamp-3 min-h-0 min-w-0 ${DESCRIPTION_CLASS}`}>{bounty.description}</p>
+      ) : null}
+
+      <div className="mt-5 shrink-0">
+        <SkillPills skills={bounty.skills} />
+      </div>
+    </article>
+  );
+}
+
+export function InProgressBountyCard({ bounty }: { bounty: SpaceBounty }) {
+  return (
+    <article style={cardStyle(IN_PROGRESS_CARD_HEIGHT_PX)} className={`${CARD_CLASS} justify-between`}>
+      <h3 className={`line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
+
+      <div className="shrink-0">
         <ContributorRow contributors={bounty.contributors} />
       </div>
     </article>

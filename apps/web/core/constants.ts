@@ -57,6 +57,9 @@ export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
 /** Bounty "Task status" relation property; linking is disabled when it points at Done. */
 export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
 export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
+export const BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID = '548fca08e94743668457b0d8429d5bf9';
+export const BOUNTY_TASK_STATUS_TODO_ENTITY_ID = '76b5b831a5fa4203ad61b3f93915edec';
+export const INTERESTED_IN_RELATION_TYPE_ID = 'ff7e1b4444a2419187324e6c222afe07';
 export const BOUNTY_SKILLS_PROPERTY_ID = 'a38732e33a3d47f9a459fb369c287709';
 export const BOUNTY_DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'] as const;
 export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];

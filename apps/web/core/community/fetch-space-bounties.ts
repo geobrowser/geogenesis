@@ -6,6 +6,7 @@ import {
   AVATAR_PROPERTY_ID,
   BOUNTY_ALLOCATED_PROPERTY_ID,
   BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_DESCRIPTION_PROPERTY_ID,
   BOUNTY_DIFFICULTY_PROPERTY_ID,
   BOUNTY_SKILLS_PROPERTY_ID,
   BOUNTY_TASK_STATUS_PROPERTY_ID,
@@ -204,10 +205,13 @@ export async function fetchSpaceBounties({
       ),
     ];
 
+    const descriptionValue = node.valuesList.find(value => ID.equals(value.propertyId, BOUNTY_DESCRIPTION_PROPERTY_ID));
+
     return {
       id: node.id,
       spaceId,
       name: node.name?.trim() || 'Untitled bounty',
+      description: descriptionValue?.text?.trim() || null,
       budget: numberFromValue(budgetValue),
       difficulty: relationTargets(node, BOUNTY_DIFFICULTY_PROPERTY_ID)[0]?.name?.trim() ?? null,
       skills,

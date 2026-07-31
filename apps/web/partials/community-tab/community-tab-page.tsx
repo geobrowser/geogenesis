@@ -21,8 +21,8 @@ export function CommunityTabPage({ spaceId }: Props) {
       <div className="flex min-w-0 flex-col gap-10 pb-8">
         <CuratorLeaderboardSection spaceId={spaceId} />
         <CompletedBountiesSection spaceId={spaceId} />
-        <InProgressBountiesSection />
-        <AvailableBountiesSection />
+        <InProgressBountiesSection spaceId={spaceId} />
+        <AvailableBountiesSection spaceId={spaceId} />
       </div>
     </EntityPageContentContainer>
   );

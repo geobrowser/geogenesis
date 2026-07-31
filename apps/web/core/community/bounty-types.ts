@@ -8,6 +8,7 @@ export type SpaceBounty = {
   id: string;
   spaceId: string;
   name: string;
+  description: string | null;
   budget: number | null;
   difficulty: string | null;
   skills: string[];

@@ -7,12 +7,27 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { SpaceBountiesResult, SpaceBounty } from '~/core/community/bounty-types';
-import { BOUNTY_DIFFICULTY_LEVELS, BOUNTY_TASK_STATUS_DONE_ENTITY_ID } from '~/core/constants';
+import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
+import {
+  BOUNTY_DIFFICULTY_LEVELS,
+  BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
+  BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
+  BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
+} from '~/core/constants';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
 
-import { BountyCard } from './bounty-card';
+import {
+  AVAILABLE_CARD_HEIGHT_PX,
+  AVAILABLE_CARD_WIDTH_PX,
+  AvailableBountyCard,
+  BountyCard,
+  CARD_WIDTH_PX,
+  COMPLETED_CARD_HEIGHT_PX,
+  IN_PROGRESS_CARD_HEIGHT_PX,
+  InProgressBountyCard,
+} from './bounty-card';
 import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 
@@ -43,13 +58,43 @@ function applyFilters(
   });
 }
 
-function BountyGrid({ bounties }: { bounties: SpaceBounty[] }) {
+type BountyCardComponent = (props: { bounty: SpaceBounty }) => React.ReactElement;
+
+function BountyGrid({ bounties, card: Card }: { bounties: SpaceBounty[]; card: BountyCardComponent }) {
   return (
     <div className="flex flex-wrap gap-4">
       {bounties.map(bounty => (
-        <BountyCard key={bounty.id} bounty={bounty} />
+        <Card key={bounty.id} bounty={bounty} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Available bounties bind each card to the viewer's interest state
+ */
+function useAvailableBountyCard(bounties: SpaceBounty[]): BountyCardComponent {
+  const bountyIds = React.useMemo(() => bounties.map(bounty => bounty.id), [bounties]);
+  const interestedIds = useInterestedBountyIds(bountyIds);
+  const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
+
+  return React.useCallback(
+    ({ bounty }: { bounty: SpaceBounty }) => (
+      <AvailableBountyCard
+        bounty={bounty}
+        isInterested={interestedIds.has(bounty.id)}
+        isPending={pendingBountyId === bounty.id}
+        canRegisterInterest={canRegisterInterest}
+        onRegisterInterest={target =>
+          void registerInterest({
+            bountyId: target.id,
+            bountyName: target.name,
+            bountySpaceId: target.spaceId,
+          })
+        }
+      />
+    ),
+    [canRegisterInterest, interestedIds, pendingBountyId, registerInterest]
   );
 }
 
@@ -61,16 +106,31 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+type UseBountyCard = (bounties: SpaceBounty[]) => BountyCardComponent;
+
+function staticCard(Component: BountyCardComponent): UseBountyCard {
+  return () => Component;
+}
+
+const USE_COMPLETED_CARD = staticCard(BountyCard);
+const USE_IN_PROGRESS_CARD = staticCard(InProgressBountyCard);
+
 function BountiesSection({
   spaceId,
   title,
   taskStatusId,
   emptyMessage,
+  useCard,
+  cardHeightPx,
+  cardWidthPx = CARD_WIDTH_PX,
 }: {
   spaceId: string;
   title: string;
   taskStatusId: string;
   emptyMessage: string;
+  useCard: UseBountyCard;
+  cardHeightPx: number;
+  cardWidthPx?: number;
 }) {
   const [scope, setScope] = React.useState<BountyScope>('featured');
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
@@ -99,6 +159,7 @@ function BountiesSection({
   );
 
   const inlineBounties = filtered.slice(0, INLINE_CARD_LIMIT);
+  const card = useCard(bounties);
 
   return (
     <section className="flex flex-col gap-4">
@@ -133,13 +194,13 @@ function BountiesSection({
       {isLoading ? (
         <div className="flex flex-wrap gap-4">
           {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
-            <Skeleton key={index} className="h-[143px] w-[249px] rounded-lg" />
+            <Skeleton key={index} className="rounded-lg" style={{ width: cardWidthPx, height: cardHeightPx }} />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
-        <BountyGrid bounties={inlineBounties} />
+        <BountyGrid bounties={inlineBounties} card={card} />
       )}
 
       <SlideUp isOpen={isViewAllOpen} setIsOpen={setIsViewAllOpen}>
@@ -155,7 +216,7 @@ function BountiesSection({
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-            <BountyGrid bounties={filtered} />
+            <BountyGrid bounties={filtered} card={card} />
           </div>
         </div>
       </SlideUp>
@@ -170,24 +231,35 @@ export function CompletedBountiesSection({ spaceId }: { spaceId: string }) {
       title="Completed bounties"
       taskStatusId={BOUNTY_TASK_STATUS_DONE_ENTITY_ID}
       emptyMessage="No completed bounties match these filters."
+      useCard={USE_COMPLETED_CARD}
+      cardHeightPx={COMPLETED_CARD_HEIGHT_PX}
     />
   );
 }
 
-export function InProgressBountiesSection() {
+export function InProgressBountiesSection({ spaceId }: { spaceId: string }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className={SECTION_TITLE_CLASS}>In progress bounties</h2>
-      <EmptyState message="Bounties currently in progress will appear here." />
-    </section>
+    <BountiesSection
+      spaceId={spaceId}
+      title="In progress bounties"
+      taskStatusId={BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID}
+      emptyMessage="No in progress bounties match these filters."
+      useCard={USE_IN_PROGRESS_CARD}
+      cardHeightPx={IN_PROGRESS_CARD_HEIGHT_PX}
+    />
   );
 }
 
-export function AvailableBountiesSection() {
+export function AvailableBountiesSection({ spaceId }: { spaceId: string }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className={SECTION_TITLE_CLASS}>Available bounties</h2>
-      <EmptyState message="Open bounties available to contributors will appear here." />
-    </section>
+    <BountiesSection
+      spaceId={spaceId}
+      title="Available bounties"
+      taskStatusId={BOUNTY_TASK_STATUS_TODO_ENTITY_ID}
+      emptyMessage="No available bounties match these filters."
+      useCard={useAvailableBountyCard}
+      cardHeightPx={AVAILABLE_CARD_HEIGHT_PX}
+      cardWidthPx={AVAILABLE_CARD_WIDTH_PX}
+    />
   );
 }
