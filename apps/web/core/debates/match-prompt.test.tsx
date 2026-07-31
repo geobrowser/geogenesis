@@ -303,6 +303,7 @@ describe('DebateMatchPrompt', () => {
       match: match(),
       debate: null,
       rematch: null,
+      challenge: null,
     } satisfies DebateActivity);
 
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);
@@ -353,6 +354,7 @@ describe('DebateMatchPrompt', () => {
       match: acceptedMatch,
       debate: null,
       rematch: null,
+      challenge: null,
     } satisfies DebateActivity);
 
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);
@@ -381,6 +383,7 @@ describe('DebateMatchPrompt', () => {
       match: null,
       debate: debate(),
       rematch: null,
+      challenge: null,
     } satisfies DebateActivity);
 
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);
@@ -411,6 +414,7 @@ describe('DebateMatchPrompt', () => {
         match: null,
         debate: terminalDebate,
         rematch: null,
+        challenge: null,
       } satisfies DebateActivity);
 
       render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);

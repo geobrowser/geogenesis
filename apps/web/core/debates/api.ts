@@ -206,6 +206,37 @@ export type DebateActivity = {
   match: DebateMatch | null;
   debate: Debate | null;
   rematch: DebateRematchSession | null;
+  challenge: DebateChallenge | null;
+};
+
+export type DebateChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+
+/**
+ * A claimless "let's debate" request sent from someone's profile. Accepting it opens a
+ * rematch session where both users pick the claim they'll argue.
+ */
+export type DebateChallenge = {
+  id: string;
+  status: DebateChallengeStatus;
+  source_space_id: string;
+  requester: DebateParticipantSummary;
+  recipient: DebateParticipantSummary;
+  rematch_session_id: string | null;
+  created_at: string;
+  expires_at: string;
+};
+
+export type DebateChallengeActionResponse = {
+  challenge: DebateChallenge;
+  session: DebateRematchSession | null;
+};
+
+export type DebateProfile = {
+  user: DebateParticipantSummary;
+  online: boolean;
+  available_to_debate: boolean;
+  is_self: boolean;
+  can_challenge: boolean;
 };
 
 export type DebateRematchParticipant = DebateParticipantSummary & {
@@ -228,7 +259,8 @@ export type DebateRematchRequest = {
 
 export type DebateRematchSession = {
   id: string;
-  source_debate_id: string;
+  /** `null` when the session came from a profile challenge rather than a finished debate. */
+  source_debate_id: string | null;
   source_space_id: string;
   status: DebateRematchStatus;
   participants: DebateRematchParticipant[];
@@ -762,6 +794,60 @@ export async function rejectDebateRematchRequest(
   accountKey: string | null
 ) {
   return geoChatRequest<DebateRematchActionResponse>(`/debate-rematch-requests/${requestId}/reject`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function getDebateProfile(
+  profileSpaceId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateProfile>(`/debate-profiles/${profileSpaceId}`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function createDebateChallenge(
+  request: { recipient_profile_space_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateChallenge>('/debate-challenges', {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function acceptDebateChallenge(
+  challengeId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateChallengeActionResponse>(`/debate-challenges/${challengeId}/accept`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function rejectDebateChallenge(
+  challengeId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateChallengeActionResponse>(`/debate-challenges/${challengeId}/reject`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,
