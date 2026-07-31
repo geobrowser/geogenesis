@@ -12,7 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
-<<<<<<< Updated upstream
+import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
 import {
   clearDebateMatchTabOwnership,
@@ -20,10 +20,6 @@ import {
   debateMatchOwnershipMatchesDebate,
   readDebateMatchTabOwnership,
 } from './debate-match-tab-ownership';
-import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
-=======
-import { DebateChallengeDialog } from './debate-challenge-dialog';
-import { useDebateGateway } from './debate-gateway';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -32,7 +28,6 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
->>>>>>> Stashed changes
 import { DebateMatchPrompt } from './match-prompt';
 import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
 

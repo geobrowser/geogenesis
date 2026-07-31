@@ -353,6 +353,7 @@ describe('useLeaveDebateRematch', () => {
         claim: { space_id: 'space-1' },
       } as NonNullable<DebateActivity['debate']>,
       rematch: decidingSession,
+      challenge: null,
     };
     const clearedActivity: DebateActivity = { ...staleActivity, debate: null, rematch: null };
     let activityAtBack: DebateActivity | undefined;
@@ -400,6 +401,7 @@ describe('useLeaveDebateRematch', () => {
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
       rematch: decidingSession,
+      challenge: null,
     };
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), staleActivity);
     mocks.leaveDebateRematch.mockResolvedValue(endedSession);
@@ -435,6 +437,7 @@ describe('useLeaveDebateRematch', () => {
         source_debate_id: 'debate-2',
         status: 'deciding',
       },
+      challenge: null,
     };
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), currentActivity);
     mocks.leaveDebateRematch.mockResolvedValue(endedSession);
@@ -476,6 +479,7 @@ describe('useLeaveDebateRematch', () => {
       match: null,
       debate,
       rematch,
+      challenge: null,
     });
     mocks.leaveDebateRematch.mockResolvedValue(endedSession);
     vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
