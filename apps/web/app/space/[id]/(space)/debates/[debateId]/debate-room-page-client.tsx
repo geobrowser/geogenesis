@@ -1623,6 +1623,7 @@ function DebateRecordingModal({
     remoteParticipant?.participant_slot ?? null,
     countdown.activeSlot
   );
+  const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const countdownRing = countdown.remainingSeconds > 0 ? <RecordingCountdownRing countdown={countdown} /> : null;
   const yieldedCountdownRing =
     countdown.yieldedRemainingSeconds !== null && countdown.yieldedProgress !== null ? (
@@ -1634,12 +1635,11 @@ function DebateRecordingModal({
       />
     ) : null;
   const sharedPhaseCountdown = countdown.activeSlot === null && countdown.yieldingSlot === null ? countdownRing : null;
-  const localCountdown =
-    countdown.yieldingSlot === localSlot
-      ? yieldedCountdownRing
-      : countdown.activeSlot === localSlot
-        ? countdownRing
-        : sharedPhaseCountdown;
+  const localCountdown = localEndingTurn
+    ? null
+    : countdown.activeSlot === localSlot
+      ? countdownRing
+      : sharedPhaseCountdown;
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
       ? yieldedCountdownRing
@@ -1655,7 +1655,6 @@ function DebateRecordingModal({
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const connecting = countdown.effectiveStatus === 'connecting';
-  const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
   const canEndLocalTurn =
@@ -1702,6 +1701,7 @@ function DebateRecordingModal({
       inactive={localInactive}
       revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
       inactiveIndicatorId="local"
+      showMutedIndicator={localEndingTurn}
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -1771,8 +1771,8 @@ function DebateRecordingModal({
         />
       )}
 
-      <main className="mx-auto flex min-h-dvh w-full max-w-[930px] flex-col items-center justify-center px-2 py-8 sm:px-5">
-        <h1 className="mb-7 max-w-[820px] text-center text-[1.75rem] leading-[1.05] font-semibold text-text md:mb-12 md:text-[3rem]">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 py-8 sm:px-5">
+        <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {debate.claim.claim}
         </h1>
 
@@ -2003,6 +2003,7 @@ function DebateVideoTile({
   inactive = false,
   revealInactive = false,
   inactiveIndicatorId,
+  showMutedIndicator = false,
   countdown,
   closingMessage = false,
   children,
@@ -2021,11 +2022,13 @@ function DebateVideoTile({
   inactive?: boolean;
   revealInactive?: boolean;
   inactiveIndicatorId: 'local' | 'remote';
+  showMutedIndicator?: boolean;
   countdown?: React.ReactNode;
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
-  const showInactiveIndicator = inactive && !revealInactive && !countdown && !overlayText && !endingTurn;
+  const showInactiveIndicator =
+    showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
 
   return (
     <section

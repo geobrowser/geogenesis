@@ -1197,7 +1197,10 @@ describe('DebateRoomPageClient', () => {
     const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
     act(() => trackSubscribed?.({ attach: () => remoteVideo }));
 
-    expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
+    expect(heading).toBeInTheDocument();
+    expect(heading.closest('main')).toHaveClass('max-w-[430px]');
+    expect(heading).toHaveClass('mb-5', 'max-w-[390px]', 'text-[1.375rem]', 'leading-[1.1]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
@@ -1910,6 +1913,8 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.endTurnMutateAsync.mock.calls[0]?.[0].endedAtMs).toBeGreaterThanOrEqual(endedAtMs);
     expect(endTurn).toBeDisabled();
     expect(screen.getByText('Ending turn…')).toBeInTheDocument();
+    expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
+    expectMutedIndicator('local');
     await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
   });
 
