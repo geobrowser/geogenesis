@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   promptsFetching: false,
   mediaMutate: vi.fn(),
   handleMutate: vi.fn(),
+  acceptChallengeMutate: vi.fn(),
+  rejectChallengeMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
   canShare: vi.fn(),
@@ -46,6 +48,8 @@ vi.mock('./hooks', () => ({
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
+  useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
+  useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -237,6 +241,7 @@ describe('DebateCoordinator', () => {
         claim: { space_id: 'space-1' },
       } as NonNullable<DebateActivity['debate']>,
       rematch: null,
+      challenge: null,
     };
 
     render(<DebateCoordinator />);
@@ -399,6 +404,7 @@ describe('DebateCoordinator', () => {
       match: null,
       debate: null,
       rematch: null,
+      challenge: null,
     };
     mocks.promptsFetching = true;
     view.rerender(<DebateCoordinator />);
@@ -651,6 +657,7 @@ function showSharePrompt() {
     match: null,
     debate: null,
     rematch: null,
+    challenge: null,
   };
   mocks.prompts = [
     {
@@ -722,6 +729,7 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
       created_at: '2026-07-02T00:00:00.000Z',
       updated_at: '2026-07-02T00:00:00.000Z',
     },
+    challenge: null,
   };
 }
 
@@ -748,6 +756,7 @@ function activityWithMatch(): DebateActivity {
     },
     debate: null,
     rematch: null,
+    challenge: null,
   };
 }
 

@@ -179,7 +179,10 @@ describe('DebateGatewayClient', () => {
     [
       'activity',
       { event_type: 'debate.activity_changed', payload: {} },
-      [['debates', 'account', 'user-a', 'activity']],
+      [
+        ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
+      ],
     ],
     [
       'state',
@@ -188,6 +191,7 @@ describe('DebateGatewayClient', () => {
         ['debates', 'detail', 'debate-1'],
         ['debates', 'space', 'space-1'],
         ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
       ],
     ],
     [
@@ -196,6 +200,7 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'account', 'user-a', 'rematch', 'rematch-1'],
         ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
       ],
     ],
     [

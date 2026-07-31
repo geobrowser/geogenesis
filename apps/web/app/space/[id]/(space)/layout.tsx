@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -71,7 +72,13 @@ export default async function Layout(props0: LayoutProps) {
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
           <SpaceHeaderContentContainer spaceId={spaceId} hasSidebar={hasCommunityCallsSidebar}>
             <div className="space-y-2">
-              <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
+              <EditableSpaceHeading
+                spaceId={spaceId}
+                entityId={props.id}
+                actionsComponent={
+                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                }
+              />
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
               <SpacePageMetadataHeader
                 spaceId={spaceId}

@@ -12,6 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+<<<<<<< Updated upstream
 import { useDebateGateway } from './debate-gateway';
 import {
   clearDebateMatchTabOwnership,
@@ -20,6 +21,18 @@ import {
   readDebateMatchTabOwnership,
 } from './debate-match-tab-ownership';
 import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
+=======
+import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { useDebateGateway } from './debate-gateway';
+import {
+  useAcceptDebateChallenge,
+  useDebateActivity,
+  useDebateSharePrompts,
+  useGeoChatAuth,
+  useHandleDebateSharePrompt,
+  useRejectDebateChallenge,
+} from './hooks';
+>>>>>>> Stashed changes
 import { DebateMatchPrompt } from './match-prompt';
 import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
 
@@ -39,6 +52,10 @@ export function DebateCoordinator() {
   const match = activity?.match ?? null;
   const reportedDebate = activity?.debate ?? null;
   const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
+  const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const acceptChallenge = useAcceptDebateChallenge();
+  const rejectChallenge = useRejectDebateChallenge();
+  const challengeError = acceptChallenge.error ?? rejectChallenge.error;
   const lastMatchRef = React.useRef<DebateMatch | null>(null);
   const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
   const retainedMatch =
@@ -46,7 +63,7 @@ export function DebateCoordinator() {
       ? lastMatchRef.current
       : null;
   const visibleMatch = match ?? retainedMatch;
-  const activeFlow = Boolean(match || debate || activity?.rematch);
+  const activeFlow = Boolean(match || debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
     activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
@@ -76,15 +93,16 @@ export function DebateCoordinator() {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
+    const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
     if (rematch.status === 'deciding') {
-      if (!pathname.includes(`/debates/${rematch.source_debate_id}`)) {
-        router.push(`/space/${rematch.source_space_id}/debates/${rematch.source_debate_id}`);
+      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
+        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
       }
       return;
     }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       // The debate room owns recording finalization before entering the browser.
-      if (pathname.includes(`/debates/${rematch.source_debate_id}`)) return;
+      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
@@ -156,6 +174,16 @@ export function DebateCoordinator() {
           matches={[visibleMatch]}
           debates={debate ? [debate] : []}
           reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
+        />
+      )}
+      {challenge && !visibleMatch && !debate && !activity?.rematch && (
+        <DebateChallengeDialog
+          challenge={challenge}
+          role={challenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
+          busy={acceptChallenge.isPending || rejectChallenge.isPending}
+          error={challengeError instanceof Error ? challengeError.message : null}
+          onAccept={() => acceptChallenge.mutate(challenge.id)}
+          onReject={() => rejectChallenge.mutate(challenge.id)}
         />
       )}
       {!activeFlow && visibleSharePrompt && (

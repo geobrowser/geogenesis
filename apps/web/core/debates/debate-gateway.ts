@@ -299,7 +299,7 @@ export class DebateGatewayClient {
 
     switch (payload.event_type) {
       case 'debate.activity_changed':
-        this.queueAccountQuery('activity');
+        this.queueAccountActivity();
         break;
       case 'debate.claims_changed':
         if (identifiers.space_id) {
@@ -309,13 +309,13 @@ export class DebateGatewayClient {
       case 'debate.state_changed':
         if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
-        this.queueAccountQuery('activity');
+        this.queueAccountActivity();
         break;
       case 'debate.rematch_changed':
         if (identifiers.rematch_session_id) {
           this.queueAccountQuery('rematch', identifiers.rematch_session_id);
         }
-        this.queueAccountQuery('activity');
+        this.queueAccountActivity();
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {
@@ -354,7 +354,13 @@ export class DebateGatewayClient {
     this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
   }
 
-  private queueAccountQuery(kind: 'activity' | 'rematch' | 'share-prompts', id?: string) {
+  /** A profile's `can_challenge` folds in the viewer's own activity, so it goes stale with it. */
+  private queueAccountActivity() {
+    this.queueAccountQuery('activity');
+    this.queueAccountQuery('profile');
+  }
+
+  private queueAccountQuery(kind: 'activity' | 'rematch' | 'share-prompts' | 'profile', id?: string) {
     if (!this.accountKey) return;
     this.queueQuery(
       id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]

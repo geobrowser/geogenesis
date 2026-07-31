@@ -69,6 +69,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const acceptRequest = useAcceptDebateRematchRequest();
   const rejectRequest = useRejectDebateRematchRequest();
   const session = sessionQuery.data ?? null;
+  // A session opened from a profile challenge has no source debate, so nothing to exclude.
   const sourceDebateQuery = useDebate(session?.source_debate_id ?? '', Boolean(session?.source_debate_id));
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(

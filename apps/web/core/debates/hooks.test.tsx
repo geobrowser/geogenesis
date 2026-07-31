@@ -225,6 +225,7 @@ describe('useUpdateDebateAvailability', () => {
     match: null,
     debate: null,
     rematch: null,
+    challenge: null,
   };
 
   it('optimistically updates then reconciles the authoritative activity', async () => {
@@ -290,6 +291,7 @@ describe('useConsentToDebateRematch', () => {
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
       rematch: null,
+      challenge: null,
     };
     const session = rematchSession();
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), staleActivity);
@@ -313,6 +315,7 @@ describe('useConsentToDebateRematch', () => {
       match: null,
       debate: null,
       rematch: session,
+      challenge: null,
     });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.activity('user-a') });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.rematch('user-a', session.id) });
@@ -600,6 +603,7 @@ describe('useClearTimedOutDebateActivity', () => {
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
       rematch: null,
+      challenge: null,
     };
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
     const wrapper = ({ children }: { children: ReactNode }) => (
@@ -628,6 +632,7 @@ describe('useClearDebateActivity', () => {
       match: null,
       debate: { id: 'debate-1' } as NonNullable<DebateActivity['debate']>,
       rematch: null,
+      challenge: null,
     };
     queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
     const wrapper = ({ children }: { children: ReactNode }) => (
