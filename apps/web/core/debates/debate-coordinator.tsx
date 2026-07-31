@@ -11,8 +11,14 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import type { DebateMatch, DebateSharePrompt } from './api';
+import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
 import { useDebateGateway } from './debate-gateway';
+import {
+  clearDebateMatchTabOwnership,
+  createDebateMatchTabOwnershipCoordinator,
+  debateMatchOwnershipMatchesDebate,
+  readDebateMatchTabOwnership,
+} from './debate-match-tab-ownership';
 import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
 import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
@@ -28,6 +34,7 @@ export function DebateCoordinator() {
     geoChatAuth.accountKey
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
+  const currentUserId = getCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
   const match = activity?.match ?? null;
   const reportedDebate = activity?.debate ?? null;
@@ -67,13 +74,6 @@ export function DebateCoordinator() {
 
   React.useEffect(() => {
     if (!activity) return;
-    const viewingRematch = pathname.includes('/debates/rematches/');
-    if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
-      // The retained match prompt owns this handoff so it can deduplicate
-      // navigation from the accept response and the activity update.
-      if (!visibleMatch) router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
-      return;
-    }
     const rematch = activity.rematch;
     if (!rematch) return;
     if (rematch.status === 'deciding') {
@@ -88,7 +88,46 @@ export function DebateCoordinator() {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
-  }, [activity, debate, pathname, router, visibleMatch]);
+  }, [activity, pathname, router]);
+
+  React.useEffect(() => {
+    if (!currentUserId) return;
+    if (debate && pathname.includes(`/debates/${debate.id}`)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    const record = readDebateMatchTabOwnership(currentUserId);
+    if (!record) return;
+    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
+      if (debateMatchOwnershipMatchesDebate(record, reportedDebate, currentUserId)) {
+        clearDebateMatchTabOwnership(currentUserId);
+      }
+      return;
+    }
+    if (!debate || visibleMatch || pathname.includes('/debates/rematches/')) return;
+    if (!debateMatchOwnershipMatchesDebate(record, debate, currentUserId)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+
+    const ownership = createDebateMatchTabOwnershipCoordinator({
+      matchId: record.matchId,
+      claimId: record.claimId,
+      spaceId: record.spaceId,
+      userId: currentUserId,
+      onAcceptedElsewhere: () => undefined,
+    });
+    let active = true;
+    void ownership.recover().then(recovered => {
+      if (!active || !recovered) return;
+      if (record.state === 'pending') ownership.confirmAcceptance();
+      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
+    });
+    return () => {
+      active = false;
+      ownership.close();
+    };
+  }, [currentUserId, debate, pathname, reportedDebate, router, visibleMatch]);
 
   if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
@@ -110,6 +149,7 @@ export function DebateCoordinator() {
           spaceId={visibleMatch.claim.space_id}
           matches={[visibleMatch]}
           debates={debate ? [debate] : []}
+          reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
         />
       )}
       {!activeFlow && visibleSharePrompt && (

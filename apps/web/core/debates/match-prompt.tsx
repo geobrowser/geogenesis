@@ -9,7 +9,19 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
-import { type Debate, type DebateMatch, type DebateMatchParticipant, getCurrentGeoChatUserId } from './api';
+import {
+  type Debate,
+  type DebateActivity,
+  type DebateMatch,
+  type DebateMatchParticipant,
+  getCurrentGeoChatUserId,
+} from './api';
+import {
+  type DebateMatchTabOwnershipCoordinator,
+  createDebateMatchTabOwnershipCoordinator,
+  debateMatchOwnershipMatchesDebate,
+  readDebateMatchTabOwnership,
+} from './debate-match-tab-ownership';
 import { DebatePreScreen } from './debate-pre-join-screen';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { type DebateFormatId, debateFormatById, defaultDebateFormatId } from './formats';
@@ -25,17 +37,28 @@ type DebateMatchPromptProps = {
   spaceId: string;
   matches: DebateMatch[];
   debates?: Debate[];
+  reconcileActivity?: () => Promise<DebateActivity | null>;
 };
 
-export function DebateMatchPrompt({ spaceId, matches, debates = [] }: DebateMatchPromptProps) {
+export function DebateMatchPrompt({ spaceId, matches, debates = [], reconcileActivity }: DebateMatchPromptProps) {
   return (
     <DebateMediaSessionBoundary>
-      <DebateMatchPromptContent spaceId={spaceId} matches={matches} debates={debates} />
+      <DebateMatchPromptContent
+        spaceId={spaceId}
+        matches={matches}
+        debates={debates}
+        reconcileActivity={reconcileActivity}
+      />
     </DebateMediaSessionBoundary>
   );
 }
 
-function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatchPromptProps) {
+type OwnershipState = 'checking' | 'none' | 'pending' | 'confirmed' | 'other-tab';
+
+const acceptanceReconciliationTimeoutMs = 10_000;
+const acceptanceReconciliationTimedOut = Symbol('acceptance-reconciliation-timed-out');
+
+function DebateMatchPromptContent({ spaceId, matches, debates = [], reconcileActivity }: DebateMatchPromptProps) {
   const router = useRouter();
   const debateFormatSelectorEnabled = useFeatureFlag('debateFormatSelector');
   const mediaSession = useDebateMediaSession();
@@ -43,18 +66,30 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   const acceptMatch = useAcceptDebateMatch(spaceId);
   const declineMatch = useDeclineDebateMatch(spaceId);
   const currentUserId = getCurrentGeoChatUserId();
+  const ownershipMatch = matches[0] ?? null;
+  const [ownershipState, setOwnershipState] = React.useState<OwnershipState>(() =>
+    initialOwnershipState(ownershipMatch, currentUserId)
+  );
   const [selectedFormatIds, setSelectedFormatIds] = React.useState<Record<string, DebateFormatId>>({});
-  const [acceptedMatchIds, setAcceptedMatchIds] = React.useState<string[]>([]);
   const [queuedReadyMatchIds, setQueuedReadyMatchIds] = React.useState<string[]>([]);
   const [readyError, setReadyError] = React.useState<string | null>(null);
   const [acceptingMatchId, setAcceptingMatchId] = React.useState<string | null>(null);
-  const [waitingClaimIds, setWaitingClaimIds] = React.useState<string[]>([]);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
   const navigatedDebateIdRef = React.useRef<string | null>(null);
   const readyHandoffDebateIdRef = React.useRef<string | null>(null);
   const readyValidationDebateIdRef = React.useRef<string | null>(null);
+  const matchActionInFlightRef = React.useRef(false);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
+  const returnFocusRef = React.useRef<HTMLElement | null>(
+    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null
+  );
+  const handleAcceptedElsewhere = React.useCallback(() => setOwnershipState('other-tab'), []);
+  const ownershipCoordinator = useMatchTabOwnershipCoordinator(ownershipMatch, currentUserId, handleAcceptedElsewhere);
+  const ownershipDebate =
+    ownershipMatch && currentUserId
+      ? (debates.find(debate => debateMatchesMatch(debate, ownershipMatch, currentUserId)) ?? null)
+      : null;
 
   const navigateToDebate = React.useCallback(
     (debateId: string, matchId: string) => {
@@ -73,7 +108,6 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
 
   React.useEffect(() => {
     const activeIds = new Set(matches.map(match => match.id));
-    setAcceptedMatchIds(current => current.filter(id => activeIds.has(id)));
     setQueuedReadyMatchIds(current => current.filter(id => activeIds.has(id)));
     setAcceptingMatchId(current => (current && activeIds.has(current) ? current : null));
     setDismissedMatchIds(current => current.filter(id => activeIds.has(id)));
@@ -88,67 +122,100 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   }, [matches]);
 
   React.useEffect(() => {
-    if (!currentUserId) return;
+    if (!ownershipMatch || !currentUserId) {
+      setOwnershipState('none');
+      return;
+    }
+    if (!ownershipCoordinator) return;
 
-    const matchWithDebate = matches.find(
-      match => match.debate_id && participantForUser(match, currentUserId)?.accepted === true
-    );
+    let active = true;
+    const record = readDebateMatchTabOwnership(currentUserId);
+    const participantAccepted = participantForUser(ownershipMatch, currentUserId)?.accepted === true;
+    if (
+      !record ||
+      record.matchId !== ownershipMatch.id ||
+      record.claimId !== ownershipMatch.claim.id ||
+      record.spaceId !== ownershipMatch.claim.space_id
+    ) {
+      setOwnershipState(participantAccepted ? 'other-tab' : 'none');
+    } else {
+      setOwnershipState('checking');
+      void ownershipCoordinator.recover().then(recovered => {
+        if (!active) return;
+        setOwnershipState(recovered ? record.state : participantAccepted ? 'other-tab' : 'none');
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [
+    currentUserId,
+    ownershipCoordinator,
+    ownershipMatch?.claim.id,
+    ownershipMatch?.claim.space_id,
+    ownershipMatch?.id,
+  ]);
+
+  React.useEffect(() => {
+    if (!ownershipCoordinator || !ownershipMatch || !currentUserId) return;
+    if (participantForUser(ownershipMatch, currentUserId)?.accepted !== true && !ownershipDebate) return;
+    if (ownershipState === 'pending') {
+      ownershipCoordinator.confirmAcceptance();
+      setOwnershipState('confirmed');
+    } else if (ownershipState === 'none') {
+      setOwnershipState('other-tab');
+    }
+  }, [currentUserId, ownershipCoordinator, ownershipDebate, ownershipMatch, ownershipState]);
+
+  React.useEffect(() => {
+    const otherTabMatchId = ownershipState === 'other-tab' ? ownershipMatch?.id : null;
+    if (!otherTabMatchId) return;
+    setQueuedReadyMatchIds(current => current.filter(id => id !== otherTabMatchId));
+    setMinimizedMatchIds(current => current.filter(id => id !== otherTabMatchId));
+    releaseSession(debateMatchMediaSessionKey(otherTabMatchId));
+
+    const frame = window.requestAnimationFrame(() => restorePageFocus(returnFocusRef.current));
+    return () => window.cancelAnimationFrame(frame);
+  }, [ownershipMatch?.id, ownershipState, releaseSession]);
+
+  React.useEffect(() => {
+    if (!currentUserId || ownershipState !== 'confirmed' || !ownershipMatch) return;
+
+    const matchWithDebate = matches.find(match => match.id === ownershipMatch.id && match.debate_id);
     if (matchWithDebate?.debate_id) {
       if (queuedReadyMatchIds.includes(matchWithDebate.id)) return;
       navigateToDebate(matchWithDebate.debate_id, matchWithDebate.id);
       return;
     }
 
-    const waitingClaimIdSet = new Set([
-      ...waitingClaimIds,
-      ...matches
-        .filter(match => participantForUser(match, currentUserId)?.accepted === true)
-        .map(match => match.claim.id),
-    ]);
-    if (waitingClaimIdSet.size === 0) return;
-
     const debate = debates.find(
       debate =>
-        waitingClaimIdSet.has(debate.claim.id) &&
+        debate.claim.id === ownershipMatch.claim.id &&
         debate.participants.some(participant => participant.user_id === currentUserId) &&
         !['complete', 'cancelled'].includes(debate.status)
     );
     if (debate) {
-      const matchId =
-        matches.find(match => match.claim.id === debate.claim.id)?.id ?? acceptedMatchIds[0] ?? queuedReadyMatchIds[0];
+      const matchId = matches.find(match => match.claim.id === debate.claim.id)?.id ?? ownershipMatch.id;
       if (matchId && !queuedReadyMatchIds.includes(matchId)) navigateToDebate(debate.id, matchId);
     }
-  }, [acceptedMatchIds, currentUserId, debates, matches, navigateToDebate, queuedReadyMatchIds, waitingClaimIds]);
+  }, [currentUserId, debates, matches, navigateToDebate, ownershipMatch, ownershipState, queuedReadyMatchIds]);
 
   const waitingMatch =
     matches.find(match => {
       if (!currentUserId || dismissedMatchIds.includes(match.id)) return false;
-      const participant = participantForUser(match, currentUserId);
-      return (
-        acceptedMatchIds.includes(match.id) ||
-        waitingClaimIds.includes(match.claim.id) ||
-        participant?.accepted === true
-      );
+      return ownershipState === 'confirmed' && match.id === ownershipMatch?.id;
     }) ?? null;
   const activeMatch =
     waitingMatch ??
-    (waitingClaimIds.length === 0 ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null) : null);
+    (ownershipState === 'none' || ownershipState === 'pending'
+      ? (matches.find(match => !dismissedMatchIds.includes(match.id)) ?? null)
+      : null);
   const activeMatchId = activeMatch?.id ?? null;
   const minimizedMatch = activeMatch && minimizedMatchIds.includes(activeMatch.id) ? activeMatch : null;
   const myParticipant = activeMatch && currentUserId ? participantForUser(activeMatch, currentUserId) : null;
-  const waiting = Boolean(
-    activeMatch &&
-    (acceptedMatchIds.includes(activeMatch.id) ||
-      waitingClaimIds.includes(activeMatch.claim.id) ||
-      myParticipant?.accepted === true)
-  );
+  const waiting = Boolean(activeMatch && ownershipState === 'confirmed');
   const matchedDebate = activeMatch
-    ? (debates.find(
-        debate =>
-          debate.claim.id === activeMatch.claim.id &&
-          Boolean(currentUserId && debate.participants.some(participant => participant.user_id === currentUserId)) &&
-          !['complete', 'cancelled'].includes(debate.status)
-      ) ?? null)
+    ? (debates.find(debate => Boolean(currentUserId && debateMatchesMatch(debate, activeMatch, currentUserId))) ?? null)
     : null;
   const debateLocalParticipant =
     matchedDebate?.participants.find(participant => participant.user_id === currentUserId) ?? null;
@@ -223,12 +290,18 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
     submitReady,
   ]);
 
-  if (!activeMatch || !currentUserId) return null;
+  if (!activeMatch || !currentUserId) {
+    return ownershipState === 'other-tab' ? (
+      <p role="status" aria-live="polite" className="sr-only">
+        Debate accepted in another tab.
+      </p>
+    ) : null;
+  }
 
   const selectedFormatId = selectedFormatIds[activeMatch.id] ?? formatIdForMatch(activeMatch);
   const error =
     readyError ??
-    (acceptMatch.error instanceof Error
+    (ownershipState !== 'confirmed' && acceptMatch.error instanceof Error
       ? acceptMatch.error.message
       : declineMatch.error instanceof Error
         ? declineMatch.error.message
@@ -246,9 +319,18 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
     setSelectedFormatIds(current => ({ ...current, [activeMatch.id]: formatId }));
   };
 
-  const accept = () => {
+  const accept = async () => {
+    if (!ownershipCoordinator || matchActionInFlightRef.current) return;
+    matchActionInFlightRef.current = true;
     setReadyError(null);
     setAcceptingMatchId(activeMatch.id);
+    if (!(await ownershipCoordinator.acquire())) {
+      matchActionInFlightRef.current = false;
+      setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+      return;
+    }
+    ownershipCoordinator.beginAcceptance();
+    setOwnershipState('pending');
     acceptMatch.mutate(
       {
         matchId: activeMatch.id,
@@ -256,18 +338,31 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
       },
       {
         onSuccess: result => {
+          matchActionInFlightRef.current = false;
+          setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+          if (!ownershipCoordinator.confirmAcceptance()) return;
+          setOwnershipState('confirmed');
           setMinimizedMatchIds(current => current.filter(id => id !== activeMatch.id));
           const debateId = result.debate?.id ?? result.match.debate_id;
           if (debateId) {
             navigateToDebate(debateId, activeMatch.id);
             return;
           }
-          setAcceptingMatchId(null);
-          setAcceptedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
-          setWaitingClaimIds(current => Array.from(new Set([...current, activeMatch.claim.id])));
         },
         onError: () => {
-          setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+          void reconcileFailedAcceptance(activeMatch, currentUserId, ownershipCoordinator, reconcileActivity)
+            .then(result => {
+              if (result.status === 'confirmed') {
+                setOwnershipState('confirmed');
+                if (result.debate) navigateToDebate(result.debate.id, activeMatch.id);
+              } else if (result.status === 'rejected') {
+                setOwnershipState('none');
+              }
+            })
+            .finally(() => {
+              matchActionInFlightRef.current = false;
+              setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+            });
         },
       }
     );
@@ -276,18 +371,33 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
   const dismiss = () => {
     readyValidationDebateIdRef.current = null;
     setDismissedMatchIds(current => Array.from(new Set([...current, activeMatch.id])));
-    setAcceptedMatchIds(current => current.filter(id => id !== activeMatch.id));
     setQueuedReadyMatchIds(current => current.filter(id => id !== activeMatch.id));
-    setWaitingClaimIds(current => current.filter(id => id !== activeMatch.claim.id));
     setMinimizedMatchIds(current => current.filter(id => id !== activeMatch.id));
     setReadyError(null);
   };
 
-  const decline = () => {
+  const decline = async () => {
+    if (!ownershipCoordinator || matchActionInFlightRef.current) return;
+    matchActionInFlightRef.current = true;
+    setAcceptingMatchId(activeMatch.id);
+    if (!(await ownershipCoordinator.acquire())) {
+      matchActionInFlightRef.current = false;
+      setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+      return;
+    }
     dismiss();
     declineMatch.mutate(activeMatch.id, {
+      onSuccess: () => {
+        matchActionInFlightRef.current = false;
+        setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
+        setOwnershipState('none');
+        void ownershipCoordinator.release({ clearRecord: true });
+      },
       onError: () => {
+        matchActionInFlightRef.current = false;
+        setAcceptingMatchId(current => (current === activeMatch.id ? null : current));
         setDismissedMatchIds(current => current.filter(id => id !== activeMatch.id));
+        void ownershipCoordinator.release({ clearRecord: ownershipState !== 'confirmed' });
       },
     });
   };
@@ -305,6 +415,8 @@ function DebateMatchPromptContent({ spaceId, matches, debates = [] }: DebateMatc
     abortDebate.mutate(undefined, {
       onSuccess: () => {
         dismiss();
+        setOwnershipState('none');
+        void ownershipCoordinator?.release({ clearRecord: true });
         releaseSession(debateMatchMediaSessionKey(activeMatch.id));
       },
     });
@@ -429,4 +541,125 @@ function speakerLabel(participant: { display_name: string | null; profile_space_
 
 function formatIdForMatch(match: DebateMatch): DebateFormatId {
   return debateFormatById(match.turn_format_id)?.id ?? defaultDebateFormatId;
+}
+
+function initialOwnershipState(match: DebateMatch | null, currentUserId: string | null): OwnershipState {
+  if (!match || !currentUserId) return 'none';
+  const record = readDebateMatchTabOwnership(currentUserId);
+  if (record?.matchId === match.id && record.claimId === match.claim.id && record.spaceId === match.claim.space_id) {
+    return 'checking';
+  }
+  return participantForUser(match, currentUserId)?.accepted === true ? 'other-tab' : 'none';
+}
+
+type AcceptanceReconciliation =
+  { status: 'confirmed'; debate: Debate | null } | { status: 'rejected' } | { status: 'inconclusive' };
+
+async function reconcileFailedAcceptance(
+  match: DebateMatch,
+  currentUserId: string,
+  ownershipCoordinator: DebateMatchTabOwnershipCoordinator,
+  reconcileActivity?: () => Promise<DebateActivity | null>
+): Promise<AcceptanceReconciliation> {
+  if (!reconcileActivity) {
+    await ownershipCoordinator.release({ clearRecord: true });
+    return { status: 'rejected' };
+  }
+
+  let activity: DebateActivity | null;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const result = await Promise.race([
+      reconcileActivity(),
+      new Promise<typeof acceptanceReconciliationTimedOut>(resolve => {
+        timeout = setTimeout(() => resolve(acceptanceReconciliationTimedOut), acceptanceReconciliationTimeoutMs);
+      }),
+    ]);
+    if (result === acceptanceReconciliationTimedOut) return { status: 'inconclusive' };
+    activity = result;
+  } catch {
+    return { status: 'inconclusive' };
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+  if (!activity) return { status: 'inconclusive' };
+
+  const activityMatch = activity.match?.id === match.id ? activity.match : null;
+  const accepted = activityMatch && participantForUser(activityMatch, currentUserId)?.accepted === true;
+  const debate =
+    activity.debate &&
+    debateMatchOwnershipMatchesDebate(
+      {
+        userId: currentUserId,
+        claimId: match.claim.id,
+        spaceId: match.claim.space_id,
+      },
+      activity.debate,
+      currentUserId
+    )
+      ? activity.debate
+      : null;
+
+  if (accepted || debate) {
+    return ownershipCoordinator.confirmAcceptance() ? { status: 'confirmed', debate } : { status: 'inconclusive' };
+  }
+
+  if (activityMatch || (!activity.match && !activity.debate)) {
+    await ownershipCoordinator.release({ clearRecord: true });
+    return { status: 'rejected' };
+  }
+  return { status: 'inconclusive' };
+}
+
+function useMatchTabOwnershipCoordinator(
+  match: DebateMatch | null,
+  currentUserId: string | null,
+  onAcceptedElsewhere: () => void
+) {
+  const [state, setState] = React.useState<{
+    matchId: string;
+    userId: string;
+    coordinator: DebateMatchTabOwnershipCoordinator;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!match || !currentUserId) return;
+    const coordinator = createDebateMatchTabOwnershipCoordinator({
+      matchId: match.id,
+      claimId: match.claim.id,
+      spaceId: match.claim.space_id,
+      userId: currentUserId,
+      onAcceptedElsewhere,
+    });
+    setState({ matchId: match.id, userId: currentUserId, coordinator });
+    return () => coordinator.close();
+  }, [currentUserId, match?.claim.id, match?.claim.space_id, match?.id, onAcceptedElsewhere]);
+
+  if (!state || state.matchId !== match?.id || state.userId !== currentUserId) return null;
+  return state.coordinator;
+}
+
+function debateMatchesMatch(debate: Debate, match: DebateMatch, currentUserId: string) {
+  return (
+    debate.claim.id === match.claim.id &&
+    debate.claim.space_id === match.claim.space_id &&
+    debate.participants.some(participant => participant.user_id === currentUserId) &&
+    !['complete', 'cancelled'].includes(debate.status)
+  );
+}
+
+function restorePageFocus(previouslyFocused: HTMLElement | null) {
+  if (previouslyFocused?.isConnected && previouslyFocused !== document.body) {
+    previouslyFocused.focus();
+    return;
+  }
+
+  const main = document.querySelector<HTMLElement>('main');
+  if (!main) return;
+  const hadTabIndex = main.hasAttribute('tabindex');
+  if (!hadTabIndex) main.tabIndex = -1;
+  main.focus();
+  if (!hadTabIndex) {
+    main.addEventListener('blur', () => main.removeAttribute('tabindex'), { once: true });
+  }
 }
