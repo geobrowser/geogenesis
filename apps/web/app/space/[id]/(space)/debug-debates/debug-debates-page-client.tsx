@@ -6,11 +6,7 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import type {
-  Debate,
-  DebateMediaResponse,
-  DebateTranscriptSegment,
-} from '~/core/debates/api';
+import type { Debate, DebateMediaResponse, DebateTranscriptSegment } from '~/core/debates/api';
 import { getCurrentGeoChatUserId } from '~/core/debates/api';
 import {
   debateQueryKeys,
@@ -268,7 +264,15 @@ function ProcessingBadge({ status }: { status: ProcessingStatus }) {
   );
 }
 
-function ProcessedRendition({ debateId, rendition, available }: { debateId: string; rendition: Rendition; available: boolean }) {
+function ProcessedRendition({
+  debateId,
+  rendition,
+  available,
+}: {
+  debateId: string;
+  rendition: Rendition;
+  available: boolean;
+}) {
   const artifactUrl = useDebateMediaArtifactUrl();
   const loadUrlRef = React.useRef(artifactUrl.mutate);
   const [url, setUrl] = React.useState<string | null>(null);
@@ -326,7 +330,11 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
             onError={() => setPlaybackError(true)}
             className="aspect-video w-full rounded bg-white object-contain"
           />
-          {playbackError && <StateMessage compact tone="error">{rendition.label} playback failed.</StateMessage>}
+          {playbackError && (
+            <StateMessage compact tone="error">
+              {rendition.label} playback failed.
+            </StateMessage>
+          )}
           <a
             href={url}
             target="_blank"
@@ -344,7 +352,8 @@ function ProcessedRendition({ debateId, rendition, available }: { debateId: stri
 function TranscriptSection({ debateId, segmentCount }: { debateId: string; segmentCount: number | undefined }) {
   const [expanded, setExpanded] = React.useState(false);
   const transcriptQuery = useDebateTranscript(debateId, 'json', expanded);
-  const label = segmentCount === undefined ? 'count unavailable' : `${segmentCount} ${segmentCount === 1 ? 'segment' : 'segments'}`;
+  const label =
+    segmentCount === undefined ? 'count unavailable' : `${segmentCount} ${segmentCount === 1 ? 'segment' : 'segments'}`;
   const segments = transcriptQuery.data?.segments ?? [];
 
   return (
@@ -419,7 +428,9 @@ function StateMessage({
   compact?: boolean;
 }) {
   return (
-    <p className={`${compact ? 'text-sm' : 'rounded-lg border border-grey-02 p-4'} ${tone === 'error' ? 'text-red-02' : 'text-grey-04'}`}>
+    <p
+      className={`${compact ? 'text-sm' : 'rounded-lg border border-grey-02 p-4'} ${tone === 'error' ? 'text-red-02' : 'text-grey-04'}`}
+    >
       {children}
     </p>
   );
