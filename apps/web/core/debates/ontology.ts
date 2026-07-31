@@ -1,5 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
+
 /**
  * GRC-20 ontology for publishing a finished debate to the knowledge graph.
  *
@@ -23,6 +25,9 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
+/** Key frame (RELATION) → Image. The still the app shows as a video's poster. */
+export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
+
 /** Supported by (RELATION) → participant space entity arguing "yes". */
 export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd';
 /** Opposed by (RELATION) → participant space entity arguing "no". */
@@ -45,6 +50,13 @@ export const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY; // a126ca53…
 export const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY; // 8f151ba4…
 export const VIDEO_TYPE_ID = SystemIds.VIDEO_TYPE; // d7a4817c… (matches spec)
 export const VIDEO_URL_PROPERTY_ID = SystemIds.VIDEO_URL_PROPERTY; // 33da2ef5…
+export const IMAGE_TYPE_ID = SystemIds.IMAGE_TYPE; // ba4e4146…
+/**
+ * The unified IPFS URL property. Despite the name it carries the `ipfs://` URI for Video entities
+ * as well as Images. `RelationDtoLive` and the media hooks read a media entity's URL from here and
+ * nowhere else, so a Video that only sets `Video URL` renders as an empty relation.
+ */
+export const IMAGE_URL_PROPERTY_ID = SystemIds.IMAGE_URL_PROPERTY; // 8a743832…
 export const BLOCKS_PROPERTY_ID = SystemIds.BLOCKS; // beaba5cb…
 export const TEXT_BLOCK_TYPE_ID = SystemIds.TEXT_BLOCK; // 76474f2f…
 export const MARKDOWN_CONTENT_PROPERTY_ID = SystemIds.MARKDOWN_CONTENT; // e3e363d1… (matches spec)
