@@ -407,8 +407,17 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
+      const activityKey = debateQueryKeys.activity(accountKey);
+      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+      if (activity) {
+        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+        if (debate !== activity.debate || rematch !== activity.rematch) {
+          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+        }
+      }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
 }

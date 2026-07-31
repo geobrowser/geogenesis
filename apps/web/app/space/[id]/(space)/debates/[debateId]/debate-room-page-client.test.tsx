@@ -2427,6 +2427,34 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });
 
+  it('returns to the previous page after leaving during the thank-you phase', async () => {
+    setHistoryLength(2);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+    expect(mocks.enqueueRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.leaveRematchMutateAsync.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(mocks.back).toHaveBeenCalledOnce();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it('does not leave the rematch flow when the local recording cannot be persisted', async () => {
     mocks.debate = {
       ...completedDebate(),
