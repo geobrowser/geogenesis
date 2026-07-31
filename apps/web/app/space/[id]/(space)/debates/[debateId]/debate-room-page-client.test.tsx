@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
+  endTurnMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
   getRecording: vi.fn(),
@@ -83,6 +84,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useClearDebateActivity: () => mocks.clearDebateActivity,
   useClearTimedOutDebateActivity: () => mocks.clearTimedOutDebateActivity,
   useConsentToDebateRematch: () => ({ mutateAsync: mocks.consentMutateAsync, isPending: false }),
+  useEndDebateTurn: () => ({ mutateAsync: mocks.endTurnMutateAsync, isPending: false }),
   useDebate: () => ({ data: mocks.debate, isLoading: false, error: null, refetch: mocks.refetchDebate }),
   useDebateRematch: () => ({ data: mocks.rematch, isLoading: false, error: null }),
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
@@ -169,6 +171,7 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
   mocks.consentMutateAsync.mockReset();
+  mocks.endTurnMutateAsync.mockReset().mockResolvedValue(undefined);
   mocks.leaveRematchMutateAsync.mockReset();
   mocks.enqueueRecording.mockReset();
   mocks.getRecording.mockReset();
@@ -1194,7 +1197,10 @@ describe('DebateRoomPageClient', () => {
     const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
     act(() => trackSubscribed?.({ attach: () => remoteVideo }));
 
-    expect(screen.getByRole('heading', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
+    expect(heading).toBeInTheDocument();
+    expect(heading.closest('main')).toHaveClass('max-w-[430px]');
+    expect(heading).toHaveClass('mb-5', 'max-w-[390px]', 'text-[1.375rem]', 'leading-[1.1]');
     expect(screen.queryByRole('button', { name: 'Mute microphone' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn camera off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disable audio' })).not.toBeInTheDocument();
@@ -1876,6 +1882,217 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
   });
 
+  it('ends the active local turn optimistically and mutes the microphone', async () => {
+    const endedAtMs = Date.parse('2026-07-02T00:00:20.000Z');
+    vi.spyOn(Date, 'now').mockReturnValue(endedAtMs);
+    const pendingEnd = deferred<Debate>();
+    mocks.endTurnMutateAsync.mockReturnValue(pendingEnd.promise);
+    const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const endTurn = await screen.findByRole('button', { name: 'End turn' });
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+    fireEvent.click(endTurn);
+
+    expect(mocks.endTurnMutateAsync).toHaveBeenCalledWith({ turnIndex: 0, endedAtMs: expect.any(Number) });
+    expect(mocks.endTurnMutateAsync.mock.calls[0]?.[0].endedAtMs).toBeGreaterThanOrEqual(endedAtMs);
+    expect(endTurn).toBeDisabled();
+    expect(screen.getByText('Ending turn…')).toBeInTheDocument();
+    expect(debateVideoTile('local').querySelector('[aria-label^="Phase timer:"]')).not.toBeInTheDocument();
+    expectMutedIndicator('local');
+    await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+  });
+
+  it('keeps a slow end-turn request pending until the server supplies the handoff deadline', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse('2026-07-02T00:00:20.000Z'));
+    mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'End turn' }));
+
+    await act(() => vi.advanceTimersByTimeAsync(6_000));
+
+    expect(screen.getByText('Ending turn…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End turn' })).toBeDisabled();
+  });
+
+  it('reconciles a committed turn yield after the mutation response is lost', async () => {
+    const endedAt = '2026-07-02T00:00:20.000Z';
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(endedAt));
+    mocks.endTurnMutateAsync.mockRejectedValue(new Error('Connection lost'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+    mocks.refetchDebate.mockResolvedValue({
+      data: {
+        ...mocks.debate,
+        turn_yields: [
+          {
+            turn_index: 0,
+            user_id: 'user-a',
+            participant_slot: 1,
+            yielded_at: endedAt,
+            accepted_at: endedAt,
+            handoff_deadline_at: '2026-07-02T00:00:25.000Z',
+          },
+        ],
+      },
+    });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+
+    await waitFor(() => expect(mocks.refetchDebate).toHaveBeenCalled());
+    expect(screen.queryByText('Connection lost')).not.toBeInTheDocument();
+  });
+
+  it('reconstructs a yielded handoff and counts the incoming local speaker in', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:24.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:25.000Z',
+      completed_at: null,
+      turn_yields: [
+        {
+          turn_index: 0,
+          user_id: 'user-b',
+          participant_slot: 2,
+          yielded_at: '2026-07-02T00:00:20.000Z',
+          accepted_at: '2026-07-02T00:00:20.000Z',
+          handoff_deadline_at: '2026-07-02T00:00:25.000Z',
+        },
+      ],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const ending = await screen.findByText('Ending turn…');
+    expect(debateVideoTile('remote')).toContainElement(ending);
+    expect(debateVideoTile('local')).toContainElement(screen.getByText('Your turn in'));
+    expect(screen.getByLabelText('Phase timer: 10 seconds remaining')).toHaveAttribute(
+      'data-timer-progress',
+      String(2 / 3)
+    );
+    expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
+  });
+
+  it('preserves the normal incoming count-in when a turn is yielded inside its final five seconds', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:29.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:00.000Z',
+      turn_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+      turn_yields: [
+        {
+          turn_index: 0,
+          user_id: 'user-b',
+          participant_slot: 2,
+          yielded_at: '2026-07-02T00:00:26.000Z',
+          accepted_at: '2026-07-02T00:00:26.000Z',
+          handoff_deadline_at: '2026-07-02T00:00:30.000Z',
+        },
+      ],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText("You're up in")).toBeInTheDocument();
+    expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
+  });
+
+  it('moves a yielded final turn into the normal thank-you phase as soon as the server snapshot arrives', async () => {
+    const endedAt = '2026-07-02T00:00:50.000Z';
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse(endedAt));
+    mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 2,
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:30.000Z',
+      turn_ends_at: '2026-07-02T00:01:00.000Z',
+      completed_at: null,
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+    expect(screen.getByText('Ending turn…')).toBeInTheDocument();
+
+    mocks.debate = {
+      ...mocks.debate,
+      status: 'thanking',
+      current_speaker_slot: null,
+      turn_started_at: endedAt,
+      turn_ends_at: '2026-07-02T00:01:10.000Z',
+      rematch_session_id: 'rematch-1',
+      turn_yields: [
+        {
+          turn_index: 1,
+          user_id: 'user-a',
+          participant_slot: 1,
+          yielded_at: endedAt,
+          accepted_at: endedAt,
+          handoff_deadline_at: endedAt,
+        },
+      ],
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
+    expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
+  });
+
   it('shows wrap it up only on the active local speaker during the penultimate turn', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
@@ -2208,6 +2425,34 @@ describe('DebateRoomPageClient', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Yes' }));
 
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
+  });
+
+  it('returns to the previous page after leaving during the thank-you phase', async () => {
+    setHistoryLength(2);
+    installRecordingMocks();
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+    expect(mocks.enqueueRecording.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.leaveRematchMutateAsync.mock.invocationCallOrder[0]!
+    );
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(mocks.back).toHaveBeenCalledOnce();
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it('does not leave the rematch flow when the local recording cannot be persisted', async () => {

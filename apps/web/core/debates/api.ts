@@ -162,6 +162,15 @@ export type DebateTranscriptResponse = {
   body?: string;
 };
 
+export type DebateTurnYield = {
+  turn_index: number;
+  user_id: string;
+  participant_slot: ParticipantSlot;
+  yielded_at: string;
+  accepted_at: string;
+  handoff_deadline_at: string;
+};
+
 export type Debate = {
   id: string;
   claim: DebateClaimSummary;
@@ -182,6 +191,7 @@ export type Debate = {
   completed_at: string | null;
   rematch_session_id?: string | null;
   participants: DebateParticipant[];
+  turn_yields?: DebateTurnYield[];
   recordings: DebateRecording[];
   recording_error: string | null;
   cancellation_reason: string | null;
@@ -597,6 +607,22 @@ export async function markDebateReady(
 ) {
   return geoChatRequest<Debate>(`/debates/${debateId}/ready`, {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function endDebateTurn(
+  debateId: string,
+  turnIndex: number,
+  endedAtMs: number,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/turns/${turnIndex}/end`, {
+    method: 'POST',
+    body: { ended_at_ms: endedAtMs },
     auth: true,
     getPrivyIdentityToken,
     accountKey,

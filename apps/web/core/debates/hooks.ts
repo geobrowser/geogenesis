@@ -13,6 +13,7 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  GeoChatRequestError,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -26,6 +27,7 @@ import {
   createDebateRematchRequest,
   createLocalRecordingUpload,
   declineDebateMatch,
+  endDebateTurn,
   getDebate,
   getDebateActivity,
   getDebateMedia,
@@ -316,6 +318,23 @@ export function useMarkDebateReady(debateId: string) {
   });
 }
 
+export function useEndDebateTurn(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ turnIndex, endedAtMs }: { turnIndex: number; endedAtMs: number }) =>
+      endDebateTurn(debateId, turnIndex, endedAtMs, getPrivyIdentityToken, accountKey),
+    retry: (failureCount, error) =>
+      failureCount < 2 &&
+      (!(error instanceof GeoChatRequestError) || error.status === 408 || error.status === 429 || error.status >= 500),
+    onSuccess: debate => {
+      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
 export function useAbortDebate(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -388,8 +407,17 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
+      const activityKey = debateQueryKeys.activity(accountKey);
+      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+      if (activity) {
+        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+        if (debate !== activity.debate || rematch !== activity.rematch) {
+          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+        }
+      }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
 }
