@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   authenticated: true,
   gatewayPaused: false,
+  currentUserId: 'user-for' as string | null,
+  refetch: vi.fn(),
+  reconcileActivity: null as (() => Promise<DebateActivity | null>) | null,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -32,9 +35,14 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
+vi.mock('./api', async importOriginal => {
+  const actual = await importOriginal<typeof import('./api')>();
+  return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
+});
+
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
-  useDebateActivity: () => ({ data: mocks.activity }),
+  useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
@@ -49,10 +57,14 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('./match-prompt', () => ({
-  DebateMatchPrompt: () => <div>Global match prompt</div>,
+  DebateMatchPrompt: ({ reconcileActivity }: { reconcileActivity?: () => Promise<DebateActivity | null> }) => {
+    mocks.reconcileActivity = reconcileActivity ?? null;
+    return <div>Global match prompt</div>;
+  },
 }));
 
 beforeEach(() => {
+  sessionStorage.clear();
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
   mocks.handleMutate.mockReset();
@@ -70,6 +82,9 @@ beforeEach(() => {
   mocks.promptsFetching = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
+  mocks.currentUserId = 'user-for';
+  mocks.refetch.mockReset();
+  mocks.reconcileActivity = null;
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -89,7 +104,11 @@ beforeEach(() => {
   mocks.fetch.mockResolvedValue(videoResponse());
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  sessionStorage.clear();
+  vi.restoreAllMocks();
+});
 
 describe('DebateCoordinator', () => {
   it('shows a non-blocking warning while live updates are paused and clears it on recovery', () => {
@@ -129,6 +148,74 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
   });
 
+  it('leaves retained handoff ownership with the mounted match prompt', () => {
+    mocks.activity = activityWithMatch();
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+    expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).not.toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
+  });
+
+  it('routes only a reloaded owning tab when activity contains only the debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    seedConfirmedOwnership();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+  });
+
+  it('makes activity reconciliation throw when refetch fails', async () => {
+    mocks.activity = activityWithMatch();
+    mocks.refetch.mockRejectedValue(new Error('Offline'));
+
+    render(<DebateCoordinator />);
+
+    await expect(mocks.reconcileActivity?.()).rejects.toThrow('Offline');
+    expect(mocks.refetch).toHaveBeenCalledWith({ throwOnError: true });
+  });
+
+  it('clears stale handoff ownership when an unrelated debate becomes active', async () => {
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = {
+      ...mocks.activity.debate!,
+      claim: { ...mocks.activity.debate!.claim, id: 'claim-2' },
+    };
+    seedConfirmedOwnership();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('clears match handoff state after explicitly reaching the debate URL', async () => {
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    mocks.activity = activityWithDebate();
+    seedConfirmedOwnership();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it('waits for the debate room to finalize its recording before routing to a rematch', async () => {
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.activity = activityWithRematch('browsing');
@@ -166,8 +253,47 @@ describe('DebateCoordinator', () => {
         status,
       },
     };
+    seedConfirmedOwnership();
 
     render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull();
+  });
+
+  it('clears ownership when loaded activity confirms the match flow expired', async () => {
+    mocks.activity = activityWithMatch();
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+
+    mocks.activity = { ...activityWithMatch(), match: null };
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('clears ownership when a different match replaces the owned flow', async () => {
+    const replacementActivity = activityWithMatch();
+    replacementActivity.match = {
+      ...replacementActivity.match!,
+      id: 'match-2',
+      claim: {
+        ...replacementActivity.match!.claim,
+        id: 'claim-2',
+        claim_entity_id: 'claim-entity-2',
+      },
+    };
+    mocks.activity = replacementActivity;
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
@@ -554,6 +680,27 @@ function videoResponse() {
   });
 }
 
+function seedConfirmedOwnership() {
+  const now = Date.now();
+  sessionStorage.setItem(
+    'geo:debate-match-owner:user-for',
+    JSON.stringify({
+      version: 1,
+      state: 'confirmed',
+      userId: 'user-for',
+      matchId: 'match-1',
+      claimId: 'claim-1',
+      spaceId: 'space-1',
+      instanceId: 'previous-instance',
+      createdAt: now,
+      acceptedAt: now,
+    })
+  );
+  vi.spyOn(performance, 'getEntriesByType').mockImplementation(type =>
+    type === 'navigation' ? ([{ type: 'reload' }] as PerformanceNavigationTiming[]) : []
+  );
+}
+
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   return {
     online: true,
@@ -612,6 +759,7 @@ function activityWithDebate(): DebateActivity {
     debate: {
       id: 'debate-1',
       claim: matchActivity.match!.claim,
+      participants: [{ user_id: 'user-for' }],
     } as NonNullable<DebateActivity['debate']>,
   };
 }
