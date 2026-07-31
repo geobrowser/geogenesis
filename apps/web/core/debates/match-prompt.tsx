@@ -41,31 +41,45 @@ type DebateMatchPromptProps = {
 };
 
 export function DebateMatchPrompt({ spaceId, matches, debates = [], reconcileActivity }: DebateMatchPromptProps) {
+  const currentUserId = getCurrentGeoChatUserId();
+  const ownershipScopeKey = `${currentUserId ?? 'anonymous'}:${matches[0]?.id ?? 'none'}`;
+
   return (
     <DebateMediaSessionBoundary>
       <DebateMatchPromptContent
+        key={ownershipScopeKey}
         spaceId={spaceId}
         matches={matches}
         debates={debates}
         reconcileActivity={reconcileActivity}
+        currentUserId={currentUserId}
       />
     </DebateMediaSessionBoundary>
   );
 }
+
+type DebateMatchPromptContentProps = DebateMatchPromptProps & {
+  currentUserId: string | null;
+};
 
 type OwnershipState = 'checking' | 'none' | 'pending' | 'confirmed' | 'other-tab';
 
 const acceptanceReconciliationTimeoutMs = 10_000;
 const acceptanceReconciliationTimedOut = Symbol('acceptance-reconciliation-timed-out');
 
-function DebateMatchPromptContent({ spaceId, matches, debates = [], reconcileActivity }: DebateMatchPromptProps) {
+function DebateMatchPromptContent({
+  spaceId,
+  matches,
+  debates = [],
+  reconcileActivity,
+  currentUserId,
+}: DebateMatchPromptContentProps) {
   const router = useRouter();
   const debateFormatSelectorEnabled = useFeatureFlag('debateFormatSelector');
   const mediaSession = useDebateMediaSession();
   const { activeSessionKey, beginSession, promoteSession, releaseSession, ensurePreview } = mediaSession;
   const acceptMatch = useAcceptDebateMatch(spaceId);
   const declineMatch = useDeclineDebateMatch(spaceId);
-  const currentUserId = getCurrentGeoChatUserId();
   const ownershipMatch = matches[0] ?? null;
   const [ownershipState, setOwnershipState] = React.useState<OwnershipState>(() =>
     initialOwnershipState(ownershipMatch, currentUserId)
@@ -599,6 +613,11 @@ async function reconcileFailedAcceptance(
     )
       ? activity.debate
       : null;
+
+  if (debate && ['complete', 'cancelled'].includes(debate.status)) {
+    await ownershipCoordinator.release({ clearRecord: true });
+    return { status: 'rejected' };
+  }
 
   if (accepted || debate) {
     return ownershipCoordinator.confirmAcceptance() ? { status: 'confirmed', debate } : { status: 'inconclusive' };

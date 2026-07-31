@@ -91,20 +91,26 @@ export function DebateCoordinator() {
   }, [activity, pathname, router]);
 
   React.useEffect(() => {
-    if (!currentUserId) return;
+    if (!currentUserId || !activity) return;
     if (debate && pathname.includes(`/debates/${debate.id}`)) {
       clearDebateMatchTabOwnership(currentUserId);
       return;
     }
     const record = readDebateMatchTabOwnership(currentUserId);
     if (!record) return;
-    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
-      if (debateMatchOwnershipMatchesDebate(record, reportedDebate, currentUserId)) {
-        clearDebateMatchTabOwnership(currentUserId);
-      }
+    if (match) {
+      if (match.id !== record.matchId) clearDebateMatchTabOwnership(currentUserId);
       return;
     }
-    if (!debate || visibleMatch || pathname.includes('/debates/rematches/')) return;
+    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    if (!debate || pathname.includes('/debates/rematches/')) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    if (visibleMatch) return;
     if (!debateMatchOwnershipMatchesDebate(record, debate, currentUserId)) {
       clearDebateMatchTabOwnership(currentUserId);
       return;
@@ -127,7 +133,7 @@ export function DebateCoordinator() {
       active = false;
       ownership.close();
     };
-  }, [currentUserId, debate, pathname, reportedDebate, router, visibleMatch]);
+  }, [activity, currentUserId, debate, match, pathname, reportedDebate, router, visibleMatch]);
 
   if (!isDebatesEnabled) return null;
   const visibleSharePrompt =

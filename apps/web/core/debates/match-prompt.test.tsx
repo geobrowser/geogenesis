@@ -369,6 +369,64 @@ describe('DebateMatchPrompt', () => {
     expect(screen.queryByText('Response lost')).not.toBeInTheDocument();
   });
 
+  it('keeps ownership when a failed response reconciles directly to an active debate', async () => {
+    let failRequest = () => {};
+    mocks.acceptMutate.mockImplementation((_variables, options) => {
+      failRequest = () => options.onError(new Error('Response lost'));
+    });
+    const reconcileActivity = vi.fn().mockResolvedValue({
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: debate(),
+      rematch: null,
+    } satisfies DebateActivity);
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() => expect(mocks.acceptMutate).toHaveBeenCalledOnce());
+
+    act(failRequest);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    expect(JSON.parse(sessionStorage.getItem('geo:debate-match-owner:user-for')!)).toMatchObject({
+      state: 'confirmed',
+    });
+    expect(screen.queryByText('Response lost')).not.toBeInTheDocument();
+  });
+
+  it.each(['complete', 'cancelled'] as const)(
+    'rejects a failed response that reconciles to a %s debate',
+    async status => {
+      let failRequest = () => {};
+      mocks.acceptMutate.mockImplementation((_variables, options) => {
+        failRequest = () => options.onError(new Error('Response lost'));
+      });
+      const terminalDebate = { ...debate(), status };
+      const reconcileActivity = vi.fn().mockResolvedValue({
+        online: true,
+        available_to_debate: true,
+        cooldown_until: null,
+        match: null,
+        debate: terminalDebate,
+        rematch: null,
+      } satisfies DebateActivity);
+
+      render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} reconcileActivity={reconcileActivity} />);
+      const acceptButton = screen.getByRole('button', { name: 'Accept' });
+      fireEvent.click(acceptButton);
+      await waitFor(() => expect(mocks.acceptMutate).toHaveBeenCalledOnce());
+
+      act(failRequest);
+
+      await waitFor(() => expect(acceptButton).toBeEnabled());
+      expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+    }
+  );
+
   it('renders each participant position without a per-participant menu', () => {
     render(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
 
@@ -655,6 +713,38 @@ describe('DebateMatchPrompt', () => {
 
     await waitFor(() => expect(mocks.releaseMediaSession).toHaveBeenCalledWith('match:match-1'));
     expect(screen.queryByRole('dialog', { name: 'Debate readiness' })).not.toBeInTheDocument();
+  });
+
+  it('does not carry confirmed ownership into a replacement match', async () => {
+    const acceptedMatch = match();
+    acceptedMatch.participants[0]!.accepted = true;
+    seedConfirmedOwnership(acceptedMatch);
+    const view = render(<DebateMatchPrompt spaceId="space-1" matches={[acceptedMatch]} debates={[]} />);
+
+    await screen.findByRole('dialog', { name: 'Debate readiness' });
+    mocks.beginMediaSession.mockClear();
+    mocks.ensurePreview.mockClear();
+    mocks.push.mockClear();
+
+    const replacementMatch = match();
+    replacementMatch.id = 'match-2';
+    replacementMatch.claim = {
+      ...replacementMatch.claim,
+      id: 'claim-2',
+      claim_entity_id: 'claim-entity-2',
+      claim: 'The replacement match stays local',
+    };
+    const replacementDebate = debate();
+    replacementDebate.id = 'debate-2';
+    replacementDebate.claim = replacementMatch.claim;
+
+    view.rerender(<DebateMatchPrompt spaceId="space-1" matches={[replacementMatch]} debates={[replacementDebate]} />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Debate accepted in another tab.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mocks.beginMediaSession).not.toHaveBeenCalled();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 });
 

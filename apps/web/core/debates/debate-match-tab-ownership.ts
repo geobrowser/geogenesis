@@ -73,15 +73,19 @@ export function createDebateMatchTabOwnershipCoordinator({
   let lockRequest: Promise<void> | null = null;
   let releaseRequest: Promise<void> | null = null;
   let acquisition: Promise<boolean> | null = null;
+  let localRecord: DebateMatchTabOwnershipRecord | null = null;
+
+  const currentRecord = () => readDebateMatchTabOwnership(userId, { storage, now }) ?? localRecord;
 
   const recordBelongsToInstance = () => {
-    const record = readDebateMatchTabOwnership(userId, { storage, now });
+    const record = currentRecord();
     return record?.matchId === matchId && record.instanceId === instanceId;
   };
 
   const clearRecord = () => {
     if (!recordBelongsToInstance()) return;
     removeRecord(userId, storage);
+    localRecord = null;
   };
 
   const acquire = (): Promise<boolean> => {
@@ -153,7 +157,7 @@ export function createDebateMatchTabOwnershipCoordinator({
       ) {
         return;
       }
-      const record = readDebateMatchTabOwnership(userId, { storage, now });
+      const record = currentRecord();
       if (
         !lockManager &&
         ownsFlow &&
@@ -171,7 +175,7 @@ export function createDebateMatchTabOwnershipCoordinator({
 
   const writeState = (state: DebateMatchTabOwnershipRecord['state']) => {
     if (!ownsFlow || closed) return null;
-    const existing = readDebateMatchTabOwnership(userId, { storage, now });
+    const existing = currentRecord();
     const timestamp = now();
     const record: DebateMatchTabOwnershipRecord = {
       version: recordVersion,
@@ -184,6 +188,7 @@ export function createDebateMatchTabOwnershipCoordinator({
       createdAt: existing?.matchId === matchId ? existing.createdAt : timestamp,
       acceptedAt: state === 'confirmed' ? timestamp : null,
     };
+    localRecord = record;
     writeRecord(record, storage);
     return record;
   };
@@ -193,7 +198,7 @@ export function createDebateMatchTabOwnershipCoordinator({
     acquire,
     beginAcceptance: () => writeState('pending'),
     confirmAcceptance: () => {
-      const existing = readDebateMatchTabOwnership(userId, { storage, now });
+      const existing = currentRecord();
       if (existing?.matchId === matchId && existing.instanceId === instanceId && existing.state === 'confirmed') {
         return existing;
       }
@@ -218,9 +223,11 @@ export function createDebateMatchTabOwnershipCoordinator({
       }
       if (!(await acquire())) {
         removeRecord(userId, storage);
+        localRecord = null;
         return false;
       }
-      writeRecord({ ...record, instanceId }, storage);
+      localRecord = { ...record, instanceId };
+      writeRecord(localRecord, storage);
       return true;
     },
     release,

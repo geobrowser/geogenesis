@@ -87,6 +87,32 @@ class MemoryStorage implements Storage {
   }
 }
 
+class ThrowingStorage implements Storage {
+  get length(): number {
+    throw new Error('Storage unavailable');
+  }
+
+  clear(): void {
+    throw new Error('Storage unavailable');
+  }
+
+  getItem(): string | null {
+    throw new Error('Storage unavailable');
+  }
+
+  key(): string | null {
+    throw new Error('Storage unavailable');
+  }
+
+  removeItem(): void {
+    throw new Error('Storage unavailable');
+  }
+
+  setItem(): void {
+    throw new Error('Storage unavailable');
+  }
+}
+
 beforeEach(() => {
   FakeBroadcastChannel.channels.clear();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: new FakeLockManager() });
@@ -185,6 +211,26 @@ describe('debate match tab ownership', () => {
     duplicate.close();
   });
 
+  it('rejects reload recovery while the original tab still holds the lock', async () => {
+    const ownerStorage = new MemoryStorage();
+    const owner = coordinator({ storage: ownerStorage });
+    await owner.acquire();
+    owner.beginAcceptance();
+    owner.confirmAcceptance();
+
+    const reloadStorage = new MemoryStorage();
+    reloadStorage.setItem('geo:debate-match-owner:user-a', ownerStorage.getItem('geo:debate-match-owner:user-a')!);
+    const reload = coordinator({ storage: reloadStorage, isReloadNavigation: () => true });
+
+    await expect(reload.recover()).resolves.toBe(false);
+    expect(reload.ownsFlow()).toBe(false);
+    expect(readDebateMatchTabOwnership('user-a', { storage: reloadStorage, now: () => 1_000 })).toBeNull();
+    expect(owner.ownsFlow()).toBe(true);
+
+    owner.close();
+    reload.close();
+  });
+
   it('does not promote a duplicate after the owner closes', async () => {
     const ownerStorage = new MemoryStorage();
     const owner = coordinator({ storage: ownerStorage });
@@ -247,6 +293,25 @@ describe('debate match tab ownership', () => {
     owner.close();
   });
 
+  it('degrades when browser coordination APIs throw or reject', async () => {
+    vi.stubGlobal(
+      'BroadcastChannel',
+      class {
+        constructor() {
+          throw new Error('BroadcastChannel unavailable');
+        }
+      }
+    );
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: { request: vi.fn().mockRejectedValue(new Error('Lock request unavailable')) },
+    });
+    const owner = coordinator({ storage: new MemoryStorage() });
+
+    await expect(owner.acquire()).resolves.toBe(false);
+    owner.close();
+  });
+
   it('uses a confirmation broadcast to stop a late fallback success when Web Locks are unavailable', async () => {
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
     const first = coordinator({ storage: new MemoryStorage() });
@@ -270,6 +335,28 @@ describe('debate match tab ownership', () => {
     const secondAcceptedElsewhere = vi.fn();
     const first = coordinator({ storage: new MemoryStorage(), onAcceptedElsewhere: firstAcceptedElsewhere });
     const second = coordinator({ storage: new MemoryStorage(), onAcceptedElsewhere: secondAcceptedElsewhere });
+    await first.acquire();
+    await second.acquire();
+    first.beginAcceptance();
+    second.beginAcceptance();
+
+    first.confirmAcceptance();
+    second.confirmAcceptance();
+
+    await vi.waitFor(() => expect(second.ownsFlow()).toBe(false));
+    expect(first.ownsFlow()).toBe(true);
+    expect(firstAcceptedElsewhere).not.toHaveBeenCalled();
+    expect(secondAcceptedElsewhere).toHaveBeenCalledWith('match-1');
+    first.close();
+    second.close();
+  });
+
+  it('keeps one deterministic fallback owner when session storage is unavailable', async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    const firstAcceptedElsewhere = vi.fn();
+    const secondAcceptedElsewhere = vi.fn();
+    const first = coordinator({ storage: new ThrowingStorage(), onAcceptedElsewhere: firstAcceptedElsewhere });
+    const second = coordinator({ storage: new ThrowingStorage(), onAcceptedElsewhere: secondAcceptedElsewhere });
     await first.acquire();
     await second.acquire();
     first.beginAcceptance();

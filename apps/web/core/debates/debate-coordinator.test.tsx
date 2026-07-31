@@ -148,6 +148,19 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
   });
 
+  it('leaves retained handoff ownership with the mounted match prompt', () => {
+    mocks.activity = activityWithMatch();
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+    expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).not.toBeNull();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithDebate();
@@ -246,6 +259,43 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull();
+  });
+
+  it('clears ownership when loaded activity confirms the match flow expired', async () => {
+    mocks.activity = activityWithMatch();
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
+
+    mocks.activity = { ...activityWithMatch(), match: null };
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('clears ownership when a different match replaces the owned flow', async () => {
+    const replacementActivity = activityWithMatch();
+    replacementActivity.match = {
+      ...replacementActivity.match!,
+      id: 'match-2',
+      claim: {
+        ...replacementActivity.match!.claim,
+        id: 'claim-2',
+        claim_entity_id: 'claim-entity-2',
+      },
+    };
+    mocks.activity = replacementActivity;
+    seedConfirmedOwnership();
+    const view = render(<DebateCoordinator />);
+
+    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+
+    mocks.activity = activityWithDebate();
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   it('requests the exact social preview and starts preparing the MP4 on open', async () => {
