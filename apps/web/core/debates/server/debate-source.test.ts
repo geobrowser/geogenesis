@@ -76,8 +76,12 @@ describe('loadDebatePublishSource media gating', () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
-    // Handed over as bytes, never as the presigned URL: the SDK's URL path rejects a webm body.
-    expect(uploadGeoImage).toHaveBeenCalledWith({ blob: expect.any(Blob) });
+    // Handed over as the artifact's bytes, never as the presigned URL: the SDK's URL path rejects a
+    // webm body. Asserted by reading the blob rather than `expect.any(Blob)`, which is an
+    // `instanceof` against the test realm's global and fails on the Blob `fetch` actually returns.
+    const [uploaded] = uploadGeoImage.mock.calls[0];
+    expect(uploaded).not.toHaveProperty('url');
+    expect(await uploaded.blob.text()).toBe('final_video');
     expect(input.videoUrl).toBe('ipfs://cid-for-final_video');
   });
 
