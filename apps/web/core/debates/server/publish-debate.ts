@@ -53,7 +53,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
 
   // Only auto-publish into spaces the acceptor actually edits. Publishing needs editor rights (a
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
-  // (CanNotExecute). Checked before the IPFS upload so an ineligible space costs nothing.
+  // (CanNotExecute).
   const access = await Effect.runPromise(getSpaceAccess(space, config.spaceId));
   if (!access.isEditor) {
     console.log('[debate-acceptor] skipping publish: acceptor is not an editor of the space', {

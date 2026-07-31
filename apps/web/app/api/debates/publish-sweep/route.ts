@@ -9,9 +9,11 @@ import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-// Bound the on-chain work per invocation. Anything left over is picked up on the next tick, where
-// the idempotency check makes re-scanning already-published debates cheap.
-const MAX_PUBLISHES_PER_SWEEP = 5;
+// Bound the work per invocation. Anything left over is picked up on the next tick, where the
+// idempotency check makes re-scanning already-published debates cheap. Each publish pins the final
+// video to IPFS before signing, so only a couple fit inside `maxDuration`. Counts attempts rather
+// than successes: a debate that pins its video and then fails on-chain has already spent the time.
+const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 2;
 
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.
@@ -37,6 +39,7 @@ export async function GET(request: Request) {
   const spaceIds = await listEditorSpaceIds(config.spaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
+  let attempted = 0;
   let alreadyPublished = 0;
   let notEditor = 0;
   let pending = 0;
@@ -52,11 +55,15 @@ export async function GET(request: Request) {
     }
 
     for (const debateId of debateIds) {
-      if (published.length >= MAX_PUBLISHES_PER_SWEEP) break;
+      if (attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP) break;
       try {
         const result = await publishDebateAsAcceptor(debateId);
+        if (result.status === 'already_published') {
+          alreadyPublished += 1;
+          continue;
+        }
+        attempted += 1;
         if (result.status === 'published') published.push(debateId);
-        else if (result.status === 'already_published') alreadyPublished += 1;
         else if (result.status === 'not_editor') notEditor += 1;
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
@@ -70,6 +77,7 @@ export async function GET(request: Request) {
           }
           continue;
         }
+        attempted += 1;
         console.error(`[debate-acceptor] sweep failed to publish debate ${debateId}:`, error);
         failed.push({ debateId, error: error instanceof Error ? error.message : String(error) });
       }
