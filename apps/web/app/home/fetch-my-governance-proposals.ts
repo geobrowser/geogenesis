@@ -3,6 +3,7 @@ import * as Effect from 'effect/Effect';
 import {
   type ApiProposalListItem,
   convertVoteOption,
+  getApiProposalCanExecute,
   mapApiActionsToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
@@ -28,6 +29,8 @@ function sameMemberSpaceId(a: string, b: string): boolean {
 
 export type MyGovernanceProposalRow = {
   id: string;
+  /** Proposal version this row describes (REST `proposalVersion`); votes must target it. */
+  version?: number;
   spaceId: string;
   name: string | null;
   displayTitle: string;
@@ -120,6 +123,7 @@ export async function getMyGovernanceProposals(opts: {
 
     proposals.push({
       id: p.proposalId,
+      version: p.proposalVersion,
       spaceId: p.spaceId,
       name: p.name,
       displayTitle,
@@ -127,7 +131,7 @@ export async function getMyGovernanceProposals(opts: {
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status: mapProposalStatus(p.status),
-      canExecute: p.canExecute,
+      canExecute: getApiProposalCanExecute(p),
       proposalVotes: {
         totalCount: p.votes.total,
         yesCount: p.votes.yes,

@@ -744,18 +744,77 @@ export function getSpaceEditorsPage(
   });
 }
 
-/** Get a personal space by wallet address. Returns the space owned by this address, or null if none exists. */
+/**
+ * Get a personal space by wallet address. Returns the space owned by this address, or
+ * null if none exists.
+ *
+ * An address can have MORE than one indexed space. `overrideSpaceId` retires an
+ * account's previous space id on-chain, but the indexer keeps serving the retired row,
+ * so the same account appears twice — often under different address casing, which the
+ * case-insensitive filter (deliberately kept: addresses are stored both checksummed and
+ * lowercase) collapses into one result set. Taking `spaces[0]` from an unordered query
+ * then picks the dead space about half the time, and because the personal space is the
+ * *author* of every write, that bricks the account entirely — every publish, vote, and
+ * comment reverts `SpaceNotActive()` no matter which space it targets.
+ *
+ * So when the index returns more than one row, ask the registry which id is still
+ * active. The single-row case — every healthy account — costs no extra RPC.
+ */
 export function getSpaceByAddress(address: string, signal?: AbortController['signal']) {
   return graphql({
     query: spacesQuery,
-    decoder: data => {
-      const firstSpace = data.spaces?.[0];
-      if (!firstSpace) return null;
-      return SpaceDecoder.decode(firstSpace);
-    },
+    decoder: data => data.spaces ?? [],
     // Use case-insensitive matching since Ethereum addresses can be checksummed or lowercase
-    variables: { filter: { address: { isInsensitive: address } }, limit: 1 },
+    variables: { filter: { address: { isInsensitive: address } }, limit: DUPLICATE_SPACE_SCAN_LIMIT },
     signal,
+  }).pipe(Effect.flatMap(spaces => resolveActiveSpace(spaces, address)));
+}
+
+/** Bounds the duplicate scan. Real accounts have 1; the sweep that created these produced 2. */
+const DUPLICATE_SPACE_SCAN_LIMIT = 10;
+
+/** Exported for testing; call `getSpaceByAddress`. */
+export function resolveActiveSpace(spaces: readonly unknown[], address: string) {
+  return Effect.gen(function* () {
+    if (spaces.length === 0) return null;
+    if (spaces.length === 1) return SpaceDecoder.decode(spaces[0] as never);
+
+    const decoded = spaces.map(space => SpaceDecoder.decode(space as never)).filter(space => space !== null);
+    if (decoded.length <= 1) return decoded[0] ?? null;
+
+    const active = yield* Effect.tryPromise({
+      // Imported lazily on purpose. geo-network pulls in the chain config, which
+      // resolves an RPC at module scope and throws when none is configured — a
+      // static import would make this shared query module unloadable in any
+      // context without a live chain, including unit tests. Duplicate rows are
+      // rare, so paying for the module only here costs nothing in practice.
+      try: async () => {
+        const { isSpaceActiveOnChain } = await import('~/core/sdk/geo-network');
+        return Promise.all(decoded.map(space => isSpaceActiveOnChain(space.id)));
+      },
+      // isSpaceActiveOnChain already swallows RPC failures to `false`; this guards
+      // only against an unexpected throw, and index order is the safe fallback.
+      catch: () => new Error('failed to resolve active space'),
+    }).pipe(Effect.orElseSucceed(() => decoded.map(() => false)));
+
+    const activeSpace = decoded.find((_, index) => active[index]);
+
+    if (!activeSpace) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}, none active on-chain. ` +
+          `Falling back to index order (${decoded[0].id}).`
+      );
+      return decoded[0];
+    }
+
+    if (activeSpace.id !== decoded[0].id) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}; index order returned the ` +
+          `retired ${decoded[0].id}, using the on-chain active ${activeSpace.id}.`
+      );
+    }
+
+    return activeSpace;
   });
 }
 
@@ -779,9 +838,13 @@ interface ResultsArgs {
   additionalSpaceIds?: string[];
   /**
    * Pass `false` to restrict results to the canonical graph plus the user's
-   * scoped spaces (`additionalSpaceIds`). Gated client-side in `getResultsPage`
-   * via each result's `inCanonicalGraph` flag — not sent to the server, so
-   * scoped-space results are never stripped before they reach us.
+   * scoped spaces (`additionalSpaceIds`).
+   *
+   * Where that gate runs depends on whether the request scopes spaces — see
+   * `buildSearchPath`. Scoped requests gate client-side in `getResultsPage` via each
+   * result's `inCanonicalGraph` flag, so scoped-space results are never stripped
+   * before they reach us; unscoped requests gate server-side, so the canonical rows
+   * can't be pushed off the endpoint's 100-row page by non-canonical ones.
    */
   includeNonCanonical?: boolean;
 }
@@ -960,8 +1023,32 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length && !args.spaceId) {
-    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;
+
+  if (scopesAdditionalSpaces) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('additional_space_ids', args.additionalSpaceIds!.map(toUuid).join(','));
+  }
+
+  // Canonical filtering runs server-side only when we aren't widening to scoped spaces.
+  // The endpoint documents `additional_space_ids` as "ignored when
+  // include_non_canonical=false" and means it literally — sending both silently drops
+  // the scoped spaces, which is why #1949 stopped emitting this param and moved the
+  // gate into `shouldIncludeRestSearchResult`.
+  //
+  // A client-side gate can only filter the page it was handed, though, and the endpoint
+  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for an
+  // unscoped caller listing a type dominated by non-canonical entities: the
+  // community-calls digest requested every Community Call, got 100 test-space rows of
+  // 382 with none canonical, and filtered down to nothing while all 8 curated calls sat
+  // past offset 100 — so the Explore panel vanished entirely (GEO-2480).
+  //
+  // Unscoped callers therefore filter at the source; the client-side gate stays as a
+  // no-op safety net. Search-dialog requests are unaffected — they always carry
+  // ROOT_SPACE in `additionalSpaceIds` (see buildGlobalSearchSpaceIds), so they take the
+  // branch above and emit a byte-identical URL.
+  if (args.includeNonCanonical === false && !scopesAdditionalSpaces) {
+    params.set('include_non_canonical', 'false');
   }
 
   return `/search?${params.toString()}`;

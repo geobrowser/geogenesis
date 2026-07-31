@@ -382,7 +382,8 @@ export const ProposalType = Schema.Union(
   Schema.Literal('REMOVE_SUBSPACE'),
   Schema.Literal('SET_TOPIC'),
   Schema.Literal('ADD_EDITOR'),
-  Schema.Literal('REMOVE_EDITOR')
+  Schema.Literal('REMOVE_EDITOR'),
+  Schema.Literal('UPDATE_VOTING_SETTINGS')
 );
 
 export type ProposalType = Schema.Schema.Type<typeof ProposalType>;
