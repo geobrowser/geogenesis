@@ -47,9 +47,7 @@ export function EntityPageTitle({
 
   return (
     <div className={className}>
-      <h1 className={cx(titleTypographyClassName, 'line-clamp-3 w-full overflow-hidden text-text')}>
-        {value || ZERO_WIDTH_SPACE}
-      </h1>
+      <h1 className={cx(titleTypographyClassName, 'w-full text-text')}>{value || ZERO_WIDTH_SPACE}</h1>
       <Spacer height={12} />
     </div>
   );
