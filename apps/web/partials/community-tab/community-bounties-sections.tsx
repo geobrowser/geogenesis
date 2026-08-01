@@ -14,6 +14,7 @@ import {
   BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
   BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
 } from '~/core/constants';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { SlideUp } from '~/design-system/slide-up';
@@ -35,6 +36,8 @@ import { FILTER_PILL_CLASS } from './community-filter-pill';
 const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [] };
 
 const INLINE_CARD_LIMIT = 4;
+
+const INFINITE_PAGE_SIZE = 8;
 
 const SECTION_TITLE_CLASS = 'text-[24px] leading-[29px] font-semibold tracking-[-0.75px] text-[#2A2B2E]';
 
@@ -124,6 +127,7 @@ function BountiesSection({
   useCard,
   cardHeightPx,
   cardWidthPx = CARD_WIDTH_PX,
+  isInfinite = false,
 }: {
   spaceId: string;
   title: string;
@@ -132,6 +136,7 @@ function BountiesSection({
   useCard: UseBountyCard;
   cardHeightPx: number;
   cardWidthPx?: number;
+  isInfinite?: boolean;
 }) {
   const [scope, setScope] = React.useState<BountyScope>('featured');
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
@@ -159,7 +164,27 @@ function BountiesSection({
     [bounties, scope, difficulties, skillSelection, skills]
   );
 
-  const inlineBounties = filtered.slice(0, INLINE_CARD_LIMIT);
+  const [visibleCount, setVisibleCount] = React.useState(INFINITE_PAGE_SIZE);
+
+  const filterKey = `${scope}|${[...difficulties].sort().join(',')}|${
+    selectedSkills ? [...selectedSkills].sort().join(',') : '*'
+  }`;
+
+  React.useEffect(() => {
+    setVisibleCount(INFINITE_PAGE_SIZE);
+  }, [filterKey]);
+
+  const hasMore = isInfinite && visibleCount < filtered.length;
+
+  const revealNextPage = React.useCallback(() => setVisibleCount(count => count + INFINITE_PAGE_SIZE), []);
+
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: hasMore,
+    isFetchingNextPage: false,
+    fetchNextPage: revealNextPage,
+  });
+
+  const inlineBounties = filtered.slice(0, isInfinite ? visibleCount : INLINE_CARD_LIMIT);
   const card = useCard(bounties);
 
   return (
@@ -181,14 +206,19 @@ function BountiesSection({
             selected={skillSelection}
             onChange={setSelectedSkills}
           />
-          <button
-            type="button"
-            onClick={() => setIsViewAllOpen(true)}
-            disabled={filtered.length === 0}
-            className={cx(FILTER_PILL_CLASS, 'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white')}
-          >
-            View all
-          </button>
+          {isInfinite ? null : (
+            <button
+              type="button"
+              onClick={() => setIsViewAllOpen(true)}
+              disabled={filtered.length === 0}
+              className={cx(
+                FILTER_PILL_CLASS,
+                'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white'
+              )}
+            >
+              View all
+            </button>
+          )}
         </div>
       </div>
 
@@ -201,10 +231,13 @@ function BountiesSection({
       ) : filtered.length === 0 ? (
         <EmptyState message={emptyMessage} />
       ) : (
-        <BountyGrid bounties={inlineBounties} card={card} />
+        <>
+          <BountyGrid bounties={inlineBounties} card={card} />
+          {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
+        </>
       )}
 
-      <SlideUp isOpen={isViewAllOpen} setIsOpen={setIsViewAllOpen}>
+      <SlideUp isOpen={!isInfinite && isViewAllOpen} setIsOpen={setIsViewAllOpen}>
         <div className="flex h-full flex-col overflow-hidden bg-white">
           <div className="flex items-center justify-between border-b border-grey-02 px-6 py-4">
             <h2 className={SECTION_TITLE_CLASS}>{title}</h2>
@@ -263,6 +296,7 @@ export function AvailableBountiesSection({ spaceId }: { spaceId: string }) {
       useCard={useAvailableBountyCard}
       cardHeightPx={AVAILABLE_CARD_HEIGHT_PX}
       cardWidthPx={AVAILABLE_CARD_WIDTH_PX}
+      isInfinite
     />
   );
 }
