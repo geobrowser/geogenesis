@@ -23,6 +23,7 @@ import {
   AVAILABLE_CARD_WIDTH_PX,
   AvailableBountyCard,
   BountyCard,
+  BountyCardActivateProvider,
   CARD_WIDTH_PX,
   COMPLETED_CARD_HEIGHT_PX,
   IN_PROGRESS_CARD_HEIGHT_PX,
@@ -216,7 +217,9 @@ function BountiesSection({
             </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-            <BountyGrid bounties={filtered} card={card} />
+            <BountyCardActivateProvider onActivate={() => setIsViewAllOpen(false)}>
+              <BountyGrid bounties={filtered} card={card} />
+            </BountyCardActivateProvider>
           </div>
         </div>
       </SlideUp>

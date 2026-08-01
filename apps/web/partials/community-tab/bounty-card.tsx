@@ -3,6 +3,8 @@
 import * as React from 'react';
 
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -52,7 +54,84 @@ function cardStyle(height: number, width: number = CARD_WIDTH_PX): React.CSSProp
   return { boxSizing: 'border-box', width, height, padding: CARD_PADDING_PX };
 }
 
-const CARD_CLASS = 'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white';
+const CARD_CLASS = 'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-left';
+
+const CARD_INTERACTIVE_CLASS =
+  'cursor-pointer transition-colors duration-150 hover:border-grey-03 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+
+/**
+ * Runs alongside opening the side panel.
+ */
+const BountyCardActivateContext = React.createContext<(() => void) | null>(null);
+
+export function BountyCardActivateProvider({
+  onActivate,
+  children,
+}: {
+  onActivate: () => void;
+  children: React.ReactNode;
+}) {
+  return <BountyCardActivateContext.Provider value={onActivate}>{children}</BountyCardActivateContext.Provider>;
+}
+
+/**
+ * Card frame. For a signed-in viewer, clicking anywhere that isn't a nested control opens the
+ * bounty in the entity side panel, which is mounted globally in `app/entry.tsx`.
+ */
+function BountyCardShell({
+  bounty,
+  height,
+  width,
+  className,
+  children,
+}: {
+  bounty: SpaceBounty;
+  height: number;
+  width?: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { openSidePanel } = useEntitySidePanel();
+  const { smartAccount } = useSmartAccount();
+  const onActivate = React.useContext(BountyCardActivateContext);
+
+  const isLoggedIn = Boolean(smartAccount?.account.address);
+  const style = cardStyle(height, width);
+  const classes = [CARD_CLASS, isLoggedIn && CARD_INTERACTIVE_CLASS, className].filter(Boolean).join(' ');
+
+  if (!isLoggedIn) {
+    return (
+      <article data-bounty-card style={style} className={classes}>
+        {children}
+      </article>
+    );
+  }
+
+  const open = () => {
+    onActivate?.();
+    openSidePanel(bounty.id, bounty.spaceId, false);
+  };
+
+  return (
+    <article
+      role="button"
+      tabIndex={0}
+      data-entity-side-panel-opener
+      data-bounty-card
+      aria-label={`Open ${bounty.name}`}
+      onClick={open}
+      onKeyDown={event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        open();
+      }}
+      style={style}
+      className={classes}
+    >
+      {children}
+    </article>
+  );
+}
 
 const AVATAR_SIZE_PX = 16;
 
@@ -133,7 +212,7 @@ function BudgetBadge({ budget }: { budget: number | null }) {
 
 export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
   return (
-    <article style={cardStyle(COMPLETED_CARD_HEIGHT_PX)} className={CARD_CLASS}>
+    <BountyCardShell bounty={bounty} height={COMPLETED_CARD_HEIGHT_PX}>
       <div>
         <BudgetBadge budget={bounty.budget} />
       </div>
@@ -143,7 +222,7 @@ export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
       <div className="mt-3">
         <ContributorRow contributors={bounty.contributors} />
       </div>
-    </article>
+    </BountyCardShell>
   );
 }
 
@@ -189,7 +268,10 @@ function InterestButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
       disabled={isPending || !canRegisterInterest}
       title={canRegisterInterest ? undefined : 'You need a registered personal space to register interest'}
       className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
@@ -216,7 +298,7 @@ export function AvailableBountyCard({
   onRegisterInterest: (bounty: SpaceBounty) => void;
 }) {
   return (
-    <article style={cardStyle(AVAILABLE_CARD_HEIGHT_PX, AVAILABLE_CARD_WIDTH_PX)} className={CARD_CLASS}>
+    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX} width={AVAILABLE_CARD_WIDTH_PX}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
         <InterestButton
@@ -237,18 +319,18 @@ export function AvailableBountyCard({
       <div className="mt-5 shrink-0">
         <SkillPills skills={bounty.skills} />
       </div>
-    </article>
+    </BountyCardShell>
   );
 }
 
 export function InProgressBountyCard({ bounty }: { bounty: SpaceBounty }) {
   return (
-    <article style={cardStyle(IN_PROGRESS_CARD_HEIGHT_PX)} className={`${CARD_CLASS} justify-between`}>
+    <BountyCardShell bounty={bounty} height={IN_PROGRESS_CARD_HEIGHT_PX} className="justify-between">
       <h3 className={`line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
       <div className="shrink-0">
         <ContributorRow contributors={bounty.contributors} />
       </div>
-    </article>
+    </BountyCardShell>
   );
 }
