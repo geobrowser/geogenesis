@@ -107,7 +107,7 @@ export function AddDataPanel({ spaceId }: Props) {
         src="/images/add-data/sculpture.png"
         alt=""
         aria-hidden
-        className="pointer-events-none absolute top-[-1.125rem] right-[-16.3125rem] h-[13.5625rem] w-[68.625rem] object-cover opacity-50"
+        className="pointer-events-none absolute top-[-1.125rem] right-[-22.3125rem] h-[13.5625rem] w-[max(68.625rem,calc(100%+16.3125rem))] object-cover opacity-50"
       />
 
       <button
