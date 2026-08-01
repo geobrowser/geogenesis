@@ -2,10 +2,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
 
-import { BOUNTIES_RELATION_TYPE, FEATURED_TAG_ID, NEWS_STORY_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { BOUNTIES_RELATION_TYPE, NEWS_STORY_TYPE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { AGGREGATED_RANKINGS_PROPERTY_ID, RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
 import { type CuratorLeaderboardWindow, curatorLeaderboardWindow, isWithinWindow } from './curator-leaderboard-period';
@@ -14,10 +14,9 @@ import type {
   CuratorLeaderboardResult,
   CuratorLeaderboardRow,
 } from './curator-leaderboard-types';
+import { CURATOR_LEADERBOARD_MAX_ROWS } from './curator-leaderboard-types';
 
-const MAX_TABLE_ROWS = 5;
-
-const FEATURED_BLOCK_LIMIT = 100;
+const RANKING_BLOCK_LIMIT = 100;
 const RELATION_PAGE_SIZE = 500;
 const ENTITY_PAGE_SIZE = 200;
 const VOTE_PAGE_SIZE = 1000;
@@ -33,26 +32,21 @@ function emptyAccumulator(): CuratorAccumulator {
   return { rankings: 0, newsStories: 0, votes: 0, submissions: 0 };
 }
 
-/** Featured ranking blocks that live in this space. */
-async function fetchFeaturedRankingBlockIds(spaceHex: string, signal?: AbortController['signal']): Promise<string[]> {
+/** Ranking blocks that live in this space. */
+async function fetchSpaceRankingBlockIds(spaceHex: string, signal?: AbortController['signal']): Promise<string[]> {
   const typesProperty = gqlId(SystemIds.TYPES_PROPERTY);
   const rankingBlockType = gqlId(RANKING_BLOCK_TYPE_ID);
-  const tagProperty = gqlId(TAG_PROPERTY_ID);
-  const featuredTag = gqlId(FEATURED_TAG_ID);
 
-  if (!typesProperty || !rankingBlockType || !tagProperty || !featuredTag) return [];
+  if (!typesProperty || !rankingBlockType) return [];
 
   const data = await runQuery<{ entitiesConnection?: { nodes: { id: string }[] } }>(
-    'featured ranking blocks',
+    'space ranking blocks',
     `query {
       entitiesConnection(
-        first: ${FEATURED_BLOCK_LIMIT}
+        first: ${RANKING_BLOCK_LIMIT}
         filter: {
           spaceIds: { overlaps: ["${spaceHex}"] }
-          and: [
-            { relations: { some: { typeId: { is: "${typesProperty}" }, toEntityId: { is: "${rankingBlockType}" } } } }
-            { relations: { some: { typeId: { is: "${tagProperty}" }, toEntityId: { is: "${featuredTag}" } } } }
-          ]
+          relations: { some: { typeId: { is: "${typesProperty}" }, toEntityId: { is: "${rankingBlockType}" } } }
         }
       ) {
         nodes { id }
@@ -65,7 +59,8 @@ async function fetchFeaturedRankingBlockIds(spaceHex: string, signal?: AbortCont
 }
 
 /**
- * Rankings — one `Aggregated rankings` relation on the block per submitted ballot.
+ * Rankings — rankings published to a curator's personal space that were submitted to one of this
+ * space's ranking blocks.
  */
 async function fetchRankingCounts(
   spaceHex: string,
@@ -73,24 +68,23 @@ async function fetchRankingCounts(
   signal?: AbortController['signal']
 ): Promise<{ perCurator: Map<string, number>; total: number }> {
   const perCurator = new Map<string, number>();
-  const aggregatedRankings = gqlId(AGGREGATED_RANKINGS_PROPERTY_ID);
-  const blockIds = await fetchFeaturedRankingBlockIds(spaceHex, signal);
+  const submittedTo = gqlId(SUBMITTED_TO_PROPERTY_ID);
+  const blockIds = await fetchSpaceRankingBlockIds(spaceHex, signal);
 
-  if (!aggregatedRankings || blockIds.length === 0) return { perCurator, total: 0 };
+  if (!submittedTo || blockIds.length === 0) return { perCurator, total: 0 };
 
-  const relations = await collectConnection<{ toEntityId: string; toSpaceId: string | null }>(
-    'aggregated ranking relations',
+  const relations = await collectConnection<{ fromEntityId: string; spaceId: string | null }>(
+    'submitted to ranking block relations',
     after => `query {
       relationsConnection(
         first: ${RELATION_PAGE_SIZE}${afterArg(after)}
         filter: {
-          typeId: { is: "${aggregatedRankings}" }
-          spaceId: { is: "${spaceHex}" }
-          fromEntityId: { in: [${gqlIdList(blockIds)}] }
+          typeId: { is: "${submittedTo}" }
+          toEntityId: { in: [${gqlIdList(blockIds)}] }
         }
       ) {
         pageInfo { endCursor hasNextPage }
-        nodes { toEntityId toSpaceId }
+        nodes { fromEntityId spaceId }
       }
     }`,
     data => data.relationsConnection,
@@ -99,37 +93,34 @@ async function fetchRankingCounts(
 
   if (relations.length === 0) return { perCurator, total: 0 };
 
-  const rankEntityIds = [...new Set(relations.map(relation => relation.toEntityId).filter(Boolean))];
-  const rankEntities = new Map<string, { spaceId: string | null; createdAt: string | null }>();
+  const rankEntityIds = [...new Set(relations.map(relation => relation.fromEntityId).filter(Boolean))];
+  const rankCreatedAt = new Map<string, string | null>();
 
   for (const ids of chunk(rankEntityIds, ID_CHUNK_SIZE)) {
     const data = await runQuery<{
-      entitiesConnection?: { nodes: { id: string; spaceIds: (string | null)[] | null; createdAt: string | null }[] };
+      entitiesConnection?: { nodes: { id: string; createdAt: string | null }[] };
     }>(
       'rank entities',
       `query {
         entitiesConnection(first: ${ids.length}, filter: { id: { in: [${gqlIdList(ids)}] } }) {
-          nodes { id spaceIds createdAt }
+          nodes { id createdAt }
         }
       }`,
       signal
     );
 
     for (const node of data?.entitiesConnection?.nodes ?? []) {
-      rankEntities.set(node.id, { spaceId: node.spaceIds?.[0] ?? null, createdAt: node.createdAt });
+      rankCreatedAt.set(node.id, node.createdAt);
     }
   }
 
   let total = 0;
 
   for (const relation of relations) {
-    const rankEntity = rankEntities.get(relation.toEntityId);
-    if (!isWithinWindow(rankEntity?.createdAt, window)) continue;
+    if (!isWithinWindow(rankCreatedAt.get(relation.fromEntityId), window)) continue;
+    if (!relation.spaceId) continue;
 
-    const curatorSpaceId = relation.toSpaceId ?? rankEntity?.spaceId;
-    if (!curatorSpaceId) continue;
-
-    perCurator.set(curatorSpaceId, (perCurator.get(curatorSpaceId) ?? 0) + 1);
+    perCurator.set(relation.spaceId, (perCurator.get(relation.spaceId) ?? 0) + 1);
     total += 1;
   }
 
@@ -389,7 +380,7 @@ function buildRows(
       } satisfies CuratorLeaderboardRow))
     : null;
 
-  const topRows = ranked.slice(0, MAX_TABLE_ROWS);
+  const topRows = ranked.slice(0, CURATOR_LEADERBOARD_MAX_ROWS);
   const currentUserInTop = currentUserRow ? topRows.some(row => row.isCurrentUser) : true;
 
   return {

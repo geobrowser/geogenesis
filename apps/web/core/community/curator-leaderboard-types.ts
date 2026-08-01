@@ -7,6 +7,9 @@ export const CURATOR_LEADERBOARD_PERIOD_OPTIONS: { value: CuratorLeaderboardPeri
   { value: 'all', label: 'All time' },
 ];
 
+/** Rows the table shows before it truncates. Beyond this the viewer's own row is appended. */
+export const CURATOR_LEADERBOARD_MAX_ROWS = 5;
+
 export type CuratorLeaderboardMetrics = {
   activeCurators: number;
   rankings: number;

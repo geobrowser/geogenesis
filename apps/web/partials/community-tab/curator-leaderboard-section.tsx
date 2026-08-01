@@ -12,7 +12,10 @@ import type {
   CuratorLeaderboardResult,
   CuratorLeaderboardRow,
 } from '~/core/community/curator-leaderboard-types';
-import { CURATOR_LEADERBOARD_PERIOD_OPTIONS } from '~/core/community/curator-leaderboard-types';
+import {
+  CURATOR_LEADERBOARD_MAX_ROWS,
+  CURATOR_LEADERBOARD_PERIOD_OPTIONS,
+} from '~/core/community/curator-leaderboard-types';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 
 import { Avatar } from '~/design-system/avatar';
@@ -134,6 +137,8 @@ function LeaderboardTable({
 
   const showCurrentUserRow = currentUserRow && !rows.some(row => row.curatorSpaceId === currentUserRow.curatorSpaceId);
 
+  const isTruncated = rows.length >= CURATOR_LEADERBOARD_MAX_ROWS;
+
   return (
     <div className="overflow-hidden rounded-lg border border-grey-02">
       <table className="w-full border-collapse">
@@ -165,7 +170,7 @@ function LeaderboardTable({
           ) : (
             rows.map(row => <LeaderboardTableRow key={row.curatorSpaceId} row={row} />)
           )}
-          {showCurrentUserRow ? <LeaderboardTableRow row={currentUserRow} showTopBorder /> : null}
+          {showCurrentUserRow ? <LeaderboardTableRow row={currentUserRow} showTopBorder={isTruncated} /> : null}
         </tbody>
       </table>
     </div>
