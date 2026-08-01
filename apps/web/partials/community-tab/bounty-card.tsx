@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -261,6 +262,11 @@ function InterestButton({
   canRegisterInterest: boolean;
   onClick: () => void;
 }) {
+  const { smartAccount } = useSmartAccount();
+  const { open: openSignInPrompt } = useSignInPrompt();
+
+  const isLoggedIn = Boolean(smartAccount?.account.address);
+
   if (isInterested) {
     return <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>Awaiting allocation</span>;
   }
@@ -270,10 +276,18 @@ function InterestButton({
       type="button"
       onClick={event => {
         event.stopPropagation();
+
+        if (!isLoggedIn) {
+          openSignInPrompt('bounty');
+          return;
+        }
+
         onClick();
       }}
-      disabled={isPending || !canRegisterInterest}
-      title={canRegisterInterest ? undefined : 'You need a registered personal space to register interest'}
+      disabled={isPending || (isLoggedIn && !canRegisterInterest)}
+      title={
+        !isLoggedIn || canRegisterInterest ? undefined : 'You need a registered personal space to register interest'
+      }
       className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
     >
       {isPending ? 'Saving…' : "I'm interested"}
