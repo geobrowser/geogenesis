@@ -214,13 +214,13 @@ function BudgetBadge({ budget }: { budget: number | null }) {
 export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
   return (
     <BountyCardShell bounty={bounty} height={COMPLETED_CARD_HEIGHT_PX}>
-      <div>
+      <div className="flex shrink-0">
         <BudgetBadge budget={bounty.budget} />
       </div>
 
       <h3 className={`mt-3 line-clamp-2 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
-      <div className="mt-3">
+      <div className="mt-3 shrink-0">
         <ContributorRow contributors={bounty.contributors} />
       </div>
     </BountyCardShell>
