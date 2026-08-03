@@ -144,14 +144,14 @@ async function ReviewProposal({ proposalId, spaceId }: Props) {
                               ·
                             </span>
                             <GovernanceOutcomeDate
-                              geoTimeSeconds={proposal.endTime}
+                              geoTimeSeconds={proposal.startTime}
                               className="shrink-0 text-grey-04"
                             />
                             <span aria-hidden className="shrink-0 text-grey-04 select-none">
                               ·
                             </span>
                             <GovernanceOutcomeTime
-                              geoTimeSeconds={proposal.endTime}
+                              geoTimeSeconds={proposal.startTime}
                               className="shrink-0 text-grey-04 tabular-nums"
                             />
                           </>

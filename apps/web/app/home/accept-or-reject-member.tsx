@@ -31,6 +31,7 @@ interface Props {
   proposalType: Proposal['type'];
   proposalVersion?: number;
   governanceHomeReturnSearch?: string;
+  startTime: number;
   endTime: number;
   isProposalEnded: boolean;
   canExecute: boolean;
@@ -59,6 +60,7 @@ export function AcceptOrRejectMember({
   proposalName,
   proposalType,
   governanceHomeReturnSearch,
+  startTime,
   endTime,
   isProposalEnded,
   canExecute,
@@ -157,11 +159,11 @@ export function AcceptOrRejectMember({
   const footerLeft =
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <GovernanceOutcomeDate geoTimeSeconds={endTime} className="shrink-0" />
+        <GovernanceOutcomeDate geoTimeSeconds={startTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <GovernanceOutcomeTime geoTimeSeconds={endTime} className="shrink-0 tabular-nums" />
+        <GovernanceOutcomeTime geoTimeSeconds={startTime} className="shrink-0 tabular-nums" />
       </div>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>

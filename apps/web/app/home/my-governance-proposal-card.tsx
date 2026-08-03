@@ -32,6 +32,7 @@ export type MyGovernanceProposalCardProps = {
   creatorName: string;
   creatorAvatarUrl: string | null | undefined;
   creatorValue: string;
+  startTime: number;
   endTime: number;
   status: ProposalStatus;
   canExecute: boolean;
@@ -59,6 +60,7 @@ export function MyGovernanceProposalCard({
   creatorName,
   creatorAvatarUrl,
   creatorValue,
+  startTime,
   endTime,
   status,
   canExecute,
@@ -83,11 +85,11 @@ export function MyGovernanceProposalCard({
   const footerDateTime =
     status === 'ACCEPTED' || status === 'REJECTED' || votingEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <GovernanceOutcomeDate geoTimeSeconds={endTime} className="shrink-0" />
+        <GovernanceOutcomeDate geoTimeSeconds={startTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <GovernanceOutcomeTime geoTimeSeconds={endTime} className="shrink-0 tabular-nums" />
+        <GovernanceOutcomeTime geoTimeSeconds={startTime} className="shrink-0 tabular-nums" />
       </div>
     ) : endTime <= 0 ? (
       // v2 contracts don't stamp startTime/endTime until the first vote fires,

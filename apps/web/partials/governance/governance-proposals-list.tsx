@@ -169,11 +169,11 @@ export async function GovernanceProposalsList({
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeDate geoTimeSeconds={p.endTime} className="shrink-0" />
+                        <GovernanceOutcomeDate geoTimeSeconds={p.startTime} className="shrink-0" />
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeTime geoTimeSeconds={p.endTime} className="shrink-0 tabular-nums" />
+                        <GovernanceOutcomeTime geoTimeSeconds={p.startTime} className="shrink-0 tabular-nums" />
                       </>
                     )}
                   </div>

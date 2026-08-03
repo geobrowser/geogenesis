@@ -163,6 +163,7 @@ async function PendingMembershipProposal({
       proposalName={proposalName}
       proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
+      startTime={proposal.startTime}
       endTime={proposal.endTime}
       isProposalEnded={isProposalEnded}
       canExecute={proposal.canExecute}
@@ -246,11 +247,11 @@ async function PendingContentProposal({
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <GovernanceOutcomeDate geoTimeSeconds={proposal.endTime} className="shrink-0" />
+        <GovernanceOutcomeDate geoTimeSeconds={proposal.startTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <GovernanceOutcomeTime geoTimeSeconds={proposal.endTime} className="shrink-0 tabular-nums" />
+        <GovernanceOutcomeTime geoTimeSeconds={proposal.startTime} className="shrink-0 tabular-nums" />
       </div>
     ) : proposal.endTime <= 0 ? (
       // v2 contracts don't stamp startTime/endTime until the first vote fires,

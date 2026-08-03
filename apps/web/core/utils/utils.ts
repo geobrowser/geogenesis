@@ -720,8 +720,8 @@ export function getViewerTimeZone(): string {
 }
 
 /**
- * Calendar date for a resolved proposal (uses voting end time as resolution time).
- * Formats in the viewer's timezone unless `timeZone` is passed.
+ * Calendar date for when a proposal was submitted (voting start), in the viewer's timezone.
+ * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
  */
 export function formatGovernanceOutcomeDate(
   geoTimeSeconds: number,
@@ -737,7 +737,7 @@ export function formatGovernanceOutcomeDate(
   return formatInTimeZone(date, timeZone, 'MMM d, yyyy');
 }
 
-/** Time of day for governance resolution in the viewer's timezone, e.g. "2:30pm". */
+/** Time of day for when a proposal was submitted, in the viewer's timezone, e.g. "2:30pm". */
 export function formatGovernanceOutcomeTime(geoTimeSeconds: number, timeZone: string = getViewerTimeZone()): string {
   return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), timeZone, 'h:mmaaa');
 }
