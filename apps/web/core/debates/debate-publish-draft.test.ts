@@ -13,9 +13,13 @@ import {
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
+  IMAGE_TYPE_ID,
+  IMAGE_URL_PROPERTY_ID,
+  KEY_FRAME_IMAGE_PROPERTY_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
+  VIDEO_URL_PROPERTY_ID,
 } from './ontology';
 
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
@@ -38,7 +42,8 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
       { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: true, participantSlot: 1 },
       { spaceEntityId: NO_SPACE, displayName: 'Preston', position: false, participantSlot: 2 },
     ],
-    videoUrl: 'https://cdn.example/final.mp4',
+    videoUrl: 'ipfs://bafyfinalvideo',
+    keyframeUrl: 'ipfs://bafykeyframe',
     transcriptTurns: [
       { speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Iran was building a nuke.' },
       { speakerSpaceEntityId: NO_SPACE, speakerName: 'Preston', text: 'There was no congressional approval.' },
@@ -89,6 +94,37 @@ describe('buildDebatePublishDraft', () => {
       createPosition: () => 'a0',
     });
     expect(draft.relations.some(r => r.toEntity.id === VIDEO_TYPE_ID)).toBe(false);
+  });
+
+  // A Video that sets nothing but `Video URL` renders as an empty relation.
+  it('writes the video URL to both the unified IPFS URL property and Video URL', () => {
+    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+    const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
+    const videoValues = draft.values.filter(v => v.entity.id === videoId);
+    expect(videoValues.find(v => v.property.id === IMAGE_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
+    expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
+  });
+
+  it('links a Key frame Image onto the Video', () => {
+    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+    const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
+    const keyframe = draft.relations.find(r => r.type.id === KEY_FRAME_IMAGE_PROPERTY_ID);
+    expect(keyframe?.fromEntity.id).toBe(videoId);
+    expect(
+      draft.values.find(v => v.entity.id === keyframe?.toEntity.id && v.property.id === IMAGE_URL_PROPERTY_ID)?.value
+    ).toBe('ipfs://bafykeyframe');
+    expect(
+      draft.relations.some(r => r.fromEntity.id === keyframe?.toEntity.id && r.toEntity.id === IMAGE_TYPE_ID)
+    ).toBe(true);
+  });
+
+  it('publishes the Video without a Key frame when no keyframe was pinned', () => {
+    const draft = buildDebatePublishDraft(baseInput({ keyframeUrl: null }), {
+      createEntityId: idFactory(),
+      createPosition: () => 'a0',
+    });
+    expect(draft.relations.some(r => r.toEntity.id === VIDEO_TYPE_ID)).toBe(true);
+    expect(draft.relations.some(r => r.type.id === KEY_FRAME_IMAGE_PROPERTY_ID)).toBe(false);
   });
 
   it('skips the Transcript entity when there are no turns', () => {

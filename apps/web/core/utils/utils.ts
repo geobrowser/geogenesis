@@ -613,23 +613,34 @@ export function toTitleCase(value: string) {
 }
 
 export function getProposalName(proposal: { name: string; type: Proposal['type']; space: Proposal['space'] }) {
+  // A space's name is nullable — it lives on the space's home entity, which is empty
+  // during the indexer-lag window after creation. Interpolating it blindly rendered
+  // titles like "Update governance settings for null", so drop the qualifier instead
+  // of naming a space we can't name.
+  const inSpace = proposal.space.name ? ` ${proposal.space.name}` : '';
+
   switch (proposal.type) {
     case 'ADD_EDIT':
       return proposal.name;
     case 'ADD_EDITOR':
-      return `Add editor to ${proposal.space.name}`;
+      return `Add editor to${inSpace || ' space'}`;
     case 'REMOVE_EDITOR':
-      return `Remove editor from ${proposal.space.name}`;
+      return `Remove editor from${inSpace || ' space'}`;
     case 'ADD_MEMBER':
-      return `Add member to ${proposal.space.name}`;
+      return `Add member to${inSpace || ' space'}`;
     case 'REMOVE_MEMBER':
-      return `Remove member from ${proposal.space.name}`;
+      return `Remove member from${inSpace || ' space'}`;
     case 'ADD_SUBSPACE':
-      return `Add space to ${proposal.space.name}`;
+      return `Add space to${inSpace || ' space'}`;
     case 'REMOVE_SUBSPACE':
-      return `Remove space from ${proposal.space.name}`;
+      return `Remove space from${inSpace || ' space'}`;
+    // UNSET_TOPIC is normalized to SET_TOPIC by the proposal DTO, so it never lands here.
     case 'SET_TOPIC':
-      return `Set topic for ${proposal.space.name}`;
+      return `Set topic for${inSpace || ' space'}`;
+    case 'UPDATE_VOTING_SETTINGS':
+      return proposal.space.name
+        ? `Update governance settings for ${proposal.space.name}`
+        : 'Update governance settings';
   }
 }
 
@@ -651,13 +662,16 @@ export function getMembershipProposalDisplayName(type: Proposal['type'], targetP
 
 export function deriveProposalStatus(executedAt: string | null, endTime: number): ProposalStatus {
   if (executedAt) return 'ACCEPTED';
+  // v2 contracts: the voting window opens on the first vote, so endTime is 0
+  // until then. Treat a zero endTime as "not started" rather than "already
+  // ended" to avoid falsely reporting fresh un-voted proposals as REJECTED.
   const now = Math.floor(Date.now() / 1000);
-  if (endTime < now) return 'REJECTED';
+  if (endTime > 0 && endTime < now) return 'REJECTED';
   return 'PROPOSED';
 }
 
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
-  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+  return status === 'REJECTED' || status === 'ACCEPTED' || (endTime > 0 && endTime < GeoDate.toGeoTime(Date.now()));
 }
 
 export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
@@ -682,12 +696,13 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 
-export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
-}
-
 export function getProposalTimeRemaining(endTime: number) {
-  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  // Clamp at zero. A past endTime produced component-wise negatives that rendered as
+  // "-19h -44m remaining" on Home — reachable whenever the proposal's block-derived
+  // endTime trails wall-clock, which testnet's slow blocks make routine. A finished
+  // proposal has no time remaining; callers distinguish ended from active via
+  // getIsProposalEnded, not by the sign of these numbers.
+  const timeRemaining = Math.max(0, endTime - GeoDate.toGeoTime(Date.now()));
   const days = Math.floor(timeRemaining / 86400);
   const hours = Math.floor((timeRemaining % 86400) / 3600);
   const minutes = Math.floor((timeRemaining % 3600) / 60);

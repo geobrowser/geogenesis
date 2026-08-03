@@ -1,11 +1,23 @@
 import { type Hex, encodeAbiParameters } from 'viem';
 
+/** An action that targets no address — used when the action targets a space id instead. */
+export const ZERO_ADDRESS: Hex = '0x0000000000000000000000000000000000000000';
+
+/** An action that targets no space — used when the action targets an address instead. */
+export const ZERO_SPACE_ID: Hex = '0x00000000000000000000000000000000';
+
 /**
  * Represents a single action to be executed as part of a proposal.
+ *
+ * An action targets EITHER a contract address or a space id, never both and never
+ * neither — the contract resolves a space id to its address at execution time. This
+ * mirrors the SDK's `normalizeProposalActions`.
  */
 export interface ProposalAction {
-  /** Target contract address */
-  to: Hex;
+  /** Target contract address. `ZERO_ADDRESS` when targeting a space id instead. */
+  toAddress: Hex;
+  /** Target space id (bytes16). Defaults to `ZERO_SPACE_ID` when targeting an address. */
+  toSpaceId?: Hex;
   /** Value to send (usually 0n) */
   value: bigint;
   /** Encoded function call data */
@@ -15,12 +27,39 @@ export interface ProposalAction {
 /**
  * Encodes the data payload for a PROPOSAL_CREATED action.
  *
+ * The action tuple MUST stay byte-compatible with the SDK's `encodeCreateProposal`
+ * (geo-sdk `dist/src/client/dao-spaces.js`), which is what the deployed contracts
+ * decode. It carries four fields; the `toSpaceId` field was added in the v2 redeploy.
+ *
+ * Getting this wrong does not produce a clean revert: the missing field shifts every
+ * subsequent offset, so the contract reads a garbage length prefix for the dynamic
+ * `data` field and dies with "out of memory". That failure mode cost us the subspace
+ * and DAO-topic write paths, so `governance.test.ts` pins the layout against calldata
+ * the SDK itself produces.
+ *
  * @param proposalId - bytes16 proposal ID
  * @param votingMode - 0 for SLOW, 1 for FAST (matches Solidity enum VotingMode { Slow, Fast })
  * @param actions - Array of actions to execute if proposal passes
  * @returns Encoded bytes for use in SpaceRegistry.enter()
  */
 export function encodeProposalCreatedData(proposalId: Hex, votingMode: number, actions: ProposalAction[]): Hex {
+  const normalized = actions.map((action, index) => {
+    const toSpaceId = action.toSpaceId ?? ZERO_SPACE_ID;
+    const targetsAddress = action.toAddress.toLowerCase() !== ZERO_ADDRESS;
+    const targetsSpace = toSpaceId.toLowerCase() !== ZERO_SPACE_ID;
+
+    // Fail here rather than let the contract revert opaquely. Both-or-neither is
+    // always a caller bug, and the on-chain error would not say so.
+    if (targetsAddress && targetsSpace) {
+      throw new Error(`actions[${index}] must target either toAddress or toSpaceId, not both`);
+    }
+    if (!targetsAddress && !targetsSpace) {
+      throw new Error(`actions[${index}] must target either toAddress or toSpaceId`);
+    }
+
+    return { toAddress: action.toAddress, toSpaceId, value: action.value, data: action.data };
+  });
+
   return encodeAbiParameters(
     [
       { name: 'proposalId', type: 'bytes16' },
@@ -29,13 +68,14 @@ export function encodeProposalCreatedData(proposalId: Hex, votingMode: number, a
         name: 'actions',
         type: 'tuple[]',
         components: [
-          { name: 'to', type: 'address' },
+          { name: 'toAddress', type: 'address' },
+          { name: 'toSpaceId', type: 'bytes16' },
           { name: 'value', type: 'uint256' },
           { name: 'data', type: 'bytes' },
         ],
       },
     ],
-    [proposalId, votingMode, actions]
+    [proposalId, votingMode, normalized]
   );
 }
 

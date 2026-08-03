@@ -58,7 +58,7 @@ export function buildDaoTopicDeclaredCalldata({
 
   const data = encodeProposalCreatedData(proposalId, VOTING_MODE.SLOW, [
     {
-      to: spaceAddress,
+      toAddress: spaceAddress,
       value: 0n,
       data: pingCallData,
     },

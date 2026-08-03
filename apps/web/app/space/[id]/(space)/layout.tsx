@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -29,7 +30,7 @@ import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
-import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
 import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
 
@@ -71,7 +72,13 @@ export default async function Layout(props0: LayoutProps) {
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
           <SpaceHeaderContentContainer spaceId={spaceId} hasSidebar={hasCommunityCallsSidebar}>
             <div className="space-y-2">
-              <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
+              <EditableSpaceHeading
+                spaceId={spaceId}
+                entityId={props.id}
+                actionsComponent={
+                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                }
+              />
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
               <SpacePageMetadataHeader
                 spaceId={spaceId}
@@ -143,6 +150,55 @@ const getSpaceFrontPage = async (spaceId: string) => {
       space: null,
       avatarUrl: null,
       coverUrl: null,
+    };
+  }
+
+  // Local-dev fallback: when the indexer has the space but its home entity has no id
+  // (the e2e bootstrap registers personal spaces without going through
+  // personalSpaces.create, so spaceEntityId is never assigned), reuse the spaceId as
+  // a deterministic home-entity id. We *also* fetch the entity at id=spaceId so any
+  // values we published under this synthetic id surface on the page. Without the
+  // second fetch, edits land in the indexer but the layout reads space.entity which
+  // still has empty values.
+  //
+  // Gated to the e2e/test environment: on testnet/mainnet a fresh space can also
+  // have an empty entity.id during the indexer-lag window, and handing out the
+  // synthetic id there attaches edits to an entity that permanently diverges from
+  // the real home entity once it indexes. Outside test env we render the empty
+  // entity and let the next request pick up the indexed one.
+  if (!entity.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
+    const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
+    const syntheticEntity = syntheticPage?.entity ?? null;
+
+    // eslint-disable-next-line no-console
+    console.log('[local-dev synthetic-home] spaceId=%s synthetic=%o', spaceId, {
+      gotPage: !!syntheticPage,
+      entityId: syntheticEntity?.id,
+      entityName: syntheticEntity?.name,
+      valuesCount: syntheticEntity?.values?.length ?? 0,
+      sampleValues: syntheticEntity?.values?.slice(0, 3).map(v => ({
+        propertyId: v.property?.id,
+        propertyName: v.property?.name,
+        spaceId: v.spaceId,
+        value: v.value,
+      })),
+    });
+
+    const spaceWithSyntheticEntity = syntheticEntity
+      ? { ...space, entity: { ...space.entity, ...syntheticEntity, id: spaceId, spaceId } }
+      : space;
+
+    return {
+      id: spaceId,
+      tabEntities: [],
+      tabRelations: [],
+      tabs: {},
+      blockRelations: syntheticEntity?.relations ?? [],
+      blocks: [],
+      initialCollectionItems: {},
+      space: spaceWithSyntheticEntity,
+      avatarUrl: syntheticEntity ? (Entities.avatar(syntheticEntity.relations) ?? null) : null,
+      coverUrl: syntheticEntity ? (Entities.cover(syntheticEntity.relations) ?? null) : null,
     };
   }
 

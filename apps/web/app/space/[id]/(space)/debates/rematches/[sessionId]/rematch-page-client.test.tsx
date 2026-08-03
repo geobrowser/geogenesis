@@ -153,7 +153,7 @@ describe('DebateRematchPageClient', () => {
     expect(within(dialog).getByText('Debate request')).toBeInTheDocument();
     expect(within(dialog).getByText('You')).toBeInTheDocument();
     expect(within(dialog).getByText('Salina')).toBeInTheDocument();
-    expect(within(dialog).getByText('vs')).toBeInTheDocument();
+    expect(within(dialog).getByText('VS')).toBeInTheDocument();
     expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
     expect(within(within(dialog).getByText('Salina').parentElement!).getByText('No')).toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);

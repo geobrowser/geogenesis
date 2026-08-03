@@ -11,7 +11,7 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
-import { type VoteObjectType, useEntityVote } from '~/core/hooks/use-entity-vote';
+import { useEntityVote } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
@@ -26,17 +26,19 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 
 type OptimisticVote = 0 | 1 | 'none' | null;
 
+// Entity votes are always object type 0 — the SDK hardcodes it in the vote
+// topic, so reads here pin the same value to stay consistent with writes.
+const ENTITY_VOTE_OBJECT_TYPE = 0;
+
 type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
-  objectType?: VoteObjectType;
 };
 
-export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityVoteButtonsProps) {
+export function EntityVoteButtons({ entityId, spaceId }: EntityVoteButtonsProps) {
   const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
-    objectType,
   });
   const { smartAccount } = useSmartAccount();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
@@ -55,16 +57,16 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
   const [votersOpen, setVotersOpen] = React.useState(false);
 
   const { data: voteCounts } = useQuery<{ upvotes: number; downvotes: number } | null>({
-    queryKey: ['entity-vote-count', entityId, objectType],
-    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, objectType)),
+    queryKey: ['entity-vote-count', entityId, ENTITY_VOTE_OBJECT_TYPE],
+    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, ENTITY_VOTE_OBJECT_TYPE)),
     staleTime: 30_000,
   });
 
   const { data: userVoteType } = useQuery({
-    queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, objectType],
+    queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, ENTITY_VOTE_OBJECT_TYPE],
     queryFn: async () => {
       if (!personalSpaceId) return null;
-      return Effect.runPromise(getUserEntityVote(personalSpaceId, entityId, spaceId, objectType));
+      return Effect.runPromise(getUserEntityVote(personalSpaceId, entityId, spaceId, ENTITY_VOTE_OBJECT_TYPE));
     },
     enabled: !!personalSpaceId,
     staleTime: 30_000,
@@ -180,7 +182,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
       previous_vote_direction: previousDirection,
       entity_id: entityId,
       space_id: spaceId,
-      object_type: objectType,
+      object_type: ENTITY_VOTE_OBJECT_TYPE,
     };
   }
 
@@ -231,7 +233,7 @@ export function EntityVoteButtons({ entityId, spaceId, objectType = 0 }: EntityV
             sideOffset={8}
             className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
-            <VotersPopoverContent entityId={entityId} spaceId={spaceId} objectType={objectType} />
+            <VotersPopoverContent entityId={entityId} spaceId={spaceId} objectType={ENTITY_VOTE_OBJECT_TYPE} />
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
