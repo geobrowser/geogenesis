@@ -246,6 +246,9 @@ describe('DebatesBrowseFeed video sharing', () => {
     const shareButtons = screen.getAllByRole('button', { name: 'Share debate video' });
     expect(shareButtons).toHaveLength(2);
     expect(shareButtons.every(button => button.getAttribute('aria-disabled') === 'false')).toBe(true);
+    fireEvent.focus(shareButtons[0]);
+    await advance(300);
+    expect(screen.queryByText('Share the debate video.')).not.toBeInTheDocument();
 
     fireEvent.click(shareButtons[1]);
     const file = mocks.share.mock.calls[0]?.[0].files[0] as File;
@@ -314,6 +317,9 @@ describe('DebatesBrowseFeed video sharing', () => {
     const sharingButtons = screen.getAllByRole('button', { name: 'Sharing debate video' });
     expect(sharingButtons).toHaveLength(2);
     expect(sharingButtons.every(button => button.getAttribute('aria-disabled') === 'true')).toBe(true);
+    fireEvent.focus(sharingButtons[0]);
+    await advance(300);
+    expect(screen.queryByText('Opening sharing options…')).not.toBeInTheDocument();
 
     resolveShare?.();
     await flushPromises();

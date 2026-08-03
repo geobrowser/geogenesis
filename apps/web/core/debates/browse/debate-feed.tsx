@@ -435,10 +435,10 @@ function getShareTooltipMessage({
   error,
 }: Pick<DebateShareAction, 'state' | 'method'> & { error: string | null }) {
   if (state === 'preparing') return 'Preparing video for sharing… You can share soon.';
-  if (state === 'sharing') return 'Opening sharing options…';
+  if (state === 'sharing') return undefined;
   if (state === 'error') {
     const fallback = method ? 'Could not share the video.' : 'Could not prepare the video.';
     return `${error ?? fallback} Select to try again.`;
   }
-  return method === 'download' ? 'Download the debate video.' : 'Share the debate video.';
+  return method === 'download' ? 'Download the debate video.' : undefined;
 }

@@ -17,7 +17,7 @@ export type DebateVote = 'up' | 'down' | null;
 export type DebateShareAction = {
   state: 'preparing' | 'ready' | 'sharing' | 'error';
   method: SocialVideoHandoffMethod | null;
-  tooltipMessage: string;
+  tooltipMessage?: string;
   onActivate: () => void;
 };
 
