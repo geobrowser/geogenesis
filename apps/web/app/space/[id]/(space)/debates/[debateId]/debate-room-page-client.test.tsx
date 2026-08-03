@@ -2354,6 +2354,8 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('renders thanking on the scheduled final-turn boundary instead of the display interval', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse('2026-07-02T00:00:20.000Z'));
     const now = Date.now();
     const finalTurnEndsAt = now + 100;
     mocks.debate = {
@@ -2372,7 +2374,8 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
-    expect(await screen.findByText('Debate again?', undefined, { timeout: 350 })).toBeInTheDocument();
+    await act(() => vi.advanceTimersByTimeAsync(101));
+    expect(screen.getByText('Debate again?')).toBeInTheDocument();
     expect(mocks.refetchDebate).not.toHaveBeenCalled();
   });
 
