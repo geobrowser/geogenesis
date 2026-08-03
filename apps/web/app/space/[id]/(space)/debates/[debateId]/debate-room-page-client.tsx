@@ -63,6 +63,7 @@ import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -1380,6 +1381,29 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   if (shouldHideTerminalDebate) return null;
 
+  if (connectionConflictWithoutTakeover) {
+    return (
+      <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8 text-center">
+        <div className="flex w-full max-w-[451px] flex-col items-center">
+          <Text as="h1" variant="smallTitle" color="text">
+            This debate is already open in another tab.
+          </Text>
+          <Text as="p" variant="metadata" color="grey-04" className="mt-3">
+            Close this tab and continue your debate in the original tab.
+          </Text>
+          <Link
+            href={`/space/${spaceId}/debates`}
+            className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
+          >
+            <Text as="span" variant="textLinkSemibold" color="current">
+              Go to debates
+            </Text>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-8">
       {debate?.status !== 'ready' && (
@@ -1488,11 +1512,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               {roomError && roomState === 'idle' && (
                 <div className="mt-4 rounded-lg border border-red-01 bg-white px-5 py-4">
                   <Text color="red-01">{roomError}</Text>
-                  {connectionConflictWithoutTakeover && (
-                    <Text as="p" color="grey-04" className="mt-2">
-                      Continue the debate in the original tab or device to preserve its recording.
-                    </Text>
-                  )}
                 </div>
               )}
             </section>
