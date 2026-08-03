@@ -76,10 +76,10 @@ export function RecordingCountdownRing({
         style={{
           color: numberColor,
           fontFamily: 'var(--font-geist-medium)',
-          fontSize: 28,
+          fontSize: 22,
           fontWeight: 500,
           lineHeight: 1,
-          transform: 'translateY(-1px)',
+          transform: 'none',
         }}
       >
         {remainingSeconds}

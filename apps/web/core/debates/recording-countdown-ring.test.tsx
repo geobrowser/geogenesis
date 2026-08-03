@@ -48,10 +48,10 @@ describe('RecordingCountdownRing', () => {
     expect(number).toHaveStyle({
       color: '#FFFFFF',
       fontFamily: 'var(--font-geist-medium)',
-      fontSize: '28px',
+      fontSize: '22px',
       fontWeight: '500',
       lineHeight: '1',
-      transform: 'translateY(-1px)',
+      transform: 'none',
     });
   });
 
