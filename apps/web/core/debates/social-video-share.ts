@@ -100,9 +100,7 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
       {
         onSuccess: response => {
           if (active) {
-            setState(current =>
-              current.playbackUrl ? current : { ...current, playbackUrl: response.upload.url }
-            );
+            setState(current => (current.playbackUrl ? current : { ...current, playbackUrl: response.upload.url }));
           }
           void downloadSocialVideo(response.upload.url, controller.signal, progress => {
             if (!active) return;

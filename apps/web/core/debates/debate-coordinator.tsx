@@ -11,9 +11,23 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import type { DebateMatch, DebateSharePrompt } from './api';
+import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
-import { useDebateActivity, useDebateSharePrompts, useGeoChatAuth, useHandleDebateSharePrompt } from './hooks';
+import {
+  clearDebateMatchTabOwnership,
+  createDebateMatchTabOwnershipCoordinator,
+  debateMatchOwnershipMatchesDebate,
+  readDebateMatchTabOwnership,
+} from './debate-match-tab-ownership';
+import {
+  useAcceptDebateChallenge,
+  useDebateActivity,
+  useDebateSharePrompts,
+  useGeoChatAuth,
+  useHandleDebateSharePrompt,
+  useRejectDebateChallenge,
+} from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
 import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
 
@@ -28,10 +42,15 @@ export function DebateCoordinator() {
     geoChatAuth.accountKey
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
+  const currentUserId = getCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
   const match = activity?.match ?? null;
   const reportedDebate = activity?.debate ?? null;
   const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
+  const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const acceptChallenge = useAcceptDebateChallenge();
+  const rejectChallenge = useRejectDebateChallenge();
+  const challengeError = acceptChallenge.error ?? rejectChallenge.error;
   const lastMatchRef = React.useRef<DebateMatch | null>(null);
   const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
   const retainedMatch =
@@ -39,7 +58,7 @@ export function DebateCoordinator() {
       ? lastMatchRef.current
       : null;
   const visibleMatch = match ?? retainedMatch;
-  const activeFlow = Boolean(match || debate || activity?.rematch);
+  const activeFlow = Boolean(match || debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
     activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
@@ -67,28 +86,67 @@ export function DebateCoordinator() {
 
   React.useEffect(() => {
     if (!activity) return;
-    const viewingRematch = pathname.includes('/debates/rematches/');
-    if (debate && !viewingRematch && !pathname.includes(`/debates/${debate.id}`)) {
-      // The retained match prompt owns this handoff so it can deduplicate
-      // navigation from the accept response and the activity update.
-      if (!visibleMatch) router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
-      return;
-    }
     const rematch = activity.rematch;
     if (!rematch) return;
+    const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
     if (rematch.status === 'deciding') {
-      if (!pathname.includes(`/debates/${rematch.source_debate_id}`)) {
-        router.push(`/space/${rematch.source_space_id}/debates/${rematch.source_debate_id}`);
+      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
+        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
       }
       return;
     }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       // The debate room owns recording finalization before entering the browser.
-      if (pathname.includes(`/debates/${rematch.source_debate_id}`)) return;
+      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) router.push(path);
     }
-  }, [activity, debate, pathname, router, visibleMatch]);
+  }, [activity, pathname, router]);
+
+  React.useEffect(() => {
+    if (!currentUserId || !activity) return;
+    if (debate && pathname.includes(`/debates/${debate.id}`)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    const record = readDebateMatchTabOwnership(currentUserId);
+    if (!record) return;
+    if (match) {
+      if (match.id !== record.matchId) clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    if (!debate || pathname.includes('/debates/rematches/')) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+    if (visibleMatch) return;
+    if (!debateMatchOwnershipMatchesDebate(record, debate, currentUserId)) {
+      clearDebateMatchTabOwnership(currentUserId);
+      return;
+    }
+
+    const ownership = createDebateMatchTabOwnershipCoordinator({
+      matchId: record.matchId,
+      claimId: record.claimId,
+      spaceId: record.spaceId,
+      userId: currentUserId,
+      onAcceptedElsewhere: () => undefined,
+    });
+    let active = true;
+    void ownership.recover().then(recovered => {
+      if (!active || !recovered) return;
+      if (record.state === 'pending') ownership.confirmAcceptance();
+      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
+    });
+    return () => {
+      active = false;
+      ownership.close();
+    };
+  }, [activity, currentUserId, debate, match, pathname, reportedDebate, router, visibleMatch]);
 
   if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
@@ -110,6 +168,17 @@ export function DebateCoordinator() {
           spaceId={visibleMatch.claim.space_id}
           matches={[visibleMatch]}
           debates={debate ? [debate] : []}
+          reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
+        />
+      )}
+      {challenge && !visibleMatch && !debate && !activity?.rematch && (
+        <DebateChallengeDialog
+          challenge={challenge}
+          role={challenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
+          busy={acceptChallenge.isPending || rejectChallenge.isPending}
+          error={challengeError instanceof Error ? challengeError.message : null}
+          onAccept={() => acceptChallenge.mutate(challenge.id)}
+          onReject={() => rejectChallenge.mutate(challenge.id)}
         />
       )}
       {!activeFlow && visibleSharePrompt && (

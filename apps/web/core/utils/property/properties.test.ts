@@ -27,8 +27,10 @@ vi.mock('~/core/io/dto/properties', () => ({
   },
 }));
 
-// Mock the constants to ensure they're available in tests
-vi.mock('~/core/constants', () => ({
+// Swap the ids these tests assert on for readable stand-ins. Spreads the real module first so an
+// unrelated constant becoming reachable from this import graph doesn't blow up the mock.
+vi.mock('~/core/constants', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/constants')>()),
   RENDERABLE_TYPE_PROPERTY: 'RENDERABLE_TYPE_PROPERTY_ID',
   DATA_TYPE_PROPERTY: 'DATA_TYPE_PROPERTY_ID',
   DATA_TYPE_ENTITY_IDS: {

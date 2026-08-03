@@ -19,11 +19,13 @@ import {
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
   abortDebate,
+  acceptDebateChallenge,
   acceptDebateMatch,
   acceptDebateRematchRequest,
   cancelDebateRecording,
   completeLocalRecordingUpload,
   consentToDebateRematch,
+  createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
   declineDebateMatch,
@@ -32,6 +34,7 @@ import {
   getDebateActivity,
   getDebateMedia,
   getDebateMediaArtifactUrl,
+  getDebateProfile,
   getDebateRematch,
   getDebateTranscript,
   getLiveKitToken,
@@ -46,6 +49,7 @@ import {
   listSpaceDebates,
   markDebateJoined,
   markDebateReady,
+  rejectDebateChallenge,
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
@@ -74,6 +78,8 @@ export const debateQueryKeys = {
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
+  profile: (accountKey: string | null, profileSpaceId: string) =>
+    ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
 };
 
 export function useGeoChatAuth() {
@@ -380,6 +386,7 @@ export function useConsentToDebateRematch(debateId: string) {
         match: null,
         debate: null,
         rematch: session,
+        challenge: null,
       }));
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -492,6 +499,63 @@ export function useRejectDebateRematchRequest() {
       void queryClient.invalidateQueries({
         queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'],
       });
+    },
+  });
+}
+
+export function useDebateProfile(profileSpaceId: string, enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.profile(accountKey, profileSpaceId),
+    queryFn: ({ signal }) => getDebateProfile(profileSpaceId, getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && authenticated && Boolean(profileSpaceId),
+  });
+}
+
+export function useCreateDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (request: { recipient_profile_space_id: string }) =>
+      createDebateChallenge(request, getPrivyIdentityToken, accountKey),
+    onSuccess: challenge => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current ? { ...current, challenge } : current
+      );
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+  });
+}
+
+export function useAcceptDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    onSuccess: result => {
+      if (result.session) {
+        queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
+      }
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+  });
+}
+
+export function useRejectDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    onSuccess: () => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current ? { ...current, challenge: null } : current
+      );
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
 }

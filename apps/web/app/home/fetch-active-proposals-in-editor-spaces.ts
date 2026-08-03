@@ -7,6 +7,7 @@ import {
   ApiProposalListResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  getApiProposalCanExecute,
   isValidUUID,
   mapActionTypeToProposalType,
   mapProposalStatus,
@@ -154,6 +155,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       totalCount: 0,
       proposals: [] as Array<{
         id: string;
+        version?: number;
         name: string | null;
         type: ProposalType;
         createdBy: Profile;
@@ -235,13 +237,14 @@ export async function getActiveProposalsForSpacesWhereEditor(
 
     return {
       id: p.proposalId,
+      version: p.proposalVersion,
       name: p.name,
       type,
       createdBy: profile,
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status,
-      canExecute: p.canExecute,
+      canExecute: getApiProposalCanExecute(p),
       space: {
         id: p.spaceId,
         name: null as string | null,

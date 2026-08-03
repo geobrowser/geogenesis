@@ -30,6 +30,7 @@ function percentageFromCounts(count: number, total: number): number {
 export type MyGovernanceProposalCardProps = {
   spaceId: string;
   proposalId: string;
+  proposalVersion?: number;
   displayTitle: string;
   spaceName: string;
   spaceImage: string;
@@ -56,6 +57,7 @@ export type MyGovernanceProposalCardProps = {
 export function MyGovernanceProposalCard({
   spaceId,
   proposalId,
+  proposalVersion,
   displayTitle,
   spaceName,
   spaceImage,
@@ -94,6 +96,11 @@ export function MyGovernanceProposalCard({
           {formatGovernanceOutcomeTime(endTime)}
         </time>
       </div>
+    ) : endTime <= 0 ? (
+      // v2 contracts don't stamp startTime/endTime until the first vote fires,
+      // so a countdown here would render negative values for freshly proposed
+      // items with zero votes.
+      <p className="text-metadataMedium">Voting opens on first vote</p>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
     );
@@ -149,6 +156,7 @@ export function MyGovernanceProposalCard({
           <AcceptOrRejectEditor
             spaceId={spaceId}
             proposalId={proposalId}
+            proposalVersion={proposalVersion}
             isProposalEnded={votingEnded}
             canExecute={canExecute}
             status={status}

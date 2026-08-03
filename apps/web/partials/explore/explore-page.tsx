@@ -15,7 +15,6 @@ type Props = {
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
-  editorSpaceIds: string[];
   communityCalls: ExploreCall[];
 };
 
@@ -25,7 +24,6 @@ export function ExplorePage({
   featuredRankings,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
-  editorSpaceIds,
   communityCalls,
 }: Props) {
   return (
@@ -51,7 +49,6 @@ export function ExplorePage({
         featuredRankings={featuredRankings}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-        editorSpaceIds={editorSpaceIds}
         communityCalls={communityCalls}
       />
     </div>

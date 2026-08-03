@@ -4,6 +4,17 @@ import { DebateNotPublishableError, listSweepCandidateDebateIds, loadDebatePubli
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
 
+const OBJECT_STORE_HOST = 'https://r2.example';
+
+// Stands in for the IPFS upload. Each artifact's fake bytes are its kind, so the returned CID
+// records which artifact was actually pinned.
+const { uploadGeoImage, pinToFakeIpfs } = vi.hoisted(() => {
+  const pinToFakeIpfs = async ({ blob }: { blob: Blob }) => ({ cid: `ipfs://cid-for-${await blob.text()}` });
+  return { uploadGeoImage: vi.fn(pinToFakeIpfs), pinToFakeIpfs };
+});
+
+vi.mock('~/core/sdk/geo-client', () => ({ uploadGeoImage }));
+
 function debateBody(overrides: Record<string, unknown> = {}) {
   return {
     id: DEBATE_ID,
@@ -20,27 +31,38 @@ function debateBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Routes each geo-chat path the loader touches to a canned response. */
-function mockGeoChat(media: unknown, debate = debateBody()) {
+/** Routes each geo-chat path the loader touches — plus the object store it redirects to — to a canned response. */
+function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: string | URL) => {
+    vi.fn(async (input: string | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.startsWith(OBJECT_STORE_HOST)) {
+        return new Response(new URL(url).pathname.slice(1), { status: artifactStatus });
+      }
       const body = url.endsWith('/media')
         ? media
         : url.includes('/transcript')
           ? { segments: [] }
           : url.includes('/media/artifacts/url')
-            ? { upload: { url: 'https://r2.example/final.webm?X-Amz-Expires=900' } }
+            ? { upload: { url: presignedUrlFor(String(init?.body)) } }
             : debate;
       return new Response(JSON.stringify(body), { status: 200 });
     })
   );
 }
 
+/** geo-chat presigns a distinct short-lived URL per artifact kind. */
+function presignedUrlFor(requestBody: string) {
+  const { kind } = JSON.parse(requestBody) as { kind: string };
+  return `${OBJECT_STORE_HOST}/${kind}?X-Amz-Expires=900`;
+}
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  uploadGeoImage.mockReset();
+  uploadGeoImage.mockImplementation(pinToFakeIpfs);
 });
 
 describe('loadDebatePublishSource media gating', () => {
@@ -49,11 +71,53 @@ describe('loadDebatePublishSource media gating', () => {
     vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
   });
 
-  it('publishes the processed final_video when the job succeeded', async () => {
+  // Publishing geo-chat's presigned URL puts a link on-chain that expires 15 minutes later.
+  it('pins the processed final_video and publishes its permanent ipfs:// URI', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
-    expect(input.videoUrl).toBe('https://r2.example/final.webm?X-Amz-Expires=900');
+    // Handed over as the artifact's bytes, never as the presigned URL: the SDK's URL path rejects a
+    // webm body. Asserted by reading the blob rather than `expect.any(Blob)`, which is an
+    // `instanceof` against the test realm's global and fails on the Blob `fetch` actually returns.
+    const [uploaded] = uploadGeoImage.mock.calls[0];
+    expect(uploaded).not.toHaveProperty('url');
+    expect(await uploaded.blob.text()).toBe('final_video');
+    expect(input.videoUrl).toBe('ipfs://cid-for-final_video');
+  });
+
+  it('pins the preview_image as the video keyframe', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }, { kind: 'preview_image' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.keyframeUrl).toBe('ipfs://cid-for-preview_image');
+  });
+
+  it('publishes without a keyframe when the worker composed no preview_image', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.keyframeUrl).toBeNull();
+    expect(uploadGeoImage).toHaveBeenCalledTimes(1);
+  });
+
+  it('still publishes the video when pinning the keyframe fails', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }, { kind: 'preview_image' }] });
+    uploadGeoImage.mockImplementation(async ({ blob }: { blob: Blob }) => {
+      if ((await blob.text()) === 'preview_image') throw new Error('ipfs upload failed');
+      return { cid: 'ipfs://cid-for-final_video' };
+    });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe('ipfs://cid-for-final_video');
+    expect(input.keyframeUrl).toBeNull();
+  });
+
+  // An expired or revoked presigned URL must fail the publish, not pin the object store's error page.
+  it('fails the publish when the artifact download is rejected', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), 403);
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/Downloading final_video/);
+    expect(uploadGeoImage).not.toHaveBeenCalled();
   });
 
   // Without this gate, a succeeded job missing final_video publishes a videoless Debate entity.

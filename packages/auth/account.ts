@@ -1,1 +1,6 @@
-export { generateSmartAccount } from './src/account.js';
+export {
+  generateZeroDevAccount,
+  isRevertedUserOperationError,
+  RevertedUserOperationError,
+  type GeoWalletClient,
+} from './src/account.js';
