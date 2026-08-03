@@ -47,6 +47,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   debateRecordingUploadId,
   deleteDebateRecordingUpload,
@@ -129,12 +130,6 @@ const recordingOverlayTextShadow = {
 const recordingLabelTextShadow = {
   textShadow: '-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 4px 12px rgba(0,0,0,0.25)',
 };
-
-// Ring geometry lives in a 68-unit viewBox; the tile renders it at the Figma frame size (51px).
-const recordingCountdownSize = 68;
-const recordingCountdownRenderSize = 51;
-const recordingCountdownRadius = 25;
-const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
 
 const debateThankingDurationMs = 20_000;
 const debatePreflightDurationMs = 5_000;
@@ -1624,14 +1619,26 @@ function DebateRecordingModal({
     countdown.activeSlot
   );
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
-  const countdownRing = countdown.remainingSeconds > 0 ? <RecordingCountdownRing countdown={countdown} /> : null;
+  const countdownRing =
+    countdown.remainingSeconds > 0 ? (
+      <RecordingCountdownRing
+        remainingSeconds={countdown.remainingSeconds}
+        progress={countdown.progress}
+        variant={
+          countdown.effectiveStatus === 'in_progress' &&
+          countdown.activeSlot !== null &&
+          countdown.remainingSeconds <= 5
+            ? 'warning'
+            : 'default'
+        }
+      />
+    ) : null;
   const yieldedCountdownRing =
     countdown.yieldedRemainingSeconds !== null && countdown.yieldedProgress !== null ? (
       <RecordingCountdownRing
-        countdown={countdown}
         remainingSeconds={countdown.yieldedRemainingSeconds}
         progress={countdown.yieldedProgress}
-        muted
+        variant="muted"
       />
     ) : null;
   const sharedPhaseCountdown = countdown.activeSlot === null && countdown.yieldingSlot === null ? countdownRing : null;
@@ -2274,72 +2281,6 @@ function DebateAgainCard({
         </span>
       </div>
     </section>
-  );
-}
-
-function RecordingCountdownRing({
-  countdown,
-  remainingSeconds = countdown.remainingSeconds,
-  progress = countdown.progress,
-  muted = false,
-}: {
-  countdown: DebateCountdown;
-  remainingSeconds?: number;
-  progress?: number;
-  muted?: boolean;
-}) {
-  const remainingRatio = Math.max(0, Math.min(1, 1 - progress));
-  const danger =
-    !muted &&
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.activeSlot !== null &&
-    remainingSeconds > 0 &&
-    remainingSeconds <= 5;
-  const ringColor = muted ? 'rgba(190,190,190,0.92)' : danger ? 'var(--color-red-01)' : 'var(--color-white)';
-  const dashOffset = recordingCountdownCircumference * (1 - remainingRatio);
-
-  return (
-    <div
-      aria-label={`Phase timer: ${remainingSeconds} seconds remaining`}
-      data-muted-timer={muted ? 'true' : 'false'}
-      data-timer-progress={progress}
-      className="relative grid place-items-center"
-      style={{ width: recordingCountdownRenderSize, height: recordingCountdownRenderSize }}
-    >
-      <svg
-        viewBox={`0 0 ${recordingCountdownSize} ${recordingCountdownSize}`}
-        aria-hidden="true"
-        className="absolute inset-0 size-full"
-      >
-        <circle cx="34" cy="34" r="32" fill="rgba(16,16,16,0.34)" stroke="rgba(16,16,16,0.64)" strokeWidth="5" />
-        <circle cx="34" cy="34" r="20" fill="rgba(0,0,0,0.52)" />
-        <circle
-          cx="34"
-          cy="34"
-          r={recordingCountdownRadius}
-          fill="none"
-          stroke="rgba(119,119,119,0.88)"
-          strokeWidth="6"
-        />
-        <circle
-          cx="34"
-          cy="34"
-          r={recordingCountdownRadius}
-          fill="none"
-          stroke={ringColor}
-          strokeWidth="7"
-          strokeLinecap="butt"
-          strokeDasharray={recordingCountdownCircumference}
-          strokeDashoffset={dashOffset}
-          transform="rotate(-90 34 34)"
-        />
-      </svg>
-      <span
-        className={cx('relative z-10 text-[1.625rem] leading-none font-medium', muted ? 'text-grey-02' : 'text-white')}
-      >
-        {remainingSeconds}
-      </span>
-    </div>
   );
 }
 

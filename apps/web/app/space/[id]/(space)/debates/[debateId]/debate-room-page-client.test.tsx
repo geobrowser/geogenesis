@@ -1615,7 +1615,9 @@ describe('DebateRoomPageClient', () => {
     expect(debateVideoTile('local')).toContainElement(phaseTimer);
     expectActiveDebateVideoTile('local');
     expect(screen.getByText('19')).toBeInTheDocument();
-    expect(document.querySelector('circle[stroke="var(--color-white)"]')).toBeInTheDocument();
+    expect(phaseTimer).toHaveStyle({ width: '51px', height: '51px' });
+    expect(phaseTimer.querySelector('svg')).toHaveAttribute('viewBox', '0 0 51 51');
+    expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
   });
 
   it('shows the circular five-second timer during preflight', async () => {
@@ -1631,9 +1633,10 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByLabelText('Phase timer: 5 seconds remaining')).toBeInTheDocument();
+    const phaseTimer = await screen.findByLabelText('Phase timer: 5 seconds remaining');
+    expect(phaseTimer).toBeInTheDocument();
     expect(screen.getAllByText('5')).not.toHaveLength(0);
-    expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).not.toBeInTheDocument();
+    expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
@@ -1858,7 +1861,7 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText("You're up in")).toBeInTheDocument();
     expect(screen.getAllByText('1')).toHaveLength(2);
-    expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-countdown-progress][stroke="#FF4A26"]')).toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
   });
@@ -2012,10 +2015,10 @@ describe('DebateRoomPageClient', () => {
     const ending = await screen.findByText('Ending turn…');
     expect(debateVideoTile('remote')).toContainElement(ending);
     expect(debateVideoTile('local')).toContainElement(screen.getByText('Your turn in'));
-    expect(screen.getByLabelText('Phase timer: 10 seconds remaining')).toHaveAttribute(
-      'data-timer-progress',
-      String(2 / 3)
-    );
+    const yieldedTimer = screen.getByLabelText('Phase timer: 10 seconds remaining');
+    expect(yieldedTimer).toHaveAttribute('data-timer-progress', String(2 / 3));
+    expect(yieldedTimer).toHaveAttribute('data-muted-timer', 'true');
+    expect(yieldedTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', 'rgba(190,190,190,0.92)');
     expect(screen.queryByRole('button', { name: 'End turn' })).not.toBeInTheDocument();
   });
 
@@ -2047,6 +2050,9 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText("You're up in")).toBeInTheDocument();
     expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
+    const yieldedTimer = screen.getByLabelText('Phase timer: 4 seconds remaining');
+    expect(yieldedTimer).toHaveAttribute('data-muted-timer', 'true');
+    expect(yieldedTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', 'rgba(190,190,190,0.92)');
   });
 
   it('moves a yielded final turn into the normal thank-you phase as soon as the server snapshot arrives', async () => {
@@ -2114,10 +2120,10 @@ describe('DebateRoomPageClient', () => {
     expect(debateVideoTile('remote')).not.toContainElement(wrapItUp);
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.queryByText('GO!')).not.toBeInTheDocument();
-    expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-countdown-progress][stroke="#FF4A26"]')).toBeInTheDocument();
   });
 
-  it('does not show the remote speaker wrap-up warning to the inactive local participant', async () => {
+  it('places the warning timer on the remote speaker without showing local wrap-up copy', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:26.500Z'));
     mocks.debate = {
       ...completedDebate(),
@@ -2133,7 +2139,11 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+    const phaseTimer = await screen.findByLabelText('Phase timer: 4 seconds remaining');
+    expect(debateVideoTile('remote')).toContainElement(phaseTimer);
+    expect(debateVideoTile('local')).not.toContainElement(phaseTimer);
+    expectActiveDebateVideoTile('remote');
+    expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FF4A26');
     expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
   });
 
@@ -2155,6 +2165,9 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
     expect(screen.queryByText('Wrap it up!')).not.toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Phase timer: 6 seconds remaining').querySelector('[data-countdown-progress]')
+    ).toHaveAttribute('stroke', '#FFFFFF');
   });
 
   it('labels the upcoming turn as a rebuttal in the final round', async () => {
@@ -2178,7 +2191,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText("You're up in")).not.toBeInTheDocument();
     expect(screen.getAllByText('4')).toHaveLength(2);
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
-    expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-countdown-progress][stroke="#FF4A26"]')).toBeInTheDocument();
   });
 
   it('shows only debate ends soon to the inactive local participant on the final turn', async () => {
@@ -2208,7 +2221,7 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
-    expect(document.querySelector('circle[stroke="var(--color-red-01)"]')).toBeInTheDocument();
+    expect(document.querySelector('[data-countdown-progress][stroke="#FF4A26"]')).toBeInTheDocument();
 
     clockElapsedMs = 4_000;
 
@@ -2400,7 +2413,11 @@ describe('DebateRoomPageClient', () => {
 
     expect(await screen.findByText('Debate again?')).toBeInTheDocument();
     expect(screen.getAllByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).not.toHaveLength(0);
-    expect(screen.getAllByLabelText('Phase timer: 20 seconds remaining')).toHaveLength(2);
+    const phaseTimers = screen.getAllByLabelText('Phase timer: 20 seconds remaining');
+    expect(phaseTimers).toHaveLength(2);
+    for (const phaseTimer of phaseTimers) {
+      expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
+    }
     fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
   });
