@@ -468,7 +468,9 @@ describe('DebateCoordinator', () => {
       debate_id: 'debate-1',
       method: 'download',
     });
-    expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object));
+    await waitFor(() =>
+      expect(mocks.handleMutate).toHaveBeenCalledWith({ promptId: 'prompt-1', action: 'shared' }, expect.any(Object))
+    );
 
     mocks.prompts = [];
     view.rerender(<DebateCoordinator />);

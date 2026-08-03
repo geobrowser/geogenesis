@@ -8,6 +8,12 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import {
+  getPreparedSocialVideoHandoffMethod,
+  handoffPreparedSocialVideo,
+  isAbortError,
+  usePreparedSocialVideo,
+} from '~/core/debates/social-video-share';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
@@ -20,10 +26,11 @@ import { Text } from '~/design-system/text';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
+import { DebateInteractionBar, type DebateShareAction, type DebateVote } from './debate-interaction-bar';
 import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
+const SHARE_PREPARATION_DWELL_MS = 5_000;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -205,7 +212,28 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const [vote, setVote] = React.useState<DebateVote>(null);
+  const [preparationEnabled, setPreparationEnabled] = React.useState(false);
+  const [isSharing, setIsSharing] = React.useState(false);
+  const [shareError, setShareError] = React.useState<string | null>(null);
+  const sharingRef = React.useRef(false);
+  const activationGenerationRef = React.useRef(0);
   const winnerVotes = useDebateVotes(debate);
+  const preparedVideo = usePreparedSocialVideo(debate.id, {
+    enabled: active && preparationEnabled,
+    includePreview: false,
+  });
+
+  React.useEffect(() => {
+    setShareError(null);
+    if (!active) {
+      activationGenerationRef.current += 1;
+      setPreparationEnabled(false);
+      return;
+    }
+
+    const dwellTimer = window.setTimeout(() => setPreparationEnabled(true), SHARE_PREPARATION_DWELL_MS);
+    return () => window.clearTimeout(dwellTimer);
+  }, [active]);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -222,6 +250,52 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
+  const handoffMethod = React.useMemo(
+    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
+    [preparedVideo.file]
+  );
+  let shareState: DebateShareAction['state'] = 'preparing';
+  if (isSharing) shareState = 'sharing';
+  else if (active && (shareError || preparedVideo.status === 'error')) shareState = 'error';
+  else if (active && preparedVideo.status === 'ready') shareState = 'ready';
+  const shareTooltipMessage = getShareTooltipMessage({
+    state: shareState,
+    method: handoffMethod,
+    error: shareError ?? preparedVideo.error,
+  });
+  const activateShare = () => {
+    if (!active || sharingRef.current) return;
+    if (preparedVideo.status === 'error') {
+      setShareError(null);
+      preparedVideo.retry();
+      return;
+    }
+    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
+
+    const file = preparedVideo.file;
+    const downloadUrl = preparedVideo.downloadUrl;
+    const activationGeneration = activationGenerationRef.current;
+    sharingRef.current = true;
+    setIsSharing(true);
+    setShareError(null);
+    const handoff = handoffPreparedSocialVideo({
+      debateId: debate.id,
+      title: debate.claim.claim,
+      file,
+      downloadUrl,
+    });
+    void handoff
+      .catch(error => {
+        if (activationGenerationRef.current === activationGeneration && !isAbortError(error)) {
+          setShareError(error instanceof Error ? error.message : 'Could not share the video.');
+        }
+      })
+      .finally(() => {
+        sharingRef.current = false;
+        setIsSharing(false);
+      });
+  };
+
   const interactionProps = {
     score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
     vote,
@@ -230,7 +304,12 @@ function DebateFeedItem({
     claimsCount: 0,
     onComment: () => undefined,
     onClaims: onOpenClaims,
-    onShare: () => undefined,
+    shareAction: {
+      state: shareState,
+      method: handoffMethod,
+      tooltipMessage: shareTooltipMessage,
+      onActivate: activateShare,
+    } satisfies DebateShareAction,
   };
 
   return (
@@ -348,4 +427,18 @@ function FeedMessage({ children }: { children: React.ReactNode }) {
 function completedTime(debate: Debate) {
   const value = debate.completed_at ?? debate.started_at ?? debate.created_at;
   return value ? new Date(value).getTime() : 0;
+}
+
+function getShareTooltipMessage({
+  state,
+  method,
+  error,
+}: Pick<DebateShareAction, 'state' | 'method'> & { error: string | null }) {
+  if (state === 'preparing') return 'Preparing video for sharing… You can share soon.';
+  if (state === 'sharing') return 'Opening sharing options…';
+  if (state === 'error') {
+    const fallback = method ? 'Could not share the video.' : 'Could not prepare the video.';
+    return `${error ?? fallback} Select to try again.`;
+  }
+  return method === 'download' ? 'Download the debate video.' : 'Share the debate video.';
 }

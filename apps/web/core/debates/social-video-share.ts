@@ -8,6 +8,8 @@ import { useDebateMediaArtifactUrl } from './hooks';
 
 type PreparationStatus = 'preparing' | 'ready' | 'error';
 
+export type SocialVideoHandoffMethod = 'native_share' | 'download';
+
 export type PreparedSocialVideo = {
   status: PreparationStatus;
   previewUrl: string | null;
@@ -38,7 +40,10 @@ const EMPTY_PREPARED_SOCIAL_VIDEO: Omit<PreparedSocialVideo, 'retry'> = {
   error: null,
 };
 
-export function usePreparedSocialVideo(debateId: string, enabled = true): PreparedSocialVideo {
+export function usePreparedSocialVideo(
+  debateId: string,
+  { enabled, includePreview }: { enabled: boolean; includePreview: boolean }
+): PreparedSocialVideo {
   const previewArtifact = useDebateMediaArtifactUrl();
   const videoArtifact = useDebateMediaArtifactUrl();
   const previewMutateRef = React.useRef(previewArtifact.mutate);
@@ -78,30 +83,31 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
       error: null,
     }));
 
-    previewMutateRef.current(
-      { debateId, request: { kind: 'social_preview_image' } },
-      {
-        onSuccess: response => {
-          if (active) setState(current => ({ ...current, previewUrl: response.upload.url }));
-        },
-        onError: () => {
-          if (!active) return;
-          captureSocialVideoEvent('debate_social_video_preparation_failed', {
-            debate_id: debateId,
-            stage: 'preview_url',
-          });
-          setState(current => ({ ...current, previewFailed: true }));
-        },
-      }
-    );
+    if (includePreview) {
+      previewMutateRef.current(
+        { debateId, request: { kind: 'social_preview_image' } },
+        {
+          onSuccess: response => {
+            if (active) setState(current => ({ ...current, previewUrl: response.upload.url }));
+          },
+          onError: () => {
+            if (!active) return;
+            captureSocialVideoEvent('debate_social_video_preparation_failed', {
+              debate_id: debateId,
+              stage: 'preview_url',
+            });
+            setState(current => ({ ...current, previewFailed: true }));
+          },
+        }
+      );
+    }
 
     videoMutateRef.current(
       { debateId, request: { kind: 'social_video' } },
       {
         onSuccess: response => {
-          if (active) {
-            setState(current => (current.playbackUrl ? current : { ...current, playbackUrl: response.upload.url }));
-          }
+          if (!active) return;
+          setState(current => (current.playbackUrl ? current : { ...current, playbackUrl: response.upload.url }));
           void downloadSocialVideo(response.upload.url, controller.signal, progress => {
             if (!active) return;
             const progressPercent = progress.totalBytes
@@ -162,12 +168,60 @@ export function usePreparedSocialVideo(debateId: string, enabled = true): Prepar
       controller.abort();
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
     };
-  }, [debateId, enabled, retryCount]);
+  }, [debateId, enabled, includePreview, retryCount]);
 
   return {
     ...state,
     retry: () => setRetryCount(count => count + 1),
   };
+}
+
+export async function handoffPreparedSocialVideo({
+  debateId,
+  title,
+  file,
+  downloadUrl,
+}: {
+  debateId: string;
+  title: string;
+  file: File;
+  downloadUrl: string;
+}): Promise<SocialVideoHandoffMethod> {
+  const method = getPreparedSocialVideoHandoffMethod(file);
+
+  try {
+    if (method === 'native_share') {
+      const sharePromise = navigator.share({ title, files: [file] });
+      await sharePromise;
+    } else {
+      downloadPreparedVideo(downloadUrl, file.name);
+    }
+
+    captureSocialVideoEvent('debate_social_video_handoff_resolved', {
+      debate_id: debateId,
+      method,
+    });
+    return method;
+  } catch (error) {
+    if (!isAbortError(error)) {
+      captureSocialVideoEvent('debate_social_video_handoff_failed', {
+        debate_id: debateId,
+        method,
+        error_name: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
+    throw error;
+  }
+}
+
+export function getPreparedSocialVideoHandoffMethod(file: File): SocialVideoHandoffMethod {
+  if (typeof navigator === 'undefined') return 'download';
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return 'download';
+  try {
+    return navigator.canShare({ files: [file] }) ? 'native_share' : 'download';
+  } catch {
+    return 'download';
+  }
 }
 
 export async function downloadSocialVideo(
@@ -254,6 +308,19 @@ export function captureSocialVideoEvent(eventName: string, properties: Record<st
     capture(eventName, properties);
   } catch {
     // Analytics is best-effort and must not change preparation or sharing semantics.
+  }
+}
+
+function downloadPreparedVideo(url: string, filename: string) {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
   }
 }
 
