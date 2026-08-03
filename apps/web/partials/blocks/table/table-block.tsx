@@ -59,7 +59,8 @@ import { shouldShowCreateEntityAction } from './data-block-create-entity-visibil
 import { DataBlockExpandControl } from './data-block-expand-control';
 import {
   filterPanelOpenStateForActions,
-  shouldShowFilterAndFullscreenActions,
+  shouldShowFilterAction,
+  shouldShowFullscreenAction,
 } from './data-block-header-action-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
@@ -975,11 +976,12 @@ const ConfiguredTableBlock = ({
 
   const showToolbarSort = isEditing || sortState !== null;
   const showToolbarDividerAfterScope = showToolbarSort || isEditing;
-  const showFilterAndFullscreenActions = shouldShowFilterAndFullscreenActions(view, source.type, isEditing);
+  const showFilterAction = shouldShowFilterAction(isEditing);
+  const showFullscreenAction = shouldShowFullscreenAction(view, source.type, isEditing);
 
   React.useEffect(() => {
-    setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAndFullscreenActions));
-  }, [showFilterAndFullscreenActions]);
+    setIsFilterOpen(current => filterPanelOpenStateForActions(current, showFilterAction));
+  }, [showFilterAction]);
 
   const toggleFilterHandler = () => setIsFilterOpen(current => !current);
 
@@ -1001,20 +1003,20 @@ const ConfiguredTableBlock = ({
               disabled={!canEdit}
             />
           )}
-          {showFilterAndFullscreenActions && (
-            <>
-              <IconButton
-                onClick={toggleFilterHandler}
-                icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
-                color="grey-04"
-              />
-              <DataBlockExpandControl
-                spaceId={spaceId}
-                blockEntityId={entityId}
-                isEditing={isEditing}
-                fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
-              />
-            </>
+          {showFilterAction && (
+            <IconButton
+              onClick={toggleFilterHandler}
+              icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+              color="grey-04"
+            />
+          )}
+          {showFullscreenAction && (
+            <DataBlockExpandControl
+              spaceId={spaceId}
+              blockEntityId={entityId}
+              isEditing={isEditing}
+              fullscreenHref={`/space/${spaceId}/${entityId}/power-tools?relationId=${relationId}`}
+            />
           )}
           <DataBlockViewMenu activeView={view} isLoading={isLoading} />
           <TableBlockContextMenu sourceType={source.type} />
