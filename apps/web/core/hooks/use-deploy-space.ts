@@ -21,6 +21,7 @@ import { createPersonalSpaceOnChain, waitForSpaceIndexed } from '~/core/utils/co
 import { EMPTY_SPACE_ID, NEW_SPACE_VOTING_DURATION_DAYS } from '~/core/utils/contracts/dao-space-factory';
 import { generateOpsForSpaceType } from '~/core/utils/contracts/generate-ops-for-space-type';
 import { getPersonalSpaceId } from '~/core/utils/contracts/get-personal-space-id';
+import { seedNewSpaceOverview } from '~/core/utils/contracts/seed-new-space-overview';
 import { SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
@@ -282,6 +283,19 @@ async function createDaoSpace({
   const indexed = await waitForSpaceIndexed(newSpaceId, resolvedTopicId, 40, 3_000);
   if (!indexed) {
     throw new Error('Timed out waiting for DAO space to index.');
+  }
+
+  // Seed the overview tab. Deliberately after indexing and deliberately non-fatal
+  try {
+    await seedNewSpaceOverview({
+      smartAccount,
+      spaceId: newSpaceId,
+      spaceAddress: newDaoSpaceAddress,
+      spaceHomeEntityId: resolvedTopicId,
+      authorSpaceId: personalSpaceId,
+    });
+  } catch (error) {
+    console.error('[CREATE_SPACE] Failed to seed the overview template; the space itself was created.', error);
   }
 
   return newSpaceId;
