@@ -415,29 +415,36 @@ function ModeToggle() {
 
   return (
     <>
-      <button
+      <motion.button
         ref={toggleRef}
         onClick={onToggle}
         data-testid="edit-toggle"
-        className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+        animate={controls}
+        variants={variants}
+        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
       >
-        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-          {!editable && <AnimatedTogglePill controls={controls} />}
-          <motion.div
-            animate={controls}
-            variants={variants}
-            className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
-          >
+        <motion.div
+          aria-hidden
+          initial={false}
+          animate={{ x: editable ? 30 : 0 }}
+          transition={{
+            duration: 0.5,
+            type: 'spring',
+            bounce: 0,
+          }}
+          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+        />
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+          <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
             <EyeSmall />
-          </motion.div>
+          </div>
         </div>
-        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-          {editable && <AnimatedTogglePill controls={controls} />}
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
           <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
             <Popover.Anchor asChild>
               <div
                 className={cx(
-                  'z-10 transition-colors duration-300',
+                  'transition-colors duration-300',
                   showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
                 )}
               >
@@ -470,7 +477,7 @@ function ModeToggle() {
             </Popover.Portal>
           </Popover.Root>
         </div>
-      </button>
+      </motion.button>
       <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
     </>
   );
@@ -481,20 +488,4 @@ function modeToggleProperties(spaceId: string, trigger: string) {
     space_id: spaceId,
     toggle_trigger: trigger,
   };
-}
-
-function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
-  return (
-    <motion.div
-      animate={controls}
-      variants={variants}
-      transition={{
-        duration: 0.5,
-        type: 'spring',
-        bounce: 0,
-      }}
-      layoutId="edit-toggle"
-      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-    />
-  );
 }
