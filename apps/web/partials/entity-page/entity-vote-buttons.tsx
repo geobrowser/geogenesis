@@ -42,6 +42,7 @@ type VoteVariant = 'default' | 'thumbs' | 'chevrons';
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 
 const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
+const CLAIM_IS_FACTUAL = normalizeId(CLAIM_IS_FACTUAL_PROPERTY_ID);
 
 function parseBoolean(value: string | null | undefined): boolean {
   if (!value) return false;
@@ -71,7 +72,7 @@ export function EntityVoteButtons({
   const { entity } = useQueryEntity({ id: entityId, spaceId });
   const isClaim = entity?.types.some(t => normalizeId(t.id) === CLAIM_TYPE) ?? false;
   const isFactualClaim =
-    isClaim && parseBoolean(entity?.values.find(v => v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value);
+    isClaim && parseBoolean(entity?.values.find(v => normalizeId(v.property.id) === CLAIM_IS_FACTUAL)?.value);
   const variant: VoteVariant = isClaim ? (isFactualClaim ? 'chevrons' : 'thumbs') : 'default';
 
   const setName = useSetAtom(nameAtom);
