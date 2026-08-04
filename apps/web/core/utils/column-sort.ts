@@ -37,6 +37,10 @@ export function propertyForSort(columnId: string, properties: Property[]): Prope
   );
 }
 
+export function shouldIncludeWithoutValueForPropertySort(propertyId: string): boolean {
+  return ID.equals(propertyId, SCORE_SYSTEM_PROPERTY);
+}
+
 export function propertySortLabel(property: Property): string {
   const known = DEFAULT_TABLE_SORT_PROPERTIES.find(p => ID.equals(p.id, property.id));
   if (known?.name) return known.name;

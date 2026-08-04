@@ -5,17 +5,19 @@ import * as React from 'react';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
+import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
+import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
 import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-header';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
@@ -28,8 +30,9 @@ import { SpaceMembers } from '~/partials/space-page/space-members';
 import { SpacePageMetadataHeader } from '~/partials/space-page/space-metadata-header';
 import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
-import { cachedFetchEntitiesBatch } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
+import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -47,9 +50,13 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const props = await getSpaceFrontPage(spaceId);
+  const [props, communityCalls] = await Promise.all([
+    getSpaceFrontPage(spaceId),
+    fetchCommunityCalls(spaceId).catch(() => []),
+  ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
+  const hasCommunityCallsSidebar = !Spaces.hasExternalTopic(props.space) && communityCalls.length > 0;
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -61,49 +68,57 @@ export default async function Layout(props0: LayoutProps) {
         initialTabs={props.tabs}
         initialCollectionItems={props.initialCollectionItems}
       >
-        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-        <EntityPageContentContainer>
-          <div className="space-y-2">
-            <EditableSpaceHeading spaceId={spaceId} entityId={props.id} />
-            <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
-            <SpacePageMetadataHeader
-              spaceId={spaceId}
-              membersComponent={
-                <div className="flex items-center gap-2">
-                  <React.Suspense fallback={<MembersSkeleton />}>
-                    <SpaceEditors spaceId={spaceId} />
-                  </React.Suspense>
-                  <React.Suspense fallback={null}>
-                    <SpaceMembers spaceId={spaceId} />
-                  </React.Suspense>
-                </div>
-              }
-            />
-          </div>
-
-          <div className="mt-6 flex flex-col gap-6">
-            <AddDataPanel spaceId={spaceId} />
-
-            {typeIds.includes(SystemIds.PERSON_TYPE) ? (
-              <>
-                <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
-                <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
-              </>
-            ) : null}
-            <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
-            <React.Suspense fallback={null}>
-              <SpaceTabs
+        <SpaceChromeGate>
+          <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
+          <SpaceHeaderContentContainer hasSidebar={hasCommunityCallsSidebar}>
+            <div className="space-y-2">
+              <EditableSpaceHeading
                 spaceId={spaceId}
                 entityId={props.id}
-                initialTabRelations={props.tabRelations ?? []}
-                tabEntities={props.tabEntities}
-                typeIds={typeIds}
+                actionsComponent={
+                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                }
               />
-            </React.Suspense>
-          </div>
-        </EntityPageContentContainer>
-        <Spacer height={20} />
+              <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
+              <SpacePageMetadataHeader
+                spaceId={spaceId}
+                membersComponent={
+                  <div className="flex items-center gap-2">
+                    <React.Suspense fallback={<MembersSkeleton />}>
+                      <SpaceEditors spaceId={spaceId} />
+                    </React.Suspense>
+                    <React.Suspense fallback={null}>
+                      <SpaceMembers spaceId={spaceId} />
+                    </React.Suspense>
+                  </div>
+                }
+              />
+            </div>
+
+            <div className="mt-6 flex flex-col gap-6">
+              <AddDataPanel spaceId={spaceId} />
+
+              {typeIds.includes(SystemIds.PERSON_TYPE) ? (
+                <>
+                  <PersonalProfileBioStarterMerge entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedTaskSync entityId={props.id} spaceId={spaceId} />
+                  <PersonalProfileSuggestedCard spaceId={spaceId} entityId={props.id} withBottomSpacing={false} />
+                </>
+              ) : null}
+              <TypeSchemaInline entityId={props.id} spaceId={spaceId} />
+              <React.Suspense fallback={null}>
+                <SpaceTabs
+                  spaceId={spaceId}
+                  entityId={props.id}
+                  initialTabRelations={props.tabRelations ?? []}
+                  tabEntities={props.tabEntities}
+                  typeIds={typeIds}
+                />
+              </React.Suspense>
+            </div>
+          </SpaceHeaderContentContainer>
+          <Spacer height={20} />
+        </SpaceChromeGate>
         {children}
       </EditorProvider>
     </EntityStoreProvider>
@@ -135,6 +150,55 @@ const getSpaceFrontPage = async (spaceId: string) => {
       space: null,
       avatarUrl: null,
       coverUrl: null,
+    };
+  }
+
+  // Local-dev fallback: when the indexer has the space but its home entity has no id
+  // (the e2e bootstrap registers personal spaces without going through
+  // personalSpaces.create, so spaceEntityId is never assigned), reuse the spaceId as
+  // a deterministic home-entity id. We *also* fetch the entity at id=spaceId so any
+  // values we published under this synthetic id surface on the page. Without the
+  // second fetch, edits land in the indexer but the layout reads space.entity which
+  // still has empty values.
+  //
+  // Gated to the e2e/test environment: on testnet/mainnet a fresh space can also
+  // have an empty entity.id during the indexer-lag window, and handing out the
+  // synthetic id there attaches edits to an entity that permanently diverges from
+  // the real home entity once it indexes. Outside test env we render the empty
+  // entity and let the next request pick up the indexed one.
+  if (!entity.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
+    const syntheticPage = await cachedFetchEntityPage(spaceId, spaceId);
+    const syntheticEntity = syntheticPage?.entity ?? null;
+
+    // eslint-disable-next-line no-console
+    console.log('[local-dev synthetic-home] spaceId=%s synthetic=%o', spaceId, {
+      gotPage: !!syntheticPage,
+      entityId: syntheticEntity?.id,
+      entityName: syntheticEntity?.name,
+      valuesCount: syntheticEntity?.values?.length ?? 0,
+      sampleValues: syntheticEntity?.values?.slice(0, 3).map(v => ({
+        propertyId: v.property?.id,
+        propertyName: v.property?.name,
+        spaceId: v.spaceId,
+        value: v.value,
+      })),
+    });
+
+    const spaceWithSyntheticEntity = syntheticEntity
+      ? { ...space, entity: { ...space.entity, ...syntheticEntity, id: spaceId, spaceId } }
+      : space;
+
+    return {
+      id: spaceId,
+      tabEntities: [],
+      tabRelations: [],
+      tabs: {},
+      blockRelations: syntheticEntity?.relations ?? [],
+      blocks: [],
+      initialCollectionItems: {},
+      space: spaceWithSyntheticEntity,
+      avatarUrl: syntheticEntity ? (Entities.avatar(syntheticEntity.relations) ?? null) : null,
+      coverUrl: syntheticEntity ? (Entities.cover(syntheticEntity.relations) ?? null) : null,
     };
   }
 
