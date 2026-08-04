@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -63,9 +66,14 @@ function openPopover() {
   fireEvent.click(screen.getByRole('button', { name: 'Debate' }));
 }
 
+function renderButton(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 describe('ClaimDebateButton', () => {
   it('renders nothing when the entity is not a Claim', () => {
-    render(
+    renderButton(
       <ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([], [{ id: 'not-a-claim' }])} />
     );
 
@@ -73,7 +81,7 @@ describe('ClaimDebateButton', () => {
   });
 
   it('prompts to publish and disables the positions for an unpublished claim', () => {
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
     openPopover();
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
@@ -83,7 +91,7 @@ describe('ClaimDebateButton', () => {
 
   it('enables the positions for a published claim and joins the queue on click', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
     openPopover();
 
     const yes = screen.getByRole('button', { name: /^Yes,/ });
@@ -96,7 +104,7 @@ describe('ClaimDebateButton', () => {
 
   it('marks the chosen position selected while waiting and leaves the queue when clicked again', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
     openPopover();
 
     const yes = screen.getByRole('button', { name: /^Yes,.*selected/ });
