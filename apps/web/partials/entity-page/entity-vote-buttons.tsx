@@ -27,6 +27,7 @@ import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimVoterAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
@@ -69,7 +70,7 @@ export function EntityVoteButtons({
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   // Claim entities render a different vote control.
-  const { entity } = useQueryEntity({ id: entityId, spaceId });
+  const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
   const isClaim = entity?.types.some(t => normalizeId(t.id) === CLAIM_TYPE) ?? false;
   const isFactualClaim =
     isClaim && parseBoolean(entity?.values.find(v => normalizeId(v.property.id) === CLAIM_IS_FACTUAL)?.value);
@@ -266,6 +267,10 @@ export function EntityVoteButtons({
   ) : null;
 
   const claimVoterAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
+
+  if (isLoadingEntity) {
+    return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
+  }
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
