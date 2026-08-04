@@ -1,7 +1,10 @@
 import * as React from 'react';
 
-/** Compact speech-bubble icon for explore feed comment counts. */
-export function ExploreCommentsIcon({ className }: { className?: string }) {
+/**
+ * Compact speech-bubble icon for entity comment counts — the explore feed and the
+ * claim interaction bar in ranking / data blocks.
+ */
+export function CommentsIcon({ className }: { className?: string }) {
   return (
     <svg
       className={className}

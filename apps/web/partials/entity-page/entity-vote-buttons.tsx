@@ -53,12 +53,14 @@ type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
   claimVoterAvatarsPosition?: 'leading' | 'trailing';
+  hideWhenClaim?: boolean;
 };
 
 export function EntityVoteButtons({
   entityId,
   spaceId,
   claimVoterAvatarsPosition = 'leading',
+  hideWhenClaim = false,
 }: EntityVoteButtonsProps) {
   const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
     entityId,
@@ -265,6 +267,8 @@ export function EntityVoteButtons({
   ) : null;
 
   const claimVoterAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
+
+  if (hideWhenClaim && isClaim) return null;
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">

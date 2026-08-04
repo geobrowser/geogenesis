@@ -10,6 +10,8 @@ import { Button } from '~/design-system/button';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 import { XIcon } from '~/design-system/icons/x';
 
+import { EntityInteractionBar } from '~/partials/entity-page/entity-interaction-bar';
+
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import {
   RankingFirstSubmissionPrompt,
@@ -247,18 +249,21 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 );
               }
               const rowContent = (
-                <div className="flex w-full min-w-0 items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <RankingEntryRow
-                      rank={rank}
-                      rankStyle="leading"
-                      entry={entry}
-                      spaceId={spaceId}
-                      linkToEntity={!isMobile}
-                      pending={pendingEntityIds.has(entityId)}
-                    />
+                <div className="flex w-full min-w-0 flex-col gap-2">
+                  <div className="flex w-full min-w-0 items-center gap-4">
+                    <div className="min-w-0 flex-1">
+                      <RankingEntryRow
+                        rank={rank}
+                        rankStyle="leading"
+                        entry={entry}
+                        spaceId={spaceId}
+                        linkToEntity={!isMobile}
+                        pending={pendingEntityIds.has(entityId)}
+                      />
+                    </div>
+                    <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
                   </div>
-                  <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                  <EntityInteractionBar entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
                 </div>
               );
               return (
@@ -335,15 +340,20 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               }
               const entryDisplay = resolvedEntry;
               const rowContent = (
-                <RankingEntryRow
-                  rank={rank}
-                  rankStyle="leading"
-                  linkToEntity={false}
-                  entry={entryDisplay}
-                  spaceId={spaceId}
-                  imageUrl={overlayImageUrl}
-                  pending={pendingEntityIds.has(entityId)}
-                />
+                <div className="flex w-full min-w-0 flex-col gap-2">
+                  <RankingEntryRow
+                    rank={rank}
+                    rankStyle="leading"
+                    linkToEntity={false}
+                    entry={entryDisplay}
+                    spaceId={spaceId}
+                    imageUrl={overlayImageUrl}
+                    pending={pendingEntityIds.has(entityId)}
+                  />
+                  {!isDragActive ? (
+                    <EntityInteractionBar entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                  ) : null}
+                </div>
               );
               return (
                 <div className="w-full">

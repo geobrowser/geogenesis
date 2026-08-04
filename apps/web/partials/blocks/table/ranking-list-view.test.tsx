@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { RankingListView } from './ranking-list-view';
 import type { RankingBlockState } from './use-ranking-block-state';
 
+vi.mock('~/partials/entity-page/entity-interaction-bar', () => ({
+  EntityInteractionBar: () => null,
+}));
+
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));

@@ -1,19 +1,23 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
+import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
+import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
+import { getClaimDebateCount } from '~/core/io/queries';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { Check } from '~/design-system/icons/check';
+import { Megaphone } from '~/design-system/icons/megaphone';
 import { Text } from '~/design-system/text';
 
 import type { DebateClaim, DebateOnlineChoice } from './api';
@@ -28,6 +32,7 @@ type ClaimDebateButtonProps = {
    * entity-page hot path; omit it to let the button fetch on its own.
    */
   entity?: Entity | null;
+  variant?: 'pill' | 'icon';
 };
 
 const positions = [
@@ -35,7 +40,12 @@ const positions = [
   { label: 'No', value: false },
 ] as const;
 
-export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }: ClaimDebateButtonProps) {
+export function ClaimDebateButton({
+  entityId,
+  spaceId,
+  entity: providedEntity,
+  variant = 'pill',
+}: ClaimDebateButtonProps) {
   const isDebatesEnabled = useDebatesEnabled();
 
   const { entity: fetchedEntity } = useQueryEntity({
@@ -57,6 +67,13 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
 
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
+
+  const { data: debateCount } = useQuery({
+    queryKey: ['claim-debate-count', entityId],
+    queryFn: () => Effect.runPromise(getClaimDebateCount(entityId)),
+    enabled: variant === 'icon' && isDebatesEnabled && isClaim,
+    staleTime: 30_000,
+  });
 
   if (!isDebatesEnabled || !isClaim) return null;
 
@@ -83,16 +100,29 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button
-          type="button"
-          className={cx(
-            'inline-flex h-7 items-center rounded-full border px-3 text-button transition-colors',
-            'border-grey-02 bg-white text-text hover:border-text',
-            'data-[state=open]:border-text data-[state=open]:bg-text data-[state=open]:text-white'
-          )}
-        >
-          Debate
-        </button>
+        {variant === 'icon' ? (
+          <button
+            type="button"
+            aria-label="Debate this claim"
+            title="Debate this claim"
+            onClick={event => event.stopPropagation()}
+            className="inline-flex h-5 items-center gap-1.5 text-grey-04 transition-colors hover:text-text data-[state=open]:text-text"
+          >
+            <Megaphone />
+            <span className="text-[14px] leading-5 font-normal tabular-nums">{debateCount ?? 0}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cx(
+              'inline-flex h-7 items-center rounded-full border px-3 text-button transition-colors',
+              'border-grey-02 bg-white text-text hover:border-text',
+              'data-[state=open]:border-text data-[state=open]:bg-text data-[state=open]:text-white'
+            )}
+          >
+            Debate
+          </button>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content

@@ -2,8 +2,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
+import { DEBATE_CLAIMS_PROPERTY_ID } from '~/core/claims/ontology';
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID, VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -25,6 +26,10 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import {
+  type ClaimDebateBacklinksPageQuery,
+  claimDebateBacklinksPageDocument,
+} from './claim-debate-backlinks-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -609,6 +614,39 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
         signal,
       })
     );
+
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
+/**
+ * Ids of the Debate entities arguing a claim, via the claim's incoming "Claims" backlinks.
+ */
+export function getClaimDebateIds(claimEntityId: string, signal?: AbortController['signal']) {
+  return collectBacklinkSourceIds(offset =>
+    graphql({
+      query: claimDebateBacklinksPageDocument,
+      decoder: (data: ClaimDebateBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+      variables: {
+        id: claimEntityId,
+        debateClaimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+        debateTypeId: DEBATE_TYPE_ID,
+        first: BACKLINKS_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    })
+  );
+}
+
+export function getClaimDebateCount(claimEntityId: string, signal?: AbortController['signal']) {
+  return Effect.map(getClaimDebateIds(claimEntityId, signal), ids => ids.length);
+}
+
+export function getClaimDebateEntities(claimEntityId: string, signal?: AbortController['signal']) {
+  return Effect.gen(function* () {
+    const ids = yield* getClaimDebateIds(claimEntityId, signal);
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);

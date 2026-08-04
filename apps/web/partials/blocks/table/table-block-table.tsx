@@ -16,6 +16,7 @@ import { cx } from 'class-variance-authority';
 import { useAtomValue } from 'jotai';
 
 import { Source } from '~/core/blocks/data/source';
+import { useIsClaimEntity } from '~/core/claims/use-is-claim-entity';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -29,6 +30,7 @@ import { Text } from '~/design-system/text';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
+import { EntityInteractionBar } from '~/partials/entity-page/entity-interaction-bar';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
@@ -37,6 +39,20 @@ import { SortableColumnHeader } from './sortable-column-header';
 import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
+
+function ClaimInteractionRow({ entityId, spaceId, colSpan }: { entityId: string; spaceId: string; colSpan: number }) {
+  const isClaim = useIsClaimEntity(entityId, spaceId);
+
+  if (!isClaim) return null;
+
+  return (
+    <tr className="group/table-row hover:bg-bg">
+      <td colSpan={colSpan} className="px-[10px] pb-[10px]">
+        <EntityInteractionBar entityId={entityId} spaceId={spaceId} />
+      </td>
+    </tr>
+  );
+}
 
 const ColumnHeader = ({
   column,
@@ -333,34 +349,39 @@ export const TableBlockTable = ({
               const cells = row.getVisibleCells();
 
               return (
-                <tr key={row.original.entityId ?? index} className="group/table-row hover:bg-bg">
-                  {cells.map((cell, cellIndex) => {
-                    const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
-                    const isShown = shownColumnIds.includes(cell.column.id);
+                <React.Fragment key={row.original.entityId ?? index}>
+                  <tr className="group/table-row hover:bg-bg">
+                    {cells.map((cell, cellIndex) => {
+                      const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
+                      const isShown = shownColumnIds.includes(cell.column.id);
 
-                    return (
-                      <TableCell key={cellId} isShown={isShown} isEditMode={isEditing}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      return (
+                        <TableCell key={cellId} isShown={isShown} isEditMode={isEditing}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
+                    {!isEditing && (
+                      <TableCell isShown={true} isEditMode={false}>
+                        <div className="flex items-center gap-1">
+                          {source.type !== 'COLLECTION' && (
+                            <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
+                              <DataBlockOpenSidePanelButton
+                                entityId={row.original.entityId}
+                                entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
+                                openedWithMainViewEditing={false}
+                              />
+                            </div>
+                          )}
+                          <EntityVoteButtons entityId={row.original.entityId} spaceId={space} hideWhenClaim />
+                        </div>
                       </TableCell>
-                    );
-                  })}
+                    )}
+                  </tr>
                   {!isEditing && (
-                    <TableCell isShown={true} isEditMode={false}>
-                      <div className="flex items-center gap-1">
-                        {source.type !== 'COLLECTION' && (
-                          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
-                            <DataBlockOpenSidePanelButton
-                              entityId={row.original.entityId}
-                              entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
-                              openedWithMainViewEditing={false}
-                            />
-                          </div>
-                        )}
-                        <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
-                      </div>
-                    </TableCell>
+                    <ClaimInteractionRow entityId={row.original.entityId} spaceId={space} colSpan={cells.length + 1} />
                   )}
-                </tr>
+                </React.Fragment>
               );
             })}
           </tbody>

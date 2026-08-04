@@ -10,6 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityInteractionBar } from '~/partials/entity-page/entity-interaction-bar';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
@@ -47,11 +48,14 @@ function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowP
   return (
     <div className={ROW_CLASS}>
       <span className={ROW_RANK_CLASS}>{rank}</span>
-      <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
-        {name}
-      </Link>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <Link href={href} className={cx(ROW_NAME_CLASS, 'hover:underline')} title={name}>
+          {name}
+        </Link>
+        <EntityInteractionBar entityId={entityId} spaceId={voteSpaceId} />
+      </div>
       <div className="flex h-5 shrink-0 items-center">
-        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} hideWhenClaim />
       </div>
     </div>
   );

@@ -4,16 +4,17 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ClaimDebateButton } from '~/core/debates/claim-debate-button';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
+import { CommentsIcon } from '~/design-system/icons/comments';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 
 type ExploreFeedCardProps = {
@@ -121,9 +122,10 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
           href={entityHref}
           className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
         >
-          <ExploreCommentsIcon className="text-grey-04" />
+          <CommentsIcon className="text-grey-04" />
           <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
         </Link>
+        <ClaimDebateButton entityId={item.entityId} spaceId={item.spaceId} variant="icon" />
       </div>
     </article>
   );

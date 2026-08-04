@@ -15,6 +15,7 @@ import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/cha
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
+import { EntityInteractionBar } from '~/partials/entity-page/entity-interaction-bar';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 type Props = {
@@ -126,7 +127,7 @@ export function TableBlockBulletedListItem({
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
         <div className="hidden md:float-right md:ml-2 md:block md:translate-y-[5px]">
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} hideWhenClaim />
         </div>
         {source.type !== 'COLLECTION' ? (
           <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="block min-w-0 text-body">
@@ -152,6 +153,7 @@ export function TableBlockBulletedListItem({
             </Link>
           </CollectionMetadata>
         )}
+        <EntityInteractionBar entityId={rowEntityId} spaceId={currentSpaceId} className="mt-2" />
       </div>
       <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
         {!isPlaceholder && source.type !== 'COLLECTION' && (
@@ -163,7 +165,7 @@ export function TableBlockBulletedListItem({
             />
           </div>
         )}
-        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} hideWhenClaim />
       </div>
     </div>
   );

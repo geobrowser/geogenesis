@@ -25,6 +25,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
+import { EntityInteractionBar } from '~/partials/entity-page/entity-interaction-bar';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import {
@@ -344,7 +345,8 @@ export function TableBlockListItem({
             );
           })}
           <div className="mt-2 flex items-center justify-between gap-2">
-            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} hideWhenClaim />
+            <EntityInteractionBar entityId={rowEntityId} spaceId={currentSpaceId} />
             {!isPlaceholder && (
               <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (

@@ -6,6 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { RankingBlockBody } from './ranking-block-body';
 import type { RankingBlockState } from './use-ranking-block-state';
 
+vi.mock('~/partials/entity-page/entity-interaction-bar', () => ({
+  EntityInteractionBar: () => null,
+}));
+
 vi.mock('./ranking-compose-entity-sheet', () => ({
   RankingComposeEntitySheet: () => null,
 }));

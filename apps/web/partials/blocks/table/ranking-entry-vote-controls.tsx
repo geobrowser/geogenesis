@@ -25,7 +25,7 @@ export function RankingEntryVoteControls({ entityId, spaceId, className }: Props
       onTouchStart={event => event.stopPropagation()}
       onClick={event => event.stopPropagation()}
     >
-      <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+      <EntityVoteButtons entityId={entityId} spaceId={spaceId} hideWhenClaim />
     </div>
   );
 }

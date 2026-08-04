@@ -7,6 +7,10 @@ import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingPillView } from './ranking-pill-view';
 import type { RankingBlockState } from './use-ranking-block-state';
 
+vi.mock('~/partials/entity-page/entity-interaction-bar', () => ({
+  EntityInteractionBar: () => null,
+}));
+
 vi.mock('~/core/blocks/data/use-view', () => ({
   useView: () => ({ shownColumnIds: [] }),
 }));
