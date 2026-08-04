@@ -4,8 +4,6 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
@@ -28,11 +26,23 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useQueryProperty, useRelations } from '~/core/sync/use-store';
 import { SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
 import { Properties } from '~/core/utils/property';
+import { NavUtils } from '~/core/utils/utils';
 
+import { SmallButton } from '~/design-system/button';
 import { Divider } from '~/design-system/divider';
+import { Dots } from '~/design-system/dots';
+import { Create } from '~/design-system/icons/create';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
+import { HistoryEmpty } from '../history/history-empty';
+import { EntityVersionItem } from '../history/history-item';
+import { HistoryPanel } from '../history/history-panel';
+import { useEntityHistory } from '../history/use-entity-history';
 
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
+import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityVoteButtons } from './entity-vote-buttons';
 import { RelationsGroup as ReadableRelationsGroup } from './readable-entity-page';
 import { RenderableTypeDropdown } from './renderable-type-dropdown';
@@ -262,37 +272,94 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
     }
   }, [propertyData, entityId, spaceId, storage, name, relations]);
 
+  const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+
+  const {
+    allVersions,
+    isFetching,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+    diffSelection,
+    onVersionClick,
+    clearDiffSelection,
+  } = useEntityHistory({ entityId: id, spaceId, enabled: isHistoryOpen });
+
   return (
-    <div className={cx('flex items-center text-text', isVoteable ? 'justify-between' : 'gap-1')}>
-      <div className="flex items-center gap-1">
-        {isPropertyEntity && editable && (
-          <>
-            <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
-            <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-          </>
-        )}
-        {propertyDataType && !editable && (
-          <DataTypePill
-            dataType={propertyDataType.dataType}
-            renderableType={propertyDataType.renderableType}
-            spaceId={spaceId}
-          />
-        )}
-        {editable ? (
-          <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-        ) : (
-          <ReadableRelationsGroup
-            entityId={id}
-            spaceId={spaceId}
-            propertyId={SystemIds.TYPES_PROPERTY}
-            isMetadataHeader={true}
-          />
-        )}
+    <>
+      <div className="flex items-center justify-between gap-4 text-text">
+        <div className="flex min-w-0 items-center gap-1">
+          {isPropertyEntity && editable && (
+            <>
+              <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
+              <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
+            </>
+          )}
+          {propertyDataType && !editable && (
+            <DataTypePill
+              dataType={propertyDataType.dataType}
+              renderableType={propertyDataType.renderableType}
+              spaceId={spaceId}
+            />
+          )}
+          {editable ? (
+            <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+          ) : (
+            <ReadableRelationsGroup
+              entityId={id}
+              spaceId={spaceId}
+              propertyId={SystemIds.TYPES_PROPERTY}
+              isMetadataHeader={true}
+            />
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-5">
+          <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
+          {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
+          {editable && (
+            <Link
+              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+            >
+              <Create />
+            </Link>
+          )}
+          <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+            {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
+            {allVersions.map((v, index) => (
+              <EntityVersionItem
+                key={v.editId}
+                createdAt={v.createdAt}
+                name={v.name}
+                createdById={v.createdById}
+                createdBy={v.createdBy}
+                onClick={() => {
+                  onVersionClick(v, index);
+                  setIsHistoryOpen(false);
+                }}
+              />
+            ))}
+            {isFetching && allVersions.length === 0 && (
+              <div className="flex h-12 w-full items-center justify-center bg-white">
+                <Dots />
+              </div>
+            )}
+            {hasNextPage && (
+              <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
+                {isFetchingNextPage ? (
+                  <Dots />
+                ) : (
+                  <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                    Show more
+                  </SmallButton>
+                )}
+              </div>
+            )}
+          </HistoryPanel>
+          <EntityPageContextMenu entityId={id} entityName={name || ''} spaceId={spaceId} />
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
-        {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
-      </div>
-    </div>
+      <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
+    </>
   );
 }
