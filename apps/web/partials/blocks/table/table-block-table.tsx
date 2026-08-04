@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import {
   ColumnDef,
+  type Row as TanstackRow,
   createColumnHelper,
   flexRender,
   getCoreRowModel,
@@ -40,17 +41,68 @@ import { editingPropertiesAtom } from '~/atoms';
 
 const columnHelper = createColumnHelper<Row>();
 
-function ClaimInteractionRow({ entityId, spaceId, colSpan }: { entityId: string; spaceId: string; colSpan: number }) {
-  const isClaim = useIsClaimEntity(entityId, spaceId);
-
-  if (!isClaim) return null;
+/**
+ * One entity in the table. A claim renders as *two* `<tr>`s — the data row and the
+ * interaction bar beneath it — so the claim check lives here rather than in the bar:
+ * the data row has to know whether it is being continued, and hand the separator down
+ * to the interaction row. Otherwise the line lands between a claim and its own
+ * interactions, reading as though the bar belongs to the next entity.
+ */
+function TableBodyRow({
+  row,
+  shownColumnIds,
+  isEditing,
+  space,
+  source,
+}: {
+  row: TanstackRow<Row>;
+  shownColumnIds: string[];
+  isEditing: boolean;
+  space: string;
+  source: Source;
+}) {
+  const cells = row.getVisibleCells();
+  const isClaim = useIsClaimEntity(row.original.entityId, space);
+  const hasInteractionRow = !isEditing && isClaim;
 
   return (
-    <tr className="group/table-row hover:bg-bg">
-      <td colSpan={colSpan} className="px-[10px] pb-[10px]">
-        <EntityInteractionBar entityId={entityId} spaceId={spaceId} />
-      </td>
-    </tr>
+    <>
+      <tr className="group/table-row hover:bg-bg">
+        {cells.map((cell, cellIndex) => {
+          const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
+          const isShown = shownColumnIds.includes(cell.column.id);
+
+          return (
+            <TableCell key={cellId} isShown={isShown} isEditMode={isEditing} hideBorder={hasInteractionRow}>
+              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+            </TableCell>
+          );
+        })}
+        {!isEditing && (
+          <TableCell isShown={true} isEditMode={false} hideBorder={hasInteractionRow}>
+            <div className="flex items-center gap-1">
+              {source.type !== 'COLLECTION' && (
+                <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
+                  <DataBlockOpenSidePanelButton
+                    entityId={row.original.entityId}
+                    entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
+                    openedWithMainViewEditing={false}
+                  />
+                </div>
+              )}
+              <EntityVoteButtons entityId={row.original.entityId} spaceId={space} hideWhenClaim />
+            </div>
+          </TableCell>
+        )}
+      </tr>
+      {hasInteractionRow && (
+        <tr className="group/table-row hover:bg-bg">
+          <td colSpan={cells.length + 1} className="border-b border-grey-02 px-[10px] pb-[10px]">
+            <EntityInteractionBar entityId={row.original.entityId} spaceId={space} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -345,45 +397,16 @@ export const TableBlockTable = ({
             </tr>
           </thead>
           <tbody>
-            {tableRows.map((row, index: number) => {
-              const cells = row.getVisibleCells();
-
-              return (
-                <React.Fragment key={row.original.entityId ?? index}>
-                  <tr className="group/table-row hover:bg-bg">
-                    {cells.map((cell, cellIndex) => {
-                      const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
-                      const isShown = shownColumnIds.includes(cell.column.id);
-
-                      return (
-                        <TableCell key={cellId} isShown={isShown} isEditMode={isEditing}>
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      );
-                    })}
-                    {!isEditing && (
-                      <TableCell isShown={true} isEditMode={false}>
-                        <div className="flex items-center gap-1">
-                          {source.type !== 'COLLECTION' && (
-                            <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
-                              <DataBlockOpenSidePanelButton
-                                entityId={row.original.entityId}
-                                entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
-                                openedWithMainViewEditing={false}
-                              />
-                            </div>
-                          )}
-                          <EntityVoteButtons entityId={row.original.entityId} spaceId={space} hideWhenClaim />
-                        </div>
-                      </TableCell>
-                    )}
-                  </tr>
-                  {!isEditing && (
-                    <ClaimInteractionRow entityId={row.original.entityId} spaceId={space} colSpan={cells.length + 1} />
-                  )}
-                </React.Fragment>
-              );
-            })}
+            {tableRows.map((row, index: number) => (
+              <TableBodyRow
+                key={row.original.entityId ?? index}
+                row={row}
+                shownColumnIds={shownColumnIds}
+                isEditing={isEditing}
+                space={space}
+                source={source}
+              />
+            ))}
           </tbody>
         </table>
       </div>

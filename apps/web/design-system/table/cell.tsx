@@ -11,16 +11,18 @@ interface Props {
   children: React.ReactNode;
   isShown?: boolean;
   isEditMode?: boolean;
+  hideBorder?: boolean;
 }
 
-export function TableCell({ children, isShown, isEditMode }: Props) {
+export function TableCell({ children, isShown, isEditMode, hideBorder }: Props) {
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
 
   return (
     <td
       className={cx(
         !isShown ? (!isEditingColumns || !isEditMode ? 'hidden' : 'bg-grey-01! text-grey-03!') : null,
-        'min-h-[40px] border-b border-grey-02 bg-transparent p-[10px] align-middle'
+        !hideBorder && 'border-b border-grey-02',
+        'min-h-[40px] bg-transparent p-[10px] align-middle'
       )}
     >
       <div className="relative h-full w-full leading-none">
