@@ -314,16 +314,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
           )}
         </div>
         <div className="flex shrink-0 items-center gap-5">
-          <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
-          {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
-          {editable && (
-            <Link
-              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-            >
-              <Create />
-            </Link>
-          )}
+          <EntityPageContextMenu entityId={id} entityName={name || ''} spaceId={spaceId} />
           <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
             {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
             {allVersions.map((v, index) => (
@@ -356,7 +347,16 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
               </div>
             )}
           </HistoryPanel>
-          <EntityPageContextMenu entityId={id} entityName={name || ''} spaceId={spaceId} />
+          {editable && (
+            <Link
+              href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+              className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
+            >
+              <Create />
+            </Link>
+          )}
+          <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
+          {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
         </div>
       </div>
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
