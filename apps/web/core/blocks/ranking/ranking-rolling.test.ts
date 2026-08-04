@@ -4,7 +4,6 @@ import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
 import {
   formatRollingSubmissionLabel,
   getRollingExpiryMs,
-  isCreatedWithinWindow,
   isRollingSubmissionLive,
   parseTimestampMs,
 } from './ranking-rolling';
@@ -57,24 +56,9 @@ describe('isRollingSubmissionLive', () => {
   });
 
   it('is not live without any identifying id', () => {
-    expect(isRollingSubmissionLive({ personalSpaceId: null, myRankEntityId: null, aggregatedSubmitterRefs: refs })).toBe(
-      false
-    );
-  });
-});
-
-describe('isCreatedWithinWindow', () => {
-  it('keeps entities created inside the window', () => {
-    expect(isCreatedWithinWindow(now - 2 * HOUR, 24, now)).toBe(true);
-  });
-
-  it('drops entities created before the window', () => {
-    expect(isCreatedWithinWindow(now - 48 * HOUR, 24, now)).toBe(false);
-  });
-
-  it('keeps entities with an unknown creation time', () => {
-    expect(isCreatedWithinWindow(undefined, 24, now)).toBe(true);
-    expect(isCreatedWithinWindow('', 24, now)).toBe(true);
+    expect(
+      isRollingSubmissionLive({ personalSpaceId: null, myRankEntityId: null, aggregatedSubmitterRefs: refs })
+    ).toBe(false);
   });
 });
 
@@ -91,10 +75,10 @@ describe('formatRollingSubmissionLabel', () => {
     ).toBeNull();
   });
 
-  it('prompts a fresh submission once rolled off', () => {
+  it('hides the label once the submission has rolled off', () => {
     expect(
       formatRollingSubmissionLabel({ hasSubmission: true, isLive: false, submittedAtMs: now, frequencyHours: 24, now })
-    ).toBe('Your ranking has rolled off — submit a fresh ranking');
+    ).toBeNull();
   });
 
   it('shows an hours countdown while live', () => {
@@ -106,7 +90,7 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 24,
         now,
       })
-    ).toBe('Your ranking expires in 4 hrs');
+    ).toBe('Vote again in 4 hrs');
   });
 
   it('shows a days countdown for long windows', () => {
@@ -118,10 +102,10 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 168,
         now,
       })
-    ).toBe('Your ranking expires in 7 days');
+    ).toBe('Vote again in 7 days');
   });
 
-  it('rolls off when the window has elapsed even if flagged live', () => {
+  it('shows a negative countdown when the backend still considers an elapsed submission live', () => {
     expect(
       formatRollingSubmissionLabel({
         hasSubmission: true,
@@ -130,6 +114,6 @@ describe('formatRollingSubmissionLabel', () => {
         frequencyHours: 24,
         now,
       })
-    ).toBe('Your ranking has rolled off — submit a fresh ranking');
+    ).toBe('Vote again in -6 hrs');
   });
 });

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,15 +8,32 @@ import type { Debate } from '~/core/debates/api';
 import { DebatesPageClient } from './debates-page-client';
 
 const mocks = vi.hoisted(() => ({
-  mediaMutate: vi.fn(),
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
-  push: vi.fn(),
   replace: vi.fn(),
+  recordingUrl: vi.fn(() => Promise.resolve({ url: 'https://media.test/slot.webm' })),
+  mediaArtifactMutate: vi.fn(),
+  openSidePanel: vi.fn(),
+  // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
+  media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
+  castVote: vi.fn(),
+}));
+
+// Voting reaches the chain and the user's personal space, neither of which exists here. The
+// tally logic has its own unit tests; this suite only cares that the feed renders the pills.
+vi.mock('~/core/debates/use-debate-votes', () => ({
+  useDebateVotes: () => ({
+    sharePercentFor: () => null,
+    isMyPick: () => false,
+    hasVoted: false,
+    isVoting: false,
+    castVote: mocks.castVote,
+  }),
+  useDebateVotesByVoter: () => new Map(),
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -26,71 +43,87 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
-  useDebateMedia: () => ({
-    data: {
-      job: { status: 'succeeded' },
-      artifacts: [
-        { kind: 'final_video', filename: 'debate.mp4' },
-        { kind: 'preview_image', filename: 'preview.jpg' },
-      ],
-      transcript_segment_count: 2,
-    },
-  }),
-  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, isPending: false }),
-  useRequestDebateMediaProcessing: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useProcessedVideoDebateIds: () => mocks.media,
+  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
-  useRecordingUrl: () => ({ mutateAsync: vi.fn() }),
+  useDebateClaims: () => ({ data: { claims: [] } }),
+  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
+}));
+
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
 beforeEach(() => {
-  mocks.mediaMutate.mockReset();
   mocks.play.mockClear();
   mocks.pause.mockClear();
-  mocks.push.mockClear();
   mocks.replace.mockClear();
-  Object.defineProperty(HTMLMediaElement.prototype, 'play', {
-    configurable: true,
-    value: mocks.play,
-  });
-  Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
-    configurable: true,
-    value: mocks.pause,
-  });
+  mocks.mediaArtifactMutate.mockClear();
+  mocks.media = { processedIds: ['debate-1'], isLoading: false, hasError: false };
+  Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
+  Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
+  class MockIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
-describe('DebatesPageClient', () => {
-  it('links processed video actions to the public recording page', async () => {
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind === 'preview_image') {
-        options.onSuccess({ upload: { url: 'https://media.test/preview.jpg' } });
-      }
-    });
+describe('DebatesPageClient browse feed', () => {
+  it('renders the claim title, space, join button and both debater videos', async () => {
+    const { container } = render(<DebatesPageClient spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
+    expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+
+    await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
+  });
+
+  // Both recordings exist, so `isWatchableDebate` passes — only the media gate withholds it.
+  it('withholds a debate whose media worker has not composed a final_video', () => {
+    mocks.media = { processedIds: [], isLoading: false, hasError: false };
 
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
-    await waitFor(() =>
-      expect(container.querySelector('video')).toHaveAttribute('poster', 'https://media.test/preview.jpg')
-    );
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
-    expect(screen.getByRole('button', { name: 'Watch originals' })).toBeInTheDocument();
+    expect(screen.getByText('No debates to watch yet. Start one from the Claims tab.')).toBeInTheDocument();
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Watch processed video' }));
+  it('stays in a loading state while readiness is still in flight', () => {
+    mocks.media = { processedIds: [], isLoading: true, hasError: false };
 
-    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
-    expect(mocks.play).not.toHaveBeenCalled();
+    render(<DebatesPageClient spaceId="space-1" />);
 
-    mocks.push.mockClear();
-    fireEvent.click(
-      screen.getByRole('button', {
-        name: 'Play Processed video for Debates are useful',
-      })
-    );
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+  });
 
-    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1/recording');
-    expect(mocks.mediaMutate.mock.calls.some(([variables]) => variables.request.kind === 'final_video')).toBe(false);
+  // The debate list loaded fine, so its own error state can't report this.
+  it('reports a failed readiness lookup instead of claiming there are no debates', () => {
+    mocks.media = { processedIds: [], isLoading: false, hasError: true };
+
+    render(<DebatesPageClient spaceId="space-1" />);
+
+    expect(
+      screen.getByText('Could not check which debates are ready to watch. Try again shortly.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No debates to watch yet. Start one from the Claims tab.')).not.toBeInTheDocument();
   });
 });
 

@@ -450,6 +450,12 @@ export const spaceFragment = graphql(/* GraphQL */ `
       memberSpaceId
     }
 
+    # DAO voting settings. Only populated on DAO spaces after the indexer has
+    # ingested the DAO's createDAOSpaceProxy event.
+    spaceVotingSetting {
+      flatSupportThreshold
+    }
+
     page {
       ...FullEntity
     }

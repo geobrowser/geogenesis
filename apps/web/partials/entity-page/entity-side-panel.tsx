@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { motion, useAnimation } from 'framer-motion';
+import { type PanInfo, motion, useAnimation, useDragControls } from 'framer-motion';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { getLocalUnpublishedChangesFingerprint } from '~/core/hooks/use-local-changes';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useDiff } from '~/core/state/diff-store';
@@ -123,18 +124,18 @@ const variants = {
   },
 };
 
-function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
+function AnimatedTogglePill({ editable }: { editable: boolean }) {
   return (
     <motion.div
-      animate={controls}
-      variants={variants}
+      aria-hidden
+      initial={false}
+      animate={{ x: editable ? 30 : 0 }}
       transition={{
         duration: 0.5,
         type: 'spring',
         bounce: 0,
       }}
-      layoutId="entity-side-panel-edit-toggle-pill"
-      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+      className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
     />
   );
 }
@@ -169,34 +170,31 @@ function EntitySidePanelModeToggle() {
   const editable = panelCtx.panelWantsEdit;
 
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onToggle}
       aria-label={editable ? 'Switch to view mode' : 'Switch to edit mode'}
-      className="flex w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1"
+      animate={controls}
+      variants={variants}
+      className="relative flex w-[66px] shrink-0 items-center justify-between rounded-[47px] bg-divider p-1"
     >
-      <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && <AnimatedTogglePill controls={controls} />}
-        <motion.div
-          animate={controls}
-          variants={variants}
-          className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
-        >
+      <AnimatedTogglePill editable={editable} />
+      <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+        <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
           <EyeSmall />
-        </motion.div>
+        </div>
       </div>
-      <div className="relative flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && <AnimatedTogglePill controls={controls} />}
+      <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
         <div
           className={cx(
-            'z-10 transition-colors duration-300',
+            'transition-colors duration-300',
             editable ? 'text-text' : canEditSpace ? 'text-grey-03' : 'text-grey-04'
           )}
         >
           <BulkEdit />
         </div>
       </div>
-    </button>
+    </motion.button>
   );
 }
 
@@ -547,9 +545,34 @@ export function EntitySidePanelSurface({
   );
 }
 
+// On mobile the panel opens as a bottom sheet (like the ranking compose flow) rather than a
+// full-height right-hand drawer. It starts this far below the top of the screen.
+const MOBILE_SHEET_TOP_OFFSET_PX = 200;
+const MOBILE_SHEET_SCROLL_SELECTOR = '[data-entity-side-panel-scroll]';
+
+function isInteractiveDragTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      'button, a, input, textarea, select, [role="button"], [contenteditable="true"], [data-no-sheet-drag]'
+    )
+  );
+}
+
+// Only start a swipe-to-dismiss drag from a non-interactive area, and not while the sheet's
+// own content is scrolled — otherwise the drag would fight scrolling and button taps.
+function shouldStartSheetDrag(event: React.PointerEvent, root: HTMLElement): boolean {
+  if (isInteractiveDragTarget(event.target)) return false;
+  const scrollEl = root.querySelector<HTMLElement>(MOBILE_SHEET_SCROLL_SELECTOR);
+  if (scrollEl?.contains(event.target as Node) && scrollEl.scrollTop > 0) return false;
+  return true;
+}
+
 export function EntitySidePanel() {
   const pathname = usePathname();
   const jotaiStore = useStore();
+  const isMobile = useIsMobileLayout();
+  const dragControls = useDragControls();
   const setSidePanelHostElement = useSetAtom(entitySidePanelHostElementAtom);
   const { isReviewOpen, bumpReviewVersion } = useDiff();
   const { sidePanelTarget, closeSidePanel } = useEntitySidePanel();
@@ -685,6 +708,65 @@ export function EntitySidePanel() {
 
   const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits } = sidePanelTarget;
 
+  const panelBody = (
+    <EntitySidePanelPopoverPortalProvider>
+      <EntitySidePanelSurface
+        entityId={entityId}
+        requestedSpaceId={spaceId}
+        openedWithMainViewEditing={openedWithMainViewEditing}
+        openedFromReviewEdits={openedFromReviewEdits}
+        onClose={handleCloseSidePanel}
+      />
+    </EntitySidePanelPopoverPortalProvider>
+  );
+
+  if (isMobile) {
+    return createPortal(
+      <motion.div
+        className={cx('fixed inset-0', isReviewOpen ? 'z-[10001]' : 'z-[200]')}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.15 }}
+        onPointerDown={event => {
+          if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
+        }}
+      >
+        <button
+          type="button"
+          className="absolute inset-0 bg-grey-04/50"
+          onClick={handleCloseSidePanel}
+          aria-label="Close"
+        />
+        <motion.div
+          ref={panelHostRef as React.Ref<HTMLDivElement>}
+          data-entity-side-panel
+          role="dialog"
+          aria-modal="true"
+          aria-label="Entity side panel"
+          drag="y"
+          dragControls={dragControls}
+          dragListener={false}
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={0.12}
+          onDragEnd={(_event, info: PanInfo) => {
+            if (info.offset.y > 72 || info.velocity.y > 420) handleCloseSidePanel();
+          }}
+          initial={{ y: '100%' }}
+          animate={{ y: 0 }}
+          transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
+          style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+        >
+          <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
+            <div className="h-1 w-10 rounded-full bg-grey-02" />
+          </div>
+          {panelBody}
+        </motion.div>
+      </motion.div>,
+      document.body
+    );
+  }
+
   return createPortal(
     <aside
       ref={panelHostRef}
@@ -694,15 +776,7 @@ export function EntitySidePanel() {
         isReviewOpen ? 'z-[10001]' : 'z-[200]'
       )}
     >
-      <EntitySidePanelPopoverPortalProvider>
-        <EntitySidePanelSurface
-          entityId={entityId}
-          requestedSpaceId={spaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
-          openedFromReviewEdits={openedFromReviewEdits}
-          onClose={handleCloseSidePanel}
-        />
-      </EntitySidePanelPopoverPortalProvider>
+      {panelBody}
     </aside>,
     document.body
   );

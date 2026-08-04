@@ -50,6 +50,9 @@ describe('buildDaoTopicDeclaredCalldata', () => {
     expect(decoded.args?.[1]).toBe(`0x${TARGET_SPACE_ID}`);
     expect(decoded.args?.[2]).toBe(GOVERNANCE_ACTIONS.PROPOSAL_CREATED);
 
+    // Four fields, matching the deployed contracts and the SDK's encodeCreateProposal.
+    // This assertion previously described a 3-field tuple and stayed green while every
+    // DAO topic write reverted on-chain, so treat the layout here as load-bearing.
     const [proposalId, votingMode, actions] = decodeAbiParameters(
       [
         { name: 'proposalId', type: 'bytes16' },
@@ -58,7 +61,8 @@ describe('buildDaoTopicDeclaredCalldata', () => {
           name: 'actions',
           type: 'tuple[]',
           components: [
-            { name: 'to', type: 'address' },
+            { name: 'toAddress', type: 'address' },
+            { name: 'toSpaceId', type: 'bytes16' },
             { name: 'value', type: 'uint256' },
             { name: 'data', type: 'bytes' },
           ],
@@ -70,7 +74,9 @@ describe('buildDaoTopicDeclaredCalldata', () => {
     expect(proposalId).toMatch(/^0x[a-f0-9]{32}$/);
     expect(votingMode).toBe(VOTING_MODE.SLOW);
     expect(actions).toHaveLength(1);
-    expect(actions[0].to).toBe('0x1111111111111111111111111111111111111111');
+    expect(actions[0].toAddress).toBe('0x1111111111111111111111111111111111111111');
+    // Targets the DAO by address, so the space-id target is zero.
+    expect(actions[0].toSpaceId).toBe(`0x${'0'.repeat(32)}`);
     expect(actions[0].value).toBe(0n);
 
     const decodedPing = decodeFunctionData({

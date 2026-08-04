@@ -9,15 +9,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
-import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
-import { Fullscreen } from '~/design-system/icons/full-screen';
 
+import { DataBlockExpandControl } from './data-block-expand-control';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
@@ -25,8 +25,8 @@ import { RankingExploreView } from './ranking-explore-view';
 import { RankingGalleryView } from './ranking-gallery-view';
 import { RankingHeaderActions } from './ranking-header-actions';
 import { RankingListView } from './ranking-list-view';
-import { RankingPillView } from './ranking-pill-view';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
+import { RankingPillView } from './ranking-pill-view';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import type { TableBlockFilterPromptHandle } from './table-block-filter-creation-prompt';
@@ -53,6 +53,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     isFilterOpen,
     setIsFilterOpen,
     displayName,
+    entityId,
     periodState,
     periodLabel,
     hasRankedByOthers,
@@ -69,19 +70,20 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const isGalleryView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
   );
-  const isListView = Boolean(
-    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  const isBulletedListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.BULLETED_LIST_VIEW)) ||
+    stateView === 'BULLETED_LIST'
   );
   const isPillView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
   );
   const isExploreView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, DATA_BLOCK_VIEW_EXPLORE_ID)) ||
-      stateView === 'EXPLORE'
+    stateView === 'EXPLORE'
   );
 
-  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
-  
+  const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
+
   const showBrowseChrome = !showHeaderActions || isEditing;
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
@@ -127,11 +129,12 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
           ) : null}
 
           {showBrowseChrome ? (
-            <IconButton
-              onClick={() => void openRankingCompose('view')}
-              icon={<Fullscreen color="grey-04" />}
-              color="grey-04"
-              aria-label="Open fullscreen ranking"
+            <DataBlockExpandControl
+              spaceId={spaceId}
+              blockEntityId={entityId}
+              isEditing={isEditing}
+              onFullscreenClick={() => void openRankingCompose('view')}
+              fullscreenAriaLabel="Open fullscreen ranking"
             />
           ) : null}
 
@@ -229,7 +232,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
 
       {isGalleryView ? (
         <RankingGalleryView state={state} />
-      ) : isListView ? (
+      ) : isBulletedListView ? (
         <RankingListView state={state} />
       ) : isPillView ? (
         <RankingPillView state={state} />

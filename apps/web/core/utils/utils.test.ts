@@ -19,6 +19,8 @@ import {
   getImagePath,
   getImagePathAtLevel,
   getPaginationPages,
+  getProposalName,
+  getProposalTimeRemaining,
   validateSpaceId,
 } from './utils';
 
@@ -158,6 +160,27 @@ describe('GeoDate', () => {
       minute: '30',
       meridiem: 'pm',
     });
+  });
+
+  it('round-trips local wall-clock time through UTC storage', () => {
+    const stored = GeoDate.toISOStringLocal({
+      day: '09',
+      month: '07',
+      year: '2026',
+      hour: '0',
+      minute: '0',
+    });
+    const parsed = GeoDate.fromISOStringLocal(stored);
+
+    expect(parsed).toEqual({
+      day: '9',
+      month: '7',
+      year: '2026',
+      hour: '12',
+      minute: '0',
+      meridiem: 'am',
+    });
+    expect(new Date(stored).getTime()).toBe(new Date(2026, 6, 9, 0, 0, 0, 0).getTime());
   });
 
   it('validates leap year', () => {
@@ -621,5 +644,70 @@ describe('validateSpaceId', () => {
   it('returns false for non-hex characters', () => {
     expect(validateSpaceId('zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(false);
     expect(validateSpaceId('GHIJKLMNOPQRSTUVWXYZ123456789012')).toBe(false);
+  });
+});
+
+describe('getProposalTimeRemaining', () => {
+  const NOW = Date.UTC(2026, 6, 30, 12, 0, 0);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const nowInGeoSeconds = () => Math.floor(NOW / 1000);
+
+  it('reports the remaining time for a future endTime', () => {
+    const { days, hours, minutes } = getProposalTimeRemaining(nowInGeoSeconds() + 90_000);
+
+    expect(days).toBe(1);
+    expect(hours).toBe(1);
+    expect(minutes).toBe(0);
+  });
+
+  it('clamps a past endTime to zero instead of counting down past it', () => {
+    // Regression: an endTime 19h44m in the past rendered as "-19h -44m remaining"
+    // on Home. Reachable whenever a block-derived endTime trails wall clock.
+    const pastEndTime = nowInGeoSeconds() - (19 * 3600 + 44 * 60);
+
+    expect(getProposalTimeRemaining(pastEndTime)).toEqual({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  });
+
+  it('clamps an endTime of zero', () => {
+    // v2 contracts leave endTime at 0 until the first vote opens the window.
+    expect(getProposalTimeRemaining(0)).toEqual({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  });
+});
+
+describe('getProposalName', () => {
+  const space = (name: string | null) => ({ id: 'a'.repeat(32), name, image: '' });
+
+  it('names the space when it is known', () => {
+    expect(
+      getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space('Research DAO') })
+    ).toBe('Update governance settings for Research DAO');
+
+    expect(getProposalName({ name: '', type: 'ADD_EDITOR', space: space('Research DAO') })).toBe(
+      'Add editor to Research DAO'
+    );
+  });
+
+  it('omits the qualifier rather than interpolating a null space name', () => {
+    // Regression: a space whose home entity has not indexed yet has a null name, which
+    // rendered titles like "Update governance settings for null" on the profile page.
+    expect(getProposalName({ name: '', type: 'UPDATE_VOTING_SETTINGS', space: space(null) })).toBe(
+      'Update governance settings'
+    );
+
+    expect(getProposalName({ name: '', type: 'ADD_EDITOR', space: space(null) })).toBe('Add editor to space');
+    expect(getProposalName({ name: '', type: 'SET_TOPIC', space: space(null) })).toBe('Set topic for space');
+  });
+
+  it('uses the proposal name verbatim for content edits', () => {
+    expect(getProposalName({ name: 'My edit', type: 'ADD_EDIT', space: space(null) })).toBe('My edit');
   });
 });

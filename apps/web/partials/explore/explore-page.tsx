@@ -15,7 +15,6 @@ type Props = {
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
-  editorSpaceIds: string[];
   communityCalls: ExploreCall[];
 };
 
@@ -25,7 +24,6 @@ export function ExplorePage({
   featuredRankings,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
-  editorSpaceIds,
   communityCalls,
 }: Props) {
   return (
@@ -40,6 +38,7 @@ export function ExplorePage({
           initialTime="month"
           initialSort="top"
           showSortFilter
+          showTypeFilter
           dividerBeforeFeed
           feedTopSpacingClassName=""
         />
@@ -50,7 +49,6 @@ export function ExplorePage({
         featuredRankings={featuredRankings}
         pendingMembershipSpaceIds={pendingMembershipSpaceIds}
         memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-        editorSpaceIds={editorSpaceIds}
         communityCalls={communityCalls}
       />
     </div>
