@@ -15,8 +15,8 @@ interface Props {
   showHeading?: boolean;
   showHeader?: boolean;
   notice?: React.ReactNode;
-  /** Pre-computed by the parent route — avoids re-querying eligibility here. */
-  canClaimTopic?: boolean;
+  /** Replaces the cover/avatar slot above the Name (e.g. a community-call recording player). */
+  coverSlot?: React.ReactNode;
 }
 
 export default async function DefaultEntityPage({
@@ -26,10 +26,10 @@ export default async function DefaultEntityPage({
   showHeading = true,
   showHeader = true,
   notice = null,
-  canClaimTopic = false,
+  coverSlot,
 }: Props) {
   const isEditing = searchParams?.edit === 'true';
-  const props = await fetchEntityPageData(params.id, params.entityId, { canClaimTopic });
+  const props = await fetchEntityPageData(params.id, params.entityId);
 
   return (
     <SpaceRedirect
@@ -60,7 +60,7 @@ export default async function DefaultEntityPage({
             showHeading={showHeading}
             showHeader={showHeader}
             serverRelations={props.relationEntityRelations}
-            canClaimTopic={canClaimTopic}
+            coverSlot={coverSlot}
             notice={notice}
           />
         </RouteEditorProvider>

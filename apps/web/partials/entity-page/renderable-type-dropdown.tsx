@@ -50,10 +50,12 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
     },
     Icon: TYPE_ICONS[key],
   }));
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 180,
     gap: 8,
+    contentElement,
   });
   const onTypeMenuWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
     trapWheelToElement(e.currentTarget, e);
@@ -97,6 +99,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
       */}
       <DropdownPrimitive.Portal container={elevatedPopoverPortal ?? undefined}>
         <DropdownPrimitive.Content
+          ref={setContentElement}
           align={align}
           side={side}
           sideOffset={8}
@@ -104,7 +107,7 @@ export const RenderableTypeDropdown = ({ value, onChange, baseDataType }: Props)
           avoidCollisions={true}
           sticky="always"
           className={cx(
-            'z-[var(--elevated-popover-z,9999)] w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
+            'pointer-events-auto z-[var(--elevated-popover-z,9999)] w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg',
             options.length > 4 && 'max-h-[180px] overflow-y-auto overscroll-contain scroll-smooth'
           )}
           onWheel={onTypeMenuWheel}

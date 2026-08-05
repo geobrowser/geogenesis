@@ -102,7 +102,6 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
 
@@ -124,7 +123,6 @@ const EXPLORE_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
             name
             types {
               id
-              name
             }
             valuesList(filter: { spaceId: { in: $spaceIdsForLists } }) {
               spaceId

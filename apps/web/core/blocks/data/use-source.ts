@@ -20,7 +20,7 @@ type UseSourceOptions = {
 };
 
 export function useSource({ filterState, setFilterState }: UseSourceOptions) {
-  const { entityId, spaceId } = useDataBlockInstance();
+  const { entityId, spaceId, knownSourceType } = useDataBlockInstance();
 
   const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === entityId) ?? null;
@@ -35,8 +35,8 @@ export function useSource({ filterState, setFilterState }: UseSourceOptions) {
   const derivedSource: Source = getSource({
     blockId: EntityId(entityId),
     dataEntityRelations,
-    currentSpaceId: SpaceId(spaceId),
     filterState,
+    knownSourceType,
   });
   const derivedSourceKey = sourceStableKey(derivedSource);
   const [optimisticSource, setOptimisticSource] = React.useState<Source | null>(null);

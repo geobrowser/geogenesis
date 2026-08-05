@@ -31,10 +31,12 @@ export function EntityPageInlineDescription({
   entityId,
   spaceId,
   truncate = true,
+  fallbackDescription,
 }: {
   entityId: string;
   spaceId: string;
   truncate?: boolean;
+  fallbackDescription?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
   const { storage } = useMutate();
@@ -44,7 +46,7 @@ export function EntityPageInlineDescription({
       v.entity.id === entityId && v.spaceId === spaceId && v.property.id === SystemIds.DESCRIPTION_PROPERTY,
   });
 
-  const description = rawValue?.value ?? '';
+  const description = rawValue?.value ?? fallbackDescription ?? '';
 
   if (isEditing) {
     const onChange = (next: string) => {

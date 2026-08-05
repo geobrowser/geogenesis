@@ -12,10 +12,11 @@ import {
   UNIT_PROPERTY,
 } from '../constants';
 import { readTypes } from '../database/entities';
+import { createValueId } from '../id/create-id';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
-import { getSpaceRank } from '../utils/space/space-ranking';
+import { getSpaceRank, scopeBySpacePrecedence } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
@@ -31,17 +32,63 @@ export function relationKey(r: Relation): string {
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
 }
 
-function preferRelation(existing: Relation, candidate: Relation): Relation {
+function preferRelation(
+  existing: Relation,
+  candidate: Relation,
+  hasBlockConfig?: (relationEntityId: string) => boolean
+): Relation {
   if (candidate.isLocal && !existing.isLocal) return candidate;
   if (!candidate.isLocal && existing.isLocal) return existing;
+
   const existingTs = existing.timestamp ?? '';
   const candidateTs = candidate.timestamp ?? '';
-  return candidateTs >= existingTs ? candidate : existing;
+  if (candidateTs !== existingTs) {
+    return candidateTs > existingTs ? candidate : existing;
+  }
+
+  // Remote relations carry no timestamp, so duplicate published relations
+  // always tie. Each duplicate has its own relation entity (`entityId`) — for
+  // BLOCKS relations that entity holds the block's view/shown-columns config,
+  // so prefer the duplicate other config data hangs off of.
+  if (hasBlockConfig) {
+    const existingHasConfig = hasBlockConfig(existing.entityId);
+    const candidateHasConfig = hasBlockConfig(candidate.entityId);
+    if (existingHasConfig !== candidateHasConfig) {
+      return existingHasConfig ? existing : candidate;
+    }
+  }
+
+  // Deterministic tie-break. Hydration and mergeWith reads append incoming
+  // relations in fetch order, so "later in the array wins" flips the survivor
+  // (and its relation entity) across syncs, orphaning data hung off of it.
+  return candidate.id < existing.id ? candidate : existing;
 }
+
+const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
+  SystemIds.VIEW_PROPERTY,
+  SystemIds.PROPERTIES,
+  SystemIds.SHOWN_COLUMNS,
+];
 
 export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   const byKey = new Map<string, Relation>();
   const deleted: Relation[] = [];
+
+  // Lazily index which entities have data-block config relations hanging off
+  // them, so same-key collisions can keep the duplicate whose relation entity
+  // carries the block's saved view/columns. Built at most once per dedupe.
+  let configFromIds: Set<string> | null = null;
+  const hasBlockConfig = (relationEntityId: string): boolean => {
+    if (configFromIds === null) {
+      configFromIds = new Set(
+        relations
+          .filter(r => !r.isDeleted && BLOCK_CONFIG_RELATION_TYPE_IDS.includes(r.type.id))
+          .map(r => r.fromEntity.id)
+      );
+    }
+    return configFromIds.has(relationEntityId);
+  };
+
   for (const relation of relations) {
     // Locally-deleted relations never render and carry pending delete ops;
     // collapsing one into a same-key replacement (e.g. a moved block's
@@ -52,7 +99,7 @@ export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
     }
     const key = relationKey(relation);
     const existing = byKey.get(key);
-    byKey.set(key, existing ? preferRelation(existing, relation) : relation);
+    byKey.set(key, existing ? preferRelation(existing, relation, hasBlockConfig) : relation);
   }
   return [...byKey.values(), ...deleted];
 }
@@ -460,7 +507,10 @@ export class GeoStore {
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    return [...syncedEntities.keys()].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
+    // Include entity IDs that only exist locally — new/unpublished entities live in
+    // the value/relation indexes until a sync merges them into syncedEntities.
+    const ids = new Set([...syncedEntities.keys(), ...getValueIndex().keys(), ...getRelationIndex().keys()]);
+    return [...ids].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
   }
 
   /**
@@ -490,7 +540,7 @@ export class GeoStore {
     this.stream.emit({ type: GeoEventStream.DATA_TYPE_CREATED, property: { id, dataType } });
   }
 
-  public getProperty(id: string): Property | null {
+  public getProperty(id: string, options: { spaceId?: string } = {}): Property | null {
     const entity = this.getEntity(id);
 
     const stableDataType = this.getStableDataType(id);
@@ -502,17 +552,23 @@ export class GeoStore {
       return null;
     }
 
-    const relationValueTypes = entity?.relations
-      .filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationValueTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,
       }));
 
-    const relationEntityTypes = entity?.relations
-      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationEntityTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,
@@ -831,5 +887,55 @@ export class GeoStore {
     });
 
     this.stream.emit({ type: GeoEventStream.CHANGES_PUBLISHED, valueIds, relationIds });
+  }
+
+  /**
+   * Rewrite every local value/relation written under `fromSpaceId` to
+   * `toSpaceId`. Used when an optimistic personal space (`pending:<topicId>`)
+   * resolves to its real on-chain spaceId. Value ids embed the spaceId
+   * (`${spaceId}:${entityId}:${propertyId}`) so they're recomputed; relation
+   * ids are uuids so only their `spaceId`/`toSpaceId` change. The existing
+   * publish filter (`v.spaceId === realSpaceId`) then picks the edits up
+   * naturally. Mirrors the map-over-atom pattern of `setAsPublished`.
+   */
+  public remapSpaceId(fromSpaceId: string, toSpaceId: string) {
+    const oldValueIds: string[] = [];
+    const remappedValues: Value[] = [];
+
+    reactiveValues.set(prev =>
+      prev.map(v => {
+        if (v.spaceId !== fromSpaceId) return v;
+        const next = produce(v, draft => {
+          draft.spaceId = toSpaceId;
+          draft.id = createValueId({ entityId: draft.entity.id, propertyId: draft.property.id, spaceId: toSpaceId });
+        });
+        oldValueIds.push(v.id);
+        remappedValues.push(next);
+        return next;
+      })
+    );
+
+    const remappedRelations: Relation[] = [];
+
+    reactiveRelations.set(prev =>
+      prev.map(r => {
+        if (r.spaceId !== fromSpaceId && r.toSpaceId !== fromSpaceId) return r;
+        const next = produce(r, draft => {
+          if (draft.spaceId === fromSpaceId) draft.spaceId = toSpaceId;
+          if (draft.toSpaceId === fromSpaceId) draft.toSpaceId = toSpaceId;
+        });
+        remappedRelations.push(next);
+        return next;
+      })
+    );
+
+    if (remappedValues.length === 0 && remappedRelations.length === 0) return;
+
+    this.stream.emit({
+      type: GeoEventStream.SPACE_REMAPPED,
+      oldValueIds,
+      values: remappedValues,
+      relations: remappedRelations,
+    });
   }
 }

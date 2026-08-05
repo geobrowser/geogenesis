@@ -151,6 +151,10 @@ export const SelectEntity = ({
       ? allowedTypes.map(r => r.id)
       : undefined;
 
+  // When the user explicitly removes every type filter pill, search
+  // unrestricted instead of blocking with no way to get results.
+  const userClearedTypeFilters = removedTypeIds.size > 0 && allowedTypes.length === 0;
+
   const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
     useSearch({
       filterByTypes,
@@ -158,7 +162,7 @@ export const SelectEntity = ({
       initialQuery,
       enabled: isSearchOpen,
       waitForFilterTypes,
-      restrictToFilterTypes,
+      restrictToFilterTypes: restrictToFilterTypes && !userClearedTypeFilters,
     });
 
   // Auto focus input when component mounts
@@ -319,6 +323,7 @@ export const SelectEntity = ({
     isOpen: isSearchOpen,
     preferredHeight: advanced ? 520 : 300,
     gap: 12,
+    contentElement: popoverElement,
   });
 
   const isQueried = isSearchOpen;
@@ -401,7 +406,7 @@ export const SelectEntity = ({
                 setResult(null);
               }}
               className={cx(
-                'z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
+                'pointer-events-auto z-[var(--elevated-popover-z,9999)] w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] leading-none',
                 width === 'full' && 'max-w-[calc(100vw-24px)]'
               )}
               // Reserve space at the bottom of the viewport so the dropdown — including

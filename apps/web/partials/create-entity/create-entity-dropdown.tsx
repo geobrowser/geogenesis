@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
+// import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
@@ -21,7 +21,7 @@ export function CreateEntityDropdown() {
   const openCreateSpaceDialog = useOpenCreateSpaceDialog();
 
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
-  const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+  // const { isEditor, isMember } = useAccessControl(spaceId ?? '');
   const { smartAccount } = useSmartAccount();
 
   if (!smartAccount?.account.address) {
@@ -62,6 +62,7 @@ export function CreateEntityDropdown() {
           >
             <p className="text-center text-button">New property</p>
           </MenuItem>
+          {/* Temporarily hidden while the import data feature is being improved.
           {(isEditor || isMember) && (
             <MenuItem
               onClick={() => {
@@ -70,7 +71,7 @@ export function CreateEntityDropdown() {
             >
               <p className="text-center text-button">Import data</p>
             </MenuItem>
-          )}
+          )} */}
         </>
       )}
     </Menu>

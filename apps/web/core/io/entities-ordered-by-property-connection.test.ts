@@ -1,15 +1,14 @@
-import { describe, expect, it, vi, beforeEach, type Mock } from 'vitest';
-
 import * as Effect from 'effect/Effect';
+import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SortOrder } from '~/core/gql/graphql';
+
+import { graphql } from './graphql-client';
+import { getEntitiesOrderedByPropertyConnection } from './queries';
 
 vi.mock('./graphql-client', () => ({
   graphql: vi.fn(),
 }));
-
-import { graphql } from './graphql-client';
-import { getEntitiesOrderedByPropertyConnection } from './queries';
 
 const graphqlMock = graphql as unknown as Mock;
 
@@ -154,5 +153,11 @@ describe('getEntitiesOrderedByPropertyConnection', () => {
       spaceIds: ['explicit-space-a', 'explicit-space-b'],
       filter: { name: { isNull: false, isNot: '' } },
     });
+  });
+
+  it('forwards includeWithoutValue to the property-ordering query', async () => {
+    await runQuery({ includeWithoutValue: true });
+
+    expect(lastVariables()).toMatchObject({ includeWithoutValue: true });
   });
 });

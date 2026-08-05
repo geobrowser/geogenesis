@@ -103,7 +103,9 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
    * Take each row, take each mapping, take each "slot" in the mapping
    * and map them into the Row structure.
    */
-  return entities.map(entity => {
+  const safeEntities = entities.filter((entity): entity is Entity => Boolean(entity && entity.id));
+
+  return safeEntities.map(entity => {
     const { name, id, relations, description, values, spaces, nameTripleSpaces } = entity;
     const newSlots = slotIds.reduce(
       (acc, slotId) => {
@@ -127,11 +129,8 @@ export function mappingToRows(entities: Entity[], slotIds: string[], collectionR
             cell.space = collectionRelation.toSpaceId;
             cell.verified = collectionRelation.verified;
           } else {
-            const nameValue = values?.find(
-              v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted
-            );
-            cell.space =
-              nameValue?.spaceId ?? nameTripleSpaces?.[0] ?? spaces?.[0] ?? cell.space;
+            const nameValue = values?.find(v => v.property.id === SystemIds.NAME_PROPERTY && !v.isDeleted);
+            cell.space = nameValue?.spaceId ?? nameTripleSpaces?.[0] ?? spaces?.[0] ?? cell.space;
           }
         }
 

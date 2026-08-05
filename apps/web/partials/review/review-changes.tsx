@@ -19,13 +19,16 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePublish } from '~/core/hooks/use-publish';
+import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useIsFastPathRestricted } from '~/core/hooks/use-fast-path-restricted';
+import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
+import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -43,6 +46,7 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
+import { ProposalPathSelector } from '~/partials/governance/proposal-path-selector';
 import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';
 
 import {
@@ -111,6 +115,7 @@ export const ReviewChanges = () => {
   const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
   const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isPersonalSpacePending } = usePendingPersonalSpace();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
@@ -425,6 +430,11 @@ export const ReviewChanges = () => {
 
   const isReadyToPublish = proposalName.length > 0;
 
+  // While the optimistic personal space is still being created on-chain there's
+  // no real space to publish into (and edits buffered under the `pending:`
+  // sentinel can't be proposed). Gate Publish until setup finishes.
+  const isPublishGatedByPendingSetup = isPersonalSpacePending || isPendingPersonalSpaceId(activeSpace);
+
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
   const proposalNameSectionRef = React.useRef<HTMLDivElement>(null);
@@ -438,6 +448,31 @@ export const ReviewChanges = () => {
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  // Fast/slow path selection (design 62501-94092). Every DAO-space submitter gets the
+  // choice — members as well as editors. Personal spaces don't vote at all.
+  const canChoosePath = activeSpaceMetadata?.type === 'DAO';
+  const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(
+    activeSpaceMetadata?.address,
+    canChoosePath
+  );
+  // A space with disableFastPathAccessForNewMembers grants incoming members the
+  // FAST_PATH_RESTRICTED role; a fast-path proposal from one reverts during simulation.
+  const { isFastPathRestricted } = useIsFastPathRestricted(
+    activeSpaceMetadata?.address,
+    personalSpaceId,
+    canChoosePath
+  );
+  const [votingMode, setVotingMode] = React.useState<ProposalVotingMode>('FAST');
+
+  // Reset to the default fast path whenever the active space changes so a slow-path
+  // choice for one space doesn't silently carry over to the next. Restricted authors
+  // start on — and stay on — the review path: the role resolves asynchronously, so
+  // this also corrects a FAST default that was chosen before the answer arrived,
+  // which is what otherwise submits a proposal doomed to revert.
+  React.useEffect(() => {
+    setVotingMode(isFastPathRestricted ? 'SLOW' : 'FAST');
+  }, [activeSpace, isFastPathRestricted]);
 
   const { settled: slideUpEnterSettled, onEnterAnimationComplete: onSlideUpEnterAnimationComplete } =
     useEnterAnimationSettled(isReviewOpen);
@@ -550,6 +585,7 @@ export const ReviewChanges = () => {
         spaceId: activeSpace,
         name: proposalName,
         proposalId: proposalEntityId,
+        votingMode: canChoosePath ? votingMode : undefined,
         onSuccess: () => {
           setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
           settle(true);
@@ -703,6 +739,8 @@ export const ReviewChanges = () => {
     relationsFromSpace,
     proposalName,
     activeSpaceMetadata?.type,
+    canChoosePath,
+    votingMode,
     selectedBountyIds,
     personalSpaceId,
     bountiesById,
@@ -813,6 +851,9 @@ export const ReviewChanges = () => {
             </div>
             {hasRemainingSpaces && (
               <div className="flex items-center gap-2">
+                {isPublishGatedByPendingSetup && (
+                  <span className="text-metadataMedium text-grey-04">Your space is finishing setup…</span>
+                )}
                 {activeSpaceMetadata?.type !== 'PERSONAL' && (
                   <button
                     onClick={() => setIsBountyLinkingOpen(prev => !prev)}
@@ -825,7 +866,19 @@ export const ReviewChanges = () => {
                     {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
                   </button>
                 )}
-                <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
+                {canChoosePath && (
+                  <ProposalPathSelector
+                    votingMode={votingMode}
+                    onChange={setVotingMode}
+                    votingSettings={activeSpaceVotingSettings}
+                    isFastPathRestricted={isFastPathRestricted}
+                  />
+                )}
+                <Button
+                  variant="primary"
+                  onClick={handleSubmit}
+                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                >
                   <Pending isPending={isPublishing}>
                     {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
                   </Pending>

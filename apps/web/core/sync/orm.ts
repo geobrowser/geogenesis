@@ -9,6 +9,7 @@ import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/
 
 import { readTypes } from '../database/entities';
 import {
+  ENTITY_ID_BATCH_SIZE,
   getAllEntities,
   getBatchEntities,
   getBatchEntitySpaces,
@@ -256,7 +257,7 @@ export class E {
     after?: string;
     offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   }): Promise<Entity[]> {
     const { merged } = await this.syncMany(args);
     return merged;
@@ -287,7 +288,7 @@ export class E {
     after?: string;
     offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
     orderBy?: EntitiesOrderBy[];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
@@ -300,6 +301,7 @@ export class E {
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
             limit: first,
             after,
@@ -316,13 +318,17 @@ export class E {
         return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
-      const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds, spaceId],
-        queryFn: async ({ signal }) => {
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
-          return entities;
-        },
-      });
+      const remoteEntities = (
+        await Promise.all(
+          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+            return cache.fetchQuery({
+              queryKey: ['network', 'entities', batchIds, spaceId],
+              queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
+            });
+          })
+        )
+      ).flat();
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
@@ -350,6 +356,7 @@ export class E {
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
             limit: first,
             after,
@@ -417,6 +424,7 @@ export class E {
     skip,
     signal,
     additionalSpaceIds,
+    includeNonCanonical,
   }: {
     store: GeoStore;
     cache: QueryClient;
@@ -425,7 +433,8 @@ export class E {
     skip: number;
     signal?: AbortController['signal'];
     additionalSpaceIds?: string[];
-  }): Promise<{ results: SearchResult[]; rawCount: number; total: number }> {
+    includeNonCanonical?: boolean;
+  }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
     // Empty string is intentional here: the REST /search endpoint accepts
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
@@ -436,7 +445,7 @@ export class E {
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const page = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds],
+      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds, includeNonCanonical],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(
@@ -447,6 +456,7 @@ export class E {
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
               additionalSpaceIds,
+              includeNonCanonical,
             },
             // Prefer the caller-supplied signal so React Query cancellation
             // on the hook side (query change, unmount) aborts the in-flight
@@ -535,7 +545,7 @@ export class E {
       })
       .filter(isIncludedSearchResult);
 
-    return { results, rawCount: page.rawCount, total: page.total };
+    return { results, rawCount: page.rawCount, serverCount: page.serverCount, total: page.total };
   }
 }
 

@@ -58,7 +58,9 @@ export const Value = Schema.Struct({
   datetime: Schema.NullOr(Schema.String),
   date: Schema.NullOr(Schema.String),
   decimal: Schema.NullOr(Schema.String),
-  bytes: Schema.NullOr(Schema.String),
+  // `bytes` is intentionally not fetched/decoded: `getValueFromDataType` always
+  // returns null for BYTES, so it was decoded and dropped. The diff path reads
+  // bytes from a separate snapshot query (ApiVersionedValue), not this schema.
   schedule: Schema.NullOr(Schema.Unknown),
   embedding: Schema.NullOr(Schema.Unknown),
 });
@@ -70,8 +72,6 @@ export const EntityType = Schema.Struct({
   name: Schema.NullOr(Schema.String),
 });
 
-export type RemoteEntityType = Schema.Schema.Type<typeof EntityType>;
-
 export const Relation = Schema.Struct({
   id: HexId,
   spaceId: HexId,
@@ -81,18 +81,29 @@ export const Relation = Schema.Struct({
     id: HexId,
     name: Schema.NullOr(Schema.String),
   }),
-  toEntity: Schema.Struct({
-    id: HexId,
-    name: Schema.NullOr(Schema.String),
-    types: Schema.Array(EntityType),
-    valuesList: Schema.Array(
-      Schema.Struct({
-        spaceId: HexId,
-        propertyId: HexId,
-        text: Schema.NullOr(Schema.String),
-      })
-    ),
-  }),
+  // `toEntity` is nullable: the indexer returns dangling relations whose target
+  // entity no longer resolves (deleted, or not present in the queried space).
+  // These have no renderable target, so they're dropped at the DTO boundary
+  // (`hasRelationTarget`). Keeping this non-nullable would fail the *entire*
+  // parent entity decode — `relationsList` is a strict array — wiping every
+  // value and relation for any entity that has even one dangling relation.
+  toEntity: Schema.NullOr(
+    Schema.Struct({
+      id: HexId,
+      name: Schema.NullOr(Schema.String),
+      // Each type is decoded as `{ id }` only: `v2_getRenderableEntityType`
+      // consumes the type ids, so the per-type `name` is intentionally not
+      // fetched. (`toEntity.name` above *is* fetched and rendered.)
+      types: Schema.Array(Schema.Struct({ id: HexId })),
+      valuesList: Schema.Array(
+        Schema.Struct({
+          spaceId: HexId,
+          propertyId: HexId,
+          text: Schema.NullOr(Schema.String),
+        })
+      ),
+    })
+  ),
   toSpaceId: Schema.NullOr(Schema.String),
   type: Schema.Struct({
     id: HexId,
@@ -170,6 +181,16 @@ export const Space = Schema.Struct({
     Schema.Struct({
       memberSpaceId: HexId,
     })
+  ),
+
+  // BigInt in GraphQL is delivered as a decimal string. Null for personal
+  // spaces or when the indexer hasn't attached voting settings to a fresh DAO.
+  spaceVotingSetting: Schema.optional(
+    Schema.NullOr(
+      Schema.Struct({
+        flatSupportThreshold: Schema.String,
+      })
+    )
   ),
 
   topic: Schema.optional(Schema.NullOr(Schema.Unknown)),

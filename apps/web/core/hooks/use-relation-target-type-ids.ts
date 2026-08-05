@@ -35,9 +35,13 @@ export function useRelationTargetTypeIds({
     void relationsSnapshot;
     if (!propertyId) return undefined;
 
-    const merged = mergeRelationValueTypesFromStore({ id: propertyId, name: null, dataType: 'RELATION' }, store);
+    const merged = mergeRelationValueTypesFromStore(
+      { id: propertyId, name: null, dataType: 'RELATION' },
+      store,
+      spaceId
+    );
     return merged.relationValueTypes?.length ? merged.relationValueTypes : undefined;
-  }, [propertyId, relationsSnapshot, store]);
+  }, [propertyId, relationsSnapshot, store, spaceId]);
 
   const {
     data: fromNetwork,

@@ -24,7 +24,7 @@ export function useRenderedProperties(entityId: string, spaceId: string) {
     [...values.map(v => v.property.id), ...relations.map(r => r.type.id)].filter(p => !SKIPPED_PROPERTIES.includes(p))
   );
 
-  return useProperties([...uniqueProperties.values()]) ?? {};
+  return useProperties([...uniqueProperties.values()], spaceId) ?? {};
 }
 
 /**
@@ -49,7 +49,7 @@ export function useRenderedPropertiesWithContent(entityId: string, spaceId: stri
     )
   );
 
-  return useProperties([...uniqueProperties.values()]) ?? {};
+  return useProperties([...uniqueProperties.values()], spaceId) ?? {};
 }
 
 export function usePlaceholderProperties(entityId: string, spaceId: string) {

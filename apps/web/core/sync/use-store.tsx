@@ -9,6 +9,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import equal from 'fast-deep-equal';
 
+import type { EntitiesOrderBy } from '../gql/graphql';
 import { getProperties, getProperty } from '../io/queries';
 import { OmitStrict } from '../types';
 import { Entity, Property, Relation, Value } from '../types';
@@ -313,8 +314,11 @@ export function useQueryEntities({
   deferUntilFetched = false,
   includeUnpublishedLocal = false,
   sort,
+  orderBy,
 }: QueryEntitiesOptions & {
-  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
+  /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
+  orderBy?: EntitiesOrderBy[];
 }) {
   const cache = useQueryClient();
   const { store, stream } = useSyncEngine();
@@ -335,10 +339,10 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
+  const { isFetched, isLoading, isPlaceholderData, data, error } = useQuery({
     enabled,
     placeholderData,
-    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null],
+    queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
     queryFn: async () => {
       const { merged, remote, endCursor, hasNextPage } = await E.syncMany({
         store,
@@ -348,6 +352,7 @@ export function useQueryEntities({
         after,
         offset,
         sort,
+        orderBy,
       });
       stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: merged, remoteEntities: remote });
       return { ids: merged.map(e => e.id), endCursor, hasNextPage };
@@ -365,17 +370,17 @@ export function useQueryEntities({
   // inline each render) so the effect only re-runs when the semantic key
   // changes, not on every render.
   const prefetchKeyTail = React.useMemo(
-    () => stableStringify({ where, first, sort: sort ?? null }),
-    [where, first, sort]
+    () => stableStringify({ where, first, sort: sort ?? null, orderBy: orderBy ?? null }),
+    [where, first, sort, orderBy]
   );
   React.useEffect(() => {
     if (!enabled) return;
     if (!prefetchEndCursor) return;
     const nextAfter = prefetchEndCursor;
     cache.prefetchQuery({
-      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null],
+      queryKey: [...GeoStore.queryKeys(where, first, nextAfter, 0), sort ?? null, orderBy ?? null],
       queryFn: async () => {
-        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort });
+        const result = await E.syncMany({ store, cache, where, first, after: nextAfter, offset: 0, sort, orderBy });
         stream.emit({
           type: GeoEventStream.ENTITIES_SYNCED,
           entities: result.merged,
@@ -452,6 +457,12 @@ export function useQueryEntities({
      * the prior page.
      */
     isPlaceholderData,
+    /**
+     * The sync error, if the remote fetch failed. Callers rendering an empty
+     * state need it to tell "nothing matched" from "the query never came back";
+     * a KG timeout otherwise reads as no results.
+     */
+    error,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
   };
@@ -486,13 +497,13 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
       }
 
       // First try the store's getProperty method (works for registered local properties)
-      const storeProperty = store.getProperty(id);
+      const storeProperty = store.getProperty(id, { spaceId });
       if (storeProperty) {
         return storeProperty;
       }
 
       // Fall back to manual reconstruction for existing properties
-      return Properties.reconstructFromStore(id, getValues, getRelations);
+      return Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
     },
     equal
   );
@@ -513,10 +524,11 @@ export function useQueryProperty({ id, spaceId, enabled = true }: QueryEntityOpt
 
 type QueryPropertiesOptions = {
   ids: string[];
+  spaceId?: string;
   enabled?: boolean;
 };
 
-export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptions) {
+export function useQueryProperties({ ids, spaceId, enabled = true }: QueryPropertiesOptions) {
   const { store } = useSyncEngine();
 
   const { data: remoteProperties, isFetched } = useQuery({
@@ -540,14 +552,14 @@ export function useQueryProperties({ ids, enabled = true }: QueryPropertiesOptio
 
       for (const id of ids) {
         // First try the store's getProperty method
-        const storeProperty = store.getProperty(id);
+        const storeProperty = store.getProperty(id, { spaceId });
         if (storeProperty) {
           props.push(storeProperty);
           continue;
         }
 
         // Fall back to manual reconstruction for existing properties
-        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations);
+        const reconstructedProperty = Properties.reconstructFromStore(id, getValues, getRelations, spaceId);
         if (reconstructedProperty) {
           props.push(reconstructedProperty);
         }
@@ -843,4 +855,36 @@ export function getRelation(options: UseRelationParams) {
   }
 
   return found ? resolveRelationNames(found) : null;
+}
+
+/**
+ * Space-aware relation lookup for data block cells. Returns a single Relation
+ * preferring the current space, falling back to any space.
+ *
+ * Use this instead of useRelation when rendering data that may originate from
+ * a different space than the one being viewed — the store accumulates relations
+ * from every visited space, so an unscoped selector can match another space's
+ * relation. Entity pages should use useRelation with a strict spaceId filter
+ * instead — they want null when the relation doesn't exist in the current space.
+ */
+export function useSpaceAwareRelation(options: { selector: (r: Relation) => boolean; spaceId: string }) {
+  const { selector, spaceId } = options;
+
+  const relation = useSelector(
+    reactive,
+    () => {
+      let fallback: Relation | null = null;
+
+      for (const r of reactiveRelations.get()) {
+        if (r.isDeleted || !selector(r)) continue;
+        if (r.spaceId === spaceId) return resolveRelationNames(r);
+        fallback ??= r;
+      }
+
+      return fallback ? resolveRelationNames(fallback) : null;
+    },
+    equal
+  );
+
+  return relation;
 }

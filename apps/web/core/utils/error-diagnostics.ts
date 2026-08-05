@@ -23,6 +23,92 @@ export function describeError(error: unknown): string {
   return String(error ?? 'Unknown error');
 }
 
+// Next.js/webpack code-split failures show up under a few different messages
+// depending on browser. `error loading dynamically imported module` is the
+// native ESM variant; the rest are webpack's.
+const CHUNK_ERROR_RE =
+  /ChunkLoadError|Loading chunk|Failed to load chunk|error loading dynamically imported module|Importing a module script failed/i;
+
+/**
+ * A code-split chunk failed to download. The loaded app is stale (a deploy
+ * usually landed while the tab was open) or the network dropped the request.
+ * Retrying the same dynamic import won't help — only a full reload fetches the
+ * new chunk manifest. Walks the cause chain since the chunk error is often
+ * wrapped (e.g. inside a `TransactionWriteFailedError`).
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (current.name === 'ChunkLoadError' || CHUNK_ERROR_RE.test(current.message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
+/**
+ * Whether an error (or anything in its cause chain) is a wallet user-rejection.
+ * Callers reset quietly instead of raising the error modal — a deliberate cancel
+ * isn't a failure to surface or investigate. Walks the cause chain since the
+ * original error is nested via `{ cause }`.
+ */
+export function isUserRejection(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (current.name === 'UserRejectedRequestError' || /user rejected/i.test(current.message)) {
+      return true;
+    }
+    current = current.cause;
+  }
+  return false;
+}
+
+export const RELOAD_REQUIRED_MESSAGE =
+  'A new version of Geo was released or the connection dropped while loading. Please reload the page and try again.';
+
+/**
+ * Privy's embedded wallet throws "Unable to connect to wallet" when it can't
+ * recover the session (expired token, lost iframe, long-backgrounded tab). viem
+ * then buries it under a generic `UnknownRpcError` ("An unknown RPC error
+ * occurred"), so the real reason ends up at the bottom of the cause chain where
+ * nobody reads it. Detect it anywhere in the chain so we can lead with it.
+ */
+const WALLET_CONNECTION_ERROR_RE = /unable to connect to wallet/i;
+
+export function isWalletConnectionError(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; current instanceof Error && depth < 10; depth++) {
+    if (WALLET_CONNECTION_ERROR_RE.test(current.message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
+
+export const WALLET_CONNECTION_MESSAGE =
+  'Your wallet session expired or disconnected. Please reload the page and try again.';
+
+/**
+ * Turn a caught error into the message + optional retry action for the global
+ * toast. Chunk-load and wallet-connection failures get a clear, actionable
+ * message instead of the wrapper's label (which would otherwise blame e.g. IPFS
+ * for a stale bundle, or bury a dead wallet session under viem's "unknown RPC
+ * error"); everything else falls through to the unwrapped cause chain.
+ */
+export function toUserFacingError(error: unknown, prefix = ''): { message: string; retry?: () => void } {
+  if (isChunkLoadError(error)) {
+    return {
+      message: RELOAD_REQUIRED_MESSAGE,
+      retry: typeof window !== 'undefined' ? () => window.location.reload() : undefined,
+    };
+  }
+  if (isWalletConnectionError(error)) {
+    return {
+      message: WALLET_CONNECTION_MESSAGE,
+      retry: typeof window !== 'undefined' ? () => window.location.reload() : undefined,
+    };
+  }
+  return { message: `${prefix}${describeError(error)}` };
+}
+
 /**
  * Diagnostics gathered when the user copies an error from the global toast.
  * Designed to be safe to share with the dev team — no wallet keys or

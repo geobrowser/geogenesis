@@ -43,6 +43,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json(result);
   } catch (e) {
     console.error(`space participants ${kind}`, { spaceId, offset, limit, error: e });
-    return NextResponse.json({ participants: [], totalCount: 0, nextOffset: null });
+    // A non-2xx status lets the client's fetch wrapper throw so React Query
+    // retries, instead of caching an empty page as a terminal result.
+    return NextResponse.json({ error: 'failed to fetch space participants' }, { status: 502 });
   }
 }

@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { personalSpaceViewed } from '~/core/analytics';
@@ -20,6 +20,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
 import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import {
+  activeRequestedSpacesForOwner,
+  reconcileRequestedSpaces,
+  requestedMembershipSpacesAtom,
+} from '~/core/state/requested-membership';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils, getImagePath } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -28,6 +35,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { GeoLogoLarge } from '~/design-system/icons/geo-logo-large';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { avatarAtom } from '~/partials/onboarding/dialog';
 
 import { loadBrowseSidebarData } from './load-browse-sidebar-data';
 
@@ -120,12 +129,20 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
   const address = smartAccount?.account.address;
   const isSignedIn = !!address;
   const { profile } = useGeoProfile(address);
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
   const pathname = usePathname() ?? '';
 
   const isExplore = pathname === '/explore' || pathname.startsWith('/explore/');
   const isRoot = pathname === '/root';
   const isGovernance = pathname === '/home' || pathname.startsWith('/home/');
-  const personalHref = personalSpaceId ? NavUtils.toSpace(personalSpaceId) : null;
+  // Optimistic: link to the navigable `pending:` page until the real spaceId lands.
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+  const personalAvatar = profile?.avatarUrl || (isPending ? pendingAvatar : '');
   const isPersonal = !!personalHref && pathname === personalHref;
   const docHref = NavUtils.toEntity(DOCUMENTATION_SPACE_ID, DOCUMENTATION_SPACE_ENTITY_ID);
   const isDoc = pathname.startsWith(`/space/${DOCUMENTATION_SPACE_ID}`);
@@ -140,22 +157,24 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         />
         <span>Explore</span>
       </Link>
-      {personalSpaceId && personalHref ? (
+      {personalHref ? (
         <Link
           href={personalHref}
           className={isPersonal ? navLinkActive : navLinkIdle}
-          onClick={() =>
-            personalSpaceViewed(personalSpaceId, {
-              navigation_source: 'browse_sidebar_primary',
-              page_path: pathname,
-            })
-          }
+          onClick={() => {
+            if (personalSpaceId) {
+              personalSpaceViewed(personalSpaceId, {
+                navigation_source: 'browse_sidebar_primary',
+                page_path: pathname,
+              });
+            }
+          }}
         >
           <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-            {profile?.avatarUrl ? (
-              <FallbackImage value={profile.avatarUrl} sizes="32px" className="object-cover" />
+            {personalAvatar ? (
+              <FallbackImage value={personalAvatar} sizes="32px" className="object-cover" />
             ) : (
-              <Avatar size={16} avatarUrl={null} value={address ?? personalSpaceId} square />
+              <Avatar size={16} avatarUrl={null} value={address ?? personalSpaceId ?? topicId ?? ''} square />
             )}
           </span>
           <span>Personal space</span>
@@ -211,8 +230,11 @@ function SpaceRowLink({ row }: { row: BrowseSpaceRow }) {
       )}
     >
       <SpaceRowThumb row={row} />
-      <span className="min-w-0 flex-1 overflow-hidden">
+      <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
         <p className="-my-0.5 truncate leading-5">{row.name}</p>
+        {row.pendingLabel ? (
+          <p className="truncate text-browseSection leading-4 text-grey-04 not-italic">{row.pendingLabel}</p>
+        ) : null}
       </span>
     </Link>
   );
@@ -281,6 +303,46 @@ export function BrowseSidebar() {
     staleTime: 60_000,
   });
   const personalSpaceId = data?.personalSpaceId ?? personalSpaceIdFromHook;
+
+  // Optimistic, persisted bridge: spaces requested this session (from anywhere)
+  // show under "Member of" as "Membership pending" until the server-fetched data
+  // reports them, which then wins via id dedup. Scoped to this account (never
+  // leaks across accounts) and expired entries drop out.
+  const allRequestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
+  const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
+  const requestedSpaces = React.useMemo(
+    () => activeRequestedSpacesForOwner(allRequestedSpaces, personalSpaceId, Date.now()),
+    [allRequestedSpaces, personalSpaceId]
+  );
+
+  const serverTrackedIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const row of data?.editorOf ?? []) ids.add(normId(row.id));
+    for (const row of data?.memberOf ?? []) ids.add(normId(row.id));
+    return ids;
+  }, [data?.editorOf, data?.memberOf]);
+
+  // Persist reconciliation: drop expired entries and this account's entries the
+  // server now tracks (pending row, member, or editor) so localStorage self-cleans.
+  React.useEffect(() => {
+    setRequestedSpaces(prev => reconcileRequestedSpaces(prev, personalSpaceId, serverTrackedIds, Date.now()));
+  }, [serverTrackedIds, setRequestedSpaces, personalSpaceId]);
+
+  const memberOfRows = React.useMemo<BrowseSpaceRow[]>(() => {
+    const base = data?.memberOf ?? [];
+    if (requestedSpaces.length === 0) return base;
+    const extras: BrowseSpaceRow[] = [];
+    for (const space of requestedSpaces) {
+      if (serverTrackedIds.has(normId(space.id))) continue;
+      extras.push({
+        id: space.id,
+        name: space.name ?? space.id.slice(0, 8),
+        image: space.image ?? null,
+        pendingLabel: 'Membership pending',
+      });
+    }
+    return [...base, ...extras];
+  }, [data?.memberOf, requestedSpaces, serverTrackedIds]);
 
   React.useEffect(() => {
     if (!data?.personalSpaceId) return;
@@ -362,22 +424,12 @@ export function BrowseSidebar() {
             </CollapsibleSection>
             <CollapsibleSection title="Editor of" hidden={data.editorOf.length === 0}>
               {data.editorOf.map(row => (
-                <div key={row.id}>
-                  <SpaceRowLink row={row} />
-                  {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseSection text-grey-04 not-italic">{row.pendingLabel}</p>
-                  ) : null}
-                </div>
+                <SpaceRowLink key={row.id} row={row} />
               ))}
             </CollapsibleSection>
-            <CollapsibleSection title="Member of" hidden={data.memberOf.length === 0}>
-              {data.memberOf.map(row => (
-                <div key={row.id}>
-                  <SpaceRowLink row={row} />
-                  {row.pendingLabel ? (
-                    <p className="px-2 pb-1 pl-9 text-browseSection text-grey-04 not-italic">{row.pendingLabel}</p>
-                  ) : null}
-                </div>
+            <CollapsibleSection title="Member of" hidden={memberOfRows.length === 0}>
+              {memberOfRows.map(row => (
+                <SpaceRowLink key={row.id} row={row} />
               ))}
             </CollapsibleSection>
           </>

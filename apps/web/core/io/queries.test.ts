@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSearchPath, groupRestResults, hasDefaultSearchExcludedType } from './queries';
+import {
+  buildSearchPath,
+  groupRestResults,
+  hasDefaultSearchExcludedType,
+  shouldIncludeRestSearchResult,
+} from './queries';
 
 describe('buildSearchPath', () => {
   const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
@@ -37,6 +42,42 @@ describe('buildSearchPath', () => {
     const alreadyHyphenated = 'a19c345a-b986-6679-b001-d7d2138d88a1';
     const path = buildSearchPath({ query: 'q', additionalSpaceIds: [alreadyHyphenated] });
     expect(path).toContain('additional_space_ids=a19c345a-b986-6679-b001-d7d2138d88a1');
+  });
+
+  it('emits include_non_canonical only when the request scopes no additional spaces', () => {
+    // Unscoped: the server filters. A client-side gate would only see the endpoint's
+    // first 100 rows, which for a type dominated by non-canonical entities can contain
+    // zero canonical ones — the Explore community-calls digest went empty that way.
+    expect(buildSearchPath({ query: 'q', includeNonCanonical: false })).toBe(
+      '/search?query=q&limit=10&offset=0&include_non_canonical=false'
+    );
+
+    // Only `false` filters; `true` and omitted both mean "no server-side filter".
+    expect(buildSearchPath({ query: 'q', includeNonCanonical: true })).toBe('/search?query=q&limit=10&offset=0');
+    expect(buildSearchPath({ query: 'q' })).toBe('/search?query=q&limit=10&offset=0');
+  });
+
+  it('suppresses include_non_canonical when additional_space_ids is in play', () => {
+    // The endpoint ignores additional_space_ids when include_non_canonical=false, so
+    // sending both drops the scoped spaces entirely — the regression #1949 fixed.
+    const path = buildSearchPath({ query: 'q', includeNonCanonical: false, additionalSpaceIds: [ROOT] });
+
+    expect(path).toContain('additional_space_ids=');
+    expect(path).not.toContain('include_non_canonical');
+  });
+
+  it('still emits include_non_canonical when additional space ids are dropped for SPACE_SINGLE', () => {
+    // space_id wins over additionalSpaceIds, so nothing is being widened and the
+    // server-side filter is safe again.
+    const path = buildSearchPath({
+      query: 'q',
+      includeNonCanonical: false,
+      spaceId: ROOT,
+      additionalSpaceIds: [ROOT],
+    });
+
+    expect(path).not.toContain('additional_space_ids=');
+    expect(path).toContain('include_non_canonical=false');
   });
 
   it('omits additional_space_ids when space_id is set (SPACE_SINGLE scope)', () => {
@@ -133,5 +174,54 @@ describe('hasDefaultSearchExcludedType', () => {
 
   it('does not match non-excluded type ids', () => {
     expect(hasDefaultSearchExcludedType([{ id: '11111111-1111-1111-1111-111111111111' }])).toBe(false);
+  });
+});
+
+describe('shouldIncludeRestSearchResult canonical gating', () => {
+  const SCOPED = 'a19c345ab9866679b001d7d2138d88a1';
+  const result = (overrides: Partial<{ inCanonicalGraph: boolean; spaceId: string }>) => ({
+    entityId: '11111111-1111-1111-1111-111111111111',
+    space: { id: overrides.spaceId ?? 'cccccccc-cccc-cccc-cccc-cccccccccccc' },
+    inCanonicalGraph: overrides.inCanonicalGraph,
+  });
+  const gate = { canonicalOnly: true, scopedSpaceIds: new Set([SCOPED]) };
+
+  it('keeps canonical-graph results', () => {
+    expect(shouldIncludeRestSearchResult(result({ inCanonicalGraph: true }), gate)).toBe(true);
+  });
+
+  it('keeps non-canonical results whose space is scoped (hex vs hyphenated match)', () => {
+    expect(
+      shouldIncludeRestSearchResult(
+        result({ inCanonicalGraph: false, spaceId: 'a19c345a-b986-6679-b001-d7d2138d88a1' }),
+        gate
+      )
+    ).toBe(true);
+  });
+
+  it('drops non-canonical out-of-scope results when canonical-only', () => {
+    expect(shouldIncludeRestSearchResult(result({ inCanonicalGraph: false }), gate)).toBe(false);
+    // Absent flag is treated as non-canonical.
+    expect(shouldIncludeRestSearchResult(result({}), gate)).toBe(false);
+  });
+
+  it('keeps everything (subject to type exclusion) when not canonical-only', () => {
+    expect(
+      shouldIncludeRestSearchResult(result({ inCanonicalGraph: false }), {
+        canonicalOnly: false,
+        scopedSpaceIds: new Set(),
+      })
+    ).toBe(true);
+    expect(shouldIncludeRestSearchResult(result({ inCanonicalGraph: false }))).toBe(true);
+  });
+
+  it('still excludes blocked types even when canonical', () => {
+    const blockResult = {
+      entityId: '11111111-1111-1111-1111-111111111111',
+      space: { id: 'cccccccc-cccc-cccc-cccc-cccccccccccc' },
+      inCanonicalGraph: true,
+      types: [{ id: 'b8803a86-65de-412b-bb35-7e0c84adf473' }],
+    };
+    expect(shouldIncludeRestSearchResult(blockResult, gate)).toBe(false);
   });
 });

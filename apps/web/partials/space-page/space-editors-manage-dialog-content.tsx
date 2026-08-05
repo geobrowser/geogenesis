@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { useProposeRemoveEditor } from '~/core/hooks/use-propose-remove-editor';
+import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 import {
   type SpaceParticipantProfile,
   useInfiniteScrollSentinel,
@@ -17,11 +18,16 @@ import { MemberRow } from './space-member-row';
 
 interface Props {
   spaceId: string;
+  initialParticipantsPage?: SpaceParticipantsPage;
 }
 
-export function SpaceEditorsManageDialogContent({ spaceId }: Props) {
+export function SpaceEditorsManageDialogContent({ spaceId, initialParticipantsPage }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
-    useSpaceParticipantsInfinite({ spaceId, kind: 'editors' });
+    useSpaceParticipantsInfinite({
+      spaceId,
+      kind: 'editors',
+      initialPage: initialParticipantsPage,
+    });
 
   const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 

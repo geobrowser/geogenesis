@@ -9,6 +9,7 @@ type SelectEntityAsPopoverBaseProps = {
   entityId: string;
   spaceId?: string;
   verified?: boolean;
+  showVerified?: boolean;
   onDone: (result: { id: string; name: string | null; space?: string; verified?: boolean }) => void;
 };
 
@@ -24,6 +25,7 @@ export function SelectSpaceAsPopover({
   entityId,
   spaceId,
   verified,
+  showVerified,
   open,
   onOpenChange,
 }: SelectEntityAsPopoverProps) {
@@ -39,7 +41,14 @@ export function SelectSpaceAsPopover({
           className="relative z-100 focus:outline-hidden"
           avoidCollisions={false}
         >
-          <SelectSpace entityId={entityId} spaceId={spaceId} verified={verified} onDone={onDone} variant="floating" />
+          <SelectSpace
+            entityId={entityId}
+            spaceId={spaceId}
+            verified={verified}
+            showVerified={showVerified}
+            onDone={onDone}
+            variant="floating"
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

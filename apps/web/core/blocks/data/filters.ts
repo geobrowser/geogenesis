@@ -245,9 +245,7 @@ export function parseFiltersSync(filterString: string | null): FilterStateResult
               valueType: 'RELATION',
               value: typed.is,
               valueName: null,
-              ...(ID.equals(key, SystemIds.TYPES_PROPERTY) && typed.space
-                ? { typesRelationSpaceId: typed.space }
-                : {}),
+              ...(ID.equals(key, SystemIds.TYPES_PROPERTY) && typed.space ? { typesRelationSpaceId: typed.space } : {}),
             });
           }
         }

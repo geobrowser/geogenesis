@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Relation, TabEntity } from '~/core/types';
+import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
@@ -41,13 +42,16 @@ export type RouteEntityPageBodyProps = SharedProps & {
   showHeading?: boolean;
   showHeader?: boolean;
   serverRelations: Relation[];
-  canClaimTopic?: boolean;
   notice?: React.ReactNode;
+  coverSlot?: React.ReactNode;
 };
 
 export type SidePanelEntityPageBodyProps = SharedProps & {
   variant: 'sidePanel';
   isRelationPage?: boolean;
+  previewImageUrl?: string | null;
+  previewName?: string | null;
+  previewDescription?: string | null;
 };
 
 export type EntityPageBodyProps = RouteEntityPageBodyProps | SidePanelEntityPageBodyProps;
@@ -119,6 +123,19 @@ function EditorFooter({
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
 
+  const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
+  const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
+  const previewImageResolvedUrl = useImageUrlFromEntity(
+    previewImageUrl && !previewImageUrl.startsWith('ipfs://') && !previewImageUrl.startsWith('http')
+      ? previewImageUrl
+      : undefined,
+    spaceId
+  );
+  const previewImageUrlResolved =
+    previewImageUrl?.startsWith('ipfs://') || previewImageUrl?.startsWith('http')
+      ? previewImageUrl
+      : (previewImageResolvedUrl ?? previewImageUrl);
+
   const tabsSection = (
     <EntityTabsSection
       entityId={entityId}
@@ -129,19 +146,25 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   );
 
   if (props.variant === 'sidePanel') {
-    const { isRelationPage = false } = props;
+    const { isRelationPage = false, previewName, previewDescription } = props;
+    const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
 
     return (
       <div className="px-4 pt-6 pb-12 sm:px-5">
-        <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} fitImage />
+        <EntityPageCover avatarUrl={avatarUrl} coverUrl={props.coverUrl} fitImage />
         <EntityPageContentContainer>
           <div>
             <div className="space-y-2">
               <div className={sidePanelHeadingClassName}>
-                <EditableHeading spaceId={spaceId} entityId={entityId} />
+                <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />
               </div>
               {!isRelationPage && (
-                <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} truncate={false} />
+                <EntityPageInlineDescription
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  truncate={false}
+                  fallbackDescription={previewDescription}
+                />
               )}
               {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
             </div>
@@ -155,19 +178,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     );
   }
 
-  const {
-    showCover = true,
-    showHeading = true,
-    showHeader = true,
-    serverRelations,
-    canClaimTopic = false,
-    notice = null,
-  } = props;
+  const { showCover = true, showHeading = true, showHeader = true, serverRelations, notice = null, coverSlot } = props;
   const showSpacer = showCover || showHeading || showHeader;
 
   return (
     <>
-      {showCover && <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />}
+      {showCover && (coverSlot ?? <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />)}
       <EntityPageContentContainer>
         <EntityPageHeader
           showHeading={showHeading}
@@ -175,8 +191,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           entityId={entityId}
           spaceId={spaceId}
           serverRelations={serverRelations}
-          canClaimTopic={canClaimTopic}
-          coverUrl={props.coverUrl}
         />
         <Spacer height={24} />
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />

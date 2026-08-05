@@ -6,11 +6,12 @@ import { isTelemetryEnabled, telemetryDsn } from '~/core/telemetry/config';
 
 initAnalytics();
 
-const tracePropagationTargets = [
+const tracePropagationTargets: (string | RegExp)[] = [
   /^\/api\//,
   /^\/monitoring$/,
-  Environment.variables.apiEndpoint,
-  Environment.variables.apiEndpointTestnet,
+  // The active network's API endpoint (mainnet apiEndpoint is optional now, so
+  // listing both raw vars would inject undefined on testnet-only configs).
+  Environment.getConfig().api,
 ];
 
 if (isTelemetryEnabled) {

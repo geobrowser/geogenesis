@@ -2,22 +2,19 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import type { HTMLMotionProps } from 'framer-motion';
 
 import { colors } from './theme/colors';
 
 type ToggleProps = {
   checked: boolean;
-} & HTMLMotionProps<'div'>;
+} & React.ComponentPropsWithoutRef<'div'>;
 
 export const Toggle = ({ checked, className = '', ...rest }: ToggleProps) => {
   return (
     <div
       className={cx('relative inline-flex h-2.5 w-4 items-center rounded-full p-px', className)}
       style={{
-        // @ts-expect-error idk
         backgroundColor: checked ? colors.light.text : colors.light['grey-03'],
-        // @ts-expect-error idk
         justifyContent: checked ? 'flex-end' : 'flex-start',
       }}
       {...rest}

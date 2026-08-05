@@ -1,6 +1,6 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,9 +20,11 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
-import { describeError } from '~/core/utils/error-diagnostics';
+import { toUserFacingError } from '~/core/utils/error-diagnostics';
 import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
@@ -43,17 +45,22 @@ function getCommentName(markdown: string): string {
   return plain.slice(0, 20).trimEnd() + '...';
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
 export function useCreateComment(targetEntityId: string) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -143,7 +150,13 @@ export function useCreateComment(targetEntityId: string) {
       }
 
       if (!personalSpaceId) {
-        setToast(<span>Personal space required to comment. Please complete onboarding.</span>);
+        setToast(
+          <span>
+            {isAccountSetupPending
+              ? 'Your account is still finishing setup — try again in a moment.'
+              : 'Personal space required to comment. Please complete onboarding.'}
+          </span>
+        );
         return null;
       }
 
@@ -310,12 +323,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Comment: ${commentName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -360,8 +372,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Publish failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to publish comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to publish comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return null;
         }
@@ -455,15 +467,15 @@ export function useCreateComment(targetEntityId: string) {
         return commentEntityId;
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to create comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return null;
       } finally {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, personalSpaceId, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
@@ -539,12 +551,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Edit comment: ${newName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -585,8 +596,8 @@ export function useCreateComment(targetEntityId: string) {
           }
 
           console.error('[useCreateComment] Edit failed:', err);
-          const message = describeError(err);
-          reportError(`Failed to edit comment: ${message}`);
+          const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+          reportError(message, retry);
           setError(err as Error);
           return false;
         }
@@ -600,8 +611,8 @@ export function useCreateComment(targetEntityId: string) {
         return true;
       } catch (err) {
         console.error('[useCreateComment] Error editing comment:', err);
-        const message = describeError(err);
-        reportError(`Failed to edit comment: ${message}`);
+        const { message, retry } = toUserFacingError(err, 'Failed to edit comment: ');
+        reportError(message, retry);
         setError(err as Error);
         return false;
       } finally {

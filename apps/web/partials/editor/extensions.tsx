@@ -18,6 +18,7 @@ import { ImageNode } from './image-node';
 import { InlineCode } from './inline-code';
 import { MathNode } from './math-node';
 import { ParagraphNode } from './paragraph-node';
+import { RankingNode } from './ranking-node';
 import { TrailingNode } from './trailing-node';
 import { VideoNode } from './video-node';
 import { Web2URLExtension } from './web2-url-extension';
@@ -53,6 +54,7 @@ export const tiptapExtensions = [
   CodeBlockNode,
   MathNode,
   DataNode,
+  RankingNode,
   ImageNode,
   VideoNode,
   // mode: 'deepest' tags only the leaf node, not the wrapper chain. With

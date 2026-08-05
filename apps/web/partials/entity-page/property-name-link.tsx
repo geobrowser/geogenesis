@@ -51,9 +51,10 @@ function PropertyNameLinkWithTooltip({ property, spaceId }: Pick<PropertyNameLin
   const description =
     descriptionValues.find(v => v.spaceId === spaceId)?.value.trim() ??
     descriptionValues
-      .reduce<
-        (typeof descriptionValues)[number] | null
-      >((best, v) => (best === null || getSpaceRank(v.spaceId) < getSpaceRank(best.spaceId) ? v : best), null)
+      .reduce<(typeof descriptionValues)[number] | null>(
+        (best, v) => (best === null || getSpaceRank(v.spaceId) < getSpaceRank(best.spaceId) ? v : best),
+        null
+      )
       ?.value.trim() ??
     '';
   const link = <PropertyNameLinkBase property={property} spaceId={spaceId} />;

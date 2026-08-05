@@ -1,13 +1,15 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useSelector } from '@xstate/store/react';
 
 import * as React from 'react';
 
-import { useSelector } from '@xstate/store/react';
 import equal from 'fast-deep-equal';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reactiveRelations } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -16,14 +18,14 @@ import { store } from '~/core/sync/use-sync-engine';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
-import { useDataBlockInstance } from './use-data-block';
-import { useMapping } from './use-mapping';
 import {
   columnPropertyIdFromRelation,
   dedupeRelationsByColumnProperty,
   isShownColumnRelation,
   relationsMatchingColumnProperty,
 } from './shown-column-relations';
+import { useDataBlockInstance } from './use-data-block';
+import { useMapping } from './use-mapping';
 
 export { columnPropertyIdFromRelation } from './shown-column-relations';
 
@@ -43,8 +45,7 @@ export function useView() {
   });
 
   const { blockRelations } = useEditorStoreLite();
-  const blocksRelationEntityId =
-    relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
+  const blocksRelationEntityId = relationId || blockRelations.find(r => r.toEntity.id === entityId)?.entityId || '';
 
   // Read shown-column / view config from the reactive sync store only
   const { blockRelationRelations, blockRelationName } = useSelector(
@@ -61,10 +62,7 @@ export function useView() {
     equal
   );
 
-  const viewRelation = React.useMemo(
-    () => selectViewRelation(blockRelationRelations),
-    [blockRelationRelations]
-  );
+  const viewRelation = React.useMemo(() => selectViewRelation(blockRelationRelations), [blockRelationRelations]);
 
   const shownColumnRelations = React.useMemo(
     () => dedupeRelationsByColumnProperty(blockRelationRelations.filter(isShownColumnRelation)),
@@ -94,10 +92,7 @@ export function useView() {
     [rawMapping, allowedMappingPropertyIds]
   );
 
-  const shownColumnIds = [
-    SystemIds.NAME_PROPERTY,
-    ...orderedShownColumnRelations.map(columnPropertyIdFromRelation),
-  ];
+  const shownColumnIds = [SystemIds.NAME_PROPERTY, ...orderedShownColumnRelations.map(columnPropertyIdFromRelation)];
 
   const view = getView(viewRelation);
   const placeholder = getPlaceholder(blockEntity, view);
@@ -111,6 +106,15 @@ export function useView() {
     return generated ?? undefined;
   }, [shownColumnRelations]);
 
+  /** Insert a newly shown column before existing ones (used when selecting main Image/Video). */
+  const firstPropertiesColumnPosition = React.useCallback((): string | undefined => {
+    const sorted = [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+    const first = sorted[0]?.position;
+    const firstStr = typeof first === 'string' && first.length > 0 ? first : null;
+    const generated = Position.generateBetween(null, firstStr);
+    return generated ?? undefined;
+  }, [shownColumnRelations]);
+
   const setView = React.useCallback(
     async (newView: DataBlockViewDetails) => {
       if (newView.value === view || !blocksRelationEntityId) return;
@@ -120,28 +124,19 @@ export function useView() {
       );
       const primary = selectViewRelation(blockRelationRelations);
 
+      // Delete the old view relation and create a fresh one instead of mutating
+      // toEntity in place: publishing re-emits a non-deleted relation as a
+      // createRelation with its original id, so an in-place target change re-creates
+      // an already-committed relation and the backend ignores it.
       for (const rel of activeViewRelations) {
-        if (rel.id !== primary?.id) {
-          storage.relations.delete(rel);
-        }
-      }
-
-      if (primary) {
-        storage.relations.update(primary, draft => {
-          draft.toEntity = {
-            id: newView.id,
-            name: newView.name,
-            value: newView.id,
-          };
-        });
-        return;
+        storage.relations.delete(rel);
       }
 
       storage.relations.set({
         id: IdUtils.generate(),
         entityId: IdUtils.generate(),
         spaceId,
-        position: Position.generate(),
+        position: primary?.position ?? Position.generate(),
         renderableType: 'RELATION',
         type: {
           id: SystemIds.VIEW_PROPERTY,
@@ -167,13 +162,15 @@ export function useView() {
     }
   };
 
-  const toggleProperty = (newColumn: Column, selector?: string) => {
+  const toggleProperty = (newColumn: Column, selector?: string, options?: { insertAt?: 'start' | 'end' }) => {
     const propertyId = EntityId(newColumn.id);
     const matchingShownRelations = relationsMatchingColumnProperty(blockRelationRelations, propertyId).filter(
       r => !r.isDeleted
     );
     const isShown = matchingShownRelations.length > 0;
     const shownColumnRelation = matchingShownRelations[0];
+    const columnPosition =
+      options?.insertAt === 'start' ? firstPropertiesColumnPosition() : nextPropertiesColumnPosition();
 
     const newId = selector ? ID.createEntityId() : undefined;
     const newRelationEntityId = IdUtils.generate();
@@ -236,7 +233,7 @@ export function useView() {
           id: newId,
           entityId: newRelationEntityId,
           spaceId: spaceId,
-          position: nextPropertiesColumnPosition(),
+          position: columnPosition,
           renderableType: 'RELATION',
           type: {
             id: SystemIds.PROPERTIES,
@@ -265,7 +262,7 @@ export function useView() {
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
-        position: nextPropertiesColumnPosition(),
+        position: columnPosition,
         renderableType: 'RELATION',
         type: {
           id: SystemIds.PROPERTIES,
@@ -291,6 +288,42 @@ export function useView() {
       storage.relations.delete(rel);
     }
   }, [blockRelationRelations, storage]);
+
+  /**
+ pr   * Persist the ordering of the block's shown columns. Only repositions columns
+   * that are already shown — reordering never adds or removes columns. This lets
+   * surfaces that display every property (e.g. the Power Tool) reorder columns
+   * without materializing shown-column relations for hidden properties, which
+   * would otherwise reset the source table's property-visibility state. Name is
+   * implicit (always first) and never persisted.
+   */
+  const setShownColumnOrder = React.useCallback(
+    (columns: Column[]) => {
+      if (!blocksRelationEntityId) return;
+
+      const active = dedupeRelationsByColumnProperty(blockRelationRelations.filter(isShownColumnRelation));
+      const relationByPropertyId = new Map(active.map(r => [ID.uuidToHex(columnPropertyIdFromRelation(r)), r]));
+
+      let cursor: string | null = null;
+      for (const column of columns) {
+        if (ID.equals(column.id, SystemIds.NAME_PROPERTY)) continue;
+
+        const existing = relationByPropertyId.get(ID.uuidToHex(column.id));
+        if (!existing) continue;
+
+        const position = Position.generateBetween(cursor, null);
+        if (!position) continue;
+        cursor = position;
+
+        if (existing.position !== position) {
+          storage.relations.update(existing, draft => {
+            draft.position = position;
+          });
+        }
+      }
+    },
+    [blockRelationRelations, blocksRelationEntityId, storage]
+  );
 
   const reorderShownPropertyRelations = React.useCallback(
     (fromIndex: number, toIndex: number) => {
@@ -324,11 +357,12 @@ export function useView() {
     toggleProperty,
     hideAllShownPropertyColumns,
     reorderShownPropertyRelations,
+    setShownColumnOrder,
     mapping,
   };
 }
 
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST';
+export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'EXPLORE' | 'PILL';
 
 function selectViewRelation(relations: Relation[]): Relation | undefined {
   const views = relations.filter(r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted);
@@ -352,6 +386,8 @@ const getView = (viewRelation: Relation | undefined): DataBlockView => {
   if (ID.equals(targetId, SystemIds.LIST_VIEW)) return 'LIST';
   if (ID.equals(targetId, SystemIds.GALLERY_VIEW)) return 'GALLERY';
   if (ID.equals(targetId, SystemIds.BULLETED_LIST_VIEW)) return 'BULLETED_LIST';
+  if (ID.equals(targetId, DATA_BLOCK_VIEW_EXPLORE_ID)) return 'EXPLORE';
+  if (ID.equals(targetId, RANKING_VIEW_PILL_ID)) return 'PILL';
 
   return 'TABLE';
 };
@@ -391,6 +427,14 @@ const DEFAULT_PLACEHOLDERS: Record<DataBlockView, { text: string; image: string 
   },
   BULLETED_LIST: {
     text: 'Add your first bullet item to get started',
+    image: '/list.png',
+  },
+  EXPLORE: {
+    text: 'Add your first story to get started',
+    image: '/list.png',
+  },
+  PILL: {
+    text: 'Add your first pill to get started',
     image: '/list.png',
   },
 };

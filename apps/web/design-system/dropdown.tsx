@@ -43,10 +43,12 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
   // Using a controlled state to enable exit animations with framer-motion
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: adaptiveAlign, side } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 240,
     gap: 8,
+    contentElement,
   });
   const resolvedAlign = align === 'center' ? 'center' : (align ?? adaptiveAlign);
   const onDropdownWheel = React.useCallback((e: React.WheelEvent<HTMLDivElement>) => {
@@ -66,6 +68,7 @@ export const Dropdown = ({ trigger, align, scrollableList = false, options }: Pr
         </DropdownPrimitive.Trigger>
       </span>
       <DropdownPrimitive.Content
+        ref={setContentElement}
         align={resolvedAlign}
         side={side}
         sideOffset={6}

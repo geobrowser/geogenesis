@@ -269,7 +269,8 @@ async function fetchEntitiesWithRelations(
 
 export async function getSchemaFromTypeIds(
   types: { id: string; spaceId?: string }[],
-  filterSpaceIds?: string[]
+  filterSpaceIds?: string[],
+  options?: { includeAllTypeSpaces?: boolean }
 ): Promise<Property[]> {
   if (types.length === 0) return [...DEFAULT_ENTITY_SCHEMA];
 
@@ -277,15 +278,30 @@ export async function getSchemaFromTypeIds(
   const spaceByType = new Map(typesInEntityOrder.map(t => [t.id, t.spaceId]));
   const dedupedTypeIds = typesInEntityOrder.map(t => t.id);
 
-  const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, spaceByType);
+  // A scoped fetch filters relations to that space at the merge layer
+  // (E.merge), which would leave nothing for the non-primary space
+  // iterations. Fetch unscoped when unioning; typeSpaceId below still pins
+  // the primary-space ordering.
+  const fetchSpaceByType = options?.includeAllTypeSpaces
+    ? new Map<string, string | undefined>(dedupedTypeIds.map(id => [id, undefined]))
+    : spaceByType;
+
+  const typeEntities = await fetchEntitiesWithRelations(dedupedTypeIds, fetchSpaceByType);
   const typeEntitiesOrdered = orderEntitiesByIdList(dedupedTypeIds, typeEntities);
 
   const nativePropertyIds = typeEntitiesOrdered.flatMap(entity => {
     const typeSpaceId = spaceByType.get(entity.id) ?? entity.spaces[0];
-    const props = entity.relations.filter(
-      r => r.type.id === SystemIds.PROPERTIES && (typeSpaceId ? r.spaceId === typeSpaceId : true)
-    );
-    return sortRelations(props).map(r => r.toEntity.id);
+    const props = entity.relations.filter(r => r.type.id === SystemIds.PROPERTIES);
+    const primarySpaceProps = sortRelations(props.filter(r => (typeSpaceId ? r.spaceId === typeSpaceId : true)));
+
+    // A multi-space type defines a property list per space iteration. Union
+    // them (primary space first so its ordering wins) so properties the type
+    // only defines in non-primary spaces stay sortable/filterable (GEO-2202).
+    const otherSpaceProps = options?.includeAllTypeSpaces
+      ? sortRelations(props.filter(r => (typeSpaceId ? r.spaceId !== typeSpaceId : false)))
+      : [];
+
+    return [...primarySpaceProps, ...otherSpaceProps].map(r => r.toEntity.id);
   });
 
   // Collect additional properties from filter-specified spaces (e.g. a type

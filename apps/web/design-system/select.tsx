@@ -37,7 +37,8 @@ export const Select = ({
   const [open, setOpen] = useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
-  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open });
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
+  const { align, side } = useAdaptiveDropdownPlacement(triggerRef, { isOpen: open, contentElement });
   const onSelectContentWheel = React.useCallback((e: React.WheelEvent) => {
     trapWheelToElement(viewportRef.current, e);
   }, []);
@@ -80,6 +81,7 @@ export const Select = ({
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
+          ref={setContentElement}
           className={cx(
             'z-20 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
             contentClassName

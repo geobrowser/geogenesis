@@ -57,10 +57,12 @@ export function Menu({
   modal = false,
 }: Props) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
   const { align: adaptiveAlign, side: adaptiveSide } = useAdaptiveDropdownPlacement(triggerRef, {
     isOpen: open,
     preferredHeight: 240,
     gap: 8,
+    contentElement,
   });
 
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -76,6 +78,7 @@ export function Menu({
         {trigger}
       </Trigger>
       <PopoverContent
+        ref={setContentElement}
         align={adaptiveAlign}
         side={adaptiveSide}
         sideOffset={sideOffset}

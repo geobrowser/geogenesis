@@ -88,7 +88,7 @@ export default async function ProfileLayout(props: Props) {
           <div className="space-y-2">
             <EditableHeading spaceId={spaceId} entityId={entityId} />
             <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} isVoteable />
           </div>
 
           <Spacer height={40} />
@@ -187,7 +187,16 @@ async function getProfilePage(
   });
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...(blockRelations ?? []),
+    ...orderedTabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const initialCollectionItems = await fetchCollectionItemsForBlocks(
+    allBlocks,
+    cachedFetchEntitiesBatch,
+    spaceId,
+    allBlockRelations
+  );
 
   return {
     ...person,

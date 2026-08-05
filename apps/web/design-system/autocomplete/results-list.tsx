@@ -8,6 +8,7 @@ import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -63,6 +64,8 @@ type ResultContentProps = {
   onChooseSpace?: () => void;
   withDescription?: boolean;
   active?: boolean;
+  /** When set, renders a multi-select checkbox (empty/checked) on the row instead of the single-select indicator. */
+  multiSelectChecked?: boolean;
 } & React.ComponentPropsWithoutRef<'button'>;
 
 export const ResultContent = ({
@@ -72,6 +75,7 @@ export const ResultContent = ({
   alreadySelected = false,
   withDescription = true,
   onChooseSpace,
+  multiSelectChecked,
   ...rest
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
@@ -108,7 +112,11 @@ export const ResultContent = ({
           <Text variant="metadataMedium" ellipsize className="leading-4.5">
             {result.name ?? result.id}
           </Text>
-          {alreadySelected && <CheckCircleSmall color="grey-04" />}
+          {multiSelectChecked !== undefined ? (
+            <CheckboxVisual checked={multiSelectChecked} className="ml-2 self-start" />
+          ) : (
+            alreadySelected && <CheckCircleSmall color="grey-04" />
+          )}
         </div>
         {showBreadcrumbs && (
           <>

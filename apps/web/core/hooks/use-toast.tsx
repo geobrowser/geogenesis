@@ -2,8 +2,11 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom } from 'jotai';
+
+import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 const toastAtom = atom<React.ReactElement<any> | null>(null);
 
@@ -24,9 +27,19 @@ export function Toast() {
   const [toast] = useToast();
 
   return (
-    <AnimatePresence>
-      {toast && (
-        <div className="pointer-events-none fixed right-0 bottom-0 left-0 flex w-full justify-center p-4">
+    // The live region stays mounted so screen readers reliably announce
+    // toasts; only the toast content itself animates in and out.
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className={cx(
+        'pointer-events-none fixed right-0 bottom-0 left-0 flex w-full justify-center p-4',
+        Z_LAYER_CLASS.toast
+      )}
+    >
+      <AnimatePresence>
+        {toast && (
           <motion.div
             variants={flowVariants}
             initial="hidden"
@@ -38,9 +51,9 @@ export function Toast() {
           >
             {toast}
           </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

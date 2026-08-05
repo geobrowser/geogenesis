@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-type Props = Omit<React.ComponentPropsWithoutRef<'div'>, 'children'> & {
+type Props = Omit<React.ComponentPropsWithoutRef<'div'>, 'children' | 'style'> & {
   type: 'horizontal' | 'vertical';
   style?: 'solid' | 'dashed';
 };

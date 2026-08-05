@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSchedule, parseSchedule, serializeSchedule, validateSchedule } from './schedule';
+import {
+  MAX_CALL_DURATION_MINUTES,
+  MIN_CALL_DURATION_MINUTES,
+  formatSchedule,
+  parseSchedule,
+  serializeSchedule,
+  validateSchedule,
+} from './schedule';
 
 describe('validateSchedule', () => {
   it('accepts a valid schedule with DTSTART only', () => {
@@ -56,6 +63,46 @@ describe('validateSchedule', () => {
     expect(result.errors).toContain('DTEND must be after DTSTART');
   });
 
+  it('rejects a call shorter than the minimum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T170500Z');
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(`Call must be at least ${MIN_CALL_DURATION_MINUTES} minutes long`);
+  });
+
+  it('accepts a call exactly at the minimum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T171500Z');
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a call longer than the maximum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T200100Z');
+    expect(result.valid).toBe(false);
+    const h = Math.floor(MAX_CALL_DURATION_MINUTES / 60);
+    const m = MAX_CALL_DURATION_MINUTES % 60;
+    expect(result.errors).toContain(`Call can't be longer than ${h}h${m ? ` ${m}m` : ''}`);
+  });
+
+  it('accepts a call exactly at the maximum duration', () => {
+    const result = validateSchedule('DTSTART:20260305T170000Z\nDTEND:20260305T193000Z');
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects a past DTSTART when requireFutureStart is set', () => {
+    const result = validateSchedule('DTSTART:20000101T000000Z', { requireFutureStart: true });
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain('Start time must be in the future');
+  });
+
+  it('accepts a future DTSTART when requireFutureStart is set', () => {
+    const result = validateSchedule('DTSTART:20990101T000000Z', { requireFutureStart: true });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts a past DTSTART when requireFutureStart is not set', () => {
+    const result = validateSchedule('DTSTART:20000101T000000Z');
+    expect(result.valid).toBe(true);
+  });
+
   it('rejects an invalid RRULE frequency', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=BIWEEKLY');
     expect(result.valid).toBe(false);
@@ -107,6 +154,20 @@ describe('validateSchedule', () => {
     const result = validateSchedule('DTSTART:20260305T170000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR');
     expect(result.valid).toBe(true);
   });
+
+  it('accepts a TZID-qualified DTSTART/DTEND', () => {
+    const result = validateSchedule(
+      'DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000'
+    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  it('rejects an invalid TZID', () => {
+    const result = validateSchedule('DTSTART;TZID=Not/AZone:20260305T090000');
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('Invalid timezone');
+  });
 });
 
 describe('parseSchedule', () => {
@@ -141,6 +202,21 @@ describe('parseSchedule', () => {
     expect(result.startTime).toBe('09:00');
     expect(result.endTime).toBe('');
     expect(result.freq).toBe('');
+  });
+
+  it('leaves timezone unset for a legacy UTC schedule', () => {
+    const result = parseSchedule('DTSTART:20260305T170000Z');
+    expect(result.timezone).toBeUndefined();
+  });
+
+  it('parses a TZID-qualified schedule without converting the wall clock', () => {
+    const result = parseSchedule(
+      'DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000'
+    );
+    expect(result.timezone).toBe('America/Los_Angeles');
+    expect(result.startDate).toBe('2026-03-05');
+    expect(result.startTime).toBe('09:00');
+    expect(result.endTime).toBe('10:00');
   });
 });
 
@@ -199,6 +275,31 @@ describe('serializeSchedule', () => {
     const serialized = serializeSchedule(parsed);
     expect(serialized).toBe(original);
   });
+
+  it('serializes with a TZID instead of a trailing Z', () => {
+    const serialized = serializeSchedule({
+      startDate: '2026-03-05',
+      startTime: '09:00',
+      endTime: '10:00',
+      freq: 'WEEKLY',
+      byDay: ['TH'],
+      interval: 1,
+      timezone: 'America/Los_Angeles',
+    });
+    expect(serialized).toBe(
+      'DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000\nRRULE:FREQ=WEEKLY;BYDAY=TH'
+    );
+  });
+
+  it('roundtrips a TZID schedule through parse and serialize', () => {
+    const original =
+      'DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000\nRRULE:FREQ=WEEKLY;BYDAY=TH';
+    const parsed = parseSchedule(original);
+    expect(parsed.timezone).toBe('America/Los_Angeles');
+    expect(parsed.startTime).toBe('09:00');
+    expect(parsed.endTime).toBe('10:00');
+    expect(serializeSchedule(parsed)).toBe(original);
+  });
 });
 
 describe('formatSchedule', () => {
@@ -254,5 +355,15 @@ describe('formatSchedule', () => {
   it('returns the raw string for unparseable input', () => {
     const raw = 'totally invalid';
     expect(formatSchedule(raw)).toBe(raw);
+  });
+
+  it('formats a TZID schedule with the zone abbreviation instead of UTC', () => {
+    const formatted = formatSchedule(
+      'DTSTART;TZID=America/Los_Angeles:20260305T090000\nDTEND;TZID=America/Los_Angeles:20260305T100000'
+    );
+    expect(formatted).toContain('9:00 AM');
+    expect(formatted).toContain('10:00 AM');
+    expect(formatted).not.toContain('UTC');
+    expect(formatted).toMatch(/P[SD]T/);
   });
 });

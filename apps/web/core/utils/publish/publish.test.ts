@@ -153,6 +153,22 @@ describe('prepareLocalDataForPublishing', () => {
       expect(updateOp.unset).toHaveLength(1);
       expect(updateOp.unset[0].property).toBeDefined();
     });
+
+    it('should pass SCHEDULE values through unmodified, including embedded newlines', () => {
+      const schedule = 'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,TH';
+      const values = [
+        createMockValue({
+          property: { id: IdUtils.generate(), name: 'Schedule', dataType: 'SCHEDULE' },
+          value: schedule,
+        }),
+      ];
+
+      const result = prepareLocalDataForPublishing(values, [], 'test-space');
+      const updateOp = result[0] as UpdateEntityOp;
+      const setValue = updateOp.set[0].value as { type: string; value: string };
+      expect(setValue.type).toBe('schedule');
+      expect(setValue.value).toBe(schedule);
+    });
   });
 
   describe('filtering', () => {
@@ -423,6 +439,79 @@ describe('prepareLocalDataForPublishing', () => {
       const result = prepareLocalDataForPublishing(values, relations, 'test-space');
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  // GEO-2226: changing a data block's view publishes an empty proposal diff when the
+  // existing VIEW relation's target is mutated in place. A non-deleted relation is
+  // always re-emitted as createRelation with its original id, so re-creating an
+  // already-committed relation is a server-side no-op and the change is lost. The fix
+  // makes setView delete the old VIEW relation and create a new one instead.
+  describe('data block view change (GEO-2226)', () => {
+    const VIEW = SystemIds.VIEW_PROPERTY;
+    const blockRelationEntityId = IdUtils.generate();
+
+    // Op ids are emitted as the hex-decoded byte form of the relation id.
+    const opIdHex = (id: unknown) =>
+      Array.from(id as Uint8Array)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    const normHex = (id: string) => id.replace(/-/g, '').toLowerCase();
+
+    it('publishes a view change as deleteRelation(old) + createRelation(new) so the change is recorded', () => {
+      const oldViewRelationId = IdUtils.generate();
+      const newViewRelationId = IdUtils.generate();
+
+      const relations = [
+        createMockRelation({
+          id: oldViewRelationId,
+          type: { id: VIEW, name: 'View' },
+          fromEntity: { id: blockRelationEntityId, name: null },
+          toEntity: { id: SystemIds.TABLE_VIEW, name: 'Table view', value: SystemIds.TABLE_VIEW },
+          isDeleted: true,
+        }),
+        createMockRelation({
+          id: newViewRelationId,
+          type: { id: VIEW, name: 'View' },
+          fromEntity: { id: blockRelationEntityId, name: null },
+          toEntity: { id: SystemIds.GALLERY_VIEW, name: 'Gallery view', value: SystemIds.GALLERY_VIEW },
+          isDeleted: false,
+        }),
+      ];
+
+      const result = prepareLocalDataForPublishing([], relations, 'test-space');
+
+      const deletes = result.filter(op => op.type === 'deleteRelation') as DeleteRelationOp[];
+      const creates = result.filter(op => op.type === 'createRelation') as CreateRelationOp[];
+
+      expect(deletes).toHaveLength(1);
+      expect(opIdHex(deletes[0].id)).toBe(normHex(oldViewRelationId));
+      expect(creates).toHaveLength(1);
+      expect(opIdHex(creates[0].id)).toBe(normHex(newViewRelationId));
+      expect(opIdHex(creates[0].id)).not.toBe(normHex(oldViewRelationId));
+    });
+
+    it('regression: an in-place target change re-creates the same relation id with no delete (backend ignores it)', () => {
+      const viewRelationId = IdUtils.generate();
+
+      const relations = [
+        createMockRelation({
+          id: viewRelationId,
+          type: { id: VIEW, name: 'View' },
+          fromEntity: { id: blockRelationEntityId, name: null },
+          toEntity: { id: SystemIds.GALLERY_VIEW, name: 'Gallery view', value: SystemIds.GALLERY_VIEW },
+          isDeleted: false,
+        }),
+      ];
+
+      const result = prepareLocalDataForPublishing([], relations, 'test-space');
+
+      // No delete, and the create reuses the committed relation id — a server-side no-op,
+      // which is why the pre-fix view change vanished from the proposal diff.
+      expect(result.filter(op => op.type === 'deleteRelation')).toHaveLength(0);
+      const creates = result.filter(op => op.type === 'createRelation') as CreateRelationOp[];
+      expect(creates).toHaveLength(1);
+      expect(opIdHex(creates[0].id)).toBe(normHex(viewRelationId));
     });
   });
 });

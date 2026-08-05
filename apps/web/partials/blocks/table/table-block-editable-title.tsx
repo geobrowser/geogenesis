@@ -59,11 +59,8 @@ export function TableBlockEditableTitle({ spaceId }: { spaceId: string }) {
             );
           })}
           {hasOverflow && (
-            <div className="relative z-10 -ml-1.5 inline-flex items-center justify-center overflow-clip rounded border-2 border-white bg-white first:ml-0">
-              <div className="size-[16px]! rounded-sm! bg-gradient-purple" />
-              <div className="absolute inset-0 z-10 flex h-full w-full items-center justify-center">
-                <span className="text-footnoteMedium text-text">+{source.value.length - 2}</span>
-              </div>
+            <div className="relative z-10 -ml-1.5 inline-flex size-[16px]! shrink-0 items-center justify-center overflow-clip rounded-sm! border border-white bg-gradient-purple first:ml-0">
+              <span className="text-footnoteMedium text-text">+{source.value.length - 2}</span>
             </div>
           )}
           <div className="absolute top-0 right-0 z-100 size-0">

@@ -16,7 +16,7 @@ import { ID } from '~/core/id';
 import { getProperty } from '~/core/io/queries';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { Property, SearchResult, SWITCHABLE_RENDERABLE_TYPE_LABELS, SwitchableRenderableType } from '~/core/types';
+import { Property, SWITCHABLE_RENDERABLE_TYPE_LABELS, SearchResult, SwitchableRenderableType } from '~/core/types';
 import { mapPropertyType } from '~/core/utils/property/properties';
 
 import { EntityCreatedToast } from '~/design-system/autocomplete/entity-created-toast';
@@ -230,13 +230,7 @@ function StepHeader({
 }
 
 /** Right-side header chip: type icon + label, with optional `→ name` suffix. */
-function TypeChip({
-  propertyType,
-  arrowTo,
-}: {
-  propertyType: SwitchableRenderableType;
-  arrowTo?: string | null;
-}) {
+function TypeChip({ propertyType, arrowTo }: { propertyType: SwitchableRenderableType; arrowTo?: string | null }) {
   const Icon = TYPE_ICONS[propertyType];
   return (
     <>
@@ -285,20 +279,12 @@ function FindOrCreatePropertyView({
   // EntityFilter that narrows by dataType and renderableType server-side via
   // `relations.some` / `relations.none`, so every row that lands already
   // matches — no client-side filtering, no page pumping.
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearchProperties({
-    dataType: baseDataType,
-    renderableTypeId,
-    enabled: true,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearchProperties({
+      dataType: baseDataType,
+      renderableTypeId,
+      enabled: true,
+    });
 
   const typeLabel = SWITCHABLE_RENDERABLE_TYPE_LABELS[propertyType];
 
@@ -322,7 +308,9 @@ function FindOrCreatePropertyView({
       renderableType: renderableTypeId,
     };
     const seeded: Property =
-      initial.dataType === baseDataType ? initial : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
+      initial.dataType === baseDataType
+        ? initial
+        : { ...initial, dataType: baseDataType, renderableType: renderableTypeId };
 
     void hydrateRelationValueTypes(seeded).then(hydrated => {
       onCreateProperty?.(csvColumnIndex, propertyId, hydrated);
@@ -367,19 +355,11 @@ function FindOrCreateToTypeView({
 }) {
   const { storage } = useMutate();
   const [, setToast] = useToast();
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearch({
-    filterByTypes: [SystemIds.SCHEMA_TYPE],
-    enabled: true,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes: [SystemIds.SCHEMA_TYPE],
+      enabled: true,
+    });
 
   const handleCreate = (name: string) => {
     const newEntityId = ID.createEntityId();
@@ -450,21 +430,13 @@ function FindOrCreateRelationPropertyView({
   // `toEntityType` via a second `relations.some` clause in the EntityFilter
   // (dataType=RELATION + relationValueType=toEntityType). Server-side filter,
   // no client narrowing needed.
-  const {
-    query,
-    onQueryChange,
-    isLoading,
-    isEmpty,
-    results,
-    hasNextPage,
-    fetchNextPage,
-    isFetchingNextPage,
-  } = useSearchProperties({
-    dataType: 'RELATION',
-    renderableTypeId: null,
-    requiredRelationValueTypeIds: [toEntityType.id],
-    enabled: true,
-  });
+  const { query, onQueryChange, isLoading, isEmpty, results, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearchProperties({
+      dataType: 'RELATION',
+      renderableTypeId: null,
+      requiredRelationValueTypeIds: [toEntityType.id],
+      enabled: true,
+    });
 
   const handleSelectExisting = async (result: { id: string; name: string | null }) => {
     let property: Property | null = store.getProperty(result.id);
@@ -721,9 +693,7 @@ function ResultsArea({
           />
         </div>
       ))}
-      {isFetchingNextPage && (
-        <div className="px-3 py-2 text-center text-metadata text-grey-04">Loading more…</div>
-      )}
+      {isFetchingNextPage && <div className="px-3 py-2 text-center text-metadata text-grey-04">Loading more…</div>}
     </ResultsList>
   );
 }

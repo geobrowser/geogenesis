@@ -59,6 +59,7 @@ export function SignInPrompt() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    close();
     login();
   };
 

@@ -25,6 +25,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
     $propertyId: UUID
     $sortDirection: SortOrder
     $dataType: String
+    $includeWithoutValue: Boolean
     $spaceId: UUID
     $spaceIds: [UUID!]
     $typeIds: [UUID!]
@@ -37,6 +38,7 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
       propertyId: $propertyId
       sortDirection: $sortDirection
       dataType: $dataType
+      includeWithoutValue: $includeWithoutValue
       spaceIds: $spaceIds
       typeIds: $typeIds
       first: $limit
@@ -60,6 +62,9 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
+        # Field selections mirror the EntityValueFields / RelationFields /
+        # RelationToEntity fragments in query-fragments.tsx. Kept inline because
+        # this is a standalone parse() document, not part of gql codegen.
         valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
@@ -76,7 +81,6 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
 
@@ -95,22 +99,11 @@ const ENTITIES_ORDERED_BY_PROPERTY_CONNECTION_SOURCE = /* GraphQL */ `
             name
             types {
               id
-              name
             }
             valuesList {
               spaceId
               propertyId
               text
-              integer
-              float
-              point
-              boolean
-              time
-              datetime
-              date
-              decimal
-              bytes
-              schedule
             }
           }
           toSpaceId

@@ -124,11 +124,8 @@ export function EditableEntityTableCell({
                 onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={spaceId} entityId={entityId} />
-            </div>
             {!isPlaceholderRow && (
-              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100 md:hidden">
+              <div className="invisible flex shrink-0 flex-nowrap items-center gap-0.5 group-hover/name-cell:visible md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={spaceId}

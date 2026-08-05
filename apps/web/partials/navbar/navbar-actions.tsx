@@ -1,6 +1,6 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
+import { useLogout, usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
@@ -8,17 +8,20 @@ import * as React from 'react';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
-import { useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 
-import { browseModeToggled, editModeToggled, loggedOut } from '~/core/analytics';
-import { Cookie } from '~/core/cookie';
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { useDebateActivity, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
+import { useToast } from '~/core/hooks/use-toast';
 import { useEditable } from '~/core/state/editable-store';
+import { useDebatesEnabled } from '~/core/state/feature-flags';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
@@ -33,8 +36,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
-import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
+import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -44,43 +46,21 @@ function useUser() {
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
 }
 
-function useResetOnboarding() {
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-  const setDismissedHints = useSetAtom(dismissedHintsAtom);
-
-  const resetOnboarding = () => {
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-    setDismissedHints([]);
-  };
-
-  return resetOnboarding;
-}
-
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
-  const resetOnboarding = useResetOnboarding();
-
-  const { logout } = useLogout({
-    onSuccess: async () => {
-      loggedOut({
-        personal_space_id: personalSpaceId ?? undefined,
-      });
-      console.log('disconnecting');
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      resetOnboarding();
-    },
-  });
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
+  const isDebatesEnabled = useDebatesEnabled();
+  const activityQuery = useDebateActivity(isDebatesEnabled);
+  const availabilityMutation = useUpdateDebateAvailability();
+  const { user } = usePrivy();
+  const [, setToast] = useToast();
+  // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
+  // only trigger the logout.
+  const { logout } = useLogout();
 
   if (isUserLoading) {
     return (
@@ -95,6 +75,27 @@ export function NavbarActions() {
     return <GeoConnectButton />;
   }
 
+  // Optimistic identity: while the personal space is being created in the
+  // background, show the avatar the user just picked and link the menu item to
+  // the navigable `pending:` page until the real spaceId resolves.
+  const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+  const displayName = profile?.name?.trim() || shortAddress(address);
+  const email = userEmail(user);
+  const identityDetail = email ?? address;
+  const availableToDebate = activityQuery.data?.available_to_debate ?? true;
+  const availabilityPending = activityQuery.isPending || availabilityMutation.isPending;
+
+  const toggleDebateAvailability = () => {
+    availabilityMutation.mutate(!availableToDebate, {
+      onError: () => setToast(<span>Couldn’t update debate availability.</span>),
+    });
+  };
+
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -102,8 +103,8 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            {profile?.avatarUrl ? (
-              <FallbackImage value={profile.avatarUrl} sizes="28px" className="object-cover" />
+            {avatarValue ? (
+              <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
             ) : (
               <Avatar value={address} size={28} />
             )}
@@ -112,20 +113,160 @@ export function NavbarActions() {
         open={open}
         onOpenChange={onOpenChange}
         sideOffset={12}
-        className="max-w-[165px]"
+        className={
+          isDebatesEnabled ? 'w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]' : 'max-w-[165px]'
+        }
       >
-        {personalSpaceId && (
-          <AvatarMenuItem href={NavUtils.toSpace(personalSpaceId)}>
-            <p className="text-button">Personal space</p>
-          </AvatarMenuItem>
+        {isDebatesEnabled ? (
+          <>
+            <IdentityHeader
+              address={address}
+              avatarValue={avatarValue}
+              displayName={displayName}
+              detail={identityDetail}
+              href={personalHref}
+              onNavigate={() => onOpenChange(false)}
+            />
+            <div className="border-t border-grey-02">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={availableToDebate}
+                disabled={availabilityPending}
+                onClick={toggleDebateAvailability}
+                className="flex w-full items-center justify-between gap-1 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
+              >
+                <span className="min-w-0 truncate">Available to debate</span>
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    'relative h-4 w-6 shrink-0 rounded-full transition-colors',
+                    availableToDebate ? 'bg-text' : 'bg-grey-03'
+                  )}
+                >
+                  <span
+                    className={cx(
+                      'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
+                      availableToDebate && 'translate-x-2'
+                    )}
+                  />
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={logout}
+                className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+              >
+                Sign out
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            {personalHref && (
+              <AvatarMenuItem href={personalHref}>
+                <p className="text-button">Personal space</p>
+              </AvatarMenuItem>
+            )}
+            <AvatarMenuItem onClick={logout}>
+              <p className="text-button">Sign out</p>
+              <DisconnectWallet />
+            </AvatarMenuItem>
+          </>
         )}
-        <AvatarMenuItem onClick={logout}>
-          <p className="text-button">Sign out</p>
-          <DisconnectWallet />
-        </AvatarMenuItem>
       </Menu>
     </div>
   );
+}
+
+function IdentityHeader({
+  address,
+  avatarValue,
+  displayName,
+  detail,
+  href,
+  onNavigate,
+}: {
+  address: `0x${string}`;
+  avatarValue: string;
+  displayName: string;
+  detail: string;
+  href: string | null;
+  onNavigate: () => void;
+}) {
+  const content = (
+    <>
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        {avatarValue ? (
+          <FallbackImage value={avatarValue} sizes="32px" className="object-cover" />
+        ) : (
+          <Avatar value={address} size={32} />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-text not-italic">
+          {displayName}
+        </p>
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-grey-04 not-italic">
+          {detail}
+        </p>
+      </div>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        onClick={onNavigate}
+        className="flex w-full flex-col items-start gap-3 px-3 py-2.5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="flex w-full flex-col items-start gap-3 px-3 py-2.5">{content}</div>;
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function userEmail(user: unknown) {
+  if (!isRecord(user)) return undefined;
+  const primary = emailFromUnknown(user.email);
+  if (primary) return primary;
+  if (!Array.isArray(user.linkedAccounts)) return undefined;
+
+  for (const account of user.linkedAccounts) {
+    const email = emailFromUnknown(account);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function emailFromUnknown(value: unknown) {
+  if (typeof value === 'string') return normalizeEmail(value);
+  if (!isRecord(value)) return undefined;
+
+  for (const key of ['address', 'email', 'emailAddress']) {
+    const email = normalizeEmail(value[key]);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const email = value.trim().toLowerCase();
+  return email.includes('@') ? email : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 const avatarMenuItemStyles = cva(
@@ -274,29 +415,36 @@ function ModeToggle() {
 
   return (
     <>
-      <button
+      <motion.button
         ref={toggleRef}
         onClick={onToggle}
         data-testid="edit-toggle"
-        className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+        animate={controls}
+        variants={variants}
+        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
       >
-        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-          {!editable && <AnimatedTogglePill controls={controls} />}
-          <motion.div
-            animate={controls}
-            variants={variants}
-            className={cx('z-10 transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}
-          >
+        <motion.div
+          aria-hidden
+          initial={false}
+          animate={{ x: editable ? 30 : 0 }}
+          transition={{
+            duration: 0.5,
+            type: 'spring',
+            bounce: 0,
+          }}
+          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+        />
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+          <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
             <EyeSmall />
-          </motion.div>
+          </div>
         </div>
-        <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-          {editable && <AnimatedTogglePill controls={controls} />}
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
           <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
             <Popover.Anchor asChild>
               <div
                 className={cx(
-                  'z-10 transition-colors duration-300',
+                  'transition-colors duration-300',
                   showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
                 )}
               >
@@ -329,7 +477,7 @@ function ModeToggle() {
             </Popover.Portal>
           </Popover.Root>
         </div>
-      </button>
+      </motion.button>
       <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
     </>
   );
@@ -340,20 +488,4 @@ function modeToggleProperties(spaceId: string, trigger: string) {
     space_id: spaceId,
     toggle_trigger: trigger,
   };
-}
-
-function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
-  return (
-    <motion.div
-      animate={controls}
-      variants={variants}
-      transition={{
-        duration: 0.5,
-        type: 'spring',
-        bounce: 0,
-      }}
-      layoutId="edit-toggle"
-      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-    />
-  );
 }

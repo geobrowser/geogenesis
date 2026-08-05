@@ -48,6 +48,7 @@
   --shadow-onboarding: 0px 0px 71.36363220214844px 0px;
   --shadow-dropdown: 0px 6px 8px #60606033;
   --shadow-button: 0px 1px 2px #f0f0f0;
+  --shadow-panel: 0 8px 20px 0 rgba(0, 0, 0, 0.04);
   --shadow-card: 0px 26px 45px rgba(0, 0, 0, 0.09);
   --shadow-light: 0px 1px 2px #f0f0f0;
   --shadow-big: 0 1px 21px #dbdbdb;
@@ -69,6 +70,7 @@
   --z-index-flow-bar: 1000;
   --z-index-slide-up: 10000;
   --z-index-status-bar: 10001;
+  --z-index-toast: 10002;
 
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
@@ -229,6 +231,11 @@
   --text-textLinkSemibold: 1.1875rem;
   --text-textLinkSemibold--line-height: 1.8125rem;
   --text-textLinkSemibold--font-weight: 600;
+
+  /* Debate recording overlay phrase, e.g. "Wrap it up!" */
+  --text-recordingLabel: 1.875rem;
+  --text-recordingLabel--line-height: 2.25rem;
+  --text-recordingLabel--font-weight: 600;
 }
 
 /* Desktop-first breakpoints (max-width) */
@@ -511,19 +518,29 @@ body[data-entity-side-panel-open] {
 
 /* Hide main-page scrollbars when the panel keeps its own scrollbar. */
 html[data-entity-side-panel-open],
+html[data-ranking-compose-edit],
 html[data-entity-side-panel-open] body,
+html[data-ranking-compose-edit] body,
 body[data-entity-side-panel-open],
+body[data-ranking-compose-edit],
 body[data-entity-side-panel-open] [data-app-scroll-surface],
-body[data-entity-side-panel-open] [data-power-tools-scroll] {
+body[data-ranking-compose-edit] [data-app-scroll-surface],
+body[data-entity-side-panel-open] [data-power-tools-scroll],
+body[data-ranking-compose-edit] [data-power-tools-scroll] {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
 
 html[data-entity-side-panel-open]::-webkit-scrollbar,
+html[data-ranking-compose-edit]::-webkit-scrollbar,
 html[data-entity-side-panel-open] body::-webkit-scrollbar,
+html[data-ranking-compose-edit] body::-webkit-scrollbar,
 body[data-entity-side-panel-open]::-webkit-scrollbar,
+body[data-ranking-compose-edit]::-webkit-scrollbar,
 body[data-entity-side-panel-open] [data-app-scroll-surface]::-webkit-scrollbar,
-body[data-entity-side-panel-open] [data-power-tools-scroll]::-webkit-scrollbar {
+body[data-ranking-compose-edit] [data-app-scroll-surface]::-webkit-scrollbar,
+body[data-entity-side-panel-open] [data-power-tools-scroll]::-webkit-scrollbar,
+body[data-ranking-compose-edit] [data-power-tools-scroll]::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
@@ -557,6 +574,14 @@ body[data-entity-side-panel-open] .elevated-popover {
 
 body[data-entity-side-panel-open] [data-radix-popper-content-wrapper] {
   z-index: 10003 !important;
+}
+
+/* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
+@media (max-width: 1023px) {
+  html[data-ranking-compose-edit] [data-app-navbar],
+  body[data-ranking-compose-edit] [data-app-navbar] {
+    display: none !important;
+  }
 }
 
 [data-entity-side-panel] [data-radix-popper-content-wrapper] {

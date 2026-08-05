@@ -95,12 +95,12 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       <div className={cx('flex gap-10', item.description ? 'items-start' : 'items-center')}>
         <div className="min-w-0 flex-1">
           <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
-            <h2 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text hover:underline">
+            <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
               {item.title}
             </h2>
           </Link>
           {item.description ? (
-            <p className="mt-1 line-clamp-2 text-[16px] leading-[20px] font-normal tracking-[-0.03em] text-grey-04">
+            <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
               {item.description}
             </p>
           ) : null}
@@ -116,7 +116,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
       </div>
 
       <div className="flex items-center gap-6">
-        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
+        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimVoterAvatarsPosition="trailing" />
         <Link
           href={entityHref}
           className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"

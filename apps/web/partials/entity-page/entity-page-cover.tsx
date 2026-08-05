@@ -41,12 +41,14 @@ function useImageUrl(entityId: string, spaceId: string, propertyId: string, serv
 
   const hasDeletedRelation = relationsIncludingDeleted.some(r => r.isDeleted);
 
-  if (hasDeletedRelation) {
-    return null;
-  }
-
-  // Store has never had this relation — use server value (store may not have synced yet)
   if (!relation) {
+    // The relation was deleted (no live one remains) — return null instead of
+    // falling back to the server value, which would resurrect the deleted image.
+    if (hasDeletedRelation) {
+      return null;
+    }
+
+    // Store has never had this relation — use server value (store may not have synced yet)
     return serverUrl;
   }
 

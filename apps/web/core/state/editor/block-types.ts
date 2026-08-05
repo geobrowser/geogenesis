@@ -4,10 +4,7 @@ import { EntityId } from '~/core/io/substream-schema';
 import { Relation } from '~/core/types';
 
 type BlockTypeId =
-  | typeof SystemIds.TEXT_BLOCK
-  | typeof SystemIds.IMAGE_TYPE
-  | typeof SystemIds.DATA_BLOCK
-  | typeof SystemIds.VIDEO_TYPE;
+  typeof SystemIds.TEXT_BLOCK | typeof SystemIds.IMAGE_TYPE | typeof SystemIds.DATA_BLOCK | typeof SystemIds.VIDEO_TYPE;
 
 const BLOCK_TYPE_NAMES: Record<BlockTypeId, string> = {
   [SystemIds.TEXT_BLOCK]: 'Text Block',
@@ -18,8 +15,9 @@ const BLOCK_TYPE_NAMES: Record<BlockTypeId, string> = {
 
 export function getRelationForBlockType(
   fromBlockEntityId: string,
-  blockTypeId: BlockTypeId,
-  spaceId: string
+  blockTypeId: BlockTypeId | string,
+  spaceId: string,
+  blockTypeName?: string | null
 ): Relation {
   return {
     id: IdUtils.generate(),
@@ -33,7 +31,7 @@ export function getRelationForBlockType(
     },
     toEntity: {
       id: EntityId(blockTypeId),
-      name: BLOCK_TYPE_NAMES[blockTypeId],
+      name: blockTypeName ?? BLOCK_TYPE_NAMES[blockTypeId as BlockTypeId] ?? null,
       value: blockTypeId,
     },
     fromEntity: {

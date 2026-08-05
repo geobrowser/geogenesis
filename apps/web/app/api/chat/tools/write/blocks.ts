@@ -5,7 +5,7 @@ import type { DataBlockSource, DataBlockView } from '~/core/chat/edit-types';
 import { ENTITY_ID_PATTERN } from './shared';
 
 const BLOCK_KINDS = ['text', 'code', 'image', 'video', 'data'] as const;
-const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST'];
+const DATA_VIEWS: readonly DataBlockView[] = ['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'EXPLORE', 'PILL'];
 const DATA_SOURCES: readonly DataBlockSource[] = ['COLLECTION', 'QUERY', 'GEO'];
 
 type CreateBlockInput = {

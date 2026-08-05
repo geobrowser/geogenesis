@@ -47,6 +47,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
     $spaceIds: [UUID!]!
     $typeIds: [UUID!]
     $spaceIdsForLists: [UUID!]!
+    $includeWithoutValue: Boolean
   ) {
     entitiesOrderedByPropertyConnection(
       first: $first
@@ -57,6 +58,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
       sortDirection: $sortDirection
       spaceIds: $spaceIds
       typeIds: $typeIds
+      includeWithoutValue: $includeWithoutValue
     ) {
       pageInfo {
         endCursor
@@ -97,7 +99,6 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
 
@@ -119,7 +120,6 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
             name
             types {
               id
-              name
             }
             valuesList(filter: { spaceId: { in: $spaceIdsForLists } }) {
               spaceId
