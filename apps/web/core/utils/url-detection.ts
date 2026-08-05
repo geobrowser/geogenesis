@@ -16,9 +16,11 @@ const WEB2_URL_CHAR = /[^\s<>"{}|\\^`[\]()]/.source;
 // not supported; they effectively never occur in real URLs.
 const WEB2_URL_PAREN_GROUP = `\\(${WEB2_URL_CHAR}*\\)`;
 
-// A full URL: scheme (http/https or www.) followed by body chars, where any run
-// may include one balanced-parentheses group. This is the single source of
-// truth every detector regex below is built from.
+// A full URL: scheme (http/https or www.) followed by body chars, where the
+// body may include any number of balanced, non-nested parentheses groups
+// (e.g. ".../Foo_(bar)" or ".../Foo_(bar)_(baz)"), matching how markdown-it
+// treats parens in link destinations. This is the single source of truth every
+// detector regex below is built from.
 const WEB2_URL_CORE = `(?:https?:\\/\\/|www\\.)(?:${WEB2_URL_CHAR}|${WEB2_URL_PAREN_GROUP})+`;
 
 function web2UrlTokenRegex(): RegExp {
@@ -29,13 +31,21 @@ function markdownLinkRegex(): RegExp {
   return new RegExp(`\\[([^\\]]+)\\]\\((${WEB2_URL_CORE})\\)`, 'gi');
 }
 
+// Anchored variant of markdownLinkRegex: matches only when the entire input is
+// exactly one markdown link literal.
+function markdownLinkExactRegex(): RegExp {
+  return new RegExp(`^\\[([^\\]]+)\\]\\((${WEB2_URL_CORE})\\)$`, 'i');
+}
+
 // Extracts the label and (parenthesis-aware) URL from a single markdown link
-// literal like `[label](https://en.wikipedia.org/wiki/Spillover_(book))`.
-// Callers that need to reason about a detected markdown link should use this
-// instead of an ad-hoc `/\[([^\]]+)\]\(([^)]+)\)/` — that pattern stops the URL
-// at the first ")", dropping the closing paren of the destination.
+// literal like `[label](https://en.wikipedia.org/wiki/Spillover_(book))`. The
+// input must be exactly one link literal — any surrounding text makes this
+// return null. Callers that need to reason about a detected markdown link
+// should use this instead of an ad-hoc `/\[([^\]]+)\]\(([^)]+)\)/` — that
+// pattern stops the URL at the first ")", dropping the closing paren of the
+// destination.
 export function parseMarkdownLink(text: string): { label: string; url: string } | null {
-  const match = markdownLinkRegex().exec(text);
+  const match = markdownLinkExactRegex().exec(text);
   if (!match) return null;
   return { label: match[1], url: match[2] };
 }

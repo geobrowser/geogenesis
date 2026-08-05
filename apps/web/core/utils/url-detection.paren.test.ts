@@ -26,6 +26,19 @@ describe('url-detection — parenthesis-aware URLs', () => {
     expect(parseMarkdownLink('just some text')).toBeNull();
   });
 
+  it('parseMarkdownLink requires the input to be exactly one link literal', () => {
+    // Surrounding text means the input is not a single link literal — callers
+    // always pass exact detected literals, so anything else is a misuse.
+    expect(parseMarkdownLink(`see ${PAREN_LINK} here`)).toBeNull();
+    expect(parseMarkdownLink('[a](https://x.com) [b](https://y.com)')).toBeNull();
+  });
+
+  it('supports multiple balanced parentheses groups in one URL', () => {
+    const multiParenUrl = 'https://en.wikipedia.org/wiki/Foo_(bar)_(baz)';
+    expect(parseMarkdownLink(`[foo](${multiParenUrl})`)).toEqual({ label: 'foo', url: multiParenUrl });
+    expect(detectWeb2URLs(`See ${multiParenUrl} here`)).toEqual([multiParenUrl]);
+  });
+
   it('detects a paren-URL markdown link as one link, not a truncated bare URL', () => {
     const text = `Zoonotic ${PAREN_LINK} have occurred throughout history.`;
     const detected = detectWeb2URLsInMarkdown(text);
