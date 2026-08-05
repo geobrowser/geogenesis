@@ -124,7 +124,7 @@ export function mapClaims(result: ClaimsExtractResult, turnCount: number): Debat
 
 async function runExtraction(config: ExtractionConfig, payload: Record<string, unknown>): Promise<ClaimsExtractResult> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (config.apiKey) headers.Authorization = `Bearer ${config.apiKey}`;
+  if (config.apiKey) headers['X-API-Key'] = config.apiKey;
 
   const enqueue = await fetch(`${config.baseUrl}/tasks`, {
     method: 'POST',
@@ -142,9 +142,12 @@ async function runExtraction(config: ExtractionConfig, payload: Record<string, u
     const response = await fetch(`${config.baseUrl}/tasks/${enqueued.id}`, { headers, cache: 'no-store' });
     if (!response.ok) throw new Error(`claims.extract poll failed (${response.status})`);
     const body = (await response.json()) as TaskStatusResponse;
-    if (body.result) return body.result;
-    if (body.error || (body.status && /fail|error|cancel/i.test(body.status))) {
-      throw new Error(`claims.extract task ${enqueued.id} failed: ${body.error ?? body.status}`);
+    const status = (body.status ?? '').toString();
+    // The status endpoint always carries a `result` key (an empty object while running), so gate on
+    // the terminal status — not on `result` being present — before reading it.
+    if (/^(completed|succeeded|success)$/i.test(status)) return body.result ?? {};
+    if (body.error || /fail|error|cancel/i.test(status)) {
+      throw new Error(`claims.extract task ${enqueued.id} failed: ${body.error || status || 'unknown'}`);
     }
   }
   throw new Error(`claims.extract task ${enqueued.id} timed out after ${POLL_TIMEOUT_MS}ms`);
