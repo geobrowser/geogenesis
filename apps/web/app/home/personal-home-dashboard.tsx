@@ -9,17 +9,10 @@ import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 import { useSearchParams } from 'next/navigation';
 
-import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-
 import { SmallButton } from '~/design-system/button';
 import { ThumbGeoImage } from '~/design-system/geo-image';
-import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
-import { EditSmall } from '~/design-system/icons/edit-small';
-import { InProgressSmall } from '~/design-system/icons/in-progress-small';
-import { Member } from '~/design-system/icons/member';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -65,7 +58,7 @@ const statusLabels: Record<GovernanceHomeStatusFilter, string> = {
 };
 
 type PersonalHomeDashboardProps = {
-  sidebarCounts?: SidebarCounts;
+  sidebar: React.ReactNode;
   proposalsList: React.ReactNode;
   governanceTab: 'review' | 'my';
   governanceFilters: GovernanceFilters;
@@ -136,7 +129,7 @@ function GovernanceTabsRow({
 }
 
 export function PersonalHomeDashboard({
-  sidebarCounts,
+  sidebar,
   proposalsList,
   governanceTab,
   governanceFilters,
@@ -203,9 +196,7 @@ export function PersonalHomeDashboard({
           <Notices />
           {proposalsList}
         </div>
-        <div className="w-1/3">
-          <Sidebar counts={sidebarCounts} />
-        </div>
+        <div className="w-1/3">{sidebar}</div>
       </div>
     </>
   );
@@ -359,58 +350,3 @@ const Notice = ({ id, color, title, description, element, media }: NoticeProps) 
     </div>
   );
 };
-
-type SidebarProps = {
-  counts?: SidebarCounts;
-};
-
-const Sidebar = ({ counts }: SidebarProps) => {
-  return (
-    <div className="space-y-2">
-      <Activity
-        label="My proposals"
-        activities={[
-          { icon: <InProgressSmall />, label: 'Pending', count: counts?.myProposals.inProgress ?? 0 },
-          { icon: <CheckCircleSmall />, label: 'Accepted', count: counts?.myProposals.accepted ?? 0 },
-          { icon: <CheckCloseSmall />, label: 'Rejected', count: counts?.myProposals.rejected ?? 0 },
-        ]}
-      />
-      <Activity
-        label="Proposals I've voted on"
-        activities={[
-          { icon: <CheckCircleSmall />, label: 'Accepted', count: counts?.votedOn.accepted ?? 0 },
-          { icon: <CheckCloseSmall />, label: 'Rejected', count: counts?.votedOn.rejected ?? 0 },
-        ]}
-      />
-      <Activity
-        label="I have accepted"
-        activities={[
-          { icon: <Member />, label: 'Members', count: counts?.iHaveAccepted.members ?? 0 },
-          { icon: <EditSmall />, label: 'Editors', count: counts?.iHaveAccepted.editors ?? 0 },
-        ]}
-      />
-    </div>
-  );
-};
-
-type ActivityProps = {
-  label: string;
-  activities: { icon?: React.ReactNode; label: string; count: number }[];
-};
-
-function Activity({ label = '', activities = [] }: ActivityProps) {
-  return (
-    <div className="rounded-lg border border-grey-02 p-4">
-      <div className="text-breadcrumb text-grey-04">{label}</div>
-      {activities.map(({ icon, label: rowLabel, count }) => (
-        <div key={rowLabel} className="mt-2 flex items-center justify-between text-metadataMedium">
-          <div className="inline-flex items-center gap-2">
-            {icon && <div>{icon}</div>}
-            <div>{rowLabel}</div>
-          </div>
-          <div>{count}</div>
-        </div>
-      ))}
-    </div>
-  );
-}

@@ -2,7 +2,53 @@
 // domains. Keep this in sync with the alternation used by the detector regexes
 // below so detection, normalization, and rendering all agree on what a web2 URL is.
 export const WEB2_URL_PREFIX_REGEX = /^(https?:\/\/|www\.)/i;
-const WEB2_URL_TOKEN_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)/gi;
+
+// One URL "body" character: anything except whitespace, the HTML/markdown
+// delimiters we never want to swallow, and parentheses/brackets.
+const WEB2_URL_CHAR = /[^\s<>"{}|\\^`[\]()]/.source;
+
+// A single level of *balanced* parentheses, e.g. Wikipedia's "_(book)",
+// "_(film)", "_(disambiguation)" convention. Without this, a URL like
+// https://en.wikipedia.org/wiki/Spillover_(book) is truncated at the first "(",
+// which — inside a markdown link — makes the detector miss the real link and
+// emit a bogus bare URL instead. That mismatch is what corrupted the document
+// and froze the tab on citation-dense imports. Nested parens are intentionally
+// not supported; they effectively never occur in real URLs.
+const WEB2_URL_PAREN_GROUP = `\\(${WEB2_URL_CHAR}*\\)`;
+
+// A full URL: scheme (http/https or www.) followed by body chars, where the
+// body may include any number of balanced, non-nested parentheses groups
+// (e.g. ".../Foo_(bar)" or ".../Foo_(bar)_(baz)"), matching how markdown-it
+// treats parens in link destinations. This is the single source of truth every
+// detector regex below is built from.
+const WEB2_URL_CORE = `(?:https?:\\/\\/|www\\.)(?:${WEB2_URL_CHAR}|${WEB2_URL_PAREN_GROUP})+`;
+
+function web2UrlTokenRegex(): RegExp {
+  return new RegExp(`(${WEB2_URL_CORE})`, 'gi');
+}
+
+function markdownLinkRegex(): RegExp {
+  return new RegExp(`\\[([^\\]]+)\\]\\((${WEB2_URL_CORE})\\)`, 'gi');
+}
+
+// Anchored variant of markdownLinkRegex: matches only when the entire input is
+// exactly one markdown link literal.
+function markdownLinkExactRegex(): RegExp {
+  return new RegExp(`^\\[([^\\]]+)\\]\\((${WEB2_URL_CORE})\\)$`, 'i');
+}
+
+// Extracts the label and (parenthesis-aware) URL from a single markdown link
+// literal like `[label](https://en.wikipedia.org/wiki/Spillover_(book))`. The
+// input must be exactly one link literal — any surrounding text makes this
+// return null. Callers that need to reason about a detected markdown link
+// should use this instead of an ad-hoc `/\[([^\]]+)\]\(([^)]+)\)/` — that
+// pattern stops the URL at the first ")", dropping the closing paren of the
+// destination.
+export function parseMarkdownLink(text: string): { label: string; url: string } | null {
+  const match = markdownLinkExactRegex().exec(text);
+  if (!match) return null;
+  return { label: match[1], url: match[2] };
+}
 
 export function isWeb2Url(url: string | null | undefined): url is string {
   return !!url?.trim() && WEB2_URL_PREFIX_REGEX.test(url.trim());
@@ -19,7 +65,7 @@ export function normalizeWeb2Url(url: string): string {
 // detectWeb2URLs (http/https/www only).
 export function tokenizeWeb2Urls(text: string): Array<{ type: 'text' | 'url'; value: string }> {
   const segments: Array<{ type: 'text' | 'url'; value: string }> = [];
-  const regex = new RegExp(WEB2_URL_TOKEN_REGEX.source, 'gi');
+  const regex = web2UrlTokenRegex();
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
@@ -50,7 +96,7 @@ export function detectWeb2URLs(text: string): string[] {
   const results: string[] = [];
 
   // Detect standalone URLs only
-  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)/gi;
+  const urlRegex = web2UrlTokenRegex();
   let urlMatch;
 
   while ((urlMatch = urlRegex.exec(text)) !== null) {
@@ -77,14 +123,14 @@ export function detectWeb2URLsInMarkdown(text: string): string[] {
   const results: string[] = [];
   const processedRanges: Array<{ start: number; end: number }> = [];
 
-  const markdownLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)\)/gi;
+  const markdownLink = markdownLinkRegex();
   let markdownMatch;
-  while ((markdownMatch = markdownLinkRegex.exec(text)) !== null) {
+  while ((markdownMatch = markdownLink.exec(text)) !== null) {
     results.push(markdownMatch[0]);
     processedRanges.push({ start: markdownMatch.index, end: markdownMatch.index + markdownMatch[0].length });
   }
 
-  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]()]+|www\.[^\s<>"{}|\\^`[\]()]+)/gi;
+  const urlRegex = web2UrlTokenRegex();
   let urlMatch;
   while ((urlMatch = urlRegex.exec(text)) !== null) {
     const url = urlMatch[0];
