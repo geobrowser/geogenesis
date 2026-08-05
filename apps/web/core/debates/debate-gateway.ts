@@ -95,6 +95,8 @@ export class DebateGatewayClient {
   private reconnectAttempt = 0;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
+  private debatePresence = true;
+  private presenceTransitionPending = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,14 +119,26 @@ export class DebateGatewayClient {
     return () => this.listeners.delete(listener);
   };
 
-  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) {
+  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
     if (this.enabled && this.accountKey !== accountKey) this.stop();
+    if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false });
     void this.connect();
+  }
+
+  setDebatePresence(debatePresence: boolean) {
+    if (this.debatePresence === debatePresence) return;
+    this.debatePresence = debatePresence;
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    if (this.heartbeatsAwaitingAck > 0) {
+      this.presenceTransitionPending = true;
+      return;
+    }
+    this.sendHeartbeat();
   }
 
   stop() {
@@ -223,6 +237,7 @@ export class DebateGatewayClient {
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
+        if (this.presenceTransitionPending) this.sendHeartbeat();
         break;
       case 'RESUME':
         this.queueBroadReconcile();
@@ -246,6 +261,7 @@ export class DebateGatewayClient {
       this.heartbeatIntervalMs = Math.max(1_000, payload.heartbeat_interval_ms);
     }
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
     this.sendHeartbeat();
   }
 
@@ -442,7 +458,8 @@ export class DebateGatewayClient {
       return;
     }
     this.heartbeatsAwaitingAck += 1;
-    this.sendEnvelope('HEARTBEAT', { debate_presence: true }, this.lastSequence);
+    this.presenceTransitionPending = false;
+    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
   }
 
@@ -517,6 +534,7 @@ export class DebateGatewayClient {
     this.clearTimer('handshake');
     this.clearTimer('token');
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
   }
 
   private clearAllTimers() {
@@ -556,8 +574,13 @@ const debateGateway = new DebateGatewayClient({
 export function useDebateGateway(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  debatePresence: boolean
 ) {
+  React.useEffect(() => {
+    debateGateway.setDebatePresence(debatePresence);
+  }, [debatePresence]);
+
   React.useEffect(() => {
     if (!enabled || !accountKey) {
       debateGateway.stop();

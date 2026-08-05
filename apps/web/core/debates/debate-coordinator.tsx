@@ -13,6 +13,7 @@ import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { useDebateAttention } from './debate-attention';
 import { useDebateGateway } from './debate-gateway';
 import {
   clearDebateMatchTabOwnership,
@@ -29,17 +30,24 @@ import {
   useRejectDebateChallenge,
 } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
-import { captureSocialVideoEvent, isAbortError, usePreparedSocialVideo } from './social-video-share';
+import {
+  getPreparedSocialVideoHandoffMethod,
+  handoffPreparedSocialVideo,
+  isAbortError,
+  usePreparedSocialVideo,
+} from './social-video-share';
 
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
   const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
+  const debateAttention = useDebateAttention();
   const gateway = useDebateGateway(
     isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
-    geoChatAuth.accountKey
+    geoChatAuth.accountKey,
+    debateAttention
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const currentUserId = getCurrentGeoChatUserId();
@@ -213,7 +221,7 @@ function DebateSharePromptDialog({
   const [promptHandled, setPromptHandled] = React.useState(false);
   const sharingRef = React.useRef(false);
   const promptActionRef = React.useRef(false);
-  const preparedVideo = usePreparedSocialVideo(prompt.debate_id, true);
+  const preparedVideo = usePreparedSocialVideo(prompt.debate_id, { enabled: true, includePreview: true });
 
   React.useEffect(() => {
     const previousBodyOverflow = document.body.style.overflow;
@@ -262,7 +270,10 @@ function DebateSharePromptDialog({
     }
     finishPrompt(handoffCompleted ? 'shared' : 'dismissed');
   };
-  const canShareFile = preparedVideo.file ? canNativeShareFile(preparedVideo.file) : false;
+  const handoffMethod = React.useMemo(
+    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
+    [preparedVideo.file]
+  );
   const share = async () => {
     if (handoffCompleted) {
       if (promptHandled) closeDialog();
@@ -275,24 +286,16 @@ function DebateSharePromptDialog({
     setIsSharing(true);
     setShareError(null);
     try {
-      if (canShareFile) {
-        await navigator.share({ title: prompt.claim, files: [preparedVideo.file] });
-      } else {
-        downloadPreparedVideo(preparedVideo.downloadUrl, preparedVideo.file.name);
-      }
-      captureSocialVideoEvent('debate_social_video_handoff_resolved', {
-        debate_id: prompt.debate_id,
-        method: canShareFile ? 'native_share' : 'download',
+      await handoffPreparedSocialVideo({
+        debateId: prompt.debate_id,
+        title: prompt.claim,
+        file: preparedVideo.file,
+        downloadUrl: preparedVideo.downloadUrl,
       });
       setHandoffCompleted(true);
       finishPrompt('shared', true);
     } catch (error) {
       if (isAbortError(error)) return;
-      captureSocialVideoEvent('debate_social_video_handoff_failed', {
-        debate_id: prompt.debate_id,
-        method: canShareFile ? 'native_share' : 'download',
-        error_name: error instanceof Error ? error.name : 'UnknownError',
-      });
       setShareError(error instanceof Error ? error.message : 'Could not share the video.');
     } finally {
       sharingRef.current = false;
@@ -309,7 +312,7 @@ function DebateSharePromptDialog({
           : 'Finish sharing'
         : preparedVideo.status !== 'ready'
           ? 'Preparing video…'
-          : canShareFile
+          : handoffMethod === 'native_share'
             ? 'Share video'
             : 'Download video';
 
@@ -422,26 +425,4 @@ function DebateSharePromptDialog({
       </section>
     </div>
   );
-}
-
-function downloadPreparedVideo(url: string, filename: string) {
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.display = 'none';
-  document.body.append(link);
-  link.click();
-  link.remove();
-}
-
-function canNativeShareFile(file: File) {
-  if (typeof navigator === 'undefined') return false;
-  const share = navigator.share as typeof navigator.share | undefined;
-  const canShare = navigator.canShare as typeof navigator.canShare | undefined;
-  if (typeof share !== 'function' || typeof canShare !== 'function') return false;
-  try {
-    return canShare.call(navigator, { files: [file] });
-  } catch {
-    return false;
-  }
 }

@@ -7,6 +7,8 @@ import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
+import { useDebateAttention } from './debate-attention';
+
 import {
   type Debate,
   type DebateActivity,
@@ -505,13 +507,25 @@ export function useRejectDebateRematchRequest() {
 
 export function useDebateProfile(profileSpaceId: string, enabled = true) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const foreground = useDebateAttention();
+  const queryEnabled = enabled && authenticated && Boolean(profileSpaceId);
+  const wasForeground = React.useRef(foreground);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.profile(accountKey, profileSpaceId),
     queryFn: ({ signal }) => getDebateProfile(profileSpaceId, getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && authenticated && Boolean(profileSpaceId),
+    enabled: queryEnabled,
+    refetchInterval: foreground ? 30_000 : false,
   });
+
+  React.useEffect(() => {
+    const returnedToForeground = foreground && !wasForeground.current;
+    wasForeground.current = foreground;
+    if (returnedToForeground && queryEnabled) void query.refetch();
+  }, [foreground, query.refetch, queryEnabled]);
+
+  return query;
 }
 
 export function useCreateDebateChallenge() {
@@ -526,6 +540,12 @@ export function useCreateDebateChallenge() {
         current ? { ...current, challenge } : current
       );
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+    onError: (error, request) => {
+      if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
+      void queryClient.invalidateQueries({
+        queryKey: debateQueryKeys.profile(accountKey, request.recipient_profile_space_id),
+      });
     },
   });
 }

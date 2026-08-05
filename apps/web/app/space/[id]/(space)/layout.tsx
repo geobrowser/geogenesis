@@ -70,7 +70,7 @@ export default async function Layout(props0: LayoutProps) {
       >
         <SpaceChromeGate>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <SpaceHeaderContentContainer spaceId={spaceId} hasSidebar={hasCommunityCallsSidebar}>
+          <SpaceHeaderContentContainer hasSidebar={hasCommunityCallsSidebar}>
             <div className="space-y-2">
               <EditableSpaceHeading
                 spaceId={spaceId}
