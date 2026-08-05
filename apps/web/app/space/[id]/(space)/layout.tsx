@@ -8,7 +8,7 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
-import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
 import { Spaces } from '~/core/utils/space';
@@ -60,7 +60,7 @@ export default async function Layout(props0: LayoutProps) {
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={props.id}
         spaceId={spaceId}
         initialBlockRelations={props.blockRelations}
@@ -120,7 +120,7 @@ export default async function Layout(props0: LayoutProps) {
           <Spacer height={20} />
         </SpaceChromeGate>
         {children}
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }
