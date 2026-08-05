@@ -531,29 +531,36 @@ export function DebateRecordingUploadBanner({
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center gap-2 bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center justify-center bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
     >
-      <span className="min-w-0 flex-1 truncate">{message}</span>
-      {showProgress && (
-        <div
-          role="progressbar"
-          aria-label={progressLabel}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={progressPercent ?? undefined}
-          className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
-        >
+      <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
+        <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
+        {showProgress && (
           <div
-            className={`h-full rounded-full bg-text transition-[width] ${progressPercent === null ? 'w-1/3 animate-pulse' : ''}`}
-            style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
-          />
-        </div>
-      )}
-      {canCancel && (
-        <SmallButton type="button" variant="ghost" onClick={onCancel} className="shrink-0 bg-transparent! hover:bg-bg!">
-          Cancel
-        </SmallButton>
-      )}
+            role="progressbar"
+            aria-label={progressLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent ?? undefined}
+            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
+          >
+            <div
+              className={`h-full rounded-full bg-text transition-[width] ${progressPercent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
+        {canCancel && (
+          <SmallButton
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            className="shrink-0 bg-transparent! hover:bg-bg!"
+          >
+            Cancel
+          </SmallButton>
+        )}
+      </div>
     </div>
   );
 }

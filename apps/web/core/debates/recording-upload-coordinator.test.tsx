@@ -146,6 +146,11 @@ describe('DebateRecordingUploadBanner', () => {
     );
 
     expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    const banner = screen.getByRole('status');
+    const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
+    expect(banner).toHaveClass('h-7', 'items-center', 'justify-center');
+    expect(content).toHaveClass('w-auto', 'items-center', 'gap-2', 'md:w-full');
+    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('flex-initial', 'md:flex-1');
     const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
     expect(progress).toHaveAttribute('aria-valuemin', '0');
     expect(progress).toHaveAttribute('aria-valuemax', '100');
