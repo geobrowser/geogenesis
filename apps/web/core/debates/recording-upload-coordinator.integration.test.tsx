@@ -271,9 +271,11 @@ describe('DebateRecordingUploadCoordinator', () => {
     );
     // debate-1's bytes are out and debate-2 hasn't started, so half the queued bytes have shipped.
     expect(screen.getByText('Uploading & publishing 2 debates')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
-      'aria-valuenow',
-      '50'
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
+        'aria-valuenow',
+        '50'
+      )
     );
     expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a');
 
@@ -446,9 +448,11 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
-      'aria-valuenow',
-      '50'
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
+        'aria-valuenow',
+        '50'
+      )
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
@@ -651,9 +655,11 @@ describe('DebateRecordingUploadCoordinator', () => {
     mocks.reportProgress!(3);
 
     expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
-    expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' })).toHaveAttribute(
-      'aria-valuenow',
-      '33'
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' })).toHaveAttribute(
+        'aria-valuenow',
+        '33'
+      )
     );
 
     held.resolve();
