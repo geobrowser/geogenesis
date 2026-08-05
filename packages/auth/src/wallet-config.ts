@@ -1,11 +1,8 @@
 import { createConfig } from '@privy-io/wagmi';
 import type { Chain } from 'viem';
 import { http } from 'viem';
-import type { Config } from 'wagmi';
+import { type Config } from 'wagmi';
 import { coinbaseWallet, injected, mock, walletConnect } from 'wagmi/connectors';
-
-type PrivyWagmiConfig = ReturnType<typeof createConfig>;
-type PrivyCreateConfigParams = Parameters<typeof createConfig>[0];
 
 export type GeoWalletConfigParams = {
   chain: Chain;

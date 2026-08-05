@@ -4,22 +4,44 @@ import type { DataBlockView } from '~/core/blocks/data/use-view';
 
 import {
   filterPanelOpenStateForActions,
-  shouldShowFilterAndFullscreenActions,
+  shouldShowFilterAction,
+  shouldShowFullscreenAction,
 } from './data-block-header-action-visibility';
 
-describe('shouldShowFilterAndFullscreenActions', () => {
-  it('hides both actions for Explore view in browse mode', () => {
-    expect(shouldShowFilterAndFullscreenActions('EXPLORE', false)).toBe(false);
+describe('shouldShowFilterAction', () => {
+  it('hides the filter action in browse mode', () => {
+    expect(shouldShowFilterAction(false)).toBe(false);
   });
 
-  it('keeps both actions for Explore view in edit mode', () => {
-    expect(shouldShowFilterAndFullscreenActions('EXPLORE', true)).toBe(true);
+  it('keeps the filter action in edit mode', () => {
+    expect(shouldShowFilterAction(true)).toBe(true);
+  });
+});
+
+describe('shouldShowFullscreenAction', () => {
+  it('hides the fullscreen action for Explore view in browse mode', () => {
+    expect(shouldShowFullscreenAction('EXPLORE', 'SPACES', false)).toBe(false);
+  });
+
+  it('keeps the fullscreen action for Explore view in edit mode', () => {
+    expect(shouldShowFullscreenAction('EXPLORE', 'SPACES', true)).toBe(true);
+  });
+
+  it.each<DataBlockView>(['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'PILL', 'EXPLORE'])(
+    'hides the fullscreen action for a Collection source using %s view in browse mode',
+    view => {
+      expect(shouldShowFullscreenAction(view, 'COLLECTION', false)).toBe(false);
+    }
+  );
+
+  it('keeps the fullscreen action for a Collection source in edit mode', () => {
+    expect(shouldShowFullscreenAction('TABLE', 'COLLECTION', true)).toBe(true);
   });
 
   it.each<DataBlockView>(['TABLE', 'LIST', 'GALLERY', 'BULLETED_LIST', 'PILL'])(
-    'keeps both actions for %s view in browse mode',
+    'keeps the fullscreen action for a query source using %s view in browse mode',
     view => {
-      expect(shouldShowFilterAndFullscreenActions(view, false)).toBe(true);
+      expect(shouldShowFullscreenAction(view, 'SPACES', false)).toBe(true);
     }
   );
 });

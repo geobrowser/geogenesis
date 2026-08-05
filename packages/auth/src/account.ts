@@ -1,180 +1,164 @@
-import { getOwnableValidator, getSmartSessionsValidator, RHINESTONE_ATTESTER_ADDRESS } from '@rhinestone/module-sdk';
-import { createSmartAccountClient, type SmartAccountClient } from 'permissionless';
-import {
-  type SafeSmartAccountImplementation,
-  type ToSafeSmartAccountParameters,
-  toSafeSmartAccount,
-} from 'permissionless/accounts';
-import { createPimlicoClient } from 'permissionless/clients/pimlico';
-import {
-  type Address,
-  type Chain,
-  createPublicClient,
-  type Hex,
-  type HttpTransport,
-  http,
-  type WalletClient,
-} from 'viem';
-import { entryPoint07Address, type SmartAccountImplementation } from 'viem/account-abstraction';
+import { createGeoWalletClient, defineGeoNetworkConfig, GeoTestnetConfig } from '@geoprotocol/geo-sdk';
+import { type Account, type Address, type Hex, createPublicClient, http } from 'viem';
 
-// ERC-7579 module addresses — must match the Curator app's constants
-const SAFE_7579_MODULE_ADDRESS: Hex = '0x7579EE8307284F293B1927136486880611F20002';
-const ERC7579_LAUNCHPAD_ADDRESS: Hex = '0x7579011aB74c46090561ea277Ba79D510c6C00ff';
-
-type SafeSmartAccount = SafeSmartAccountImplementation<'0.7'> & {
-  address: Address;
-  getNonce: NonNullable<SmartAccountImplementation['getNonce']>;
-  isDeployed: () => Promise<boolean>;
-  type: 'smart';
+// Narrow interface capturing the surface every consumer in apps/web actually touches:
+// `.account.address`, `.sendTransaction({to,data,value})`, `.sendUserOperation({calls})`.
+export type GeoWalletClient = {
+  account: { address: Address };
+  sendTransaction: (args: { to: Address; data: Hex; value?: bigint }) => Promise<Hex>;
+  sendUserOperation: (args: { calls: ReadonlyArray<{ to: Address; data: Hex; value?: bigint }> }) => Promise<Hex>;
+  /** `timeout` bounds a single wait so the caller — not viem's ~120s default — owns the total budget. */
+  waitForUserOperationReceipt: (args: { hash: Hex; timeout?: number }) => Promise<{ success: boolean }>;
 };
 
-type GeoSmartAccount = SmartAccountClient<
-  HttpTransport<undefined, false>,
-  Chain,
-  object &
-    SafeSmartAccount & {
-      address: Address;
-      getNonce: NonNullable<SmartAccountImplementation['getNonce']>;
-      isDeployed: () => Promise<boolean>;
-      type: 'smart';
-    },
-  undefined,
-  undefined
->;
+// ──────────────────────────────────────────────────────────────────────────────
+// ZeroDev EIP-7702 Kernel — the only wallet stack. The v2 SpaceRegistry keys
+// permissions on the EOA address directly, so there is no Safe indirection.
+//
+// The signer MUST be a viem LocalAccount (type: 'local') with a working
+// `signAuthorization` method. viem's standard `signAuthorization` action rejects
+// JSON-RPC accounts outright, so the embedded Privy WalletClient cannot be used
+// directly — wrap it via `toViemAccount` from `@privy-io/react-auth` at the call
+// site (see apps/web/core/hooks/use-smart-account.ts) before passing it here.
+// ──────────────────────────────────────────────────────────────────────────────
 
-type GenerateSmartAccountParams = {
-  rpcUrl: string;
-  bundlerUrl: string;
-  chain: Chain;
-  walletClient: WalletClient;
+type GeoNetworkConfig = ReturnType<typeof defineGeoNetworkConfig>;
+
+type GenerateZeroDevAccountParams = {
+  signer: Account;
+  /**
+   * Full Geo network config (chain, sponsorship, contracts) for the target
+   * network. Defaults to the SDK's built-in testnet config when omitted; the
+   * app passes its env-driven config so a network flip needs no change here.
+   */
+  network?: GeoNetworkConfig;
 };
 
-export async function generateSmartAccount({
-  rpcUrl,
-  bundlerUrl,
-  chain,
-  walletClient,
-}: GenerateSmartAccountParams): Promise<GeoSmartAccount> {
-  const transport = http(rpcUrl);
-  const publicClient = createPublicClient({
-    transport,
-    chain,
-  });
+/**
+ * A UserOperation that was included on-chain but reverted. Terminal by nature:
+ * nothing landed, and re-submitting the identical op reverts identically.
+ * Callers that wrap sends in a retry schedule MUST NOT retry this — see
+ * `isRevertedUserOperationError`.
+ */
+export class RevertedUserOperationError extends Error {
+  readonly hash: Hex;
 
-  // The RPC must actually serve the chain we think we're on. If it doesn't, viem reads the
-  // account's bytecode from the wrong chain, concludes it isn't deployed, and attaches init
-  // code — which the bundler rejects as `AA10 sender already constructed`, but only after the
-  // edit has been uploaded to IPFS. Fail here instead, where the cause is still legible.
-  const rpcChainId = await publicClient.getChainId();
+  constructor(hash: Hex) {
+    super(
+      `UserOperation ${hash} was included on-chain but reverted — the transaction had no effect. ` +
+        'Check permissions and proposal state before retrying.'
+    );
+    this.name = 'RevertedUserOperationError';
+    this.hash = hash;
+  }
+}
 
-  if (rpcChainId !== chain.id) {
+/**
+ * A bundler/paymaster rejecting an op because it reverted during simulation. The op
+ * never left the client, so there is no hash and no `RevertedUserOperationError` — but
+ * it is just as terminal: the same calldata simulates the same way every time.
+ *
+ * Matched on the message because the failure arrives as a generic viem
+ * `RpcRequestError` from `zd_sponsorUserOperation`; the bundler gives us no typed
+ * error to hold onto.
+ */
+const SIMULATION_REVERT_PATTERN = /reverted during simulation/i;
+
+/**
+ * Whether `error`, or anything in its `cause` chain, is a UserOperation that reverted
+ * — either on-chain after inclusion, or during the bundler's pre-submission simulation.
+ *
+ * The chain walk matters: every send site wraps failures in its own error type
+ * (TransactionWriteFailedError et al.), so the revert is never the outermost error by
+ * the time a retry schedule inspects it.
+ *
+ * Both cases are terminal and must not be retried. Missing the simulation case cost us
+ * seven identical submissions of a proposal that reverted `FastPathRestricted()` — a
+ * deterministic permission failure that no amount of retrying could fix.
+ */
+export function isRevertedUserOperationError(error: unknown): boolean {
+  // Bounded so a self-referential `cause` can't spin.
+  for (let current = error, depth = 0; current != null && depth < 10; depth++) {
+    if (current instanceof Error) {
+      // Name check as well as instanceof: this class crosses a workspace package
+      // boundary and a duplicated module instance would break identity.
+      if (current.name === 'RevertedUserOperationError') return true;
+      if (SIMULATION_REVERT_PATTERN.test(current.message)) return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+// One successful verification per RPC URL per session. Only successes are
+// cached: a rejected probe is evicted so a transient RPC error neither wedges
+// login permanently nor disables the guard for the rest of the session.
+const verifiedRpcUrls = new Map<string, Promise<void>>();
+
+/**
+ * Fail fast if the RPC serves a different chain than the one we're configured
+ * for. Without this, EIP-7702 authorizations and user operations are built and
+ * signed against the wrong chain and fail opaquely at submit time (AA10 after
+ * the edit has already been uploaded to IPFS) — the exact failure mode this
+ * guard's predecessor existed for before the ZeroDev migration dropped it.
+ */
+function assertRpcMatchesChain(chain: { id: number; rpcUrl?: string }): Promise<void> {
+  const { id, rpcUrl } = chain;
+  // No RPC URL to probe — createGeoWalletClient fails on its own terms.
+  if (!rpcUrl) return Promise.resolve();
+
+  const cached = verifiedRpcUrls.get(rpcUrl);
+  if (cached) return cached;
+
+  const probe = createPublicClient({ transport: http(rpcUrl) })
+    .getChainId()
+    .then(rpcChainId => {
+      if (rpcChainId !== id) {
+        throw new Error(
+          `RPC ${rpcUrl} serves chain ${rpcChainId}, but the app is configured for chain ${id}. ` +
+            'Refusing to sign against the wrong chain — check NEXT_PUBLIC_CHAIN_ID and the RPC endpoint vars.'
+        );
+      }
+    });
+  verifiedRpcUrls.set(rpcUrl, probe);
+  probe.catch(() => verifiedRpcUrls.delete(rpcUrl));
+  return probe;
+}
+
+/**
+ * Every UserOperation is submitted through the sponsorship endpoint (combined
+ * bundler + paymaster). Without one there is no bundler to submit to at all, so
+ * a network config missing it produces a client that can read but fails opaquely
+ * on the first write. Fail at construction, where the message can name the fix.
+ *
+ * Deliberately checked here rather than at module load in geo-network.ts: an
+ * unsponsored network should still serve read-only traffic.
+ */
+function assertSponsorshipConfigured(network: GeoNetworkConfig): void {
+  if (!network.sponsorship?.rpcUrl) {
     throw new Error(
-      `RPC chain mismatch: ${rpcUrl} serves chain ${rpcChainId}, but the app is configured for ${chain.name} (${chain.id}). Point RPC_ENDPOINT_TESTNET at a chain ${chain.id} RPC.`
+      `Network ${network.id ?? 'unknown'} (chain ${network.chain?.id ?? 'unknown'}) has no gas-sponsorship endpoint. ` +
+        'UserOperations cannot be submitted without a bundler — set NEXT_PUBLIC_SPONSORSHIP_RPC_URL for this chain.'
     );
   }
+}
 
-  let safeAccount;
+export async function generateZeroDevAccount({
+  signer,
+  network,
+}: GenerateZeroDevAccountParams): Promise<GeoWalletClient> {
+  const resolvedNetwork = network ?? GeoTestnetConfig;
 
-  if (chain.id === 19411) {
-    // Testnet: always use legacy path (7579 modules not deployed on testnet)
-    const safeAccountParams: ToSafeSmartAccountParameters<'0.7', undefined> = {
-      client: publicClient,
-      owners: [walletClient],
-      entryPoint: {
-        address: entryPoint07Address,
-        version: '0.7',
-      },
-      version: '1.4.1',
-      // Custom SAFE Addresses for testnet
-      safeModuleSetupAddress: '0x2dd68b007B46fBe91B9A7c3EDa5A7a1063cB5b47',
-      safe4337ModuleAddress: '0x75cf11467937ce3F2f357CE24ffc3DBF8fD5c226',
-      safeProxyFactoryAddress: '0xd9d2Ba03a7754250FDD71333F444636471CACBC4',
-      safeSingletonAddress: '0x639245e8476E03e789a244f279b5843b9633b2E7',
-      multiSendAddress: '0x7B21BBDBdE8D01Df591fdc2dc0bE9956Dde1e16C',
-      multiSendCallOnlyAddress: '0x32228dDEA8b9A2bd7f2d71A958fF241D79ca5eEC',
-    };
+  assertSponsorshipConfigured(resolvedNetwork);
 
-    safeAccount = await toSafeSmartAccount(safeAccountParams);
-  } else {
-    // Mainnet: match the Curator's two-path logic.
-    // Try legacy first — if the account was deployed before 7579 migration, use that address.
-    // Otherwise use the 7579 path, which is what the Curator uses for new accounts.
-    const legacyParams: ToSafeSmartAccountParameters<'0.7', undefined> = {
-      client: publicClient,
-      owners: [walletClient],
-      entryPoint: {
-        address: entryPoint07Address,
-        version: '0.7',
-      },
-      version: '1.4.1',
-    };
-
-    const legacyAccount = await toSafeSmartAccount(legacyParams);
-
-    if (await legacyAccount.isDeployed()) {
-      safeAccount = legacyAccount;
-    } else {
-      // New account — use 7579 path matching the Curator
-      const ownerAddress = walletClient.account?.address;
-      if (!ownerAddress) {
-        throw new Error('Wallet client has no account address');
-      }
-
-      const ownableValidator = getOwnableValidator({
-        owners: [ownerAddress],
-        threshold: 1,
-      });
-      const smartSessionsValidator = getSmartSessionsValidator({});
-
-      const erc7579Params: ToSafeSmartAccountParameters<'0.7', Hex> = {
-        client: publicClient,
-        owners: [walletClient],
-        version: '1.4.1',
-        entryPoint: {
-          address: entryPoint07Address,
-          version: '0.7',
-        },
-        safe4337ModuleAddress: SAFE_7579_MODULE_ADDRESS,
-        erc7579LaunchpadAddress: ERC7579_LAUNCHPAD_ADDRESS,
-        attesters: [RHINESTONE_ATTESTER_ADDRESS],
-        attestersThreshold: 1,
-        validators: [
-          {
-            address: ownableValidator.address,
-            context: ownableValidator.initData,
-          },
-          {
-            address: smartSessionsValidator.address,
-            context: smartSessionsValidator.initData,
-          },
-        ],
-      };
-
-      safeAccount = await toSafeSmartAccount(erc7579Params);
-    }
+  if (resolvedNetwork.chain) {
+    await assertRpcMatchesChain(resolvedNetwork.chain);
   }
 
-  const bundlerTransport = http(bundlerUrl);
-  const paymasterClient = createPimlicoClient({
-    transport: bundlerTransport,
-    chain: chain,
-    entryPoint: {
-      address: entryPoint07Address,
-      version: '0.7',
-    },
+  const kernelClient = await createGeoWalletClient({
+    signer: signer as Parameters<typeof createGeoWalletClient>[0]['signer'],
+    network: resolvedNetwork,
   });
 
-  const smartAccount = createSmartAccountClient({
-    chain: chain,
-    account: safeAccount,
-    paymaster: paymasterClient,
-    bundlerTransport,
-    userOperation: {
-      estimateFeesPerGas: async () => {
-        return (await paymasterClient.getUserOperationGasPrice()).fast;
-      },
-    },
-  });
-
-  return smartAccount;
+  return kernelClient as unknown as GeoWalletClient;
 }

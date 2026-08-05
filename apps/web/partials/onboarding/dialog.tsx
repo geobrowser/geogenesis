@@ -1,7 +1,7 @@
 'use client';
 
 import { useLogout } from '@geogenesis/auth';
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,6 +20,7 @@ import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboa
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
+import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { E } from '~/core/sync/orm';
@@ -323,7 +324,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     const file = e.target.files[0];
     setIsUploadingAvatar(true);
     try {
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
+      const { cid } = await uploadGeoImage({ blob: file });
       setAvatar(cid);
     } catch (error) {
       console.error('Avatar upload failed:', error);

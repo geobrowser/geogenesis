@@ -98,7 +98,11 @@ export function CommunityCallsPage({
   const PAST_PAGE = 10;
   const [pastLimit, setPastLimit] = React.useState(PAST_PAGE);
 
-  const { isEditor } = useAccessControl(spaceId);
+  const { isEditor, isMember } = useAccessControl(spaceId);
+  // Scheduling, deleting and publishing recordings stay editor-only; RSVP is
+  // participation, so it's open to anyone in the space (GEO-2480). `isMember` and
+  // `isEditor` are independent flags — an editor is not implicitly a member.
+  const canRsvp = isMember || isEditor;
   const { identityToken, getToken } = useCommunityCallIdentityToken();
 
   const { data: recordingsData } = useQuery({
@@ -146,7 +150,9 @@ export function CommunityCallsPage({
         {buckets.upcoming.length === 0 ? (
           <p className="text-metadata text-grey-04">No upcoming calls scheduled.</p>
         ) : (
-          buckets.upcoming.map(row => <UpcomingRow key={rowKey(row)} row={row} isEditor={isEditor} />)
+          buckets.upcoming.map(row => (
+            <UpcomingRow key={rowKey(row)} row={row} isEditor={isEditor} canRsvp={canRsvp} />
+          ))
         )}
       </section>
 
@@ -209,7 +215,7 @@ function LiveCallCard({ spaceId, row }: { spaceId: string; row: Row }) {
   );
 }
 
-function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
+function UpcomingRow({ row, isEditor, canRsvp }: { row: Row; isEditor: boolean; canRsvp: boolean }) {
   'use no memo';
 
   const router = useRouter();
@@ -276,7 +282,7 @@ function UpcomingRow({ row, isEditor }: { row: Row; isEditor: boolean }) {
       <div className="flex items-start justify-between">
         <CallTitle row={row} />
         <div className="flex items-center gap-2">
-          {isEditor && <RsvpButton call={row.call} />}
+          {canRsvp && <RsvpButton call={row.call} />}
           <Dropdown
             trigger={<Ellipsis />}
             align="end"

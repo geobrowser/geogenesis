@@ -1,6 +1,6 @@
 'use client';
 
-import { Graph, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import cx from 'classnames';
 
 import { MAX_VIDEO_SIZE_BYTES, VALID_VIDEO_TYPES, VIDEO_ACCEPT } from '~/core/constants';
+import { createGeoImage } from '~/core/sdk/geo-client';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -197,11 +198,8 @@ function VideoNodeChildren({
         setUploadProgress(prev => Math.min(prev + 2, 90));
       }, 300);
 
-      // Upload using Graph.createImage (works for video too)
-      const { ops } = await Graph.createImage({
-        blob: file,
-        network: 'TESTNET',
-      });
+      // Videos upload through the same image pipeline
+      const { ops } = await createGeoImage({ blob: file });
 
       setUploadProgress(100);
 
