@@ -1149,48 +1149,50 @@ export function getEntityVoters(
   });
 }
 
-const USER_ENTITY_VOTES_PAGE_SIZE = 200;
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVotesPage = {
   nodes: Array<{ objectId: string }>;
   pageInfo: { hasNextPage: boolean; endCursor?: string | null };
 };
 
-export function getUserEntityVoteObjectIds(
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
   userId: string,
   voteType: 0 | 1,
   objectType: 0 | 1 = 0,
+  after?: string | null,
   signal?: AbortController['signal']
 ) {
   return Effect.gen(function* () {
-    const objectIds: string[] = [];
-    let after: string | null | undefined = undefined;
-    let hasNextPage = true;
+    const page: UserEntityVotesPage = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVotesPage =>
+        data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        after: after ?? null,
+      },
+      signal,
+    });
 
-    while (hasNextPage) {
-      const page: UserEntityVotesPage = yield* graphql({
-        query: UserEntityVotesByTypeDocument,
-        decoder: (data): UserEntityVotesPage =>
-          data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
-        variables: {
-          userId,
-          voteType,
-          objectType,
-          first: USER_ENTITY_VOTES_PAGE_SIZE,
-          after: after ?? null,
-        },
-        signal,
-      });
+    const objectIds = page.nodes.map(node => node.objectId).filter(Boolean);
+    const endCursor = page.pageInfo.endCursor ?? null;
 
-      for (const node of page.nodes) {
-        if (node.objectId) objectIds.push(node.objectId);
-      }
-
-      hasNextPage = Boolean(page.pageInfo.hasNextPage && page.pageInfo.endCursor);
-      after = page.pageInfo.endCursor;
-    }
-
-    return objectIds;
+    return {
+      objectIds,
+      endCursor,
+      // A cursor is required to advance, so treat a missing one as the end.
+      hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),
+    } satisfies UserEntityVoteObjectIdsPage;
   });
 }
 

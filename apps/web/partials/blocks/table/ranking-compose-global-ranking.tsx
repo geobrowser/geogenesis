@@ -9,8 +9,7 @@ import cx from 'classnames';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
-import { useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
-import { ID } from '~/core/id';
+import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
 
@@ -336,27 +335,29 @@ export function RankingComposeGlobalRanking({
   const isDesktop = !isMobile;
 
   const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
-  const { votedIdSet: upvotedIdSet, isLoading: isLoadingUpvoted } = useUserVotedEntityIds(
-    'up',
-    browseTab === 'upvoted'
-  );
-  const { votedIdSet: downvotedIdSet, isLoading: isLoadingDownvoted } = useUserVotedEntityIds(
-    'down',
-    browseTab === 'downvoted'
-  );
 
-  const voteFilterSet = browseTab === 'upvoted' ? upvotedIdSet : browseTab === 'downvoted' ? downvotedIdSet : null;
-  const isLoadingVoteFilter =
-    (browseTab === 'upvoted' && isLoadingUpvoted) || (browseTab === 'downvoted' && isLoadingDownvoted);
+  const voteDirection = browseTab === 'upvoted' ? 'up' : browseTab === 'downvoted' ? 'down' : null;
+  const {
+    orderedIds: voteTabIds,
+    isLoading: isLoadingVoteTab,
+    hasNextPage: voteTabHasNextPage,
+    isFetchingNextPage: isFetchingVoteTabNextPage,
+    fetchNextPage: fetchVoteTabNextPage,
+  } = useVoteTabEntities(voteDirection);
 
-  const tabFilteredRankedIds = React.useMemo(
-    () => (voteFilterSet ? filteredRankedIds.filter(id => voteFilterSet.has(ID.uuidToHex(id))) : filteredRankedIds),
-    [filteredRankedIds, voteFilterSet]
-  );
-  const tabFilteredUnrankedIds = React.useMemo(
-    () => (voteFilterSet ? filteredUnrankedIds.filter(id => voteFilterSet.has(ID.uuidToHex(id))) : filteredUnrankedIds),
-    [filteredUnrankedIds, voteFilterSet]
-  );
+  const isVoteTab = voteDirection !== null;
+
+  const [tabFilteredRankedIds, tabFilteredUnrankedIds] = React.useMemo(() => {
+    if (!isVoteTab) return [filteredRankedIds, filteredUnrankedIds];
+
+    const ranked: string[] = [];
+    const unranked: string[] = [];
+    for (const id of voteTabIds) {
+      if (globalRankByEntityId.has(id)) ranked.push(id);
+      else unranked.push(id);
+    }
+    return [ranked, unranked];
+  }, [isVoteTab, voteTabIds, globalRankByEntityId, filteredRankedIds, filteredUnrankedIds]);
 
   const tabShowRankedUnrankedDivider = tabFilteredRankedIds.length > 0 && tabFilteredUnrankedIds.length > 0;
   const tabHasVisibleRankableEntities = tabFilteredRankedIds.length > 0 || tabFilteredUnrankedIds.length > 0;
@@ -445,12 +446,17 @@ export function RankingComposeGlobalRanking({
     setSearchListStableHeight(computeSearchListStableHeight(pageScrollRoot, listContainerRef.current));
   }, [getPageScrollRoot, needsSearchStablePlaceholder]);
 
-  const canLoadMore = hasNextPage && (browseTab !== 'global' || hasVisibleRankableEntities);
+  const canLoadMore = isVoteTab ? voteTabHasNextPage : hasNextPage && hasVisibleRankableEntities;
+  const isFetchingMore = isVoteTab ? isFetchingVoteTabNextPage : isFetchingNextPage;
+  const fetchMore = React.useCallback(() => {
+    if (isVoteTab) void fetchVoteTabNextPage();
+    else onFetchNextPage();
+  }, [isVoteTab, fetchVoteTabNextPage, onFetchNextPage]);
 
   const setSentinelRef = useInfiniteScrollSentinel({
     hasNextPage: canLoadMore,
-    isFetchingNextPage,
-    fetchNextPage: onFetchNextPage,
+    isFetchingNextPage: isFetchingMore,
+    fetchNextPage: fetchMore,
     root: scrollRoot,
   });
   const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
@@ -475,21 +481,21 @@ export function RankingComposeGlobalRanking({
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
   React.useEffect(() => {
-    if (!scrollRoot || !canLoadMore || isFetchingNextPage || !sentinelEl) return;
+    if (!scrollRoot || !canLoadMore || isFetchingMore || !sentinelEl) return;
 
     const rootRect = scrollRoot.getBoundingClientRect();
     const sentinelRect = sentinelEl.getBoundingClientRect();
     if (sentinelRect.top <= rootRect.bottom + 200) {
-      onFetchNextPage();
+      fetchMore();
     }
   }, [
     browseTab,
     scrollRoot,
     canLoadMore,
-    isFetchingNextPage,
-    onFetchNextPage,
-    filteredRankedIds.length,
-    filteredUnrankedIds.length,
+    isFetchingMore,
+    fetchMore,
+    tabFilteredRankedIds.length,
+    tabFilteredUnrankedIds.length,
     sentinelEl,
   ]);
 
@@ -549,11 +555,12 @@ export function RankingComposeGlobalRanking({
     if (query) {
       ids = ids.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
     }
-    if (voteFilterSet) {
-      ids = ids.filter(id => voteFilterSet.has(ID.uuidToHex(id)));
+    if (isVoteTab) {
+      const votedIds = new Set(voteTabIds);
+      ids = ids.filter(id => votedIds.has(id));
     }
     return ids;
-  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById, voteFilterSet]);
+  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById, isVoteTab, voteTabIds]);
 
   const hasExactNameMatch = React.useMemo(() => {
     if (!isSearchActive) return false;
@@ -583,7 +590,7 @@ export function RankingComposeGlobalRanking({
   const loadMoreFooter = (
     <>
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {canLoadMore && isFetchingMore ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
     </>
   );
 
@@ -626,9 +633,7 @@ export function RankingComposeGlobalRanking({
 
   const voteTabEmptyState = (
     <>
-      {isFetchingNextPage || canLoadMore ? (
-        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
-      ) : null}
+      {isFetchingMore || canLoadMore ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
       {pendingDisclosure}
     </>
@@ -711,7 +716,7 @@ export function RankingComposeGlobalRanking({
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
-          ) : browseTab !== 'global' && isLoadingVoteFilter ? (
+          ) : browseTab !== 'global' && isLoadingVoteTab ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
           ) : !tabHasVisibleRankableEntities ? (
             browseTab === 'global' ? (

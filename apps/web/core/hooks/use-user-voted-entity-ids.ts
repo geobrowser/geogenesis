@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
-import { getUserEntityVoteObjectIds } from '~/core/io/queries';
+import { type UserEntityVoteObjectIdsPage, getUserEntityVoteObjectIdsPage } from '~/core/io/queries';
 
 export type EntityVoteDirectionFilter = 'up' | 'down';
 
@@ -31,26 +31,42 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
   const voteType = VOTE_TYPE_BY_DIRECTION[direction];
   const canFetch = enabled && Boolean(personalSpaceId) && isRegistered;
 
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: userEntityVotesQueryKey(personalSpaceId, direction),
-    queryFn: async ({ signal }) => {
-      if (!personalSpaceId) return [] as string[];
-      return Effect.runPromise(getUserEntityVoteObjectIds(personalSpaceId, voteType, 0, signal));
+    queryFn: async ({ pageParam, signal }) => {
+      if (!personalSpaceId) {
+        return { objectIds: [], endCursor: null, hasNextPage: false } satisfies UserEntityVoteObjectIdsPage;
+      }
+      return Effect.runPromise(getUserEntityVoteObjectIdsPage(personalSpaceId, voteType, 0, pageParam, signal));
     },
+    initialPageParam: null as string | null,
+    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
     enabled: canFetch,
     staleTime: 30_000,
   });
 
-  const votedIdSet = React.useMemo(() => {
-    const set = new Set<string>();
-    for (const id of query.data ?? []) {
-      if (id) set.add(ID.uuidToHex(id));
+  const ids = React.useMemo(() => {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+
+    for (const page of query.data?.pages ?? []) {
+      for (const id of page.objectIds) {
+        if (!id) continue;
+        const hexId = ID.uuidToHex(id);
+        if (seen.has(hexId)) continue;
+        seen.add(hexId);
+        ordered.push(hexId);
+      }
     }
-    return set;
+
+    return ordered;
   }, [query.data]);
 
   return {
-    votedIdSet,
+    ids,
     isLoading: canFetch && query.isLoading,
+    hasNextPage: Boolean(query.hasNextPage),
+    isFetchingNextPage: query.isFetchingNextPage,
+    fetchNextPage: query.fetchNextPage,
   };
 }
