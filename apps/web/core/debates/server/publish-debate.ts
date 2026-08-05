@@ -16,6 +16,7 @@ import { Publish } from '~/core/utils/publish';
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { getDebateAcceptorConfig } from './acceptor-config';
 import { loadDebatePublishSource } from './debate-source';
+import { extractDebateClaims } from './extract-claims';
 
 export type PublishDebateResult =
   | { status: 'published'; debateEntityId: string; spaceId: string; userOpHash: string }
@@ -44,7 +45,12 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   }
 
   const { input } = await loadDebatePublishSource(debateId);
-  const draft = buildDebatePublishDraft(input);
+
+  // Extract claims from the transcript and mint them into the SAME publish edit (one signature, one
+  // governance round). Non-fatal: returns [] when disabled/unconfigured/slow/failed, and the debate
+  // publishes without claims.
+  const claims = await extractDebateClaims(input);
+  const draft = buildDebatePublishDraft({ ...input, claims });
 
   const space = await Effect.runPromise(getSpace(input.spaceId));
   if (!space) {

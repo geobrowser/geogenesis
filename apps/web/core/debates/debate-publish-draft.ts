@@ -1,5 +1,6 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import type { DataType, Relation, Value } from '~/core/types';
 
@@ -41,6 +42,19 @@ export type DebatePublishTurn = {
   text: string;
 };
 
+export type DebateClaimInput = {
+  /** The claim text (becomes the Claim entity name). */
+  text: string;
+  /** True = verifiable fact, False = opinion, null = unclassified. */
+  isFactual: boolean | null;
+  /**
+   * Index into the post-filter `transcriptTurns` (empty/whitespace turns removed) of the turn this
+   * claim was extracted from. The claim is attached to that turn's text block, whose Authors relation
+   * carries the speaker attribution.
+   */
+  turnIndex: number;
+};
+
 export type DebatePublishInput = {
   /** geo-chat debate UUID (with dashes). Becomes the Debate entity id, dashless. */
   debateId: string;
@@ -59,6 +73,11 @@ export type DebatePublishInput = {
   keyframeUrl: string | null;
   /** Merged per-turn transcript. Empty skips the Transcript entity. */
   transcriptTurns: DebatePublishTurn[];
+  /**
+   * Claims extracted from the transcript, each attributed to a turn by its post-filter index in
+   * `transcriptTurns`. Optional — omitted/empty publishes the debate with no extracted claims.
+   */
+  claims?: DebateClaimInput[];
 };
 
 export type DebatePublishDraft = {
@@ -101,6 +120,21 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const setText = (entityId: string, entityName: string | null, propertyId: string, value: string) => {
     values.push(makeTextValue({ entityId, entityName, propertyId, value, spaceId: input.spaceId }));
   };
+
+  const setBoolean = (entityId: string, entityName: string | null, propertyId: string, value: boolean) => {
+    values.push(
+      makeBooleanValue({ entityId, entityName, propertyId, value: value ? 'true' : 'false', spaceId: input.spaceId })
+    );
+  };
+
+  // Group extracted claims by the turn they came from, so the transcript loop can attach each to
+  // its source block. turnIndex aligns with the post-filter `turns` order below.
+  const claimsByTurnIndex = new Map<number, DebateClaimInput[]>();
+  for (const claim of input.claims ?? []) {
+    const list = claimsByTurnIndex.get(claim.turnIndex);
+    if (list) list.push(claim);
+    else claimsByTurnIndex.set(claim.turnIndex, [claim]);
+  }
 
   const relate = ({
     fromEntity,
@@ -217,7 +251,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       toEntityName: transcriptName,
     });
 
-    for (const turn of turns) {
+    turns.forEach((turn, turnIndex) => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
       const blockId = createEntityId();
       const blockName = `${speakerName} — ${claimText}`;
@@ -248,7 +282,35 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         toEntityId: blockId,
         toEntityName: blockName,
       });
-    }
+
+      // Claims extracted from this turn. Each becomes a Claim entity linked FROM this text block via
+      // the Claims relation — so attribution rides the block's Authors relation (the speaker), with no
+      // separate claim→speaker property. Side (for/against) is recoverable from the participant's
+      // Supported/Opposed-by membership on the Debate.
+      for (const claim of claimsByTurnIndex.get(turnIndex) ?? []) {
+        const claimEntityText = claim.text.trim();
+        if (claimEntityText.length === 0) continue;
+        const claimId = createEntityId();
+        const claimRef = { id: claimId, name: claimEntityText };
+        setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
+        relate({ fromEntity: claimRef, propertyId: TYPES_PROPERTY_ID, toEntityId: CLAIM_TYPE_ID, toEntityName: 'Claim' });
+        if (claim.isFactual !== null) {
+          setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
+        }
+        relate({
+          fromEntity: blockRef,
+          propertyId: DEBATE_CLAIMS_PROPERTY_ID,
+          toEntityId: claimId,
+          toEntityName: claimEntityText,
+        });
+        relate({
+          fromEntity: claimRef,
+          propertyId: SOURCES_PROPERTY_ID,
+          toEntityId: debateEntityId,
+          toEntityName: debateName,
+        });
+      }
+    });
   }
 
   return { debateEntityId, debateName, values, relations };
@@ -297,6 +359,32 @@ function makeTextValue({
     id: ID.createValueId({ entityId, propertyId, spaceId }),
     entity: { id: entityId, name: entityName },
     property: { id: propertyId, name: null, dataType: TEXT_DATA_TYPE },
+    value,
+    spaceId,
+    isLocal: true,
+    hasBeenPublished: false,
+  };
+}
+
+const BOOLEAN_DATA_TYPE: DataType = 'BOOLEAN';
+
+function makeBooleanValue({
+  entityId,
+  entityName,
+  propertyId,
+  value,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  value: string;
+  spaceId: string;
+}): Value {
+  return {
+    id: ID.createValueId({ entityId, propertyId, spaceId }),
+    entity: { id: entityId, name: entityName },
+    property: { id: propertyId, name: null, dataType: BOOLEAN_DATA_TYPE },
     value,
     spaceId,
     isLocal: true,
