@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GeoChatRequestError,
   completeLocalRecordingUpload,
+  endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
   resetGeoChatSession,
@@ -154,6 +155,33 @@ describe('debate availability', () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ available_to_debate: false }),
+      })
+    );
+  });
+});
+
+describe('turn yields', () => {
+  it('posts the client cutoff to the addressed turn', async () => {
+    const debate = { id: 'debate-1', status: 'in_progress', turn_yields: [] };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(debate), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(endDebateTurn('debate-1', 2, 1_784_542_272_505, vi.fn(), 'user-a')).resolves.toEqual(debate);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/turns/2/end',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ended_at_ms: 1_784_542_272_505 }),
       })
     );
   });

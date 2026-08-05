@@ -104,8 +104,14 @@ describe('DebugDebatesPageClient', () => {
 
   it.each([
     [{ data: undefined, isLoading: true, isFetching: true, error: null }, 'Loading debate diagnostics…'],
-    [{ data: undefined, isLoading: false, isFetching: false, error: new Error('List failed') }, 'Could not load debates: List failed'],
-    [{ data: { debates: [], matches: [] }, isLoading: false, isFetching: false, error: null }, 'No debates found for this space.'],
+    [
+      { data: undefined, isLoading: false, isFetching: false, error: new Error('List failed') },
+      'Could not load debates: List failed',
+    ],
+    [
+      { data: { debates: [], matches: [] }, isLoading: false, isFetching: false, error: null },
+      'No debates found for this space.',
+    ],
   ])('renders the list state %#', (result, message) => {
     mocks.listResult = result as typeof mocks.listResult;
 
@@ -115,7 +121,10 @@ describe('DebugDebatesPageClient', () => {
   });
 
   it('sorts debates newest first and refreshes the list and media queries', async () => {
-    mocks.listResult.data.debates = [debate('older', '2026-07-01T00:00:00.000Z'), debate('newer', '2026-07-03T00:00:00.000Z')];
+    mocks.listResult.data.debates = [
+      debate('older', '2026-07-01T00:00:00.000Z'),
+      debate('newer', '2026-07-03T00:00:00.000Z'),
+    ];
 
     render(<DebugDebatesPageClient spaceId="space-1" />);
 
@@ -269,7 +278,9 @@ describe('DebugDebatesPageClient', () => {
     const unaffectedCard = screen.getByTestId('debate-card-unaffected');
     fireEvent.click(within(card).getByRole('button', { name: 'Reprocess video' }));
     expect(await within(card).findByText('Could not reprocess video: Reprocessing unavailable')).toBeInTheDocument();
-    expect(within(unaffectedCard).queryByText('Could not reprocess video: Reprocessing unavailable')).not.toBeInTheDocument();
+    expect(
+      within(unaffectedCard).queryByText('Could not reprocess video: Reprocessing unavailable')
+    ).not.toBeInTheDocument();
 
     fireEvent.click(within(card).getByRole('button', { name: 'Reprocess video' }));
     await waitFor(() => expect(mocks.reprocess).toHaveBeenCalledTimes(2));
@@ -376,7 +387,10 @@ describe('DebugDebatesPageClient', () => {
   it.each([
     [{ data: undefined, isLoading: true, error: null }, 'Loading transcript…'],
     [{ data: { segments: [] }, isLoading: false, error: null }, 'No transcript segments found.'],
-    [{ data: undefined, isLoading: false, error: new Error('Transcript failed') }, 'Could not load transcript: Transcript failed'],
+    [
+      { data: undefined, isLoading: false, error: new Error('Transcript failed') },
+      'Could not load transcript: Transcript failed',
+    ],
   ])('renders the expanded transcript state %#', (result, message) => {
     mocks.listResult.data.debates = [debate('transcript-state')];
     mocks.mediaByDebate.set('transcript-state', mediaResult('succeeded', {}, [], 2));
@@ -392,7 +406,13 @@ describe('DebugDebatesPageClient', () => {
 function debate(id: string, createdAt = '2026-07-02T00:00:00.000Z'): Debate {
   return {
     id,
-    claim: { id: `claim-${id}`, space_id: 'space-1', claim_entity_id: `entity-${id}`, claim: `Claim ${id}`, description: null },
+    claim: {
+      id: `claim-${id}`,
+      space_id: 'space-1',
+      claim_entity_id: `entity-${id}`,
+      claim: `Claim ${id}`,
+      description: null,
+    },
     status: 'complete',
     room_name: id,
     first_participant_slot: 1,
@@ -410,12 +430,26 @@ function debate(id: string, createdAt = '2026-07-02T00:00:00.000Z'): Debate {
     completed_at: null,
     participants: [
       {
-        user_id: 'user-1', profile_space_id: 'profile-1', display_name: 'Alex', avatar_cid: null,
-        participant_slot: 1, position: true, position_label: 'For', joined_at: null, ready_at: null,
+        user_id: 'user-1',
+        profile_space_id: 'profile-1',
+        display_name: 'Alex',
+        avatar_cid: null,
+        participant_slot: 1,
+        position: true,
+        position_label: 'For',
+        joined_at: null,
+        ready_at: null,
       },
       {
-        user_id: 'user-2', profile_space_id: 'profile-2', display_name: null, avatar_cid: null,
-        participant_slot: 2, position: false, position_label: 'Against', joined_at: null, ready_at: null,
+        user_id: 'user-2',
+        profile_space_id: 'profile-2',
+        display_name: null,
+        avatar_cid: null,
+        participant_slot: 2,
+        position: false,
+        position_label: 'Against',
+        joined_at: null,
+        ready_at: null,
       },
     ],
     recordings: [],
@@ -449,7 +483,12 @@ function mediaResult(
         }
       : null,
     artifacts: artifactKinds.map(kind => ({
-      id: `${kind}-id`, kind, filename: `${kind}.video`, content_type: 'video/test', byte_size: 1, metadata: {},
+      id: `${kind}-id`,
+      kind,
+      filename: `${kind}.video`,
+      content_type: 'video/test',
+      byte_size: 1,
+      metadata: {},
       created_at: '2026-07-01T00:00:00.000Z',
     })),
     transcript_segment_count: transcriptSegmentCount,

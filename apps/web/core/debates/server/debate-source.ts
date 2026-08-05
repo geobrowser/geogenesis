@@ -1,4 +1,12 @@
-import type { Debate, DebateMediaResponse, DebateTranscriptResponse, SpaceDebatesResponse } from '../api';
+import { uploadGeoImage } from '~/core/sdk/geo-client';
+
+import type {
+  Debate,
+  DebateMediaArtifactKind,
+  DebateMediaResponse,
+  DebateTranscriptResponse,
+  SpaceDebatesResponse,
+} from '../api';
 import {
   type DebatePublishInput,
   type DebatePublishParticipant,
@@ -104,7 +112,10 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     throw new DebateNotPublishableError('media_not_ready', `Debate ${debateId} has no processed final_video artifact.`);
   }
 
-  const videoUrl = await resolveFinalVideoUrl(debateId);
+  const videoUrl = await pinArtifactToIpfs(debateId, 'final_video');
+  const keyframeUrl = media.artifacts.some(artifact => artifact.kind === 'preview_image')
+    ? await pinKeyframeToIpfs(debateId)
+    : null;
   const transcriptTurns = await loadTranscriptTurns(debateId, debate);
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
@@ -121,6 +132,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     claimText: debate.claim.claim,
     participants,
     videoUrl,
+    keyframeUrl,
     transcriptTurns,
   };
 
@@ -156,13 +168,36 @@ function debatePublicationDeadline(debate: Debate): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-async function resolveFinalVideoUrl(debateId: string): Promise<string> {
-  // NOTE: this is a presigned (expiring) URL. Flagged in TICKET.md — production needs a stable
-  // public/CDN URL for the final video before this is durable on-chain.
+/**
+ * Pin a geo-chat media artifact to IPFS and return its permanent `ipfs://` URI.
+ *
+ * geo-chat only hands out presigned object-store URLs, and those expire after 15 minutes, so a
+ * published one is dead well before anyone opens the entity. Download the bytes while the URL is
+ * still valid and pin those instead.
+ *
+ * Uploaded as a blob rather than by URL: the SDK's URL path rejects any body that isn't an image,
+ * and the final video is a webm.
+ */
+async function pinArtifactToIpfs(debateId: string, kind: DebateMediaArtifactKind): Promise<string> {
   const { upload } = await geoChatPost<{ upload: { url: string } }>(`/debates/${debateId}/media/artifacts/url`, {
-    kind: 'final_video',
+    kind,
   });
-  return upload.url;
+  const response = await fetch(upload.url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Downloading ${kind} for debate ${debateId} failed (${response.status}).`);
+  }
+  const { cid } = await uploadGeoImage({ blob: await response.blob() });
+  return cid;
+}
+
+async function pinKeyframeToIpfs(debateId: string): Promise<string | null> {
+  try {
+    return await pinArtifactToIpfs(debateId, 'preview_image');
+  } catch (error) {
+    // A missing poster shouldn't hold back the Debate + Video entities.
+    console.warn(`[debate-acceptor] could not pin keyframe for ${debateId}; publishing without one.`, error);
+    return null;
+  }
 }
 
 async function loadTranscriptTurns(debateId: string, debate: Debate) {

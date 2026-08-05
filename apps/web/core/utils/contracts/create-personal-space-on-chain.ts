@@ -1,10 +1,13 @@
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
+import { getCreatePersonalSpaceCalldata } from '@geoprotocol/geo-sdk';
 
 import { Duration, Effect, Schedule } from 'effect';
 import { type Hex, createPublicClient, http } from 'viem';
 
 import type { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getSpace } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
+import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { SpaceType } from '~/core/types';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
@@ -13,7 +16,7 @@ import { devLog } from '../dev-log';
 import { getImagePath } from '../utils';
 import { EMPTY_SPACE_ID } from './dao-space-factory';
 import { generateOpsForSpaceType } from './generate-ops-for-space-type';
-import { SPACE_REGISTRY_ADDRESS_HEX, SpaceRegistryAbi } from './space-registry';
+import { SpaceRegistryAbi } from './space-registry';
 import { buildPersonalTopicDeclaredCalldata } from './space-topic';
 
 /**
@@ -95,11 +98,15 @@ export async function waitForSpaceIndexed(
   return false;
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function publishRetrySchedule() {
   return Schedule.exponential(Duration.millis(500)).pipe(
     Schedule.jittered,
     Schedule.tapInput(() => Effect.sync(() => devLog('[CREATE_SPACE] Retrying publish + topic'))),
-    Schedule.intersect(Schedule.recurs(2))
+    Schedule.intersect(Schedule.recurs(2)),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
@@ -126,7 +133,8 @@ export async function createPersonalSpaceOnChain({
   // 1. Register the space id if the account doesn't already have one.
   let spaceId = await readRegisteredSpaceId(walletAddress);
   if (!spaceId) {
-    const { to, calldata } = personalSpace.createSpace();
+    const to = SPACE_REGISTRY_ADDRESS_HEX;
+    const calldata = getCreatePersonalSpaceCalldata();
     const registerResult = await runEffectEither(
       Effect.tryPromise({
         try: () => smartAccount.sendUserOperation({ calls: [{ to, value: 0n, data: calldata }] }),
@@ -160,12 +168,11 @@ export async function createPersonalSpaceOnChain({
     topicId,
   });
 
-  const { to: publishTo, calldata: publishCalldata } = await personalSpace.publishEdit({
+  const { to: publishTo, calldata: publishCalldata } = await geo.personalSpaces.publishEdit({
     name: spaceName,
     spaceId,
     ops,
     author: spaceId,
-    network: 'TESTNET',
   });
 
   const topicCalldata = buildPersonalTopicDeclaredCalldata({
@@ -202,9 +209,23 @@ export async function createPersonalSpaceOnChain({
   devLog('[CREATE_SPACE] publish + topic userOp sent, waiting for index…');
 
   // 4. Wait for both content and topic to index (one merged loop).
+  //
+  // A timeout here is NOT a creation failure. The space is registered on-chain — we
+  // read its id from the registry above — and the content userOp was accepted; all
+  // that's outstanding is the indexer catching up, which it does on its own schedule.
+  // Throwing reported "Account setup failed: Timed out waiting for personal space to
+  // index" for a space that already existed, and left the account wedged: the runner's
+  // catch never seeds the personal-space cache, so the app kept the user unregistered
+  // and refused every write until a hard reload.
+  //
+  // Return the id either way. Callers treat it as created, and usePersonalSpaceId
+  // polls until the indexer serves it.
   const indexed = await waitForSpaceIndexed(spaceId, resolvedTopicId);
-  if (!indexed) throw new Error('Timed out waiting for personal space to index.');
-  devLog('[CREATE_SPACE] indexed, spaceId=%s', spaceId);
+  if (indexed) {
+    devLog('[CREATE_SPACE] indexed, spaceId=%s', spaceId);
+  } else {
+    devLog('[CREATE_SPACE] created but not yet indexed, spaceId=%s — resolving anyway', spaceId);
+  }
 
   return spaceId;
 }

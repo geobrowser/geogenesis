@@ -4,11 +4,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { Check } from '~/design-system/icons/check';
+import { SmallButton } from '~/design-system/button';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
@@ -123,8 +121,8 @@ export function DebateRecordingUploadCoordinator() {
   const [cancelError, setCancelError] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
   // Debates whose recording finished uploading in this session and is still publishable. The queue
-  // row is deleted as soon as an upload completes, so nothing else can keep the banner, and its
-  // publish opt-out, on screen for the rest of the thank-you period.
+  // row is deleted as soon as an upload completes, so nothing else can keep the banner and its
+  // cancellation action on screen for the rest of the thank-you period.
   const [uploadedDebateIds, setUploadedDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const [cancelledDebateIds, setCancelledDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
   const thankingDebate = useThankingDebate();
@@ -206,7 +204,7 @@ export function DebateRecordingUploadCoordinator() {
     return () => subscription.unsubscribe();
   }, [userId]);
 
-  // Recording persistence and the publish opt-out can finish in either order at the phase
+  // Recording persistence and cancellation can finish in either order at the phase
   // boundary. If a cancelled debate appears in IndexedDB afterward, keep it hidden, never start
   // its upload, and remove the late row as soon as the observer reports it.
   React.useEffect(() => {
@@ -346,9 +344,9 @@ export function DebateRecordingUploadCoordinator() {
     !cancelledDebateIds.has(normalizedThankingDebateId)
       ? (publishableUploads.find(upload => normalizeDebateId(upload.debateId) === normalizedThankingDebateId) ?? null)
       : null;
-  // A fast connection finishes the upload before the user can reach the checkbox, so an already
-  // uploaded debate keeps the banner open until thanking ends. The backend still accepts a cancel
-  // for it. Debates dropped as unpublishable never enter `uploadedDebateIds`, so they get no opt-out.
+  // A fast connection can finish the upload before the user reaches the Cancel action. Keep the
+  // uploaded debate banner open until thanking ends, since the backend still accepts a cancel.
+  // Debates dropped as unpublishable never enter `uploadedDebateIds`, so they get no opt-out.
   const thankingUploadFinished =
     normalizedThankingDebateId !== null &&
     !thankingUpload &&
@@ -414,7 +412,7 @@ export function DebateRecordingUploadCoordinator() {
       }
       if (mountedRef.current) {
         // The server opt-out is authoritative even if this device cannot clean IndexedDB. Mark it
-        // before local cleanup so a storage failure can never make Publish appear enabled again.
+        // before local cleanup so a storage failure can never make Cancel available again.
         setCancelledDebateIds(current => new Set(current).add(normalizedTargetDebateId));
         setUploadedDebateIds(current => {
           const next = new Set(current);
@@ -471,9 +469,8 @@ export function DebateRecordingUploadCoordinator() {
           percent={uploadPercent}
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
-          canPublishOptOut={cancellableDebateId !== null || cancelPromptOpen}
-          publishChecked={!cancelPromptOpen}
-          onUncheckPublish={() => setCancelTargetDebateId(cancellableDebateId)}
+          canCancel={cancellableDebateId !== null && !cancelPromptOpen}
+          onCancel={() => setCancelTargetDebateId(cancellableDebateId)}
         />
       )}
       {cancelPromptOpen && (
@@ -495,9 +492,8 @@ export function DebateRecordingUploadBanner({
   percent = null,
   waitingReason,
   errorMessage,
-  canPublishOptOut,
-  publishChecked,
-  onUncheckPublish,
+  canCancel,
+  onCancel,
 }: {
   count: number;
   thankingRecordingPending?: boolean;
@@ -505,9 +501,8 @@ export function DebateRecordingUploadBanner({
   percent?: number | null;
   waitingReason: DebateRecordingUploadWaitingReason;
   errorMessage: string | null;
-  canPublishOptOut: boolean;
-  publishChecked: boolean;
-  onUncheckPublish: () => void;
+  canCancel: boolean;
+  onCancel: () => void;
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
   let message: string;
@@ -524,48 +519,48 @@ export function DebateRecordingUploadBanner({
     message = `Waiting to upload ${label} — ${failure}${punctuation} Retrying automatically.`;
   } else if (waitingReason) {
     message = `Waiting to upload ${label}`;
-  } else if (percent !== null) {
-    message = `Uploading ${label} · ${percent}%`;
   } else {
-    // With no checkbox or percent after it the message is the whole line, so the ellipsis is what
-    // keeps it reading as in progress.
-    message = canPublishOptOut ? `Uploading ${label}` : `Uploading ${label}...`;
+    message = `Uploading & publishing ${label}`;
   }
+
+  const showProgress = thankingRecordingPending || (!thankingUploadFinished && waitingReason === null);
+  const progressPercent = thankingRecordingPending ? null : percent;
+  const progressLabel = thankingRecordingPending ? message : `Uploading and publishing ${label}`;
 
   return (
     <div
       role="status"
       aria-live="polite"
-      className={`fixed inset-x-0 bottom-0 flex min-w-0 items-center justify-center gap-2 bg-divider px-4 py-2 text-metadata text-grey-04 ${Z_LAYER_CLASS.toast}`}
+      className={`fixed inset-x-0 bottom-0 flex h-7 min-w-0 items-center justify-center bg-divider px-4 text-metadata text-text ${Z_LAYER_CLASS.toast}`}
     >
-      <span className="min-w-0 truncate">{message}</span>
-      {canPublishOptOut && (
-        <>
-          <span aria-hidden="true" className="shrink-0">
-            ·
-          </span>
-          <button
-            type="button"
-            role="checkbox"
-            aria-checked={publishChecked}
-            aria-label="Publish debate"
-            onClick={() => {
-              if (publishChecked) onUncheckPublish();
-            }}
-            className="inline-flex shrink-0 items-center gap-1.5 text-text"
+      <div className="flex w-auto max-w-full min-w-0 items-center gap-2 md:w-full">
+        <span className="min-w-0 flex-initial truncate md:flex-1">{message}</span>
+        {showProgress && (
+          <div
+            role="progressbar"
+            aria-label={progressLabel}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progressPercent ?? undefined}
+            className="h-1 w-14 shrink-0 overflow-hidden rounded-full bg-grey-03"
           >
-            Publish
-            <span
-              className={cx(
-                'grid size-3 place-items-center rounded-sm border transition-colors *:size-2.5',
-                publishChecked ? 'border-text bg-text text-white' : 'border-grey-03 bg-white text-transparent'
-              )}
-            >
-              <Check />
-            </span>
-          </button>
-        </>
-      )}
+            <div
+              className={`h-full rounded-full bg-text transition-[width] ${progressPercent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={progressPercent === null ? undefined : { width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
+        {canCancel && (
+          <SmallButton
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            className="shrink-0 bg-transparent! hover:bg-bg!"
+          >
+            Cancel
+          </SmallButton>
+        )}
+      </div>
     </div>
   );
 }

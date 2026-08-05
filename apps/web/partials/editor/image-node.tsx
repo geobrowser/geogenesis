@@ -1,6 +1,6 @@
 'use client';
 
-import { Graph, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dropdown from '@radix-ui/react-dropdown-menu';
 import { Node, NodeViewProps, NodeViewWrapper, ReactNodeViewRenderer, mergeAttributes } from '@tiptap/react';
 
@@ -10,6 +10,7 @@ import { useRef, useState } from 'react';
 import cx from 'classnames';
 
 import { IMAGE_ACCEPT, MAX_IMAGE_SIZE_BYTES, VALID_IMAGE_TYPES } from '~/core/constants';
+import { createGeoImage } from '~/core/sdk/geo-client';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
@@ -196,11 +197,7 @@ function ImageNodeChildren({
         setUploadProgress(prev => Math.min(prev + 2, 90));
       }, 300);
 
-      // Upload using Graph.createImage
-      const { ops } = await Graph.createImage({
-        blob: file,
-        network: 'TESTNET',
-      });
+      const { ops } = await createGeoImage({ blob: file });
 
       setUploadProgress(100);
 

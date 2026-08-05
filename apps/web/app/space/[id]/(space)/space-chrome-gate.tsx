@@ -19,16 +19,12 @@ export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
 
 type SpaceHeaderContentContainerProps = {
   children: React.ReactNode;
-  spaceId: string;
   hasSidebar: boolean;
 };
 
-export function SpaceHeaderContentContainer({ children, spaceId, hasSidebar }: SpaceHeaderContentContainerProps) {
-  const pathname = usePathname();
-  const isSpaceHome = pathname === `/space/${spaceId}` || pathname === `/space/${spaceId}/`;
-
+export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (
-    <EntityPageContentContainer variant={isSpaceHome && hasSidebar ? 'with-sidebar' : 'content'}>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
       {children}
     </EntityPageContentContainer>
   );
