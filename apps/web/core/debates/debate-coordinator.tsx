@@ -13,6 +13,7 @@ import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { useDebateAttention } from './debate-attention';
 import { useDebateGateway } from './debate-gateway';
 import {
   clearDebateMatchTabOwnership,
@@ -41,10 +42,12 @@ export function DebateCoordinator() {
   const pathname = usePathname();
   const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
+  const debateAttention = useDebateAttention();
   const gateway = useDebateGateway(
     isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
-    geoChatAuth.accountKey
+    geoChatAuth.accountKey,
+    debateAttention
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const currentUserId = getCurrentGeoChatUserId();
