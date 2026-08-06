@@ -1,8 +1,12 @@
 'use client';
 
+import * as React from 'react';
+
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -24,13 +28,38 @@ export function ExploreJoinSpaceButton({
 }: ExploreJoinSpaceButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
   // Durable + persisted pending state so a request made anywhere (space page,
   // the "Join spaces" pills) flips every card for this space to "Membership
   // pending" without a refresh.
   const isPending = useIsMembershipPending(spaceId);
-  const showPendingLabel = hasRequestedSpaceMembership || isPending;
+  const showPendingLabel = hasRequestedSpaceMembership || isPending || optimisticRequested;
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleJoin = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+
+    // The PendingActionsRunner submits it once the space registers.
+    setOptimisticRequested(true);
+    enqueuePendingAction({
+      id: `join:${spaceId}`,
+      label: 'your membership request',
+      requires: 'personalSpace',
+      run: () =>
+        new Promise<void>((resolve, reject) => {
+          requestToBeMember(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
+        }),
+    });
+    if (!smartAccount) openSignInPrompt('join');
+  };
 
   return (
     <Pending isPending={status === 'pending'} position="end">
@@ -41,13 +70,7 @@ export function ExploreJoinSpaceButton({
           type="button"
           className="flex h-6 items-center rounded border border-grey-02 px-2 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text hover:border-text"
           disabled={status !== 'idle'}
-          onClick={() => {
-            if (!smartAccount) {
-              openSignInPrompt('join');
-              return;
-            }
-            requestToBeMember();
-          }}
+          onClick={handleJoin}
         >
           {label}
         </button>
@@ -56,13 +79,7 @@ export function ExploreJoinSpaceButton({
           type="button"
           className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
           disabled={status !== 'idle'}
-          onClick={() => {
-            if (!smartAccount) {
-              openSignInPrompt('join');
-              return;
-            }
-            requestToBeMember();
-          }}
+          onClick={handleJoin}
         >
           {label}
         </button>

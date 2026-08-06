@@ -16,6 +16,7 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -172,8 +173,10 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
   const isLoggedIn = !!smartAccount;
   const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
+  const commentSeqRef = React.useRef(0);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
@@ -222,6 +225,24 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
+      // The composer only lets a signed-in user type, so smartAccount is present here.
+      if (!personalSpaceId) {
+        const id = `comment:${entityId}:${(commentSeqRef.current += 1)}`;
+        enqueuePendingAction({
+          id,
+          label: 'your comment',
+          requires: 'personalSpace',
+          run: () =>
+            createComment({
+              text,
+              targetSpaceId: spaceId,
+              ancestorComments,
+              onOptimistic: cid => markSessionNew(cid),
+            }).then(() => {}),
+        });
+        return;
+      }
+
       void createComment({
         text,
         targetSpaceId: spaceId,
@@ -229,7 +250,7 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
         onOptimistic: id => markSessionNew(id),
       });
     },
-    [createComment, spaceId, markSessionNew]
+    [createComment, spaceId, personalSpaceId, entityId, enqueuePendingAction, markSessionNew]
   );
 
   const handleEditComment = React.useCallback(
