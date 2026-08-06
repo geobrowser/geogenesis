@@ -213,19 +213,14 @@ function BountiesSection({
             selected={skillSelection}
             onChange={setSelectedSkills}
           />
-          {isInfinite ? null : (
-            <button
-              type="button"
-              onClick={() => setIsViewAllOpen(true)}
-              disabled={filtered.length === 0}
-              className={cx(
-                FILTER_PILL_CLASS,
-                'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white'
-              )}
-            >
-              View all
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => setIsViewAllOpen(true)}
+            disabled={filtered.length === 0}
+            className={cx(FILTER_PILL_CLASS, 'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white')}
+          >
+            View all
+          </button>
         </div>
       </div>
 
@@ -244,7 +239,7 @@ function BountiesSection({
         </>
       )}
 
-      <SlideUp isOpen={!isInfinite && isViewAllOpen} setIsOpen={setIsViewAllOpen}>
+      <SlideUp isOpen={isViewAllOpen} setIsOpen={setIsViewAllOpen}>
         <div className="flex h-full flex-col overflow-hidden bg-white">
           <div className="flex items-center justify-between border-b border-grey-02 px-6 py-4">
             <h2 className={SECTION_TITLE_CLASS}>{title}</h2>
