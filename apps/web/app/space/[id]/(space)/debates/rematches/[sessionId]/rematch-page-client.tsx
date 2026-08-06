@@ -269,6 +269,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 : null}
           </Text>
         )}
+        {session?.request?.status === 'expired' && session.request.cancellation_reason && (
+          <Text color="red-01" className="mb-4">
+            {rematchCancellationMessage(session.request.cancellation_reason)}
+          </Text>
+        )}
 
         <div className="grid gap-4">
           {visibleClaims.map(claim => (
@@ -440,6 +445,21 @@ function fallbackRematchPositionLabel(responseKind: DebateRematchClaim['response
   if (responseKind === 'veracity') return position ? 'Verify' : 'Dispute';
   if (responseKind === 'stance') return position ? 'Agree' : 'Disagree';
   return null;
+}
+
+function rematchCancellationMessage(reason: string) {
+  switch (reason) {
+    case 'claim_response_withdrawn':
+      return 'This request was cancelled because a participant withdrew their response.';
+    case 'claim_response_kind_changed':
+      return 'This request was cancelled because the claim’s response type changed.';
+    case 'claim_response_position_changed':
+    case 'claim_responses_not_opposed':
+    case 'claim_response_changed_during_accept':
+      return 'This request was cancelled because the responses no longer oppose each other.';
+    default:
+      return 'This debate request is no longer available.';
+  }
 }
 
 function PositionAvatars({ participants }: { participants: DebateRematchParticipant[] }) {

@@ -226,6 +226,33 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /^(Agree|Disagree)$/ })).not.toBeInTheDocument();
   });
 
+  it('explains when response changes cancel a rematch request', () => {
+    mocks.session = session({
+      request: {
+        id: 'request-1',
+        status: 'expired',
+        claim: claimSummary('claim-shared', 'A claim both participants chose'),
+        requester_user_id: 'user-local',
+        recipient_user_id: 'user-remote',
+        requester_position: true,
+        requester_position_label: 'Agree',
+        recipient_position: false,
+        recipient_position_label: 'Disagree',
+        response_kind: 'stance',
+        cancellation_reason: 'claim_response_position_changed',
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(
+      screen.getByText('This request was cancelled because the responses no longer oppose each other.')
+    ).toBeInTheDocument();
+  });
+
   it('filters to opponent-committed claims on the Debate now tab', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 

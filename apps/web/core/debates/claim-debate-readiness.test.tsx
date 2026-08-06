@@ -81,6 +81,12 @@ describe('ClaimDebateReadiness', () => {
 
     expect(screen.getByText('Your response changed, so debate readiness was removed.')).toBeInTheDocument();
   });
+
+  it('turns backend lifecycle codes into actionable readiness messages', () => {
+    renderReadiness(claim({ readiness_disabled_reason: 'claim_response_kind_changed' }));
+
+    expect(screen.getByText('This claim’s response type changed. Respond and join again.')).toBeInTheDocument();
+  });
 });
 
 function renderReadiness(debateClaim: DebateClaim) {

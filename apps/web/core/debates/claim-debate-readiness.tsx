@@ -83,11 +83,24 @@ export function ClaimDebateReadiness({
       )}
       {(mutationError || debateClaim.readiness_disabled_reason) && (
         <Text as="p" variant={textVariant} color="red-01" className="mt-2">
-          {mutationError ?? debateClaim.readiness_disabled_reason}
+          {mutationError ?? readinessReasonMessage(debateClaim.readiness_disabled_reason)}
         </Text>
       )}
     </div>
   );
+}
+
+function readinessReasonMessage(reason: string | null) {
+  switch (reason) {
+    case 'claim_response_withdrawn':
+      return 'Your response was withdrawn, so debate readiness was turned off.';
+    case 'claim_response_kind_changed':
+      return 'This claim’s response type changed. Respond and join again.';
+    case 'claim_response_validation_failed':
+      return 'Your response could not be verified yet. You’ll remain ready while verification retries.';
+    default:
+      return reason;
+  }
 }
 
 function OnlineChoices({ responseKind, choices }: { responseKind: DebateResponseKind; choices: DebateOnlineChoice[] }) {

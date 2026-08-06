@@ -27,6 +27,7 @@ export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
   response_kind: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
@@ -258,6 +259,7 @@ export type DebateRematchRequest = {
   recipient_position: boolean;
   recipient_position_label: string;
   response_kind: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;
   expires_at: string;
