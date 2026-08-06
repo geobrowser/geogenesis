@@ -1,11 +1,17 @@
 import { Cell, Property } from '~/core/types';
 
 /**
- * Description line + long-text property values in list/gallery browse.
+ * Entity name in list/gallery browse.
+ * Uses the card title token so names remain readable in both layouts.
+ */
+export const LIST_GALLERY_BROWSE_TITLE_CLASS = 'text-cardEntityTitle font-medium text-text';
+
+/**
+ * Description line + property values in list/gallery browse.
  * Uses explicit token sizes so property fields match the system description block (avoids `text-tableCell` bleed).
  */
 export const LIST_GALLERY_BROWSE_BODY_CLASS =
-  '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] font-normal text-grey-04';
+  '!text-[length:var(--text-listItem)] !leading-[length:var(--text-listItem--line-height)] font-normal text-grey-04';
 
 /**
  * Vertical gap before the next row in list/gallery browse (Figma):

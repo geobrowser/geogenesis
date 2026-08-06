@@ -28,10 +28,10 @@ import { LIST_GALLERY_BROWSE_BODY_CLASS } from './table-block-browse-layout';
 
 /** Match description tokens in list/gallery browse (overrides tableCell / tableProperty on inner elements). */
 const BROWSE_LIST_VALUE_CLASS =
-  '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] !font-normal !text-grey-04 !text-left';
+  '!text-[length:var(--text-listItem)] !leading-[length:var(--text-listItem--line-height)] !font-normal !text-grey-04 !text-left';
 
 const BROWSE_LIST_URL_CLASS =
-  '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] !font-normal !text-ctaPrimary hover:!text-ctaHover !text-left break-all';
+  '!text-[length:var(--text-listItem)] !leading-[length:var(--text-listItem--line-height)] !font-normal !text-ctaPrimary hover:!text-ctaHover !text-left break-all';
 
 function BrowsePropertyLabel({ name }: { name: string }) {
   return <div className="mb-0.5 text-footnote text-grey-04">{name}</div>;
