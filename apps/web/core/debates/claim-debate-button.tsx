@@ -12,12 +12,11 @@ import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
-import { Avatar } from '~/design-system/avatar';
-import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
-import type { DebateClaim, DebateOnlineChoice } from './api';
-import { useDebateActivity, useDebateClaims, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
+import type { DebateClaim } from './api';
+import { ClaimDebateReadiness } from './claim-debate-readiness';
+import { useDebateActivity, useDebateClaims } from './hooks';
 
 type ClaimDebateButtonProps = {
   entityId: string;
@@ -29,11 +28,6 @@ type ClaimDebateButtonProps = {
    */
   entity?: Entity | null;
 };
-
-const positions = [
-  { label: 'Yes', value: true },
-  { label: 'No', value: false },
-] as const;
 
 export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }: ClaimDebateButtonProps) {
   const isDebatesEnabled = useDebatesEnabled();
@@ -55,31 +49,11 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   const activity = activityQuery.data ?? null;
   const hasActiveFlowElsewhere = Boolean(activity?.match || activity?.debate || activity?.rematch);
 
-  const joinQueue = useJoinDebateQueue(spaceId);
-  const leaveQueue = useLeaveDebateQueue(spaceId);
-
   if (!isDebatesEnabled || !isClaim) return null;
 
   const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
   const canJoinDebate = published && !activeDebate && !activeMatch && !hasActiveFlowElsewhere;
-  const isMutating = joinQueue.isPending || leaveQueue.isPending;
-  const mutationError =
-    joinQueue.error instanceof Error
-      ? joinQueue.error.message
-      : leaveQueue.error instanceof Error
-        ? leaveQueue.error.message
-        : null;
-
-  // Clicking the position you're already waiting on leaves the queue.
-  const togglePosition = (position: boolean) => {
-    if (debateClaim?.viewer_waiting_position === position) {
-      leaveQueue.mutate({ claimId: entityId });
-    } else {
-      joinQueue.mutate({ claimId: entityId, request: { position } });
-    }
-  };
-
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
@@ -105,98 +79,27 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
             Debate this claim
           </Text>
           <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-            Select your position and start matchmaking
+            Respond to the claim, then choose whether you’re ready to debate.
           </Text>
 
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            {positions.map(position => {
-              const choice = debateClaim?.online_choices.find(choice => choice.position === position.value) ?? null;
-              const label = choice?.position_label ?? position.label;
-              const participantCount = choice?.participant_count ?? 0;
-              const selected = debateClaim?.viewer_waiting_position === position.value;
-              const accessibleLabel = `${label}, ${participantCount} participant${participantCount === 1 ? '' : 's'} available${selected ? ', selected' : ''}`;
+          {published && (
+            <ClaimDebateReadiness
+              debateClaim={debateClaim}
+              entityId={entityId}
+              spaceId={spaceId}
+              canToggle={canJoinDebate}
+              className="mt-5"
+            />
+          )}
 
-              return (
-                <button
-                  key={position.label}
-                  type="button"
-                  aria-label={accessibleLabel}
-                  aria-pressed={selected}
-                  onClick={() => togglePosition(position.value)}
-                  disabled={!canJoinDebate || isMutating}
-                  className={cx(
-                    'flex min-h-7 min-w-0 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors disabled:opacity-60',
-                    selected ? (position.value ? 'bg-green text-text' : 'bg-red-01 text-text') : 'bg-bg text-text'
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    {selected && (
-                      <span aria-hidden="true" className="shrink-0">
-                        <Check />
-                      </span>
-                    )}
-                    <span className="truncate">{label}</span>
-                  </span>
-                  {choice && <OnlineChoiceParticipants choice={choice} />}
-                </button>
-              );
-            })}
-          </div>
-
-          <ClaimDebateStatus debateClaim={debateClaim} mutationError={mutationError} published={published} />
+          <ClaimDebateStatus debateClaim={debateClaim} published={published} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
-  const participants = choice.participants.slice(0, 2);
-  const overflowCount = Math.max(0, choice.participant_count - participants.length);
-
-  if (participants.length === 0 && overflowCount === 0) return null;
-
-  return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
-      {participants.map(participant => {
-        const label = participant.display_name || participant.profile_space_id;
-
-        return (
-          <span
-            key={participant.user_id}
-            title={label}
-            className="relative box-content block h-5 w-5 overflow-hidden rounded-full border-2 border-white"
-          >
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
-          </span>
-        );
-      })}
-      {overflowCount > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
-          +{overflowCount}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ClaimDebateStatus({
-  debateClaim,
-  mutationError,
-  published,
-}: {
-  debateClaim: DebateClaim | null;
-  mutationError: string | null;
-  published: boolean;
-}) {
-  if (mutationError) {
-    return (
-      <Text as="p" variant="metadata" color="red-01" className="mt-3">
-        {mutationError}
-      </Text>
-    );
-  }
-
+function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
   if (!published) {
     return (
       <Text as="p" variant="metadata" color="grey-04" className="mt-3">
@@ -217,14 +120,6 @@ function ClaimDebateStatus({
     return (
       <Text as="p" variant="metadata" color="grey-04" className="mt-3">
         Match found. Both speakers need to accept.
-      </Text>
-    );
-  }
-
-  if (debateClaim?.viewer_waiting_position !== null && debateClaim?.viewer_waiting_position !== undefined) {
-    return (
-      <Text as="p" variant="metadata" color="grey-04" className="mt-3">
-        Waiting for someone with the opposite position.
       </Text>
     );
   }

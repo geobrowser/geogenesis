@@ -16,6 +16,8 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
+  useDebateClaims,
+  useDebateRematchClaims,
   useEndDebateTurn,
   useGeoChatAuth,
   useLeaveDebateRematch,
@@ -30,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   consentToDebateRematch: vi.fn(),
   endDebateTurn: vi.fn(),
   leaveDebateRematch: vi.fn(),
+  listDebateClaims: vi.fn(),
+  listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
   pathname: '/space/space-1/debates/debate-1',
@@ -69,6 +73,8 @@ vi.mock('./api', async importOriginal => {
     consentToDebateRematch: mocks.consentToDebateRematch,
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
+    listDebateClaims: mocks.listDebateClaims,
+    listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
     updateDebateAvailability: mocks.updateDebateAvailability,
@@ -109,12 +115,16 @@ describe('useGeoChatAuth', () => {
     mocks.consentToDebateRematch.mockReset();
     mocks.endDebateTurn.mockReset();
     mocks.leaveDebateRematch.mockReset();
+    mocks.listDebateClaims.mockReset();
+    mocks.listDebateRematchClaims.mockReset();
     mocks.listDebateSharePrompts.mockReset();
     mocks.markDebateReady.mockReset();
     mocks.push.mockReset();
     mocks.back.mockReset();
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.updateDebateAvailability.mockReset();
+    mocks.listDebateClaims.mockResolvedValue({ claims: [] });
+    mocks.listDebateRematchClaims.mockResolvedValue({ claims: [], excluded_claim_ids: [] });
     mocks.listDebateSharePrompts.mockResolvedValue({ prompts: [] });
     setCachedIdentityToken(null);
   });
@@ -177,6 +187,50 @@ describe('useGeoChatAuth', () => {
     await result.current.getPrivyIdentityToken();
 
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches debate readiness when an indexed claim response query succeeds', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateClaims('space-1', ['claim-1'], true), { wrapper });
+    await waitFor(() => expect(mocks.listDebateClaims).toHaveBeenCalled());
+    invalidateQueries.mockClear();
+
+    act(() => {
+      queryClient.setQueryData(['user-entity-response', 'profile-1', 'claim-1', 'space-1', 0, 'stance'], 'positive');
+    });
+
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] }));
+  });
+
+  it('refetches rematch snapshots when an indexed claim response query succeeds', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalled());
+    invalidateQueries.mockClear();
+
+    act(() => {
+      queryClient.setQueryData(['user-entity-response', 'profile-1', 'claim-1', 'space-1', 0, 'veracity'], 'negative');
+    });
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
+      })
+    );
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would

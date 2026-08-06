@@ -31,6 +31,10 @@ vi.mock('./hooks', () => ({
   useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-response-buttons">Entity response buttons</div>,
+}));
+
 beforeEach(() => {
   mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
@@ -50,11 +54,21 @@ function entity(relations: Entity['relations'], types: { id: string }[] = [{ id:
 
 function debateClaim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   return {
+    id: 'debate-claim-1',
+    space_id: 'space-1',
     claim_entity_id: 'claim-entity-1',
+    claim: 'A claim',
+    description: null,
+    response_kind: 'stance',
+    viewer_response: null,
+    viewer_debate_ready: false,
+    readiness_disabled_reason: null,
+    readiness_changed_at: null,
     online_choices: [],
-    viewer_waiting_position: null,
     active_match: null,
     active_debate: null,
+    created_at: '2026-08-06T00:00:00.000Z',
+    updated_at: '2026-08-06T00:00:00.000Z',
     ...overrides,
   } as unknown as DebateClaim;
 }
@@ -72,39 +86,45 @@ describe('ClaimDebateButton', () => {
     expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
-  it('prompts to publish and disables the positions for an unpublished claim', () => {
+  it('prompts to publish without rendering readiness controls for an unpublished claim', () => {
     render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
     openPopover();
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Yes,/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^No,/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /join debate/i })).not.toBeInTheDocument();
   });
 
-  it('enables the positions for a published claim and joins the queue on click', () => {
+  it('requires a claim response before showing the readiness toggle', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
     render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
     openPopover();
 
-    const yes = screen.getByRole('button', { name: /^Yes,/ });
-    expect(yes).toBeEnabled();
-    expect(yes).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(yes);
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1', request: { position: true } });
+    expect(screen.getByText('Respond before joining')).toBeInTheDocument();
+    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
   });
 
-  it('marks the chosen position selected while waiting and leaves the queue when clicked again', () => {
-    mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
+  it('shows one readiness toggle for the backend response and leaves when ready', () => {
+    mocks.debateClaims.mockReturnValue({
+      data: {
+        claims: [
+          debateClaim({
+            viewer_response: { position: true, position_label: 'Agree' },
+            viewer_debate_ready: true,
+          }),
+        ],
+      },
+    });
     render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
     openPopover();
 
-    const yes = screen.getByRole('button', { name: /^Yes,.*selected/ });
-    expect(yes).toHaveAttribute('aria-pressed', 'true');
-    expect(yes).toBeEnabled();
-    expect(screen.getByText('Waiting for someone with the opposite position.')).toBeInTheDocument();
+    expect(screen.getByText('Your response: Agree')).toBeInTheDocument();
+    const leave = screen.getByRole('button', { name: 'Leave debate' });
+    expect(leave).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('button', { name: /debate/i })).toHaveLength(2);
+    expect(screen.getByText('Waiting for someone with the opposite response.')).toBeInTheDocument();
 
-    fireEvent.click(yes);
+    fireEvent.click(leave);
     expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1' });
     expect(mocks.joinMutate).not.toHaveBeenCalled();
   });

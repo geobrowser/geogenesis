@@ -36,7 +36,6 @@ vi.mock('~/core/debates/hooks', () => ({
     error: null,
   }),
   useDebate: () => ({ data: { claim: { claim_entity_id: 'claim-source' } } }),
-  useUpdateDebateRematchPosition: () => mutation(),
   useCreateDebateRematchRequest: () => mutation(),
   useLeaveDebateRematch: () => mutation(),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
@@ -62,6 +61,10 @@ vi.mock('~/core/sync/use-store', () => ({
     endCursor: null,
     hasNextPage: false,
   }),
+}));
+
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <button type="button">Change response</button>,
 }));
 
 function mutation(mutate = mocks.mutate) {
@@ -120,14 +123,35 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
-  it('shows each side its holder avatar in the claim position controls', () => {
+  it('shows backend response labels and holder avatars without position-update controls', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
     expect(sharedClaimCard).not.toBeNull();
-    // Local picked Yes and the opponent picked No, so each pill carries one avatar.
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'Yes' }).querySelector('img, svg')).not.toBeNull();
-    expect(within(sharedClaimCard!).getByRole('button', { name: 'No' }).querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).getByLabelText('Agree response').querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).getByLabelText('Disagree response').querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
+    expect(within(sharedClaimCard!).queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
+  });
+
+  it('shows response controls when the active responses are missing or on the same side', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: true, position_label: 'Agree' },
+        ],
+      },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(
+      screen.getByText('You both have the same response. Change yours to request this debate.')
+    ).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Change response' }).length).toBeGreaterThan(0);
+    expect(screen.getByText('Respond before requesting')).toBeInTheDocument();
   });
 
   it('shows an incoming request in the shared dialog and preserves rematch actions', () => {
@@ -140,7 +164,10 @@ describe('DebateRematchPageClient', () => {
         requester_user_id: 'user-remote',
         recipient_user_id: 'user-local',
         requester_position: false,
+        requester_position_label: 'No',
         recipient_position: true,
+        recipient_position_label: 'Yes',
+        response_kind: null,
         turn_format_id: 'standard',
         created_at: '2026-07-10T10:00:00.000Z',
         expires_at: '2026-07-10T10:02:00.000Z',
@@ -173,7 +200,7 @@ describe('DebateRematchPageClient', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
-  it('disables every claim card while a rematch request is pending', () => {
+  it('disables debate requests while a rematch request is pending', () => {
     mocks.session = session({
       status: 'request_pending',
       request: {
@@ -183,7 +210,10 @@ describe('DebateRematchPageClient', () => {
         requester_user_id: 'user-local',
         recipient_user_id: 'user-remote',
         requester_position: true,
+        requester_position_label: 'Agree',
         recipient_position: false,
+        recipient_position_label: 'Disagree',
+        response_kind: 'stance',
         turn_format_id: 'standard',
         created_at: '2026-07-10T10:00:00.000Z',
         expires_at: '2026-07-10T10:02:00.000Z',
@@ -193,9 +223,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
-    expect(screen.getAllByRole('button', { name: /^(Yes|No)$/ }).every(button => button.hasAttribute('disabled'))).toBe(
-      true
-    );
+    expect(screen.queryByRole('button', { name: /^(Agree|Disagree)$/ })).not.toBeInTheDocument();
   });
 
   it('filters to opponent-committed claims on the Debate now tab', () => {
@@ -217,7 +245,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Debate now/ }));
 
-    expect(screen.getByText(/Salina hasn't picked a side yet/)).toBeInTheDocument();
+    expect(screen.getByText(/Salina hasn't responded yet/)).toBeInTheDocument();
   });
 
   it('narrows the list to the selected topic', () => {
@@ -278,9 +306,10 @@ function session(overrides: Partial<DebateRematchSession> = {}): DebateRematchSe
 function sharedClaim(): DebateRematchClaim {
   return {
     claim: claimSummary('claim-shared', 'A claim both participants chose'),
+    response_kind: 'stance',
     participants: [
-      { user_id: 'user-local', position: true },
-      { user_id: 'user-remote', position: false },
+      { user_id: 'user-local', position: true, position_label: 'Agree' },
+      { user_id: 'user-remote', position: false, position_label: 'Disagree' },
     ],
     shared_preference: true,
     recently_rejected: false,

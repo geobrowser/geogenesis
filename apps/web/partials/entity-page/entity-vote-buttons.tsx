@@ -64,12 +64,14 @@ type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
+  showProcessingLabel?: boolean;
 };
 
 export function EntityVoteButtons({
   entityId,
   spaceId,
   claimResponderAvatarsPosition = 'leading',
+  showProcessingLabel = false,
 }: EntityVoteButtonsProps) {
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
   const isClaim =
@@ -88,12 +90,11 @@ export function EntityVoteButtons({
     responseKind === 'curation' ? 'default' : responseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[responseKind];
 
-  const {
-    submitResponse,
-    isProcessingResponse,
-    isConnected,
-    personalSpaceId,
-  } = useEntityResponse({ entityId, spaceId, responseKind });
+  const { submitResponse, isProcessingResponse, isConnected, personalSpaceId } = useEntityResponse({
+    entityId,
+    spaceId,
+    responseKind,
+  });
   const { smartAccount } = useSmartAccount();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
@@ -396,7 +397,11 @@ export function EntityVoteButtons({
       {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
       ) : null}
-      {isProcessingResponse ? <span className="sr-only">Processing response…</span> : null}
+      {isProcessingResponse ? (
+        <span className={showProcessingLabel ? 'ml-1 text-metadata text-grey-04' : 'sr-only'}>
+          Processing response…
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -423,10 +428,7 @@ function RespondersPopoverContent({
   });
   const responderSpaceIds = React.useMemo(() => responders?.map(responder => responder.userId) ?? [], [responders]);
   const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
-    queryKey: [
-      ...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind),
-      responderSpaceIds,
-    ],
+    queryKey: [...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind), responderSpaceIds],
     enabled: responderSpaceIds.length > 0,
     queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(responderSpaceIds)),
     staleTime: 30_000,
@@ -435,9 +437,10 @@ function RespondersPopoverContent({
   if (responders?.length === 0) {
     respondersWithProfiles = [];
   } else if (responders && profiles) {
-    respondersWithProfiles = responders.map(
-      (responder, index): ResponderWithProfile => ({ ...responder, profile: profiles[index]! })
-    );
+    respondersWithProfiles = responders.map((responder, index): ResponderWithProfile => ({
+      ...responder,
+      profile: profiles[index]!,
+    }));
   }
   const isLoading = isLoadingResponders || (responderSpaceIds.length > 0 && isLoadingProfiles);
 

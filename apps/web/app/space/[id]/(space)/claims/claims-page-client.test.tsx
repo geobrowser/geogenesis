@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   bumpReviewVersion: vi.fn(),
   setIsReviewOpen: vi.fn(),
   joinMutate: vi.fn(),
+  leaveMutate: vi.fn(),
 }));
 
 let claims: Entity[] = [];
@@ -36,8 +37,13 @@ vi.mock('~/core/state/feature-flags', () => ({
 vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
   useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: joinPending, error: null }),
+  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
   useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-response-buttons">Entity response buttons</div>,
 }));
 
 vi.mock('~/core/state/diff-store', () => ({
@@ -112,60 +118,40 @@ describe('ClaimsPageClient', () => {
     expect(mocks.setIsReviewOpen).toHaveBeenCalledWith(true);
   });
 
-  it('joins the claim queue with boolean Yes and No positions', () => {
-    claims = [
-      {
-        id: 'claim-1',
-        name: 'Public transit should be free',
-        description: null,
-        spaces: ['space-1'],
-        types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
-        values: [],
-        relations: [],
-      },
-    ];
+  it('shows no readiness toggle until a refetch exposes the viewer response', () => {
+    claims = [publishedClaim()];
     debateClaimsResponse = {
-      claims: [
-        {
-          claim_entity_id: 'claim-1',
-          viewer_waiting_position: null,
-          online_choices: [],
-          active_match: null,
-          active_debate: null,
-        },
-      ],
+      claims: [debateClaim({ viewer_response: null })],
     };
 
-    render(<ClaimsPageClient spaceId="space-1" />);
+    const { rerender } = render(<ClaimsPageClient spaceId="space-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, 0 participants available' }));
-    fireEvent.click(screen.getByRole('button', { name: 'No, 0 participants available' }));
+    expect(screen.getByText('Respond before joining')).toBeInTheDocument();
+    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
 
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1', request: { position: true } });
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1', request: { position: false } });
+    debateClaimsResponse = {
+      claims: [debateClaim({ viewer_response: { position: true, position_label: 'Agree' } })],
+    };
+    rerender(<ClaimsPageClient spaceId="space-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
+
+    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('renders online participants and highlights the viewer selected position', () => {
-    claims = [
-      {
-        id: 'claim-1',
-        name: 'Public transit should be free',
-        description: null,
-        spaces: ['space-1'],
-        types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
-        values: [],
-        relations: [],
-      },
-    ];
+  it('renders backend response labels and one leave-readiness toggle', () => {
+    claims = [publishedClaim()];
     debateClaimsResponse = {
       claims: [
-        {
-          claim_entity_id: 'claim-1',
-          viewer_waiting_position: true,
+        debateClaim({
+          viewer_response: { position: true, position_label: 'Verify' },
+          viewer_debate_ready: true,
+          response_kind: 'veracity',
           online_choices: [
             {
               position: true,
-              position_label: 'Yes',
+              position_label: 'Verify',
               participant_count: 4,
               participants: [
                 {
@@ -184,70 +170,44 @@ describe('ClaimsPageClient', () => {
             },
             {
               position: false,
-              position_label: 'No',
+              position_label: 'Dispute',
               participant_count: 0,
               participants: [],
             },
           ],
-          active_match: null,
-          active_debate: null,
-        },
+        }),
       ],
     };
 
     render(<ClaimsPageClient spaceId="space-1" />);
 
-    const yesButton = screen.getByRole('button', { name: 'Yes, 4 participants available, selected' });
-    const noButton = screen.getByRole('button', { name: 'No, 0 participants available' });
+    const verifyAvailability = screen.getByLabelText('Verify, 4 participants available');
+    expect(within(verifyAvailability).getByTitle('Current viewer')).toBeInTheDocument();
+    expect(within(verifyAvailability).getByTitle('Other participant')).toBeInTheDocument();
+    expect(within(verifyAvailability).getByText('+2')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dispute' })).not.toBeInTheDocument();
 
-    expect(yesButton.parentElement).toHaveClass('grid-cols-2');
-    expect(yesButton).toHaveClass('rounded-full', 'bg-green');
-    expect(yesButton).toHaveAttribute('aria-pressed', 'true');
-    expect(yesButton).toBeDisabled();
-    expect(noButton).not.toHaveClass('bg-green');
-    expect(noButton).toHaveAttribute('aria-pressed', 'false');
-    expect(noButton).toBeEnabled();
-    expect(within(yesButton).getByTitle('Current viewer')).toBeInTheDocument();
-    expect(within(yesButton).getByTitle('Other participant')).toBeInTheDocument();
-    expect(within(yesButton).getByText('+2')).toBeInTheDocument();
-    expect(within(yesButton).queryByRole('list')).not.toBeInTheDocument();
-    expect(yesButton.querySelector('li')).not.toBeInTheDocument();
-    expect(within(noButton).queryByRole('img')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('keeps position controls disabled while joining, unpublished, or matched', () => {
-    const publishedClaim: Entity = {
-      id: 'claim-1',
-      name: 'Public transit should be free',
-      description: null,
-      spaces: ['space-1'],
-      types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
-      values: [],
-      relations: [],
-    };
-    claims = [publishedClaim];
+  it('keeps readiness disabled while joining, unpublished, or matched', () => {
+    const published = publishedClaim();
+    claims = [published];
     debateClaimsResponse = {
-      claims: [
-        {
-          claim_entity_id: 'claim-1',
-          viewer_waiting_position: null,
-          online_choices: [],
-          active_match: null,
-          active_debate: null,
-        },
-      ],
+      claims: [debateClaim()],
     };
     joinPending = true;
 
     const { rerender } = render(<ClaimsPageClient spaceId="space-1" />);
 
-    expect(screen.getByRole('button', { name: 'Yes, 0 participants available' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'No, 0 participants available' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join debate' })).toBeDisabled();
 
     joinPending = false;
     claims = [
       {
-        ...publishedClaim,
+        ...published,
         relations: [
           {
             type: { id: 'local-change', name: 'Local change' },
@@ -260,25 +220,48 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Yes, 0 participants available' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'No, 0 participants available' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
 
-    claims = [publishedClaim];
+    claims = [published];
     debateClaimsResponse = {
-      claims: [
-        {
-          claim_entity_id: 'claim-1',
-          viewer_waiting_position: null,
-          online_choices: [],
-          active_match: { id: 'match-1' },
-          active_debate: null,
-        },
-      ],
+      claims: [debateClaim({ active_match: { id: 'match-1' } })],
     };
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Match found. Both speakers need to accept.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Yes, 0 participants available' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'No, 0 participants available' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join debate' })).toBeDisabled();
   });
 });
+
+function publishedClaim(): Entity {
+  return {
+    id: 'claim-1',
+    name: 'Public transit should be free',
+    description: null,
+    spaces: ['space-1'],
+    types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+    values: [],
+    relations: [],
+  };
+}
+
+function debateClaim(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'debate-claim-1',
+    space_id: 'space-1',
+    claim_entity_id: 'claim-1',
+    claim: 'Public transit should be free',
+    description: null,
+    response_kind: 'stance',
+    viewer_response: { position: true, position_label: 'Agree' },
+    viewer_debate_ready: false,
+    readiness_disabled_reason: null,
+    readiness_changed_at: null,
+    online_choices: [],
+    active_match: null,
+    active_debate: null,
+    created_at: '2026-08-06T00:00:00.000Z',
+    updated_at: '2026-08-06T00:00:00.000Z',
+    ...overrides,
+  };
+}
