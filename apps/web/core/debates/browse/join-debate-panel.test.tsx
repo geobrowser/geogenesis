@@ -21,6 +21,10 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponseIndexingState: () => 'idle',
+}));
+
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
 }));

@@ -20,6 +20,10 @@ vi.mock('~/core/state/feature-flags', () => ({
   useDebatesEnabled: () => mocks.debatesEnabled(),
 }));
 
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponseIndexingState: () => 'idle',
+}));
+
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: undefined }),
 }));

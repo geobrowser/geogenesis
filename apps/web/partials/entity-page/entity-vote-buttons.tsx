@@ -31,6 +31,7 @@ import {
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
   getEntityResponseKind,
+  hasUnpublishedClaimResponseKindEdit,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -63,6 +64,7 @@ const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
+  responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
   showProcessingLabel?: boolean;
 };
@@ -70,6 +72,7 @@ type EntityVoteButtonsProps = {
 export function EntityVoteButtons({
   entityId,
   spaceId,
+  responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   showProcessingLabel = false,
 }: EntityVoteButtonsProps) {
@@ -85,16 +88,24 @@ export function EntityVoteButtons({
         v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
       )?.value
     ) === true;
-  const responseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
+  const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
+  const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
+  const hasUnpublishedResponseKindEdit =
+    responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
+  const queryResponseKind = responseKind ?? 'stance';
+  const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
   const variant: ResponseVariant =
-    responseKind === 'curation' ? 'default' : responseKind === 'veracity' ? 'chevrons' : 'thumbs';
-  const responseCopy = ENTITY_RESPONSE_COPY[responseKind];
+    queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
+  const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
-  const { submitResponse, isProcessingResponse, isConnected, personalSpaceId } = useEntityResponse({
-    entityId,
-    spaceId,
-    responseKind,
-  });
+  const {
+    submitResponse,
+    isProcessingResponse,
+    isResponseIndexingDelayed,
+    retryResponseIndexing,
+    isConnected,
+    personalSpaceId,
+  } = useEntityResponse({ entityId, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
@@ -113,22 +124,28 @@ export function EntityVoteButtons({
   const [respondersOpen, setRespondersOpen] = React.useState(false);
 
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
-    queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, responseKind),
+    queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
-      Effect.runPromise(getEntityResponseCounts(entityId, spaceId, responseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
-    enabled: !isLoadingEntity,
+      Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
+    enabled: !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
   const { data: serverResponseDirection } = useQuery({
-    queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, responseKind),
+    queryKey: userEntityResponseQueryKey(
+      personalSpaceId,
+      entityId,
+      spaceId,
+      ENTITY_RESPONSE_OBJECT_TYPE,
+      queryResponseKind
+    ),
     queryFn: async () => {
       if (!personalSpaceId) return null;
       return Effect.runPromise(
-        getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind, ENTITY_RESPONSE_OBJECT_TYPE)
+        getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: !!personalSpaceId && !isLoadingEntity,
+    enabled: !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -298,15 +315,31 @@ export function EntityVoteButtons({
       entityId={entityId}
       spaceId={spaceId}
       objectType={ENTITY_RESPONSE_OBJECT_TYPE}
-      responseKind={responseKind}
+      responseKind={queryResponseKind}
       totalResponders={totalResponders}
     />
   ) : null;
 
   const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
-  if (isLoadingEntity) {
+  if (isResponseKindLoading) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
+  }
+
+  if (hasUnpublishedResponseKindEdit) {
+    return (
+      <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
+        Publish changes before responding
+      </span>
+    );
+  }
+
+  if (responseKind === null) {
+    return (
+      <span className="text-metadata text-grey-04" title="The response type is unavailable">
+        Response unavailable
+      </span>
+    );
   }
 
   return (
@@ -322,13 +355,15 @@ export function EntityVoteButtons({
             ? responseCopy.signIn
             : isAccountSetupPending
               ? 'Finishing account setup…'
-              : isProcessingResponse
-                ? 'Processing response…'
-                : isConnected
-                  ? positiveActive
-                    ? responseCopy.removePositive
-                    : responseCopy.positiveAction
-                  : responseCopy.connect
+              : isResponseIndexingDelayed
+                ? 'Response submitted. Indexing is delayed.'
+                : isProcessingResponse
+                  ? 'Processing response…'
+                  : isConnected
+                    ? positiveActive
+                      ? responseCopy.removePositive
+                      : responseCopy.positiveAction
+                    : responseCopy.connect
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
@@ -375,13 +410,15 @@ export function EntityVoteButtons({
             ? responseCopy.signIn
             : isAccountSetupPending
               ? 'Finishing account setup…'
-              : isProcessingResponse
-                ? 'Processing response…'
-                : isConnected
-                  ? negativeActive
-                    ? responseCopy.removeNegative
-                    : responseCopy.negativeAction
-                  : responseCopy.connect
+              : isResponseIndexingDelayed
+                ? 'Response submitted. Indexing is delayed.'
+                : isProcessingResponse
+                  ? 'Processing response…'
+                  : isConnected
+                    ? negativeActive
+                      ? responseCopy.removeNegative
+                      : responseCopy.negativeAction
+                    : responseCopy.connect
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
@@ -397,7 +434,14 @@ export function EntityVoteButtons({
       {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
       ) : null}
-      {isProcessingResponse ? (
+      {isResponseIndexingDelayed ? (
+        <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
+          Response submitted. Indexing is delayed.
+          <button type="button" onClick={retryResponseIndexing} className="ml-1 underline hover:text-text">
+            Check again
+          </button>
+        </span>
+      ) : isProcessingResponse ? (
         <span className={showProcessingLabel ? 'ml-1 text-metadata text-grey-04' : 'sr-only'}>
           Processing response…
         </span>

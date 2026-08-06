@@ -255,10 +255,10 @@ export type DebateRematchRequest = {
   requester_user_id: string;
   recipient_user_id: string;
   requester_position: boolean;
-  requester_position_label: string;
+  requester_position_label?: string | null;
   recipient_position: boolean;
-  recipient_position_label: string;
-  response_kind: DebateResponseKind | null;
+  recipient_position_label?: string | null;
+  response_kind?: DebateResponseKind | null;
   cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;

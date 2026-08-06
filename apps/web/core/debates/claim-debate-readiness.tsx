@@ -2,6 +2,8 @@
 
 import cx from 'classnames';
 
+import { useEntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
+
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
@@ -29,9 +31,16 @@ export function ClaimDebateReadiness({
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
 
+  const responseIndexingState = useEntityResponseIndexingState({
+    entityId,
+    spaceId,
+    responseKind: debateClaim?.response_kind ?? null,
+  });
+
   if (!debateClaim) return null;
 
   const isReady = debateClaim.viewer_debate_ready;
+  const isResponseProcessing = responseIndexingState !== 'idle';
   const isPending = joinQueue.isPending || leaveQueue.isPending;
   const mutationError =
     joinQueue.error instanceof Error
@@ -50,7 +59,11 @@ export function ClaimDebateReadiness({
             <Text as="p" variant={textVariant} color="grey-04">
               Your response: {debateClaim.viewer_response.position_label}
             </Text>
-            <DebateEntityResponseControls entityId={entityId} spaceId={spaceId} />
+            <DebateEntityResponseControls
+              entityId={entityId}
+              spaceId={spaceId}
+              responseKind={debateClaim.response_kind}
+            />
           </div>
           <button
             type="button"
@@ -58,13 +71,13 @@ export function ClaimDebateReadiness({
             onClick={() =>
               isReady ? leaveQueue.mutate({ claimId: entityId }) : joinQueue.mutate({ claimId: entityId })
             }
-            disabled={isPending || (!isReady && !canToggle)}
+            disabled={isPending || isResponseProcessing || (!isReady && !canToggle)}
             className={cx(
               'mt-2 inline-flex min-h-9 items-center justify-center rounded-full border px-4 text-button transition-colors disabled:opacity-60',
               isReady ? 'border-text bg-text text-white' : 'border-text bg-white text-text hover:bg-bg'
             )}
           >
-            {isReady ? 'Leave debate' : 'Join debate'}
+            {isResponseProcessing ? 'Processing response…' : isReady ? 'Leave debate' : 'Join debate'}
           </button>
         </div>
       ) : (
@@ -72,7 +85,11 @@ export function ClaimDebateReadiness({
           <Text as="p" variant={textVariant} color="grey-04">
             Respond before joining
           </Text>
-          <DebateEntityResponseControls entityId={entityId} spaceId={spaceId} />
+          <DebateEntityResponseControls
+            entityId={entityId}
+            spaceId={spaceId}
+            responseKind={debateClaim.response_kind}
+          />
         </div>
       )}
 

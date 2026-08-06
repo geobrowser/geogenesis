@@ -1,7 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import type { DebateClaim } from './api';
 import { ClaimDebateReadiness } from './claim-debate-readiness';
@@ -9,6 +12,7 @@ import { ClaimDebateReadiness } from './claim-debate-readiness';
 const mocks = vi.hoisted(() => ({
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
+  responseKinds: [] as Array<'stance' | 'veracity' | null>,
 }));
 
 vi.mock('./hooks', () => ({
@@ -17,12 +21,16 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="entity-response-buttons">Entity response buttons</div>,
+  EntityVoteButtons: ({ responseKind }: { responseKind: 'stance' | 'veracity' | null }) => {
+    mocks.responseKinds.push(responseKind);
+    return <div data-testid="entity-response-buttons">Entity response buttons</div>;
+  },
 }));
 
 beforeEach(() => {
   mocks.joinMutate.mockReset();
   mocks.leaveMutate.mockReset();
+  mocks.responseKinds.length = 0;
 });
 
 afterEach(cleanup);
@@ -61,6 +69,16 @@ describe('ClaimDebateReadiness', () => {
     expect(mocks.joinMutate).not.toHaveBeenCalled();
   });
 
+  it('blocks queue changes while the exact response is still indexing', () => {
+    renderReadiness(claim(), 'reconciling');
+
+    const toggle = screen.getByRole('button', { name: 'Processing response…' });
+    expect(toggle).toBeDisabled();
+
+    fireEvent.click(toggle);
+    expect(mocks.joinMutate).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['stance', 'Agree', 'Disagree'],
     ['veracity', 'Verify', 'Dispute'],
@@ -74,6 +92,7 @@ describe('ClaimDebateReadiness', () => {
 
     expect(screen.getByText(positiveLabel)).toBeInTheDocument();
     expect(screen.getByText(negativeLabel)).toBeInTheDocument();
+    expect(mocks.responseKinds).toContain(responseKind);
   });
 
   it('shows the backend readiness-disabled reason after a refetch', () => {
@@ -89,15 +108,23 @@ describe('ClaimDebateReadiness', () => {
   });
 });
 
-function renderReadiness(debateClaim: DebateClaim) {
+function renderReadiness(debateClaim: DebateClaim, indexingStatus: 'idle' | 'reconciling' = 'idle') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  queryClient.setQueryData(entityResponseIndexingQueryKey('claim-1', 'space-1', debateClaim.response_kind), {
+    status: indexingStatus,
+    pending: null,
+  });
+
   return render(
-    <ClaimDebateReadiness
-      debateClaim={debateClaim}
-      entityId="claim-1"
-      spaceId="space-1"
-      canToggle
-      textVariant="metadata"
-    />
+    <QueryClientProvider client={queryClient}>
+      <ClaimDebateReadiness
+        debateClaim={debateClaim}
+        entityId="claim-1"
+        spaceId="space-1"
+        canToggle
+        textVariant="metadata"
+      />
+    </QueryClientProvider>
   );
 }
 

@@ -34,6 +34,10 @@ vi.mock('~/core/state/feature-flags', () => ({
   useDebatesEnabled: () => featureEnabled,
 }));
 
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponseIndexingState: () => 'idle',
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
   useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: joinPending, error: null }),

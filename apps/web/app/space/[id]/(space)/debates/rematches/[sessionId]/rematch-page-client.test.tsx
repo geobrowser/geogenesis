@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
+  responseKinds: [] as Array<'stance' | 'veracity' | null>,
 }));
 
 vi.mock('next/navigation', () => ({
@@ -64,7 +65,10 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <button type="button">Change response</button>,
+  EntityVoteButtons: ({ responseKind }: { responseKind: 'stance' | 'veracity' | null }) => {
+    mocks.responseKinds.push(responseKind);
+    return <button type="button">Change response</button>;
+  },
 }));
 
 function mutation(mutate = mocks.mutate) {
@@ -76,6 +80,7 @@ beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
+  mocks.responseKinds.length = 0;
   mocks.session = session();
   mocks.claims = [sharedClaim()];
   document.body.style.overflow = '';
@@ -150,11 +155,21 @@ describe('DebateRematchPageClient', () => {
     expect(
       screen.getByText('You both have the same response. Change yours to request this debate.')
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Change response' }).length).toBeGreaterThan(0);
-    expect(screen.getByText('Respond before requesting')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Change response' })).toHaveLength(1);
+    const syntheticClaimCard = screen.getByRole('heading', { name: 'A newly published claim' }).closest('article');
+    expect(syntheticClaimCard).not.toBeNull();
+    expect(within(syntheticClaimCard!).getByText('Respond before requesting')).toBeInTheDocument();
+    expect(
+      within(syntheticClaimCard!).getByText(
+        'Response controls are unavailable while this claim is being prepared for rematches.'
+      )
+    ).toBeInTheDocument();
+    expect(within(syntheticClaimCard!).queryByRole('button', { name: 'Change response' })).not.toBeInTheDocument();
+    expect(mocks.responseKinds).toContain('stance');
+    expect(mocks.responseKinds).not.toContain(null);
   });
 
-  it('shows an incoming request in the shared dialog and preserves rematch actions', () => {
+  it('shows authoritative stance labels in the incoming request dialog and preserves rematch actions', () => {
     mocks.session = session({
       status: 'request_pending',
       request: {
@@ -164,10 +179,10 @@ describe('DebateRematchPageClient', () => {
         requester_user_id: 'user-remote',
         recipient_user_id: 'user-local',
         requester_position: false,
-        requester_position_label: 'No',
+        requester_position_label: 'Disagree',
         recipient_position: true,
-        recipient_position_label: 'Yes',
-        response_kind: null,
+        recipient_position_label: 'Agree',
+        response_kind: 'stance',
         turn_format_id: 'standard',
         created_at: '2026-07-10T10:00:00.000Z',
         expires_at: '2026-07-10T10:02:00.000Z',
@@ -181,8 +196,8 @@ describe('DebateRematchPageClient', () => {
     expect(within(dialog).getByText('You')).toBeInTheDocument();
     expect(within(dialog).getByText('Salina')).toBeInTheDocument();
     expect(within(dialog).getByText('VS')).toBeInTheDocument();
-    expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
-    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('No')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('You').parentElement!).getByText('Agree')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('Disagree')).toBeInTheDocument();
     expect(within(dialog).getAllByText('1m')).toHaveLength(2);
     expect(within(dialog).getAllByText('45s')).toHaveLength(2);
     expect(document.body.style.overflow).toBe('hidden');
@@ -198,6 +213,30 @@ describe('DebateRematchPageClient', () => {
 
     expect(document.body.style.overflow).toBe('');
     expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('falls back to Yes and No for legacy incoming requests without response metadata', () => {
+    mocks.session = session({
+      status: 'request_pending',
+      request: {
+        id: 'request-legacy',
+        status: 'pending',
+        claim: claimSummary('claim-shared', 'A claim both participants chose'),
+        requester_user_id: 'user-remote',
+        recipient_user_id: 'user-local',
+        requester_position: false,
+        recipient_position: true,
+        turn_format_id: 'standard',
+        created_at: '2026-07-10T10:00:00.000Z',
+        expires_at: '2026-07-10T10:02:00.000Z',
+      },
+    });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const dialog = screen.getByRole('dialog', { name: 'A claim both participants chose' });
+    expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('No')).toBeInTheDocument();
   });
 
   it('disables debate requests while a rematch request is pending', () => {

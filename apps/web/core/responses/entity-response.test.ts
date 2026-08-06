@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+
 import { getChecked } from '~/design-system/checkbox';
 
 import {
@@ -7,13 +9,18 @@ import {
   decodeActiveResponseDirection,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
+  entityResponseIndexingQueryKey,
   entityResponseQueryVariables,
   getEntityResponseKind,
   getResponseActionMethod,
+  hasUnpublishedClaimResponseKindEdit,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
 } from './entity-response';
+
+const SPACE_ID = '1234567890abcdef1234567890abcdef';
+const OTHER_SPACE_ID = 'abcdef1234567890abcdef1234567890';
 
 describe('entity response semantics', () => {
   it.each([
@@ -79,6 +86,26 @@ describe('entity response semantics', () => {
     [9, null],
   ] as const)('normalizes backend voteType %s to %s', (voteType, expected) => {
     expect(decodeActiveResponseDirection(voteType)).toBe(expected);
+  });
+
+  it('blocks responses while an exact-space factual edit is still unpublished', () => {
+    const entity = {
+      relations: [],
+      values: [
+        {
+          spaceId: SPACE_ID,
+          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          isLocal: true,
+          hasBeenPublished: false,
+        },
+      ],
+    } as unknown as NonNullable<Parameters<typeof hasUnpublishedClaimResponseKindEdit>[0]>;
+
+    expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(true);
+    expect(hasUnpublishedClaimResponseKindEdit(entity, OTHER_SPACE_ID)).toBe(false);
+
+    entity.values[0]!.hasBeenPublished = true;
+    expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(false);
   });
 
   it('keeps polling until Gaia serves the expected response', async () => {
@@ -147,6 +174,12 @@ describe('entity response query keys', () => {
       'space',
       0,
       'curation',
+    ]);
+    expect(entityResponseIndexingQueryKey('entity', 'space', 'stance')).toEqual([
+      'entity-response-indexing',
+      'entity',
+      'space',
+      'stance',
     ]);
   });
 });

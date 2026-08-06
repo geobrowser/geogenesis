@@ -197,13 +197,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? session.participants.map(participant => {
           const requester = participant.user_id === incomingRequest.requester_user_id;
           const position = requester ? incomingRequest.requester_position : incomingRequest.recipient_position;
+          const positionLabel = requester
+            ? incomingRequest.requester_position_label
+            : incomingRequest.recipient_position_label;
 
           return {
             ...participant,
             position,
-            position_label: requester
-              ? incomingRequest.requester_position_label
-              : incomingRequest.recipient_position_label,
+            position_label: positionLabel ?? (position ? 'Yes' : 'No'),
           };
         })
       : [];
@@ -423,7 +424,17 @@ function RematchClaimCard({
           <Text as="p" variant="metadata" color="grey-04">
             {responsePrompt}
           </Text>
-          <DebateEntityResponseControls entityId={claim.claim.claim_entity_id} spaceId={claim.claim.space_id} />
+          {claim.response_kind ? (
+            <DebateEntityResponseControls
+              entityId={claim.claim.claim_entity_id}
+              spaceId={claim.claim.space_id}
+              responseKind={claim.response_kind}
+            />
+          ) : (
+            <Text as="p" variant="metadata" color="grey-04">
+              Response controls are unavailable while this claim is being prepared for rematches.
+            </Text>
+          )}
         </div>
       )}
 

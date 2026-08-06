@@ -1,3 +1,8 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { uuidToHex } from '~/core/id/normalize';
+import type { Entity } from '~/core/types';
 import { sleep } from '~/core/utils/utils';
 
 export type ResponseKind = 'curation' | 'stance' | 'veracity';
@@ -14,6 +19,10 @@ const RESPONSE_VOTE_KIND: Record<ResponseKind, ResponseVoteKind> = {
   stance: 1,
   veracity: 2,
 };
+
+const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
+const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
+const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 
 const RESPONSE_ACTION_METHOD: Record<ResponseKind, Record<ResponseDirection, ResponseActionMethod>> = {
   curation: {
@@ -94,6 +103,30 @@ export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean
   return isFactual ? 'veracity' : 'stance';
 }
 
+export function hasUnpublishedClaimResponseKindEdit(
+  entity: Pick<Entity, 'relations' | 'values'> | null | undefined,
+  spaceId: string
+) {
+  return (
+    entity?.values.some(
+      value =>
+        uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+        uuidToHex(value.property.id) === CLAIM_IS_FACTUAL &&
+        value.isLocal === true &&
+        value.hasBeenPublished !== true
+    ) ||
+    entity?.relations.some(
+      relation =>
+        uuidToHex(relation.spaceId) === uuidToHex(spaceId) &&
+        uuidToHex(relation.type.id) === TYPES_PROPERTY &&
+        uuidToHex(relation.toEntity.id) === CLAIM_TYPE &&
+        relation.isLocal === true &&
+        relation.hasBeenPublished !== true
+    ) ||
+    false
+  );
+}
+
 export function responseKindToVoteKind(kind: ResponseKind): ResponseVoteKind {
   return RESPONSE_VOTE_KIND[kind];
 }
@@ -161,6 +194,10 @@ export function userEntityResponseQueryKey(
   responseKind: ResponseKind
 ) {
   return ['user-entity-response', userId, entityId, spaceId, objectType, responseKind] as const;
+}
+
+export function entityResponseIndexingQueryKey(entityId: string, spaceId: string, responseKind: ResponseKind | null) {
+  return ['entity-response-indexing', entityId, spaceId, responseKind] as const;
 }
 
 export function entityRespondersQueryKey(
