@@ -55,6 +55,7 @@ function filterByType(spaceId: string, typeId: string): string {
 
 function filterByTypes(spaceId: string, typeIds: string[]): string {
   return JSON.stringify({
+    mode: 'OR',
     spaceId: { in: [spaceId] },
     filter: { [SystemIds.TYPES_PROPERTY]: { in: typeIds } },
   });
