@@ -82,23 +82,30 @@ function useAvailableBountyCard(bounties: SpaceBounty[]): BountyCardComponent {
   const interestedIds = useInterestedBountyIds(bountyIds);
   const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
 
-  return React.useCallback(
-    ({ bounty }: { bounty: SpaceBounty }) => (
-      <AvailableBountyCard
-        bounty={bounty}
-        isInterested={interestedIds.has(bounty.id)}
-        isPending={pendingBountyId === bounty.id}
-        canRegisterInterest={canRegisterInterest}
-        onRegisterInterest={target =>
-          void registerInterest({
-            bountyId: target.id,
-            bountyName: target.name,
-            bountySpaceId: target.spaceId,
-          })
-        }
-      />
-    ),
-    [canRegisterInterest, interestedIds, pendingBountyId, registerInterest]
+  const latest = React.useRef({ interestedIds, pendingBountyId, canRegisterInterest, registerInterest });
+  latest.current = { interestedIds, pendingBountyId, canRegisterInterest, registerInterest };
+
+  return React.useMemo<BountyCardComponent>(
+    () =>
+      function AvailableBountyCardConnected({ bounty }: { bounty: SpaceBounty }) {
+        const { interestedIds, pendingBountyId, canRegisterInterest, registerInterest } = latest.current;
+        return (
+          <AvailableBountyCard
+            bounty={bounty}
+            isInterested={interestedIds.has(bounty.id)}
+            isPending={pendingBountyId === bounty.id}
+            canRegisterInterest={canRegisterInterest}
+            onRegisterInterest={target =>
+              void registerInterest({
+                bountyId: target.id,
+                bountyName: target.name,
+                bountySpaceId: target.spaceId,
+              })
+            }
+          />
+        );
+      },
+    []
   );
 }
 

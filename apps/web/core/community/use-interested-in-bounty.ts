@@ -49,15 +49,15 @@ type ProposeInterestArgs = {
 export function useInterestedInBounty() {
   const { storage } = useMutate();
   const { makeProposal } = usePublish();
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { personalSpaceId, personalEntityId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [pendingBountyId, setPendingBountyId] = React.useState<string | null>(null);
 
-  const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
+  const canRegisterInterest = Boolean(personalSpaceId && isRegistered && personalEntityId);
 
   const registerInterest = React.useCallback(
     async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
-      if (!personalSpaceId || !isRegistered) return;
+      if (!personalSpaceId || !isRegistered || !personalEntityId) return;
 
       setPendingBountyId(bountyId);
 
@@ -72,7 +72,7 @@ export function useInterestedInBounty() {
         hasBeenPublished: false,
         isDeleted: false,
         type: { id: INTERESTED_IN_RELATION_TYPE_ID, name: 'Interested in' },
-        fromEntity: { id: personalSpaceId, name: null },
+        fromEntity: { id: personalEntityId, name: null },
         toEntity: { id: bountyId, name: bountyName, value: bountyId },
       };
 
@@ -92,7 +92,7 @@ export function useInterestedInBounty() {
         setPendingBountyId(null);
       }
     },
-    [isRegistered, makeProposal, personalSpaceId, queryClient, storage.relations]
+    [isRegistered, makeProposal, personalSpaceId, personalEntityId, queryClient, storage.relations]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };

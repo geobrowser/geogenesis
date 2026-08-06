@@ -27,10 +27,10 @@ export function usePersonalSpaceId() {
       const space = await Effect.runPromise(getSpaceByAddress(address));
 
       if (!space) {
-        return { isRegistered: false, personalSpaceId: null };
+        return { isRegistered: false, personalSpaceId: null, personalEntityId: null };
       }
 
-      return { isRegistered: true, personalSpaceId: space.id };
+      return { isRegistered: true, personalSpaceId: space.id, personalEntityId: space.topicId ?? null };
     },
     enabled: !!address,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -54,6 +54,7 @@ export function usePersonalSpaceId() {
 
   return {
     personalSpaceId: data?.personalSpaceId ?? null,
+    personalEntityId: data?.personalEntityId ?? null,
     isRegistered: data?.isRegistered ?? false,
     // TanStack's isLoading can read false for a tick after the query becomes enabled but
     // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched
