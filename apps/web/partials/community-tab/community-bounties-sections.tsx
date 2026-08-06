@@ -194,25 +194,26 @@ function BountiesSection({
   const inlineBounties = filtered.slice(0, isInfinite ? visibleCount : INLINE_CARD_LIMIT);
   const card = useCard(bounties);
 
+  const filterControls = (
+    <>
+      <ScopeFilter value={scope} onChange={setScope} />
+      <CheckboxFilter
+        allLabel="Any difficulty"
+        options={[...BOUNTY_DIFFICULTY_LEVELS]}
+        selected={difficulties}
+        onChange={setDifficulties}
+      />
+      <CheckboxFilter allLabel="Any skill" options={skills} selected={skillSelection} onChange={setSelectedSkills} />
+    </>
+  );
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className={SECTION_TITLE_CLASS}>{title}</h2>
 
         <div className="flex flex-wrap items-center gap-2">
-          <ScopeFilter value={scope} onChange={setScope} />
-          <CheckboxFilter
-            allLabel="Any difficulty"
-            options={[...BOUNTY_DIFFICULTY_LEVELS]}
-            selected={difficulties}
-            onChange={setDifficulties}
-          />
-          <CheckboxFilter
-            allLabel="Any skill"
-            options={skills}
-            selected={skillSelection}
-            onChange={setSelectedSkills}
-          />
+          {filterControls}
           <button
             type="button"
             onClick={() => setIsViewAllOpen(true)}
@@ -241,15 +242,14 @@ function BountiesSection({
 
       <SlideUp isOpen={isViewAllOpen} setIsOpen={setIsViewAllOpen}>
         <div className="flex h-full flex-col overflow-hidden bg-white">
-          <div className="flex items-center justify-between border-b border-grey-02 px-6 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-02 px-6 py-4">
             <h2 className={SECTION_TITLE_CLASS}>{title}</h2>
-            <button
-              type="button"
-              onClick={() => setIsViewAllOpen(false)}
-              className="text-[16px] leading-[20px] text-grey-04 hover:text-[#2A2B2E]"
-            >
-              Close
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {filterControls}
+              <button type="button" onClick={() => setIsViewAllOpen(false)} className={FILTER_PILL_CLASS}>
+                Close
+              </button>
+            </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
             <BountyCardActivateProvider onActivate={() => setIsViewAllOpen(false)}>
