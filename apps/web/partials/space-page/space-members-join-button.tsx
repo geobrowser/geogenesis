@@ -1,9 +1,13 @@
 'use client';
 
+import * as React from 'react';
+
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -18,10 +22,35 @@ type SpaceMembersJoinButtonProps = {
 export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJoinButtonProps) {
   const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const [optimisticRequested, setOptimisticRequested] = React.useState(false);
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleJoin = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+
+    // The PendingActionsRunner submits it once the space registers.
+    setOptimisticRequested(true);
+    enqueuePendingAction({
+      id: `join:${spaceId}`,
+      label: 'your membership request',
+      requires: 'personalSpace',
+      run: () =>
+        new Promise<void>((resolve, reject) => {
+          requestToBeMember(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
+        }),
+    });
+    if (!smartAccount) openSignInPrompt('join');
+  };
 
   // A still-listed request whose vote has ended is busted: executed requests drop
   // off the list, so this one can no longer execute and the vote can't be revived.
@@ -30,7 +59,8 @@ export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJ
   // Open vote, or just submitted (before the indexer catches up) — show the live
   // vote. A stuck request never counts as under vote, so the Join button can
   // reappear.
-  const showUnderVote = status === 'success' || (!isStuck && (memberRequest != null || isPending));
+  const showUnderVote =
+    status === 'success' || optimisticRequested || (!isStuck && (memberRequest != null || isPending));
 
   return (
     <>
@@ -47,13 +77,7 @@ export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJ
           </span>
         ) : (
           <button
-            onClick={() => {
-              if (!smartAccount) {
-                openSignInPrompt('join');
-                return;
-              }
-              requestToBeMember();
-            }}
+            onClick={handleJoin}
             disabled={status !== 'idle'}
             title={isStuck ? "Your previous request can't be completed and needs to be sent again." : undefined}
           >

@@ -8,7 +8,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
@@ -16,7 +17,7 @@ import { useEntityVote } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { pendingActionsAtom, useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
@@ -31,6 +32,8 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimVoterAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
+
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 type OptimisticVote = 0 | 1 | 'none' | null;
 
@@ -67,7 +70,6 @@ export function EntityVoteButtons({
     spaceId,
   });
   const { smartAccount } = useSmartAccount();
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   // Claim entities render a different vote control.
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
@@ -81,6 +83,10 @@ export function EntityVoteButtons({
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const enqueuePendingAction = useEnqueuePendingAction();
 
   const { login } = useGeoLogin({
     onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
@@ -106,18 +112,25 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
+  // While a vote is queued (cast before the personal space was ready), the real
+  // write hasn't landed yet, so a background refetch.
+  const pendingActions = useAtomValue(pendingActionsAtom);
+  const hasQueuedVote = pendingActions.some(a => a.id === `entity-vote:${entityId}:${spaceId}`);
+
   React.useEffect(
     function clearOptimisticScoreOnServerUpdate() {
+      if (hasQueuedVote) return;
       setOptimisticScore(null);
     },
-    [voteCounts]
+    [voteCounts, hasQueuedVote]
   );
 
   React.useEffect(
     function clearOptimisticVoteOnServerUpdate() {
+      if (hasQueuedVote) return;
       setOptimisticVote(null);
     },
-    [userVoteType]
+    [userVoteType, hasQueuedVote]
   );
 
   const serverVoteDirection = userVoteType === 0 ? 0 : userVoteType === 1 ? 1 : null;
@@ -130,6 +143,9 @@ export function EntityVoteButtons({
   const displayScore = optimisticScore !== null ? optimisticScore : netScore;
 
   function openPrivySignIn() {
+    // stay on this page after onboarding
+    const search = searchParams?.toString();
+    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
     setName('');
     setTopicId('');
     setAvatar('');
@@ -138,12 +154,36 @@ export function EntityVoteButtons({
     login();
   }
 
+  function queueVote(direction: 0 | 1) {
+    const base = optimisticScore !== null ? optimisticScore : netScore;
+    const prevVote = activeVote;
+    if (direction === 0) {
+      setOptimisticVote(0);
+      setOptimisticScore(base + (prevVote === 1 ? 2n : 1n));
+    } else {
+      setOptimisticVote(1);
+      setOptimisticScore(base - (prevVote === 0 ? 2n : 1n));
+    }
+
+    enqueuePendingAction({
+      id: `entity-vote:${entityId}:${spaceId}`,
+      label: 'your vote',
+      requires: 'personalSpace',
+      run: () =>
+        new Promise<void>((resolve, reject) => {
+          const mutate = direction === 0 ? upvote : downvote;
+          mutate(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
+        }),
+    });
+
+    if (!smartAccount) openPrivySignIn();
+  }
+
   function handleUpvote() {
-    if (!smartAccount) {
-      openPrivySignIn();
+    if (!isConnected) {
+      queueVote(0);
       return;
     }
-    if (!isConnected) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 0) {
       setOptimisticVote('none');
@@ -175,11 +215,10 @@ export function EntityVoteButtons({
   }
 
   function handleDownvote() {
-    if (!smartAccount) {
-      openPrivySignIn();
+    if (!isConnected) {
+      queueVote(1);
       return;
     }
-    if (!isConnected) return;
     const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeVote === 1) {
       setOptimisticVote('none');
@@ -279,23 +318,19 @@ export function EntityVoteButtons({
       ) : null}
       <button
         onClick={handleUpvote}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? 'Sign in to vote'
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? upvoteActive
-                  ? 'Remove upvote'
-                  : 'Upvote'
-                : 'Connect wallet to vote'
+            : !isConnected
+              ? 'Vote now — saved until your account is ready'
+              : upvoteActive
+                ? 'Remove upvote'
+                : 'Upvote'
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
-          claimVoteButtonColor(upvoteActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          claimVoteButtonColor(upvoteActive)
         )}
       >
         {renderVoteIcon('up', upvoteActive)}
@@ -323,23 +358,19 @@ export function EntityVoteButtons({
       </Popover.Root>
       <button
         onClick={handleDownvote}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? 'Sign in to vote'
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? downvoteActive
-                  ? 'Remove downvote'
-                  : 'Downvote'
-                : 'Connect wallet to vote'
+            : !isConnected
+              ? 'Vote now — saved until your account is ready'
+              : downvoteActive
+                ? 'Remove downvote'
+                : 'Downvote'
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
-          claimVoteButtonColor(downvoteActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          claimVoteButtonColor(downvoteActive)
         )}
       >
         {renderVoteIcon('down', downvoteActive)}
