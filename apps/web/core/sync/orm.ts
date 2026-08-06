@@ -4,8 +4,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { type EntitiesOrderBy, SortOrder } from '~/core/gql/graphql';
+import { type EntitiesOrderBy } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
+import { SortOrder } from '~/core/io/sort-order';
 
 import { readTypes } from '../database/entities';
 import {
