@@ -1032,6 +1032,33 @@ describe('DebateRoomPageClient', () => {
     );
   });
 
+  it('uses the LiveKit fallback instead of showing a conflict when Web Lock requests fail', async () => {
+    mocks.useRealRoomOwnership = true;
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: vi.fn().mockRejectedValue(new Error('Web Locks are unavailable')),
+      },
+    });
+    vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    expect(screen.queryByText('This debate is already open in another tab.')).not.toBeInTheDocument();
+    expect(mocks.capture).not.toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'web_lock_blocked' })
+    );
+  });
+
   it('takes over a connection-phase debate before minting a new token', async () => {
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {

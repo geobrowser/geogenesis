@@ -339,6 +339,27 @@ describe('debate room ownership', () => {
     await closeCoordinators(first, second);
   });
 
+  it('falls back to LiveKit identity handling when a Web Lock request fails', async () => {
+    Object.defineProperty(navigator, 'locks', {
+      configurable: true,
+      value: {
+        request: vi.fn().mockRejectedValue(new Error('Web Locks are unavailable')),
+      },
+    });
+    const coordinator = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+    });
+
+    expect(coordinator.coordinationMode).toBe('lock-and-broadcast');
+    await expect(coordinator.acquire()).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+    expect(coordinator.coordinationMode).toBe('livekit-fallback');
+    expect(coordinator.ownsConnection()).toBe(true);
+
+    await closeCoordinators(coordinator);
+  });
+
   it('falls back to LiveKit identity handling when Web Locks are unavailable', async () => {
     Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
     const first = createDebateRoomOwnershipCoordinator({
