@@ -61,23 +61,8 @@ const CARD_INTERACTIVE_CLASS =
   'cursor-pointer transition-colors duration-150 hover:border-grey-03 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
 /**
- * Runs alongside opening the side panel.
- */
-const BountyCardActivateContext = React.createContext<(() => void) | null>(null);
-
-export function BountyCardActivateProvider({
-  onActivate,
-  children,
-}: {
-  onActivate: () => void;
-  children: React.ReactNode;
-}) {
-  return <BountyCardActivateContext.Provider value={onActivate}>{children}</BountyCardActivateContext.Provider>;
-}
-
-/**
- * Card frame. For a signed-in viewer, clicking anywhere that isn't a nested control opens the
- * bounty in the entity side panel, which is mounted globally in `app/entry.tsx`.
+ * Card frame. Clicking anywhere that isn't a nested control opens the bounty in the entity
+ * side panel (mounted globally in `app/entry.tsx`)
  */
 function BountyCardShell({
   bounty,
@@ -93,23 +78,11 @@ function BountyCardShell({
   children: React.ReactNode;
 }) {
   const { openSidePanel } = useEntitySidePanel();
-  const { smartAccount } = useSmartAccount();
-  const onActivate = React.useContext(BountyCardActivateContext);
 
-  const isLoggedIn = Boolean(smartAccount?.account.address);
   const style = cardStyle(height, width);
-  const classes = [CARD_CLASS, isLoggedIn && CARD_INTERACTIVE_CLASS, className].filter(Boolean).join(' ');
-
-  if (!isLoggedIn) {
-    return (
-      <article data-bounty-card style={style} className={classes}>
-        {children}
-      </article>
-    );
-  }
+  const classes = [CARD_CLASS, CARD_INTERACTIVE_CLASS, className].filter(Boolean).join(' ');
 
   const open = () => {
-    onActivate?.();
     openSidePanel(bounty.id, bounty.spaceId, false);
   };
 
