@@ -46,11 +46,14 @@ const mocks = vi.hoisted(() => ({
   refetchDebate: vi.fn(),
   clearTimedOutDebateActivity: vi.fn(),
   roomOn: vi.fn(),
+  capture: vi.fn(),
   ownershipAcquire: vi.fn(),
   ownershipRequestTakeover: vi.fn(),
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
   ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
+  useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
@@ -75,6 +78,10 @@ vi.mock('~/design-system/prefetch-link', () => ({
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.featureFlags[id] ?? false,
   useDebatesEnabled: () => mocks.featureFlags['questionsTab'] ?? false,
+}));
+
+vi.mock('~/core/analytics', () => ({
+  capture: mocks.capture,
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {
@@ -116,19 +123,28 @@ vi.mock('~/core/debates/thanking-debate-store', () => ({
   useSetThankingDebate: () => mocks.setThankingDebate,
 }));
 
-vi.mock('~/core/debates/debate-room-ownership', () => ({
-  createDebateRoomOwnershipCoordinator: (options: { onTakeoverRequested: () => boolean | Promise<boolean> }) => {
-    mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
-    return {
-      instanceId: 'connection-instance-1',
-      acquire: mocks.ownershipAcquire,
-      requestTakeover: mocks.ownershipRequestTakeover,
-      release: mocks.ownershipRelease,
-      close: mocks.ownershipClose,
-      ownsConnection: () => true,
-    };
-  },
-}));
+vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/debate-room-ownership')>();
+
+  return {
+    ...actual,
+    createDebateRoomOwnershipCoordinator: (
+      options: Parameters<typeof actual.createDebateRoomOwnershipCoordinator>[0]
+    ) => {
+      if (mocks.useRealRoomOwnership) return actual.createDebateRoomOwnershipCoordinator(options);
+      mocks.ownershipTakeoverHandler = options.onTakeoverRequested;
+      return {
+        instanceId: 'connection-instance-1',
+        coordinationMode: mocks.ownershipCoordinationMode,
+        acquire: mocks.ownershipAcquire,
+        requestTakeover: mocks.ownershipRequestTakeover,
+        release: mocks.ownershipRelease,
+        close: mocks.ownershipClose,
+        ownsConnection: () => true,
+      };
+    },
+  };
+});
 
 vi.mock('livekit-client', () => ({
   createLocalTracks: mocks.createLocalTracks,
@@ -168,6 +184,63 @@ vi.mock('@livekit/krisp-noise-filter', () => ({
 function emitRoomEvent(event: string, payload?: unknown) {
   for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
     if (registeredEvent === event) callback(payload);
+  }
+}
+
+type QueuedLock = {
+  callback: (lock: Lock | null) => Promise<void> | void;
+  resolve: () => void;
+  reject: (error: unknown) => void;
+};
+
+class FakeLockManager {
+  private held = false;
+  private queue: QueuedLock[] = [];
+
+  request(_name: string, options: LockOptions, callback: QueuedLock['callback']): Promise<void> {
+    if (options.ifAvailable && this.held) return Promise.resolve(callback(null));
+
+    return new Promise<void>((resolve, reject) => {
+      const queued = { callback, resolve, reject };
+      if (this.held) this.queue.push(queued);
+      else void this.run(queued);
+    });
+  }
+
+  private async run(queued: QueuedLock) {
+    this.held = true;
+    try {
+      await queued.callback({ name: 'debate-room', mode: 'exclusive' });
+      queued.resolve();
+    } catch (error) {
+      queued.reject(error);
+    } finally {
+      this.held = false;
+      const next = this.queue.shift();
+      if (next) void this.run(next);
+    }
+  }
+}
+
+class FakeBroadcastChannel {
+  static channels = new Map<string, Set<FakeBroadcastChannel>>();
+
+  onmessage: ((event: MessageEvent) => void) | null = null;
+
+  constructor(private readonly name: string) {
+    const channels = FakeBroadcastChannel.channels.get(name) ?? new Set();
+    channels.add(this);
+    FakeBroadcastChannel.channels.set(name, channels);
+  }
+
+  postMessage(data: unknown) {
+    for (const channel of FakeBroadcastChannel.channels.get(this.name) ?? []) {
+      if (channel !== this) queueMicrotask(() => channel.onmessage?.(new MessageEvent('message', { data })));
+    }
+  }
+
+  close() {
+    FakeBroadcastChannel.channels.get(this.name)?.delete(this);
   }
 }
 
@@ -224,11 +297,14 @@ beforeEach(() => {
   mocks.refetchDebate.mockReset();
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
-  mocks.ownershipAcquire.mockReset().mockResolvedValue(true);
+  mocks.capture.mockReset();
+  mocks.ownershipAcquire.mockReset().mockResolvedValue({ acquired: true, waitedForLocalRelease: false });
   mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
   mocks.ownershipRelease.mockReset();
   mocks.ownershipClose.mockReset();
   mocks.ownershipTakeoverHandler = null;
+  mocks.ownershipCoordinationMode = 'lock-and-broadcast';
+  mocks.useRealRoomOwnership = false;
   mocks.deviceChangeHandler = null;
   mocks.debate = completedDebate();
   mocks.rematch = null;
@@ -303,11 +379,14 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
+  await Promise.resolve();
+  await Promise.resolve();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
 });
 
 describe('isDebateInThankYouPeriod', () => {
@@ -897,7 +976,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('does not mint a token when another tab owns the participant connection', async () => {
-    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -911,10 +990,50 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
     expect(mocks.roomConnect).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        source: 'web_lock_blocked',
+        coordination_mode: 'lock-and-broadcast',
+        debate_status: 'connecting',
+        room_state: 'idle',
+        visibility_state: expect.any(String),
+        has_focus: expect.any(Boolean),
+        navigation_type: expect.any(String),
+      })
+    );
+  });
+
+  it('keeps lock-only pages exclusive before token creation', async () => {
+    mocks.useRealRoomOwnership = true;
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: new FakeLockManager() });
+    vi.stubGlobal('BroadcastChannel', undefined);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(
+      <>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </>
+    );
+
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'web_lock_blocked', coordination_mode: 'lock-only' })
+    );
   });
 
   it('takes over a connection-phase debate before minting a new token', async () => {
-    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -935,7 +1054,7 @@ describe('DebateRoomPageClient', () => {
   it('keeps takeover available during a preflight ownership conflict', async () => {
     const now = Date.parse('2026-07-02T00:00:05.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
-    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...completedDebate(),
       status: 'preflight',
@@ -971,12 +1090,17 @@ describe('DebateRoomPageClient', () => {
 
     await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'ownership_released', coordination_mode: 'lock-and-broadcast' })
+    );
 
     pendingConnection.resolve();
   });
 
   it('does not allow a secondary tab to take over an active debate recording', async () => {
-    mocks.ownershipAcquire.mockResolvedValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...completedDebate(),
       status: 'in_progress',
@@ -1104,6 +1228,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('explains when LiveKit disconnects a duplicate participant identity', async () => {
+    mocks.ownershipCoordinationMode = 'livekit-fallback';
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -1120,6 +1245,11 @@ describe('DebateRoomPageClient', () => {
     expect(screen.getByRole('button', { name: 'Continue here' })).toBeInTheDocument();
     expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
     expect(mocks.ownershipRelease).toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_connection_conflict',
+      expect.objectContaining({ source: 'livekit_duplicate_identity', coordination_mode: 'livekit-fallback' })
+    );
   });
 
   it('does not resume an in-flight join after a duplicate-identity disconnect', async () => {
@@ -1145,6 +1275,10 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('connects to LiveKit after the Strict Mode effect rehearsal', async () => {
+    mocks.useRealRoomOwnership = true;
+    FakeBroadcastChannel.channels.clear();
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: new FakeLockManager() });
+    vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -1158,8 +1292,19 @@ describe('DebateRoomPageClient', () => {
       </StrictMode>
     );
 
-    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
-    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.queryByText('This debate is already open in another tab.')).not.toBeInTheDocument();
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_ownership_recovered',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        coordination_mode: 'lock-and-broadcast',
+        waited_for_local_release: true,
+      })
+    );
   });
 
   it('refetches the debate when LiveKit reports the remote participant connected', async () => {
