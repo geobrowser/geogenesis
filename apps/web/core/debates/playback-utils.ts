@@ -6,10 +6,7 @@ export type TurnState = {
   seconds: number;
 } | null;
 
-/**
- * Has both per-slot recordings. A debate whose media job failed still passes this, so the feed
- * pairs it with {@link hasProcessedVideo} before rendering.
- */
+/** Complete, with both per-slot recordings — everything the feed needs to play it. */
 export function isWatchableDebate(debate: Debate) {
   return (
     debate.status === 'complete' &&
@@ -18,7 +15,10 @@ export function isWatchableDebate(debate: Debate) {
   );
 }
 
-/** The media worker composed the two per-slot recordings into a single `final_video`. */
+/**
+ * The media worker composed the two per-slot recordings into a single `final_video`. The feed
+ * plays the raw recordings and doesn't wait on this
+ */
 export function hasProcessedVideo(media: DebateMediaResponse | undefined): boolean {
   return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
 }
