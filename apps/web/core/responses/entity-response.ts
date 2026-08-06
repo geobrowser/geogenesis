@@ -1,8 +1,9 @@
+import { sleep } from '~/core/utils/utils';
+
 export type ResponseKind = 'curation' | 'stance' | 'veracity';
 export type ResponseDirection = 'positive' | 'negative' | 'clear';
 export type ActiveResponseDirection = Exclude<ResponseDirection, 'clear'>;
 export type ResponseVoteKind = 0 | 1 | 2;
-export type ResponseVoteType = 0 | 1 | 2;
 export type ResponseObjectType = 0 | 1;
 
 export type ResponseActionMethod =
@@ -122,7 +123,7 @@ export async function waitForIndexedEntityResponse(
     }
 
     if (attempt < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      await sleep(intervalMs);
     }
   }
 

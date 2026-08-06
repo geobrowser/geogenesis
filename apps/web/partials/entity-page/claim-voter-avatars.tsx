@@ -11,7 +11,7 @@ import { type ResponseKind, type ResponseObjectType, entityRespondersQueryKey } 
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 
-export function ClaimVoterAvatars({
+export function ClaimResponderAvatars({
   entityId,
   spaceId,
   objectType,

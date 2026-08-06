@@ -15,6 +15,7 @@ import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uuidToHex } from '~/core/id/normalize';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -27,6 +28,7 @@ import {
   ENTITY_RESPONSE_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
+  entityRespondersQueryKey,
   entityResponseCountsQueryKey,
   getEntityResponseKind,
   userEntityResponseQueryKey,
@@ -45,7 +47,7 @@ import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { ClaimVoterAvatars } from '~/partials/entity-page/claim-voter-avatars';
+import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 type OptimisticResponse = ActiveResponseDirection | 'none' | null;
@@ -54,33 +56,31 @@ const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
-const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
-
-const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
-const CLAIM_IS_FACTUAL = normalizeId(CLAIM_IS_FACTUAL_PROPERTY_ID);
-const TYPES_PROPERTY = normalizeId(SystemIds.TYPES_PROPERTY);
+const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
+const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
+const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 
 type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
-  claimVoterAvatarsPosition?: 'leading' | 'trailing';
+  claimResponderAvatarsPosition?: 'leading' | 'trailing';
 };
 
 export function EntityVoteButtons({
   entityId,
   spaceId,
-  claimVoterAvatarsPosition = 'leading',
+  claimResponderAvatarsPosition = 'leading',
 }: EntityVoteButtonsProps) {
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
   const isClaim =
     entity?.relations.some(
-      relation => normalizeId(relation.type.id) === TYPES_PROPERTY && normalizeId(relation.toEntity.id) === CLAIM_TYPE
+      relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
     ) ?? false;
   const isFactualClaim =
     isClaim &&
     getChecked(
       entity?.values.find(
-        v => normalizeId(v.spaceId) === normalizeId(spaceId) && normalizeId(v.property.id) === CLAIM_IS_FACTUAL
+        v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
       )?.value
     ) === true;
   const responseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
@@ -89,9 +89,7 @@ export function EntityVoteButtons({
   const responseCopy = ENTITY_RESPONSE_COPY[responseKind];
 
   const {
-    submitPositiveResponse,
-    submitNegativeResponse,
-    clearResponse,
+    submitResponse,
     isProcessingResponse,
     isConnected,
     personalSpaceId,
@@ -174,7 +172,7 @@ export function EntityVoteButtons({
     if (activeResponse === 'positive') {
       setOptimisticResponse('none');
       setOptimisticScore(base - 1n);
-      clearResponse(undefined, {
+      submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'up'));
         },
@@ -188,7 +186,7 @@ export function EntityVoteButtons({
       const previousResponse = activeResponse ?? null;
       setOptimisticResponse('positive');
       setOptimisticScore(base + delta);
-      submitPositiveResponse(undefined, {
+      submitResponse('positive', {
         onSuccess: () => {
           upvoted(
             voteProperties(
@@ -215,7 +213,7 @@ export function EntityVoteButtons({
     if (activeResponse === 'negative') {
       setOptimisticResponse('none');
       setOptimisticScore(base + 1n);
-      clearResponse(undefined, {
+      submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'down'));
         },
@@ -229,7 +227,7 @@ export function EntityVoteButtons({
       const previousResponse = activeResponse ?? null;
       setOptimisticResponse('negative');
       setOptimisticScore(base - delta);
-      submitNegativeResponse(undefined, {
+      submitResponse('negative', {
         onSuccess: () => {
           downvoted(
             voteProperties(
@@ -295,7 +293,7 @@ export function EntityVoteButtons({
   };
 
   const claimResponderAvatars = isClaimVariant ? (
-    <ClaimVoterAvatars
+    <ClaimResponderAvatars
       entityId={entityId}
       spaceId={spaceId}
       objectType={ENTITY_RESPONSE_OBJECT_TYPE}
@@ -312,7 +310,7 @@ export function EntityVoteButtons({
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {claimVoterAvatarsPosition === 'leading' && claimResponderAvatars ? (
+      {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'mr-1')}>{claimResponderAvatars}</span>
       ) : null}
       <button
@@ -395,7 +393,7 @@ export function EntityVoteButtons({
       >
         {renderResponseIcon('down', negativeActive)}
       </button>
-      {claimVoterAvatarsPosition === 'trailing' && claimResponderAvatars ? (
+      {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
       ) : null}
       {isProcessingResponse ? <span className="sr-only">Processing response…</span> : null}
@@ -417,16 +415,31 @@ function RespondersPopoverContent({
   responseKind: ResponseKind;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
-  const { data: respondersWithProfiles, isLoading } = useQuery({
-    queryKey: entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind),
-    queryFn: async () => {
-      const responders = await Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType));
-      if (responders.length === 0) return [];
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(responders.map(v => v.userId)));
-      return responders.map((responder, i): ResponderWithProfile => ({ ...responder, profile: profiles[i]! }));
-    },
+  const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
+  const { data: responders, isLoading: isLoadingResponders } = useQuery({
+    queryKey: respondersQueryKey,
+    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
     staleTime: 30_000,
   });
+  const responderSpaceIds = React.useMemo(() => responders?.map(responder => responder.userId) ?? [], [responders]);
+  const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
+    queryKey: [
+      ...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind),
+      responderSpaceIds,
+    ],
+    enabled: responderSpaceIds.length > 0,
+    queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(responderSpaceIds)),
+    staleTime: 30_000,
+  });
+  let respondersWithProfiles: ResponderWithProfile[] | undefined;
+  if (responders?.length === 0) {
+    respondersWithProfiles = [];
+  } else if (responders && profiles) {
+    respondersWithProfiles = responders.map(
+      (responder, index): ResponderWithProfile => ({ ...responder, profile: profiles[index]! })
+    );
+  }
+  const isLoading = isLoadingResponders || (responderSpaceIds.length > 0 && isLoadingProfiles);
 
   const positiveResponders = respondersWithProfiles?.filter(v => v.direction === 'positive') ?? [];
   const negativeResponders = respondersWithProfiles?.filter(v => v.direction === 'negative') ?? [];

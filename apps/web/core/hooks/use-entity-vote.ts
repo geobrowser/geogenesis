@@ -12,7 +12,6 @@ import { getUserEntityResponse } from '~/core/io/queries';
 import {
   type ResponseDirection,
   type ResponseKind,
-  entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
   getResponseActionMethod,
@@ -35,7 +34,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
 
   const tx = useSmartAccountTransaction();
 
-  const submitResponse = useCallback(
+  const executeResponse = useCallback(
     async (direction: ResponseDirection) => {
       if (!validateSpaceId(spaceId)) {
         throw new Error('Invalid space ID format. Cannot submit response.');
@@ -97,31 +96,16 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       queryClient.invalidateQueries({
         queryKey: entityRespondersQueryKey(entityId, spaceId, 0, responseKind),
       }),
-      queryClient.invalidateQueries({
-        queryKey: entityResponderProfilesQueryKey(entityId, spaceId, 0, responseKind),
-      }),
     ]);
 
-  const positiveResponse = useMutation({
-    mutationFn: () => submitResponse('positive'),
-    onSuccess,
-  });
-
-  const negativeResponse = useMutation({
-    mutationFn: () => submitResponse('negative'),
-    onSuccess,
-  });
-
-  const clearResponse = useMutation({
-    mutationFn: () => submitResponse('clear'),
+  const responseMutation = useMutation({
+    mutationFn: executeResponse,
     onSuccess,
   });
 
   return {
-    submitPositiveResponse: positiveResponse.mutate,
-    submitNegativeResponse: negativeResponse.mutate,
-    clearResponse: clearResponse.mutate,
-    isProcessingResponse: positiveResponse.isPending || negativeResponse.isPending || clearResponse.isPending,
+    submitResponse: responseMutation.mutate,
+    isProcessingResponse: responseMutation.isPending,
     isConnected: !!personalSpaceId && isRegistered,
     personalSpaceId,
   };
