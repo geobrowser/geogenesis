@@ -6,8 +6,15 @@ import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
-import { useSpaceDebates } from '~/core/debates/hooks';
+import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import {
+  getPreparedSocialVideoHandoffMethod,
+  handoffPreparedSocialVideo,
+  isAbortError,
+  usePreparedSocialVideo,
+} from '~/core/debates/social-video-share';
+import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -19,10 +26,11 @@ import { Text } from '~/design-system/text';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
+import { DebateInteractionBar, type DebateShareAction, type DebateVote } from './debate-interaction-bar';
 import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
+const SHARE_PREPARATION_DWELL_MS = 5_000;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -37,9 +45,24 @@ export function DebatesBrowseFeed({
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
+  // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
+  // whose media job failed or never ran still passes it, so readiness decides what renders.
+  const candidates = React.useMemo(
+    () => (debatesQuery.data?.debates ?? []).filter(isWatchableDebate),
+    [debatesQuery.data?.debates]
+  );
+  const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
+  const {
+    processedIds,
+    isLoading: mediaLoading,
+    hasError: mediaError,
+  } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
+
   const debates = React.useMemo(() => {
-    const watchable = (debatesQuery.data?.debates ?? []).filter(isWatchableDebate);
-    const sorted = watchable.sort((a, b) => completedTime(b) - completedTime(a));
+    const processed = new Set(processedIds);
+    const sorted = candidates
+      .filter(debate => processed.has(debate.id))
+      .sort((a, b) => completedTime(b) - completedTime(a));
     if (!initialDebateId) return sorted;
     // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
     // first full-screen video, then let the rest of the space's debates scroll in below it.
@@ -47,7 +70,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [debatesQuery.data?.debates, initialDebateId]);
+  }, [candidates, processedIds, initialDebateId]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -80,14 +103,26 @@ export function DebatesBrowseFeed({
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
+  // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
+  // flashes "no debates" and strands a valid anchor.
+  const isLoading = debatesQuery.isLoading || mediaLoading;
+
+  // One message at a time, most specific first. A readiness lookup that failed has to read as an
+  // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
+  const emptyMessage = isLoading
+    ? 'Loading debates…'
+    : debatesQuery.error instanceof Error
+      ? `Could not load debates: ${debatesQuery.error.message}`
+      : mediaError
+        ? 'Could not check which debates are ready to watch. Try again shortly.'
+        : 'No debates to watch yet. Start one from the Claims tab.';
+
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
   // Debates tab passes none and keeps its own empty/error states.
   const anchorMissing =
-    initialDebateId != null &&
-    !debatesQuery.isLoading &&
-    !debates.some(debate => ID.equals(debate.id, initialDebateId));
+    initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
 
   const visibleDebates = debates.slice(0, visibleCount);
 
@@ -111,13 +146,7 @@ export function DebatesBrowseFeed({
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
-      {debatesQuery.isLoading && debates.length === 0 && <FeedMessage>Loading debates…</FeedMessage>}
-      {debatesQuery.error instanceof Error && debates.length === 0 && (
-        <FeedMessage>Could not load debates: {debatesQuery.error.message}</FeedMessage>
-      )}
-      {!debatesQuery.isLoading && !debatesQuery.error && debates.length === 0 && (
-        <FeedMessage>No debates to watch yet. Start one from the Claims tab.</FeedMessage>
-      )}
+      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
         <DebateFeedItem
           key={debate.id}
@@ -183,7 +212,28 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const [vote, setVote] = React.useState<DebateVote>(null);
-  const [hasVoted, setHasVoted] = React.useState(false);
+  const [preparationEnabled, setPreparationEnabled] = React.useState(false);
+  const [isSharing, setIsSharing] = React.useState(false);
+  const [shareError, setShareError] = React.useState<string | null>(null);
+  const sharingRef = React.useRef(false);
+  const activationGenerationRef = React.useRef(0);
+  const winnerVotes = useDebateVotes(debate);
+  const preparedVideo = usePreparedSocialVideo(debate.id, {
+    enabled: active && preparationEnabled,
+    includePreview: false,
+  });
+
+  React.useEffect(() => {
+    setShareError(null);
+    if (!active) {
+      activationGenerationRef.current += 1;
+      setPreparationEnabled(false);
+      return;
+    }
+
+    const dwellTimer = window.setTimeout(() => setPreparationEnabled(true), SHARE_PREPARATION_DWELL_MS);
+    return () => window.clearTimeout(dwellTimer);
+  }, [active]);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -200,6 +250,52 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
+  const handoffMethod = React.useMemo(
+    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
+    [preparedVideo.file]
+  );
+  let shareState: DebateShareAction['state'] = 'preparing';
+  if (isSharing) shareState = 'sharing';
+  else if (active && (shareError || preparedVideo.status === 'error')) shareState = 'error';
+  else if (active && preparedVideo.status === 'ready') shareState = 'ready';
+  const shareTooltipMessage = getShareTooltipMessage({
+    state: shareState,
+    method: handoffMethod,
+    error: shareError ?? preparedVideo.error,
+  });
+  const activateShare = () => {
+    if (!active || sharingRef.current) return;
+    if (preparedVideo.status === 'error') {
+      setShareError(null);
+      preparedVideo.retry();
+      return;
+    }
+    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
+
+    const file = preparedVideo.file;
+    const downloadUrl = preparedVideo.downloadUrl;
+    const activationGeneration = activationGenerationRef.current;
+    sharingRef.current = true;
+    setIsSharing(true);
+    setShareError(null);
+    const handoff = handoffPreparedSocialVideo({
+      debateId: debate.id,
+      title: debate.claim.claim,
+      file,
+      downloadUrl,
+    });
+    void handoff
+      .catch(error => {
+        if (activationGenerationRef.current === activationGeneration && !isAbortError(error)) {
+          setShareError(error instanceof Error ? error.message : 'Could not share the video.');
+        }
+      })
+      .finally(() => {
+        sharingRef.current = false;
+        setIsSharing(false);
+      });
+  };
+
   const interactionProps = {
     score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
     vote,
@@ -208,7 +304,12 @@ function DebateFeedItem({
     claimsCount: 0,
     onComment: () => undefined,
     onClaims: onOpenClaims,
-    onShare: () => undefined,
+    shareAction: {
+      state: shareState,
+      method: handoffMethod,
+      tooltipMessage: shareTooltipMessage,
+      onActivate: activateShare,
+    } satisfies DebateShareAction,
   };
 
   return (
@@ -237,12 +338,7 @@ function DebateFeedItem({
             topics={topics}
             onOpenJoin={onOpenJoin}
           />
-          <DebateFeedPlayer
-            debate={debate}
-            active={active}
-            hasVoted={hasVoted}
-            onSelectWinner={() => setHasVoted(true)}
-          />
+          <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
           <div className="hidden md:block">
@@ -331,4 +427,18 @@ function FeedMessage({ children }: { children: React.ReactNode }) {
 function completedTime(debate: Debate) {
   const value = debate.completed_at ?? debate.started_at ?? debate.created_at;
   return value ? new Date(value).getTime() : 0;
+}
+
+function getShareTooltipMessage({
+  state,
+  method,
+  error,
+}: Pick<DebateShareAction, 'state' | 'method'> & { error: string | null }) {
+  if (state === 'preparing') return 'Preparing video for sharing… You can share soon.';
+  if (state === 'sharing') return undefined;
+  if (state === 'error') {
+    const fallback = method ? 'Could not share the video.' : 'Could not prepare the video.';
+    return `${error ?? fallback} Select to try again.`;
+  }
+  return method === 'download' ? 'Download the debate video.' : undefined;
 }

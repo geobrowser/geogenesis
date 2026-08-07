@@ -13,6 +13,8 @@ import { speakerLabel } from './playback-utils';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
+  position: boolean;
+  position_label: string;
 };
 
 type DebateRequestDialogFormatSelector = {
@@ -46,12 +48,19 @@ export function DebateRequestDialog({
   onReject,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
-  const orderedParticipants = React.useMemo(
+  const turnParticipants = React.useMemo(
     () => [...participants].sort((a, b) => a.participant_slot - b.participant_slot),
     [participants]
   );
-  const firstParticipant = orderedParticipants[0];
-  const secondParticipant = orderedParticipants[1] ?? firstParticipant;
+  const positionParticipants = React.useMemo(
+    () =>
+      [...turnParticipants].sort(
+        (a, b) => Number(b.position) - Number(a.position) || a.participant_slot - b.participant_slot
+      ),
+    [turnParticipants]
+  );
+  const firstParticipant = positionParticipants[0];
+  const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
   React.useEffect(() => {
     const originalBodyOverflow = document.body.style.overflow;
@@ -93,8 +102,8 @@ export function DebateRequestDialog({
                 aria-hidden="true"
                 className="absolute top-1/2 left-1/2 h-14 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
               />
-              <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-smallButton text-text">
-                vs
+              <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
+                VS
               </span>
             </div>
             <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
@@ -118,11 +127,7 @@ export function DebateRequestDialog({
               )}
             </div>
             <div className="px-1 pb-1">
-              <DebateFormatDetails
-                formatId={formatId}
-                participants={orderedParticipants}
-                currentUserId={currentUserId}
-              />
+              <DebateFormatDetails formatId={formatId} participants={turnParticipants} currentUserId={currentUserId} />
             </div>
           </section>
 
@@ -133,12 +138,12 @@ export function DebateRequestDialog({
           )}
         </div>
 
-        <footer className="grid gap-3">
+        <footer className="grid gap-5">
           <button
             type="button"
             onClick={onAccept}
             disabled={busy}
-            className="flex min-h-11 w-full items-center justify-center rounded-full bg-text px-5 text-button text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+            className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
           >
             Accept
           </button>
@@ -146,7 +151,7 @@ export function DebateRequestDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
-            className="mx-auto min-h-10 px-4 text-button text-grey-04 hover:text-text disabled:opacity-50"
+            className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
           >
             Reject
           </button>
@@ -177,6 +182,9 @@ function ParticipantSummary({
       </span>
       <Text as="div" variant="metadata" color="text" className="max-w-full truncate">
         {label}
+      </Text>
+      <Text as="span" variant="smallButton" color="text" className="rounded-full bg-grey-02 px-2 py-0.5">
+        {participant.position_label}
       </Text>
     </div>
   );

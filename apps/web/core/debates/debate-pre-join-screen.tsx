@@ -19,6 +19,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { CameraIcon, CloseIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
+import { MicrophoneLevelMeter } from './microphone-level-meter';
 
 export type DebatePreScreenParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -146,7 +147,7 @@ export function DebatePreScreen({
               <video ref={localVideoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
             </div>
 
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="mt-3 flex flex-col gap-[6px]">
               {isMobile ? (
                 <>
                   <PreScreenSettingsTrigger
@@ -202,6 +203,10 @@ export function DebatePreScreen({
                   </DesktopSettingsPopover>
                 </>
               )}
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-grey-02 pt-2">
+              <p className="text-[12px] leading-4 font-normal text-grey-04">Speak to test your mic</p>
+              <MicrophoneLevelMeter stream={previewStream} />
             </div>
           </div>
         ) : (

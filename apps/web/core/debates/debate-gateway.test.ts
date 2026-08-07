@@ -179,7 +179,10 @@ describe('DebateGatewayClient', () => {
     [
       'activity',
       { event_type: 'debate.activity_changed', payload: {} },
-      [['debates', 'account', 'user-a', 'activity']],
+      [
+        ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
+      ],
     ],
     [
       'state',
@@ -188,6 +191,7 @@ describe('DebateGatewayClient', () => {
         ['debates', 'detail', 'debate-1'],
         ['debates', 'space', 'space-1'],
         ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
       ],
     ],
     [
@@ -196,6 +200,7 @@ describe('DebateGatewayClient', () => {
       [
         ['debates', 'account', 'user-a', 'rematch', 'rematch-1'],
         ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
       ],
     ],
     [
@@ -277,6 +282,57 @@ describe('DebateGatewayClient', () => {
 
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
+  });
+
+  it('sends the current inactive presence without disconnecting the gateway', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      false
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+  });
+
+  it('coalesces rapid attention changes behind an outstanding heartbeat and preserves the final state', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      true
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+    const initialHeartbeatCount = sockets[0]!.sent.filter(message => message.op === 'HEARTBEAT').length;
+
+    client.setDebatePresence(false);
+    client.setDebatePresence(true);
+    client.setDebatePresence(false);
+    expect(sockets[0]!.sent.filter(message => message.op === 'HEARTBEAT')).toHaveLength(initialHeartbeatCount);
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    client.setDebatePresence(true);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true } })
+    );
   });
 
   it('resets missed acknowledgements and keeps the live socket connected', async () => {

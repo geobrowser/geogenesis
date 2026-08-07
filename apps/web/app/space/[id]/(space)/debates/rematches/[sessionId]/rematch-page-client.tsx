@@ -69,6 +69,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const acceptRequest = useAcceptDebateRematchRequest();
   const rejectRequest = useRejectDebateRematchRequest();
   const session = sessionQuery.data ?? null;
+  // A session opened from a profile challenge has no source debate, so nothing to exclude.
   const sourceDebateQuery = useDebate(session?.source_debate_id ?? '', Boolean(session?.source_debate_id));
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(
@@ -190,6 +191,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
+  const incomingRequestParticipants =
+    incomingRequest && session
+      ? session.participants.map(participant => {
+          const position =
+            participant.user_id === incomingRequest.requester_user_id
+              ? incomingRequest.requester_position
+              : incomingRequest.recipient_position;
+
+          return {
+            ...participant,
+            position,
+            position_label: position ? 'Yes' : 'No',
+          };
+        })
+      : [];
 
   return (
     <div className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text">
@@ -314,7 +330,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
           claim={incomingRequest.claim.claim}
-          participants={session.participants}
+          participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
           busy={acceptRequest.isPending || rejectRequest.isPending}

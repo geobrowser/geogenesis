@@ -11,11 +11,19 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
 const ROW_NAME_CLASS = 'block line-clamp-3 tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
 
 /** Placeholder row shown while an entry's name/image resolve — rank is already known. */
-export function RankingEntryRowSkeleton({ rank }: { rank?: number }) {
+export function RankingEntryRowSkeleton({
+  rank,
+  reserveVoteControls = false,
+}: {
+  rank?: number;
+  reserveVoteControls?: boolean;
+}) {
   const showLeadingRank = rank != null && rank > 0;
 
   return (
@@ -28,6 +36,7 @@ export function RankingEntryRowSkeleton({ rank }: { rank?: number }) {
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-3 w-3/5" />
       </div>
+      {reserveVoteControls ? <Skeleton className="h-5 w-16 shrink-0 rounded" /> : null}
     </div>
   );
 }
@@ -45,6 +54,8 @@ type Props = {
   linkToEntity?: boolean;
   /** `leading` = rank column left of avatar; `avatar-badge` = overlapping corner badge (default). */
   rankStyle?: 'leading' | 'avatar-badge';
+  /** Show entity vote controls (including claim variants) at the trailing edge of the row. */
+  showVotes?: boolean;
 };
 
 export function RankingEntryRow({
@@ -56,6 +67,7 @@ export function RankingEntryRow({
   pending = false,
   linkToEntity = true,
   rankStyle = 'avatar-badge',
+  showVotes = false,
 }: Props) {
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
   const imageHint = entry.image;
@@ -110,6 +122,11 @@ export function RankingEntryRow({
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
       </div>
+      {showVotes ? (
+        <div className="shrink-0" onClick={event => event.stopPropagation()}>
+          <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
+        </div>
+      ) : null}
     </div>
   );
 }

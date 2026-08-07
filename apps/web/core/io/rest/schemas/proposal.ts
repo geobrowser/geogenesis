@@ -11,6 +11,7 @@ import type {
   SubspaceEdgeProposalDetails,
   SubspaceProposalDetails,
   SubspaceTopicProposalDetails,
+  VotingSettingsProposalDetails,
 } from '../../dto/proposals';
 import { ProposalStatus, ProposalType } from '../../substream-schema';
 
@@ -78,6 +79,7 @@ export const ApiActionSchema = Schema.Struct({
   quorum: Schema.optional(Schema.Number),
   fastThreshold: Schema.optional(Schema.Number),
   slowThreshold: Schema.optional(Schema.Number),
+  universalPercentageSupportThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
   targetSpaceId: Schema.optional(Schema.String),
   targetTopicId: Schema.optional(Schema.String),
@@ -97,6 +99,11 @@ const ApiProposalBaseFields = {
   spaceId: Schema.String,
   name: Schema.NullOr(Schema.String),
   proposedBy: Schema.String,
+  /** Version of the proposal this payload describes. Votes must target it —
+   *  the vote calldata is (proposalId, versionId, voteOption) and the SDK
+   *  defaults versionId to 1, which is wrong for updated proposals. Optional
+   *  because older API deployments may not send it. */
+  proposalVersion: Schema.optional(Schema.Number),
   status: Schema.Union(
     Schema.Literal('PROPOSED'),
     Schema.Literal('EXECUTABLE'),
@@ -313,6 +320,30 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
 }
 
 /**
+ * Extract the proposed new voting settings from an `UPDATE_VOTING_SETTINGS` action. The API
+ * carries the new values (`slowThreshold`, `universalPercentageSupportThreshold`,
+ * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
+ * such action or it carries none of them.
+ */
+export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]): VotingSettingsProposalDetails | null {
+  const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');
+  if (!action) {
+    return null;
+  }
+
+  const details: VotingSettingsProposalDetails = {
+    slowThreshold: action.slowThreshold,
+    universalThreshold: action.universalPercentageSupportThreshold,
+    fastThreshold: action.fastThreshold,
+    quorum: action.quorum,
+    durationSeconds: action.duration,
+  };
+
+  const hasAnyValue = Object.values(details).some(value => value !== undefined);
+  return hasAnyValue ? details : null;
+}
+
+/**
  * Map REST `actions` to a single {@link ProposalType}. Action order from the API is not
  * guaranteed, so the first action alone can mis-classify multi-action proposals: any
  * `PUBLISH` action means a content edit proposal (`ADD_EDIT`), then a membership action
@@ -325,6 +356,9 @@ export function mapApiActionsToProposalType(actions: readonly ApiAction[]): Prop
   const membershipAction = findMembershipAction(actions);
   if (membershipAction) {
     return mapActionTypeToProposalType(membershipAction.actionType);
+  }
+  if (actions.some(a => a.actionType === 'UPDATE_VOTING_SETTINGS')) {
+    return 'UPDATE_VOTING_SETTINGS';
   }
   return mapActionTypeToProposalType(actions[0]?.actionType ?? 'UNKNOWN');
 }
@@ -354,6 +388,8 @@ export function mapActionTypeToProposalType(actionType: string): ProposalType {
     case 'SET_TOPIC':
     case 'UNSET_TOPIC':
       return 'SET_TOPIC';
+    case 'UPDATE_VOTING_SETTINGS':
+      return 'UPDATE_VOTING_SETTINGS';
     default:
       return 'ADD_EDIT';
   }
@@ -372,6 +408,31 @@ export function mapProposalStatus(apiStatus: ApiProposalStatusResponse['status']
     default:
       return 'PROPOSED';
   }
+}
+
+/**
+ * Whether the UI should offer to execute this proposal.
+ *
+ * SLOW proposals pass a percentage quorum and support threshold, and `quorum`/
+ * `threshold` describe exactly those — so requiring all three is the correct
+ * conservative read of the API.
+ *
+ * FAST proposals do not: they clear on `flatSupportThreshold` (a single editor
+ * vote can satisfy it), with no percentage gate to reach. ANDing the percentage
+ * flags in would report `false` for a FAST proposal that legitimately passed,
+ * and the caller renders that as "Rejected" with no Execute button — an
+ * unrecoverable false negative. So FAST defers to the API's own `canExecute`.
+ *
+ * The asymmetry is safe in the direction that matters: a false *positive* only
+ * shows a button whose click is caught by the on-chain executability simulation
+ * in execute.tsx, whereas a false negative hides the affordance entirely.
+ */
+export function getApiProposalCanExecute(
+  proposal: Pick<ApiProposalStatusResponse, 'canExecute' | 'quorum' | 'threshold' | 'votingMode'>
+): boolean {
+  if (!proposal.canExecute) return false;
+  if (proposal.votingMode === 'FAST') return true;
+  return proposal.quorum.reached && proposal.threshold.reached;
 }
 
 /**

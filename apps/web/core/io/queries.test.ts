@@ -44,9 +44,40 @@ describe('buildSearchPath', () => {
     expect(path).toContain('additional_space_ids=a19c345a-b986-6679-b001-d7d2138d88a1');
   });
 
-  it('never emits include_non_canonical (canonical gating is client-side)', () => {
-    expect(buildSearchPath({ query: 'q', includeNonCanonical: false })).toBe('/search?query=q&limit=10&offset=0');
+  it('emits include_non_canonical only when the request scopes no additional spaces', () => {
+    // Unscoped: the server filters. A client-side gate would only see the endpoint's
+    // first 100 rows, which for a type dominated by non-canonical entities can contain
+    // zero canonical ones — the Explore community-calls digest went empty that way.
+    expect(buildSearchPath({ query: 'q', includeNonCanonical: false })).toBe(
+      '/search?query=q&limit=10&offset=0&include_non_canonical=false'
+    );
+
+    // Only `false` filters; `true` and omitted both mean "no server-side filter".
     expect(buildSearchPath({ query: 'q', includeNonCanonical: true })).toBe('/search?query=q&limit=10&offset=0');
+    expect(buildSearchPath({ query: 'q' })).toBe('/search?query=q&limit=10&offset=0');
+  });
+
+  it('suppresses include_non_canonical when additional_space_ids is in play', () => {
+    // The endpoint ignores additional_space_ids when include_non_canonical=false, so
+    // sending both drops the scoped spaces entirely — the regression #1949 fixed.
+    const path = buildSearchPath({ query: 'q', includeNonCanonical: false, additionalSpaceIds: [ROOT] });
+
+    expect(path).toContain('additional_space_ids=');
+    expect(path).not.toContain('include_non_canonical');
+  });
+
+  it('still emits include_non_canonical when additional space ids are dropped for SPACE_SINGLE', () => {
+    // space_id wins over additionalSpaceIds, so nothing is being widened and the
+    // server-side filter is safe again.
+    const path = buildSearchPath({
+      query: 'q',
+      includeNonCanonical: false,
+      spaceId: ROOT,
+      additionalSpaceIds: [ROOT],
+    });
+
+    expect(path).not.toContain('additional_space_ids=');
+    expect(path).toContain('include_non_canonical=false');
   });
 
   it('omits additional_space_ids when space_id is set (SPACE_SINGLE scope)', () => {

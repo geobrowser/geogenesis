@@ -1,6 +1,6 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,6 +20,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
+import { geo } from '~/core/sdk/geo-client';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
@@ -44,11 +45,15 @@ function getCommentName(markdown: string): string {
   return plain.slice(0, 20).trimEnd() + '...';
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
@@ -318,12 +323,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Comment: ${commentName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -547,12 +551,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Edit comment: ${newName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),

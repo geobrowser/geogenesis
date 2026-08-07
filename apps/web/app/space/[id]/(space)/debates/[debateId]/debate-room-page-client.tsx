@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import {
   type Debate,
   type DebateRematchSession,
@@ -20,10 +21,12 @@ import {
   CameraIcon,
   LeaveIcon,
   MicrophoneIcon,
+  MutedMicrophoneIndicator,
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
 import {
+  type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
 } from '~/core/debates/debate-room-ownership';
@@ -34,6 +37,7 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateRematch,
+  useEndDebateTurn,
   useLeaveDebateRematch,
   useLiveKitJoin,
   useMarkDebateJoined,
@@ -45,6 +49,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   debateRecordingUploadId,
   deleteDebateRecordingUpload,
@@ -55,11 +60,12 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useSetThankingDebateId } from '~/core/debates/thanking-debate-store';
+import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -68,6 +74,8 @@ type DebateRoomPageClientProps = {
 };
 
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
+
+type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -100,6 +108,17 @@ type DebateCountdown = {
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
   elapsedMs: number;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
+};
+
+type PendingTurnYield = {
+  turnIndex: number;
+  participantSlot: ParticipantSlot;
+  endedAtMs: number;
 };
 
 type DebateRecordingWindow = {
@@ -116,12 +135,6 @@ const recordingOverlayTextShadow = {
 const recordingLabelTextShadow = {
   textShadow: '-2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff, 0 4px 12px rgba(0,0,0,0.25)',
 };
-
-// Ring geometry lives in a 68-unit viewBox; the tile renders it at the Figma frame size (51px).
-const recordingCountdownSize = 68;
-const recordingCountdownRenderSize = 51;
-const recordingCountdownRadius = 25;
-const recordingCountdownCircumference = 2 * Math.PI * recordingCountdownRadius;
 
 const debateThankingDurationMs = 20_000;
 const debatePreflightDurationMs = 5_000;
@@ -185,6 +198,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
   const abortDebate = useAbortDebate(debateId);
+  const endDebateTurn = useEndDebateTurn(debateId);
   const clearDebateActivity = useClearDebateActivity();
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
@@ -193,10 +207,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
-  const [connectionConflict, setConnectionConflict] = React.useState(false);
+  const [connectionConflictSource, setConnectionConflictSource] =
+    React.useState<DebateRoomConnectionConflictSource | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
+  const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
@@ -224,6 +240,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
   const connectionFailureHandledRef = React.useRef(false);
+  const reportedConflictGenerationRef = React.useRef<number | null>(null);
+  const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
@@ -247,6 +265,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const storagePersistenceRequestedRef = React.useRef(false);
   const recordingCancellationHandledRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
+  const countdownDebate = debate ? debateWithPendingYield(debate, pendingTurnYield) : null;
   preflightEndsAtMsRef.current = timestampMs(debate?.preflight_ends_at ?? null);
   const debateStatusRef = React.useRef<Debate['status'] | null>(debate?.status ?? null);
   const roomStateRef = React.useRef(roomState);
@@ -256,7 +275,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
-  const countdown = useDebateCountdown(debate, serverClock.now);
+  const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
   const preScreenLocalParticipant =
@@ -273,18 +292,46 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
   // debate's thank-you screen, so tell the banner which debate that is.
-  const setThankingDebateId = useSetThankingDebateId();
-  const thankingDebateId = countdown.effectiveStatus === 'thanking' ? (debate?.id ?? null) : null;
-  React.useEffect(() => {
-    setThankingDebateId(thankingDebateId);
-    return () => setThankingDebateId(null);
-  }, [setThankingDebateId, thankingDebateId]);
+  const setThankingDebate = useSetThankingDebate();
+  const locallyThanking = countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0;
+  const thankingDebateId =
+    debate && (locallyThanking || isDebateInThankYouPeriod(debate, serverClock.now())) ? debate.id : null;
+  const thankingHasUploadedRecording = Boolean(thankingDebateId && debate?.recordings.length);
+  const thankingRecordingCancelled = Boolean(thankingDebateId && debate?.recording_cancelled_at);
+  const thankingHasPendingLocalRecording = Boolean(
+    thankingDebateId &&
+    !thankingHasUploadedRecording &&
+    !thankingRecordingCancelled &&
+    (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
+  );
+  // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
+  // upload banner joins the rematch card in the same browser paint at the countdown boundary.
+  React.useLayoutEffect(() => {
+    setThankingDebate(
+      thankingDebateId
+        ? {
+            debateId: thankingDebateId,
+            hasPendingLocalRecording: thankingHasPendingLocalRecording,
+            hasUploadedRecording: thankingHasUploadedRecording,
+            recordingCancelled: thankingRecordingCancelled,
+          }
+        : null
+    );
+  }, [
+    setThankingDebate,
+    thankingDebateId,
+    thankingHasPendingLocalRecording,
+    thankingHasUploadedRecording,
+    thankingRecordingCancelled,
+  ]);
+  React.useLayoutEffect(() => () => setThankingDebate(null), [setThankingDebate]);
   const localAudioEnabled = shouldEnableLocalAudio(
     debate ? countdown.effectiveStatus : null,
     countdown.activeSlot,
     localSlot,
-    audioMuted
+    audioMuted || pendingTurnYield !== null
   );
+  const connectionConflict = connectionConflictSource !== null;
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
@@ -339,9 +386,53 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [localAudioEnabled, videoEnabled]);
 
   React.useEffect(() => {
+    if (!pendingTurnYield) return;
+    if (
+      debate?.turn_yields?.some(turnYield => turnYield.turn_index === pendingTurnYield.turnIndex) ||
+      debate?.status === 'thanking'
+    ) {
+      setPendingTurnYield(null);
+    }
+  }, [debate?.status, debate?.turn_yields, pendingTurnYield]);
+
+  React.useEffect(() => {
     remoteAudioEnabledRef.current = remoteAudioEnabled;
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
+
+  const reportConnectionConflict = React.useCallback(
+    (
+      generation: number,
+      source: DebateRoomConnectionConflictSource,
+      coordinationMode: DebateRoomOwnershipCoordinationMode
+    ) => {
+      if (reportedConflictGenerationRef.current === generation) return;
+      reportedConflictGenerationRef.current = generation;
+      captureDebateRoomConnectionEvent('debate_room_connection_conflict', {
+        debateId,
+        source,
+        coordinationMode,
+        debateStatus: debateStatusRef.current,
+        roomState: roomStateRef.current,
+      });
+    },
+    [debateId]
+  );
+
+  const reportLocalReleaseRecovery = React.useCallback(
+    (generation: number, coordinationMode: DebateRoomOwnershipCoordinationMode) => {
+      if (reportedRecoveryGenerationRef.current === generation) return;
+      reportedRecoveryGenerationRef.current = generation;
+      captureDebateRoomConnectionEvent('debate_room_ownership_recovered', {
+        debateId,
+        coordinationMode,
+        debateStatus: debateStatusRef.current,
+        roomState: roomStateRef.current,
+        waitedForLocalRelease: true,
+      });
+    },
+    [debateId]
+  );
 
   React.useEffect(() => {
     if (!currentUserId) return;
@@ -357,12 +448,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         const canReleaseOwnership = status === 'connecting' || preflightStillPending;
         if (!canReleaseOwnership) return false;
 
-        connectionGenerationRef.current += 1;
+        const generation = connectionGenerationRef.current + 1;
+        connectionGenerationRef.current = generation;
         disconnectConnectingRoom(connectingRoomRef);
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
-        setConnectionConflict(true);
+        setConnectionConflictSource('ownership_released');
         setRoomError('This debate moved to another tab.');
         setRoomState('idle');
         logDebateConnectionDiagnostic('ownership-released', {
@@ -370,6 +462,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           instanceId: connectionInstanceIdRef.current,
           roomState: roomStateRef.current,
         });
+        reportConnectionConflict(
+          generation,
+          'ownership_released',
+          ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+        );
         return true;
       },
     });
@@ -380,7 +477,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (ownershipRef.current === coordinator) ownershipRef.current = null;
       coordinator.close();
     };
-  }, [currentUserId, debateId]);
+  }, [currentUserId, debateId, reportConnectionConflict]);
 
   const clearRecordingTimers = React.useCallback(() => {
     if (recordingStartTimerRef.current !== null) {
@@ -651,10 +748,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
       const ownership = ownershipRef.current;
-      const ownsConnection = options.takeover ? await ownership?.requestTakeover() : await ownership?.acquire();
+      let ownsConnection: boolean | undefined;
+      let waitedForLocalRelease = false;
+      if (options.takeover) {
+        ownsConnection = await ownership?.requestTakeover();
+      } else {
+        const acquisition = await ownership?.acquire();
+        ownsConnection = acquisition?.acquired;
+        waitedForLocalRelease = acquisition?.waitedForLocalRelease ?? false;
+      }
       if (!isCurrent()) return;
+      if (ownsConnection && waitedForLocalRelease) {
+        reportLocalReleaseRecovery(generation, ownership?.coordinationMode ?? 'livekit-fallback');
+      }
       if (ownsConnection === false) {
-        setConnectionConflict(true);
+        setConnectionConflictSource('web_lock_blocked');
         setRoomError('This debate is already open in another tab.');
         setRoomState('idle');
         logDebateConnectionDiagnostic('ownership-blocked', {
@@ -662,10 +770,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           instanceId: connectionInstanceIdRef.current,
           roomState: roomStateRef.current,
         });
+        reportConnectionConflict(generation, 'web_lock_blocked', ownership?.coordinationMode ?? 'livekit-fallback');
         return;
       }
 
-      setConnectionConflict(false);
+      setConnectionConflictSource(null);
       setRoomError(null);
       setRoomState('connecting');
       setServerClockSettled(false);
@@ -757,7 +866,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
           if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
-          connectionGenerationRef.current += 1;
+          const conflictGeneration = connectionGenerationRef.current + 1;
+          connectionGenerationRef.current = conflictGeneration;
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
           // call room.disconnect() a second time and could re-enter this handler.
           roomRef.current = null;
@@ -767,7 +877,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           localMediaStreamRef.current = null;
           setRemoteVideoReady(false);
           const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
-          setConnectionConflict(duplicateIdentity);
+          setConnectionConflictSource(duplicateIdentity ? 'livekit_duplicate_identity' : null);
           setRoomError(
             duplicateIdentity
               ? 'This debate is active in another tab or device.'
@@ -780,6 +890,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             roomState: roomStateRef.current,
             disconnectReason: payload,
           });
+          if (duplicateIdentity) {
+            reportConnectionConflict(
+              conflictGeneration,
+              'livekit_duplicate_identity',
+              ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+            );
+          }
         });
 
         await room.connect(token.url, token.token);
@@ -869,7 +986,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
-        setConnectionConflict(false);
+        setConnectionConflictSource(null);
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -881,7 +998,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localMediaStreamRef.current = null;
         if (isCurrent()) {
           ownershipRef.current?.release();
-          setConnectionConflict(false);
+          setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
           setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
         }
@@ -896,6 +1013,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       initializeNoiseFilter,
       liveKitJoin,
       markJoined,
+      reportConnectionConflict,
+      reportLocalReleaseRecovery,
       refetchDebate,
       setPreviewStream,
       videoEnabled,
@@ -921,6 +1040,50 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const toggleVideoEnabled = React.useCallback(() => {
     setVideoEnabled(current => !current);
   }, []);
+
+  const endLocalTurn = React.useCallback(async () => {
+    if (
+      !localSlot ||
+      pendingTurnYield ||
+      countdown.effectiveStatus !== 'in_progress' ||
+      countdown.activeSlot !== localSlot ||
+      countdown.turnIndex === null
+    ) {
+      return;
+    }
+
+    const pendingYield = {
+      turnIndex: countdown.turnIndex,
+      participantSlot: localSlot,
+      endedAtMs: serverClock.now(),
+    };
+    setRoomError(null);
+    setPendingTurnYield(pendingYield);
+    try {
+      await endDebateTurn.mutateAsync({
+        turnIndex: pendingYield.turnIndex,
+        endedAtMs: pendingYield.endedAtMs,
+      });
+    } catch (error) {
+      const refreshedDebate = await refetchDebate();
+      setPendingTurnYield(null);
+      const authoritativeYield = refreshedDebate.data?.turn_yields?.some(
+        turnYield => turnYield.turn_index === pendingYield.turnIndex
+      );
+      if (!authoritativeYield) {
+        setRoomError(error instanceof Error ? error.message : 'Could not end the turn.');
+      }
+    }
+  }, [
+    countdown.activeSlot,
+    countdown.effectiveStatus,
+    countdown.turnIndex,
+    endDebateTurn,
+    localSlot,
+    pendingTurnYield,
+    refetchDebate,
+    serverClock,
+  ]);
 
   const toggleNoiseFilter = React.useCallback(async () => {
     const processor = noiseFilterProcessorRef.current;
@@ -1288,6 +1451,29 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   if (shouldHideTerminalDebate) return null;
 
+  if (connectionConflictWithoutTakeover) {
+    return (
+      <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8 text-center">
+        <div className="flex w-full max-w-[451px] flex-col items-center">
+          <Text as="h1" variant="smallTitle" color="text">
+            This debate is already open in another tab.
+          </Text>
+          <Text as="p" variant="metadata" color="grey-04" className="mt-3">
+            Close this tab and continue your debate in the original tab.
+          </Text>
+          <Link
+            href={`/space/${spaceId}/debates`}
+            className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
+          >
+            <Text as="span" variant="textLinkSemibold" color="current">
+              Go to debates
+            </Text>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-8">
       {debate?.status !== 'ready' && (
@@ -1396,11 +1582,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               {roomError && roomState === 'idle' && (
                 <div className="mt-4 rounded-lg border border-red-01 bg-white px-5 py-4">
                   <Text color="red-01">{roomError}</Text>
-                  {connectionConflictWithoutTakeover && (
-                    <Text as="p" color="grey-04" className="mt-2">
-                      Continue the debate in the original tab or device to preserve its recording.
-                    </Text>
-                  )}
                 </div>
               )}
             </section>
@@ -1429,6 +1610,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onRequestRematch={requestRematch}
                 rematchConsentRequested={rematchConsentRequested}
                 rematchBusy={consentToRematch.isPending}
+                endTurnPending={pendingTurnYield !== null}
+                onEndTurn={endLocalTurn}
                 onRetryFinalization={retryLiveDebateFinalization}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
@@ -1464,6 +1647,8 @@ function DebateRecordingModal({
   onRequestRematch,
   rematchConsentRequested,
   rematchBusy,
+  endTurnPending,
+  onEndTurn,
   onRetryFinalization,
   onRetryConnection,
   onLeave,
@@ -1491,6 +1676,8 @@ function DebateRecordingModal({
   onRequestRematch: () => void;
   rematchConsentRequested: boolean;
   rematchBusy: boolean;
+  endTurnPending: boolean;
+  onEndTurn: () => void;
   onRetryFinalization: () => void;
   onRetryConnection: () => void;
   onLeave: () => void;
@@ -1504,7 +1691,12 @@ function DebateRecordingModal({
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const localUpcomingSeconds = localTurnStartsInSeconds(debate, countdown, localSlot);
-  const localUpcomingLabel = upcomingTurnIsRebuttal(debate, countdown) ? 'Rebut in' : "You're up in";
+  const localUpcomingLabel =
+    countdown.yieldingSlot && !countdown.preservesExistingCountIn
+      ? 'Your turn in'
+      : upcomingTurnIsRebuttal(debate, countdown)
+        ? 'Rebut in'
+        : "You're up in";
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
@@ -1515,11 +1707,41 @@ function DebateRecordingModal({
     remoteParticipant?.participant_slot ?? null,
     countdown.activeSlot
   );
-  const countdownRing = countdown.remainingSeconds > 0 ? <RecordingCountdownRing countdown={countdown} /> : null;
-  const sharedPhaseCountdown = countdown.activeSlot === null ? countdownRing : null;
-  const localCountdown = countdown.activeSlot === localSlot ? countdownRing : sharedPhaseCountdown;
+  const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
+  const countdownRing =
+    countdown.remainingSeconds > 0 ? (
+      <RecordingCountdownRing
+        remainingSeconds={countdown.remainingSeconds}
+        progress={countdown.progress}
+        variant={
+          countdown.effectiveStatus === 'in_progress' &&
+          countdown.activeSlot !== null &&
+          countdown.remainingSeconds <= 5
+            ? 'warning'
+            : 'default'
+        }
+      />
+    ) : null;
+  const yieldedCountdownRing =
+    countdown.yieldedRemainingSeconds !== null && countdown.yieldedProgress !== null ? (
+      <RecordingCountdownRing
+        remainingSeconds={countdown.yieldedRemainingSeconds}
+        progress={countdown.yieldedProgress}
+        variant="muted"
+      />
+    ) : null;
+  const sharedPhaseCountdown = countdown.activeSlot === null && countdown.yieldingSlot === null ? countdownRing : null;
+  const localCountdown = localEndingTurn
+    ? null
+    : countdown.activeSlot === localSlot
+      ? countdownRing
+      : sharedPhaseCountdown;
   const remoteCountdown =
-    countdown.activeSlot === remoteParticipant?.participant_slot ? countdownRing : sharedPhaseCountdown;
+    countdown.yieldingSlot === remoteParticipant?.participant_slot
+      ? yieldedCountdownRing
+      : countdown.activeSlot === remoteParticipant?.participant_slot
+        ? countdownRing
+        : sharedPhaseCountdown;
   const localRematchParticipant = rematchSession?.participants.find(
     participant => participant.user_id === currentUserId
   );
@@ -1529,11 +1751,22 @@ function DebateRecordingModal({
   const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const connecting = countdown.effectiveStatus === 'connecting';
+  const remoteEndingTurn =
+    countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  const canEndLocalTurn =
+    countdown.effectiveStatus === 'in_progress' &&
+    countdown.activeSlot === localSlot &&
+    countdown.turnIndex !== null &&
+    countdown.yieldingSlot === null;
   const localVideoTile = (
     <DebateVideoTile
       key="local"
       participantPosition={localParticipant?.position ?? null}
-      active={countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === localSlot}
+      positionLabel={localParticipant?.position_label ?? null}
+      active={
+        countdown.effectiveStatus === 'in_progress' &&
+        (countdown.activeSlot === localSlot || countdown.yieldingSlot === localSlot)
+      }
       overlayText={
         connecting
           ? roomState === 'connected' || Boolean(localParticipant?.joined_at)
@@ -1545,12 +1778,26 @@ function DebateRecordingModal({
       }
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
+      endingTurn={localEndingTurn}
+      endTurnAction={
+        canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
+          <button
+            type="button"
+            onClick={onEndTurn}
+            disabled={endTurnPending || localEndingTurn}
+            className="min-h-9 rounded-full bg-black px-5 text-sm font-medium text-white shadow-light transition hover:bg-black/85 disabled:cursor-default disabled:opacity-70 md:min-h-14 md:px-8 md:text-xl"
+          >
+            End turn
+          </button>
+        ) : null
+      }
       showGo={showLocalGo}
       showWrapItUp={showLocalWrapItUp}
       showDebateEndsSoon={showLocalDebateEndsSoon}
       inactive={localInactive}
-      revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon}
-      inactiveOverlayId="local"
+      revealInactive={localUpcomingSeconds !== null || showLocalDebateEndsSoon || localEndingTurn}
+      inactiveIndicatorId="local"
+      showMutedIndicator={localEndingTurn}
       countdown={localCountdown}
       closingMessage={
         countdown.effectiveStatus === 'thanking' &&
@@ -1566,8 +1813,11 @@ function DebateRecordingModal({
     <DebateVideoTile
       key="remote"
       participantPosition={remoteParticipant?.position ?? null}
+      positionLabel={remoteParticipant?.position_label ?? null}
       active={
-        countdown.effectiveStatus === 'in_progress' && countdown.activeSlot === remoteParticipant?.participant_slot
+        countdown.effectiveStatus === 'in_progress' &&
+        (countdown.activeSlot === remoteParticipant?.participant_slot ||
+          countdown.yieldingSlot === remoteParticipant?.participant_slot)
       }
       overlayText={
         connecting
@@ -1579,7 +1829,9 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      inactiveOverlayId="remote"
+      endingTurn={remoteEndingTurn}
+      revealInactive={remoteEndingTurn}
+      inactiveIndicatorId="remote"
       countdown={remoteCountdown}
     >
       <div
@@ -1615,7 +1867,7 @@ function DebateRecordingModal({
         />
       )}
 
-      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-5 py-8">
+      <main className="mx-auto flex min-h-dvh w-full max-w-[430px] flex-col items-center justify-center px-2 py-8 sm:px-5">
         <h1 className="mb-5 max-w-[390px] text-center text-[1.375rem] leading-[1.1] font-semibold text-text">
           {debate.claim.claim}
         </h1>
@@ -1623,10 +1875,14 @@ function DebateRecordingModal({
         <div className="relative grid w-full gap-2">
           {orderedVideoTiles}
 
-          {countdown.effectiveStatus === 'thanking' && rematchSession && (
+          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && (
             <DebateAgainCard
               opponentName={
-                remoteRematchParticipant?.display_name || remoteRematchParticipant?.profile_space_id || 'Other debater'
+                remoteRematchParticipant?.display_name ||
+                remoteRematchParticipant?.profile_space_id ||
+                remoteParticipant?.display_name ||
+                remoteParticipant?.profile_space_id ||
+                'Other debater'
               }
               localConsented={localConsented || rematchConsentRequested}
               remoteConsented={remoteConsented}
@@ -1830,6 +2086,7 @@ function formatDebugDuration(durationMs: number) {
 
 function DebateVideoTile({
   participantPosition,
+  positionLabel,
   active,
   overlayText,
   upcomingSeconds,
@@ -1837,14 +2094,18 @@ function DebateVideoTile({
   showGo = false,
   showWrapItUp = false,
   showDebateEndsSoon = false,
+  endingTurn = false,
+  endTurnAction,
   inactive = false,
   revealInactive = false,
-  inactiveOverlayId,
+  inactiveIndicatorId,
+  showMutedIndicator = false,
   countdown,
   closingMessage = false,
   children,
 }: {
   participantPosition: boolean | null;
+  positionLabel: string | null;
   active: boolean;
   overlayText?: string | null;
   upcomingSeconds?: number | null;
@@ -1852,30 +2113,48 @@ function DebateVideoTile({
   showGo?: boolean;
   showWrapItUp?: boolean;
   showDebateEndsSoon?: boolean;
+  endingTurn?: boolean;
+  endTurnAction?: React.ReactNode;
   inactive?: boolean;
   revealInactive?: boolean;
-  inactiveOverlayId: 'local' | 'remote';
+  inactiveIndicatorId: 'local' | 'remote';
+  showMutedIndicator?: boolean;
   countdown?: React.ReactNode;
   closingMessage?: boolean;
   children: React.ReactNode;
 }) {
+  const showInactiveIndicator =
+    showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
+
   return (
     <section
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
-      className="relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card"
+      data-active-speaker={active ? 'true' : 'false'}
+      className={cx(
+        'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
+        active && 'outline-[3px] outline-offset-0 outline-purple'
+      )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {active && <div className="pointer-events-none absolute inset-0 z-10 ring-2 ring-white/80 ring-inset" />}
+      {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
       <div
         aria-hidden="true"
-        data-inactive-speaker={inactiveOverlayId}
-        data-visible={inactive && !revealInactive ? 'true' : 'false'}
+        data-inactive-speaker={inactiveIndicatorId}
+        data-visible={showInactiveIndicator ? 'true' : 'false'}
         className={cx(
-          'pointer-events-none absolute inset-0 z-10 bg-black/45 transition-opacity duration-700 ease-out',
-          inactive && !revealInactive ? 'opacity-100' : 'opacity-0'
+          'pointer-events-none absolute top-3 right-3 z-20',
+          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
         )}
-      />
+      >
+        {showInactiveIndicator && <MutedMicrophoneIndicator />}
+      </div>
       {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+
+      {positionLabel && (
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 inline-flex h-4 items-center rounded-full bg-white/60 px-1.5 text-[0.75rem] leading-none text-text">
+          {positionLabel}
+        </div>
+      )}
 
       {closingMessage && (
         <div
@@ -1885,6 +2164,15 @@ function DebateVideoTile({
           Nice debate!
           <br />
           Say thanks
+        </div>
+      )}
+
+      {endingTurn && (
+        <div
+          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+          style={recordingLabelTextShadow}
+        >
+          Ending turn…
         </div>
       )}
 
@@ -2085,57 +2373,6 @@ function DebateAgainCard({
   );
 }
 
-function RecordingCountdownRing({ countdown }: { countdown: DebateCountdown }) {
-  const remainingRatio = Math.max(0, Math.min(1, 1 - countdown.progress));
-  const danger =
-    countdown.effectiveStatus === 'in_progress' &&
-    countdown.activeSlot !== null &&
-    countdown.remainingSeconds > 0 &&
-    countdown.remainingSeconds <= 5;
-  const ringColor = danger ? 'var(--color-red-01)' : 'var(--color-white)';
-  const dashOffset = recordingCountdownCircumference * (1 - remainingRatio);
-
-  return (
-    <div
-      aria-label={`Phase timer: ${countdown.remainingSeconds} seconds remaining`}
-      className="relative grid place-items-center"
-      style={{ width: recordingCountdownRenderSize, height: recordingCountdownRenderSize }}
-    >
-      <svg
-        viewBox={`0 0 ${recordingCountdownSize} ${recordingCountdownSize}`}
-        aria-hidden="true"
-        className="absolute inset-0 size-full"
-      >
-        <circle cx="34" cy="34" r="32" fill="rgba(16,16,16,0.34)" stroke="rgba(16,16,16,0.64)" strokeWidth="5" />
-        <circle cx="34" cy="34" r="20" fill="rgba(0,0,0,0.52)" />
-        <circle
-          cx="34"
-          cy="34"
-          r={recordingCountdownRadius}
-          fill="none"
-          stroke="rgba(119,119,119,0.88)"
-          strokeWidth="6"
-        />
-        <circle
-          cx="34"
-          cy="34"
-          r={recordingCountdownRadius}
-          fill="none"
-          stroke={ringColor}
-          strokeWidth="7"
-          strokeLinecap="butt"
-          strokeDasharray={recordingCountdownCircumference}
-          strokeDashoffset={dashOffset}
-          transform="rotate(-90 34 34)"
-        />
-      </svg>
-      <span className="relative z-10 text-[1.625rem] leading-none font-medium text-white">
-        {countdown.remainingSeconds}
-      </span>
-    </div>
-  );
-}
-
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
   preferences: { audioEnabled: boolean; videoEnabled: boolean },
@@ -2189,6 +2426,9 @@ function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  if (countdown.yieldingSlot !== null) {
+    return countdown.incomingSlot === localSlot ? countdown.remainingSeconds : null;
+  }
   if (countdown.activeSlot === localSlot) return null;
 
   const nextTurnIndex = countdown.turnIndex + 1;
@@ -2236,6 +2476,40 @@ function logDebateConnectionDiagnostic(
   console.info('[DebateRoomConnection]', { event, ...details });
 }
 
+function captureDebateRoomConnectionEvent(
+  eventName: 'debate_room_connection_conflict' | 'debate_room_ownership_recovered',
+  details: {
+    debateId: string;
+    coordinationMode: DebateRoomOwnershipCoordinationMode;
+    debateStatus: Debate['status'] | null;
+    roomState: string;
+    source?: DebateRoomConnectionConflictSource;
+    waitedForLocalRelease?: boolean;
+  }
+) {
+  try {
+    capture(eventName, {
+      debate_id: details.debateId,
+      coordination_mode: details.coordinationMode,
+      debate_status: details.debateStatus ?? 'unknown',
+      room_state: details.roomState,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      navigation_type: currentNavigationType(),
+      ...(details.source ? { source: details.source } : {}),
+      ...(details.waitedForLocalRelease ? { waited_for_local_release: true } : {}),
+    });
+  } catch {
+    // Analytics is best-effort and must never affect room ownership or connection recovery.
+  }
+}
+
+function currentNavigationType() {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return 'unknown';
+  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  return navigation?.type ?? 'unknown';
+}
+
 // Mobile browsers behind cellular/symmetric NAT can take several seconds to establish the publisher
 // PeerConnection, and the first publishTrack often rejects with "engine not connected within
 // timeout" before ICE settles. Retry a couple times so a slow-but-viable connection isn't surfaced
@@ -2281,14 +2555,27 @@ function disconnectConnectingRoom(connectingRoomRef: React.MutableRefObject<Room
 
 function useDebateCountdown(debate: Debate | null, serverNow: () => number): DebateCountdown {
   const [now, setNow] = React.useState(serverNow);
+  const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
+  const completedThankYouDeadlineMs =
+    debate?.status === 'complete' && isDebateInThankYouPeriod(debate, now)
+      ? timestampMs(debate.turn_ends_at ?? debate.completed_at)
+      : null;
+  const boundaryAtMs = countdownWindow?.targetMs ?? completedThankYouDeadlineMs;
 
   React.useEffect(() => {
-    setNow(serverNow());
+    const currentNow = serverNow();
+    setNow(currentNow);
     const timer = window.setInterval(() => setNow(serverNow()), 500);
-    return () => window.clearInterval(timer);
-  }, [serverNow]);
+    const boundaryTimer =
+      boundaryAtMs !== null && boundaryAtMs > currentNow
+        ? window.setTimeout(() => setNow(serverNow()), boundaryAtMs - currentNow + 1)
+        : null;
+    return () => {
+      window.clearInterval(timer);
+      if (boundaryTimer !== null) window.clearTimeout(boundaryTimer);
+    };
+  }, [boundaryAtMs, serverNow]);
 
-  const countdownWindow = debate ? countdownWindowForDebate(debate, now) : null;
   if (!countdownWindow || countdownWindow.targetMs === null) {
     return {
       label: '00:00',
@@ -2298,6 +2585,11 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
       effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
       turnIndex: countdownWindow?.turnIndex ?? null,
       elapsedMs: 0,
+      yieldingSlot: countdownWindow?.yieldingSlot ?? null,
+      incomingSlot: countdownWindow?.incomingSlot ?? null,
+      yieldedRemainingSeconds: countdownWindow?.yieldedRemainingSeconds ?? null,
+      yieldedProgress: countdownWindow?.yieldedProgress ?? null,
+      preservesExistingCountIn: countdownWindow?.preservesExistingCountIn ?? false,
     };
   }
 
@@ -2316,17 +2608,58 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     effectiveStatus: countdownWindow.effectiveStatus,
     turnIndex: countdownWindow.turnIndex,
     elapsedMs,
+    yieldingSlot: countdownWindow.yieldingSlot,
+    incomingSlot: countdownWindow.incomingSlot,
+    yieldedRemainingSeconds: countdownWindow.yieldedRemainingSeconds,
+    yieldedProgress: countdownWindow.yieldedProgress,
+    preservesExistingCountIn: countdownWindow.preservesExistingCountIn,
   };
 }
 
 function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null {
   const startAtMs = timestampMs(debate.started_at ?? debate.preflight_ends_at);
-  const durationMs = debate.turn_durations_ms.reduce((sum, durationMs) => sum + Math.max(0, durationMs), 0);
-  if (startAtMs === null || durationMs <= 0) return null;
+  if (startAtMs === null || debate.turn_durations_ms.length === 0) return null;
+
+  let endAtMs = startAtMs;
+  for (const [turnIndex, durationMs] of debate.turn_durations_ms.entries()) {
+    const naturalTurnEndMs = endAtMs + Math.max(0, durationMs);
+    const handoffDeadlineMs = timestampMs(
+      debate.turn_yields?.find(turnYield => turnYield.turn_index === turnIndex)?.handoff_deadline_at ?? null
+    );
+    endAtMs = handoffDeadlineMs === null ? naturalTurnEndMs : Math.min(naturalTurnEndMs, handoffDeadlineMs);
+  }
+
+  if (endAtMs <= startAtMs) return null;
 
   return {
     startAtMs,
-    endAtMs: startAtMs + durationMs,
+    endAtMs,
+  };
+}
+
+function debateWithPendingYield(debate: Debate, pendingTurnYield: PendingTurnYield | null): Debate {
+  if (!pendingTurnYield || debate.status !== 'in_progress') return debate;
+  if (debate.turn_yields?.some(turnYield => turnYield.turn_index === pendingTurnYield.turnIndex)) return debate;
+
+  const naturalDeadlineMs = timestampMs(debate.turn_ends_at) ?? pendingTurnYield.endedAtMs + 5_000;
+  const endedAt = new Date(pendingTurnYield.endedAtMs).toISOString();
+
+  return {
+    ...debate,
+    turn_yields: [
+      ...(debate.turn_yields ?? []),
+      {
+        turn_index: pendingTurnYield.turnIndex,
+        user_id: '__pending__',
+        participant_slot: pendingTurnYield.participantSlot,
+        yielded_at: endedAt,
+        accepted_at: endedAt,
+        // The real five-second handoff starts at server acceptance, which is unknowable while
+        // this request is pending. Preserve the current deadline so a slow request cannot make
+        // the optimistic UI advance before the authoritative response arrives.
+        handoff_deadline_at: new Date(naturalDeadlineMs).toISOString(),
+      },
+    ],
   };
 }
 
@@ -2339,6 +2672,11 @@ function countdownWindowForDebate(
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
 } {
   if (debate.status === 'connecting') {
     return {
@@ -2347,6 +2685,11 @@ function countdownWindowForDebate(
       activeSlot: null,
       effectiveStatus: 'connecting',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2361,6 +2704,11 @@ function countdownWindowForDebate(
       activeSlot: debate.first_participant_slot,
       effectiveStatus: 'preflight',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2375,6 +2723,11 @@ function countdownWindowForDebate(
       activeSlot: debate.current_speaker_slot,
       effectiveStatus: 'in_progress',
       turnIndex: debate.current_turn_index,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2385,6 +2738,11 @@ function countdownWindowForDebate(
       activeSlot: null,
       effectiveStatus: 'thanking',
       turnIndex: null,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
     };
   }
 
@@ -2394,7 +2752,21 @@ function countdownWindowForDebate(
     activeSlot: null,
     effectiveStatus: debate.status,
     turnIndex: null,
+    yieldingSlot: null,
+    incomingSlot: null,
+    yieldedRemainingSeconds: null,
+    yieldedProgress: null,
+    preservesExistingCountIn: false,
   };
+}
+
+export function isDebateInThankYouPeriod(
+  debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>,
+  now: number
+) {
+  if (debate.status !== 'thanking' && debate.status !== 'complete') return false;
+  const deadline = timestampMs(debate.turn_ends_at ?? debate.completed_at);
+  return deadline !== null && now < deadline;
 }
 
 function timedDebateCountdownWindow(
@@ -2407,21 +2779,71 @@ function timedDebateCountdownWindow(
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
   turnIndex: number | null;
+  yieldingSlot: ParticipantSlot | null;
+  incomingSlot: ParticipantSlot | null;
+  yieldedRemainingSeconds: number | null;
+  yieldedProgress: number | null;
+  preservesExistingCountIn: boolean;
 } {
   let turnStartMs = debateStartMs;
 
   for (const [turnIndex, configuredDurationMs] of debate.turn_durations_ms.entries()) {
-    const turnEndMs = turnStartMs + Math.max(0, configuredDurationMs);
-    if (now < turnEndMs) {
+    const naturalTurnEndMs = turnStartMs + Math.max(0, configuredDurationMs);
+    const turnYield = debate.turn_yields?.find(candidate => candidate.turn_index === turnIndex);
+    const yieldedAtMs = turnYield ? timestampMs(turnYield.yielded_at) : null;
+    const handoffDeadlineMs = turnYield ? timestampMs(turnYield.handoff_deadline_at) : null;
+    const validYieldedAtMs =
+      yieldedAtMs !== null && yieldedAtMs >= turnStartMs && yieldedAtMs <= naturalTurnEndMs ? yieldedAtMs : null;
+    const validHandoffDeadlineMs =
+      validYieldedAtMs !== null && handoffDeadlineMs !== null
+        ? Math.max(validYieldedAtMs, Math.min(naturalTurnEndMs, handoffDeadlineMs))
+        : null;
+
+    if (
+      validYieldedAtMs !== null &&
+      validHandoffDeadlineMs !== null &&
+      (now >= validYieldedAtMs || turnYield?.user_id === '__pending__')
+    ) {
+      if (now < validHandoffDeadlineMs) {
+        const yieldingSlot = participantSlotForTurn(debate.first_participant_slot, turnIndex);
+        return {
+          startMs: validYieldedAtMs,
+          targetMs: validHandoffDeadlineMs,
+          activeSlot: null,
+          effectiveStatus: 'in_progress',
+          turnIndex,
+          yieldingSlot,
+          incomingSlot:
+            turnIndex + 1 < debate.turn_durations_ms.length
+              ? participantSlotForTurn(debate.first_participant_slot, turnIndex + 1)
+              : null,
+          yieldedRemainingSeconds: Math.max(0, Math.ceil((naturalTurnEndMs - validYieldedAtMs) / 1_000)),
+          yieldedProgress:
+            configuredDurationMs > 0
+              ? Math.max(0, Math.min(1, (validYieldedAtMs - turnStartMs) / configuredDurationMs))
+              : 0,
+          preservesExistingCountIn: validHandoffDeadlineMs === naturalTurnEndMs,
+        };
+      }
+      turnStartMs = validHandoffDeadlineMs;
+      continue;
+    }
+
+    if (now < naturalTurnEndMs) {
       return {
         startMs: turnStartMs,
-        targetMs: turnEndMs,
+        targetMs: naturalTurnEndMs,
         activeSlot: participantSlotForTurn(debate.first_participant_slot, turnIndex),
         effectiveStatus: 'in_progress',
         turnIndex,
+        yieldingSlot: null,
+        incomingSlot: null,
+        yieldedRemainingSeconds: null,
+        yieldedProgress: null,
+        preservesExistingCountIn: false,
       };
     }
-    turnStartMs = turnEndMs;
+    turnStartMs = validHandoffDeadlineMs ?? naturalTurnEndMs;
   }
 
   return {
@@ -2430,6 +2852,11 @@ function timedDebateCountdownWindow(
     activeSlot: null,
     effectiveStatus: 'thanking',
     turnIndex: null,
+    yieldingSlot: null,
+    incomingSlot: null,
+    yieldedRemainingSeconds: null,
+    yieldedProgress: null,
+    preservesExistingCountIn: false,
   };
 }
 

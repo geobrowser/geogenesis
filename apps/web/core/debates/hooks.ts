@@ -1,33 +1,42 @@
 'use client';
 
 import { usePrivy } from '@geogenesis/auth';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
+import { useDebateAttention } from './debate-attention';
+
 import {
+  type Debate,
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
+  type DebateMediaResponse,
+  GeoChatRequestError,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
   abortDebate,
+  acceptDebateChallenge,
   acceptDebateMatch,
   acceptDebateRematchRequest,
   cancelDebateRecording,
   completeLocalRecordingUpload,
   consentToDebateRematch,
+  createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
   declineDebateMatch,
+  endDebateTurn,
   getDebate,
   getDebateActivity,
   getDebateMedia,
   getDebateMediaArtifactUrl,
+  getDebateProfile,
   getDebateRematch,
   getDebateTranscript,
   getLiveKitToken,
@@ -42,13 +51,16 @@ import {
   listSpaceDebates,
   markDebateJoined,
   markDebateReady,
+  rejectDebateChallenge,
   rejectDebateRematchRequest,
   requestDebateMediaProcessing,
+  retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
   updateDebatePreference,
   updateDebateRematchPosition,
 } from './api';
 import { useDebateGatewayScope } from './debate-gateway';
+import { hasProcessedVideo } from './playback-utils';
 
 const debateQueryNetworkOptions = {
   retry: false,
@@ -68,6 +80,8 @@ export const debateQueryKeys = {
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
+  profile: (accountKey: string | null, profileSpaceId: string) =>
+    ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
 };
 
 export function useGeoChatAuth() {
@@ -312,6 +326,23 @@ export function useMarkDebateReady(debateId: string) {
   });
 }
 
+export function useEndDebateTurn(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ turnIndex, endedAtMs }: { turnIndex: number; endedAtMs: number }) =>
+      endDebateTurn(debateId, turnIndex, endedAtMs, getPrivyIdentityToken, accountKey),
+    retry: (failureCount, error) =>
+      failureCount < 2 &&
+      (!(error instanceof GeoChatRequestError) || error.status === 408 || error.status === 429 || error.status >= 500),
+    onSuccess: debate => {
+      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
 export function useAbortDebate(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -343,9 +374,13 @@ export function useConsentToDebateRematch(debateId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: () => consentToDebateRematch(debateId, getPrivyIdentityToken, accountKey),
+    mutationFn: () =>
+      retryDebatePhaseBoundaryRequest(() => consentToDebateRematch(debateId, getPrivyIdentityToken, accountKey)),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
+      queryClient.setQueryData<Debate>(debateQueryKeys.debate(debateId), current =>
+        current ? { ...current, rematch_session_id: session.id } : current
+      );
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
         online: current?.online ?? true,
         available_to_debate: current?.available_to_debate ?? true,
@@ -353,6 +388,7 @@ export function useConsentToDebateRematch(debateId: string) {
         match: null,
         debate: null,
         rematch: session,
+        challenge: null,
       }));
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -380,8 +416,17 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
+      const activityKey = debateQueryKeys.activity(accountKey);
+      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+      if (activity) {
+        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+        if (debate !== activity.debate || rematch !== activity.rematch) {
+          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+        }
+      }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
 }
@@ -460,6 +505,81 @@ export function useRejectDebateRematchRequest() {
   });
 }
 
+export function useDebateProfile(profileSpaceId: string, enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const foreground = useDebateAttention();
+  const queryEnabled = enabled && authenticated && Boolean(profileSpaceId);
+  const wasForeground = React.useRef(foreground);
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.profile(accountKey, profileSpaceId),
+    queryFn: ({ signal }) => getDebateProfile(profileSpaceId, getPrivyIdentityToken, accountKey, signal),
+    enabled: queryEnabled,
+    refetchInterval: foreground ? 30_000 : false,
+  });
+
+  React.useEffect(() => {
+    const returnedToForeground = foreground && !wasForeground.current;
+    wasForeground.current = foreground;
+    if (returnedToForeground && queryEnabled) void query.refetch();
+  }, [foreground, query.refetch, queryEnabled]);
+
+  return query;
+}
+
+export function useCreateDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (request: { recipient_profile_space_id: string }) =>
+      createDebateChallenge(request, getPrivyIdentityToken, accountKey),
+    onSuccess: challenge => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current ? { ...current, challenge } : current
+      );
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+    onError: (error, request) => {
+      if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
+      void queryClient.invalidateQueries({
+        queryKey: debateQueryKeys.profile(accountKey, request.recipient_profile_space_id),
+      });
+    },
+  });
+}
+
+export function useAcceptDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    onSuccess: result => {
+      if (result.session) {
+        queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
+      }
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+  });
+}
+
+export function useRejectDebateChallenge() {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: (challengeId: string) => rejectDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
+    onSuccess: () => {
+      queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
+        current ? { ...current, challenge: null } : current
+      );
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
+    },
+  });
+}
+
 export function useDebateSharePrompts(enabled = true) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -530,6 +650,51 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
         signal
       ),
     enabled,
+  });
+}
+
+/**
+ * Which of the given debates have a processed `final_video`. The space debates endpoint carries
+ * recordings but no media artifacts, so readiness can only be answered one debate at a time — pass
+ * only already-watchable debates to bound the fan-out. Shares `debateQueryKeys.media` with the
+ * player's own lookup, and opens no gateway scope since it's a one-shot check.
+ */
+export function useProcessedVideoDebateIds(debateIds: string[], enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // `combine` has to be stable: react-query re-runs it whenever its identity changes, and the
+  // result is diffed with `replaceEqualDeep`, which compares arrays structurally but treats every
+  // new Set as changed. An inline closure returning a Set therefore hands callers a fresh object
+  // each render and defeats their `useMemo`s — hence the callback, and ids as an array.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateMediaResponse>[]) => ({
+      processedIds: debateIds.filter((_, index) => hasProcessedVideo(results[index]?.data)),
+      isLoading: enabled && results.some(result => result.isPending),
+      // A failed lookup is "unknown", not "not ready". It still withholds the debate — nothing
+      // should render that can't play — but callers need to tell the two apart, or a geo-chat blip
+      // reads to the viewer as "this space has no debates".
+      hasError: results.some(result => result.isError),
+    }),
+    [debateIds, enabled]
+  );
+
+  return useQueries({
+    queries: debateIds.map(debateId => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.media(debateId),
+      // Readiness only moves when the media worker finishes, so don't re-ask on every remount of
+      // the feed — that's one request per candidate, up to the list endpoint's 50.
+      staleTime: 30_000,
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        getDebateMedia(
+          debateId,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled,
+    })),
+    combine,
   });
 }
 

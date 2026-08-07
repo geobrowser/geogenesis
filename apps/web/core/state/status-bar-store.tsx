@@ -44,7 +44,13 @@ export const statusBarDispatchAtom = atom(null, (_get, set, action: StatusBarAct
     case 'ERROR':
       set(reviewStateAtom, 'publish-error');
       set(errorAtom, action.payload);
-      set(retryAtom, action.retry);
+      // Wrap in a thunk: jotai treats a bare function value as a state UPDATER and
+      // calls it immediately, storing its return value. Passing `action.retry`
+      // directly therefore *invoked* the retry at dispatch time and left a Promise
+      // in the atom. For a write that fails deterministically that is an infinite
+      // loop — fail, dispatch, auto-retry, fail — and the StatusBar then renders
+      // onClick={Promise}. This cost us ~125 duplicate subspace submissions.
+      set(retryAtom, () => action.retry);
       return;
   }
 });
