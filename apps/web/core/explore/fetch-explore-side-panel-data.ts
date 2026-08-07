@@ -22,20 +22,17 @@ export type ExploreSidePanelData = {
 };
 
 type FetchExploreSidePanelDataOptions = {
-  wallet?: string | null;
   memberSpaceId?: string | null;
   featuredSpacesPromise?: Promise<FeaturedSpace[]>;
 };
 
 export const fetchExploreSidePanelData = cache(
   async (options: FetchExploreSidePanelDataOptions = {}): Promise<ExploreSidePanelData> => {
-    const wallet =
-      options.wallet !== undefined ? options.wallet : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
-
     let memberSpaceId: string | null;
     if (options.memberSpaceId !== undefined) {
       memberSpaceId = options.memberSpaceId;
     } else {
+      const wallet = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
       try {
         memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;
       } catch {

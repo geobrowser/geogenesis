@@ -29,7 +29,6 @@ export default async function ExploreRoutePage() {
     fetchBrowseSidebarData(null, featuredSpacesPromise).catch(() => null)
   );
   const sidePanelPromise = fetchExploreSidePanelData({
-    wallet,
     memberSpaceId,
     featuredSpacesPromise,
   });
