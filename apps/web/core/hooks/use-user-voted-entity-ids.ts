@@ -45,25 +45,33 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     staleTime: 30_000,
   });
 
-  const ids = React.useMemo(() => {
+  // Kept as per-page slices, not just the flattened list
+  const idPages = React.useMemo(() => {
     const seen = new Set<string>();
-    const ordered: string[] = [];
+    const pages: string[][] = [];
 
     for (const page of query.data?.pages ?? []) {
+      const pageIds: string[] = [];
+
       for (const id of page.objectIds) {
         if (!id) continue;
         const hexId = ID.uuidToHex(id);
         if (seen.has(hexId)) continue;
         seen.add(hexId);
-        ordered.push(hexId);
+        pageIds.push(hexId);
       }
+
+      pages.push(pageIds);
     }
 
-    return ordered;
+    return pages;
   }, [query.data]);
+
+  const ids = React.useMemo(() => idPages.flat(), [idPages]);
 
   return {
     ids,
+    idPages,
     isLoading: canFetch && query.isLoading,
     hasNextPage: Boolean(query.hasNextPage),
     isFetchingNextPage: query.isFetchingNextPage,
