@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
   play: vi.fn(() => Promise.resolve()),
   pause: vi.fn(),
   replace: vi.fn(),
-  recordingUrl: vi.fn(() => Promise.resolve({ url: 'https://media.test/slot.webm' })),
+  recordingUrls: vi.fn(),
   mediaArtifactMutate: vi.fn(),
   openSidePanel: vi.fn(),
-  // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
-  media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
+  debates: [] as Debate[],
+  spaceDebatesLoading: false,
   castVote: vi.fn(),
 }));
 
@@ -42,9 +42,21 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
-  useProcessedVideoDebateIds: () => mocks.media,
-  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useSpaceDebates: () => ({
+    data: { debates: mocks.debates, matches: [] },
+    isLoading: mocks.spaceDebatesLoading,
+    error: null,
+  }),
+  useDebateRecordingUrls: (debate: Debate, enabled: boolean) => {
+    mocks.recordingUrls(debate.id, enabled);
+    return enabled
+      ? {
+          slot1: `https://media.test/${debate.id}-1.webm`,
+          slot2: `https://media.test/${debate.id}-2.webm`,
+          error: null,
+        }
+      : { slot1: null, slot2: null, error: null };
+  },
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
@@ -68,7 +80,9 @@ beforeEach(() => {
   mocks.pause.mockClear();
   mocks.replace.mockClear();
   mocks.mediaArtifactMutate.mockClear();
-  mocks.media = { processedIds: ['debate-1'], isLoading: false, hasError: false };
+  mocks.recordingUrls.mockClear();
+  mocks.debates = [completedDebate('debate-1', 'Debates are useful')];
+  mocks.spaceDebatesLoading = false;
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
   class MockIntersectionObserver {
@@ -85,60 +99,58 @@ afterEach(() => {
 });
 
 describe('DebatesPageClient browse feed', () => {
-  it('renders the claim title, space, join button and both debater videos', async () => {
+  it('renders the claim title, space, join button and both debater videos with no loading pass', () => {
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Loading debates\u2026')).not.toBeInTheDocument();
 
-    await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
+    const videos = container.querySelectorAll('video');
+    expect(videos).toHaveLength(2);
+    expect(videos[0]).toHaveAttribute('src', 'https://media.test/debate-1-1.webm');
   });
 
-  // Both recordings exist, so `isWatchableDebate` passes — only the media gate withholds it.
-  it('withholds a debate whose media worker has not composed a final_video', () => {
-    mocks.media = { processedIds: [], isLoading: false, hasError: false };
+  // The neighbour's signed URLs are in hand before the viewer gets there, so scrolling lands on a
+  // painted frame rather than an empty slot waiting on two round trips.
+  it("warms the neighbouring debate's recordings while the first one plays", () => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate'));
 
     const { container } = render(<DebatesPageClient spaceId="space-1" />);
 
-    expect(screen.getByText('No debates to watch yet. Start one from the Claims tab.')).toBeInTheDocument();
-    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(mocks.recordingUrls).toHaveBeenCalledWith('debate-2', true);
+    expect(container.querySelectorAll('video')).toHaveLength(4);
   });
 
-  it('stays in a loading state while readiness is still in flight', () => {
-    mocks.media = { processedIds: [], isLoading: true, hasError: false };
+  it('says nothing about an empty space until the debates query has answered', () => {
+    mocks.debates = [];
+    mocks.spaceDebatesLoading = true;
 
-    render(<DebatesPageClient spaceId="space-1" />);
+    const { rerender } = render(<DebatesPageClient spaceId="space-1" />);
 
-    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
-  });
-
-  // The debate list loaded fine, so its own error state can't report this.
-  it('reports a failed readiness lookup instead of claiming there are no debates', () => {
-    mocks.media = { processedIds: [], isLoading: false, hasError: true };
-
-    render(<DebatesPageClient spaceId="space-1" />);
-
-    expect(
-      screen.getByText('Could not check which debates are ready to watch. Try again shortly.')
-    ).toBeInTheDocument();
     expect(screen.queryByText('No debates to watch yet. Start one from the Claims tab.')).not.toBeInTheDocument();
+
+    mocks.spaceDebatesLoading = false;
+    rerender(<DebatesPageClient spaceId="space-1" />);
+
+    expect(screen.getByText('No debates to watch yet. Start one from the Claims tab.')).toBeInTheDocument();
   });
 });
 
-function completedDebate(): Debate {
+function completedDebate(id: string, claim: string): Debate {
   return {
-    id: 'debate-1',
+    id,
     claim: {
-      id: 'claim-1',
+      id: `claim-${id}`,
       space_id: 'space-1',
-      claim_entity_id: 'claim-entity-1',
-      claim: 'Debates are useful',
+      claim_entity_id: `claim-entity-${id}`,
+      claim,
       description: null,
     },
     status: 'complete',
-    room_name: 'debate-1',
+    room_name: id,
     first_participant_slot: 1,
     current_turn_index: 1,
     current_speaker_slot: null,
@@ -177,13 +189,13 @@ function completedDebate(): Debate {
       },
     ],
     recordings: [1, 2].map(slot => ({
-      id: `recording-${slot}`,
+      id: `${id}-recording-${slot}`,
       participant_slot: slot as 1 | 2,
       position: slot === 1,
       position_label: slot === 1 ? 'Yes' : 'No',
-      user_id: `user-${slot}`,
-      object_key: `recording-${slot}.webm`,
-      filename: `recording-${slot}.webm`,
+      user_id: `${id}-user-${slot}`,
+      object_key: `${id}-recording-${slot}.webm`,
+      filename: `${id}-recording-${slot}.webm`,
       source: 'local' as const,
       content_type: 'video/webm',
       started_at_ms: 0,

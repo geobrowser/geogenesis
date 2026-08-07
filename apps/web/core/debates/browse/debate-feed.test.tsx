@@ -28,11 +28,6 @@ let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
-  useProcessedVideoDebateIds: () => ({
-    processedIds: mocks.debates.map(debate => debate.id),
-    isLoading: false,
-    hasError: false,
-  }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
 }));
 

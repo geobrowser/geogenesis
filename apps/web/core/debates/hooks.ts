@@ -7,14 +7,11 @@ import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
-import { useDebateAttention } from './debate-attention';
-
 import {
   type Debate,
   type DebateActivity,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
-  type DebateMediaResponse,
   GeoChatRequestError,
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
@@ -59,8 +56,8 @@ import {
   updateDebatePreference,
   updateDebateRematchPosition,
 } from './api';
+import { useDebateAttention } from './debate-attention';
 import { useDebateGatewayScope } from './debate-gateway';
-import { hasProcessedVideo } from './playback-utils';
 
 const debateQueryNetworkOptions = {
   retry: false,
@@ -73,6 +70,8 @@ export const debateQueryKeys = {
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
+  recordingUrl: (debateId: string, filename: string | null) =>
+    ['debates', 'recording-url', debateId, filename] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
@@ -626,12 +625,35 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
   });
 }
 
-export function useRecordingUrl() {
+/**
+ * Signed playback URLs for a debate's two recordings.
+ */
+export function useDebateRecordingUrls(debate: Debate, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
-    mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
-      getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey),
+  const slot1Filename = debate.recordings.find(recording => recording.participant_slot === 1)?.filename ?? null;
+  const slot2Filename = debate.recordings.find(recording => recording.participant_slot === 2)?.filename ?? null;
+  const filenames = React.useMemo(() => [slot1Filename, slot2Filename], [slot1Filename, slot2Filename]);
+
+  // `combine` has to be stable
+  const combine = React.useCallback((results: UseQueryResult<{ url: string }>[]) => {
+    const failure = results.find(result => result.error)?.error;
+    return {
+      slot1: results[0]?.data?.url ?? null,
+      slot2: results[1]?.data?.url ?? null,
+      error: failure ? failure.message || 'Could not load recordings.' : null,
+    };
+  }, []);
+
+  return useQueries({
+    queries: filenames.map(filename => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.recordingUrl(debate.id, filename),
+      queryFn: () => getRecordingUrl(debate.id, filename as string, getPrivyIdentityToken, accountKey),
+      enabled: enabled && filename !== null,
+      staleTime: 5 * 60 * 1000,
+    })),
+    combine,
   });
 }
 
@@ -650,51 +672,6 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
         signal
       ),
     enabled,
-  });
-}
-
-/**
- * Which of the given debates have a processed `final_video`. The space debates endpoint carries
- * recordings but no media artifacts, so readiness can only be answered one debate at a time — pass
- * only already-watchable debates to bound the fan-out. Shares `debateQueryKeys.media` with the
- * player's own lookup, and opens no gateway scope since it's a one-shot check.
- */
-export function useProcessedVideoDebateIds(debateIds: string[], enabled: boolean) {
-  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-
-  // `combine` has to be stable: react-query re-runs it whenever its identity changes, and the
-  // result is diffed with `replaceEqualDeep`, which compares arrays structurally but treats every
-  // new Set as changed. An inline closure returning a Set therefore hands callers a fresh object
-  // each render and defeats their `useMemo`s — hence the callback, and ids as an array.
-  const combine = React.useCallback(
-    (results: UseQueryResult<DebateMediaResponse>[]) => ({
-      processedIds: debateIds.filter((_, index) => hasProcessedVideo(results[index]?.data)),
-      isLoading: enabled && results.some(result => result.isPending),
-      // A failed lookup is "unknown", not "not ready". It still withholds the debate — nothing
-      // should render that can't play — but callers need to tell the two apart, or a geo-chat blip
-      // reads to the viewer as "this space has no debates".
-      hasError: results.some(result => result.isError),
-    }),
-    [debateIds, enabled]
-  );
-
-  return useQueries({
-    queries: debateIds.map(debateId => ({
-      ...debateQueryNetworkOptions,
-      queryKey: debateQueryKeys.media(debateId),
-      // Readiness only moves when the media worker finishes, so don't re-ask on every remount of
-      // the feed — that's one request per candidate, up to the list endpoint's 50.
-      staleTime: 30_000,
-      queryFn: ({ signal }: { signal?: AbortSignal }) =>
-        getDebateMedia(
-          debateId,
-          authenticated ? getPrivyIdentityToken : undefined,
-          authenticated ? accountKey : null,
-          signal
-        ),
-      enabled,
-    })),
-    combine,
   });
 }
 

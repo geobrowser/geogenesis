@@ -21,12 +21,13 @@ import { WinnerVoteButton } from './winner-vote-button';
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
+  prefetch?: boolean;
   votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, prefetch = false, votes }: DebateFeedPlayerProps) {
   const { hasVoted } = votes;
-  const controller = useDebatePlayback(debate, active);
+  const controller = useDebatePlayback(debate, active, prefetch);
   const {
     slot1VideoRef,
     slot2VideoRef,
@@ -213,7 +214,7 @@ function DebaterVideo({
     <div className="relative aspect-480/289 w-full overflow-hidden rounded-lg bg-grey-01">
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
-        {src ? (
+        {src && (
           <video
             ref={videoRef}
             className={cx('h-full w-full object-cover', !isActiveSpeaker && 'saturate-0')}
@@ -227,8 +228,6 @@ function DebaterVideo({
             onPlay={onPlaybackTick}
             onTimeUpdate={onPlaybackTick}
           />
-        ) : (
-          <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
         )}
       </button>
 

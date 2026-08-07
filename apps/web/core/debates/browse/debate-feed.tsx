@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
-import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import {
   getPreparedSocialVideoHandoffMethod,
@@ -45,24 +45,15 @@ export function DebatesBrowseFeed({
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
-  // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
-  // whose media job failed or never ran still passes it, so readiness decides what renders.
+  // The list response carries the recordings themselves, so a debate is playable the moment it
+  // arrives.
   const candidates = React.useMemo(
     () => (debatesQuery.data?.debates ?? []).filter(isWatchableDebate),
     [debatesQuery.data?.debates]
   );
-  const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
-  const {
-    processedIds,
-    isLoading: mediaLoading,
-    hasError: mediaError,
-  } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
 
   const debates = React.useMemo(() => {
-    const processed = new Set(processedIds);
-    const sorted = candidates
-      .filter(debate => processed.has(debate.id))
-      .sort((a, b) => completedTime(b) - completedTime(a));
+    const sorted = [...candidates].sort((a, b) => completedTime(b) - completedTime(a));
     if (!initialDebateId) return sorted;
     // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
     // first full-screen video, then let the rest of the space's debates scroll in below it.
@@ -70,7 +61,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [candidates, processedIds, initialDebateId]);
+  }, [candidates, initialDebateId]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -103,19 +94,12 @@ export function DebatesBrowseFeed({
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
-  // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
-  // flashes "no debates" and strands a valid anchor.
-  const isLoading = debatesQuery.isLoading || mediaLoading;
+  const isLoading = debatesQuery.isLoading;
 
-  // One message at a time, most specific first. A readiness lookup that failed has to read as an
-  // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
-  const emptyMessage = isLoading
-    ? 'Loading debates…'
-    : debatesQuery.error instanceof Error
+  const emptyMessage =
+    debatesQuery.error instanceof Error
       ? `Could not load debates: ${debatesQuery.error.message}`
-      : mediaError
-        ? 'Could not check which debates are ready to watch. Try again shortly.'
-        : 'No debates to watch yet. Start one from the Claims tab.';
+      : 'No debates to watch yet. Start one from the Claims tab.';
 
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
@@ -125,6 +109,10 @@ export function DebatesBrowseFeed({
     initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
 
   const visibleDebates = debates.slice(0, visibleCount);
+  const activeIndex = Math.max(
+    0,
+    visibleDebates.findIndex(debate => debate.id === activeId)
+  );
 
   // Keep an active debate whenever the list is non-empty — including when a
   // refetch, pagination, or space switch drops the current activeId out of view,
@@ -146,8 +134,8 @@ export function DebatesBrowseFeed({
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
     >
-      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
-      {visibleDebates.map(debate => (
+      {debates.length === 0 && !isLoading && <FeedMessage>{emptyMessage}</FeedMessage>}
+      {visibleDebates.map((debate, index) => (
         <DebateFeedItem
           key={debate.id}
           debate={debate}
@@ -155,6 +143,7 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
+          prefetch={Math.abs(index - activeIndex) <= 1}
           root={scrollEl}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
@@ -195,6 +184,7 @@ function DebateFeedItem({
   spaceImage,
   topics,
   active,
+  prefetch,
   root,
   onActivate,
   onOpenJoin,
@@ -205,6 +195,7 @@ function DebateFeedItem({
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
+  prefetch: boolean;
   root: HTMLElement | null;
   onActivate: () => void;
   onOpenJoin: () => void;
@@ -338,7 +329,7 @@ function DebateFeedItem({
             topics={topics}
             onOpenJoin={onOpenJoin}
           />
-          <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
+          <DebateFeedPlayer debate={debate} active={active} prefetch={prefetch} votes={winnerVotes} />
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
           <div className="hidden md:block">

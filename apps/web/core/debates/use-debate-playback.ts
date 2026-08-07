@@ -5,7 +5,7 @@ import * as React from 'react';
 import { atom, useAtom } from 'jotai';
 
 import type { Debate } from './api';
-import { useDebateTranscript, useRecordingUrl } from './hooks';
+import { useDebateRecordingUrls, useDebateTranscript } from './hooks';
 import {
   type TurnState,
   clampSeconds,
@@ -32,11 +32,13 @@ const feedMutedAtom = atom(true);
  * per-slot playback URLs, keeps the videos in lockstep, tracks the active turn
  * (for the countdown + subtitles), and exposes play/pause/seek/replay controls.
  * Shared by the browse feed; the videos themselves are rendered by the caller.
+ *
+ * `prefetch` loads the recordings without engaging playback, so a debate the viewer
+ * hasn't reached yet still hands its `<video>` a src and paints the opening frame.
  */
-export function useDebatePlayback(debate: Debate, enabled: boolean) {
-  const recordingUrlMutation = useRecordingUrl();
+export function useDebatePlayback(debate: Debate, enabled: boolean, prefetch = false) {
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
-  const [error, setError] = React.useState<string | null>(null);
+  const [playbackError, setPlaybackError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
   const [userPaused, setUserPaused] = React.useState(false);
   const [isScrubbing, setIsScrubbing] = React.useState(false);
@@ -51,7 +53,6 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const slot1VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2VideoRef = React.useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecondsRef = React.useRef<number | null>(null);
-  const getRecordingPlaybackUrlRef = React.useRef(recordingUrlMutation.mutateAsync);
 
   const turnDurations = React.useMemo(
     () => normalizeTurnDurationsMs(debate.turn_durations_ms),
@@ -64,6 +65,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   const slot2Recording = debate.recordings.find(recording => recording.participant_slot === 2) ?? null;
   const slot1RecordingFilename = slot1Recording?.filename ?? null;
   const slot2RecordingFilename = slot2Recording?.filename ?? null;
+  const recordingUrls = useDebateRecordingUrls(debate, enabled || prefetch);
 
   // How far each recording's own timeline sits from the debate-timeline origin, so the two
   // videos can be kept in lockstep despite starting at different instants on different devices.
@@ -94,34 +96,17 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
   }, [activeSlot, playheadSeconds, transcriptSegments]);
 
   React.useEffect(() => {
-    getRecordingPlaybackUrlRef.current = recordingUrlMutation.mutateAsync;
-  }, [recordingUrlMutation.mutateAsync]);
-
-  React.useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
     setUrls({ slot1: null, slot2: null });
-    setError(null);
-    if (!slot1RecordingFilename || !slot2RecordingFilename) {
-      setError('This debate needs both recordings before it can be watched.');
-      return;
-    }
+    setPlaybackError(null);
+  }, [debate.id]);
 
-    Promise.all([
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot1RecordingFilename }),
-      getRecordingPlaybackUrlRef.current({ debateId: debate.id, filename: slot2RecordingFilename }),
-    ])
-      .then(([slot1Result, slot2Result]) => {
-        if (!cancelled) setUrls({ slot1: slot1Result.url, slot2: slot2Result.url });
-      })
-      .catch(caught => {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : 'Could not load recordings.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [debate.id, enabled, slot1RecordingFilename, slot2RecordingFilename]);
+  // Sticky: once a slot's `<video>` is pointed at a signed URL, keep that URL.
+  React.useEffect(() => {
+    setUrls(current => ({
+      slot1: current.slot1 ?? recordingUrls.slot1,
+      slot2: current.slot2 ?? recordingUrls.slot2,
+    }));
+  }, [recordingUrls.slot1, recordingUrls.slot2]);
 
   const videos = React.useCallback(
     () => [slot1VideoRef.current, slot2VideoRef.current].filter((video): video is HTMLVideoElement => video !== null),
@@ -206,7 +191,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
-    setError(null);
+    setPlaybackError(null);
     // Realign slot 2 to slot 1's position so a resume can't leave the recordings drifting.
     seekVideosTo(clampSeconds(primaryVideo.currentTime + offsets.slot1, timelineSeconds));
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
@@ -222,7 +207,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
       secondaryVideo.pause();
       setPlaying(false);
       setTurnState(null);
-      setError('Could not play both videos. Try Play again.');
+      setPlaybackError('Could not play both videos. Try Play again.');
     }
   }, [offsets.slot1, seekVideosTo, timelineSeconds]);
 
@@ -230,7 +215,7 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     if (!primaryVideo || !secondaryVideo) return;
-    setError(null);
+    setPlaybackError(null);
     setUserPaused(false);
     setPlayheadSeconds(0);
     pendingSeekSecondsRef.current = null;
@@ -256,6 +241,12 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
 
   const ready = Boolean(urls.slot1 && urls.slot2);
   const playbackEnded = ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - 0.05;
+
+  const missingRecording = !slot1RecordingFilename || !slot2RecordingFilename;
+  const loadError = missingRecording
+    ? 'This debate needs both recordings before it can be watched.'
+    : recordingUrls.error;
+  const error = playbackError ?? (enabled ? loadError : null);
 
   const togglePlayback = React.useCallback(() => {
     if (playing) {
