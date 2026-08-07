@@ -5,7 +5,9 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { RemoveScroll } from 'react-remove-scroll';
 
 import type { SpaceBountiesResult, SpaceBounty } from '~/core/community/bounty-types';
 import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
@@ -16,13 +18,12 @@ import {
   BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
 } from '~/core/constants';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
-
-import { RankingComposeFullscreen } from '~/partials/blocks/table/ranking-compose-fullscreen';
 
 import {
   AVAILABLE_CARD_HEIGHT_PX,
@@ -37,6 +38,7 @@ import {
 import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
+import { rankingFullscreenActiveAtom } from '~/atoms';
 
 const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [] };
 
@@ -350,6 +352,26 @@ function BountiesSection({
   );
 }
 
+function CommunityFullscreen({ children }: { children: React.ReactNode }) {
+  const isMobile = useIsMobileLayout();
+  const setFullscreenActive = useSetAtom(rankingFullscreenActiveAtom);
+
+  React.useEffect(() => {
+    setFullscreenActive(true);
+    return () => setFullscreenActive(false);
+  }, [setFullscreenActive]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white" style={{ top: 44 }}>
+      {isMobile ? (
+        <RemoveScroll className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</RemoveScroll>
+      ) : (
+        children
+      )}
+    </div>
+  );
+}
+
 /**
  * Full-screen route counterpart to a section's "View all"
  */
@@ -376,11 +398,8 @@ function BountiesFullView({
   const { filtered, controls: filterControls } = useUrlBountyFilterState(bounties, skills);
   const card = useCard(bounties);
 
-  // Reuse the app's full-screen shell (the same one the ranking full-screen view uses): it
-  // owns the below-navbar positioning and drops the browse sidebar, so this matches that
-  // layout exactly — top bar only, no gap, no left sidebar.
   return (
-    <RankingComposeFullscreen>
+    <CommunityFullscreen>
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 py-4">
         <div className="flex min-w-0 items-center gap-3">
           <Link
@@ -408,7 +427,7 @@ function BountiesFullView({
           <BountyGrid bounties={filtered} card={card} />
         )}
       </div>
-    </RankingComposeFullscreen>
+    </CommunityFullscreen>
   );
 }
 
