@@ -5,14 +5,11 @@ import * as React from 'react';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
-import { ROOT_SPACE } from '~/core/constants';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
-import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -34,6 +31,7 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
 import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -51,14 +49,9 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const isRootSpace = spaceId === ROOT_SPACE;
-  const [props, communityCalls] = await Promise.all([
-    getSpaceFrontPage(spaceId),
-    isRootSpace ? Promise.resolve([]) : fetchCommunityCalls(spaceId).catch(() => []),
-  ]);
+  const [props, { hasSidebar }] = await Promise.all([getSpaceFrontPage(spaceId), resolveSpaceSidebar(spaceId)]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-  const hasSidebar = !Spaces.hasExternalTopic(props.space) && (isRootSpace ? true : communityCalls.length > 0);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>

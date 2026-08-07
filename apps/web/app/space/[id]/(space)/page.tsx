@@ -7,8 +7,6 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
-import { ROOT_SPACE } from '~/core/constants';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -33,6 +31,7 @@ import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -79,10 +78,9 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const isRootSpace = spaceId === ROOT_SPACE;
-  const [props, communityCalls] = await Promise.all([
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
     getSpaceFrontPage(space),
-    isRootSpace ? Promise.resolve([]) : fetchCommunityCalls(spaceId).catch(() => []),
+    resolveSpaceSidebar(spaceId),
   ]);
 
   let sidebar: React.ReactNode = null;
