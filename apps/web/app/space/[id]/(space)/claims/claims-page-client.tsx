@@ -10,17 +10,16 @@ import { useRouter } from 'next/navigation';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
-import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
-import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
+import type { DebateClaim } from '~/core/debates/api';
+import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
+import { useDebateClaims } from '~/core/debates/hooks';
 import { useDiff } from '~/core/state/diff-store';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
-import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
-import { Check } from '~/design-system/icons/check';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -295,19 +294,8 @@ function ClaimListItem({
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublished(claim);
-  const joinQueue = useJoinDebateQueue(spaceId);
   const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
-  const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
-
-  const joinPosition = (position: boolean) => {
-    joinQueue.mutate({
-      claimId: claim.id,
-      request: {
-        position,
-      },
-    });
-  };
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
@@ -323,19 +311,18 @@ function ClaimListItem({
         )}
       </div>
 
-      <PositionButtonGroup
-        debatesEnabled={debatesEnabled}
-        canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
-        pendingPosition={debateClaim?.viewer_waiting_position ?? null}
-        onlineChoices={debateClaim?.online_choices ?? []}
-        joinPending={joinQueue.isPending}
-        onJoinPosition={joinPosition}
-        className="mt-3"
-      />
-
-      {debatesEnabled && (
-        <ClaimDebateStatus debateClaim={debateClaim} mutationError={mutationError} published={published} />
+      {debatesEnabled && published && (
+        <ClaimDebateReadiness
+          debateClaim={debateClaim}
+          entityId={claim.id}
+          spaceId={spaceId}
+          canToggle={!activeDebate && !activeMatch && !debateJoinBlocked}
+          className="mt-3"
+          textVariant="body"
+        />
       )}
+
+      {debatesEnabled && <ClaimDebateStatus debateClaim={debateClaim} published={published} />}
 
       {topics.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -346,129 +333,7 @@ function ClaimListItem({
   );
 }
 
-function PositionButtonGroup({
-  debatesEnabled,
-  canJoinDebate,
-  pendingPosition,
-  onlineChoices,
-  joinPending,
-  onJoinPosition,
-  className,
-}: {
-  debatesEnabled: boolean;
-  canJoinDebate: boolean;
-  pendingPosition: boolean | null;
-  onlineChoices: DebateOnlineChoice[];
-  joinPending: boolean;
-  onJoinPosition: (position: boolean) => void;
-  className?: string;
-}) {
-  const positions = [
-    { label: 'Yes', value: true },
-    { label: 'No', value: false },
-  ];
-
-  return (
-    <div className={className}>
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        Position
-      </Text>
-      <div className="grid grid-cols-2 gap-2">
-        {positions.map(position => {
-          const choice = onlineChoices.find(choice => choice.position === position.value);
-          const label = choice?.position_label ?? position.label;
-          const participantCount = choice?.participant_count ?? 0;
-          const selected = pendingPosition === position.value;
-          const accessibleLabel = `${label}, ${participantCount} participant${participantCount === 1 ? '' : 's'} available${selected ? ', selected' : ''}`;
-
-          if (debatesEnabled) {
-            return (
-              <button
-                key={position.label}
-                type="button"
-                aria-label={accessibleLabel}
-                aria-pressed={selected}
-                onClick={() => onJoinPosition(position.value)}
-                disabled={!canJoinDebate || joinPending || selected}
-                className={cx(
-                  'flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors disabled:opacity-60 sm:px-4',
-                  selected ? 'bg-green text-text' : 'bg-bg text-text'
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {selected && (
-                    <span aria-hidden="true" className="shrink-0">
-                      <Check />
-                    </span>
-                  )}
-                  <span className="truncate">{label}</span>
-                </span>
-                {choice && <OnlineChoiceParticipants choice={choice} />}
-              </button>
-            );
-          }
-
-          return (
-            <span
-              key={position.label}
-              className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
-            >
-              <span className="truncate">{label}</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
-  const participants = choice.participants.slice(0, 2);
-  const overflowCount = Math.max(0, choice.participant_count - participants.length);
-
-  if (participants.length === 0 && overflowCount === 0) return null;
-
-  return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
-      {participants.map(participant => {
-        const label = participant.display_name || participant.profile_space_id;
-
-        return (
-          <span
-            key={participant.user_id}
-            title={label}
-            className="relative box-content block h-5 w-5 overflow-hidden rounded-full border-2 border-white"
-          >
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
-          </span>
-        );
-      })}
-      {overflowCount > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
-          +{overflowCount}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ClaimDebateStatus({
-  debateClaim,
-  mutationError,
-  published,
-}: {
-  debateClaim: DebateClaim | null;
-  mutationError: string | null;
-  published: boolean;
-}) {
-  if (mutationError) {
-    return (
-      <Text as="p" variant="body" color="red-01" className="mt-3">
-        {mutationError}
-      </Text>
-    );
-  }
-
+function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
   if (!published) return null;
 
   if (debateClaim?.active_debate) {
@@ -483,14 +348,6 @@ function ClaimDebateStatus({
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
         Match found. Both speakers need to accept.
-      </Text>
-    );
-  }
-
-  if (debateClaim?.viewer_waiting_position !== null && debateClaim?.viewer_waiting_position !== undefined) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Waiting for someone with the opposite position.
       </Text>
     );
   }

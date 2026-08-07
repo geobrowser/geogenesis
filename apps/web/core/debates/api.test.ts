@@ -6,6 +6,7 @@ import {
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  joinDebateQueue,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
@@ -157,6 +158,28 @@ describe('debate availability', () => {
         body: JSON.stringify({ available_to_debate: false }),
       })
     );
+  });
+});
+
+describe('debate queue readiness', () => {
+  it('joins with a bodyless POST and no JSON content type', async () => {
+    const response = { claim: { id: 'claim-1' }, match: null };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).resolves.toEqual(response);
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
   });
 });
 

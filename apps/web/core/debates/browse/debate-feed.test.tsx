@@ -376,6 +376,7 @@ function completedDebate(id: string, claim: string, completedAt: string): Debate
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: id,
     first_participant_slot: 1,
     current_turn_index: 1,

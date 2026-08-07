@@ -7,8 +7,6 @@ import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
-import { useDebateAttention } from './debate-attention';
-
 import {
   type Debate,
   type DebateActivity,
@@ -16,7 +14,6 @@ import {
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
   GeoChatRequestError,
-  type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
@@ -56,9 +53,8 @@ import {
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
-  updateDebatePreference,
-  updateDebateRematchPosition,
 } from './api';
+import { useDebateAttention } from './debate-attention';
 import { useDebateGatewayScope } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
@@ -100,9 +96,32 @@ export function useGeoChatAuth() {
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
+  const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
+
+  React.useEffect(
+    function refetchReadinessAfterIndexedResponse() {
+      if (!shouldFetch) return;
+
+      return queryClient.getQueryCache().subscribe(event => {
+        if (event.type !== 'updated' || event.action.type !== 'success') return;
+        const [scope, , responseEntityId, responseSpaceId, , responseKind] = event.query.queryKey;
+        if (
+          scope !== 'user-entity-response' ||
+          responseSpaceId !== spaceId ||
+          (responseKind !== 'stance' && responseKind !== 'veracity') ||
+          (claimIds !== null && !claimIds.includes(String(responseEntityId)))
+        ) {
+          return;
+        }
+
+        void queryClient.invalidateQueries({ queryKey: ['debates', 'claims', spaceId] });
+      });
+    },
+    [claimIds, queryClient, shouldFetch, spaceId]
+  );
 
   return useQuery({
     ...debateQueryNetworkOptions,
@@ -124,8 +143,8 @@ export function useJoinDebateQueue(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
-      joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken, accountKey),
+    mutationFn: ({ claimId }: { claimId: string }) =>
+      joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
@@ -142,17 +161,6 @@ export function useLeaveDebateQueue(spaceId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
-  });
-}
-
-export function useUpdateDebatePreference(spaceId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId, position }: { claimId: string; position: boolean }) =>
-      updateDebatePreference(spaceId, claimId, { position }, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
   });
 }
 
@@ -432,27 +440,37 @@ export function useLeaveDebateRematch(sessionId: string) {
 }
 
 export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [], enabled = true) {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  React.useEffect(
+    function refetchRematchClaimsAfterIndexedResponse() {
+      if (!enabled || !sessionId) return;
+
+      return queryClient.getQueryCache().subscribe(event => {
+        if (event.type !== 'updated' || event.action.type !== 'success') return;
+        const [scope, , responseEntityId, , , responseKind] = event.query.queryKey;
+        if (
+          scope !== 'user-entity-response' ||
+          (responseKind !== 'stance' && responseKind !== 'veracity') ||
+          (claimIds.length > 0 && !claimIds.includes(String(responseEntityId)))
+        ) {
+          return;
+        }
+
+        void queryClient.invalidateQueries({
+          queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
+        });
+      });
+    },
+    [accountKey, claimIds, enabled, queryClient, sessionId]
+  );
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematchClaims(accountKey, sessionId, claimIds),
     queryFn: ({ signal }) => listDebateRematchClaims(sessionId, claimIds, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
-  });
-}
-
-export function useUpdateDebateRematchPosition(sessionId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId, position, sourceSpaceId }: { claimId: string; position: boolean; sourceSpaceId: string }) =>
-      updateDebateRematchPosition(sessionId, claimId, position, sourceSpaceId, getPrivyIdentityToken, accountKey),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
-      }),
   });
 }
 

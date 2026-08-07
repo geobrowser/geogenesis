@@ -6,6 +6,7 @@ export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' 
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+export type DebateResponseKind = 'stance' | 'veracity';
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -25,6 +26,8 @@ export type DebateClaimSummary = {
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
+  response_kind: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
@@ -175,6 +178,7 @@ export type Debate = {
   id: string;
   claim: DebateClaimSummary;
   status: DebateStatus;
+  response_kind: DebateResponseKind | null;
   room_name: string;
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
@@ -251,7 +255,11 @@ export type DebateRematchRequest = {
   requester_user_id: string;
   recipient_user_id: string;
   requester_position: boolean;
+  requester_position_label?: string | null;
   recipient_position: boolean;
+  recipient_position_label?: string | null;
+  response_kind?: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;
   expires_at: string;
@@ -276,10 +284,12 @@ export type DebateRematchSession = {
 export type DebateRematchClaimPosition = {
   user_id: string;
   position: boolean | null;
+  position_label: string | null;
 };
 
 export type DebateRematchClaim = {
   claim: DebateClaimSummary;
+  response_kind: DebateResponseKind | null;
   participants: DebateRematchClaimPosition[];
   shared_preference: boolean;
   recently_rejected: boolean;
@@ -322,7 +332,11 @@ export type DebateClaim = {
   claim_entity_id: string;
   claim: string;
   description: string | null;
-  viewer_waiting_position: boolean | null;
+  response_kind: DebateResponseKind;
+  viewer_response: { position: boolean; position_label: string } | null;
+  viewer_debate_ready: boolean;
+  readiness_disabled_reason: string | null;
+  readiness_changed_at: string | null;
   online_choices: DebateOnlineChoice[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
@@ -339,10 +353,6 @@ export type ObjectStoreUpload = {
 
 export type DebateClaimsResponse = {
   claims: DebateClaim[];
-};
-
-export type JoinDebateQueueRequest = {
-  position: boolean;
 };
 
 export type JoinDebateQueueResponse = {
@@ -507,13 +517,11 @@ export async function listDebateClaims(
 export async function joinDebateQueue(
   spaceId: string,
   claimId: string,
-  request: JoinDebateQueueRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
-    body: request,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -528,22 +536,6 @@ export async function leaveDebateQueue(
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'DELETE',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
-
-export async function updateDebatePreference(
-  spaceId: string,
-  claimId: string,
-  request: JoinDebateQueueRequest,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-preference`, {
-    method: 'PUT',
-    body: request,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -740,23 +732,6 @@ export async function listDebateRematchClaims(
     getPrivyIdentityToken,
     accountKey,
     signal,
-  });
-}
-
-export async function updateDebateRematchPosition(
-  sessionId: string,
-  claimId: string,
-  position: boolean,
-  sourceSpaceId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims/${claimId}/position`, {
-    method: 'PUT',
-    body: { position, source_space_id: sourceSpaceId },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
   });
 }
 

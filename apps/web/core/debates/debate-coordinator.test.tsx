@@ -743,6 +743,7 @@ function activityWithMatch(): DebateActivity {
     match: {
       id: 'match-1',
       status: 'pending',
+      response_kind: null,
       claim: {
         id: 'claim-1',
         space_id: 'space-1',
