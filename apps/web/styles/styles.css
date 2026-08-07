@@ -75,13 +75,7 @@
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 
-  /* Match CONTENT_MAX_WIDTH */
-  --width-content-max: 1144px;
-
-  /* Shared width for the overview side rails (Explore + space home).
-     Both rails use `w-[var(--width-side-rail)]` so they can't drift apart.
-     (This is a plain CSS var, not a `w-*` utility namespace — `--width-*`
-     does not generate width utilities in Tailwind v4.) */
+  /* Shared width for the overview side rails (Explore + space home) */
   --width-side-rail: 360px;
 
   /* Animations */
