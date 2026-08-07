@@ -3,13 +3,16 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
+import { getRelationVideoUrls } from '~/core/utils/relation-video';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -35,6 +38,8 @@ export type ExploreFeedItem = {
   title: string;
   description: string | null;
   imageUrl: string | null;
+  recordingUrls: string[];
+  debateVideoUrls: string[];
   commentCount: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
@@ -289,8 +294,9 @@ function buildItems(
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
     const displaySpaceIdNorm = normId(spaceId);
-    const types = e.relations
-      .filter(r => normId(r.type.id) === typesRelationIdNorm && normId(r.spaceId) === displaySpaceIdNorm)
+    const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
+    const types = relationsInDisplaySpace
+      .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
 
     items.push({
@@ -301,6 +307,8 @@ function buildItems(
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
+      recordingUrls: getRecordingUrls(relationsInDisplaySpace),
+      debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
       commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });

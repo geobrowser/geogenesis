@@ -13,9 +13,10 @@ import {
   getAggregatedRankingSubmitterRefs,
 } from '~/core/blocks/ranking/ranking-block-relations';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
+import { resolveBlockPlacement } from '~/core/blocks/resolve-block-placement';
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import type { EntityFilter } from '~/core/gql/graphql';
-import { getAllEntities, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
+import { getAllEntities, getEntityPage } from '~/core/io/queries';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -52,15 +53,6 @@ const FEATURED_RANKINGS_FILTER: EntityFilter = {
     { relations: { some: { typeId: { is: SystemIds.TYPES_PROPERTY }, toEntityId: { is: RANKING_BLOCK_TYPE_ID } } } },
     { relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: FEATURED_TAG_ID } } } },
   ],
-};
-
-// Raw shape of the BLOCKS relations returned by getRelationsByToEntityIds
-// (undecoded — mirrors resolve-ranking-share's placement resolution).
-type ToEntityRelation = {
-  id: string;
-  fromEntityId: string;
-  toEntityId: string;
-  spaceId: string;
 };
 
 function readDateValue(entity: Entity | null | undefined, propertyId: string, spaceId: string): string {
@@ -103,26 +95,6 @@ async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): 
   return dedupePreserveOrder(
     refs.map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId)).filter((id): id is string => Boolean(id))
   );
-}
-
-/**
- * Find where a block is embedded: its parent entity id and the id of the BLOCKS
- * relation binding them. The block is the target of a BLOCKS relation from its
- * parent, so we read the block's backlinks. Returns null when the placement
- * can't be resolved — such a ranking is dropped rather than shipping a Vote
- * button that leads to a broken compose view.
- */
-async function resolveBlockPlacement(
-  blockEntityId: string,
-  spaceId: string
-): Promise<{ parentEntityId: string; relationId: string } | null> {
-  const relations = (await Effect.runPromise(
-    getRelationsByToEntityIds([blockEntityId], SystemIds.BLOCKS, spaceId)
-  )) as unknown as ToEntityRelation[];
-  if (!relations || relations.length === 0) return null;
-  const match = relations.find(r => r.spaceId === spaceId) ?? relations[0];
-  if (!match.id || !match.fromEntityId) return null;
-  return { parentEntityId: match.fromEntityId, relationId: match.id };
 }
 
 /**

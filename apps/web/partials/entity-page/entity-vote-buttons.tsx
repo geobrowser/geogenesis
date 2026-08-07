@@ -293,7 +293,6 @@ export function EntityVoteButtons({
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimVoteButtonColor(upvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
@@ -303,7 +302,7 @@ export function EntityVoteButtons({
       <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
         <Popover.Trigger asChild>
           <button
-            className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
+            className="min-w-[2ch] cursor-pointer text-center leading-5 tabular-nums hover:text-grey-04"
             title={totalVoters > 0 ? 'View voters' : undefined}
             disabled={totalVoters === 0}
           >
@@ -337,7 +336,6 @@ export function EntityVoteButtons({
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimVoteButtonColor(downvoteActive),
           !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
