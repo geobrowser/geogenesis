@@ -31,27 +31,8 @@ export function ClaimDebateReadiness({
 }: ClaimDebateReadinessProps) {
   if (!debateClaim) return null;
 
-  const isMatchmakingDisabled = debateClaim.readiness_disabled_reason === 'response_derived_positions_disabled';
-
-  if (isMatchmakingDisabled) {
-    return (
-      <div className={className}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Text as="p" variant={textVariant} color="grey-04">
-            {readinessReasonMessage(debateClaim.readiness_disabled_reason)}
-          </Text>
-          <DebateEntityResponseControls
-            entityId={entityId}
-            spaceId={spaceId}
-            responseKind={debateClaim.response_kind}
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <EnabledClaimDebateReadiness
+    <ClaimDebateReadinessContent
       debateClaim={debateClaim}
       entityId={entityId}
       spaceId={spaceId}
@@ -62,7 +43,7 @@ export function ClaimDebateReadiness({
   );
 }
 
-function EnabledClaimDebateReadiness({
+function ClaimDebateReadinessContent({
   debateClaim,
   entityId,
   spaceId,
@@ -154,8 +135,6 @@ function readinessReasonMessage(reason: string | null) {
       return 'This claim’s response type changed. Respond and join again.';
     case 'claim_response_validation_failed':
       return 'Your response could not be verified yet. You’ll remain ready while verification retries.';
-    case 'response_derived_positions_disabled':
-      return 'Debate matchmaking is temporarily unavailable.';
     default:
       return reason;
   }

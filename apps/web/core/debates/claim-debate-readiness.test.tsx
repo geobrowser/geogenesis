@@ -107,20 +107,6 @@ describe('ClaimDebateReadiness', () => {
     expect(screen.getByText('This claim’s response type changed. Respond and join again.')).toBeInTheDocument();
   });
 
-  it('keeps response actions available while debate matchmaking is disabled', () => {
-    renderReadiness(
-      claim({
-        viewer_response: null,
-        readiness_disabled_reason: 'response_derived_positions_disabled',
-      })
-    );
-
-    expect(screen.getByText('Debate matchmaking is temporarily unavailable.')).toBeInTheDocument();
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
-    expect(screen.queryByText('Respond before joining')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /join debate/i })).not.toBeInTheDocument();
-  });
 });
 
 function renderReadiness(debateClaim: DebateClaim, indexingStatus: 'idle' | 'reconciling' = 'idle') {
