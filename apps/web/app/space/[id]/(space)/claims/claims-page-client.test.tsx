@@ -1,6 +1,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,11 +39,14 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingState: () => 'idle',
+  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: joinPending, error: null }),
+  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: joinPending, error: null }),
   useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
   useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -93,7 +99,7 @@ afterEach(() => cleanup());
 
 describe('ClaimsPageClient', () => {
   it('queries Claim entities and renders the empty state', () => {
-    render(<ClaimsPageClient spaceId="space-1" />);
+    renderClaims();
 
     expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
     expect(screen.getByText('No claims yet')).toBeInTheDocument();
@@ -106,7 +112,7 @@ describe('ClaimsPageClient', () => {
   });
 
   it('stages a claim with Claim and Topics relations only', () => {
-    render(<ClaimsPageClient spaceId="space-1" />);
+    renderClaims();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
     fireEvent.change(screen.getByLabelText('Claim'), {
@@ -122,26 +128,28 @@ describe('ClaimsPageClient', () => {
     expect(mocks.setIsReviewOpen).toHaveBeenCalledWith(true);
   });
 
-  it('shows no readiness toggle until a refetch exposes the viewer response', () => {
+  it('enables the readiness switch after a refetch exposes the viewer response', () => {
     claims = [publishedClaim()];
     debateClaimsResponse = {
       claims: [debateClaim({ viewer_response: null })],
     };
 
-    const { rerender } = render(<ClaimsPageClient spaceId="space-1" />);
+    const { rerender } = renderClaims();
 
-    expect(screen.getByText('Respond before joining')).toBeInTheDocument();
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
 
     debateClaimsResponse = {
       claims: [debateClaim({ viewer_response: { position: true, position_label: 'Agree' } })],
     };
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
 
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
+    expect(mocks.joinMutate).toHaveBeenCalledWith(
+      { claimId: 'claim-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
   });
 
   it('renders backend response labels and one leave-readiness toggle', () => {
@@ -152,48 +160,20 @@ describe('ClaimsPageClient', () => {
           viewer_response: { position: true, position_label: 'Verify' },
           viewer_debate_ready: true,
           response_kind: 'veracity',
-          online_choices: [
-            {
-              position: true,
-              position_label: 'Verify',
-              participant_count: 4,
-              participants: [
-                {
-                  user_id: 'viewer-user',
-                  profile_space_id: 'viewer-profile',
-                  display_name: 'Current viewer',
-                  avatar_cid: 'https://example.com/viewer.png',
-                },
-                {
-                  user_id: 'other-user',
-                  profile_space_id: 'other-profile',
-                  display_name: 'Other participant',
-                  avatar_cid: null,
-                },
-              ],
-            },
-            {
-              position: false,
-              position_label: 'Dispute',
-              participant_count: 0,
-              participants: [],
-            },
-          ],
+          online_choices: [],
         }),
       ],
     };
 
-    render(<ClaimsPageClient spaceId="space-1" />);
+    renderClaims();
 
-    const verifyAvailability = screen.getByLabelText('Verify, 4 participants available');
-    expect(within(verifyAvailability).getByTitle('Current viewer')).toBeInTheDocument();
-    expect(within(verifyAvailability).getByTitle('Other participant')).toBeInTheDocument();
-    expect(within(verifyAvailability).getByText('+2')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Dispute' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
+    expect(mocks.leaveMutate).toHaveBeenCalledWith(
+      { claimId: 'claim-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
   });
 
   it('keeps readiness disabled while joining, unpublished, or matched', () => {
@@ -204,9 +184,9 @@ describe('ClaimsPageClient', () => {
     };
     joinPending = true;
 
-    const { rerender } = render(<ClaimsPageClient spaceId="space-1" />);
+    const { rerender } = renderClaims();
 
-    expect(screen.getByRole('button', { name: 'Join debate' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
 
     joinPending = false;
     claims = [
@@ -224,7 +204,7 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
 
     claims = [published];
     debateClaimsResponse = {
@@ -233,9 +213,18 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Match found. Both speakers need to accept.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Join debate' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 });
+
+function renderClaims() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<ClaimsPageClient spaceId="space-1" />, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 function publishedClaim(): Entity {
   return {

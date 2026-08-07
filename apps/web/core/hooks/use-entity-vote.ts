@@ -1,8 +1,8 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
@@ -30,7 +30,7 @@ interface UseEntityResponseArgs {
   responseKind: ResponseKind | null;
 }
 
-type PendingEntityResponseIndex = {
+export type PendingEntityResponseIndex = {
   entityId: string;
   expectedResponse: ActiveResponseDirection | null;
   personalSpaceId: string;
@@ -38,10 +38,11 @@ type PendingEntityResponseIndex = {
   spaceId: string;
 };
 
-type EntityResponseIndexingState =
+export type EntityResponseIndexingState =
   | { status: 'idle'; pending: null; runId: null }
   | { status: 'reconciling'; pending: PendingEntityResponseIndex | null; runId: string }
-  | { status: 'delayed'; pending: PendingEntityResponseIndex; runId: string };
+  | { status: 'delayed'; pending: PendingEntityResponseIndex; runId: string }
+  | { status: 'indexed'; pending: PendingEntityResponseIndex; runId: string };
 
 const IDLE_INDEXING_STATE: EntityResponseIndexingState = { status: 'idle', pending: null, runId: null };
 let responseIndexingRunSequence = 0;
@@ -93,36 +94,79 @@ export function useEntityResponseIndexingState({
   entityId,
   spaceId,
   responseKind,
-}: UseEntityResponseArgs): EntityResponseIndexingState['status'] {
-  return useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }).status;
+}: UseEntityResponseArgs): 'idle' | 'reconciling' | 'delayed' {
+  const status = useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }).status;
+  return status === 'indexed' ? 'idle' : status;
 }
 
-function useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
+export function useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const queryKey = useMemo(
+    () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
+    [entityId, personalSpaceId, responseKind, spaceId]
+  );
+  const queryHash = useMemo(() => hashKey(queryKey), [queryKey]);
   const getSnapshot = useCallback(
-    () =>
-      queryClient.getQueryData<EntityResponseIndexingState>(
-        entityResponseIndexingQueryKey(entityId, spaceId, responseKind)
-      ) ?? IDLE_INDEXING_STATE,
-    [entityId, queryClient, responseKind, spaceId]
+    () => queryClient.getQueryData<EntityResponseIndexingState>(queryKey) ?? IDLE_INDEXING_STATE,
+    [queryClient, queryKey]
   );
   const subscribe = useCallback(
-    (onStoreChange: () => void) => queryClient.getQueryCache().subscribe(onStoreChange),
-    [queryClient]
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe(event => {
+        if (event.query.queryHash === queryHash) onStoreChange();
+      }),
+    [queryClient, queryHash]
   );
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
+  const queryClient = useQueryClient();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const queryKey = useMemo(
+    () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
+    [entityId, personalSpaceId, responseKind, spaceId]
+  );
+
+  return useCallback(
+    (runId: string) => {
+      queryClient.setQueryData<EntityResponseIndexingState>(queryKey, current =>
+        current?.runId === runId ? IDLE_INDEXING_STATE : current
+      );
+    },
+    [queryClient, queryKey]
+  );
 }
 
 export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const indexingQueryKey = entityResponseIndexingQueryKey(entityId, spaceId, responseKind);
-  const indexingKeyId = JSON.stringify(indexingQueryKey);
+  const indexingQueryKey = useMemo(
+    () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
+    [entityId, personalSpaceId, responseKind, spaceId]
+  );
+  const indexingKeyId = useMemo(() => hashKey(indexingQueryKey), [indexingQueryKey]);
   const indexingState = useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind });
 
   const tx = useSmartAccountTransaction();
+
+  const pendingResponseIndex = useCallback(
+    (direction: ResponseDirection): PendingEntityResponseIndex | null => {
+      if (!responseKind || !personalSpaceId || !isRegistered || !validateSpaceId(spaceId)) return null;
+
+      return {
+        entityId,
+        expectedResponse: direction === 'clear' ? null : direction,
+        personalSpaceId,
+        responseKind,
+        spaceId,
+      };
+    },
+    [entityId, isRegistered, personalSpaceId, responseKind, spaceId]
+  );
 
   const isCurrentIndexingRun = useCallback(
     (runId: string) => queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey)?.runId === runId,
@@ -157,11 +201,6 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       cancelActiveResponseReconciliation(responseIndexingRegistry, indexingKeyId);
       const controller = new AbortController();
       responseIndexingRegistry.activeReconciliations.set(indexingKeyId, { controller, runId });
-      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
-        status: 'reconciling',
-        pending,
-        runId,
-      });
 
       const indexed = await waitForIndexedEntityResponse(
         signal =>
@@ -201,7 +240,11 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       await invalidateResponseQueries(pending);
       if (!isCurrentIndexingRun(runId)) return;
 
-      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, IDLE_INDEXING_STATE);
+      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+        status: 'indexed',
+        pending,
+        runId,
+      });
       responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
     },
     [
@@ -258,27 +301,22 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         throw error;
       }
 
-      const expectedResponse = direction === 'clear' ? null : direction;
-      const pending: PendingEntityResponseIndex = {
-        entityId,
-        expectedResponse,
-        personalSpaceId,
-        responseKind,
-        spaceId,
-      };
+      const pending = pendingResponseIndex(direction);
+      if (!pending) throw new Error('Response indexing context is unavailable.');
       return { pending, transaction: result.right };
     },
-    [personalSpaceId, isRegistered, spaceId, entityId, responseKind, tx]
+    [personalSpaceId, isRegistered, spaceId, entityId, responseKind, tx, pendingResponseIndex]
   );
 
   const responseMutation = useMutation({
     mutationFn: executeResponse,
-    onMutate: () => {
+    onMutate: direction => {
       const previousState =
         queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
       const { runId, runOrder } = createResponseIndexingRunId();
+      const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
-        pending: null,
+        pending,
         previousState,
         runId,
         runOrder,
@@ -287,7 +325,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       cancelActiveResponseReconciliation(responseIndexingRegistry, indexingKeyId);
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
         status: 'reconciling',
-        pending: null,
+        pending,
         runId,
       });
       return { previousState, runId, runOrder };
@@ -339,21 +377,34 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
   });
 
   const retryResponseIndexing = useCallback(() => {
-    if (!indexingState.pending || indexingState.status === 'reconciling') return;
-    const { runId } = createResponseIndexingRunId();
+    const current = queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey);
+    if (!current?.pending || current.status !== 'delayed') return;
+    const { runId } = current;
     queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
       status: 'reconciling',
-      pending: indexingState.pending,
+      pending: current.pending,
       runId,
     });
-    void reconcileResponseIndexing(indexingState.pending, runId);
-  }, [indexingKeyId, indexingQueryKey, indexingState, queryClient, reconcileResponseIndexing]);
+    void reconcileResponseIndexing(current.pending, runId);
+  }, [indexingQueryKey, queryClient, reconcileResponseIndexing]);
+
+  useEffect(() => {
+    if (indexingState.status !== 'delayed') return;
+    const retryTimer = window.setTimeout(retryResponseIndexing, 10_000);
+    return () => window.clearTimeout(retryTimer);
+  }, [indexingState.status, retryResponseIndexing]);
+
+  const optimisticResponse =
+    (indexingState.status !== 'reconciling' && indexingState.status !== 'delayed') || !indexingState.pending
+      ? undefined
+      : indexingState.pending.expectedResponse;
 
   return {
     submitResponse: responseMutation.mutate,
-    isProcessingResponse: responseMutation.isPending || indexingState.status !== 'idle',
+    optimisticResponse,
+    isProcessingResponse:
+      responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
     isResponseIndexingDelayed: indexingState.status === 'delayed',
-    retryResponseIndexing,
     isConnected: !!personalSpaceId && isRegistered,
     personalSpaceId,
   };

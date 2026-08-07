@@ -231,8 +231,13 @@ export function userEntityResponseQueryKey(
   return ['user-entity-response', userId, entityId, spaceId, objectType, responseKind] as const;
 }
 
-export function entityResponseIndexingQueryKey(entityId: string, spaceId: string, responseKind: ResponseKind | null) {
-  return ['entity-response-indexing', entityId, spaceId, responseKind] as const;
+export function entityResponseIndexingQueryKey(
+  personalSpaceId: string | null,
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind | null
+) {
+  return ['entity-response-indexing', personalSpaceId, entityId, spaceId, responseKind] as const;
 }
 
 export function entityRespondersQueryKey(

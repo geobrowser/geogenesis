@@ -51,8 +51,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
-type OptimisticResponse = ActiveResponseDirection | 'none' | null;
-
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
@@ -66,7 +64,6 @@ type EntityVoteButtonsProps = {
   spaceId: string;
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
-  showProcessingLabel?: boolean;
 };
 
 export function EntityVoteButtons({
@@ -74,17 +71,18 @@ export function EntityVoteButtons({
   spaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
-  showProcessingLabel = false,
 }: EntityVoteButtonsProps) {
-  const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
+  const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId, includeDeleted: true });
+  const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
+  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
   const isClaim =
-    entity?.relations.some(
+    activeRelations.some(
       relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
     ) ?? false;
   const isFactualClaim =
     isClaim &&
     getChecked(
-      entity?.values.find(
+      activeValues.find(
         v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
       )?.value
     ) === true;
@@ -98,14 +96,8 @@ export function EntityVoteButtons({
     queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
-  const {
-    submitResponse,
-    isProcessingResponse,
-    isResponseIndexingDelayed,
-    retryResponseIndexing,
-    isConnected,
-    personalSpaceId,
-  } = useEntityResponse({ entityId, spaceId, responseKind });
+  const { submitResponse, optimisticResponse, isResponseIndexingDelayed, isConnected, personalSpaceId } =
+    useEntityResponse({ entityId, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
@@ -119,8 +111,6 @@ export function EntityVoteButtons({
     onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
   });
 
-  const [optimisticResponse, setOptimisticResponse] = React.useState<OptimisticResponse>(null);
-  const [optimisticScore, setOptimisticScore] = React.useState<bigint | null>(null);
   const [respondersOpen, setRespondersOpen] = React.useState(false);
 
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
@@ -149,27 +139,14 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
-  React.useEffect(
-    function clearOptimisticScoreOnServerUpdate() {
-      setOptimisticScore(null);
-    },
-    [responseCounts]
-  );
-
-  React.useEffect(
-    function clearOptimisticResponseOnServerUpdate() {
-      setOptimisticResponse(null);
-    },
-    [serverResponseDirection]
-  );
-
-  const activeResponse =
-    optimisticResponse !== null ? (optimisticResponse === 'none' ? null : optimisticResponse) : serverResponseDirection;
+  const activeResponse = optimisticResponse === undefined ? serverResponseDirection : optimisticResponse;
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
   const netScore = positiveResponses - negativeResponses;
-  const displayScore = optimisticScore !== null ? optimisticScore : netScore;
+  const responseScore = (direction: ActiveResponseDirection | null | undefined) =>
+    direction === 'positive' ? 1n : direction === 'negative' ? -1n : 0n;
+  const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
   function openPrivySignIn() {
     setName('');
@@ -186,24 +163,14 @@ export function EntityVoteButtons({
       return;
     }
     if (!isConnected) return;
-    const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeResponse === 'positive') {
-      setOptimisticResponse('none');
-      setOptimisticScore(base - 1n);
       submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'up'));
         },
-        onError: () => {
-          setOptimisticResponse('positive');
-          setOptimisticScore(null);
-        },
       });
     } else {
-      const delta = activeResponse === 'negative' ? 2n : 1n;
       const previousResponse = activeResponse ?? null;
-      setOptimisticResponse('positive');
-      setOptimisticScore(base + delta);
       submitResponse('positive', {
         onSuccess: () => {
           upvoted(
@@ -212,10 +179,6 @@ export function EntityVoteButtons({
               previousResponse === 'negative' ? 'down' : undefined
             )
           );
-        },
-        onError: () => {
-          setOptimisticResponse(previousResponse);
-          setOptimisticScore(null);
         },
       });
     }
@@ -227,24 +190,14 @@ export function EntityVoteButtons({
       return;
     }
     if (!isConnected) return;
-    const base = optimisticScore !== null ? optimisticScore : netScore;
     if (activeResponse === 'negative') {
-      setOptimisticResponse('none');
-      setOptimisticScore(base + 1n);
       submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'down'));
         },
-        onError: () => {
-          setOptimisticResponse('negative');
-          setOptimisticScore(null);
-        },
       });
     } else {
-      const delta = activeResponse === 'positive' ? 2n : 1n;
       const previousResponse = activeResponse ?? null;
-      setOptimisticResponse('negative');
-      setOptimisticScore(base - delta);
       submitResponse('negative', {
         onSuccess: () => {
           downvoted(
@@ -253,10 +206,6 @@ export function EntityVoteButtons({
               previousResponse === 'positive' ? 'up' : undefined
             )
           );
-        },
-        onError: () => {
-          setOptimisticResponse(previousResponse);
-          setOptimisticScore(null);
         },
       });
     }
@@ -280,9 +229,9 @@ export function EntityVoteButtons({
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    optimisticResponse !== null ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    optimisticResponse !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
   const optimisticNegativeDelta =
-    optimisticResponse !== null ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    optimisticResponse !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;
@@ -349,29 +298,23 @@ export function EntityVoteButtons({
       ) : null}
       <button
         onClick={handlePositiveResponse}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending || isProcessingResponse)}
+        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? responseCopy.signIn
             : isAccountSetupPending
               ? 'Finishing account setup…'
-              : isResponseIndexingDelayed
-                ? 'Response submitted. Indexing is delayed.'
-                : isProcessingResponse
-                  ? 'Processing response…'
-                  : isConnected
-                    ? positiveActive
-                      ? responseCopy.removePositive
-                      : responseCopy.positiveAction
-                    : responseCopy.connect
+              : isConnected
+                ? positiveActive
+                  ? responseCopy.removePositive
+                  : responseCopy.positiveAction
+                : responseCopy.connect
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(positiveActive),
-          !!smartAccount &&
-            (!isConnected || isAccountSetupPending || isProcessingResponse) &&
-            'cursor-default opacity-50'
+          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
         {renderResponseIcon('up', positiveActive)}
@@ -404,29 +347,23 @@ export function EntityVoteButtons({
       </Popover.Root>
       <button
         onClick={handleNegativeResponse}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending || isProcessingResponse)}
+        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
         title={
           !smartAccount
             ? responseCopy.signIn
             : isAccountSetupPending
               ? 'Finishing account setup…'
-              : isResponseIndexingDelayed
-                ? 'Response submitted. Indexing is delayed.'
-                : isProcessingResponse
-                  ? 'Processing response…'
-                  : isConnected
-                    ? negativeActive
-                      ? responseCopy.removeNegative
-                      : responseCopy.negativeAction
-                    : responseCopy.connect
+              : isConnected
+                ? negativeActive
+                  ? responseCopy.removeNegative
+                  : responseCopy.negativeAction
+                : responseCopy.connect
         }
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(negativeActive),
-          !!smartAccount &&
-            (!isConnected || isAccountSetupPending || isProcessingResponse) &&
-            'cursor-default opacity-50'
+          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
         )}
       >
         {renderResponseIcon('down', negativeActive)}
@@ -436,14 +373,7 @@ export function EntityVoteButtons({
       ) : null}
       {isResponseIndexingDelayed ? (
         <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
-          Response submitted. Indexing is delayed.
-          <button type="button" onClick={retryResponseIndexing} className="ml-1 underline hover:text-text">
-            Check again
-          </button>
-        </span>
-      ) : isProcessingResponse ? (
-        <span className={showProcessingLabel ? 'ml-1 text-metadata text-grey-04' : 'sr-only'}>
-          Processing response…
+          Response submitted. Waiting for confirmation.
         </span>
       ) : null}
     </div>

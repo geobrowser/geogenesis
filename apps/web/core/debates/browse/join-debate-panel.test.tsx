@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,15 +17,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: { claims: mocks.claims }, isLoading: false, error: null }),
   useDebateActivity: () => ({ data: { available_to_debate: false }, isPending: false }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.availabilityMutate, isPending: false }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingState: () => 'idle',
+  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -41,14 +47,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('JoinDebatePanel', () => {
-  it('prompts for a response without a readiness toggle', () => {
+  it('prompts for a response with a disabled readiness switch', () => {
     mocks.claims = [claim({ viewer_response: null })];
 
-    render(<JoinDebatePanel spaceId="space-1" onClose={vi.fn()} />);
+    renderPanel();
 
-    expect(screen.getByText('Respond before joining')).toBeInTheDocument();
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 
   it('renders backend labels and one bodyless join toggle after a response', () => {
@@ -56,31 +61,42 @@ describe('JoinDebatePanel', () => {
       claim({
         response_kind: 'veracity',
         viewer_response: { position: false, position_label: 'Dispute' },
-        online_choices: [choice(true, 'Verified'), choice(false, 'Disputed')],
+        online_choices: [],
       }),
     ];
 
-    render(<JoinDebatePanel spaceId="space-1" onClose={vi.fn()} />);
+    renderPanel();
 
-    expect(screen.getByText('Your response: Dispute')).toBeInTheDocument();
-    expect(screen.getByText('Verified')).toBeInTheDocument();
-    expect(screen.getByText('Disputed')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Verified' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Disputed' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
+    expect(mocks.joinMutate).toHaveBeenCalledWith(
+      { claimId: 'claim-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
   });
 
   it('leaves through the same readiness toggle', () => {
     mocks.claims = [claim({ viewer_debate_ready: true })];
 
-    render(<JoinDebatePanel spaceId="space-1" onClose={vi.fn()} />);
+    renderPanel();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
+    expect(mocks.leaveMutate).toHaveBeenCalledWith(
+      { claimId: 'claim-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
   });
 });
+
+function renderPanel() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<JoinDebatePanel spaceId="space-1" onClose={vi.fn()} />, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 function claim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   return {
@@ -101,8 +117,4 @@ function claim(overrides: Partial<DebateClaim> = {}): DebateClaim {
     updated_at: '2026-08-06T00:00:00.000Z',
     ...overrides,
   };
-}
-
-function choice(position: boolean, positionLabel: string) {
-  return { position, position_label: positionLabel, participant_count: 0, participants: [] };
 }

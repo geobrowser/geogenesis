@@ -5,7 +5,13 @@ import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useEntityResponse, useEntityResponseIndexingState } from './use-entity-vote';
+import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
+
+import {
+  useEntityResponse,
+  useEntityResponseIndexingSnapshot,
+  useEntityResponseIndexingState,
+} from './use-entity-vote';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
@@ -16,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   runEffectEither: vi.fn(),
   responseAction: vi.fn(() => ({ to: '0x1234' as const, calldata: '0xabcd' as const })),
   waitForIndexedEntityResponse: vi.fn(),
+  personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
 }));
 
 vi.mock('~/core/responses/entity-response', async importOriginal => {
@@ -29,7 +36,7 @@ vi.mock('~/core/responses/entity-response', async importOriginal => {
 });
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: PERSONAL_SPACE_ID, isRegistered: true }),
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.personalSpaceId !== null }),
 }));
 
 vi.mock('~/core/hooks/use-smart-account-transaction', async () => {
@@ -72,6 +79,7 @@ beforeEach(() => {
   mocks.responseAction.mockClear();
   mocks.waitForIndexedEntityResponse.mockClear();
   mocks.runEffectEither.mockResolvedValue({ _tag: 'Right', right: '0xtransaction' });
+  mocks.personalSpaceId = PERSONAL_SPACE_ID;
 });
 
 afterEach(() => {
@@ -80,7 +88,32 @@ afterEach(() => {
 });
 
 describe('useEntityResponse indexing reconciliation', () => {
-  it('keeps a submitted response unsettled and exposes retry after reconciliation exhausts', async () => {
+  it('exposes the expected optimistic response before the transaction settles', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValue(transaction.promise);
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => ({
+        response: useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+        indexing: useEntityResponseIndexingSnapshot({
+          entityId: 'claim-1',
+          spaceId: TARGET_SPACE_ID,
+          responseKind: 'stance',
+        }),
+      }),
+      { wrapper }
+    );
+
+    act(() => result.current.response.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+
+    expect(result.current.indexing).toMatchObject({
+      status: 'reconciling',
+      pending: { expectedResponse: 'negative' },
+    });
+  });
+
+  it('keeps a submitted response unsettled and retries automatically after reconciliation exhausts', async () => {
     mocks.fetchResponse.mockReturnValue(null);
     const onSuccess = vi.fn();
     const onError = vi.fn();
@@ -98,24 +131,48 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(onError).not.toHaveBeenCalled();
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
+    const initialRunId = queryClient.getQueryData<{ runId: string }>(
+      entityResponseIndexingQueryKey(PERSONAL_SPACE_ID, 'claim-1', TARGET_SPACE_ID, 'stance')
+    )?.runId;
 
     await act(async () => vi.advanceTimersByTimeAsync(58_000));
 
     expect(mocks.fetchResponse).toHaveBeenCalledTimes(30);
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(true);
-    expect(result.current.retryResponseIndexing).toEqual(expect.any(Function));
     expect(invalidateQueries).not.toHaveBeenCalled();
+    expect(
+      queryClient.getQueryData<{ runId: string }>(
+        entityResponseIndexingQueryKey(PERSONAL_SPACE_ID, 'claim-1', TARGET_SPACE_ID, 'stance')
+      )?.runId
+    ).toBe(initialRunId);
 
     mocks.fetchResponse.mockReturnValue('positive');
-    await act(async () => {
-      result.current.retryResponseIndexing();
-      await Promise.resolve();
-    });
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
 
     expect(result.current.isProcessingResponse).toBe(false);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
+    expect(result.current.optimisticResponse).toBeUndefined();
     expect(invalidateQueries).toHaveBeenCalledTimes(3);
+  });
+
+  it('isolates optimistic response state by personal space', async () => {
+    const transaction = deferred<unknown>();
+    mocks.runEffectEither.mockReturnValue(transaction.promise);
+    const { wrapper } = createHarness();
+    const { result, rerender } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+    expect(result.current.optimisticResponse).toBe('positive');
+
+    mocks.personalSpaceId = 'another-personal-space';
+    rerender();
+
+    expect(result.current.optimisticResponse).toBeUndefined();
   });
 
   it('stays visibly processing after submission and invalidates when Gaia indexes late', async () => {
@@ -141,6 +198,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledTimes(2);
     expect(result.current.isProcessingResponse).toBe(false);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
+    expect(result.current.optimisticResponse).toBeUndefined();
     expect(invalidateQueries).toHaveBeenCalledTimes(3);
   });
 
@@ -167,6 +225,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     await act(async () => Promise.resolve());
     act(() => result.current.second.submitResponse('negative'));
     await act(async () => Promise.resolve());
+    expect(result.current.first.optimisticResponse).toBe('negative');
 
     await act(async () => {
       secondTransaction.resolve({ _tag: 'Right', right: '0xsecond' });
@@ -175,6 +234,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     });
     expect(mocks.fetchResponse).toHaveBeenCalledOnce();
     expect(result.current.indexingStatus).toBe('reconciling');
+    expect(result.current.first.optimisticResponse).toBe('negative');
 
     await act(async () => {
       firstTransaction.resolve({ _tag: 'Right', right: '0xfirst' });
@@ -216,6 +276,7 @@ describe('useEntityResponse indexing reconciliation', () => {
       await Promise.resolve();
     });
     expect(result.current.indexingStatus).toBe('reconciling');
+    expect(result.current.first.optimisticResponse).toBe('positive');
 
     await act(async () => {
       firstTransaction.resolve({ _tag: 'Right', right: '0xfirst' });
@@ -272,6 +333,7 @@ describe('useEntityResponse indexing reconciliation', () => {
       await Promise.resolve();
     });
     expect(result.current.indexingStatus).toBe('reconciling');
+    expect(result.current.first.optimisticResponse).toBe('positive');
 
     await act(async () => {
       firstTransaction.resolve({ _tag: 'Right', right: '0xfirst' });

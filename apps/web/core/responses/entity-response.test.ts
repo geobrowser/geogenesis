@@ -1,6 +1,8 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
 import { getChecked } from '~/design-system/checkbox';
 
@@ -106,6 +108,24 @@ describe('entity response semantics', () => {
 
     entity.values[0]!.hasBeenPublished = true;
     expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(false);
+  });
+
+  it('blocks responses for unpublished response-kind tombstones', () => {
+    const entity = {
+      values: [],
+      relations: [
+        {
+          spaceId: SPACE_ID,
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isDeleted: true,
+          isLocal: true,
+          hasBeenPublished: false,
+        },
+      ],
+    } as unknown as NonNullable<Parameters<typeof hasUnpublishedClaimResponseKindEdit>[0]>;
+
+    expect(hasUnpublishedClaimResponseKindEdit(entity, SPACE_ID)).toBe(true);
   });
 
   it('keeps polling until Gaia serves the expected response', async () => {
@@ -223,8 +243,9 @@ describe('entity response query keys', () => {
       0,
       'curation',
     ]);
-    expect(entityResponseIndexingQueryKey('entity', 'space', 'stance')).toEqual([
+    expect(entityResponseIndexingQueryKey('profile-space', 'entity', 'space', 'stance')).toEqual([
       'entity-response-indexing',
+      'profile-space',
       'entity',
       'space',
       'stance',

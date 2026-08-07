@@ -155,7 +155,7 @@ function JoinDebateCard({
         debateClaim={debateClaim}
         entityId={debateClaim.claim_entity_id}
         spaceId={spaceId}
-        canToggle={canJoin}
+        canEnable={canJoin}
         className="mt-3"
       />
     </article>

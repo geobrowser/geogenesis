@@ -17,7 +17,6 @@ export function DebateEntityResponseControls({
       spaceId={spaceId}
       responseKind={responseKind}
       claimResponderAvatarsPosition="trailing"
-      showProcessingLabel
     />
   );
 }

@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +25,8 @@ vi.mock('~/core/state/feature-flags', () => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingState: () => 'idle',
+  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -29,9 +34,10 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('./hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
@@ -77,38 +83,30 @@ function debateClaim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   } as unknown as DebateClaim;
 }
 
-function openPopover() {
-  fireEvent.click(screen.getByRole('button', { name: 'Debate' }));
-}
-
 describe('ClaimDebateButton', () => {
   it('renders nothing when the entity is not a Claim', () => {
-    render(
+    renderButton(
       <ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([], [{ id: 'not-a-claim' }])} />
     );
 
-    expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
-  it('prompts to publish without rendering readiness controls for an unpublished claim', () => {
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
-    openPopover();
+  it('renders a disabled compact switch for an unpublished claim', () => {
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
 
-    expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /join debate/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 
-  it('requires a claim response before showing the readiness toggle', () => {
+  it('shows the disabled Debate switch before a claim response', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-    openPopover();
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
 
-    expect(screen.getByText('Respond before joining')).toBeInTheDocument();
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Join debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByText('Respond before debating', { selector: 'p' })).not.toBeInTheDocument();
   });
 
-  it('shows one readiness toggle for the backend response and leaves when ready', () => {
+  it('shows the inline checked Debate switch and leaves when ready', () => {
     mocks.debateClaims.mockReturnValue({
       data: {
         claims: [
@@ -119,17 +117,22 @@ describe('ClaimDebateButton', () => {
         ],
       },
     });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-    openPopover();
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
 
-    expect(screen.getByText('Your response: Agree')).toBeInTheDocument();
-    const leave = screen.getByRole('button', { name: 'Leave debate' });
-    expect(leave).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByRole('button', { name: /debate/i })).toHaveLength(2);
-    expect(screen.getByText('Waiting for someone with the opposite response.')).toBeInTheDocument();
+    const leave = screen.getByRole('switch', { name: 'Debate' });
+    expect(leave).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Waiting for someone with the opposite response.')).not.toBeInTheDocument();
 
     fireEvent.click(leave);
-    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1' });
+    expect(mocks.leaveMutate).toHaveBeenCalledWith(
+      { claimId: 'claim-entity-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+    );
     expect(mocks.joinMutate).not.toHaveBeenCalled();
   });
 });
+
+function renderButton(button: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{button}</QueryClientProvider>);
+}

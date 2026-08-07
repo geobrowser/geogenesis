@@ -316,7 +316,7 @@ function ClaimListItem({
           debateClaim={debateClaim}
           entityId={claim.id}
           spaceId={spaceId}
-          canToggle={!activeDebate && !activeMatch && !debateJoinBlocked}
+          canEnable={!activeDebate && !activeMatch && !debateJoinBlocked}
           className="mt-3"
           textVariant="body"
         />
