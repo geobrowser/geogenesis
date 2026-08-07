@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
 
@@ -139,6 +139,54 @@ describe('entity response semantics', () => {
       )
     ).resolves.toBe(true);
     expect(attempt).toBe(2);
+  });
+
+  it('aborts and retries a Gaia probe that never settles', async () => {
+    vi.useFakeTimers();
+    let aborted = false;
+    const polling = waitForIndexedEntityResponse(
+      signal =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => {
+            aborted = true;
+            reject(new Error('aborted'));
+          });
+        }),
+      'positive',
+      1,
+      0,
+      50
+    );
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expect(polling).resolves.toBe(false);
+    expect(aborted).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('stops polling when a reconciliation run is superseded', async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    const polling = waitForIndexedEntityResponse(
+      signal => {
+        attempts += 1;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')));
+        });
+      },
+      'positive',
+      30,
+      2_000,
+      5_000,
+      controller.signal
+    );
+    await Promise.resolve();
+
+    controller.abort();
+
+    await expect(polling).resolves.toBe(false);
+    expect(attempts).toBe(1);
   });
 });
 

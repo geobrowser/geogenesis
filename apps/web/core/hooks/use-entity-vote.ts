@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
@@ -39,11 +39,55 @@ type PendingEntityResponseIndex = {
 };
 
 type EntityResponseIndexingState =
-  | { status: 'idle'; pending: null }
-  | { status: 'reconciling'; pending: PendingEntityResponseIndex | null }
-  | { status: 'delayed'; pending: PendingEntityResponseIndex };
+  | { status: 'idle'; pending: null; runId: null }
+  | { status: 'reconciling'; pending: PendingEntityResponseIndex | null; runId: string }
+  | { status: 'delayed'; pending: PendingEntityResponseIndex; runId: string };
 
-const IDLE_INDEXING_STATE: EntityResponseIndexingState = { status: 'idle', pending: null };
+const IDLE_INDEXING_STATE: EntityResponseIndexingState = { status: 'idle', pending: null, runId: null };
+let responseIndexingRunSequence = 0;
+type ResponseSubmissionRun = {
+  pending: PendingEntityResponseIndex | null;
+  previousState: EntityResponseIndexingState;
+  runId: string;
+  runOrder: number;
+  status: 'pending' | 'success' | 'failed';
+};
+type ResponseIndexingRegistry = {
+  activeReconciliations: Map<string, { controller: AbortController; runId: string }>;
+  submissionRuns: Map<string, Map<string, ResponseSubmissionRun>>;
+};
+const responseIndexingRegistries = new WeakMap<object, ResponseIndexingRegistry>();
+
+function createResponseIndexingRunId() {
+  responseIndexingRunSequence += 1;
+  return {
+    runId: `${Date.now()}-${responseIndexingRunSequence}`,
+    runOrder: responseIndexingRunSequence,
+  };
+}
+
+function getResponseIndexingRegistry(queryClient: object) {
+  let registry = responseIndexingRegistries.get(queryClient);
+  if (!registry) {
+    registry = { activeReconciliations: new Map(), submissionRuns: new Map() };
+    responseIndexingRegistries.set(queryClient, registry);
+  }
+  return registry;
+}
+
+function cancelActiveResponseReconciliation(registry: ResponseIndexingRegistry, indexingKeyId: string) {
+  registry.activeReconciliations.get(indexingKeyId)?.controller.abort();
+  registry.activeReconciliations.delete(indexingKeyId);
+}
+
+function getResponseSubmissionRuns(registry: ResponseIndexingRegistry, indexingKeyId: string) {
+  let runs = registry.submissionRuns.get(indexingKeyId);
+  if (!runs) {
+    runs = new Map();
+    registry.submissionRuns.set(indexingKeyId, runs);
+  }
+  return runs;
+}
 
 export function useEntityResponseIndexingState({
   entityId,
@@ -72,12 +116,18 @@ function useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind }: 
 
 export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
+  const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const indexingQueryKey = entityResponseIndexingQueryKey(entityId, spaceId, responseKind);
+  const indexingKeyId = JSON.stringify(indexingQueryKey);
   const indexingState = useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind });
-  const reconciliationRun = useRef(0);
 
   const tx = useSmartAccountTransaction();
+
+  const isCurrentIndexingRun = useCallback(
+    (runId: string) => queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey)?.runId === runId,
+    [indexingQueryKey, queryClient]
+  );
 
   const invalidateResponseQueries = useCallback(
     (pending: PendingEntityResponseIndex) =>
@@ -102,37 +152,66 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
   );
 
   const reconcileResponseIndexing = useCallback(
-    async (pending: PendingEntityResponseIndex) => {
-      const run = ++reconciliationRun.current;
+    async (pending: PendingEntityResponseIndex, runId: string) => {
+      if (!isCurrentIndexingRun(runId)) return;
+      cancelActiveResponseReconciliation(responseIndexingRegistry, indexingKeyId);
+      const controller = new AbortController();
+      responseIndexingRegistry.activeReconciliations.set(indexingKeyId, { controller, runId });
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
         status: 'reconciling',
         pending,
+        runId,
       });
 
       const indexed = await waitForIndexedEntityResponse(
-        () =>
+        signal =>
           Effect.runPromise(
-            getUserEntityResponse(pending.personalSpaceId, pending.entityId, pending.spaceId, pending.responseKind)
+            getUserEntityResponse(
+              pending.personalSpaceId,
+              pending.entityId,
+              pending.spaceId,
+              pending.responseKind,
+              0,
+              signal
+            )
           ),
-        pending.expectedResponse
+        pending.expectedResponse,
+        30,
+        2_000,
+        5_000,
+        controller.signal
       );
 
-      if (run !== reconciliationRun.current) return;
+      const activeReconciliation = responseIndexingRegistry.activeReconciliations.get(indexingKeyId);
+      if (activeReconciliation?.controller !== controller) return;
+      responseIndexingRegistry.activeReconciliations.delete(indexingKeyId);
+
+      if (!isCurrentIndexingRun(runId)) return;
 
       if (!indexed) {
         queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
           status: 'delayed',
           pending,
+          runId,
         });
+        responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
         return;
       }
 
       await invalidateResponseQueries(pending);
-      if (run !== reconciliationRun.current) return;
+      if (!isCurrentIndexingRun(runId)) return;
 
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, IDLE_INDEXING_STATE);
+      responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
     },
-    [indexingQueryKey, invalidateResponseQueries, queryClient]
+    [
+      indexingKeyId,
+      indexingQueryKey,
+      invalidateResponseQueries,
+      isCurrentIndexingRun,
+      queryClient,
+      responseIndexingRegistry,
+    ]
   );
 
   const executeResponse = useCallback(
@@ -195,24 +274,80 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
   const responseMutation = useMutation({
     mutationFn: executeResponse,
     onMutate: () => {
-      reconciliationRun.current += 1;
+      const previousState =
+        queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
+      const { runId, runOrder } = createResponseIndexingRunId();
+      getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
+        pending: null,
+        previousState,
+        runId,
+        runOrder,
+        status: 'pending',
+      });
+      cancelActiveResponseReconciliation(responseIndexingRegistry, indexingKeyId);
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
         status: 'reconciling',
         pending: null,
+        runId,
       });
+      return { previousState, runId, runOrder };
     },
-    onSuccess: submission => {
-      void reconcileResponseIndexing(submission.pending);
+    onSuccess: (submission, _direction, context) => {
+      if (!context) return;
+      const run = responseIndexingRegistry.submissionRuns.get(indexingKeyId)?.get(context.runId);
+      if (!run) return;
+      run.pending = submission.pending;
+      run.status = 'success';
+      if (isCurrentIndexingRun(context.runId)) {
+        void reconcileResponseIndexing(submission.pending, context.runId);
+      }
     },
-    onError: () => {
-      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, IDLE_INDEXING_STATE);
+    onError: (_error, _direction, context) => {
+      if (!context) return;
+      const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
+      const failedRun = runs?.get(context.runId);
+      if (!runs || !failedRun) return;
+      failedRun.status = 'failed';
+      if (!isCurrentIndexingRun(context.runId)) return;
+
+      const recoverableRun = [...runs.values()]
+        .filter(run => run.status !== 'failed' && run.runOrder < context.runOrder)
+        .sort((left, right) => right.runOrder - left.runOrder)[0];
+      if (recoverableRun) {
+        queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+          status: 'reconciling',
+          pending: recoverableRun.pending,
+          runId: recoverableRun.runId,
+        });
+        if (recoverableRun.status === 'success' && recoverableRun.pending) {
+          void reconcileResponseIndexing(recoverableRun.pending, recoverableRun.runId);
+        }
+        return;
+      }
+
+      const previousState = [...runs.values()].sort((left, right) => left.runOrder - right.runOrder)[0]?.previousState;
+      responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
+      if (!previousState || previousState.status === 'idle') {
+        queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, IDLE_INDEXING_STATE);
+        return;
+      }
+      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, previousState);
+      if (previousState.status === 'reconciling' && previousState.pending) {
+        void reconcileResponseIndexing(previousState.pending, previousState.runId);
+      }
     },
   });
 
   const retryResponseIndexing = useCallback(() => {
     if (!indexingState.pending || indexingState.status === 'reconciling') return;
-    void reconcileResponseIndexing(indexingState.pending);
-  }, [indexingState, reconcileResponseIndexing]);
+    const { runId } = createResponseIndexingRunId();
+    queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+      status: 'reconciling',
+      pending: indexingState.pending,
+      runId,
+    });
+    void reconcileResponseIndexing(indexingState.pending, runId);
+  }, [indexingKeyId, indexingQueryKey, indexingState, queryClient, reconcileResponseIndexing]);
 
   return {
     submitResponse: responseMutation.mutate,
