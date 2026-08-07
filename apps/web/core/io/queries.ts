@@ -67,6 +67,7 @@ import {
 import { restFetch } from './rest';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
+import { UserEntityVotesByTypeDocument } from './user-entity-votes-by-type-document';
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
@@ -1269,6 +1270,54 @@ export function getEntityVoters(
     signal,
   });
 }
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVotesPage = {
+  nodes: Array<{ objectId: string }>;
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+};
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  after?: string | null,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const page: UserEntityVotesPage = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVotesPage =>
+        data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        after: after ?? null,
+      },
+      signal,
+    });
+
+    const objectIds = page.nodes.map(node => node.objectId).filter(Boolean);
+    const endCursor = page.pageInfo.endCursor ?? null;
+
+    return {
+      objectIds,
+      endCursor,
+      // A cursor is required to advance, so treat a missing one as the end.
+      hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,
