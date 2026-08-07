@@ -1,4 +1,3 @@
-import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 
 import { ExploreSidePanel } from './explore-side-panel';
@@ -10,17 +9,13 @@ import { ExploreSidePanel } from './explore-side-panel';
 export async function RootExploreSidePanelContainer() {
   const data = await fetchExploreSidePanelData().catch(() => null);
 
-  if (!data || !exploreSidePanelHasServerContent(data)) {
-    return null;
-  }
-
   return (
     <ExploreSidePanel
-      featuredSpaces={data.featuredSpaces}
-      featuredRankings={data.featuredRankings}
-      pendingMembershipSpaceIds={data.pendingMembershipSpaceIds}
-      memberOrEditorSpaceIds={data.memberOrEditorSpaceIds}
-      communityCalls={data.communityCalls}
+      featuredSpaces={data?.featuredSpaces ?? []}
+      featuredRankings={data?.featuredRankings ?? []}
+      pendingMembershipSpaceIds={data?.pendingMembershipSpaceIds ?? []}
+      memberOrEditorSpaceIds={data?.memberOrEditorSpaceIds ?? []}
+      communityCalls={data?.communityCalls ?? []}
     />
   );
 }
