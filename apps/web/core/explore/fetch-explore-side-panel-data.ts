@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import { cookies } from 'next/headers';
 
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
@@ -26,71 +28,71 @@ type FetchExploreSidePanelDataOptions = {
   featuredSpacesPromise?: Promise<FeaturedSpace[]>;
 };
 
-export async function fetchExploreSidePanelData(
-  options: FetchExploreSidePanelDataOptions = {}
-): Promise<ExploreSidePanelData> {
-  const wallet =
-    options.wallet !== undefined ? options.wallet : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
+export const fetchExploreSidePanelData = cache(
+  async (options: FetchExploreSidePanelDataOptions = {}): Promise<ExploreSidePanelData> => {
+    const wallet =
+      options.wallet !== undefined ? options.wallet : ((await cookies()).get(WALLET_ADDRESS)?.value ?? null);
 
-  let memberSpaceId: string | null;
-  if (options.memberSpaceId !== undefined) {
-    memberSpaceId = options.memberSpaceId;
-  } else {
-    try {
-      memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;
-    } catch {
-      memberSpaceId = null;
-    }
-  }
-
-  const featuredSpacesPromise =
-    options.featuredSpacesPromise ?? fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
-  const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
-  const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
-  const governancePromise = memberSpaceId
-    ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
-    : Promise.resolve(null);
-
-  const [featuredSpaces, featuredRankings, communityCalls, governance] = await Promise.all([
-    featuredSpacesPromise,
-    featuredRankingsPromise,
-    communityCallsPromise,
-    governancePromise,
-  ]);
-
-  const memberOrEditorSpaceIds: string[] = memberSpaceId
-    ? governance
-      ? [...new Set([...governance.editorIds, ...governance.myProposalSpaceIds, memberSpaceId])]
-      : [memberSpaceId]
-    : [];
-  const editorSpaceIds: string[] = governance ? governance.editorIds : [];
-
-  let pendingMembershipSpaceIds: string[] = [];
-  if (memberSpaceId) {
-    const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
-    const candidateIds = new Map<string, string>();
-    for (const s of featuredSpaces) {
-      const normalized = normId(s.spaceId);
-      if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
-      candidateIds.set(normalized, s.spaceId);
-    }
-    const checks = await mapWithConcurrency([...candidateIds.values()], 8, async spaceId => {
+    let memberSpaceId: string | null;
+    if (options.memberSpaceId !== undefined) {
+      memberSpaceId = options.memberSpaceId;
+    } else {
       try {
-        const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
-        return req != null && !req.isVotingEnded ? spaceId : null;
+        memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;
       } catch {
-        return null;
+        memberSpaceId = null;
       }
-    });
-    pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
-  }
+    }
 
-  return {
-    featuredSpaces,
-    featuredRankings,
-    pendingMembershipSpaceIds,
-    memberOrEditorSpaceIds,
-    editorSpaceIds,
-    communityCalls,
-  };
-}
+    const featuredSpacesPromise =
+      options.featuredSpacesPromise ?? fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+    const featuredRankingsPromise = fetchFeaturedRankings().catch(() => [] as FeaturedRanking[]);
+    const communityCallsPromise = fetchCommunityCallsForExplore().catch(() => [] as ExploreCall[]);
+    const governancePromise = memberSpaceId
+      ? getGovernanceHomeSpaceContext(memberSpaceId).catch(() => null)
+      : Promise.resolve(null);
+
+    const [featuredSpaces, featuredRankings, communityCalls, governance] = await Promise.all([
+      featuredSpacesPromise,
+      featuredRankingsPromise,
+      communityCallsPromise,
+      governancePromise,
+    ]);
+
+    const memberOrEditorSpaceIds: string[] = memberSpaceId
+      ? governance
+        ? [...new Set([...governance.editorIds, ...governance.myProposalSpaceIds, memberSpaceId])]
+        : [memberSpaceId]
+      : [];
+    const editorSpaceIds: string[] = governance ? governance.editorIds : [];
+
+    let pendingMembershipSpaceIds: string[] = [];
+    if (memberSpaceId) {
+      const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
+      const candidateIds = new Map<string, string>();
+      for (const s of featuredSpaces) {
+        const normalized = normId(s.spaceId);
+        if (memberOrEditorSet.has(normalized) || candidateIds.has(normalized)) continue;
+        candidateIds.set(normalized, s.spaceId);
+      }
+      const checks = await mapWithConcurrency([...candidateIds.values()], 8, async spaceId => {
+        try {
+          const req = await fetchActiveMemberRequest(spaceId, memberSpaceId!);
+          return req != null && !req.isVotingEnded ? spaceId : null;
+        } catch {
+          return null;
+        }
+      });
+      pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
+    }
+
+    return {
+      featuredSpaces,
+      featuredRankings,
+      pendingMembershipSpaceIds,
+      memberOrEditorSpaceIds,
+      editorSpaceIds,
+      communityCalls,
+    };
+  }
+);
