@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
-import { ZERO_WIDTH_SPACE } from '~/core/constants';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -18,15 +17,11 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Close } from '~/design-system/icons/close';
 import { Context } from '~/design-system/icons/context';
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { SpaceTopicDialog } from '~/partials/space-page/space-topic-dialog';
 import { SubspacesDialog } from '~/partials/space-page/subspaces-dialog';
@@ -38,6 +33,7 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
+import { EntityPageTitle } from './entity-page-title';
 
 type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
@@ -137,30 +133,13 @@ export function EditableSpaceHeading({
   return (
     <>
       <div className="relative flex items-center justify-between">
-        {isEditing ? (
-          <div className="grow">
-            <PageStringField
-              variant="mainPage"
-              placeholder="Entity name..."
-              value={name ?? ''}
-              onChange={onNameChange}
-            />
-            {/* Manual spacing to match the <Text /> height and avoid layout shift */}
-            <Spacer height={3.5} />
-          </div>
-        ) : (
-          <div>
-            <div className="flex items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
-                <Text as="h1" variant="mainPage">
-                  {name ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </Truncate>
-            </div>
-            <Spacer height={12} />
-          </div>
-        )}
-        {(actionsComponent || isSpacePage) && (
+        <EntityPageTitle
+          value={name ?? ''}
+          isEditing={isEditing}
+          onChange={onNameChange}
+          className="min-w-0 grow"
+        />
+        {isSpacePage && (
           <div className="inline-flex items-center gap-4">
             {actionsComponent}
             {isSpacePage && (
