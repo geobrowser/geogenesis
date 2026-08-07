@@ -1,7 +1,6 @@
 'use client';
 
 import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
-import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
@@ -28,26 +27,17 @@ export function ExplorePage({
   memberOrEditorSpaceIds,
   communityCalls,
 }: Props) {
-  const hasSidebar = exploreSidePanelHasServerContent({
-    featuredSpaces,
-    featuredRankings,
-    pendingMembershipSpaceIds,
-    memberOrEditorSpaceIds,
-    communityCalls,
-  });
-
   return (
     <EntityPageSidebarLayout
+      sidebarWidth="auto"
       sidebar={
-        hasSidebar ? (
-          <ExploreSidePanel
-            featuredSpaces={featuredSpaces}
-            featuredRankings={featuredRankings}
-            pendingMembershipSpaceIds={pendingMembershipSpaceIds}
-            memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-            communityCalls={communityCalls}
-          />
-        ) : null
+        <ExploreSidePanel
+          featuredSpaces={featuredSpaces}
+          featuredRankings={featuredRankings}
+          pendingMembershipSpaceIds={pendingMembershipSpaceIds}
+          memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+          communityCalls={communityCalls}
+        />
       }
     >
       <main className="min-w-0 pt-5">
