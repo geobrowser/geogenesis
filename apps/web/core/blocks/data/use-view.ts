@@ -109,6 +109,15 @@ export function useView() {
     return generated ?? undefined;
   }, [shownColumnRelations]);
 
+  /** Insert a newly shown column before existing ones (used when selecting main Image/Video). */
+  const firstPropertiesColumnPosition = React.useCallback((): string | undefined => {
+    const sorted = [...shownColumnRelations].sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
+    const first = sorted[0]?.position;
+    const firstStr = typeof first === 'string' && first.length > 0 ? first : null;
+    const generated = Position.generateBetween(null, firstStr);
+    return generated ?? undefined;
+  }, [shownColumnRelations]);
+
   const setView = React.useCallback(
     async (newView: DataBlockViewDetails) => {
       if (newView.value === view || !blocksRelationEntityId) return;
@@ -182,13 +191,15 @@ export function useView() {
     [blocksRelationEntityId, spaceId, storage]
   );
 
-  const toggleProperty = (newColumn: Column, selector?: string) => {
+  const toggleProperty = (newColumn: Column, selector?: string, options?: { insertAt?: 'start' | 'end' }) => {
     const propertyId = EntityId(newColumn.id);
     const matchingShownRelations = relationsMatchingColumnProperty(blockRelationRelations, propertyId).filter(
       r => !r.isDeleted
     );
     const isShown = matchingShownRelations.length > 0;
     const shownColumnRelation = matchingShownRelations[0];
+    const columnPosition =
+      options?.insertAt === 'start' ? firstPropertiesColumnPosition() : nextPropertiesColumnPosition();
 
     if (ID.equals(propertyId, SCORE_SYSTEM_PROPERTY)) {
       setScoreDismissed(isShown);
@@ -255,7 +266,7 @@ export function useView() {
           id: newId,
           entityId: newRelationEntityId,
           spaceId: spaceId,
-          position: nextPropertiesColumnPosition(),
+          position: columnPosition,
           renderableType: 'RELATION',
           type: {
             id: SystemIds.PROPERTIES,
@@ -284,7 +295,7 @@ export function useView() {
         id: IdUtils.generate(),
         entityId: newRelationEntityId,
         spaceId: spaceId,
-        position: nextPropertiesColumnPosition(),
+        position: columnPosition,
         renderableType: 'RELATION',
         type: {
           id: SystemIds.PROPERTIES,

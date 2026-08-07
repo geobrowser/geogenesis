@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -38,11 +37,11 @@ type ListRowProps = {
   rank: number;
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
-  showVoteButtons: boolean;
 };
 
-function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: ListRowProps) {
+function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowProps) {
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
@@ -51,11 +50,9 @@ function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: List
       <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
         {name}
       </Link>
-      {showVoteButtons ? (
-        <div className="flex h-5 shrink-0 items-center">
-          <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
-        </div>
-      ) : null}
+      <div className="flex h-5 shrink-0 items-center">
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+      </div>
     </div>
   );
 }
@@ -67,7 +64,7 @@ type Props = {
 export function RankingListView({ state }: Props) {
   const {
     spaceId,
-    shownColumnIds,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
@@ -79,13 +76,10 @@ export function RankingListView({ state }: Props) {
     aggregatedRankingCount,
     periodState,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
   } = state;
-
-  const showVoteButtons = isScorePropertyShown(shownColumnIds);
 
   const rows = globalDisplayEntityIds
     .map(entityId => {
@@ -103,8 +97,8 @@ export function RankingListView({ state }: Props) {
           rank={rank}
           entityId={entityId}
           spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
           name={entry.name}
-          showVoteButtons={showVoteButtons}
         />
       );
     })
@@ -140,7 +134,6 @@ export function RankingListView({ state }: Props) {
         {showEmbeddedGlobalPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
               hasNextPage={hasEmbeddedGlobalNextPage}
               onSetPage={setEmbeddedGlobalPage}

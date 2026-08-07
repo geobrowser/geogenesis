@@ -1,6 +1,6 @@
 'use client';
 
-import { Ops, personalSpace } from '@geoprotocol/geo-sdk';
+import { Ops } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
@@ -208,12 +208,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Ranking: ${rankName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),

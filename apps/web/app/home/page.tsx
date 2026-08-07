@@ -1,12 +1,13 @@
+import * as React from 'react';
+
 import * as Effect from 'effect/Effect';
 import { cookies } from 'next/headers';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import type { Space } from '~/core/io/dto/spaces';
-import { fetchSidebarCounts } from '~/core/io/fetch-sidebar-counts';
 import { getSpaces } from '~/core/io/queries';
-import { fetchProfile } from '~/core/io/subgraph';
+import { cachedFetchProfile } from '~/core/io/subgraph';
 import { compareSpaceListOrderByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
 import { Component } from './component';
@@ -14,6 +15,8 @@ import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
+import { GovernanceHomeSidebar, GovernanceHomeSidebarSkeleton } from './governance-home-sidebar';
+import { GovernanceHomeSidebarCounts } from './governance-home-sidebar-counts';
 import { getGovernanceHomeSpaceContext } from './governance-home-space-ids';
 
 interface Props {
@@ -58,12 +61,10 @@ function mapAndSortGovernanceSpaceOptions(spaces: Space[]): GovernanceSpaceOptio
 }
 
 export default async function PersonalHomePage(props: Props) {
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
-  const sp = await props.searchParams;
+  const [cookieStore, sp] = await Promise.all([cookies(), props.searchParams]);
+  const connectedAddress = cookieStore.get(WALLET_ADDRESS)?.value;
 
-  const person = connectedAddress ? await Effect.runPromise(fetchProfile(connectedAddress)) : null;
-
-  const sidebarCounts = person?.spaceId ? await fetchSidebarCounts(person.spaceId) : undefined;
+  const person = connectedAddress ? await cachedFetchProfile(connectedAddress) : null;
 
   const tab = sp.tab === 'my' ? 'my' : 'review';
   const proposalCategory = parseCategory(sp.proposalCategory, sp.proposalType);
@@ -85,11 +86,19 @@ export default async function PersonalHomePage(props: Props) {
     myProposalSpaceOptions = mapAndSortGovernanceSpaceOptions(mySpaces);
   }
 
+  const sidebar = person?.spaceId ? (
+    <React.Suspense fallback={<GovernanceHomeSidebarSkeleton />}>
+      <GovernanceHomeSidebarCounts memberSpaceId={person.spaceId} />
+    </React.Suspense>
+  ) : (
+    <GovernanceHomeSidebar />
+  );
+
   return (
     <Component
       header={<GovernanceHomeHeader />}
       proposalType={sp.proposalType}
-      sidebarCounts={sidebarCounts}
+      sidebar={sidebar}
       connectedAddress={connectedAddress}
       connectedSpaceId={person?.spaceId}
       governanceTab={tab}

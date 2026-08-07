@@ -16,8 +16,8 @@ import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { IconButton } from '~/design-system/button';
 import { FilterTable } from '~/design-system/icons/filter-table';
 import { FilterTableWithFilters } from '~/design-system/icons/filter-table-with-filters';
-import { Fullscreen } from '~/design-system/icons/full-screen';
 
+import { DataBlockExpandControl } from './data-block-expand-control';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockViewMenu } from './data-block-view-menu';
 import { RankingBlockBody } from './ranking-block-body';
@@ -53,6 +53,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     isFilterOpen,
     setIsFilterOpen,
     displayName,
+    entityId,
     periodState,
     periodLabel,
     hasRankedByOthers,
@@ -69,8 +70,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const isGalleryView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.GALLERY_VIEW)) || stateView === 'GALLERY'
   );
-  const isListView = Boolean(
-    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.LIST_VIEW)) || stateView === 'LIST'
+  const isBulletedListView = Boolean(
+    (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, SystemIds.BULLETED_LIST_VIEW)) ||
+    stateView === 'BULLETED_LIST'
   );
   const isPillView = Boolean(
     (stateViewRelation && ID.equals(stateViewRelation.toEntity.id, RANKING_VIEW_PILL_ID)) || stateView === 'PILL'
@@ -80,7 +82,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     stateView === 'EXPLORE'
   );
 
-  const showHeaderActions = isExploreView || isListView || isPillView || isGalleryView;
+  const showHeaderActions = isExploreView || isBulletedListView || isPillView || isGalleryView;
 
   const showBrowseChrome = !showHeaderActions || isEditing;
 
@@ -127,11 +129,12 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
           ) : null}
 
           {showBrowseChrome ? (
-            <IconButton
-              onClick={() => void openRankingCompose('view')}
-              icon={<Fullscreen color="grey-04" />}
-              color="grey-04"
-              aria-label="Open fullscreen ranking"
+            <DataBlockExpandControl
+              spaceId={spaceId}
+              blockEntityId={entityId}
+              isEditing={isEditing}
+              onFullscreenClick={() => void openRankingCompose('view')}
+              fullscreenAriaLabel="Open fullscreen ranking"
             />
           ) : null}
 
@@ -229,7 +232,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
 
       {isGalleryView ? (
         <RankingGalleryView state={state} />
-      ) : isListView ? (
+      ) : isBulletedListView ? (
         <RankingListView state={state} />
       ) : isPillView ? (
         <RankingPillView state={state} />
