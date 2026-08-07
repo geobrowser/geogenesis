@@ -1,6 +1,7 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
+import { createGeoImage } from '~/core/sdk/geo-client';
 import type { Property, Relation, Value } from '~/core/types';
 import { toHexId } from '~/core/utils/hex-id';
 import { extractValueString } from '~/core/utils/value';
@@ -184,10 +185,7 @@ async function uploadAndCreateImageEntity(task: ImageImportTask, spaceId: string
   const values: Value[] = [];
   const relations: Relation[] = [];
 
-  const { id: imageId, ops: createImageOps } = await Graph.createImage({
-    url: task.url,
-    network: 'TESTNET',
-  });
+  const { id: imageId, ops: createImageOps } = await createGeoImage({ url: task.url });
 
   const imageEntityId = toHexId(imageId);
 

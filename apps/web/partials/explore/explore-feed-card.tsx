@@ -224,7 +224,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
 
   const cardActions = (
     <div className="flex items-center gap-6 text-metadataMedium text-text">
-      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} />
+      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimVoterAvatarsPosition="trailing" />
       <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
     </div>
   );

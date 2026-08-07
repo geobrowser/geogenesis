@@ -1,10 +1,161 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { downloadSocialVideo } from './social-video-share';
+import { downloadSocialVideo, handoffPreparedSocialVideo } from './social-video-share';
+
+const mocks = vi.hoisted(() => ({
+  capture: vi.fn(),
+  share: vi.fn(),
+  canShare: vi.fn(),
+  downloadClick: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
+
+const preparedFile = new File([new Uint8Array([1, 2, 3])], 'debate-debate-1-social.mp4', {
+  type: 'video/mp4',
+});
+
+beforeEach(() => {
+  vi.resetAllMocks();
+});
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe('handoffPreparedSocialVideo', () => {
+  it('probes only the file payload and shares only the claim title and MP4', async () => {
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    const handoff = handoffPreparedSocialVideo({
+      debateId: 'debate-1',
+      title: 'Debates are useful',
+      file: preparedFile,
+      downloadUrl: 'blob:https://geo.test/social-video',
+    });
+
+    expect(mocks.canShare).toHaveBeenCalledWith({ files: [preparedFile] });
+    expect(mocks.share).toHaveBeenCalledWith({ title: 'Debates are useful', files: [preparedFile] });
+    await expect(handoff).resolves.toBe('native_share');
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'native_share',
+    });
+  });
+
+  it.each([
+    ['unsupported', () => false],
+    [
+      'throwing',
+      () => {
+        throw new TypeError('Unsupported share payload');
+      },
+    ],
+  ])('downloads when file sharing is %s', async (_label, capabilityProbe) => {
+    mocks.canShare.mockImplementation(capabilityProbe);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+    Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
+      configurable: true,
+      value: mocks.downloadClick,
+    });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).resolves.toBe('download');
+
+    expect(mocks.share).not.toHaveBeenCalled();
+    expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
+    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
+    expect(downloadLink.href).toBe('blob:https://geo.test/social-video');
+    expect(downloadLink.download).toBe('debate-debate-1-social.mp4');
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'download',
+    });
+  });
+
+  it('rethrows native share cancellation without failure analytics', async () => {
+    const cancellation = new DOMException('Cancelled', 'AbortError');
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockRejectedValue(cancellation);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).rejects.toBe(cancellation);
+
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_social_video_handoff_failed', expect.anything());
+  });
+
+  it('reports non-cancellation native share failures and leaves retry to the caller', async () => {
+    const failure = new Error('Share service unavailable');
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockRejectedValue(failure);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).rejects.toBe(failure);
+
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_failed', {
+      debate_id: 'debate-1',
+      method: 'native_share',
+      error_name: 'Error',
+    });
+  });
+
+  it('removes the temporary download link and reports a failed fallback download', async () => {
+    const failure = new Error('Download blocked');
+    mocks.canShare.mockReturnValue(false);
+    mocks.downloadClick.mockImplementation(() => {
+      throw failure;
+    });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+    Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
+      configurable: true,
+      value: mocks.downloadClick,
+    });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).rejects.toBe(failure);
+
+    expect(document.querySelector('a[download="debate-debate-1-social.mp4"]')).toBeNull();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_failed', {
+      debate_id: 'debate-1',
+      method: 'download',
+      error_name: 'Error',
+    });
+  });
 });
 
 describe('downloadSocialVideo', () => {

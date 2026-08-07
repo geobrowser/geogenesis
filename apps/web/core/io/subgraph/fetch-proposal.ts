@@ -10,8 +10,10 @@ import {
   convertVoteOption,
   encodePathSegment,
   findMembershipAction,
+  getApiProposalCanExecute,
   getSpaceTopicProposalDetails,
   getSubspaceProposalDetails,
+  getVotingSettingsProposalDetails,
   mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
@@ -88,6 +90,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
   const proposalType = mapApiActionsToProposalType(apiProposal.actions);
   const subspaceDetails = getSubspaceProposalDetails(apiProposal.actions);
   const spaceTopicDetails = getSpaceTopicProposalDetails(apiProposal.actions);
+  const votingSettingsDetails = getVotingSettingsProposalDetails(apiProposal.actions);
 
   // Convert votes to internal format
   const votes: SubstreamVote[] = apiProposal.votes.voters.map(v => ({
@@ -106,6 +109,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
 
   return {
     id: apiProposal.proposalId,
+    version: apiProposal.proposalVersion,
     editId: '',
     name: apiProposal.name,
     type: proposalType,
@@ -114,7 +118,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     startTime: apiProposal.timing.startTime,
     endTime: apiProposal.timing.endTime,
     status: mapProposalStatus(apiProposal.status),
-    canExecute: apiProposal.canExecute,
+    canExecute: getApiProposalCanExecute(apiProposal),
     space: {
       id: apiProposal.spaceId,
       name: null,
@@ -127,6 +131,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     },
     subspaceDetails: subspaceDetails ?? undefined,
     spaceTopicDetails: spaceTopicDetails ?? undefined,
+    votingSettingsDetails: votingSettingsDetails ?? undefined,
     targetProfile,
   };
 }

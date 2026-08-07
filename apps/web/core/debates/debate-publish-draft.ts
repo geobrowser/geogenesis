@@ -12,6 +12,9 @@ import {
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
+  IMAGE_TYPE_ID,
+  IMAGE_URL_PROPERTY_ID,
+  KEY_FRAME_IMAGE_PROPERTY_ID,
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
@@ -47,8 +50,13 @@ export type DebatePublishInput = {
   claimEntityId: string;
   claimText: string;
   participants: DebatePublishParticipant[];
-  /** Permanent URL for the rendered final video, or null to skip the Video entity. */
+  /**
+   * `ipfs://` URI for the rendered final video, or null to skip the Video entity. Goes on-chain,
+   * so it has to outlive geo-chat's presigned object-store URLs.
+   */
   videoUrl: string | null;
+  /** `ipfs://` URI for the video's poster still, or null to publish the Video without one. */
+  keyframeUrl: string | null;
   /** Merged per-turn transcript. Empty skips the Transcript entity. */
   transcriptTurns: DebatePublishTurn[];
 };
@@ -139,14 +147,18 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     });
   }
 
-  // --- Video entity ---
+  // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
     const videoId = createEntityId();
     const videoName = `${debateName} video`;
+    const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
+    // Both carry the same ipfs:// URI: `Video URL` is what the debates ontology spec names,
+    // `IPFS URL` is what the relation decoder actually reads.
     setText(videoId, videoName, VIDEO_URL_PROPERTY_ID, input.videoUrl);
+    setText(videoId, videoName, IMAGE_URL_PROPERTY_ID, input.videoUrl);
     relate({
-      fromEntity: { id: videoId, name: videoName },
+      fromEntity: videoRef,
       propertyId: TYPES_PROPERTY_ID,
       toEntityId: VIDEO_TYPE_ID,
       toEntityName: 'Video',
@@ -157,6 +169,26 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       toEntityId: videoId,
       toEntityName: videoName,
     });
+
+    if (input.keyframeUrl) {
+      const keyframeId = createEntityId();
+      const keyframeName = `${debateName} keyframe`;
+      const keyframeRef = { id: keyframeId, name: keyframeName };
+      setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
+      setText(keyframeId, keyframeName, IMAGE_URL_PROPERTY_ID, input.keyframeUrl);
+      relate({
+        fromEntity: keyframeRef,
+        propertyId: TYPES_PROPERTY_ID,
+        toEntityId: IMAGE_TYPE_ID,
+        toEntityName: 'Image',
+      });
+      relate({
+        fromEntity: videoRef,
+        propertyId: KEY_FRAME_IMAGE_PROPERTY_ID,
+        toEntityId: keyframeId,
+        toEntityName: keyframeName,
+      });
+    }
   }
 
   // --- Transcript entity + per-turn text blocks ---

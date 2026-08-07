@@ -6,11 +6,15 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { Crown } from '~/core/debates/browse/icons';
+import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
+import type { DebateVoteRecord } from '~/core/debates/vote-tally';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
+import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
@@ -92,6 +96,27 @@ function CommentBranchHighlightProvider({ children }: { children: React.ReactNod
   return <CommentBranchHighlightContext.Provider value={value}>{children}</CommentBranchHighlightContext.Provider>;
 }
 
+/**
+ * Voter space id → who they picked to win the debate being commented on. Context so the
+ * badge doesn't have to be threaded through every nesting level of CommentList. Empty for
+ * entities that aren't debates.
+ */
+const DebateVoteBadgeContext = React.createContext<Map<string, DebateVoteRecord>>(new Map());
+
+function CommentVoteBadge({ authorSpaceId }: { authorSpaceId: string }) {
+  const vote = React.useContext(DebateVoteBadgeContext).get(uuidToHex(authorSpaceId));
+  if (!vote?.winnerName) return null;
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-divider px-2 py-1 text-grey-04">
+      <Crown size={12} />
+      <Text variant="footnote" color="grey-04" as="span">
+        {vote.winnerName}
+      </Text>
+    </span>
+  );
+}
+
 function replySubtreeContainsCommentId(node: CommentWithReplies, targetId: string): boolean {
   const replies = Array.isArray(node.replies) ? node.replies : [];
   for (const reply of replies) {
@@ -151,6 +176,9 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
+  // so entity pages without any don't pay for the lookup.
+  const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
@@ -280,20 +308,22 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
           filteredComments.length > 0 && (
             <>
               <Spacer height={16} />
-              <CommentList
-                comments={filteredComments}
-                entityId={entityId}
-                spaceId={spaceId}
-                onReply={handleCreateComment}
-                onEdit={handleEditComment}
-                personalSpaceId={personalSpaceId}
-                editorSpaceIds={editorSpaceIds}
-                isThreadCollapsed={isThreadCollapsed}
-                toggleThreadCollapsed={toggleThreadCollapsed}
-                sortReplies={sortWithSessionPinned}
-                isLoggedIn={isLoggedIn}
-                onSignInRequired={requireSignInToComment}
-              />
+              <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
+                <CommentList
+                  comments={filteredComments}
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  onReply={handleCreateComment}
+                  onEdit={handleEditComment}
+                  personalSpaceId={personalSpaceId}
+                  editorSpaceIds={editorSpaceIds}
+                  isThreadCollapsed={isThreadCollapsed}
+                  toggleThreadCollapsed={toggleThreadCollapsed}
+                  sortReplies={sortWithSessionPinned}
+                  isLoggedIn={isLoggedIn}
+                  onSignInRequired={requireSignInToComment}
+                />
+              </DebateVoteBadgeContext.Provider>
             </>
           )
         )}
@@ -869,6 +899,7 @@ function CommentItem({
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
           {relativeTime}
         </Text>
+        <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
         {comment.isPublishing && (
           <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
             Publishing…
@@ -1043,6 +1074,7 @@ function CommentItem({
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
               {relativeTime}
             </Text>
+            <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
             {comment.isPublishing && (
               <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
                 Publishing…

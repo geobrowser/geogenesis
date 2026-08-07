@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import DebugDebatesPage from './page';
+
 const mocks = vi.hoisted(() => ({
   isValid: vi.fn(),
   notFound: vi.fn(() => {
@@ -16,8 +18,6 @@ vi.mock('next/navigation', () => ({ notFound: mocks.notFound }));
 vi.mock('./debug-debates-page-client', () => ({
   DebugDebatesPageClient: ({ spaceId }: { spaceId: string }) => <div data-space-id={spaceId} />,
 }));
-
-import DebugDebatesPage from './page';
 
 describe('DebugDebatesPage', () => {
   it('rejects an invalid space ID', async () => {
