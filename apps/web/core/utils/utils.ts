@@ -711,6 +711,18 @@ export function getProposalTimeRemaining(endTime: number) {
   return { days, hours, minutes, seconds };
 }
 
+/**
+ * Resolves the current runtime's IANA timezone (e.g. "America/New_York"),
+ * falling back to "UTC" if it can't be determined.
+ *
+ * NOTE: "viewer" here means the JS runtime this executes in. In the browser
+ * that's the actual user's timezone, but during SSR / server actions / route
+ * handlers it resolves to the *server's* timezone (typically UTC), NOT the
+ * viewer's. Only call this in client components — or code guaranteed to run in
+ * the browser — when you need the real viewer timezone. On the server, pass an
+ * explicit timeZone to the formatting functions instead of relying on this
+ * default.
+ */
 export function getViewerTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
