@@ -476,7 +476,7 @@ function makeProposal(args: MakeProposalArgs) {
   });
 }
 
-interface ExecuteFastProposalArgs {
+export interface ExecuteFastProposalArgs {
   smartAccount: MakeProposalArgs['smartAccount'];
   /** The proposal author's personal space ID. Also used as the executor. */
   author: string;
@@ -502,7 +502,7 @@ interface ExecuteFastProposalArgs {
  * the Governance tab, and is rejected outright if nobody does so before the voting
  * window closes.
  */
-function executeFastProposal(args: ExecuteFastProposalArgs) {
+export function executeFastProposal(args: ExecuteFastProposalArgs) {
   const { smartAccount, author, spaceId, daoSpaceAddress, proposalId, createUserOpHash } = args;
 
   const confirmUserOp = (label: string, hash: `0x${string}`) =>

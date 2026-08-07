@@ -43,8 +43,8 @@ import {
 import { VotingSettingsFields } from '~/partials/governance/voting-settings-fields';
 import { Animation } from '~/partials/onboarding/dialog';
 
-export const spaceTypeAtom = atom<SpaceType | null>(null);
-export const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
+export const spaceTypeAtom = atom<SpaceType | null>('default');
+export const governanceTypeAtom = atom<SpaceGovernanceType | null>('DAO');
 export const nameAtom = atom<string>('');
 export const topicIdAtom = atom<string>('');
 export const imageAtom = atom<string>('');
@@ -53,17 +53,20 @@ export const imageAtom = atom<string>('');
 export const votingSettingsAtom = atom<VotingSettingsInput | null>(null);
 const spaceIdAtom = atom<string>('');
 
-type Step = 'select-type' | 'enter-profile' | 'configure-governance' | 'create-space' | 'completed';
+type Step = 'enter-profile' | 'configure-governance' | 'create-space' | 'completed';
 
-export const stepAtom = atom<Step>('select-type');
+export const stepAtom = atom<Step>('enter-profile');
+
+const DEFAULT_SPACE_TYPE: SpaceType = 'default';
+const DEFAULT_GOVERNANCE_TYPE: SpaceGovernanceType = 'DAO';
 
 /** Externally controllable open state so non-trigger callers (e.g. the navbar
  * "+" dropdowns) can preset the atoms above and open the dialog. */
 export const createSpaceDialogOpenAtom = atom<boolean>(false);
 
 /** When true, the dialog auto-fires `createSpaces` as soon as it opens at
- * step='create-space'. Used by the claim flow to skip the template-picker
- * and profile-entry steps entirely. */
+ * step='create-space'. Used by the claim flow to skip the profile-entry
+ * step entirely. */
 const autoRunAtom = atom<boolean>(false);
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
@@ -81,15 +84,15 @@ type OpenDialogPreset = {
   governanceType?: SpaceGovernanceType | null;
   spaceType?: SpaceType | null;
   step?: Step;
-  /** Skip the template-picker / profile-entry steps and fire the deploy as
-   * soon as the dialog mounts. Requires `spaceType` to be set. */
+  /** Skip the profile-entry step and fire the deploy as soon as the dialog
+   * mounts. Requires `spaceType` to be set. */
   autoRun?: boolean;
 };
 
 /**
  * Opens the (globally-mounted) CreateSpaceDialog with optional preset values.
- * Without a preset, resets to the original "New space" entry — same behavior the
- * navbar dropdown trigger had before this was hoisted to a global mount.
+ * Without a preset, resets to the "New space" entry — the name/image form, with
+ * the space type and governance fixed to the defaults above.
  */
 export function useOpenCreateSpaceDialog() {
   const setName = useSetAtom(nameAtom);
@@ -110,9 +113,9 @@ export function useOpenCreateSpaceDialog() {
       setName(preset?.name ?? '');
       setImage(preset?.image ?? '');
       setTopicId(preset?.topicId ?? '');
-      setGovernanceType(preset?.governanceType ?? null);
-      setSpaceType(preset?.spaceType ?? null);
-      setStep(preset?.step ?? 'select-type');
+      setGovernanceType(preset?.governanceType ?? DEFAULT_GOVERNANCE_TYPE);
+      setSpaceType(preset?.spaceType ?? DEFAULT_SPACE_TYPE);
+      setStep(preset?.step ?? 'enter-profile');
       setAutoRun(preset?.autoRun ?? false);
       // Re-opening while already open skips the close-effect cleanup, so any
       // custom voting settings from the previous session must be cleared here.
@@ -232,7 +235,7 @@ export function CreateSpaceDialog() {
         >
           <Dialog.Title className="sr-only">Create a new space</Dialog.Title>
           <Dialog.Description className="sr-only">
-            Create a new space by selecting a template and configuring governance settings
+            Create a new space by naming it and configuring governance settings
           </Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
             <AnimatePresence mode="wait">
@@ -244,7 +247,6 @@ export function CreateSpaceDialog() {
               >
                 <ModalCard childKey="card">
                   <StepHeader />
-                  {step === 'select-type' && <StepSelectType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
                   {step === 'configure-governance' && <StepConfigureGovernance />}
                   {workflowSteps.includes(step) && <StepComplete onDone={() => onOpenChange(false)} />}
@@ -279,7 +281,6 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 };
 
 const headerText: Record<Step, string> = {
-  'select-type': 'Select space template',
   'enter-profile': '',
   'configure-governance': 'Advanced governance settings',
   'create-space': '',
@@ -288,21 +289,11 @@ const headerText: Record<Step, string> = {
 
 const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
 
-  const showBack = step === 'enter-profile' || step === 'configure-governance';
+  const showBack = step === 'configure-governance';
 
   const handleBack = () => {
-    if (step === 'configure-governance') {
-      setStep('enter-profile');
-      return;
-    }
-    setName('');
-    setTopicId('');
-    if (step === 'enter-profile') {
-      setStep('select-type');
-    }
+    setStep('enter-profile');
   };
 
   return (
@@ -346,70 +337,6 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
     </motion.div>
   );
 };
-
-function StepSelectType() {
-  const setSpaceType = useSetAtom(spaceTypeAtom);
-  const setGovernanceType = useSetAtom(governanceTypeAtom);
-  const setStep = useSetAtom(stepAtom);
-
-  return (
-    <>
-      <StepContents childKey="account-type">
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          {spaceTypeOptions.map(spaceType => {
-            return (
-              <button
-                key={spaceType.value}
-                onClick={() => {
-                  setSpaceType(spaceType.value);
-
-                  if (spaceType.governance) {
-                    setGovernanceType(spaceType.governance);
-                  }
-                  setStep('enter-profile');
-                }}
-                className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pr-3 pl-2 transition-colors duration-150 ease-in-out hover:bg-divider"
-              >
-                <div className="size-8 shrink-0 overflow-clip rounded">
-                  <img src={spaceType.image} alt="" className="block h-full w-full object-cover" />
-                </div>
-                <div className="text-button">{spaceType.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </StepContents>
-    </>
-  );
-}
-
-const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance?: 'DAO' | 'PERSONAL' }[] = [
-  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default', governance: 'DAO' },
-  {
-    image: '/images/onboarding/academic-field.png',
-    label: 'Academic field',
-    value: 'academic-field',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'DAO' },
-  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'DAO' },
-  {
-    image: '/images/onboarding/gov-org.png',
-    label: 'Government org',
-    value: 'government-org',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'DAO' },
-  {
-    image: '/images/onboarding/interest-group.png',
-    label: 'Interest',
-    value: 'interest',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'DAO' },
-  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'DAO' },
-  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'DAO' },
-];
 
 type StepEnterProfileProps = {
   onNext: () => void;
