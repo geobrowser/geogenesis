@@ -4,27 +4,31 @@ import { notFound } from 'next/navigation';
 
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 
-import { CommunityCallsPage } from '~/partials/community-calls/community-calls-page';
-import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-
-import { cachedFetchSpace } from '../../cached-fetch-space';
+import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
+import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 
 type Props = {
   params: Promise<{ id: string }>;
 };
 
-export default async function CommunityCalls(props: Props) {
+export default async function CommunityPage(props: Props) {
   const params = await props.params;
 
   if (!IdUtils.isValid(params.id)) {
     notFound();
   }
 
-  const [space, series] = await Promise.all([cachedFetchSpace(params.id), fetchCommunityCalls(params.id)]);
+  const spaceId = params.id;
+  const communityCalls = await fetchCommunityCalls(spaceId).catch(() => []);
 
   return (
-    <EntityPageContentContainer>
-      <CommunityCallsPage spaceId={params.id} spaceName={space?.entity?.name ?? 'this space'} series={series} />
-    </EntityPageContentContainer>
+    <EntityPageSidebarLayout
+      sidebar={
+        communityCalls.length > 0 ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null
+      }
+    >
+      <CommunityTabPage spaceId={spaceId} />
+    </EntityPageSidebarLayout>
   );
 }
