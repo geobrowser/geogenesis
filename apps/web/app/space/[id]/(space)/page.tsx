@@ -9,8 +9,6 @@ import { notFound } from 'next/navigation';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
-import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
-import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -30,7 +28,7 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { ExploreSidePanel } from '~/partials/explore/explore-side-panel';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -82,25 +80,18 @@ export default async function SpacePage(props0: Props) {
   }
 
   const isRootSpace = spaceId === ROOT_SPACE;
-  const [props, communityCalls, exploreSidePanelData] = await Promise.all([
+  const [props, communityCalls] = await Promise.all([
     getSpaceFrontPage(space),
     isRootSpace ? Promise.resolve([]) : fetchCommunityCalls(spaceId).catch(() => []),
-    isRootSpace ? fetchExploreSidePanelData().catch(() => null) : Promise.resolve(null),
   ]);
 
   let sidebar: React.ReactNode = null;
   if (isRootSpace) {
-    if (exploreSidePanelData && exploreSidePanelHasServerContent(exploreSidePanelData)) {
-      sidebar = (
-        <ExploreSidePanel
-          featuredSpaces={exploreSidePanelData.featuredSpaces}
-          featuredRankings={exploreSidePanelData.featuredRankings}
-          pendingMembershipSpaceIds={exploreSidePanelData.pendingMembershipSpaceIds}
-          memberOrEditorSpaceIds={exploreSidePanelData.memberOrEditorSpaceIds}
-          communityCalls={exploreSidePanelData.communityCalls}
-        />
-      );
-    }
+    sidebar = (
+      <React.Suspense fallback={null}>
+        <RootExploreSidePanelContainer />
+      </React.Suspense>
+    );
   } else if (communityCalls.length > 0) {
     sidebar = <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />;
   }

@@ -8,8 +8,6 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ROOT_SPACE } from '~/core/constants';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
-import { exploreSidePanelHasServerContent } from '~/core/explore/explore-side-panel-has-content';
-import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { EntityId } from '~/core/io/substream-schema';
 import { EditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -54,18 +52,13 @@ export default async function Layout(props0: LayoutProps) {
   }
 
   const isRootSpace = spaceId === ROOT_SPACE;
-  const [props, communityCalls, exploreSidePanelData] = await Promise.all([
+  const [props, communityCalls] = await Promise.all([
     getSpaceFrontPage(spaceId),
     isRootSpace ? Promise.resolve([]) : fetchCommunityCalls(spaceId).catch(() => []),
-    isRootSpace ? fetchExploreSidePanelData().catch(() => null) : Promise.resolve(null),
   ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-  const hasSidebar =
-    !Spaces.hasExternalTopic(props.space) &&
-    (isRootSpace
-      ? exploreSidePanelData != null && exploreSidePanelHasServerContent(exploreSidePanelData)
-      : communityCalls.length > 0);
+  const hasSidebar = !Spaces.hasExternalTopic(props.space) && (isRootSpace ? true : communityCalls.length > 0);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
