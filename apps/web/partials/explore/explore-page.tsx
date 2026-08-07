@@ -4,6 +4,7 @@ import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { EntityFeed, type SpaceOption } from '~/partials/feed/entity-feed';
 
 import { ExploreSidePanel } from './explore-side-panel';
@@ -27,8 +28,19 @@ export function ExplorePage({
   communityCalls,
 }: Props) {
   return (
-    <div className="mx-auto flex w-full max-w-[1320px] gap-8 px-6 lg:px-4">
-      <main className="min-w-0 flex-1 pt-5">
+    <EntityPageSidebarLayout
+      sidebarWidth="auto"
+      sidebar={
+        <ExploreSidePanel
+          featuredSpaces={featuredSpaces}
+          featuredRankings={featuredRankings}
+          pendingMembershipSpaceIds={pendingMembershipSpaceIds}
+          memberOrEditorSpaceIds={memberOrEditorSpaceIds}
+          communityCalls={communityCalls}
+        />
+      }
+    >
+      <main className="min-w-0 pt-5">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />
         </div>
@@ -43,14 +55,6 @@ export function ExplorePage({
           feedTopSpacingClassName=""
         />
       </main>
-      <div aria-hidden className="w-px shrink-0 self-stretch bg-divider lg:hidden" />
-      <ExploreSidePanel
-        featuredSpaces={featuredSpaces}
-        featuredRankings={featuredRankings}
-        pendingMembershipSpaceIds={pendingMembershipSpaceIds}
-        memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-        communityCalls={communityCalls}
-      />
-    </div>
+    </EntityPageSidebarLayout>
   );
 }

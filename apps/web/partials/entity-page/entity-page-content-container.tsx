@@ -25,9 +25,11 @@ export function EntityPageContentContainer({ children, variant = 'content' }: Pr
     <div
       className={cx(
         'mx-auto w-full',
-        variant === 'with-sidebar'
-          ? 'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]'
-          : 'max-w-[var(--entity-page-content-max-width)]'
+        variant === 'with-sidebar' &&
+          'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]',
+        variant === 'auto-sidebar' &&
+          'max-lg:[&:has(>div>aside)]:max-w-[var(--entity-page-with-sidebar-max-width)] max-w-[var(--entity-page-content-max-width)]',
+        variant === 'content' && 'max-w-[var(--entity-page-content-max-width)]'
       )}
       data-entity-page-content-variant={variant}
       style={widthVariables}

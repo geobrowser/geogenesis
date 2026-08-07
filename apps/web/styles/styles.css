@@ -75,6 +75,9 @@
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 
+  /* Shared width for the overview side rails (Explore + space home) */
+  --width-side-rail: 360px;
+
   /* Animations */
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;

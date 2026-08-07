@@ -7,7 +7,6 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -27,10 +26,12 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -77,17 +78,24 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, communityCalls] = await Promise.all([
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
     getSpaceFrontPage(space),
-    fetchCommunityCalls(spaceId).catch(() => []),
+    resolveSpaceSidebar(spaceId),
   ]);
 
+  let sidebar: React.ReactNode = null;
+  if (isRootSpace) {
+    sidebar = (
+      <React.Suspense fallback={null}>
+        <RootExploreSidePanelContainer />
+      </React.Suspense>
+    );
+  } else if (communityCalls.length > 0) {
+    sidebar = <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />;
+  }
+
   return (
-    <EntityPageSidebarLayout
-      sidebar={
-        communityCalls.length > 0 ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null
-      }
-    >
+    <EntityPageSidebarLayout sidebar={sidebar}>
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
