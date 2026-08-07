@@ -98,6 +98,11 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
   },
 };
 
+export function responsePositionLabel(responseKind: 'stance' | 'veracity' | null, position: boolean) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind ?? 'stance'];
+  return position ? copy.positiveAction : copy.negativeAction;
+}
+
 export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean; isFactual: boolean }): ResponseKind {
   if (!isClaim) return 'curation';
   return isFactual ? 'veracity' : 'stance';

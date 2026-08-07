@@ -215,7 +215,7 @@ describe('DebateRematchPageClient', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
-  it('falls back to Yes and No for legacy incoming requests without response metadata', () => {
+  it('falls back to Agree and Disagree for incoming requests without response metadata', () => {
     mocks.session = session({
       status: 'request_pending',
       request: {
@@ -235,8 +235,8 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const dialog = screen.getByRole('dialog', { name: 'A claim both participants chose' });
-    expect(within(within(dialog).getByText('You').parentElement!).getByText('Yes')).toBeInTheDocument();
-    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('No')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('You').parentElement!).getByText('Agree')).toBeInTheDocument();
+    expect(within(within(dialog).getByText('Salina').parentElement!).getByText('Disagree')).toBeInTheDocument();
   });
 
   it('disables debate requests while a rematch request is pending', () => {

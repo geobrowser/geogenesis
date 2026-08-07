@@ -26,6 +26,7 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
@@ -204,7 +205,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           return {
             ...participant,
             position,
-            position_label: positionLabel ?? (position ? 'Yes' : 'No'),
+            position_label: positionLabel ?? responsePositionLabel(incomingRequest.response_kind ?? null, position),
           };
         })
       : [];
@@ -399,7 +400,7 @@ function RematchClaimCard({
             participant => participant.position === position && participant.position_label
           );
           const positionLabel =
-            positionSnapshot?.position_label ?? fallbackRematchPositionLabel(claim.response_kind, position);
+            positionSnapshot?.position_label ?? responsePositionLabel(claim.response_kind, position);
           const holders = session
             ? claim.participants
                 .filter(participant => participant.position === position)
@@ -450,12 +451,6 @@ function RematchClaimCard({
       )}
     </article>
   );
-}
-
-function fallbackRematchPositionLabel(responseKind: DebateRematchClaim['response_kind'], position: boolean) {
-  if (responseKind === 'veracity') return position ? 'Verify' : 'Dispute';
-  if (responseKind === 'stance') return position ? 'Agree' : 'Disagree';
-  return null;
 }
 
 function rematchCancellationMessage(reason: string) {

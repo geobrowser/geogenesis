@@ -3,6 +3,7 @@
 import cx from 'classnames';
 
 import { useEntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
@@ -28,16 +29,54 @@ export function ClaimDebateReadiness({
   className,
   textVariant = 'metadata',
 }: ClaimDebateReadinessProps) {
+  if (!debateClaim) return null;
+
+  const isMatchmakingDisabled = debateClaim.readiness_disabled_reason === 'response_derived_positions_disabled';
+
+  if (isMatchmakingDisabled) {
+    return (
+      <div className={className}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Text as="p" variant={textVariant} color="grey-04">
+            {readinessReasonMessage(debateClaim.readiness_disabled_reason)}
+          </Text>
+          <DebateEntityResponseControls
+            entityId={entityId}
+            spaceId={spaceId}
+            responseKind={debateClaim.response_kind}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EnabledClaimDebateReadiness
+      debateClaim={debateClaim}
+      entityId={entityId}
+      spaceId={spaceId}
+      canToggle={canToggle}
+      className={className}
+      textVariant={textVariant}
+    />
+  );
+}
+
+function EnabledClaimDebateReadiness({
+  debateClaim,
+  entityId,
+  spaceId,
+  canToggle,
+  className,
+  textVariant = 'metadata',
+}: Omit<ClaimDebateReadinessProps, 'debateClaim'> & { debateClaim: DebateClaim }) {
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
-
   const responseIndexingState = useEntityResponseIndexingState({
     entityId,
     spaceId,
-    responseKind: debateClaim?.response_kind ?? null,
+    responseKind: debateClaim.response_kind,
   });
-
-  if (!debateClaim) return null;
 
   const isReady = debateClaim.viewer_debate_ready;
   const isResponseProcessing = responseIndexingState !== 'idle';
@@ -115,6 +154,8 @@ function readinessReasonMessage(reason: string | null) {
       return 'This claim’s response type changed. Respond and join again.';
     case 'claim_response_validation_failed':
       return 'Your response could not be verified yet. You’ll remain ready while verification retries.';
+    case 'response_derived_positions_disabled':
+      return 'Debate matchmaking is temporarily unavailable.';
     default:
       return reason;
   }
@@ -130,7 +171,7 @@ function OnlineChoices({ responseKind, choices }: { responseKind: DebateResponse
         {[true, false].map(position => {
           const choice = choices.find(candidate => candidate.position === position);
           const participantCount = choice?.participant_count ?? 0;
-          const label = choice?.position_label || fallbackPositionLabel(responseKind, position);
+          const label = choice?.position_label || responsePositionLabel(responseKind, position);
 
           return (
             <div
@@ -146,11 +187,6 @@ function OnlineChoices({ responseKind, choices }: { responseKind: DebateResponse
       </div>
     </div>
   );
-}
-
-function fallbackPositionLabel(responseKind: DebateResponseKind, position: boolean) {
-  if (responseKind === 'veracity') return position ? 'Verify' : 'Dispute';
-  return position ? 'Agree' : 'Disagree';
 }
 
 function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
