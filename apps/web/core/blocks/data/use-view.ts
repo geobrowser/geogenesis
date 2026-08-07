@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import equal from 'fast-deep-equal';
 
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
@@ -18,6 +19,8 @@ import { store } from '~/core/sync/use-sync-engine';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
+import { SCORE_DISMISSED_PROPERTY_ID } from './block-ontology-ids';
+import { serializeScoreDismissed } from './score-dismissed';
 import {
   columnPropertyIdFromRelation,
   dedupeRelationsByColumnProperty,
@@ -162,6 +165,32 @@ export function useView() {
     }
   };
 
+  const setScoreDismissed = React.useCallback(
+    (dismissed: boolean) => {
+      if (!blocksRelationEntityId) return;
+
+      storage.values.set({
+        id: ID.createValueId({
+          entityId: blocksRelationEntityId,
+          propertyId: SCORE_DISMISSED_PROPERTY_ID,
+          spaceId,
+        }),
+        spaceId,
+        entity: {
+          id: blocksRelationEntityId,
+          name: null,
+        },
+        property: {
+          id: SCORE_DISMISSED_PROPERTY_ID,
+          name: 'Score dismissed',
+          dataType: 'BOOLEAN',
+        },
+        value: serializeScoreDismissed(dismissed),
+      });
+    },
+    [blocksRelationEntityId, spaceId, storage]
+  );
+
   const toggleProperty = (newColumn: Column, selector?: string, options?: { insertAt?: 'start' | 'end' }) => {
     const propertyId = EntityId(newColumn.id);
     const matchingShownRelations = relationsMatchingColumnProperty(blockRelationRelations, propertyId).filter(
@@ -171,6 +200,10 @@ export function useView() {
     const shownColumnRelation = matchingShownRelations[0];
     const columnPosition =
       options?.insertAt === 'start' ? firstPropertiesColumnPosition() : nextPropertiesColumnPosition();
+
+    if (ID.equals(propertyId, SCORE_SYSTEM_PROPERTY)) {
+      setScoreDismissed(isShown);
+    }
 
     const newId = selector ? ID.createEntityId() : undefined;
     const newRelationEntityId = IdUtils.generate();
@@ -284,10 +317,15 @@ export function useView() {
   };
 
   const hideAllShownPropertyColumns = React.useCallback(() => {
-    for (const rel of blockRelationRelations.filter(isShownColumnRelation)) {
+    const shown = blockRelationRelations.filter(isShownColumnRelation);
+    for (const rel of shown) {
       storage.relations.delete(rel);
     }
-  }, [blockRelationRelations, storage]);
+
+    if (shown.some(rel => ID.equals(columnPropertyIdFromRelation(rel), SCORE_SYSTEM_PROPERTY))) {
+      setScoreDismissed(true);
+    }
+  }, [blockRelationRelations, setScoreDismissed, storage]);
 
   /**
  pr   * Persist the ordering of the block's shown columns. Only repositions columns

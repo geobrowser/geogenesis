@@ -5,9 +5,11 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { useView } from '~/core/blocks/data/use-view';
+import { PLACEHOLDER_SPACE_IMAGE, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
 import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
@@ -69,6 +71,8 @@ export function TableBlockGalleryItem({
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
+  const { shownColumnIds } = useView();
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
@@ -100,6 +104,7 @@ export function TableBlockGalleryItem({
 
   const otherPropertyData = Object.values(columns).filter(c => {
     if (c.slotId === SystemIds.NAME_PROPERTY) return false;
+    if (c.slotId === SCORE_SYSTEM_PROPERTY) return false;
     if (isBlockMediaColumn(c.slotId, properties)) return false;
     return true;
   });
@@ -353,7 +358,7 @@ export function TableBlockGalleryItem({
           );
         })}
         <div className="mt-2 flex items-center justify-between gap-2">
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
               {source.type === 'COLLECTION' ? (

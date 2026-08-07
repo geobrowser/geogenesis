@@ -96,9 +96,11 @@ export function RankingEntryRow({
   ) : null;
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-4 overflow-hidden">
+    // Top-aligned when the rank leads the row: without an avatar the name is the tallest thing in
+    // it, and a name wrapping to `line-clamp-3` would otherwise drag the rank down beside it.
+    <div className={cx('flex w-full min-w-0 gap-4 overflow-hidden', showLeadingRank ? 'items-start' : 'items-center')}>
       {showLeadingRank ? (
-        <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+        <span className="w-5 shrink-0 pt-0.5 text-center text-button font-medium text-text tabular-nums">{rank}</span>
       ) : null}
       {avatar}
       <div className={cx('flex min-w-0 flex-1 flex-col justify-center gap-1', imageUrl && 'min-h-16')}>
@@ -123,7 +125,7 @@ export function RankingEntryRow({
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
       </div>
       {showVotes ? (
-        <div className="shrink-0" onClick={event => event.stopPropagation()}>
+        <div className={cx('shrink-0', showLeadingRank && 'pt-0.5')} onClick={event => event.stopPropagation()}>
           <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
         </div>
       ) : null}

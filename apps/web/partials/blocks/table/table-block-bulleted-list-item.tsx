@@ -3,6 +3,8 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Source } from '~/core/blocks/data/source';
+import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
+import { useView } from '~/core/blocks/data/use-view';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -47,6 +49,8 @@ export function TableBlockBulletedListItem({
   focusRequestKey,
   collectionTypeFilters,
 }: Props) {
+  const { shownColumnIds } = useView();
+  const showVoteButtons = isScorePropertyShown(shownColumnIds);
   const nameCell = columns[SystemIds.NAME_PROPERTY];
   const { propertyId: cellId, verified } = nameCell;
 
@@ -126,7 +130,7 @@ export function TableBlockBulletedListItem({
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
         <div className="hidden md:float-right md:ml-2 md:block md:translate-y-[5px]">
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
         </div>
         {source.type !== 'COLLECTION' ? (
           <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="block min-w-0 text-body">
@@ -163,7 +167,7 @@ export function TableBlockBulletedListItem({
             />
           </div>
         )}
-        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
       </div>
     </div>
   );
