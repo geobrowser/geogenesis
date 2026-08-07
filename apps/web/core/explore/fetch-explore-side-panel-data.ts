@@ -18,7 +18,6 @@ export type ExploreSidePanelData = {
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
-  editorSpaceIds: string[];
   communityCalls: ExploreCall[];
 };
 
@@ -64,7 +63,6 @@ export const fetchExploreSidePanelData = cache(
         ? [...new Set([...governance.editorIds, ...governance.myProposalSpaceIds, memberSpaceId])]
         : [memberSpaceId]
       : [];
-    const editorSpaceIds: string[] = governance ? governance.editorIds : [];
 
     let pendingMembershipSpaceIds: string[] = [];
     if (memberSpaceId) {
@@ -91,7 +89,6 @@ export const fetchExploreSidePanelData = cache(
       featuredRankings,
       pendingMembershipSpaceIds,
       memberOrEditorSpaceIds,
-      editorSpaceIds,
       communityCalls,
     };
   }

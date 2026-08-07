@@ -20,7 +20,6 @@ export type ExploreSidePanelProps = {
   featuredRankings: FeaturedRanking[];
   pendingMembershipSpaceIds: string[];
   memberOrEditorSpaceIds: string[];
-  editorSpaceIds: string[];
   communityCalls: ExploreCall[];
 };
 
@@ -29,7 +28,6 @@ export function ExploreSidePanel({
   featuredRankings,
   pendingMembershipSpaceIds,
   memberOrEditorSpaceIds,
-  editorSpaceIds,
   communityCalls,
 }: ExploreSidePanelProps) {
   // Durable (server) + optimistic (persisted) pending requests, unioned with the
@@ -39,7 +37,6 @@ export function ExploreSidePanel({
 
   const pendingSet = new Set(pendingMembershipSpaceIds.map(normId));
   const memberOrEditorSet = new Set(memberOrEditorSpaceIds.map(normId));
-  const editorSet = new Set(editorSpaceIds.map(normId));
 
   // A space drops out of "Join spaces" once the user belongs to it, already has
   // a pending request from a prior visit, or just requested one this session.
@@ -72,7 +69,6 @@ export function ExploreSidePanel({
         <ExploreCommunityCallsSection
           calls={communityCalls}
           memberOrEditorSpaceIds={memberOrEditorSet}
-          editorSpaceIds={editorSet}
           pendingMembershipSpaceIds={pendingSet}
         />
       ),

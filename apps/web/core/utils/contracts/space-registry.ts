@@ -1,11 +1,8 @@
 import { type Hex } from 'viem';
 
-/**
- * SpaceRegistry address (Geo Testnet)
- */
-export const SPACE_REGISTRY_ADDRESS = '0xB01683b2f0d38d43fcD4D9aAB980166988924132' as const;
-
-export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;
+// The SpaceRegistry *address* lives in ~/core/sdk/geo-network (network config,
+// env-driven). This module stays pure — ABI + action constants only — so tests
+// can import it without an environment.
 
 export const EMPTY_TOPIC_HEX = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex;
 
@@ -63,78 +60,7 @@ export const VOTING_MODE = {
   FAST: 1,
 } as const;
 
-/**
- * Minimal DAOSpace ABI for governance actions.
- *
- * The DAOSpace contract manages proposals, voting, and role-based access.
- * This partial ABI includes only the functions needed for governance operations
- * (membership management, subspace management via ping).
- */
-export const DAOSpaceAbi = [
-  {
-    inputs: [{ internalType: 'bytes16', name: '_newMemberSpaceId', type: 'bytes16' }],
-    name: 'addMember',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'bytes16', name: '_oldMemberSpaceId', type: 'bytes16' }],
-    name: 'removeMember',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'bytes16', name: '_newEditorSpaceId', type: 'bytes16' }],
-    name: 'addEditor',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'bytes16', name: '_oldEditorSpaceId', type: 'bytes16' }],
-    name: 'removeEditor',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { internalType: 'bytes32', name: '_action', type: 'bytes32' },
-      { internalType: 'bytes32', name: '_topic', type: 'bytes32' },
-      { internalType: 'bytes', name: '_data', type: 'bytes' },
-    ],
-    name: 'ping',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-] as const;
-
-/**
- * Minimal SpaceRegistry ABI - only includes functions used by this app.
- */
-export const SpaceRegistryAbi = [
-  {
-    inputs: [
-      { internalType: 'bytes16', name: '_fromSpaceId', type: 'bytes16' },
-      { internalType: 'bytes16', name: '_toSpaceId', type: 'bytes16' },
-      { internalType: 'bytes32', name: '_action', type: 'bytes32' },
-      { internalType: 'bytes32', name: '_topic', type: 'bytes32' },
-      { internalType: 'bytes', name: '_data', type: 'bytes' },
-      { internalType: 'bytes', name: '_signature', type: 'bytes' },
-    ],
-    name: 'enter',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [{ internalType: 'address', name: '_account', type: 'address' }],
-    name: 'addressToSpaceId',
-    outputs: [{ internalType: 'bytes16', name: '_spaceId', type: 'bytes16' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
+// Full contract ABIs come from the SDK; re-exported under the names this app
+// already uses so call sites don't churn. (Previously hand-rolled minimal
+// ABIs — the SDK versions are signature-identical supersets.)
+export { SpaceRegistryAbi, DaoSpaceAbi as DAOSpaceAbi } from '@geoprotocol/geo-sdk/abis';

@@ -60,7 +60,6 @@ export default async function ExploreRoutePage() {
       featuredRankings={sidePanel.featuredRankings}
       pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={sidePanel.memberOrEditorSpaceIds}
-      editorSpaceIds={sidePanel.editorSpaceIds}
       communityCalls={sidePanel.communityCalls}
     />
   );

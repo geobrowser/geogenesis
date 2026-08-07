@@ -27,8 +27,8 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntity, useValues } from '~/core/sync/use-store';
 
-import { DateTimeInput } from '~/design-system/editable-fields/date-field';
 import { CheckboxVisual } from '~/design-system/checkbox';
+import { DateTimeInput } from '~/design-system/editable-fields/date-field';
 import { DateOnlyInput } from '~/design-system/editable-fields/date-field';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
@@ -280,12 +280,7 @@ export function TableBlockRankingSetup({ spaceId, onCompleteRankingSetup }: Prop
           <div className="flex w-full flex-wrap items-start justify-center gap-8">
             <div className="flex flex-col items-center gap-2">
               <p className="text-button font-medium text-text">Start time</p>
-              <DateTimeInput
-                variant="body"
-                initialDate={startDate}
-                onDateChange={onStartDateChange}
-                timezone="local"
-              />
+              <DateTimeInput variant="body" initialDate={startDate} onDateChange={onStartDateChange} timezone="local" />
             </div>
             <div className="flex flex-col items-center gap-2">
               <p className="text-button font-medium text-text">End time</p>

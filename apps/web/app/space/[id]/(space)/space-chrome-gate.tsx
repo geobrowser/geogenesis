@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
 
-import { NavUtils } from '~/core/utils/utils';
-
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 
 /**
@@ -21,18 +19,12 @@ export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
 
 type SpaceHeaderContentContainerProps = {
   children: React.ReactNode;
-  spaceId: string;
   hasSidebar: boolean;
 };
 
-export function SpaceHeaderContentContainer({ children, spaceId, hasSidebar }: SpaceHeaderContentContainerProps) {
-  const pathname = usePathname();
-  
-  const homePath = NavUtils.toSpace(spaceId);
-  const isSpaceHome = pathname === homePath || pathname === `${homePath}/`;
-
+export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (
-    <EntityPageContentContainer variant={isSpaceHome && hasSidebar ? 'with-sidebar' : 'content'}>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
       {children}
     </EntityPageContentContainer>
   );

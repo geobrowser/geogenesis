@@ -12,9 +12,24 @@ const mocks = vi.hoisted(() => ({
   pause: vi.fn(),
   replace: vi.fn(),
   recordingUrl: vi.fn(() => Promise.resolve({ url: 'https://media.test/slot.webm' })),
+  mediaArtifactMutate: vi.fn(),
   openSidePanel: vi.fn(),
   // Second stage of the feed's gate: which debates the media worker has composed a final_video for.
   media: { processedIds: ['debate-1'] as string[], isLoading: false, hasError: false },
+  castVote: vi.fn(),
+}));
+
+// Voting reaches the chain and the user's personal space, neither of which exists here. The
+// tally logic has its own unit tests; this suite only cares that the feed renders the pills.
+vi.mock('~/core/debates/use-debate-votes', () => ({
+  useDebateVotes: () => ({
+    sharePercentFor: () => null,
+    isMyPick: () => false,
+    hasVoted: false,
+    isVoting: false,
+    castVote: mocks.castVote,
+  }),
+  useDebateVotesByVoter: () => new Map(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -30,6 +45,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
   useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
@@ -51,6 +67,7 @@ beforeEach(() => {
   mocks.play.mockClear();
   mocks.pause.mockClear();
   mocks.replace.mockClear();
+  mocks.mediaArtifactMutate.mockClear();
   mocks.media = { processedIds: ['debate-1'], isLoading: false, hasError: false };
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play });
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause });
