@@ -1,18 +1,12 @@
-import { Effect, Either, Schema } from 'effect';
+import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
-  ApiProposalListResponseSchema,
   convertVoteOption,
-  encodePathSegment,
   getApiProposalCanExecute,
-  isValidUUID,
   mapActionTypeToProposalType,
   mapProposalStatus,
-  restFetch,
-  validateActionTypes,
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
@@ -20,125 +14,29 @@ import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-grant
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
 
+import {
+  type GovernanceHomeReviewCategory,
+  type GovernanceHomeStatusFilter,
+  fetchProposalsForSpaceByGovernanceFilters,
+} from '~/partials/governance/governance-proposal-query';
+
+export type {
+  GovernanceHomeReviewCategory,
+  GovernanceHomeStatusFilter,
+  GovernanceProposalCategory,
+  GovernanceProposalStatusFilter,
+} from '~/partials/governance/governance-proposal-query';
+export {
+  actionTypesForGovernanceCategory,
+  fetchProposalsForSpaceByGovernanceFilters,
+  matchesGovernanceCategory,
+} from '~/partials/governance/governance-proposal-query';
+
 export type ActiveProposalsForSpacesWhereEditor = Awaited<ReturnType<typeof getActiveProposalsForSpacesWhereEditor>>;
 
 const PAGE_SIZE = 100;
 
 const MEMBERSHIP_ACTIONS = new Set(['ADD_MEMBER', 'REMOVE_MEMBER']);
-
-export type GovernanceHomeReviewCategory = 'all' | 'knowledge' | 'membership' | 'settings';
-export type GovernanceHomeStatusFilter = 'pending' | 'accepted' | 'rejected';
-
-const SETTINGS_ACTION_TYPES = [
-  'UpdateVotingSettings',
-  'SetTopic',
-  'UnsetTopic',
-  'TopicDeclared',
-  'TopicRemoved',
-  'SubspaceVerified',
-  'SubspaceUnverified',
-  'SubspaceRelated',
-  'SubspaceUnrelated',
-  'SubspaceTopicDeclared',
-  'SubspaceTopicRemoved',
-] as const;
-
-export function actionTypesForGovernanceCategory(category: GovernanceHomeReviewCategory): string[] | undefined {
-  switch (category) {
-    case 'knowledge':
-      return validateActionTypes(['Publish']);
-    case 'membership':
-      return validateActionTypes(['AddMember', 'RemoveMember', 'AddEditor', 'RemoveEditor']);
-    case 'settings':
-      return validateActionTypes([...SETTINGS_ACTION_TYPES]);
-    default:
-      return undefined;
-  }
-}
-
-export function matchesGovernanceCategory(
-  actionType: string | undefined,
-  category: GovernanceHomeReviewCategory
-): boolean {
-  if (category === 'all') return true;
-  const allowed = actionTypesForGovernanceCategory(category);
-  if (!allowed?.length) return false;
-  const norm = (s: string) => s.replace(/_/g, '').toUpperCase();
-  const u = norm(actionType ?? 'UNKNOWN');
-  return allowed.some(a => norm(a) === u);
-}
-
-function statusQueryParam(status: GovernanceHomeStatusFilter): string {
-  if (status === 'pending') return 'PROPOSED,EXECUTABLE';
-  if (status === 'accepted') return 'ACCEPTED';
-  return 'REJECTED';
-}
-
-/** Same REST query used for governance home review lists and “My proposals”. */
-export async function fetchProposalsForSpaceByGovernanceFilters({
-  spaceId,
-  memberSpaceId,
-  proposalType,
-  category = 'all',
-  status = 'pending',
-}: {
-  spaceId: string;
-  memberSpaceId: string;
-  proposalType?: 'membership' | 'content';
-  category?: GovernanceHomeReviewCategory;
-  status?: GovernanceHomeStatusFilter;
-}): Promise<readonly ApiProposalListItem[]> {
-  const config = Environment.getConfig();
-
-  const params = new URLSearchParams();
-  params.set('limit', String(PAGE_SIZE));
-  params.set('status', statusQueryParam(status));
-  params.set('orderBy', 'end_time');
-  params.set('orderDirection', 'desc');
-
-  const resolvedCategory: GovernanceHomeReviewCategory =
-    category !== 'all'
-      ? category
-      : proposalType === 'content'
-        ? 'knowledge'
-        : proposalType === 'membership'
-          ? 'membership'
-          : 'all';
-
-  const types = actionTypesForGovernanceCategory(resolvedCategory);
-  if (types?.length) {
-    params.set('actionTypes', types.join(','));
-  }
-
-  if (isValidUUID(memberSpaceId) && status === 'pending') {
-    params.set('voterId', memberSpaceId);
-  }
-
-  const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
-
-  const result = await Effect.runPromise(
-    Effect.either(
-      restFetch<unknown>({
-        endpoint: config.api,
-        path,
-      })
-    )
-  );
-
-  if (Either.isLeft(result)) {
-    console.error(`Failed to fetch proposals for space ${spaceId}:`, result.left);
-    return [];
-  }
-
-  const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
-
-  if (Either.isLeft(decoded)) {
-    console.error(`Failed to decode proposals for space ${spaceId}:`, decoded.left);
-    return [];
-  }
-
-  return decoded.right.proposals;
-}
 
 export async function getActiveProposalsForSpacesWhereEditor(
   memberSpaceId?: string,
