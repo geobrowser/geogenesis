@@ -28,7 +28,7 @@ const DAO_ADDRESS = '0x1111111111111111111111111111111111111111';
 
 describe('encodeProposalCreatedData', () => {
   // Subspace and DAO-topic proposals are the only two write paths with no SDK helper
-  // (geo-sdk 0.20.1 exposes daoSpaces.create/proposeEdit/propose*/voteProposal/
+  // (geo-sdk 0.20.3 exposes daoSpaces.create/proposeEdit/propose*/voteProposal/
   // executeProposal and nothing for subspaces or topics), so we hand-roll their
   // calldata. This test is what keeps the hand-rolled copy aligned with the SDK.
   it('agrees with the action tuple the SDK itself encodes', () => {
