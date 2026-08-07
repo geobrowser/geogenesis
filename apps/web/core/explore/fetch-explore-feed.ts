@@ -104,7 +104,7 @@ function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
   const pid = normId(propertyId);
   const sid = normId(spaceId);
-  const row = entity.values.find(v => v.property.id === pid && v.spaceId === sid);
+  const row = entity.values.find(v => normId(v.property.id) === pid && normId(v.spaceId) === sid);
   if (!row?.value) return null;
   const t = row.value.trim();
   return t.length ? t : null;
@@ -115,16 +115,16 @@ function imageFromRelationMedia(relations: Entity['relations'], spaceId: string)
   const sid = normId(spaceId);
   const coverT = normId(SystemIds.COVER_PROPERTY);
   const avatarT = normId(ContentIds.AVATAR_PROPERTY);
-  const pool = relations.filter(r => r.spaceId === sid);
+  const pool = relations.filter(r => normId(r.spaceId) === sid);
   const scan = pool.length ? pool : relations;
   for (const r of scan) {
-    if (r.type.id === coverT && r.toEntity.value) {
+    if (normId(r.type.id) === coverT && r.toEntity.value) {
       const v = r.toEntity.value.trim();
       if (v) return v;
     }
   }
   for (const r of scan) {
-    if (r.type.id === avatarT && r.toEntity.value) {
+    if (normId(r.type.id) === avatarT && r.toEntity.value) {
       const v = r.toEntity.value.trim();
       if (v) return v;
     }
@@ -294,9 +294,9 @@ function buildItems(
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
     const displaySpaceIdNorm = normId(spaceId);
-    const relationsInDisplaySpace = e.relations.filter(r => r.spaceId === displaySpaceIdNorm);
+    const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
     const types = relationsInDisplaySpace
-      .filter(r => r.type.id === typesRelationIdNorm)
+      .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
 
     items.push({
