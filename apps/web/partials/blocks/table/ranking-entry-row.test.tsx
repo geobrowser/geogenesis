@@ -39,11 +39,11 @@ describe('RankingEntryRow', () => {
     expect(markup).not.toContain('data-vote-actions');
   });
 
-  it('keeps actions exactly 6px below the final text row', () => {
+  it('keeps actions exactly 4px below the final text row', () => {
     render(<RankingEntryRow entry={entry} spaceId="space-1" actions={<div data-testid="row-actions" />} />);
 
     const actions = screen.getByTestId('row-actions').parentElement;
-    expect(actions?.className).toContain('mt-0.5');
+    expect(actions?.className).toContain('mt-0');
     expect(actions?.parentElement?.className).toContain('gap-1');
   });
 

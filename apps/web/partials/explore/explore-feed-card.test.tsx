@@ -44,11 +44,11 @@ const item: ExploreFeedItem = {
 };
 
 describe('ExploreFeedCard', () => {
-  it('keeps actions 6px below text even when the card has an image', () => {
+  it('keeps actions 4px below text even when the card has an image', () => {
     render(<ExploreFeedCard item={item} />);
 
     const actions = screen.getByTestId('row-actions');
-    expect(actions.className).toContain('mt-[6px]');
+    expect(actions.className).toContain('mt-1');
     expect(actions.parentElement?.contains(screen.getByText('A claim'))).toBe(true);
     expect(actions.parentElement?.parentElement?.contains(screen.getByTestId('image'))).toBe(true);
   });
