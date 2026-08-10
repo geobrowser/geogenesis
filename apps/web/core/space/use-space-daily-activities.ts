@@ -14,6 +14,7 @@ import { isRollingSubmissionLive, parseTimestampMs } from '~/core/blocks/ranking
 import { useMyRanking } from '~/core/blocks/ranking/use-my-ranking';
 import { getRankingSubmissionFrequencyHours } from '~/core/blocks/ranking/use-ranking-block-config';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import {
   RANKING_END_DATE_PROPERTY_ID,
@@ -64,6 +65,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
 } {
   const { ready, authenticated } = usePrivy();
   const isSignedIn = ready && authenticated;
+  const canEdit = useCanUserEdit(spaceId);
   const { blockRelations, initialBlockEntities } = useEditorStoreLite();
 
   const blockIds = React.useMemo(() => blockRelations.map(r => r.block.id), [blockRelations]);
@@ -181,7 +183,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
       });
     }
 
-    if (hasLinkIngestionTool) {
+    if (hasLinkIngestionTool && canEdit) {
       next.push({
         kind: 'upload',
         id: 'upload-news-story',
@@ -191,7 +193,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
     }
 
     return next;
-  }, [blockIds, blockValues, hasLinkIngestionTool, initialBlockEntities, isSignedIn, spaceId, typeRelations]);
+  }, [blockIds, blockValues, canEdit, hasLinkIngestionTool, initialBlockEntities, isSignedIn, spaceId, typeRelations]);
 
   return { tasks, hasLinkIngestionTool };
 }
