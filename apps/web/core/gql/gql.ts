@@ -54,6 +54,7 @@ type Documents = {
     "\n  query EntityResponseCounts($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind(\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n      voteKind: $voteKind\n    ) {\n      positive\n      negative\n      voteKind\n    }\n  }\n": typeof types.EntityResponseCountsDocument,
     "\n  query UserEntityResponse($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind(\n      userId: $userId\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n      voteKind: $voteKind\n    ) {\n      voteType\n    }\n  }\n": typeof types.UserEntityResponseDocument,
     "\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n": typeof types.EntityRespondersDocument,
+    "\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n": typeof types.ClaimResponseSummariesDocument,
     "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": typeof types.UserHasEntityVoteDocument,
 };
 const documents: Documents = {
@@ -97,6 +98,7 @@ const documents: Documents = {
     "\n  query EntityResponseCounts($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind(\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n      voteKind: $voteKind\n    ) {\n      positive\n      negative\n      voteKind\n    }\n  }\n": types.EntityResponseCountsDocument,
     "\n  query UserEntityResponse($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind(\n      userId: $userId\n      objectId: $objectId\n      objectType: $objectType\n      spaceId: $spaceId\n      voteKind: $voteKind\n    ) {\n      voteType\n    }\n  }\n": types.UserEntityResponseDocument,
     "\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n": types.EntityRespondersDocument,
+    "\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n": types.ClaimResponseSummariesDocument,
     "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": types.UserHasEntityVoteDocument,
 };
 
@@ -274,6 +276,10 @@ export function graphql(source: "\n  query UserEntityResponse($userId: UUID!, $o
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n"): (typeof documents)["\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n"): (typeof documents)["\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

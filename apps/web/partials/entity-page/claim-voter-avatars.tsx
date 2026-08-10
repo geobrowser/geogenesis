@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 
 import { getEntityResponders } from '~/core/io/queries';
 import { type ResponseKind, type ResponseObjectType, entityRespondersQueryKey } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 
@@ -24,9 +25,11 @@ export function ClaimResponderAvatars({
   responseKind: ResponseKind;
   totalResponders: number;
 }) {
+  const responseBatch = useClaimResponseBatchState();
   const { data: responders } = useQuery({
     queryKey: entityRespondersQueryKey(entityId, spaceId, objectType, responseKind),
     queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
+    enabled: !responseBatch.managed,
     staleTime: 30_000,
   });
 
@@ -39,6 +42,7 @@ export function ClaimResponderAvatars({
       submitterSpaceIds={responderSpaceIds}
       totalCount={Math.max(totalResponders, responderSpaceIds.length)}
       size={12}
+      queriesEnabled={!responseBatch.managed}
     />
   );
 }

@@ -16,6 +16,7 @@ import {
   type EntityFilter,
   type EntitySpacesBatchQuery,
   UserHasEntityVoteDocument,
+  type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -41,6 +42,7 @@ import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
+  claimResponseSummariesQuery,
   entitiesBatchQuery,
   entitiesPageQuery,
   entityBacklinksQuery,
@@ -71,8 +73,8 @@ import {
   userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
-import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { type SortOrder } from './sort-order';
+import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
@@ -1266,6 +1268,33 @@ export function getUserHasEntityVote(userId: string, signal?: AbortController['s
 }
 
 export type EntityResponder = { userId: string; direction: ActiveResponseDirection };
+
+export type ClaimResponseSummaryRow = {
+  userId: string;
+  objectId: string;
+  voteType: number;
+  voteKind: number;
+};
+
+export function getClaimResponseSummaryPage(
+  filter: UserVoteFilter,
+  first: number,
+  offset: number,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: claimResponseSummariesQuery,
+    decoder: data =>
+      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+        userId: String(vote.userId),
+        objectId: String(vote.objectId),
+        voteType: vote.voteType,
+        voteKind: vote.voteKind,
+      })),
+    variables: { filter, first, offset },
+    signal,
+  });
+}
 
 export function getEntityResponders(
   entityId: string,

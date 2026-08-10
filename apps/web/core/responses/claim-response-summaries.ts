@@ -1,0 +1,275 @@
+import type { QueryClient } from '@tanstack/react-query';
+
+import { Effect } from 'effect';
+
+import type { UserVoteFilter } from '~/core/gql/graphql';
+import type { Space } from '~/core/io/dto/spaces';
+import {
+  type ClaimResponseSummaryRow,
+  type EntityResponder,
+  getClaimResponseSummaryPage,
+  getSpaces,
+} from '~/core/io/queries';
+import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import type { Profile } from '~/core/types';
+
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  decodeActiveResponseDirection,
+  entityResponderProfilesQueryKey,
+  entityRespondersQueryKey,
+  entityResponseCountsQueryKey,
+  responseKindToVoteKind,
+  userEntityResponseQueryKey,
+} from './entity-response';
+
+export const CLAIM_RESPONSE_SUMMARY_PAGE_SIZE = 1_000;
+
+export type ClaimResponseTarget = {
+  entityId: string;
+  responseKind: ResponseKind;
+};
+
+export type ClaimResponseSummary = {
+  counts: { positive: number; negative: number };
+  viewerResponse: ActiveResponseDirection | null;
+  responders: EntityResponder[];
+};
+
+type FetchSummaryPageArgs = {
+  filter: UserVoteFilter;
+  first: number;
+  offset: number;
+  signal?: AbortSignal;
+};
+
+type FetchSummaryPage = (args: FetchSummaryPageArgs) => Promise<ClaimResponseSummaryRow[]>;
+type FetchSummaries = typeof fetchClaimResponseSummaries;
+type FetchProfiles = (spaceIds: string[]) => Promise<Profile[]>;
+type FetchSpaces = (spaceIds: string[], signal?: AbortSignal) => Promise<Space[]>;
+
+export function claimResponseTargetKey(target: ClaimResponseTarget) {
+  return `${target.entityId}:${target.responseKind}`;
+}
+
+export function claimResponseSummariesQueryKeyPrefix(personalSpaceId: string | null, spaceId: string) {
+  return ['claim-response-summaries', personalSpaceId, spaceId] as const;
+}
+
+export function normalizeClaimResponseTargets(targets: ClaimResponseTarget[]) {
+  const byKey = new Map(targets.map(target => [claimResponseTargetKey(target), target]));
+  return [...byKey.values()].sort((left, right) =>
+    claimResponseTargetKey(left).localeCompare(claimResponseTargetKey(right))
+  );
+}
+
+export function buildClaimResponseSummaryFilter(spaceId: string, targets: ClaimResponseTarget[]): UserVoteFilter {
+  return {
+    spaceId: { is: spaceId },
+    objectType: { is: 0 },
+    voteType: { in: [0, 1] },
+    or: normalizeClaimResponseTargets(targets).map(target => ({
+      objectId: { is: target.entityId },
+      voteKind: { is: responseKindToVoteKind(target.responseKind) },
+    })),
+  };
+}
+
+export function groupClaimResponseSummaryRows(
+  targets: ClaimResponseTarget[],
+  rows: ClaimResponseSummaryRow[],
+  personalSpaceId: string | null
+): Map<string, ClaimResponseSummary> {
+  const normalizedTargets = normalizeClaimResponseTargets(targets);
+  const targetByObjectAndKind = new Map(
+    normalizedTargets.map(target => [`${target.entityId}:${responseKindToVoteKind(target.responseKind)}`, target])
+  );
+  const activeRows = new Map<string, { target: ClaimResponseTarget; row: ClaimResponseSummaryRow }>();
+
+  for (const row of rows) {
+    const target = targetByObjectAndKind.get(`${row.objectId}:${row.voteKind}`);
+    const direction = decodeActiveResponseDirection(row.voteType);
+    if (!target || !direction) continue;
+    activeRows.set(`${claimResponseTargetKey(target)}:${row.userId}`, { target, row });
+  }
+
+  const summaries = new Map<string, ClaimResponseSummary>(
+    normalizedTargets.map(target => [
+      claimResponseTargetKey(target),
+      { counts: { positive: 0, negative: 0 }, viewerResponse: null, responders: [] },
+    ])
+  );
+
+  for (const { target, row } of activeRows.values()) {
+    const direction = decodeActiveResponseDirection(row.voteType);
+    if (!direction) continue;
+    const summary = summaries.get(claimResponseTargetKey(target));
+    if (!summary) continue;
+    summary.counts[direction] += 1;
+    summary.responders.push({ userId: row.userId, direction });
+    if (personalSpaceId && row.userId === personalSpaceId) summary.viewerResponse = direction;
+  }
+
+  return summaries;
+}
+
+export async function fetchClaimResponseSummaries({
+  spaceId,
+  targets,
+  personalSpaceId,
+  signal,
+  fetchPage = defaultFetchPage,
+}: {
+  spaceId: string;
+  targets: ClaimResponseTarget[];
+  personalSpaceId: string | null;
+  signal?: AbortSignal;
+  fetchPage?: FetchSummaryPage;
+}) {
+  const normalizedTargets = normalizeClaimResponseTargets(targets);
+  if (normalizedTargets.length === 0) return new Map<string, ClaimResponseSummary>();
+
+  const filter = buildClaimResponseSummaryFilter(spaceId, normalizedTargets);
+  const rows: ClaimResponseSummaryRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const page = await fetchPage({ filter, first: CLAIM_RESPONSE_SUMMARY_PAGE_SIZE, offset, signal });
+    rows.push(...page);
+    if (page.length < CLAIM_RESPONSE_SUMMARY_PAGE_SIZE) break;
+    offset += CLAIM_RESPONSE_SUMMARY_PAGE_SIZE;
+  }
+
+  return groupClaimResponseSummaryRows(normalizedTargets, rows, personalSpaceId);
+}
+
+function defaultFetchPage({ filter, first, offset, signal }: FetchSummaryPageArgs) {
+  return Effect.runPromise(getClaimResponseSummaryPage(filter, first, offset, signal));
+}
+
+export async function loadClaimResponseSummaryCaches({
+  queryClient,
+  spaceId,
+  targets,
+  personalSpaceId,
+  signal,
+  fetchSummaries = fetchClaimResponseSummaries,
+  fetchProfiles = defaultFetchProfiles,
+  fetchSpaces = defaultFetchSpaces,
+  forceResponseRefresh = false,
+}: {
+  queryClient: QueryClient;
+  spaceId: string;
+  targets: ClaimResponseTarget[];
+  personalSpaceId: string | null;
+  signal?: AbortSignal;
+  fetchSummaries?: FetchSummaries;
+  fetchProfiles?: FetchProfiles;
+  fetchSpaces?: FetchSpaces;
+  forceResponseRefresh?: boolean;
+}) {
+  const normalizedTargets = normalizeClaimResponseTargets(targets);
+  const summaryQueryKey = [
+    'claim-response-summary-data',
+    personalSpaceId,
+    spaceId,
+    normalizedTargets.map(claimResponseTargetKey),
+  ] as const;
+  const summaries = await queryClient.fetchQuery({
+    queryKey: summaryQueryKey,
+    queryFn: () => fetchSummaries({ spaceId, targets: normalizedTargets, personalSpaceId, signal }),
+    staleTime: forceResponseRefresh ? 0 : 30_000,
+    retry: false,
+  });
+  const responderSpaceIds = [
+    ...new Set(
+      [...summaries.values()].flatMap(summary => summary.responders.map(responder => responder.userId)).filter(Boolean)
+    ),
+  ].sort();
+  const [profilesBySpaceId, responderSpaces] = await Promise.all([
+    queryClient.fetchQuery({
+      queryKey: profilesBySpaceIdsQueryKey(responderSpaceIds),
+      queryFn: async () => {
+        const profileChunks = await Promise.all(chunk(responderSpaceIds, 100).map(ids => fetchProfiles(ids)));
+        return new Map(profileChunks.flat().map(profile => [profile.spaceId, profile]));
+      },
+      staleTime: 60_000,
+      retry: false,
+    }),
+    queryClient.fetchQuery({
+      queryKey: spacesByIdsQueryKey(responderSpaceIds),
+      queryFn: async () => {
+        const spaceChunks = await Promise.all(chunk(responderSpaceIds, 100).map(ids => fetchSpaces(ids, signal)));
+        return spaceChunks.flat();
+      },
+      staleTime: 60_000,
+      retry: false,
+    }),
+  ]);
+  const spacesById = new Map(responderSpaces.map(space => [space.id, space]));
+
+  signal?.throwIfAborted();
+
+  for (const target of normalizedTargets) {
+    const summary = summaries.get(claimResponseTargetKey(target)) ?? emptySummary();
+    const responderIds = summary.responders.map(responder => responder.userId);
+    const responderProfiles = responderIds.flatMap(id => {
+      const profile = profilesBySpaceId.get(id);
+      return profile ? [profile] : [];
+    });
+
+    queryClient.setQueryData(
+      entityResponseCountsQueryKey(target.entityId, spaceId, 0, target.responseKind),
+      summary.counts
+    );
+    queryClient.setQueryData(
+      entityRespondersQueryKey(target.entityId, spaceId, 0, target.responseKind),
+      summary.responders
+    );
+    if (personalSpaceId) {
+      queryClient.setQueryData(
+        userEntityResponseQueryKey(personalSpaceId, target.entityId, spaceId, 0, target.responseKind),
+        summary.viewerResponse
+      );
+    }
+    if (responderIds.length > 0) {
+      queryClient.setQueryData(
+        [...entityResponderProfilesQueryKey(target.entityId, spaceId, 0, target.responseKind), responderIds],
+        responderProfiles
+      );
+      queryClient.setQueryData(
+        profilesBySpaceIdsQueryKey(responderIds),
+        new Map(responderProfiles.map(profile => [profile.spaceId, profile]))
+      );
+      queryClient.setQueryData(
+        spacesByIdsQueryKey(responderIds),
+        [...responderIds].sort().flatMap(id => {
+          const space = spacesById.get(id);
+          return space ? [space] : [];
+        })
+      );
+    }
+  }
+
+  return summaries;
+}
+
+function emptySummary(): ClaimResponseSummary {
+  return { counts: { positive: 0, negative: 0 }, viewerResponse: null, responders: [] };
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let start = 0; start < items.length; start += size) chunks.push(items.slice(start, start + size));
+  return chunks;
+}
+
+function defaultFetchProfiles(spaceIds: string[]) {
+  return Effect.runPromise(fetchProfilesBySpaceIds(spaceIds));
+}
+
+function defaultFetchSpaces(spaceIds: string[], signal?: AbortSignal) {
+  return Effect.runPromise(getSpaces({ spaceIds, limit: spaceIds.length }, signal));
+}

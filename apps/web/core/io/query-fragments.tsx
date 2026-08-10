@@ -791,6 +791,17 @@ export const entityRespondersQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
+  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
+    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {
+      userId
+      objectId
+      voteType
+      voteKind
+    }
+  }
+`);
+
 export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
   query UserHasEntityVote($userId: UUID!) {
     userVotes(condition: { userId: $userId }, first: 1) {

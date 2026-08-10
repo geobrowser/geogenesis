@@ -21,13 +21,18 @@ const mocks = vi.hoisted(() => ({
   setIsReviewOpen: vi.fn(),
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
+  responseBatchCalls: [] as unknown[],
+  refetchResponseBatch: vi.fn(),
 }));
 
 let claims: Entity[] = [];
+let claimsLoading = false;
 let featureEnabled = true;
 let joinPending = false;
 let lastQueryEntitiesOptions: unknown = null;
 let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
+let responseBatchReady = true;
+let responseBatchError = false;
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
@@ -57,8 +62,25 @@ vi.mock('~/core/debates/hooks', () => ({
   useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+vi.mock('~/core/responses/use-claim-response-summaries', () => ({
+  ClaimResponseBatchBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
+  useClaimResponseSummaryBatch: (options: unknown) => {
+    mocks.responseBatchCalls.push(options);
+    return {
+      isSuccess: responseBatchReady,
+      isError: responseBatchError,
+      refetch: mocks.refetchResponseBatch,
+    };
+  },
+}));
+
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="entity-response-buttons">Entity response buttons</div>,
+  EntityVoteButtons: () =>
+    !responseBatchReady ? (
+      <div data-testid="entity-response-skeleton">Response skeleton</div>
+    ) : (
+      <div data-testid="entity-response-buttons">Entity response buttons</div>
+    ),
 }));
 
 vi.mock('~/core/state/diff-store', () => ({
@@ -72,7 +94,8 @@ vi.mock('~/core/state/diff-store', () => ({
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: (options: unknown) => {
     lastQueryEntitiesOptions = options;
-    return { entities: claims, isLoading: false };
+    const deferUntilFetched = (options as { deferUntilFetched?: boolean }).deferUntilFetched;
+    return { entities: claimsLoading && deferUntilFetched ? [] : claims, isLoading: claimsLoading };
   },
 }));
 
@@ -93,13 +116,17 @@ vi.mock('~/design-system/select-entity-compact', () => ({
 
 beforeEach(() => {
   claims = [];
+  claimsLoading = false;
   featureEnabled = true;
   joinPending = false;
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };
+  responseBatchReady = true;
+  responseBatchError = false;
   vi.clearAllMocks();
   mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
   mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
+  mocks.responseBatchCalls.length = 0;
 });
 
 afterEach(() => cleanup());
@@ -115,7 +142,34 @@ describe('ClaimsPageClient', () => {
         spaces: [{ equals: 'space-1' }],
         types: [{ id: { equals: CLAIM_TYPE_ID } }],
       },
+      deferUntilFetched: true,
+      includeUnpublishedLocal: true,
     });
+    expect(lastQueryEntitiesOptions).not.toHaveProperty('placeholderData');
+  });
+
+  it('shows loading instead of locally cached claims before the authoritative query resolves', () => {
+    claims = [publishedClaim()];
+    claimsLoading = true;
+
+    renderClaims();
+
+    expect(screen.getByText('Loading claims...')).toBeInTheDocument();
+    expect(screen.queryByText('Public transit should be free')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+  });
+
+  it('does not retain the previous space claims while the next space loads', () => {
+    claims = [publishedClaim()];
+    const view = renderClaims();
+    expect(screen.getByText('Public transit should be free')).toBeInTheDocument();
+
+    claimsLoading = true;
+    view.rerender(<ClaimsPageClient spaceId="space-2" />);
+
+    expect(screen.getByText('Loading claims...')).toBeInTheDocument();
+    expect(screen.queryByText('Public transit should be free')).not.toBeInTheDocument();
   });
 
   it('stages a claim with Claim and Topics relations only', () => {
@@ -154,6 +208,48 @@ describe('ClaimsPageClient', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
 
     expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
+  });
+
+  it('batches the active response kind for all visible claims and defers their individual requests', () => {
+    claims = Array.from({ length: 50 }, (_, index) => publishedClaim(`claim-${index}`, `Claim ${index}`));
+    debateClaimsResponse = {
+      claims: claims.map((claim, index) =>
+        debateClaim({
+          claim_entity_id: claim.id,
+          response_kind: index % 2 === 0 ? 'stance' : 'veracity',
+        })
+      ),
+    };
+    responseBatchReady = false;
+
+    renderClaims();
+
+    expect(mocks.responseBatchCalls).toHaveLength(1);
+    expect(mocks.responseBatchCalls[0]).toMatchObject({
+      spaceId: 'space-1',
+      enabled: true,
+      targets: expect.arrayContaining([
+        { entityId: 'claim-0', responseKind: 'stance' },
+        { entityId: 'claim-1', responseKind: 'veracity' },
+      ]),
+    });
+    expect((mocks.responseBatchCalls[0] as { targets: unknown[] }).targets).toHaveLength(50);
+    expect(screen.getAllByTestId('entity-response-skeleton')).toHaveLength(50);
+    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(50);
+  });
+
+  it('retries only the page response batch after its retries are exhausted', () => {
+    claims = [publishedClaim()];
+    debateClaimsResponse = { claims: [debateClaim()] };
+    responseBatchReady = false;
+    responseBatchError = true;
+
+    renderClaims();
+
+    expect(screen.getByTestId('entity-response-skeleton')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.refetchResponseBatch).toHaveBeenCalledOnce();
   });
 
   it('renders backend response labels and one leave-readiness toggle', () => {
@@ -228,10 +324,10 @@ function renderClaims() {
   });
 }
 
-function publishedClaim(): Entity {
+function publishedClaim(id = 'claim-1', name = 'Public transit should be free'): Entity {
   return {
-    id: 'claim-1',
-    name: 'Public transit should be free',
+    id,
+    name,
     description: null,
     spaces: ['space-1'],
     types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],

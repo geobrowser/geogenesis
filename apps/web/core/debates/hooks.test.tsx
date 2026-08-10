@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
+import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
@@ -189,7 +190,7 @@ describe('useGeoChatAuth', () => {
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches debate readiness when an indexed claim response query succeeds', async () => {
+  it('refetches debate readiness only when response reconciliation is fully indexed', async () => {
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -205,11 +206,26 @@ describe('useGeoChatAuth', () => {
     act(() => {
       queryClient.setQueryData(['user-entity-response', 'profile-1', 'claim-1', 'space-1', 0, 'stance'], 'positive');
     });
+    expect(invalidateQueries).not.toHaveBeenCalled();
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
 
     await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] }));
   });
 
-  it('refetches rematch snapshots when an indexed claim response query succeeds', async () => {
+  it('refetches rematch snapshots when response reconciliation is fully indexed', async () => {
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -223,7 +239,17 @@ describe('useGeoChatAuth', () => {
     invalidateQueries.mockClear();
 
     act(() => {
-      queryClient.setQueryData(['user-entity-response', 'profile-1', 'claim-1', 'space-1', 0, 'veracity'], 'negative');
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
     });
 
     await waitFor(() =>

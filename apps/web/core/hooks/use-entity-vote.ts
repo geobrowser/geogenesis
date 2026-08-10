@@ -10,6 +10,10 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getUserEntityResponse } from '~/core/io/queries';
 import {
+  claimResponseSummariesQueryKeyPrefix,
+  loadClaimResponseSummaryCaches,
+} from '~/core/responses/claim-response-summaries';
+import {
   type ActiveResponseDirection,
   type ResponseDirection,
   type ResponseKind,
@@ -173,28 +177,6 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     [indexingQueryKey, queryClient]
   );
 
-  const invalidateResponseQueries = useCallback(
-    (pending: PendingEntityResponseIndex) =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: entityResponseCountsQueryKey(pending.entityId, pending.spaceId, 0, pending.responseKind),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: userEntityResponseQueryKey(
-            pending.personalSpaceId,
-            pending.entityId,
-            pending.spaceId,
-            0,
-            pending.responseKind
-          ),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: entityRespondersQueryKey(pending.entityId, pending.spaceId, 0, pending.responseKind),
-        }),
-      ]),
-    [queryClient]
-  );
-
   const reconcileResponseIndexing = useCallback(
     async (pending: PendingEntityResponseIndex, runId: string) => {
       if (!isCurrentIndexingRun(runId)) return;
@@ -237,7 +219,48 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         return;
       }
 
-      await invalidateResponseQueries(pending);
+      try {
+        if (pending.responseKind === 'curation') {
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: entityResponseCountsQueryKey(pending.entityId, pending.spaceId, 0, pending.responseKind),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: userEntityResponseQueryKey(
+                pending.personalSpaceId,
+                pending.entityId,
+                pending.spaceId,
+                0,
+                pending.responseKind
+              ),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: entityRespondersQueryKey(pending.entityId, pending.spaceId, 0, pending.responseKind),
+            }),
+          ]);
+        } else {
+          void queryClient.cancelQueries({
+            queryKey: claimResponseSummariesQueryKeyPrefix(pending.personalSpaceId, pending.spaceId),
+          });
+          await loadClaimResponseSummaryCaches({
+            queryClient,
+            spaceId: pending.spaceId,
+            targets: [{ entityId: pending.entityId, responseKind: pending.responseKind }],
+            personalSpaceId: pending.personalSpaceId,
+            signal: controller.signal,
+            forceResponseRefresh: true,
+          });
+        }
+      } catch {
+        if (!isCurrentIndexingRun(runId)) return;
+        queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+          status: 'delayed',
+          pending,
+          runId,
+        });
+        responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
+        return;
+      }
       if (!isCurrentIndexingRun(runId)) return;
 
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
@@ -247,14 +270,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       });
       responseIndexingRegistry.submissionRuns.delete(indexingKeyId);
     },
-    [
-      indexingKeyId,
-      indexingQueryKey,
-      invalidateResponseQueries,
-      isCurrentIndexingRun,
-      queryClient,
-      responseIndexingRegistry,
-    ]
+    [indexingKeyId, indexingQueryKey, isCurrentIndexingRun, queryClient, responseIndexingRegistry]
   );
 
   const executeResponse = useCallback(

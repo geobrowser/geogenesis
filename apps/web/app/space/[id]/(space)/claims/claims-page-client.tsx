@@ -1,7 +1,5 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -13,6 +11,10 @@ import { isClaimPublished } from '~/core/claims/publish';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { useDebateClaims } from '~/core/debates/hooks';
+import {
+  ClaimResponseBatchBoundary,
+  useClaimResponseSummaryBatch,
+} from '~/core/responses/use-claim-response-summaries';
 import { useDiff } from '~/core/state/diff-store';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -69,7 +71,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
     },
     first: 50,
-    placeholderData: keepPreviousData,
+    deferUntilFetched: true,
     includeUnpublishedLocal: true,
   });
   const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
@@ -85,6 +87,20 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_match ? [claim.active_match] : [])),
     [debateClaimsQuery.data?.claims]
   );
+  const responseTargets = React.useMemo(
+    () =>
+      publishedClaimIds.flatMap(entityId => {
+        const responseKind = debateClaimsByEntityId.get(entityId)?.response_kind;
+        return responseKind ? [{ entityId, responseKind }] : [];
+      }),
+    [debateClaimsByEntityId, publishedClaimIds]
+  );
+  const responseBatch = useClaimResponseSummaryBatch({
+    spaceId,
+    targets: responseTargets,
+    enabled: debatesEnabled,
+  });
+  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -101,15 +117,25 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
       {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
       <div className={cx(formOpen && 'mt-6')}>
-        <ClaimsList
-          claims={claims}
-          isLoading={isLoading}
-          spaceId={spaceId}
-          debatesEnabled={debatesEnabled}
-          debateJoinBlocked={activeMatches.length > 0}
-          debateClaimsByEntityId={debateClaimsByEntityId}
-          debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
-        />
+        <ClaimResponseBatchBoundary ready={responseBatchReady}>
+          {responseBatch.isError ? (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+              <Text color="grey-04">Response data could not be loaded.</Text>
+              <Button type="button" variant="secondary" onClick={() => void responseBatch.refetch()}>
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          <ClaimsList
+            claims={claims}
+            isLoading={isLoading}
+            spaceId={spaceId}
+            debatesEnabled={debatesEnabled}
+            debateJoinBlocked={activeMatches.length > 0}
+            debateClaimsByEntityId={debateClaimsByEntityId}
+            debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
+          />
+        </ClaimResponseBatchBoundary>
       </div>
     </div>
   );

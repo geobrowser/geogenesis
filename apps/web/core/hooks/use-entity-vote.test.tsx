@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   runEffectEither: vi.fn(),
   responseAction: vi.fn(() => ({ to: '0x1234' as const, calldata: '0xabcd' as const })),
   waitForIndexedEntityResponse: vi.fn(),
+  loadResponseSummaryCaches: vi.fn(),
   personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
 }));
 
@@ -68,6 +69,15 @@ vi.mock('~/core/sdk/geo-client', () => ({
   },
 }));
 
+vi.mock('~/core/responses/claim-response-summaries', () => ({
+  claimResponseSummariesQueryKeyPrefix: (personalSpaceId: string | null, spaceId: string) => [
+    'claim-response-summaries',
+    personalSpaceId,
+    spaceId,
+  ],
+  loadClaimResponseSummaryCaches: (...args: unknown[]) => mocks.loadResponseSummaryCaches(...args),
+}));
+
 vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: (...args: unknown[]) => mocks.runEffectEither(...args),
 }));
@@ -78,6 +88,8 @@ beforeEach(() => {
   mocks.runEffectEither.mockReset();
   mocks.responseAction.mockClear();
   mocks.waitForIndexedEntityResponse.mockClear();
+  mocks.loadResponseSummaryCaches.mockReset();
+  mocks.loadResponseSummaryCaches.mockResolvedValue(new Map());
   mocks.runEffectEither.mockResolvedValue({ _tag: 'Right', right: '0xtransaction' });
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
 });
@@ -119,6 +131,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     const onError = vi.fn();
     const { queryClient, wrapper } = createHarness();
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries');
     const { result } = renderHook(
       () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
       { wrapper }
@@ -153,7 +166,18 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(result.current.isProcessingResponse).toBe(false);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
     expect(result.current.optimisticResponse).toBeUndefined();
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryClient,
+        spaceId: TARGET_SPACE_ID,
+        personalSpaceId: PERSONAL_SPACE_ID,
+        targets: [{ entityId: 'claim-1', responseKind: 'stance' }],
+      })
+    );
+    expect(cancelQueries).toHaveBeenCalledWith({
+      queryKey: ['claim-response-summaries', PERSONAL_SPACE_ID, TARGET_SPACE_ID],
+    });
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('isolates optimistic response state by personal space', async () => {
@@ -199,6 +223,52 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(result.current.isProcessingResponse).toBe(false);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
     expect(result.current.optimisticResponse).toBeUndefined();
+    expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledOnce();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('keeps reconciliation recoverable when the single-claim summary refresh fails', async () => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    mocks.loadResponseSummaryCaches.mockRejectedValueOnce(new Error('summary unavailable'));
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.isResponseIndexingDelayed).toBe(true);
+    expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledOnce();
+
+    await act(async () => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledTimes(2);
+    expect(result.current.isResponseIndexingDelayed).toBe(false);
+  });
+
+  it('preserves individual cache invalidation for non-Claim curation votes', async () => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    const { queryClient, wrapper } = createHarness();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'entity-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.loadResponseSummaryCaches).not.toHaveBeenCalled();
     expect(invalidateQueries).toHaveBeenCalledTimes(3);
   });
 

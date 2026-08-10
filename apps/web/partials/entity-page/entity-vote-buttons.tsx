@@ -34,6 +34,7 @@ import {
   hasUnpublishedClaimResponseKindEdit,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
@@ -72,7 +73,13 @@ export function EntityVoteButtons({
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
 }: EntityVoteButtonsProps) {
-  const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId, includeDeleted: true });
+  const responseBatch = useClaimResponseBatchState();
+  const { entity, isLoading: isLoadingEntity } = useQueryEntity({
+    id: entityId,
+    spaceId,
+    includeDeleted: true,
+    enabled: responseKindOverride === undefined,
+  });
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
   const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
   const isClaim =
@@ -117,7 +124,7 @@ export function EntityVoteButtons({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
-    enabled: !isResponseKindLoading && responseKind !== null,
+    enabled: !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -135,7 +142,7 @@ export function EntityVoteButtons({
         getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
+    enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -271,7 +278,7 @@ export function EntityVoteButtons({
 
   const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
-  if (isResponseKindLoading) {
+  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
@@ -393,17 +400,19 @@ function RespondersPopoverContent({
   objectType: 0 | 1;
   responseKind: ResponseKind;
 }) {
+  const responseBatch = useClaimResponseBatchState();
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
   const { data: responders, isLoading: isLoadingResponders } = useQuery({
     queryKey: respondersQueryKey,
     queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
+    enabled: !responseBatch.managed,
     staleTime: 30_000,
   });
   const responderSpaceIds = React.useMemo(() => responders?.map(responder => responder.userId) ?? [], [responders]);
   const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
     queryKey: [...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind), responderSpaceIds],
-    enabled: responderSpaceIds.length > 0,
+    enabled: !responseBatch.managed && responderSpaceIds.length > 0,
     queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(responderSpaceIds)),
     staleTime: 30_000,
   });
