@@ -917,7 +917,7 @@ function UngroupedDropContainer({
     <div className={cx(hasGroupsAbove && 'border-t border-grey-02', 'px-4 py-3')}>
       {hasGroupsAbove && (
         <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
-          Ungrouped properties
+          Other properties
         </Text>
       )}
       <div
