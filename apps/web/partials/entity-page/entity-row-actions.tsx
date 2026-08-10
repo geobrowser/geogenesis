@@ -15,7 +15,7 @@ type Props = {
   className?: string;
 };
 
-/** Claim-row actions in the design order: response, supporting actions, Debate. */
+/** Entity-row actions in the claim design order: response, supporting actions, Debate. */
 export function EntityRowActions({ entityId, spaceId, children, className }: Props) {
   return (
     <div className={cx('flex items-center gap-4', className)}>
