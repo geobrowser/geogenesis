@@ -5,12 +5,11 @@ import { EntityPageContentContainer } from './entity-page-content-container';
 type Props = {
   children: React.ReactNode;
   sidebar?: React.ReactNode;
-  sidebarWidth?: 'reserve' | 'auto';
 };
 
-export function EntityPageSidebarLayout({ children, sidebar = null, sidebarWidth = 'reserve' }: Props) {
+export function EntityPageSidebarLayout({ children, sidebar = null }: Props) {
   const hasSidebar = sidebar !== null && sidebar !== false;
-  const variant = !hasSidebar ? 'content' : sidebarWidth === 'auto' ? 'auto-sidebar' : 'with-sidebar';
+  const variant = hasSidebar ? 'with-sidebar' : 'content';
 
   return (
     <EntityPageContentContainer variant={variant}>

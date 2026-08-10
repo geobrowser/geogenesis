@@ -29,7 +29,6 @@ export function ExplorePage({
 }: Props) {
   return (
     <EntityPageSidebarLayout
-      sidebarWidth="auto"
       sidebar={
         <ExploreSidePanel
           featuredSpaces={featuredSpaces}
