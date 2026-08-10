@@ -75,7 +75,7 @@ function RankingGalleryCard({
         <p className="line-clamp-2 text-[19px] leading-[1.3] font-medium text-text">{name}</p>
       </Link>
       <div
-        className="mt-2 flex h-5 items-center"
+        className="mt-1 flex h-5 items-center"
         onPointerDown={event => event.stopPropagation()}
         onClick={event => event.stopPropagation()}
       >
@@ -90,7 +90,7 @@ function RankingGalleryCardSkeleton({ keyId }: { keyId: string }) {
     <div key={keyId} className="w-[240px] shrink-0">
       <Skeleton className="h-[120px] w-[240px] rounded-xl" />
       <Skeleton className="mt-2 h-6 w-[180px]" />
-      <Skeleton className="mt-2 h-5 w-16" />
+      <Skeleton className="mt-1 h-5 w-16" />
     </div>
   );
 }

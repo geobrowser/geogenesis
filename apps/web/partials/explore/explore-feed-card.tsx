@@ -104,7 +104,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {item.description}
             </p>
           ) : null}
-          <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-2">
+          <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
             <Link
               href={entityHref}
               className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
