@@ -37,8 +37,8 @@ vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
@@ -49,7 +49,9 @@ beforeEach(() => {
   mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
+  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
   mocks.leaveMutate.mockReset();
+  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
 });
 
 afterEach(() => {
@@ -124,10 +126,7 @@ describe('ClaimDebateButton', () => {
     expect(screen.queryByText('Waiting for someone with the opposite response.')).not.toBeInTheDocument();
 
     fireEvent.click(leave);
-    expect(mocks.leaveMutate).toHaveBeenCalledWith(
-      { claimId: 'claim-entity-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
-    );
+    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1' });
     expect(mocks.joinMutate).not.toHaveBeenCalled();
   });
 });

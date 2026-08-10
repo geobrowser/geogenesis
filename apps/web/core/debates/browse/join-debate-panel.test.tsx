@@ -21,8 +21,8 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: { claims: mocks.claims }, isLoading: false, error: null }),
   useDebateActivity: () => ({ data: { available_to_debate: false }, isPending: false }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.availabilityMutate, isPending: false }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -42,6 +42,8 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 beforeEach(() => {
   mocks.claims = [];
   vi.clearAllMocks();
+  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
+  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
 });
 
 afterEach(cleanup);
@@ -70,10 +72,7 @@ describe('JoinDebatePanel', () => {
     expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-    expect(mocks.joinMutate).toHaveBeenCalledWith(
-      { claimId: 'claim-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
-    );
+    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
   it('leaves through the same readiness toggle', () => {
@@ -82,10 +81,7 @@ describe('JoinDebatePanel', () => {
     renderPanel();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith(
-      { claimId: 'claim-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
-    );
+    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 });
 

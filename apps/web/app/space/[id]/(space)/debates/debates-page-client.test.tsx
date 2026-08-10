@@ -48,7 +48,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
-  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({

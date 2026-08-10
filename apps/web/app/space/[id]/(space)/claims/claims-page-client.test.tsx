@@ -46,8 +46,13 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/debates/hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, reset: vi.fn(), isPending: joinPending, error: null }),
-  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({
+    mutateAsync: mocks.joinMutate,
+    reset: vi.fn(),
+    isPending: joinPending,
+    error: null,
+  }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
   useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
@@ -93,6 +98,8 @@ beforeEach(() => {
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };
   vi.clearAllMocks();
+  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
+  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
 });
 
 afterEach(() => cleanup());
@@ -146,10 +153,7 @@ describe('ClaimsPageClient', () => {
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
 
-    expect(mocks.joinMutate).toHaveBeenCalledWith(
-      { claimId: 'claim-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
-    );
+    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
   it('renders backend response labels and one leave-readiness toggle', () => {
@@ -170,13 +174,10 @@ describe('ClaimsPageClient', () => {
     expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith(
-      { claimId: 'claim-1' },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
-    );
+    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('keeps readiness disabled while joining, unpublished, or matched', () => {
+  it('keeps readiness clickable while joining but unavailable for unpublished or matched claims', () => {
     const published = publishedClaim();
     claims = [published];
     debateClaimsResponse = {
@@ -186,7 +187,8 @@ describe('ClaimsPageClient', () => {
 
     const { rerender } = renderClaims();
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeEnabled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-busy', 'true');
 
     joinPending = false;
     claims = [
