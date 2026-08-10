@@ -104,11 +104,46 @@ function ClaimDebateReadinessContent({
   const viewerPosition = pendingResponse ? optimisticPosition : confirmedViewerPosition;
   const backendReady = debateClaim?.viewer_debate_ready ?? false;
   const responseWithdrawalPending = Boolean(pendingResponse && pendingResponse.expectedResponse === null);
-  const checked = responseWithdrawalPending ? false : (intent?.desiredReady ?? backendReady);
+  const readyBeforeResponseChange = React.useRef(backendReady);
+  const preserveReadyDuringPositionChange = Boolean(
+    pendingResponse?.expectedResponse && readyBeforeResponseChange.current
+  );
+  if (!pendingResponse) readyBeforeResponseChange.current = intent?.desiredReady ?? backendReady;
+  const checked = responseWithdrawalPending
+    ? false
+    : (intent?.desiredReady ?? (backendReady || preserveReadyDuringPositionChange));
   const intentRequestInFlight = intent?.inFlightReady !== null && intent?.inFlightReady !== undefined;
   const isSaving = intentRequestInFlight || joinQueue.isPending || leaveQueue.isPending;
   const canEnableToggle = viewerPosition !== null && authenticated && canEnable;
   const disabled = !checked && !canEnableToggle;
+
+  React.useEffect(
+    function preserveReadinessAcrossPositionChange() {
+      if (intent || !preserveReadyDuringPositionChange || viewerPosition === null || !authenticated || !accountKey) {
+        return;
+      }
+
+      setIntent({
+        desiredReady: true,
+        confirmedReady: true,
+        inFlightReady: null,
+        expectedPosition: viewerPosition,
+        responseRunId: responseIndexing.runId,
+        hasRetried: false,
+        refreshing: false,
+        error: null,
+      });
+    },
+    [
+      accountKey,
+      authenticated,
+      intent,
+      preserveReadyDuringPositionChange,
+      responseIndexing.runId,
+      setIntent,
+      viewerPosition,
+    ]
+  );
 
   React.useEffect(
     function reconcileReadinessIntent() {
@@ -126,8 +161,32 @@ function ClaimDebateReadinessContent({
       if (intent.inFlightReady !== null) return;
       if (intent.refreshing) return;
 
+      if (intent.desiredReady && viewerPosition === null) {
+        setIntent(null);
+        return;
+      }
+
+      if (intent.desiredReady && viewerPosition !== intent.expectedPosition) {
+        updateIntent(current =>
+          current?.desiredReady
+            ? {
+                ...current,
+                expectedPosition: viewerPosition,
+                responseRunId: pendingResponse ? responseIndexing.runId : null,
+                hasRetried: false,
+                error: null,
+              }
+            : current
+        );
+        return;
+      }
+
       if (intent.desiredReady === intent.confirmedReady) {
-        if (backendReady === intent.confirmedReady && !intent.error) setIntent(null);
+        // Keep an enabled intent as the UI source of truth. The claims query is
+        // invalidated after joining and can briefly return the old disabled
+        // snapshot. Readiness only ends when the user disables it or withdraws
+        // their claim response.
+        if (!intent.desiredReady && !backendReady && !intent.error) setIntent(null);
         return;
       }
 
@@ -146,7 +205,6 @@ function ClaimDebateReadinessContent({
       }
 
       if (intent.desiredReady && confirmedViewerPosition !== intent.expectedPosition) {
-        if (!intent.responseRunId || responseIndexing.status === 'idle') setIntent(null);
         return;
       }
 
@@ -196,6 +254,7 @@ function ClaimDebateReadinessContent({
         },
         error => {
           let retryAfterRefetch = false;
+          let retryPosition: boolean | null = null;
           updateIntent(current => {
             if (current?.inFlightReady !== submittedReady) return current;
             if (
@@ -206,6 +265,7 @@ function ClaimDebateReadinessContent({
               !current.hasRetried
             ) {
               retryAfterRefetch = true;
+              retryPosition = current.expectedPosition;
               return {
                 ...current,
                 hasRetried: true,
@@ -236,7 +296,7 @@ function ClaimDebateReadinessContent({
               spaceId,
               entityId,
               responseKind,
-              confirmedViewerPosition,
+              retryPosition,
               getPrivyIdentityToken,
               accountKey
             )

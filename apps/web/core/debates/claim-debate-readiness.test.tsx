@@ -118,7 +118,7 @@ describe('ClaimDebateReadiness', () => {
     expect(mocks.joinMutateAsync).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('hands control back to a newer backend disable after the join is confirmed', async () => {
+  it('does not flick off when a stale backend snapshot follows a confirmed join', async () => {
     const join = deferred();
     mocks.joinMutateAsync.mockReturnValueOnce(join.promise);
     const view = renderReadiness(claim());
@@ -132,7 +132,46 @@ describe('ClaimDebateReadiness', () => {
 
     view.rerender(readiness(claim({ viewer_debate_ready: false }), view.queryClient));
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
+
+    view.rerender(readiness(claim({ viewer_response: null, viewer_debate_ready: false }), view.queryClient));
+
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+  });
+
+  it('stays enabled when an existing response changes position', async () => {
+    const view = renderReadiness(claim({ viewer_debate_ready: true }));
+
+    await act(async () => {
+      view.queryClient.setQueryData(
+        entityResponseIndexingQueryKey('profile-space-1', 'claim-1', 'space-1', 'stance'),
+        indexing('negative')
+      );
+    });
+    view.rerender(
+      readiness(
+        claim({
+          viewer_response: { position: true, position_label: 'Agree' },
+          viewer_debate_ready: false,
+        }),
+        view.queryClient
+      )
+    );
+
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
+
+    view.rerender(
+      readiness(
+        claim({
+          viewer_response: { position: false, position_label: 'Disagree' },
+          viewer_debate_ready: false,
+        }),
+        view.queryClient
+      )
+    );
+
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.leaveMutateAsync).not.toHaveBeenCalled();
   });
 
   it('stays clickable while joining and serializes a later leave', async () => {
