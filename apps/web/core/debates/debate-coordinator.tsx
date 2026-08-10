@@ -12,8 +12,9 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
-import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
+import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
 import {
   clearDebateMatchTabOwnership,
@@ -48,6 +49,11 @@ export function DebateCoordinator() {
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey,
     debateAttention
+  );
+  useClaimResponseIndexedNotifier(
+    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const currentUserId = getCurrentGeoChatUserId();
