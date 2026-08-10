@@ -60,12 +60,13 @@ describe('ClaimReadinessToggle', () => {
   });
 
   // The position is an on-chain response, so readiness cannot be turned on before one is indexed.
+  // The reason is shown rather than left in a `title`, which never appears on touch.
   it('cannot be turned on without an indexed response, and says why', () => {
     render(<ClaimReadinessToggle claim={claim} readiness={readiness({ viewer_response: null })} />);
     const toggle = screen.getByRole('switch', { name: 'Ready to debate this claim' });
 
     expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('title', 'Respond to this claim to debate it.');
+    expect(screen.getByText('Respond to this claim to debate it.')).toBeInTheDocument();
     fireEvent.click(toggle);
     expect(mocks.readinessMutate).not.toHaveBeenCalled();
   });
@@ -77,18 +78,16 @@ describe('ClaimReadinessToggle', () => {
         readiness={readiness({ readiness_disabled_reason: 'Your response is still being indexed.' })}
       />
     );
-    const toggle = screen.getByRole('switch', { name: 'Ready to debate this claim' });
 
-    expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('title', 'Your response is still being indexed.');
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeDisabled();
+    expect(screen.getByText('Your response is still being indexed.')).toBeInTheDocument();
   });
 
   it('blocks readiness on a claim that is already being debated', () => {
     render(<ClaimReadinessToggle claim={claim} readiness={readiness()} activeDebate />);
-    const toggle = screen.getByRole('switch', { name: 'Ready to debate this claim' });
 
-    expect(toggle).toBeDisabled();
-    expect(toggle).toHaveAttribute('title', 'This claim is being debated right now.');
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeDisabled();
+    expect(screen.getByText('This claim is being debated right now.')).toBeInTheDocument();
   });
 
   it('still lets a ready viewer stand down while a reason is present', () => {

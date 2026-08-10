@@ -81,6 +81,9 @@ export const debateQueryKeys = {
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
   people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
+  /** Prefix covering every filter combination of the claims list. */
+  matchmakingClaimsRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
   matchmakingClaims: (accountKey: string | null, filters: MatchmakingClaimsQuery) =>
     ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
   matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,

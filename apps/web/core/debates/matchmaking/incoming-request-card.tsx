@@ -2,11 +2,16 @@
 
 import * as React from 'react';
 
+import { motion } from 'framer-motion';
+
 import { Time } from '~/design-system/icons/time';
+import { Text } from '~/design-system/text';
 
 import type { DebateRequest } from '../api';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
+import { hubCardMotion } from './hub-motion';
+import { HubPillButton } from './hub-pill-button';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { RequestParties } from './request-parties';
@@ -25,24 +30,17 @@ export function IncomingRequestCard({ request }: { request: DebateRequest }) {
   const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
 
-  // Expiry is server-driven, but hiding it locally avoids a dead card between tick and event.
-  if (countdown.expired) return null;
-
   return (
-    <article className="rounded-lg border border-grey-02 bg-white p-3">
+    // Expiry is owned by the list (`useUnexpiredRequests`) rather than this card, so the card can
+    // animate out instead of vanishing mid-frame.
+    <motion.article {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <SpaceChip spaceId={request.claim.space_id} />
         <span className="flex shrink-0 items-center gap-1 text-footnote text-grey-04">
           <Time />
           {countdown.label}
-        </span>
-      </div>
-
-      <p className="mb-3 text-metadataMedium">{request.claim.claim}</p>
-
-      <div className="relative">
-        <RequestParties viewer={request.recipient} opponent={request.requester} />
-        <div className="absolute top-1.5 right-1.5">
+          {/* Sits with the other header affordances rather than floating over the participants
+              card, where it collided with longer display names. */}
           <RequestOverflowMenu
             actions={[
               {
@@ -56,33 +54,40 @@ export function IncomingRequestCard({ request }: { request: DebateRequest }) {
               },
             ]}
           />
-        </div>
+        </span>
       </div>
 
+      <Text as="p" variant="metadataMedium" className="mb-3">
+        {request.claim.claim}
+      </Text>
+
+      <RequestParties viewer={request.recipient} opponent={request.requester} />
+
       {unavailable ? (
-        <p className="mt-2 text-footnote text-grey-04">
+        <Text as="p" variant="footnote" color="grey-04" className="mt-2">
           {speakerLabel(request.requester)} is in a debate. You can accept once they’re free.
-        </p>
+        </Text>
       ) : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
+        <HubPillButton
           onClick={() => dismissRequest.mutate({ requestId: request.id })}
           disabled={busy}
-          className="h-8 rounded-full border border-grey-02 text-metadata transition-colors hover:bg-grey-01 disabled:opacity-50"
+          pending={dismissRequest.isPending}
+          pendingLabel="Dismissing…"
         >
           Dismiss
-        </button>
-        <button
-          type="button"
+        </HubPillButton>
+        <HubPillButton
+          variant="primary"
           onClick={() => acceptRequest.mutate({ requestId: request.id })}
           disabled={busy || unavailable}
-          className="h-8 rounded-full bg-text text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+          pending={acceptRequest.isPending}
+          pendingLabel="Accepting…"
         >
           {unavailable ? 'Pending' : 'Accept'}
-        </button>
+        </HubPillButton>
       </div>
-    </article>
+    </motion.article>
   );
 }

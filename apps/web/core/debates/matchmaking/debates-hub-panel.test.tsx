@@ -81,7 +81,7 @@ describe('DebatesHubPanel', () => {
     expect(screen.queryByRole('heading', { name: 'Debates' })).not.toBeInTheDocument();
   });
 
-  it('renders every tab and switches between them', () => {
+  it('renders every tab and switches between them', async () => {
     renderOpen();
 
     for (const label of ['Requests', 'Matches', 'Claims', 'People']) {
@@ -90,13 +90,14 @@ describe('DebatesHubPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
-    expect(screen.getByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
+    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', () => {
     renderOpen();
 
-    fireEvent.click(screen.getByRole('switch', { name: /Unavailable/ }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Available to debate' }));
 
     expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
   });

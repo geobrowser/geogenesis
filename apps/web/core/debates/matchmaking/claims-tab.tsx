@@ -15,8 +15,11 @@ import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic 
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
+import { HubCardList } from './hub-motion';
+import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -50,9 +53,17 @@ export function ClaimsTab() {
   );
 
   const claimsQuery = useMatchmakingClaims(query, true);
-  const pages = claimsQuery.data?.pages ?? [];
-  const claims = pages.flatMap(page => page.claims);
+  const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
+  const serverClaims = React.useMemo(() => pages.flatMap(page => page.claims), [pages]);
   const facets = pages[0]?.facets;
+
+  // The server re-sorts on every readiness change, so hold the order the user is looking at until
+  // they ask for a different list.
+  const claims = useStableListOrder(
+    serverClaims,
+    entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
+    `${debouncedSearch}|${spaceId ?? ''}|${filter}`
+  );
 
   // Only real entity ids can be looked up in the KG; the graph 400s the whole batch on a single
   // malformed id, so drop any that aren't valid.
@@ -86,6 +97,8 @@ export function ClaimsTab() {
     }
     return [...seen.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [topicsByClaimId]);
+
+  const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
   const visibleClaims = React.useMemo(
     () =>
@@ -125,33 +138,49 @@ export function ClaimsTab() {
       <HubQueryState
         isLoading={claimsQuery.isLoading}
         error={claimsQuery.error}
+        onRetry={() => void claimsQuery.refetch()}
         isEmpty={visibleClaims.length === 0}
-        emptyMessage="No claims match these filters."
-      >
-        <div className="flex flex-col gap-2">
-          {visibleClaims.map(entry => (
-            <MatchmakingClaimCard
-              key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-              claim={entry.claim}
-              positions={entry.positions}
-              responseKind={entry.response_kind}
-              viewerResponse={entry.viewer_response}
-              headerAction={
-                <ClaimReadinessToggle claim={entry.claim} readiness={entry} activeDebate={entry.active_debate} />
+        emptyMessage={hasFilters ? 'No claims match these filters.' : 'No debatable claims yet.'}
+        emptyAction={
+          hasFilters
+            ? {
+                label: 'Clear filters',
+                onClick: () => {
+                  setSearch('');
+                  setFilter('all');
+                  setSpaceId(null);
+                  setTopicId(null);
+                },
               }
-            />
-          ))}
+            : undefined
+        }
+      >
+        <>
+          <HubCardList>
+            {visibleClaims.map(entry => (
+              <MatchmakingClaimCard
+                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                claim={entry.claim}
+                positions={entry.positions}
+                responseKind={entry.response_kind}
+                viewerResponse={entry.viewer_response}
+                headerAction={
+                  <ClaimReadinessToggle claim={entry.claim} readiness={entry} activeDebate={entry.active_debate} />
+                }
+              />
+            ))}
+          </HubCardList>
           {claimsQuery.hasNextPage ? (
-            <button
-              type="button"
+            <HubPillButton
               onClick={() => void claimsQuery.fetchNextPage()}
-              disabled={claimsQuery.isFetchingNextPage}
-              className="mt-1 h-8 rounded-full border border-grey-02 text-metadata transition-colors hover:bg-grey-01 disabled:opacity-50"
+              pending={claimsQuery.isFetchingNextPage}
+              pendingLabel="Loading…"
+              className="mt-2 w-full"
             >
-              {claimsQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
-            </button>
+              Load more
+            </HubPillButton>
           ) : null}
-        </div>
+        </>
       </HubQueryState>
     </div>
   );

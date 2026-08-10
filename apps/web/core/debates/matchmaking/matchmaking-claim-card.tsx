@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -12,6 +13,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, DebateResponseSummary } from '../api';
+import { hubCardMotion } from './hub-motion';
 
 type Props = {
   claim: DebateClaimSummary;
@@ -43,8 +45,12 @@ export function MatchmakingClaimCard({ claim, positions, responseKind, viewerRes
   const fallback = fallbackLabels(responseKind);
 
   return (
-    <article className="rounded-lg border border-grey-02 bg-white p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
+    // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
+    // collapse to its content width as it fades.
+    <motion.article {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
+      {/* items-start, not items-center: the readiness toggle grows when it shows an explanation,
+          and centering would drag the space chip out of line with it. */}
+      <div className="mb-2 flex items-start justify-between gap-2">
         <SpaceChip spaceId={claim.space_id} />
         {headerAction}
       </div>
@@ -69,7 +75,7 @@ export function MatchmakingClaimCard({ claim, positions, responseKind, viewerRes
         />
       </div>
       {footer}
-    </article>
+    </motion.article>
   );
 }
 

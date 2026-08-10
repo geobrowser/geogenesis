@@ -63,7 +63,7 @@ afterEach(cleanup);
 
 describe('MatchesTab', () => {
   it('shows both sides with their semantic response labels', () => {
-    render(<MatchesTab />);
+    render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByText('Agree')).toBeInTheDocument();
     expect(screen.getByText('Disagree')).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe('MatchesTab', () => {
         positions: [],
       }),
     ];
-    render(<MatchesTab />);
+    render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByText('Verify')).toBeInTheDocument();
     expect(screen.getByText('Dispute')).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe('MatchesTab', () => {
 
   // A position is an on-chain response now — the card links to the claim rather than setting it.
   it('does not offer to change the position from the hub', () => {
-    render(<MatchesTab />);
+    render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('link', { name: 'Chips are better than fries' })).toHaveAttribute(
       'href',
@@ -96,7 +96,7 @@ describe('MatchesTab', () => {
   });
 
   it('stands down from a claim by turning readiness off, never by clearing a position', () => {
-    render(<MatchesTab />);
+    render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Ready to debate this claim' }));
 
@@ -108,13 +108,13 @@ describe('MatchesTab', () => {
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {
-    const { rerender } = render(<MatchesTab />);
+    const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
     expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: 'space-1', claim_entity_id: 'claim-1' });
 
     mocks.outbound = { id: 'request-1', claim: match().claim, expires_at: '2099-01-01T00:00:00.000Z' };
-    rerender(<MatchesTab />);
+    rerender(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });

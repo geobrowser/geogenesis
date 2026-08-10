@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   type CreateDebateRequestBody,
@@ -63,6 +63,9 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
       ),
     initialPageParam: null as string | null,
     getNextPageParam: lastPage => lastPage.next_cursor,
+    // Changing a filter or typing in search changes the query key; without this the list would be
+    // replaced by a skeleton on every keystroke.
+    placeholderData: keepPreviousData,
     enabled: enabled && authenticated,
   });
 }
@@ -120,8 +123,61 @@ export function useClaimReadiness() {
       ready
         ? joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey)
         : leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    // The switch moves now rather than a round trip and a refetch later, mirroring the
+    // availability switch in the panel header.
+    onMutate: async ({ claimId, ready }) => {
+      const families = [debateQueryKeys.matchmakingClaimsRoot(accountKey), debateQueryKeys.matches(accountKey)];
+      await Promise.all(families.map(queryKey => queryClient.cancelQueries({ queryKey })));
+      const previous = families.flatMap(queryKey => queryClient.getQueriesData({ queryKey }));
+      for (const queryKey of families) {
+        queryClient.setQueriesData({ queryKey }, (current: unknown) => patchClaimReadiness(current, claimId, ready));
+      }
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      for (const [queryKey, data] of context?.previous ?? []) queryClient.setQueryData(queryKey, data);
+    },
+    // Readiness changes who is matchable, so let the server re-sort — but only the families it
+    // actually affects, rather than every debate query.
+    onSettled: () => {
+      for (const queryKey of [
+        debateQueryKeys.matchmakingClaimsRoot(accountKey),
+        debateQueryKeys.matches(accountKey),
+        debateQueryKeys.activity(accountKey),
+        ['debates', 'claims'] as const,
+      ]) {
+        void queryClient.invalidateQueries({ queryKey });
+      }
+    },
   });
+}
+
+/**
+ * Flips `viewer_debate_ready` on one claim wherever it appears, in both the flat matches response
+ * and the paged claims response. Anything else is returned untouched.
+ */
+function patchClaimReadiness(data: unknown, claimId: string, ready: boolean): unknown {
+  const patchOne = <T extends { claim: { claim_entity_id: string }; viewer_debate_ready: boolean }>(entry: T) =>
+    entry.claim.claim_entity_id === claimId ? { ...entry, viewer_debate_ready: ready } : entry;
+
+  if (!data || typeof data !== 'object') return data;
+
+  if ('matches' in data && Array.isArray(data.matches)) {
+    return { ...data, matches: data.matches.map(patchOne) };
+  }
+
+  if ('pages' in data && Array.isArray(data.pages)) {
+    return {
+      ...data,
+      pages: data.pages.map((page: unknown) =>
+        page && typeof page === 'object' && 'claims' in page && Array.isArray(page.claims)
+          ? { ...page, claims: page.claims.map(patchOne) }
+          : page
+      ),
+    };
+  }
+
+  return data;
 }
 
 export function useCreateDebateRequest() {

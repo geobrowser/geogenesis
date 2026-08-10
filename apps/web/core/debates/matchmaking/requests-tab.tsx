@@ -3,12 +3,15 @@
 import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
+import { Text } from '~/design-system/text';
 
 import { getCurrentGeoChatUserId } from '../api';
 import { useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
+import { HubCardList } from './hub-motion';
+import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -66,9 +69,11 @@ export function RequestsTab({ onTabChange }: Props) {
               onExploreClaims={() => onTabChange('claims')}
             />
           ) : null}
-          {filtered.map(request => (
-            <IncomingRequestCard key={request.id} request={request} />
-          ))}
+          <HubCardList>
+            {filtered.map(request => (
+              <IncomingRequestCard key={request.id} request={request} />
+            ))}
+          </HubCardList>
         </div>
       </HubQueryState>
     </div>
@@ -96,29 +101,28 @@ function ChallengeCard({
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-3">
-      <p className="mb-2 text-footnoteMedium text-grey-04">Someone wants to debate you</p>
+      <Text as="p" variant="footnoteMedium" color="grey-04" className="mb-2">
+        Someone wants to debate you
+      </Text>
       <div className="mb-3 flex items-center gap-2">
         <span className="h-6 w-6 shrink-0 overflow-hidden rounded-full">
           <Avatar avatarUrl={avatarUrl} value={avatarValue} size={24} />
         </span>
-        <span className="truncate text-metadataMedium">{requesterName}</span>
+        <Text as="span" variant="metadataMedium" className="truncate">
+          {requesterName}
+        </Text>
       </div>
       <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
+        <HubPillButton
           onClick={() => rejectChallenge.mutate(challengeId)}
-          disabled={rejectChallenge.isPending}
-          className="h-8 rounded-full border border-grey-02 text-metadata transition-colors hover:bg-grey-01 disabled:opacity-50"
+          pending={rejectChallenge.isPending}
+          pendingLabel="Dismissing…"
         >
           Dismiss
-        </button>
-        <button
-          type="button"
-          onClick={onExploreClaims}
-          className="h-8 rounded-full bg-text text-metadata text-white transition-colors hover:bg-text/90"
-        >
+        </HubPillButton>
+        <HubPillButton variant="primary" onClick={onExploreClaims}>
           Explore claims
-        </button>
+        </HubPillButton>
       </div>
     </article>
   );

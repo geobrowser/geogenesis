@@ -3,17 +3,19 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { type PanInfo, motion, useDragControls } from 'framer-motion';
+import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 
-import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
+import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
+import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests } from './hooks';
+import { HubSwap } from './hub-motion';
 import { HubMessage } from './hub-states';
 import { MatchesTab } from './matches-tab';
 import { PeopleTab } from './people-tab';
@@ -102,53 +104,59 @@ export function DebatesHubPanel() {
 
   if (isMobile) {
     return createPortal(
-      <motion.div
-        className="fixed inset-0 z-[200]"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.15 }}
-        onPointerDown={event => {
-          if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
-        }}
-      >
-        <button type="button" className="absolute inset-0 bg-grey-04/50" onClick={close} aria-label="Close" />
+      // Scoped to the hub rather than a global MotionConfig, which would silently retune every
+      // animation in the app. `user` keeps opacity fades but drops transform and layout motion.
+      <MotionConfig reducedMotion="user">
         <motion.div
-          data-debates-hub
-          role="dialog"
-          aria-modal="true"
-          aria-label="Debates"
-          drag="y"
-          dragControls={dragControls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.12}
-          onDragEnd={(_event, info: PanInfo) => {
-            if (info.offset.y > 72 || info.velocity.y > 420) close();
+          className="fixed inset-0 z-[200]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
+          onPointerDown={event => {
+            if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
           }}
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
-          style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
         >
-          <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
-            <div className="h-1 w-10 rounded-full bg-grey-02" />
-          </div>
-          {body}
+          <button type="button" className="absolute inset-0 bg-grey-04/50" onClick={close} aria-label="Close" />
+          <motion.div
+            data-debates-hub
+            role="dialog"
+            aria-modal="true"
+            aria-label="Debates"
+            drag="y"
+            dragControls={dragControls}
+            dragListener={false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.12}
+            onDragEnd={(_event, info: PanInfo) => {
+              if (info.offset.y > 72 || info.velocity.y > 420) close();
+            }}
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden bg-white"
+            style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+          >
+            <div className="flex shrink-0 justify-center pt-2 pb-1" aria-hidden>
+              <div className="h-1 w-10 rounded-full bg-grey-02" />
+            </div>
+            {body}
+          </motion.div>
         </motion.div>
-      </motion.div>,
+      </MotionConfig>,
       document.body
     );
   }
 
   return createPortal(
-    <aside
-      data-debates-hub
-      aria-label="Debates"
-      className="shadow-2xl fixed top-11 right-0 bottom-0 z-[200] flex w-[min(400px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white"
-    >
-      {body}
-    </aside>,
+    <MotionConfig reducedMotion="user">
+      <aside
+        data-debates-hub
+        aria-label="Debates"
+        className="shadow-2xl fixed top-11 right-0 bottom-0 z-[200] flex w-[min(400px,100vw)] shrink-0 flex-col overflow-hidden border-l border-grey-02 bg-white"
+      >
+        {body}
+      </aside>
+    </MotionConfig>,
     document.body
   );
 }
@@ -165,11 +173,24 @@ function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
 
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
   const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
+  // leave Requests scrolled to the same offset.
+  const changeTab = React.useCallback(
+    (tab: DebatesHubTab) => {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+      onTabChange(tab);
+    },
+    [onTabChange]
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-4 pb-3">
-        <h2 className="text-smallTitle">Debates</h2>
+        <Text as="h2" variant="smallTitle">
+          Debates
+        </Text>
         <AvailabilityToggle />
       </div>
 
@@ -180,11 +201,17 @@ function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => onTabChange(tab.id)}
+                aria-current={activeTab === tab.id ? 'true' : undefined}
+                onClick={() => changeTab(tab.id)}
                 className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
               >
                 {tab.label}
-                {tab.id === 'requests' && requestCount > 0 ? <TabBadge>{requestCount}</TabBadge> : null}
+                {tab.id === 'requests' && requestCount > 0 ? (
+                  <Badge>
+                    {requestCount}
+                    <span className="sr-only"> pending requests</span>
+                  </Badge>
+                ) : null}
                 {activeTab === tab.id && (
                   <motion.div
                     layoutId="debates-hub-tab-active-border"
@@ -201,19 +228,30 @@ function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
         </div>
       </div>
 
-      <div data-debates-hub-scroll className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {/* layoutScroll tells Motion to account for this element's scroll offset when it measures
+          card positions — without it, reordering a scrolled list animates from the wrong place. */}
+      <motion.div
+        layoutScroll
+        ref={scrollRef}
+        data-debates-hub-scroll
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
+      >
         {!ready ? null : !authenticated ? (
           <HubMessage>Sign in to find people to debate.</HubMessage>
-        ) : activeTab === 'requests' ? (
-          <RequestsTab onTabChange={onTabChange} />
-        ) : activeTab === 'matches' ? (
-          <MatchesTab />
-        ) : activeTab === 'claims' ? (
-          <ClaimsTab />
         ) : (
-          <PeopleTab />
+          <HubSwap activeKey={activeTab}>
+            {activeTab === 'requests' ? (
+              <RequestsTab onTabChange={changeTab} />
+            ) : activeTab === 'matches' ? (
+              <MatchesTab onTabChange={changeTab} />
+            ) : activeTab === 'claims' ? (
+              <ClaimsTab />
+            ) : (
+              <PeopleTab />
+            )}
+          </HubSwap>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -231,6 +269,9 @@ function AvailabilityToggle() {
     <button
       type="button"
       role="switch"
+      // Without this the switch announces "Unavailable, off", which is ambiguous about which way
+      // pressing it goes.
+      aria-label="Available to debate"
       aria-checked={available}
       disabled={updateAvailability.isPending}
       onClick={() => updateAvailability.mutate(!available)}
@@ -256,8 +297,4 @@ function AvailabilityToggle() {
       </span>
     </button>
   );
-}
-
-function TabBadge({ children }: { children: React.ReactNode }) {
-  return <span className="shrink-0 rounded bg-black px-1.25 py-0.5 text-xs leading-none text-white">{children}</span>;
 }

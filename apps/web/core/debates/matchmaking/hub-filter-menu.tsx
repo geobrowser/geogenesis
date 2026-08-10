@@ -5,6 +5,7 @@ import * as React from 'react';
 import { SmallButton } from '~/design-system/button';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
@@ -36,7 +37,12 @@ export function HubFilterMenu<T extends string>({ label, options, value, onChang
       onOpenChange={setOpen}
       asChild
       className="max-w-[280px]"
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
+      // Space names come from the knowledge graph and can be long enough to burst the pill.
+      trigger={
+        <SmallButton icon={<ChevronDownSmall />} className="max-w-[160px]">
+          <span className="truncate">{label}</span>
+        </SmallButton>
+      }
     >
       <>
         {options.map(option => (
@@ -63,7 +69,11 @@ export function HubFilterMenu<T extends string>({ label, options, value, onChang
             <Text variant="button" className="truncate hover:text-text!">
               {option.label}
             </Text>
-            {option.value === value ? <span className="ml-auto shrink-0 text-metadata text-grey-04">✓</span> : null}
+            {option.value === value ? (
+              <span className="ml-auto shrink-0">
+                <TickSmall />
+              </span>
+            ) : null}
           </button>
         ))}
       </>

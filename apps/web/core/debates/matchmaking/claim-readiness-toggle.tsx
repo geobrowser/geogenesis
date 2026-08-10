@@ -4,6 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { Text } from '~/design-system/text';
+import { Toggle } from '~/design-system/toggle';
+
 import type { DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { useClaimReadiness } from './hooks';
 
@@ -33,6 +36,8 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) 
     : (blockedReason ?? (missingResponse ? `Respond to this claim to debate it.` : undefined));
   const error = setReadiness.error instanceof Error ? setReadiness.error.message : null;
 
+  const explanationId = React.useId();
+
   return (
     <span className="flex shrink-0 flex-col items-end gap-0.5">
       <button
@@ -40,7 +45,8 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) 
         role="switch"
         aria-checked={ready}
         aria-label="Ready to debate this claim"
-        title={explanation}
+        aria-describedby={explanation ? explanationId : undefined}
+        aria-busy={setReadiness.isPending || undefined}
         disabled={disabled}
         onClick={() =>
           setReadiness.mutate({
@@ -50,22 +56,30 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) 
           })
         }
         className={cx(
-          'flex shrink-0 items-center gap-1.5 text-footnote transition-colors disabled:opacity-50',
+          'flex h-6 shrink-0 items-center gap-1.5 text-footnote transition-colors disabled:opacity-50',
           ready ? 'text-text' : 'text-grey-04',
           !disabled && 'hover:text-text'
         )}
       >
-        <span aria-hidden className={cx('relative h-4 w-6 shrink-0 rounded-full', ready ? 'bg-text' : 'bg-grey-03')}>
-          <span
-            className={cx(
-              'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-              ready && 'translate-x-2'
-            )}
-          />
-        </span>
+        <Toggle checked={ready} className="shrink-0" />
         Debate
       </button>
-      {error ? <span className="max-w-40 text-right text-footnote text-red-01">{error}</span> : null}
+      {/* Shown, not just a `title`: native tooltips never appear on touch and are unreliable on a
+          disabled button, which is exactly when the explanation matters. */}
+      {explanation ? (
+        <span id={explanationId}>
+          <Text as="span" variant="footnote" color="grey-04" className="block max-w-40 text-right">
+            {explanation}
+          </Text>
+        </span>
+      ) : null}
+      {error ? (
+        <div role="alert">
+          <Text as="span" variant="footnote" color="red-01" className="block max-w-40 text-right">
+            {error}
+          </Text>
+        </div>
+      ) : null}
     </span>
   );
 }

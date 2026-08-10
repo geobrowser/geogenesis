@@ -21,7 +21,7 @@ export function RequestParties({
   showPositions?: boolean;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-grey-02 py-3">
+    <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-grey-02 px-2 py-3">
       <PartySummary party={viewer} label="You" showPosition={showPositions} />
       <span className="grid w-10 place-items-center text-footnote text-grey-04">vs</span>
       <PartySummary party={opponent} label={speakerLabel(opponent)} showPosition={showPositions} />
@@ -45,7 +45,9 @@ function PartySummary({
       </span>
       <span className="max-w-full truncate text-footnoteMedium">{label}</span>
       {showPosition && party ? (
-        <span className="rounded-full bg-grey-02 px-2 py-0.5 text-footnote">{party.position_label}</span>
+        <span className="max-w-full truncate rounded-full bg-grey-02 px-2 py-0.5 text-footnote">
+          {party.position_label}
+        </span>
       ) : null}
     </div>
   );

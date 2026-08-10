@@ -28,7 +28,9 @@ export function DebatesHubButton() {
     <button
       type="button"
       data-debates-hub-opener
-      aria-label="Debates"
+      // The pending count is the whole point of the button, and an aria-label would otherwise
+      // override the visible number.
+      aria-label={requestCount > 0 ? `Debates, ${requestCount} pending requests` : 'Debates'}
       aria-expanded={isOpen}
       onClick={() => toggle()}
       className={cx(

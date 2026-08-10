@@ -30,7 +30,7 @@ export function RequestOverflowMenu({ actions }: { actions: RequestOverflowActio
         <button
           type="button"
           aria-label="More options"
-          className="flex h-6 w-6 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
         >
           <Ellipsis />
         </button>
