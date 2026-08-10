@@ -14,13 +14,15 @@ import {
 import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
-import { type DebateClaim, type DebateClaimsResponse, GeoChatRequestError } from './api';
+import { type DebateClaim, type DebateClaimsResponse, type DebateResponseKind, GeoChatRequestError } from './api';
 import { DebateEntityResponseControls } from './debate-entity-response-controls';
 import { useDebateReadinessIntent } from './debate-readiness-intent';
 import { useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
 
 type ClaimDebateReadinessProps = {
   debateClaim: DebateClaim | null;
+  responseKind?: DebateResponseKind | null;
+  viewerPosition?: boolean | null;
   entityId: string;
   spaceId: string;
   canEnable: boolean;
@@ -31,6 +33,8 @@ type ClaimDebateReadinessProps = {
 
 export function ClaimDebateReadiness({
   debateClaim,
+  responseKind: responseKindOverride,
+  viewerPosition: viewerPositionOverride,
   entityId,
   spaceId,
   canEnable,
@@ -38,13 +42,14 @@ export function ClaimDebateReadiness({
   textVariant = 'metadata',
   compact = false,
 }: ClaimDebateReadinessProps) {
-  if (!debateClaim) {
-    return null;
-  }
+  const responseKind = responseKindOverride ?? debateClaim?.response_kind ?? null;
+  if (!responseKind) return null;
 
   return (
     <ClaimDebateReadinessContent
       debateClaim={debateClaim}
+      responseKind={responseKind}
+      viewerPosition={viewerPositionOverride}
       entityId={entityId}
       spaceId={spaceId}
       canEnable={canEnable}
@@ -57,13 +62,18 @@ export function ClaimDebateReadiness({
 
 function ClaimDebateReadinessContent({
   debateClaim,
+  responseKind,
+  viewerPosition: viewerPositionOverride,
   entityId,
   spaceId,
   canEnable,
   className,
   textVariant = 'metadata',
   compact = false,
-}: Omit<ClaimDebateReadinessProps, 'debateClaim'> & { debateClaim: DebateClaim }) {
+}: Omit<ClaimDebateReadinessProps, 'debateClaim' | 'responseKind'> & {
+  debateClaim: DebateClaim | null;
+  responseKind: DebateResponseKind;
+}) {
   const queryClient = useQueryClient();
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
@@ -71,25 +81,22 @@ function ClaimDebateReadinessContent({
   const responseIndexing = useEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
-    responseKind: debateClaim.response_kind,
+    responseKind,
   });
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
-    responseKind: debateClaim.response_kind,
+    responseKind,
   });
-  const { intent, setIntent, updateIntent } = useDebateReadinessIntent(
-    accountKey,
-    spaceId,
-    entityId,
-    debateClaim.response_kind
-  );
+  const { intent, setIntent, updateIntent } = useDebateReadinessIntent(accountKey, spaceId, entityId, responseKind);
 
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
-  const viewerPosition = pendingResponse ? optimisticPosition : (debateClaim.viewer_response?.position ?? null);
-  const backendReady = debateClaim.viewer_debate_ready;
+  const confirmedViewerPosition =
+    viewerPositionOverride === undefined ? (debateClaim?.viewer_response?.position ?? null) : viewerPositionOverride;
+  const viewerPosition = pendingResponse ? optimisticPosition : confirmedViewerPosition;
+  const backendReady = debateClaim?.viewer_debate_ready ?? false;
   const responseWithdrawalPending = Boolean(pendingResponse && pendingResponse.expectedResponse === null);
   const checked = responseWithdrawalPending ? false : (intent?.desiredReady ?? backendReady);
   const intentRequestInFlight = intent?.inFlightReady !== null && intent?.inFlightReady !== undefined;
@@ -132,7 +139,7 @@ function ClaimDebateReadinessContent({
         }
       }
 
-      if (intent.desiredReady && debateClaim.viewer_response?.position !== intent.expectedPosition) {
+      if (intent.desiredReady && confirmedViewerPosition !== intent.expectedPosition) {
         if (!intent.responseRunId || responseIndexing.status === 'idle') setIntent(null);
         return;
       }
@@ -163,9 +170,11 @@ function ClaimDebateReadinessContent({
             current
               ? {
                   ...current,
-                  claims: current.claims.map(claim =>
-                    claim.claim_entity_id === result.claim.claim_entity_id ? result.claim : claim
-                  ),
+                  claims: current.claims.some(claim => claim.claim_entity_id === result.claim.claim_entity_id)
+                    ? current.claims.map(claim =>
+                        claim.claim_entity_id === result.claim.claim_entity_id ? result.claim : claim
+                      )
+                    : [...current.claims, result.claim],
                 }
               : current
           );
@@ -231,7 +240,7 @@ function ClaimDebateReadinessContent({
       accountKey,
       authenticated,
       backendReady,
-      debateClaim.viewer_response?.position,
+      confirmedViewerPosition,
       entityId,
       intent,
       joinQueue,
@@ -250,11 +259,11 @@ function ClaimDebateReadinessContent({
       const expectedResponse = responseIndexing.pending.expectedResponse;
       const confirmed =
         expectedResponse === null
-          ? debateClaim.viewer_response === null
-          : debateClaim.viewer_response?.position === (expectedResponse === 'positive');
+          ? confirmedViewerPosition === null
+          : confirmedViewerPosition === (expectedResponse === 'positive');
       if (confirmed) resetResponseIndexing(responseIndexing.runId);
     },
-    [debateClaim.viewer_response, resetResponseIndexing, responseIndexing]
+    [confirmedViewerPosition, resetResponseIndexing, responseIndexing]
   );
 
   const handleToggle = () => {
@@ -286,12 +295,12 @@ function ClaimDebateReadinessContent({
 
   if (compact) return toggle;
 
-  const readinessMessage = readinessReasonMessage(debateClaim.readiness_disabled_reason);
+  const readinessMessage = readinessReasonMessage(debateClaim?.readiness_disabled_reason ?? null);
 
   return (
     <div className={className}>
       <div className="flex items-center gap-4">
-        <DebateEntityResponseControls entityId={entityId} spaceId={spaceId} responseKind={debateClaim.response_kind} />
+        <DebateEntityResponseControls entityId={entityId} spaceId={spaceId} responseKind={responseKind} />
         {toggle}
       </div>
 

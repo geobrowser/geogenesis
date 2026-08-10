@@ -108,6 +108,35 @@ export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean
   return isFactual ? 'veracity' : 'stance';
 }
 
+export function getEntityResponseKindForEntity(
+  entity: Pick<Entity, 'relations' | 'types' | 'values'> | null | undefined,
+  spaceId: string
+): ResponseKind | null {
+  if (!entity) return null;
+
+  const isClaim =
+    entity.types?.some(type => uuidToHex(type.id) === CLAIM_TYPE) ||
+    entity.relations?.some(
+      relation =>
+        relation.isDeleted !== true &&
+        uuidToHex(relation.type.id) === TYPES_PROPERTY &&
+        uuidToHex(relation.toEntity.id) === CLAIM_TYPE
+    ) ||
+    false;
+  const isFactual =
+    isClaim &&
+    (entity.values?.some(
+      value =>
+        value.isDeleted !== true &&
+        uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+        uuidToHex(value.property.id) === CLAIM_IS_FACTUAL &&
+        value.value === '1'
+    ) ??
+      false);
+
+  return getEntityResponseKind({ isClaim, isFactual });
+}
+
 export function hasUnpublishedClaimResponseKindEdit(
   entity: Pick<Entity, 'relations' | 'values'> | null | undefined,
   spaceId: string

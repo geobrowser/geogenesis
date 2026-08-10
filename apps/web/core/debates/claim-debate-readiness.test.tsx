@@ -56,6 +56,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimDebateReadiness', () => {
+  it('uses the canonical response while the debate snapshot hydrates', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <ClaimDebateReadiness
+          debateClaim={null}
+          responseKind="stance"
+          viewerPosition={false}
+          entityId="claim-1"
+          spaceId="space-1"
+          canEnable
+          compact
+        />
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
+  });
+
   it('hides the Debate switch until the user responds', () => {
     renderReadiness(claim({ viewer_response: null }));
 
