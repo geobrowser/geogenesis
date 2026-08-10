@@ -9,11 +9,17 @@ import { useClaimResponseSummaryBatch } from './use-claim-response-summaries';
 
 const mocks = vi.hoisted(() => ({
   loadCaches: vi.fn(),
+  loadMetadataCaches: vi.fn(),
   personalSpaceId: 'profile-1' as string | null,
+  personalSpaceLoading: false,
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: true }),
+  usePersonalSpaceId: () => ({
+    personalSpaceId: mocks.personalSpaceId,
+    isRegistered: true,
+    isLoading: mocks.personalSpaceLoading,
+  }),
 }));
 
 vi.mock('./claim-response-summaries', async importOriginal => {
@@ -21,13 +27,17 @@ vi.mock('./claim-response-summaries', async importOriginal => {
   return {
     ...actual,
     loadClaimResponseSummaryCaches: (...args: unknown[]) => mocks.loadCaches(...args),
+    loadClaimResponderMetadataCaches: (...args: unknown[]) => mocks.loadMetadataCaches(...args),
   };
 });
 
 beforeEach(() => {
   mocks.loadCaches.mockReset();
   mocks.loadCaches.mockResolvedValue(new Map());
+  mocks.loadMetadataCaches.mockReset();
+  mocks.loadMetadataCaches.mockResolvedValue(undefined);
   mocks.personalSpaceId = 'profile-1';
+  mocks.personalSpaceLoading = false;
 });
 
 describe('useClaimResponseSummaryBatch', () => {
@@ -95,6 +105,58 @@ describe('useClaimResponseSummaryBatch', () => {
     expect(
       queryClient.getQueryState(['claim-response-summaries', 'profile-1', 'space-2', ['claim-1:stance']])?.status
     ).toBe('success');
+  });
+
+  it('waits for the viewer identity query before starting the batch', async () => {
+    mocks.personalSpaceId = null;
+    mocks.personalSpaceLoading = true;
+    const { wrapper } = createHarness();
+    const targets = [{ entityId: 'claim-1', responseKind: 'stance' as const }];
+    const { result, rerender } = renderHook(
+      () => useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }),
+      { wrapper }
+    );
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(mocks.loadCaches).not.toHaveBeenCalled();
+
+    mocks.personalSpaceId = 'profile-1';
+    mocks.personalSpaceLoading = false;
+    rerender();
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mocks.loadCaches).toHaveBeenCalledOnce();
+    expect(mocks.loadCaches).toHaveBeenCalledWith(expect.objectContaining({ personalSpaceId: 'profile-1' }));
+  });
+
+  it('keeps the response batch successful when avatar enrichment fails', async () => {
+    mocks.loadCaches.mockResolvedValue(
+      new Map([
+        [
+          'claim-1:stance',
+          {
+            counts: { positive: 1, negative: 0 },
+            viewerResponse: null,
+            responders: [{ userId: 'profile-2', direction: 'positive' }],
+          },
+        ],
+      ])
+    );
+    mocks.loadMetadataCaches.mockRejectedValue(new Error('avatar metadata unavailable'));
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () =>
+        useClaimResponseSummaryBatch({
+          spaceId: 'space-1',
+          targets: [{ entityId: 'claim-1', responseKind: 'stance' }],
+          enabled: true,
+        }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(mocks.loadMetadataCaches).toHaveBeenCalled());
+    expect(result.current.isError).toBe(false);
   });
 });
 

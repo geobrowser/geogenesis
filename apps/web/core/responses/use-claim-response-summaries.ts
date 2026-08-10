@@ -9,7 +9,9 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import {
   type ClaimResponseTarget,
   claimResponseSummariesQueryKeyPrefix,
+  claimResponseSummaryResponderSpaceIds,
   claimResponseTargetKey,
+  loadClaimResponderMetadataCaches,
   loadClaimResponseSummaryCaches,
   normalizeClaimResponseTargets,
 } from './claim-response-summaries';
@@ -35,10 +37,10 @@ export function useClaimResponseSummaryBatch({
   enabled: boolean;
 }) {
   const queryClient = useQueryClient();
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const normalizedTargets = normalizeClaimResponseTargets(targets);
 
-  return useQuery({
+  const responseBatch = useQuery({
     queryKey: [
       ...claimResponseSummariesQueryKeyPrefix(personalSpaceId, spaceId),
       normalizedTargets.map(claimResponseTargetKey),
@@ -51,8 +53,31 @@ export function useClaimResponseSummaryBatch({
         personalSpaceId,
         signal,
       }),
-    enabled: enabled && normalizedTargets.length > 0,
+    enabled: enabled && !isPersonalSpaceLoading && normalizedTargets.length > 0,
     staleTime: 30_000,
     retry: 2,
   });
+  const responderSpaceIds = responseBatch.data ? claimResponseSummaryResponderSpaceIds(responseBatch.data) : [];
+
+  useQuery({
+    queryKey: [
+      'claim-response-responder-metadata',
+      spaceId,
+      normalizedTargets.map(claimResponseTargetKey),
+      responderSpaceIds,
+    ],
+    queryFn: ({ signal }) =>
+      loadClaimResponderMetadataCaches({
+        queryClient,
+        spaceId,
+        targets: normalizedTargets,
+        summaries: responseBatch.data!,
+        signal,
+      }),
+    enabled: responseBatch.isSuccess && responderSpaceIds.length > 0,
+    staleTime: 60_000,
+    retry: 2,
+  });
+
+  return responseBatch;
 }

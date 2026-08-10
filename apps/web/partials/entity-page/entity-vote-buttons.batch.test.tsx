@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -8,15 +8,22 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
-import { ClaimResponseBatchBoundary } from '~/core/responses/use-claim-response-summaries';
+import {
+  ClaimResponseBatchBoundary,
+  useClaimResponseSummaryBatch,
+} from '~/core/responses/use-claim-response-summaries';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
   getCounts: vi.fn(),
   getResponders: vi.fn(),
+  getSummaryPage: vi.fn(),
   getViewerResponse: vi.fn(),
+  optimisticResponse: undefined as 'positive' | 'negative' | null | undefined,
   queryEntityOptions: [] as unknown[],
+  smartAccount: null as object | null,
+  submitResponse: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -32,21 +39,27 @@ vi.mock('~/core/analytics', () => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
-    submitResponse: vi.fn(),
-    optimisticResponse: undefined,
+    submitResponse: mocks.submitResponse,
+    optimisticResponse: mocks.optimisticResponse,
     isResponseIndexingDelayed: false,
     isConnected: true,
     personalSpaceId: 'profile-1',
   }),
 }));
 
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: 'profile-1', isRegistered: true, isLoading: false }),
+}));
+
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: null }),
+  useSmartAccount: () => ({ smartAccount: mocks.smartAccount }),
 }));
 
 vi.mock('~/core/io/queries', () => ({
+  getClaimResponseSummaryPage: (...args: unknown[]) => Effect.succeed(mocks.getSummaryPage(...args)),
   getEntityResponseCounts: (...args: unknown[]) => Effect.succeed(mocks.getCounts(...args)),
   getEntityResponders: (...args: unknown[]) => Effect.succeed(mocks.getResponders(...args)),
+  getSpaces: () => Effect.succeed([]),
   getUserEntityResponse: (...args: unknown[]) => Effect.succeed(mocks.getViewerResponse(...args)),
 }));
 
@@ -74,9 +87,14 @@ beforeEach(() => {
   mocks.getCounts.mockReturnValue({ positive: 2, negative: 1 });
   mocks.getResponders.mockReset();
   mocks.getResponders.mockReturnValue([]);
+  mocks.getSummaryPage.mockReset();
+  mocks.getSummaryPage.mockReturnValue([]);
   mocks.getViewerResponse.mockReset();
   mocks.getViewerResponse.mockReturnValue('positive');
+  mocks.optimisticResponse = undefined;
   mocks.queryEntityOptions.length = 0;
+  mocks.smartAccount = null;
+  mocks.submitResponse.mockReset();
 });
 
 afterEach(cleanup);
@@ -101,20 +119,97 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(mocks.getViewerResponse).not.toHaveBeenCalled();
     expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
   });
+
+  it('renders factual claims with thumbs and the Is factual label', () => {
+    const view = renderButtons(true, true, 'veracity');
+
+    expect(view.getByText('Is factual')).toBeInTheDocument();
+    const responseIcons = [...view.container.querySelectorAll('svg')];
+    expect(responseIcons).toHaveLength(2);
+    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
+  });
+
+  it('wires optimistic claim response changes without blocking subsequent clicks', () => {
+    mocks.smartAccount = {};
+    const view = renderButtons(true, true);
+
+    fireEvent.click(view.getByTitle('Remove agreement'));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('clear', expect.any(Object));
+
+    mocks.optimisticResponse = 'negative';
+    view.rerender(
+      <ClaimResponseBatchBoundary ready>
+        <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind="stance" />
+      </ClaimResponseBatchBoundary>
+    );
+    fireEvent.click(view.getByTitle('Agree'));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('positive', expect.any(Object));
+
+    mocks.optimisticResponse = 'positive';
+    view.rerender(
+      <ClaimResponseBatchBoundary ready>
+        <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind="stance" />
+      </ClaimResponseBatchBoundary>
+    );
+    fireEvent.click(view.getByTitle('Disagree'));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+  });
+
+  it('renders 50 batched claims with one summary request and no individual response requests', async () => {
+    const targets = Array.from({ length: 50 }, (_, index) => ({
+      entityId: `claim-${index}`,
+      responseKind: index % 2 === 0 ? ('stance' as const) : ('veracity' as const),
+    }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const view = render(<BatchedClaims targets={targets} />, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(view.container.querySelector('.animate-pulse')).not.toBeInTheDocument());
+    expect(mocks.getSummaryPage).toHaveBeenCalledOnce();
+    expect(mocks.getCounts).not.toHaveBeenCalled();
+    expect(mocks.getViewerResponse).not.toHaveBeenCalled();
+    expect(mocks.getResponders).not.toHaveBeenCalled();
+    expect(mocks.queryEntityOptions.length).toBeGreaterThanOrEqual(50);
+    expect(mocks.queryEntityOptions.every(option => (option as { enabled: boolean }).enabled === false)).toBe(true);
+    expect(new Set(mocks.queryEntityOptions.map(option => (option as { id: string }).id)).size).toBe(50);
+  });
 });
 
-function renderButtons(ready: boolean, seedCaches = false) {
+function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' | 'veracity' }> }) {
+  const batch = useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true });
+  return (
+    <ClaimResponseBatchBoundary ready={batch.isSuccess}>
+      {targets.map(target => (
+        <EntityVoteButtons
+          key={target.entityId}
+          entityId={target.entityId}
+          spaceId="space-1"
+          responseKind={target.responseKind}
+        />
+      ))}
+    </ClaimResponseBatchBoundary>
+  );
+}
+
+function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' | 'veracity' = 'stance') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seedCaches) {
-    queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, 'stance'), {
+    queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, responseKind), {
       positive: 2,
       negative: 1,
     });
-    queryClient.setQueryData(userEntityResponseQueryKey('profile-1', 'claim-1', 'space-1', 0, 'stance'), 'positive');
+    queryClient.setQueryData(
+      userEntityResponseQueryKey('profile-1', 'claim-1', 'space-1', 0, responseKind),
+      'positive'
+    );
   }
   return render(
     <ClaimResponseBatchBoundary ready={ready}>
-      <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind="stance" />
+      <EntityVoteButtons entityId="claim-1" spaceId="space-1" responseKind={responseKind} />
     </ClaimResponseBatchBoundary>,
     {
       wrapper: ({ children }: { children: ReactNode }) => (

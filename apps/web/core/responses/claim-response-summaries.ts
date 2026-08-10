@@ -13,6 +13,7 @@ import {
 import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Profile } from '~/core/types';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import {
   type ActiveResponseDirection,
@@ -26,6 +27,8 @@ import {
 } from './entity-response';
 
 export const CLAIM_RESPONSE_SUMMARY_PAGE_SIZE = 1_000;
+const RESPONDER_METADATA_CHUNK_SIZE = 100;
+const RESPONDER_METADATA_CONCURRENCY = 4;
 
 export type ClaimResponseTarget = {
   entityId: string;
@@ -156,8 +159,6 @@ export async function loadClaimResponseSummaryCaches({
   personalSpaceId,
   signal,
   fetchSummaries = fetchClaimResponseSummaries,
-  fetchProfiles = defaultFetchProfiles,
-  fetchSpaces = defaultFetchSpaces,
   forceResponseRefresh = false,
 }: {
   queryClient: QueryClient;
@@ -166,8 +167,6 @@ export async function loadClaimResponseSummaryCaches({
   personalSpaceId: string | null;
   signal?: AbortSignal;
   fetchSummaries?: FetchSummaries;
-  fetchProfiles?: FetchProfiles;
-  fetchSpaces?: FetchSpaces;
   forceResponseRefresh?: boolean;
 }) {
   const normalizedTargets = normalizeClaimResponseTargets(targets);
@@ -183,16 +182,68 @@ export async function loadClaimResponseSummaryCaches({
     staleTime: forceResponseRefresh ? 0 : 30_000,
     retry: false,
   });
-  const responderSpaceIds = [
+  signal?.throwIfAborted();
+
+  for (const target of normalizedTargets) {
+    const summary = summaries.get(claimResponseTargetKey(target)) ?? emptySummary();
+
+    queryClient.setQueryData(
+      entityResponseCountsQueryKey(target.entityId, spaceId, 0, target.responseKind),
+      summary.counts
+    );
+    queryClient.setQueryData(
+      entityRespondersQueryKey(target.entityId, spaceId, 0, target.responseKind),
+      summary.responders
+    );
+    if (personalSpaceId) {
+      queryClient.setQueryData(
+        userEntityResponseQueryKey(personalSpaceId, target.entityId, spaceId, 0, target.responseKind),
+        summary.viewerResponse
+      );
+    }
+  }
+
+  return summaries;
+}
+
+export function claimResponseSummaryResponderSpaceIds(summaries: Map<string, ClaimResponseSummary>) {
+  return [
     ...new Set(
       [...summaries.values()].flatMap(summary => summary.responders.map(responder => responder.userId)).filter(Boolean)
     ),
   ].sort();
+}
+
+export async function loadClaimResponderMetadataCaches({
+  queryClient,
+  spaceId,
+  targets,
+  summaries,
+  signal,
+  fetchProfiles = defaultFetchProfiles,
+  fetchSpaces = defaultFetchSpaces,
+}: {
+  queryClient: QueryClient;
+  spaceId: string;
+  targets: ClaimResponseTarget[];
+  summaries: Map<string, ClaimResponseSummary>;
+  signal?: AbortSignal;
+  fetchProfiles?: FetchProfiles;
+  fetchSpaces?: FetchSpaces;
+}) {
+  const normalizedTargets = normalizeClaimResponseTargets(targets);
+  const responderSpaceIds = claimResponseSummaryResponderSpaceIds(summaries);
+  if (responderSpaceIds.length === 0) return;
+
   const [profilesBySpaceId, responderSpaces] = await Promise.all([
     queryClient.fetchQuery({
       queryKey: profilesBySpaceIdsQueryKey(responderSpaceIds),
       queryFn: async () => {
-        const profileChunks = await Promise.all(chunk(responderSpaceIds, 100).map(ids => fetchProfiles(ids)));
+        const profileChunks = await mapWithConcurrency(
+          chunk(responderSpaceIds, RESPONDER_METADATA_CHUNK_SIZE),
+          RESPONDER_METADATA_CONCURRENCY,
+          ids => fetchProfiles(ids)
+        );
         return new Map(profileChunks.flat().map(profile => [profile.spaceId, profile]));
       },
       staleTime: 60_000,
@@ -201,7 +252,11 @@ export async function loadClaimResponseSummaryCaches({
     queryClient.fetchQuery({
       queryKey: spacesByIdsQueryKey(responderSpaceIds),
       queryFn: async () => {
-        const spaceChunks = await Promise.all(chunk(responderSpaceIds, 100).map(ids => fetchSpaces(ids, signal)));
+        const spaceChunks = await mapWithConcurrency(
+          chunk(responderSpaceIds, RESPONDER_METADATA_CHUNK_SIZE),
+          RESPONDER_METADATA_CONCURRENCY,
+          ids => fetchSpaces(ids, signal)
+        );
         return spaceChunks.flat();
       },
       staleTime: 60_000,
@@ -220,20 +275,6 @@ export async function loadClaimResponseSummaryCaches({
       return profile ? [profile] : [];
     });
 
-    queryClient.setQueryData(
-      entityResponseCountsQueryKey(target.entityId, spaceId, 0, target.responseKind),
-      summary.counts
-    );
-    queryClient.setQueryData(
-      entityRespondersQueryKey(target.entityId, spaceId, 0, target.responseKind),
-      summary.responders
-    );
-    if (personalSpaceId) {
-      queryClient.setQueryData(
-        userEntityResponseQueryKey(personalSpaceId, target.entityId, spaceId, 0, target.responseKind),
-        summary.viewerResponse
-      );
-    }
     if (responderIds.length > 0) {
       queryClient.setQueryData(
         [...entityResponderProfilesQueryKey(target.entityId, spaceId, 0, target.responseKind), responderIds],
@@ -252,8 +293,6 @@ export async function loadClaimResponseSummaryCaches({
       );
     }
   }
-
-  return summaries;
 }
 
 function emptySummary(): ClaimResponseSummary {

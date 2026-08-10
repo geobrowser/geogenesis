@@ -11,6 +11,7 @@ import {
   buildClaimResponseSummaryFilter,
   fetchClaimResponseSummaries,
   groupClaimResponseSummaryRows,
+  loadClaimResponderMetadataCaches,
   loadClaimResponseSummaryCaches,
   normalizeClaimResponseTargets,
 } from './claim-response-summaries';
@@ -138,12 +139,18 @@ describe('claim response summaries', () => {
       ids.map(id => ({ id, entity: { id: `entity-${id}` } }) as Space)
     );
 
-    await loadClaimResponseSummaryCaches({
+    const summaries = await loadClaimResponseSummaryCaches({
       queryClient,
       spaceId: 'space-1',
       targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
       personalSpaceId: 'profile-1',
       fetchSummaries,
+    });
+    await loadClaimResponderMetadataCaches({
+      queryClient,
+      spaceId: 'space-1',
+      targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
+      summaries,
       fetchProfiles,
       fetchSpaces,
     });
@@ -169,7 +176,7 @@ describe('claim response summaries', () => {
     expect(queryClient.getQueryData(spacesByIdsQueryKey(responderIds))).toHaveLength(205);
   });
 
-  it('reuses successful summary and profile metadata when a space-metadata retry is needed', async () => {
+  it('keeps response caches usable when avatar metadata fails and reuses successful metadata on retry', async () => {
     const queryClient = new QueryClient();
     const fetchSummaries = vi.fn().mockResolvedValue(
       new Map([
@@ -188,25 +195,35 @@ describe('claim response summaries', () => {
       .fn<() => Promise<Space[]>>()
       .mockRejectedValueOnce(new Error('space metadata unavailable'))
       .mockResolvedValueOnce([{ id: 'profile-1', entity: { id: 'profile-1' } } as Space]);
-    const args = {
+    const summaries = await loadClaimResponseSummaryCaches({
       queryClient,
       spaceId: 'space-1',
       targets: [{ entityId: 'claim-stance', responseKind: 'stance' as const }],
       personalSpaceId: null,
       fetchSummaries,
+    });
+    const metadataArgs = {
+      queryClient,
+      spaceId: 'space-1',
+      targets: [{ entityId: 'claim-stance', responseKind: 'stance' as const }],
+      summaries,
       fetchProfiles,
       fetchSpaces,
     };
 
-    await expect(loadClaimResponseSummaryCaches(args)).rejects.toThrow('space metadata unavailable');
-    await expect(loadClaimResponseSummaryCaches(args)).resolves.toBeInstanceOf(Map);
+    await expect(loadClaimResponderMetadataCaches(metadataArgs)).rejects.toThrow('space metadata unavailable');
+    expect(queryClient.getQueryData(entityResponseCountsQueryKey('claim-stance', 'space-1', 0, 'stance'))).toEqual({
+      positive: 1,
+      negative: 0,
+    });
+    await expect(loadClaimResponderMetadataCaches(metadataArgs)).resolves.toBeUndefined();
 
     expect(fetchSummaries).toHaveBeenCalledOnce();
     expect(fetchProfiles).toHaveBeenCalledOnce();
     expect(fetchSpaces).toHaveBeenCalledTimes(2);
   });
 
-  it('does not seed per-claim caches after its page batch is cancelled', async () => {
+  it('does not seed avatar caches after metadata enrichment is cancelled', async () => {
     const queryClient = new QueryClient();
     const controller = new AbortController();
     const fetchSummaries = vi.fn().mockResolvedValue(
@@ -226,22 +243,83 @@ describe('claim response summaries', () => {
       return [{ spaceId: 'profile-1', address: '0x1' } as unknown as Profile];
     });
 
+    const summaries = await loadClaimResponseSummaryCaches({
+      queryClient,
+      spaceId: 'space-1',
+      targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
+      personalSpaceId: 'profile-1',
+      fetchSummaries,
+    });
+
     await expect(
-      loadClaimResponseSummaryCaches({
+      loadClaimResponderMetadataCaches({
         queryClient,
         spaceId: 'space-1',
         targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
-        personalSpaceId: 'profile-1',
+        summaries,
         signal: controller.signal,
-        fetchSummaries,
         fetchProfiles,
         fetchSpaces: vi.fn(async () => [{ id: 'profile-1', entity: { id: 'profile-1' } } as Space]),
       })
     ).rejects.toBeDefined();
 
-    expect(queryClient.getQueryData(entityResponseCountsQueryKey('claim-stance', 'space-1', 0, 'stance'))).toBe(
-      undefined
-    );
+    expect(queryClient.getQueryData(entityResponseCountsQueryKey('claim-stance', 'space-1', 0, 'stance'))).toEqual({
+      positive: 1,
+      negative: 0,
+    });
+    expect(
+      queryClient.getQueryData([
+        ...entityResponderProfilesQueryKey('claim-stance', 'space-1', 0, 'stance'),
+        ['profile-1'],
+      ])
+    ).toBeUndefined();
+  });
+
+  it('caps concurrent responder profile and space metadata requests', async () => {
+    const queryClient = new QueryClient();
+    const responderIds = Array.from({ length: 505 }, (_, index) => `profile-${index}`);
+    const summaries = new Map([
+      [
+        'claim-stance:stance',
+        {
+          counts: { positive: 505, negative: 0 },
+          viewerResponse: null,
+          responders: responderIds.map(userId => ({ userId, direction: 'positive' as const })),
+        },
+      ],
+    ]);
+    let activeProfiles = 0;
+    let activeSpaces = 0;
+    let maxProfiles = 0;
+    let maxSpaces = 0;
+    const fetchProfiles = vi.fn(async (ids: string[]) => {
+      activeProfiles += 1;
+      maxProfiles = Math.max(maxProfiles, activeProfiles);
+      await Promise.resolve();
+      activeProfiles -= 1;
+      return ids.map(id => ({ spaceId: id, address: `0x${id}` }) as Profile);
+    });
+    const fetchSpaces = vi.fn(async (ids: string[]) => {
+      activeSpaces += 1;
+      maxSpaces = Math.max(maxSpaces, activeSpaces);
+      await Promise.resolve();
+      activeSpaces -= 1;
+      return ids.map(id => ({ id, entity: { id } }) as Space);
+    });
+
+    await loadClaimResponderMetadataCaches({
+      queryClient,
+      spaceId: 'space-1',
+      targets: [{ entityId: 'claim-stance', responseKind: 'stance' }],
+      summaries,
+      fetchProfiles,
+      fetchSpaces,
+    });
+
+    expect(fetchProfiles).toHaveBeenCalledTimes(6);
+    expect(fetchSpaces).toHaveBeenCalledTimes(6);
+    expect(maxProfiles).toBeLessThanOrEqual(4);
+    expect(maxSpaces).toBeLessThanOrEqual(4);
   });
 });
 
