@@ -15,6 +15,7 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Profile } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
+import { claimResponseTargetKey } from './claim-response-summary-query-keys';
 import {
   type ActiveResponseDirection,
   type ResponseKind,
@@ -25,6 +26,8 @@ import {
   responseKindToVoteKind,
   userEntityResponseQueryKey,
 } from './entity-response';
+
+export { claimResponseSummariesQueryKeyPrefix, claimResponseTargetKey } from './claim-response-summary-query-keys';
 
 export const CLAIM_RESPONSE_SUMMARY_PAGE_SIZE = 1_000;
 const RESPONDER_METADATA_CHUNK_SIZE = 100;
@@ -52,14 +55,6 @@ type FetchSummaryPage = (args: FetchSummaryPageArgs) => Promise<ClaimResponseSum
 type FetchSummaries = typeof fetchClaimResponseSummaries;
 type FetchProfiles = (spaceIds: string[]) => Promise<Profile[]>;
 type FetchSpaces = (spaceIds: string[], signal?: AbortSignal) => Promise<Space[]>;
-
-export function claimResponseTargetKey(target: ClaimResponseTarget) {
-  return `${target.entityId}:${target.responseKind}`;
-}
-
-export function claimResponseSummariesQueryKeyPrefix(personalSpaceId: string | null, spaceId: string) {
-  return ['claim-response-summaries', personalSpaceId, spaceId] as const;
-}
 
 export function normalizeClaimResponseTargets(targets: ClaimResponseTarget[]) {
   const byKey = new Map(targets.map(target => [claimResponseTargetKey(target), target]));

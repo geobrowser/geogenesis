@@ -56,6 +56,10 @@ vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
 }));
 
+vi.mock('./claim-response-indexed-notifier', () => ({
+  useClaimResponseIndexedNotifier: vi.fn(),
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({
   useDebatesEnabled: () => true,
 }));

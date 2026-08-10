@@ -7,7 +7,7 @@ import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Entity, Relation } from '~/core/types';
 
 import { ClaimsPageClient } from './claims-page-client';
@@ -75,11 +75,13 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () =>
+  EntityVoteButtons: ({ responseKind }: { responseKind: string }) =>
     !responseBatchReady ? (
       <div data-testid="entity-response-skeleton">Response skeleton</div>
     ) : (
-      <div data-testid="entity-response-buttons">Entity response buttons</div>
+      <div data-testid="entity-response-buttons" data-response-kind={responseKind}>
+        Entity response buttons
+      </div>
     ),
 }));
 
@@ -237,6 +239,36 @@ describe('ClaimsPageClient', () => {
     expect(screen.getAllByTestId('entity-response-skeleton')).toHaveLength(50);
     expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
     expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(50);
+  });
+
+  it('keeps every published claim responsive when geo-chat has not hydrated its readiness snapshot yet', () => {
+    claims = [
+      publishedClaim('claim-1', 'Existing debate claim'),
+      {
+        ...publishedClaim('claim-2', 'New factual claim'),
+        values: [
+          {
+            spaceId: 'space-1',
+            property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+            value: '1',
+          },
+        ],
+      } as Entity,
+    ];
+    debateClaimsResponse = { claims: [debateClaim()] };
+
+    renderClaims();
+
+    expect(mocks.responseBatchCalls.at(-1)).toMatchObject({
+      targets: [
+        { entityId: 'claim-1', responseKind: 'stance' },
+        { entityId: 'claim-2', responseKind: 'veracity' },
+      ],
+    });
+    expect(screen.getAllByTestId('entity-response-buttons')).toHaveLength(2);
+    expect(screen.getAllByTestId('entity-response-buttons')[1]).toHaveAttribute('data-response-kind', 'veracity');
+    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(2);
+    expect(screen.getAllByRole('switch', { name: 'Debate' })[1]).toBeDisabled();
   });
 
   it('retries only the page response batch after its retries are exhausted', () => {

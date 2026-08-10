@@ -6,11 +6,13 @@ import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
+import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
 import { useDebateClaims } from '~/core/debates/hooks';
+import { uuidToHex } from '~/core/id/normalize';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -22,6 +24,7 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
 import { Button } from '~/design-system/button';
+import { getChecked } from '~/design-system/checkbox';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -87,13 +90,21 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_match ? [claim.active_match] : [])),
     [debateClaimsQuery.data?.claims]
   );
-  const responseTargets = React.useMemo(
+  const responseKindsByEntityId = React.useMemo(
     () =>
-      publishedClaimIds.flatMap(entityId => {
-        const responseKind = debateClaimsByEntityId.get(entityId)?.response_kind;
-        return responseKind ? [{ entityId, responseKind }] : [];
-      }),
-    [debateClaimsByEntityId, publishedClaimIds]
+      new Map(
+        claims
+          .filter(isClaimPublished)
+          .map(claim => [
+            claim.id,
+            debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
+          ])
+      ),
+    [claims, debateClaimsByEntityId, spaceId]
+  );
+  const responseTargets = React.useMemo(
+    () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
+    [publishedClaimIds, responseKindsByEntityId]
   );
   const responseBatch = useClaimResponseSummaryBatch({
     spaceId,
@@ -133,6 +144,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
             debatesEnabled={debatesEnabled}
             debateJoinBlocked={activeMatches.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
+            responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
           />
         </ClaimResponseBatchBoundary>
@@ -253,6 +265,7 @@ function ClaimsList({
   debatesEnabled,
   debateJoinBlocked,
   debateClaimsByEntityId,
+  responseKindsByEntityId,
   debateStatus,
 }: {
   claims: Entity[];
@@ -261,6 +274,7 @@ function ClaimsList({
   debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
+  responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
 }) {
   if (isLoading && claims.length === 0) {
@@ -299,6 +313,7 @@ function ClaimsList({
           debatesEnabled={debatesEnabled}
           debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
+          responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
       ))}
     </div>
@@ -311,12 +326,14 @@ function ClaimListItem({
   debatesEnabled,
   debateJoinBlocked,
   debateClaim,
+  responseKind,
 }: {
   claim: Entity;
   spaceId: string;
   debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
+  responseKind: 'stance' | 'veracity';
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublished(claim);
@@ -338,14 +355,16 @@ function ClaimListItem({
       </div>
 
       {debatesEnabled && published && (
-        <ClaimDebateReadiness
-          debateClaim={debateClaim}
-          entityId={claim.id}
-          spaceId={spaceId}
-          canEnable={!activeDebate && !activeMatch && !debateJoinBlocked}
-          className="mt-3"
-          textVariant="body"
-        />
+        <div className="mt-3 flex items-center gap-4">
+          <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
+          <ClaimDebateReadiness
+            compact
+            debateClaim={debateClaim}
+            entityId={claim.id}
+            spaceId={spaceId}
+            canEnable={!activeDebate && !activeMatch && !debateJoinBlocked}
+          />
+        </div>
       )}
 
       {debatesEnabled && <ClaimDebateStatus debateClaim={debateClaim} published={published} />}
@@ -413,4 +432,14 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
+}
+
+function claimResponseKind(claim: Entity, spaceId: string): 'stance' | 'veracity' {
+  const isFactual = claim.values.find(
+    value =>
+      value.isDeleted !== true &&
+      uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+      uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
+  )?.value;
+  return getChecked(isFactual) === true ? 'veracity' : 'stance';
 }

@@ -190,7 +190,7 @@ describe('useGeoChatAuth', () => {
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
   });
 
-  it('refetches debate readiness only when response reconciliation is fully indexed', async () => {
+  it('leaves indexed-response claim refreshes to the gateway notification path', async () => {
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -222,7 +222,8 @@ describe('useGeoChatAuth', () => {
       });
     });
 
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates', 'claims', 'space-1'] }));
+    await Promise.resolve();
+    expect(invalidateQueries).not.toHaveBeenCalled();
   });
 
   it('refetches rematch snapshots when response reconciliation is fully indexed', async () => {

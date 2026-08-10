@@ -6,7 +6,6 @@ import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient 
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
-import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 
 import {
   type Debate,
@@ -55,6 +54,7 @@ import {
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
 } from './api';
+import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
 import { useDebateGatewayScope } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
@@ -81,19 +81,6 @@ export const debateQueryKeys = {
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
 };
 
-function indexedResponseEvent(queryKey: readonly unknown[], data: unknown) {
-  const [scope, , entityId, spaceId, responseKind] = queryKey;
-  const indexingState = data as EntityResponseIndexingState | undefined;
-  if (
-    scope !== 'entity-response-indexing' ||
-    indexingState?.status !== 'indexed' ||
-    (responseKind !== 'stance' && responseKind !== 'veracity')
-  ) {
-    return null;
-  }
-  return { entityId: String(entityId), spaceId: String(spaceId), responseKind };
-}
-
 export function useGeoChatAuth() {
   const privy = usePrivy();
   useIdentityTokenSync();
@@ -110,27 +97,9 @@ export function useGeoChatAuth() {
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
-  const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
-
-  React.useEffect(
-    function refetchReadinessAfterIndexedResponse() {
-      if (!shouldFetch) return;
-
-      return queryClient.getQueryCache().subscribe(event => {
-        if (event.type !== 'updated' || event.action.type !== 'success') return;
-        const response = indexedResponseEvent(event.query.queryKey, event.query.state.data);
-        if (!response || response.spaceId !== spaceId || (claimIds !== null && !claimIds.includes(response.entityId))) {
-          return;
-        }
-
-        void queryClient.invalidateQueries({ queryKey: ['debates', 'claims', spaceId] });
-      });
-    },
-    [claimIds, queryClient, shouldFetch, spaceId]
-  );
 
   return useQuery({
     ...debateQueryNetworkOptions,
@@ -458,7 +427,7 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [
 
       return queryClient.getQueryCache().subscribe(event => {
         if (event.type !== 'updated' || event.action.type !== 'success') return;
-        const response = indexedResponseEvent(event.query.queryKey, event.query.state.data);
+        const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
         if (!response || (claimIds.length > 0 && !claimIds.includes(response.entityId))) {
           return;
         }

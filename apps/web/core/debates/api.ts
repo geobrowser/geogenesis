@@ -507,7 +507,7 @@ export async function listDebateClaims(
 ) {
   const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
   return geoChatRequest<DebateClaimsResponse>(`/spaces/${spaceId}/debate-claims${query}`, {
-    auth: 'optional',
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -540,6 +540,35 @@ export async function leaveDebateQueue(
     getPrivyIdentityToken,
     accountKey,
   });
+}
+
+export async function notifyClaimResponseIndexed(
+  spaceId: string,
+  claimId: string,
+  responseKind: DebateResponseKind,
+  position: boolean | null,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const request = () =>
+    geoChatRequest<void>(`/spaces/${spaceId}/claims/${claimId}/response-indexed`, {
+      method: 'POST',
+      body: { response_kind: responseKind, position },
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+      signal,
+    });
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (attempt >= 2 || !isTransientResponseNotificationError(error)) throw error;
+      await waitForResponseNotificationRetry(250 * 2 ** attempt, signal);
+    }
+  }
 }
 
 export async function acceptDebateMatch(
@@ -974,6 +1003,8 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     throw await requestError(response);
   }
 
+  if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
 }
 
@@ -994,6 +1025,31 @@ const debatePhaseBoundaryRetryCodes = new Set([
   'recording_not_cancellable',
   'recording_not_ready',
 ]);
+
+function isTransientResponseNotificationError(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  return !(error instanceof DOMException && error.name === 'AbortError');
+}
+
+function waitForResponseNotificationRetry(delayMs: number, signal?: AbortSignal) {
+  if (signal?.aborted)
+    return Promise.reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<T>): Promise<T> {
   try {
