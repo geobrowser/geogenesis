@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setCachedIdentityToken } from '~/core/auth/identity-token';
+import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
@@ -16,6 +17,8 @@ import {
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
+  useDebateClaims,
+  useDebateRematchClaims,
   useEndDebateTurn,
   useGeoChatAuth,
   useLeaveDebateRematch,
@@ -30,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   consentToDebateRematch: vi.fn(),
   endDebateTurn: vi.fn(),
   leaveDebateRematch: vi.fn(),
+  listDebateClaims: vi.fn(),
+  listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
   pathname: '/space/space-1/debates/debate-1',
@@ -69,6 +74,8 @@ vi.mock('./api', async importOriginal => {
     consentToDebateRematch: mocks.consentToDebateRematch,
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
+    listDebateClaims: mocks.listDebateClaims,
+    listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
     updateDebateAvailability: mocks.updateDebateAvailability,
@@ -109,12 +116,16 @@ describe('useGeoChatAuth', () => {
     mocks.consentToDebateRematch.mockReset();
     mocks.endDebateTurn.mockReset();
     mocks.leaveDebateRematch.mockReset();
+    mocks.listDebateClaims.mockReset();
+    mocks.listDebateRematchClaims.mockReset();
     mocks.listDebateSharePrompts.mockReset();
     mocks.markDebateReady.mockReset();
     mocks.push.mockReset();
     mocks.back.mockReset();
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.updateDebateAvailability.mockReset();
+    mocks.listDebateClaims.mockResolvedValue({ claims: [] });
+    mocks.listDebateRematchClaims.mockResolvedValue({ claims: [], excluded_claim_ids: [] });
     mocks.listDebateSharePrompts.mockResolvedValue({ prompts: [] });
     setCachedIdentityToken(null);
   });
@@ -177,6 +188,76 @@ describe('useGeoChatAuth', () => {
     await result.current.getPrivyIdentityToken();
 
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves indexed-response claim refreshes to the gateway notification path', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateClaims('space-1', ['claim-1'], true), { wrapper });
+    await waitFor(() => expect(mocks.listDebateClaims).toHaveBeenCalled());
+    invalidateQueries.mockClear();
+
+    act(() => {
+      queryClient.setQueryData(['user-entity-response', 'profile-1', 'claim-1', 'space-1', 0, 'stance'], 'positive');
+    });
+    expect(invalidateQueries).not.toHaveBeenCalled();
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    await Promise.resolve();
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+
+  it('refetches rematch snapshots when response reconciliation is fully indexed', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalled());
+    invalidateQueries.mockClear();
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
+      })
+    );
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would
