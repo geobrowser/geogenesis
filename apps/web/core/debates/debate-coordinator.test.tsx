@@ -3,12 +3,16 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateSharePrompt } from './api';
+import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   activity: null as DebateActivity | null,
+  requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
+  acceptRequestMutate: vi.fn(),
+  dismissRequestMutate: vi.fn(),
+  blockUserMutate: vi.fn(),
   pathname: '/space/space-1/debates',
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
@@ -53,7 +57,19 @@ vi.mock('./hooks', () => ({
 }));
 
 vi.mock('./debate-gateway', () => ({
-  useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
+  useDebateGateway: () => ({
+    status: mocks.gatewayPaused ? 'degraded' : 'ready',
+    paused: mocks.gatewayPaused,
+    capabilities: [],
+  }),
+  useDebateGatewayScope: () => undefined,
+}));
+
+vi.mock('./matchmaking/hooks', () => ({
+  useDebateRequests: () => ({ data: mocks.requests, isLoading: false, error: null }),
+  useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),
+  useDismissDebateRequest: () => ({ mutate: mocks.dismissRequestMutate, isPending: false, error: null }),
+  useBlockDebateUser: () => ({ mutate: mocks.blockUserMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -81,6 +97,10 @@ beforeEach(() => {
   mocks.downloadClick.mockClear();
   mocks.capture.mockReset();
   mocks.activity = null;
+  mocks.requests = { outbound: null, incoming: [] };
+  mocks.acceptRequestMutate.mockReset();
+  mocks.dismissRequestMutate.mockReset();
+  mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
   mocks.prompts = [];
   mocks.promptsFetching = false;

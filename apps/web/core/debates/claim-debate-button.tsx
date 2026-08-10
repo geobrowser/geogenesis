@@ -17,7 +17,10 @@ import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
 import type { DebateClaim, DebateOnlineChoice } from './api';
+import { useDebateMatchmakingSupported } from './debate-gateway';
 import { useDebateActivity, useDebateClaims, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
+import { useClearDebateIntent, useSetDebateIntent } from './matchmaking/hooks';
+import { useDebatesHub } from './matchmaking/use-debates-hub';
 
 type ClaimDebateButtonProps = {
   entityId: string;
@@ -55,29 +58,35 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   const activity = activityQuery.data ?? null;
   const hasActiveFlowElsewhere = Boolean(activity?.match || activity?.debate || activity?.rematch);
 
+  // Until geo-chat advertises matchmaking, taking a position still means joining the auto-pairing
+  // queue. Once it does, a position is only an intent — debates start from an explicit request.
+  const matchmakingSupported = useDebateMatchmakingSupported();
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
+  const setIntent = useSetDebateIntent();
+  const clearIntent = useClearDebateIntent();
 
   if (!isDebatesEnabled || !isClaim) return null;
 
   const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
   const canJoinDebate = published && !activeDebate && !activeMatch && !hasActiveFlowElsewhere;
-  const isMutating = joinQueue.isPending || leaveQueue.isPending;
+  const isMutating = joinQueue.isPending || leaveQueue.isPending || setIntent.isPending || clearIntent.isPending;
   const mutationError =
-    joinQueue.error instanceof Error
-      ? joinQueue.error.message
-      : leaveQueue.error instanceof Error
-        ? leaveQueue.error.message
-        : null;
+    [joinQueue.error, leaveQueue.error, setIntent.error, clearIntent.error].find(
+      (error): error is Error => error instanceof Error
+    )?.message ?? null;
 
-  // Clicking the position you're already waiting on leaves the queue.
+  // Clicking the position you already hold clears it.
   const togglePosition = (position: boolean) => {
-    if (debateClaim?.viewer_waiting_position === position) {
-      leaveQueue.mutate({ claimId: entityId });
-    } else {
-      joinQueue.mutate({ claimId: entityId, request: { position } });
+    const clearing = debateClaim?.viewer_waiting_position === position;
+    if (matchmakingSupported) {
+      if (clearing) clearIntent.mutate({ spaceId, claimId: entityId });
+      else setIntent.mutate({ spaceId, claimId: entityId, position });
+      return;
     }
+    if (clearing) leaveQueue.mutate({ claimId: entityId });
+    else joinQueue.mutate({ claimId: entityId, request: { position } });
   };
 
   return (
@@ -105,7 +114,7 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
             Debate this claim
           </Text>
           <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-            Select your position and start matchmaking
+            {matchmakingSupported ? 'Set your position' : 'Select your position and start matchmaking'}
           </Text>
 
           <div className="mt-5 grid grid-cols-2 gap-2">
@@ -143,7 +152,12 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
             })}
           </div>
 
-          <ClaimDebateStatus debateClaim={debateClaim} mutationError={mutationError} published={published} />
+          <ClaimDebateStatus
+            debateClaim={debateClaim}
+            mutationError={mutationError}
+            published={published}
+            matchmakingSupported={matchmakingSupported}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
@@ -184,11 +198,15 @@ function ClaimDebateStatus({
   debateClaim,
   mutationError,
   published,
+  matchmakingSupported,
 }: {
   debateClaim: DebateClaim | null;
   mutationError: string | null;
   published: boolean;
+  matchmakingSupported: boolean;
 }) {
+  const { open } = useDebatesHub();
+
   if (mutationError) {
     return (
       <Text as="p" variant="metadata" color="red-01" className="mt-3">
@@ -222,10 +240,27 @@ function ClaimDebateStatus({
   }
 
   if (debateClaim?.viewer_waiting_position !== null && debateClaim?.viewer_waiting_position !== undefined) {
+    if (!matchmakingSupported) {
+      return (
+        <Text as="p" variant="metadata" color="grey-04" className="mt-3">
+          Waiting for someone with the opposite position.
+        </Text>
+      );
+    }
+
     return (
-      <Text as="p" variant="metadata" color="grey-04" className="mt-3">
-        Waiting for someone with the opposite position.
-      </Text>
+      <div className="mt-3">
+        <Text as="p" variant="metadata" color="grey-04">
+          Position saved. Find someone to debate it.
+        </Text>
+        <button
+          type="button"
+          onClick={() => open('matches')}
+          className="mt-2 inline-flex h-7 items-center rounded-full bg-text px-3 text-metadata text-white transition-colors hover:bg-text/90"
+        >
+          Open Debates
+        </button>
+      </div>
     );
   }
 

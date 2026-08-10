@@ -34,6 +34,12 @@ type DebateRequestDialogProps = {
   error: string | null;
   onAccept: () => void;
   onReject: () => void;
+  /** Defaults to "Reject". GEO-2430 request popups say "Not now" instead. */
+  rejectLabel?: string;
+  /** GEO-2430: an extra text action under the footer, e.g. "I don't want to debate this claim". */
+  tertiaryAction?: { label: string; onClick: () => void };
+  /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
+  overflowMenu?: React.ReactNode;
 };
 
 export function DebateRequestDialog({
@@ -46,6 +52,9 @@ export function DebateRequestDialog({
   error,
   onAccept,
   onReject,
+  rejectLabel = 'Reject',
+  tertiaryAction,
+  overflowMenu,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
   const turnParticipants = React.useMemo(
@@ -95,7 +104,8 @@ export function DebateRequestDialog({
         </header>
 
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+            {overflowMenu ? <div className="absolute top-2 right-2">{overflowMenu}</div> : null}
             <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
             <div className="relative grid w-16 place-items-center">
               <span
@@ -153,8 +163,18 @@ export function DebateRequestDialog({
             disabled={busy}
             className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
           >
-            Reject
+            {rejectLabel}
           </button>
+          {tertiaryAction ? (
+            <button
+              type="button"
+              onClick={tertiaryAction.onClick}
+              disabled={busy}
+              className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
+            >
+              {tertiaryAction.label}
+            </button>
+          ) : null}
         </footer>
       </section>
     </div>

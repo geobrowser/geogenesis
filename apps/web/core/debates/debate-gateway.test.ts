@@ -208,6 +208,32 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.share_prompts_changed', payload: {} },
       [['debates', 'account', 'user-a', 'share-prompts']],
     ],
+    [
+      'requests',
+      { event_type: 'debate.requests_changed', payload: {} },
+      [
+        ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
+      ],
+    ],
+    [
+      'matchmaking sections',
+      { event_type: 'debate.matchmaking_changed', payload: { sections: ['people', 'matches'] } },
+      [
+        ['debates', 'account', 'user-a', 'people'],
+        ['debates', 'account', 'user-a', 'matches'],
+      ],
+    ],
+    [
+      'matchmaking without sections',
+      { event_type: 'debate.matchmaking_changed', payload: {} },
+      [
+        ['debates', 'account', 'user-a', 'people'],
+        ['debates', 'account', 'user-a', 'matchmaking-claims'],
+        ['debates', 'account', 'user-a', 'matches'],
+      ],
+    ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -226,6 +252,60 @@ describe('DebateGatewayClient', () => {
       expectInvalidated(invalidateQueries, { queryKey, refetchType: 'active' });
     }
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
+  });
+
+  it('subscribes to the matchmaking scope and reconciles every hub query on confirmation', async () => {
+    const release = client.retainScope({ scope: 'matchmaking' });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
+    await flushInvalidations();
+
+    for (const kind of ['people', 'matchmaking-claims', 'matches']) {
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', kind],
+        refetchType: 'active',
+      });
+    }
+
+    release();
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'UNSUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+  });
+
+  it('exposes the advertised capabilities so surfaces can detect matchmaking support', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    expect(client.getSnapshot().capabilities).toEqual([]);
+
+    sockets[0]!.receive('READY', {
+      ...readyPayload([]),
+      capabilities: ['debate_invalidations_v1', 'debate_matchmaking_v1'],
+    });
+    await flushInvalidations();
+
+    expect(client.getSnapshot().capabilities).toEqual(['debate_invalidations_v1', 'debate_matchmaking_v1']);
+
+    client.stop();
+    expect(client.getSnapshot().capabilities).toEqual([]);
   });
 
   it('filters claim invalidations to active claim queries that intersect the event', async () => {
@@ -342,7 +422,7 @@ describe('DebateGatewayClient', () => {
     await vi.advanceTimersByTimeAsync(1);
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
   });
@@ -359,7 +439,7 @@ describe('DebateGatewayClient', () => {
     await flushInvalidations();
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
   });
@@ -432,7 +512,7 @@ describe('DebateGatewayClient', () => {
 
     sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'retry after 5 seconds' });
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
 
     await vi.advanceTimersByTimeAsync(4_999);
     expect(sockets).toHaveLength(1);
@@ -474,7 +554,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('ERROR', { code: 'subscription_limit_reached', message: 'too many subscriptions' });
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
   it('pauses live updates when a subscription is rejected', async () => {
@@ -488,7 +568,7 @@ describe('DebateGatewayClient', () => {
 
     sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
 
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
   it('reconnects with a new session when the authenticated account changes', async () => {
@@ -519,7 +599,7 @@ describe('DebateGatewayClient', () => {
     await vi.runAllTicks();
 
     expect(sockets).toHaveLength(0);
-    expect(client.getSnapshot()).toEqual({ status: 'idle', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'idle', paused: false });
   });
 
   it('enters degraded mode when the server lacks the required capability and recovers on READY', async () => {
@@ -531,10 +611,10 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.open();
     sockets[0]!.receive('READY', { ...readyPayload([]), capabilities: [] });
 
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
 
     sockets[0]!.receive('READY', readyPayload([]));
-    expect(client.getSnapshot()).toEqual({ status: 'ready', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
   });
 
   it('ignores malformed protocol envelopes', async () => {
@@ -550,7 +630,7 @@ describe('DebateGatewayClient', () => {
       sockets[0]!.receiveRaw('42');
       sockets[0]!.receiveRaw(JSON.stringify({ v: 1, op: 5, payload: {} }));
     }).not.toThrow();
-    expect(client.getSnapshot()).toEqual({ status: 'connecting', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'connecting', paused: false });
   });
 });
 

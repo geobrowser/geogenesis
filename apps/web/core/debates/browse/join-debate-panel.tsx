@@ -8,12 +8,14 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
+import { useDebateMatchmakingSupported } from '~/core/debates/debate-gateway';
 import {
   useDebateActivity,
   useDebateClaims,
   useJoinDebateQueue,
   useUpdateDebateAvailability,
 } from '~/core/debates/hooks';
+import { useClearDebateIntent, useSetDebateIntent } from '~/core/debates/matchmaking/hooks';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -145,10 +147,28 @@ function JoinDebateCard({
   debateClaim: DebateClaim;
   topic: string | null;
 }) {
+  // Mirrors `ClaimDebateButton`: a position is an intent once geo-chat supports matchmaking,
+  // and a queue entry before that.
+  const matchmakingSupported = useDebateMatchmakingSupported();
   const joinQueue = useJoinDebateQueue(spaceId);
+  const setIntent = useSetDebateIntent();
+  const clearIntent = useClearDebateIntent();
   const canJoin = !debateClaim.active_debate && !debateClaim.active_match;
+  const isMutating = joinQueue.isPending || setIntent.isPending || clearIntent.isPending;
   const forChoice = debateClaim.online_choices.find(choice => choice.position === true);
   const againstChoice = debateClaim.online_choices.find(choice => choice.position === false);
+
+  const choosePosition = (position: boolean) => {
+    if (!matchmakingSupported) {
+      joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position } });
+      return;
+    }
+    if (debateClaim.viewer_waiting_position === position) {
+      clearIntent.mutate({ spaceId, claimId: debateClaim.claim_entity_id });
+      return;
+    }
+    setIntent.mutate({ spaceId, claimId: debateClaim.claim_entity_id, position });
+  };
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-5">
@@ -165,17 +185,17 @@ function JoinDebateCard({
           label={forChoice?.position_label ?? 'For'}
           choice={forChoice}
           position={true}
-          disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === true}
+          disabled={!canJoin || isMutating || (!matchmakingSupported && debateClaim.viewer_waiting_position === true)}
           selected={debateClaim.viewer_waiting_position === true}
-          onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: true } })}
+          onClick={() => choosePosition(true)}
         />
         <PositionButton
           label={againstChoice?.position_label ?? 'Against'}
           choice={againstChoice}
           position={false}
-          disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === false}
+          disabled={!canJoin || isMutating || (!matchmakingSupported && debateClaim.viewer_waiting_position === false)}
           selected={debateClaim.viewer_waiting_position === false}
-          onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: false } })}
+          onClick={() => choosePosition(false)}
         />
       </div>
     </article>

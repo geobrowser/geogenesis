@@ -2,12 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   GeoChatRequestError,
+  blockDebateUser,
+  clearDebateIntent,
   completeLocalRecordingUpload,
+  createDebateRequest,
+  dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  listMatchmakingClaims,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
+  setDebateIntent,
   updateDebateAvailability,
 } from './api';
 
@@ -156,6 +162,95 @@ describe('debate availability', () => {
         },
         body: JSON.stringify({ available_to_debate: false }),
       })
+    );
+  });
+});
+
+describe('matchmaking', () => {
+  function stubJson(body: unknown) {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  it('only sends the claim filters that are set', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: 'chips', filter: 'debate_now', limit: 20 }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/claims?search=chips&filter=debate_now&limit=20',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('omits the default "all" filter and unset facets', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ filter: 'all', spaceId: null, topicId: null }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  it('sets a debate intent without joining the auto-pairing queue', async () => {
+    const fetch = stubJson({ claim: {}, match: null });
+
+    await setDebateIntent('space-1', 'claim-1', true, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/claims/claim-1/debate-intent',
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ position: true }) })
+    );
+  });
+
+  it('clears a debate intent', async () => {
+    const fetch = stubJson({ claim: {}, match: null });
+
+    await clearDebateIntent('space-1', 'claim-1', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/claims/claim-1/debate-intent',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+  });
+
+  it('creates a debate request for a claim', async () => {
+    const fetch = stubJson({ id: 'request-1' });
+
+    await createDebateRequest({ space_id: 'space-1', claim_entity_id: 'claim-1' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ space_id: 'space-1', claim_entity_id: 'claim-1' }),
+      })
+    );
+  });
+
+  it('dismisses a request and optionally drops the claim intent', async () => {
+    const fetch = stubJson({ request: {}, match: null, debate: null });
+
+    await dismissDebateRequest('request-1', { remove_intent: true }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests/request-1/dismiss',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ remove_intent: true }) })
+    );
+  });
+
+  it('blocks a user', async () => {
+    const fetch = stubJson({ blocked: [] });
+
+    await blockDebateUser('user-b', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/debate-blocks/user-b',
+      expect.objectContaining({ method: 'PUT' })
     );
   });
 });

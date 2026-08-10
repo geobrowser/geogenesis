@@ -533,6 +533,18 @@ describe('DebateMatchPrompt', () => {
     expect(mocks.ensurePreview).not.toHaveBeenCalled();
   });
 
+  it('claims a match that arrived already accepted on both sides and enters the ready room', async () => {
+    // An accepted debate request (GEO-2514) produces a match neither side saw a prompt for, so
+    // there is no local ownership record to recover — the tab has to claim the flow itself.
+    const requestMatch = match();
+    for (const participant of requestMatch.participants) participant.accepted = true;
+
+    render(<DebateMatchPrompt spaceId="space-1" matches={[requestMatch]} debates={[]} />);
+
+    expect(await screen.findByRole('dialog', { name: 'Debate readiness' })).toBeInTheDocument();
+    expect(mocks.acceptMutate).not.toHaveBeenCalled();
+  });
+
   it('closes a secondary prompt when shared activity reports acceptance and stays on the current page', async () => {
     const underlyingControl = document.createElement('button');
     underlyingControl.textContent = 'Underlying page control';

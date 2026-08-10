@@ -29,6 +29,9 @@ import {
   useRejectDebateChallenge,
 } from './hooks';
 import { DebateMatchPrompt } from './match-prompt';
+import { useDebateRequests } from './matchmaking/hooks';
+import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
+import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -69,6 +72,28 @@ export function DebateCoordinator() {
     activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
+
+  // Only fetch the request list once activity says one exists, so idle sessions stay quiet. "Not
+  // now" snoozes a request for this session; it stays in the hub's Requests tab either way.
+  const hasIncomingRequests = (activity?.incoming_request_count ?? 0) > 0;
+  const requestsQuery = useDebateRequests(isDebatesEnabled && hasIncomingRequests && !activeFlow);
+  const [snoozedRequestIds, setSnoozedRequestIds] = React.useState<string[]>([]);
+  // Expired requests are dropped here too, so the popup can never prompt for a dead request while
+  // waiting on the server's `debate.requests_changed` event.
+  const incomingRequests = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
+  const promptedRequest =
+    activeFlow || !currentUserId
+      ? null
+      : (incomingRequests.find(request => request.status === 'pending' && !snoozedRequestIds.includes(request.id)) ??
+        null);
+
+  React.useEffect(() => {
+    const liveIds = new Set(incomingRequests.map(request => request.id));
+    setSnoozedRequestIds(current => {
+      const next = current.filter(id => liveIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [incomingRequests]);
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -186,7 +211,15 @@ export function DebateCoordinator() {
           onReject={() => rejectChallenge.mutate(challenge.id)}
         />
       )}
-      {!activeFlow && visibleSharePrompt && (
+      {promptedRequest && currentUserId && (
+        <IncomingRequestPopup
+          key={promptedRequest.id}
+          request={promptedRequest}
+          currentUserId={currentUserId}
+          onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
+        />
+      )}
+      {!activeFlow && !promptedRequest && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}

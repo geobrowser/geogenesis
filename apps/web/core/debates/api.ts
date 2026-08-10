@@ -207,6 +207,13 @@ export type DebateActivity = {
   debate: Debate | null;
   rematch: DebateRematchSession | null;
   challenge: DebateChallenge | null;
+  /**
+   * The single debate request the viewer currently has awaiting a response. Optional until
+   * geo-chat ships `debate_matchmaking_v1`.
+   */
+  outbound_request?: DebateRequest | null;
+  /** Number of unexpired incoming debate requests. Drives the navbar badge. */
+  incoming_request_count?: number;
 };
 
 export type DebateChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -328,6 +335,136 @@ export type DebateClaim = {
   active_debate: Debate | null;
   created_at: string;
   updated_at: string;
+};
+
+/* -------------------------------------------------------------------------------------------------
+ * Matchmaking hub (GEO-2514)
+ * -----------------------------------------------------------------------------------------------*/
+
+export type DebateMatchmakingPresence = {
+  online: boolean;
+  available_to_debate: boolean;
+  /** `true` while the user is in an active match or debate, so requests to them stay pending. */
+  in_debate: boolean;
+  /** Server-authoritative. Requests target the candidate who has been online longest. */
+  online_since: string | null;
+};
+
+export type DebatePerson = DebateParticipantSummary &
+  DebateMatchmakingPresence & {
+    can_challenge: boolean;
+  };
+
+export type DebatePeopleResponse = {
+  people: DebatePerson[];
+};
+
+export type DebateClaimPositionSummary = {
+  position: boolean;
+  position_label: string;
+  /** Everyone who set this position, online or not. */
+  total_count: number;
+  /** Online, available, not in a debate, not blocked either way. */
+  available_now_count: number;
+  /** Capped list used for avatar stacks. */
+  participants: DebateParticipantSummary[];
+};
+
+export type MatchmakingTopic = {
+  id: string;
+  name: string | null;
+};
+
+export type MatchmakingClaim = {
+  claim: DebateClaimSummary;
+  topics: MatchmakingTopic[];
+  /** The viewer's debate intent for this claim. */
+  viewer_position: boolean | null;
+  positions: DebateClaimPositionSummary[];
+  score: number;
+  active_debate: boolean;
+};
+
+export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
+
+export type MatchmakingClaimsQuery = {
+  search?: string | null;
+  spaceId?: string | null;
+  topicId?: string | null;
+  filter?: MatchmakingClaimsFilter;
+  cursor?: string | null;
+  limit?: number;
+};
+
+export type MatchmakingFacets = {
+  space_ids: string[];
+  topics: MatchmakingTopic[];
+};
+
+export type MatchmakingClaimsResponse = {
+  claims: MatchmakingClaim[];
+  next_cursor: string | null;
+  /** Only returned on the first (cursor-less) page. */
+  facets?: MatchmakingFacets;
+};
+
+export type MatchmakingMatch = {
+  claim: DebateClaimSummary;
+  topics: MatchmakingTopic[];
+  viewer_position: boolean;
+  positions: DebateClaimPositionSummary[];
+};
+
+export type MatchmakingMatchesResponse = {
+  matches: MatchmakingMatch[];
+};
+
+export type DebateRequestStatus = 'pending' | 'accepted' | 'dismissed' | 'withdrawn' | 'expired' | 'exhausted';
+
+export type DebateRequestParty = DebateParticipantSummary &
+  DebateMatchmakingPresence & {
+    position: boolean;
+    position_label: string;
+  };
+
+export type DebateRequest = {
+  id: string;
+  status: DebateRequestStatus;
+  claim: DebateClaimSummary;
+  requester: DebateRequestParty;
+  /** The current target. The server re-targets the request when a recipient dismisses or blocks. */
+  recipient: DebateRequestParty;
+  turn_format_id: string | null;
+  created_at: string;
+  /** Fixed for the lifetime of the request, even as it advances between recipients. */
+  expires_at: string;
+};
+
+export type DebateRequestsResponse = {
+  /** At most one outbound request may be pending at a time. */
+  outbound: DebateRequest | null;
+  incoming: DebateRequest[];
+};
+
+export type DebateRequestActionResponse = {
+  request: DebateRequest;
+  match: DebateMatch | null;
+  debate: Debate | null;
+};
+
+export type CreateDebateRequestBody = {
+  space_id: string;
+  claim_entity_id: string;
+  format_id?: string;
+};
+
+export type DismissDebateRequestBody = {
+  /** Also clears the recipient's debate intent for the claim. */
+  remove_intent?: boolean;
+};
+
+export type DebateBlocksResponse = {
+  blocked: DebateParticipantSummary[];
 };
 
 export type ObjectStoreUpload = {
@@ -849,6 +986,198 @@ export async function rejectDebateChallenge(
 ) {
   return geoChatRequest<DebateChallengeActionResponse>(`/debate-challenges/${challengeId}/reject`, {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Matchmaking hub (GEO-2514)
+ * -----------------------------------------------------------------------------------------------*/
+
+export async function listDebatePeople(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function listMatchmakingClaims(
+  query: MatchmakingClaimsQuery,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams();
+  if (query.search) params.set('search', query.search);
+  if (query.spaceId) params.set('space_id', query.spaceId);
+  if (query.topicId) params.set('topic_id', query.topicId);
+  if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.limit) params.set('limit', String(query.limit));
+
+  const search = params.toString();
+  return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function listMatchmakingMatches(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<MatchmakingMatchesResponse>('/matchmaking/matches', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function setDebateIntent(
+  spaceId: string,
+  claimId: string,
+  position: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-intent`, {
+    method: 'PUT',
+    body: { position },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function clearDebateIntent(
+  spaceId: string,
+  claimId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-intent`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function listDebateRequests(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateRequestsResponse>('/me/debate-requests', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function createDebateRequest(
+  request: CreateDebateRequestBody,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequest>('/debate-requests', {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function withdrawDebateRequest(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/withdraw`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function acceptDebateRequest(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  formatId?: string
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/accept`, {
+    method: 'POST',
+    body: { format_id: formatId },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function dismissDebateRequest(
+  requestId: string,
+  request: DismissDebateRequestBody,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/dismiss`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function listDebateBlocks(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateBlocksResponse>('/me/debate-blocks', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function blockDebateUser(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateBlocksResponse>(`/me/debate-blocks/${userId}`, {
+    method: 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function unblockDebateUser(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateBlocksResponse>(`/me/debate-blocks/${userId}`, {
+    method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,
     accountKey,

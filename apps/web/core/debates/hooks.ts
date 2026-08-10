@@ -17,6 +17,7 @@ import {
   type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
+  type MatchmakingClaimsQuery,
   type TranscriptFormat,
   abortDebate,
   acceptDebateChallenge,
@@ -60,7 +61,7 @@ import {
 import { useDebateGatewayScope } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
-const debateQueryNetworkOptions = {
+export const debateQueryNetworkOptions = {
   retry: false,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,
@@ -80,6 +81,12 @@ export const debateQueryKeys = {
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
+  people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
+  matchmakingClaims: (accountKey: string | null, filters: MatchmakingClaimsQuery) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
+  matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
+  blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
 };
 
 export function useGeoChatAuth() {

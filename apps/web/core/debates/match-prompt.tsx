@@ -151,7 +151,23 @@ function DebateMatchPromptContent({
       record.claimId !== ownershipMatch.claim.id ||
       record.spaceId !== ownershipMatch.claim.space_id
     ) {
-      setOwnershipState(participantAccepted ? 'other-tab' : 'none');
+      // A match born from an accepted debate request arrives with both sides already accepted and
+      // no ownership record anywhere — neither participant went through the accept dialog here. The
+      // first tab to take the lock runs the ready room; the rest fall back to the other-tab notice.
+      if (participantAccepted && isFullyAcceptedMatch(ownershipMatch)) {
+        setOwnershipState('checking');
+        void ownershipCoordinator.acquire().then(acquired => {
+          if (!active) return;
+          if (!acquired) {
+            setOwnershipState('other-tab');
+            return;
+          }
+          ownershipCoordinator.beginAcceptance();
+          setOwnershipState(ownershipCoordinator.confirmAcceptance() ? 'confirmed' : 'other-tab');
+        });
+      } else {
+        setOwnershipState(participantAccepted ? 'other-tab' : 'none');
+      }
     } else {
       setOwnershipState('checking');
       void ownershipCoordinator.recover().then(recovered => {
@@ -563,7 +579,17 @@ function initialOwnershipState(match: DebateMatch | null, currentUserId: string 
   if (record?.matchId === match.id && record.claimId === match.claim.id && record.spaceId === match.claim.space_id) {
     return 'checking';
   }
-  return participantForUser(match, currentUserId)?.accepted === true ? 'other-tab' : 'none';
+  if (participantForUser(match, currentUserId)?.accepted !== true) return 'none';
+  // The ownership effect resolves this by racing for the lock. See the comment there.
+  return isFullyAcceptedMatch(match) ? 'checking' : 'other-tab';
+}
+
+/**
+ * Both sides accepted without either passing through this prompt — i.e. the match came from an
+ * accepted debate request (GEO-2514) rather than the legacy queue pairing.
+ */
+function isFullyAcceptedMatch(match: DebateMatch) {
+  return match.participants.length > 1 && match.participants.every(participant => participant.accepted);
 }
 
 type AcceptanceReconciliation =
