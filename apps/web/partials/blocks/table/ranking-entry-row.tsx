@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import cx from 'classnames';
 
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
@@ -11,7 +13,7 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 const ROW_NAME_CLASS = 'block line-clamp-3 tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
@@ -35,8 +37,8 @@ export function RankingEntryRowSkeleton({
       <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
         <Skeleton className="h-4 w-1/3" />
         <Skeleton className="h-3 w-3/5" />
+        {reserveVoteControls ? <Skeleton className="h-5 w-16 shrink-0 rounded" /> : null}
       </div>
-      {reserveVoteControls ? <Skeleton className="h-5 w-16 shrink-0 rounded" /> : null}
     </div>
   );
 }
@@ -54,7 +56,9 @@ type Props = {
   linkToEntity?: boolean;
   /** `leading` = rank column left of avatar; `avatar-badge` = overlapping corner badge (default). */
   rankStyle?: 'leading' | 'avatar-badge';
-  /** Show entity vote controls (including claim variants) at the trailing edge of the row. */
+  /** Actions rendered exactly 8px below the final text row. */
+  actions?: ReactNode;
+  /** Show entity vote controls (including claim variants) below the item content. */
   showVotes?: boolean;
 };
 
@@ -67,6 +71,7 @@ export function RankingEntryRow({
   pending = false,
   linkToEntity = true,
   rankStyle = 'avatar-badge',
+  actions,
   showVotes = false,
 }: Props) {
   const { avatarUrl, coverUrl } = useEntityMedia(entry.entityId, spaceId);
@@ -80,6 +85,7 @@ export function RankingEntryRow({
 
   const effectiveRankStyle = imageUrl ? rankStyle : 'leading';
   const showLeadingRank = showRank && effectiveRankStyle === 'leading';
+  const rowActions = actions ?? (showVotes ? <EntityRowActions entityId={entry.entityId} spaceId={spaceId} /> : null);
 
   const avatar = imageUrl ? (
     <div
@@ -121,12 +127,12 @@ export function RankingEntryRow({
           </div>
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
+        {rowActions ? (
+          <div className="mt-1" onClick={event => event.stopPropagation()}>
+            {rowActions}
+          </div>
+        ) : null}
       </div>
-      {showVotes ? (
-        <div className="shrink-0" onClick={event => event.stopPropagation()}>
-          <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
-        </div>
-      ) : null}
     </div>
   );
 }

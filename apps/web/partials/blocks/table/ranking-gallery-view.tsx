@@ -16,7 +16,7 @@ import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
@@ -79,7 +79,7 @@ function RankingGalleryCard({
         onPointerDown={event => event.stopPropagation()}
         onClick={event => event.stopPropagation()}
       >
-        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+        <EntityRowActions entityId={entityId} spaceId={voteSpaceId} />
       </div>
     </div>
   );
