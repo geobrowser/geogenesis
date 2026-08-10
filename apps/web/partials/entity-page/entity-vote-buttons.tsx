@@ -1,6 +1,7 @@
 'use client';
 
 import { useGeoLogin } from '@geogenesis/auth';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 
@@ -11,8 +12,10 @@ import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uuidToHex } from '~/core/id/normalize';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -27,7 +30,7 @@ import {
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
-  getEntityResponseKindForEntity,
+  getEntityResponseKind,
   hasUnpublishedClaimResponseKindEdit,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
@@ -37,6 +40,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { getChecked } from '~/design-system/checkbox';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
@@ -51,6 +55,10 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
+
+const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
+const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
+const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 
 type EntityVoteButtonsProps = {
   entityId: string;
@@ -72,7 +80,20 @@ export function EntityVoteButtons({
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
-  const inferredResponseKind = getEntityResponseKindForEntity(entity, spaceId);
+  const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
+  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
+  const isClaim =
+    activeRelations.some(
+      relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
+    ) ?? false;
+  const isFactualClaim =
+    isClaim &&
+    getChecked(
+      activeValues.find(
+        v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
+      )?.value
+    ) === true;
+  const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
   const hasUnpublishedResponseKindEdit =
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);

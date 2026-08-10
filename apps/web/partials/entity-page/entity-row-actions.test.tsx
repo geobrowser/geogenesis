@@ -6,6 +6,7 @@ import { EntityRowActions } from './entity-row-actions';
 
 const mocks = vi.hoisted(() => ({
   voteProps: null as null | Record<string, unknown>,
+  debateProps: null as null | Record<string, unknown>,
 }));
 
 vi.mock('./entity-vote-buttons', () => ({
@@ -16,7 +17,10 @@ vi.mock('./entity-vote-buttons', () => ({
 }));
 
 vi.mock('~/core/debates/claim-debate-button', () => ({
-  ClaimDebateButton: () => <div data-action="debate" />,
+  ClaimDebateButton: (props: Record<string, unknown>) => {
+    mocks.debateProps = props;
+    return <div data-action="debate" />;
+  },
 }));
 
 describe('EntityRowActions', () => {
@@ -37,5 +41,6 @@ describe('EntityRowActions', () => {
       spaceId: 'space-1',
       claimResponderAvatarsPosition: 'trailing',
     });
+    expect(mocks.debateProps).toEqual({ entityId: 'claim-1', spaceId: 'space-1' });
   });
 });

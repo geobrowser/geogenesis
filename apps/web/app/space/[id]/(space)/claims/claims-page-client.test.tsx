@@ -200,7 +200,7 @@ describe('ClaimsPageClient', () => {
     const { rerender } = renderClaims();
 
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
 
     debateClaimsResponse = {
       claims: [debateClaim({ viewer_response: { position: true, position_label: 'Agree' } })],
@@ -267,7 +267,8 @@ describe('ClaimsPageClient', () => {
     });
     expect(screen.getAllByTestId('entity-response-buttons')).toHaveLength(2);
     expect(screen.getAllByTestId('entity-response-buttons')[1]).toHaveAttribute('data-response-kind', 'veracity');
-    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(1);
+    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(2);
+    expect(screen.getAllByRole('switch', { name: 'Debate' })[1]).toBeDisabled();
   });
 
   it('retries only the page response batch after its retries are exhausted', () => {

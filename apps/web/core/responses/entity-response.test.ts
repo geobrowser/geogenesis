@@ -14,7 +14,6 @@ import {
   entityResponseIndexingQueryKey,
   entityResponseQueryVariables,
   getEntityResponseKind,
-  getEntityResponseKindForEntity,
   getResponseActionMethod,
   hasUnpublishedClaimResponseKindEdit,
   responseKindToVoteKind,
@@ -33,24 +32,6 @@ describe('entity response semantics', () => {
     [{ isClaim: true, isFactual: true }, 'veracity'],
   ] as const)('selects the active response kind for %o', (input, expected) => {
     expect(getEntityResponseKind(input)).toBe(expected);
-  });
-
-  it('infers claim response kinds from hydrated entity types and values', () => {
-    const entity = {
-      types: [{ id: CLAIM_TYPE_ID }],
-      relations: [],
-      values: [
-        {
-          spaceId: SPACE_ID,
-          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
-          value: '1',
-        },
-      ],
-    } as unknown as NonNullable<Parameters<typeof getEntityResponseKindForEntity>[0]>;
-
-    expect(getEntityResponseKindForEntity(entity, SPACE_ID)).toBe('veracity');
-    expect(getEntityResponseKindForEntity({ ...entity, values: [] }, SPACE_ID)).toBe('stance');
-    expect(getEntityResponseKindForEntity({ ...entity, types: [] }, SPACE_ID)).toBe('curation');
   });
 
   it.each([

@@ -1,14 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
-import { Effect } from 'effect';
-
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getUserEntityResponse } from '~/core/io/queries';
-import { getEntityResponseKindForEntity, userEntityResponseQueryKey } from '~/core/responses/entity-response';
-import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
@@ -31,26 +24,8 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
     enabled: isDebatesEnabled && providedEntity == null,
   });
   const entity = providedEntity ?? fetchedEntity;
-  const responseKind = getEntityResponseKindForEntity(entity, spaceId);
-  const isClaim = responseKind === 'stance' || responseKind === 'veracity';
+  const isClaim = entity?.types.some(type => type.id === CLAIM_TYPE_ID) ?? false;
   const published = entity ? isClaimPublished(entity) : false;
-  const responseBatch = useClaimResponseBatchState();
-  const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
-  const { data: viewerResponse } = useQuery({
-    queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, 0, responseKind ?? 'stance'),
-    queryFn: () =>
-      personalSpaceId && responseKind
-        ? Effect.runPromise(getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind))
-        : null,
-    enabled:
-      isDebatesEnabled &&
-      isClaim &&
-      published &&
-      !isPersonalSpaceLoading &&
-      Boolean(personalSpaceId) &&
-      (!responseBatch.managed || responseBatch.ready),
-    staleTime: 30_000,
-  });
 
   const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], isDebatesEnabled && isClaim);
   const debateClaim = debateClaimsQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
@@ -64,10 +39,6 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   return (
     <ClaimDebateReadiness
       debateClaim={debateClaim}
-      responseKind={responseKind}
-      viewerPosition={
-        viewerResponse === undefined ? undefined : viewerResponse === null ? null : viewerResponse === 'positive'
-      }
       entityId={entityId}
       spaceId={spaceId}
       canEnable={canEnable}

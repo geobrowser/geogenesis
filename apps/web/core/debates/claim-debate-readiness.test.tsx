@@ -16,22 +16,12 @@ const mocks = vi.hoisted(() => ({
   joinReset: vi.fn(),
   leaveMutateAsync: vi.fn(),
   responseKinds: [] as Array<'stance' | 'veracity' | null>,
-  notifyResponseIndexed: vi.fn(),
   authenticated: true,
   accountKey: 'account-1' as string | null,
 }));
 
-vi.mock('./api', async importOriginal => ({
-  ...(await importOriginal<typeof import('./api')>()),
-  notifyClaimResponseIndexed: (...args: unknown[]) => mocks.notifyResponseIndexed(...args),
-}));
-
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({
-    authenticated: mocks.authenticated,
-    accountKey: mocks.accountKey,
-    getPrivyIdentityToken: vi.fn(),
-  }),
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
     reset: mocks.joinReset,
@@ -59,8 +49,6 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockReturnValue(deferred(queueResponse(false)).promise);
   mocks.responseKinds.length = 0;
-  mocks.notifyResponseIndexed.mockReset();
-  mocks.notifyResponseIndexed.mockResolvedValue(undefined);
   mocks.authenticated = true;
   mocks.accountKey = 'account-1';
 });
@@ -68,31 +56,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimDebateReadiness', () => {
-  it('uses the canonical response while the debate snapshot hydrates', () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={queryClient}>
-        <ClaimDebateReadiness
-          debateClaim={null}
-          responseKind="stance"
-          viewerPosition={false}
-          entityId="claim-1"
-          spaceId="space-1"
-          canEnable
-          compact
-        />
-      </QueryClientProvider>
-    );
-
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-5');
-  });
-
-  it('hides the Debate switch until the user responds', () => {
+  it('shows the disabled Debate switch until the user responds', () => {
     renderReadiness(claim({ viewer_response: null }));
 
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
     expect(screen.queryByText(/join debate|cancel join|check again/i)).not.toBeInTheDocument();
   });
 
@@ -102,7 +70,6 @@ describe('ClaimDebateReadiness', () => {
     const actionRow = screen.getByTestId('entity-response-buttons').parentElement;
     expect(actionRow).toBe(screen.getByRole('switch', { name: 'Debate' }).parentElement);
     expect(actionRow).toHaveClass('flex', 'items-center', 'gap-4');
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-7');
   });
 
   it('optimistically enables persisted readiness through the Debate switch', async () => {
@@ -118,7 +85,7 @@ describe('ClaimDebateReadiness', () => {
     expect(mocks.joinMutateAsync).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('does not flick off when a stale backend snapshot follows a confirmed join', async () => {
+  it('hands control back to a newer backend disable after the join is confirmed', async () => {
     const join = deferred();
     mocks.joinMutateAsync.mockReturnValueOnce(join.promise);
     const view = renderReadiness(claim());
@@ -132,46 +99,7 @@ describe('ClaimDebateReadiness', () => {
 
     view.rerender(readiness(claim({ viewer_debate_ready: false }), view.queryClient));
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
-
-    view.rerender(readiness(claim({ viewer_response: null, viewer_debate_ready: false }), view.queryClient));
-
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
-  });
-
-  it('stays enabled when an existing response changes position', async () => {
-    const view = renderReadiness(claim({ viewer_debate_ready: true }));
-
-    await act(async () => {
-      view.queryClient.setQueryData(
-        entityResponseIndexingQueryKey('profile-space-1', 'claim-1', 'space-1', 'stance'),
-        indexing('negative')
-      );
-    });
-    view.rerender(
-      readiness(
-        claim({
-          viewer_response: { position: true, position_label: 'Agree' },
-          viewer_debate_ready: false,
-        }),
-        view.queryClient
-      )
-    );
-
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
-
-    view.rerender(
-      readiness(
-        claim({
-          viewer_response: { position: false, position_label: 'Disagree' },
-          viewer_debate_ready: false,
-        }),
-        view.queryClient
-      )
-    );
-
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
-    expect(mocks.leaveMutateAsync).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('stays clickable while joining and serializes a later leave', async () => {
@@ -367,19 +295,20 @@ describe('ClaimDebateReadiness', () => {
       );
     });
 
-    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument());
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(toggle).toBeDisabled();
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });
 
   it('turns readiness off immediately when the response is optimistically withdrawn', () => {
     renderReadiness(claim({ viewer_debate_ready: true }), indexingClear());
 
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
     expect(screen.queryByText('Waiting for someone with the opposite response.')).not.toBeInTheDocument();
     expect(mocks.leaveMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('synchronizes the response and retries once when geo-chat has not observed it yet', async () => {
+  it('refetches and retries once when geo-chat has not observed the response yet', async () => {
     mocks.joinMutateAsync.mockRejectedValueOnce(
       new GeoChatRequestError('Respond before debating', 'claim_response_required', 409)
     );
@@ -389,15 +318,6 @@ describe('ClaimDebateReadiness', () => {
 
     await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(2));
     expect(mocks.joinReset).toHaveBeenCalledOnce();
-    expect(mocks.notifyResponseIndexed).toHaveBeenCalledWith(
-      'space-1',
-      'claim-1',
-      'stance',
-      true,
-      expect.any(Function),
-      'account-1'
-    );
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText('Respond before debating', { selector: '.text-red-01' })).not.toBeInTheDocument();
   });
 
@@ -428,7 +348,9 @@ describe('ClaimDebateReadiness', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
     view.rerender(readiness(claim({ viewer_response: null }), view.queryClient));
 
-    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false')
+    );
     expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -521,7 +443,8 @@ describe('ClaimDebateReadiness', () => {
 
     view.rerender(readiness(claim({ response_kind: 'veracity', viewer_response: null }), view.queryClient));
 
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });
 
@@ -540,7 +463,7 @@ describe('ClaimDebateReadiness', () => {
   it('renders only the compact Debate switch in claim action rows', () => {
     renderReadiness(claim(), idleIndexingState(), true);
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-5');
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeInTheDocument();
     expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
     expect(screen.queryByText(/your response/i)).not.toBeInTheDocument();
   });
