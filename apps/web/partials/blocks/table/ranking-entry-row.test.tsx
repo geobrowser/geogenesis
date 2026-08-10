@@ -39,6 +39,14 @@ describe('RankingEntryRow', () => {
     expect(markup).not.toContain('data-vote-actions');
   });
 
+  it('keeps actions exactly 8px below the final text row', () => {
+    render(<RankingEntryRow entry={entry} spaceId="space-1" actions={<div data-testid="row-actions" />} />);
+
+    const actions = screen.getByTestId('row-actions').parentElement;
+    expect(actions?.className).toContain('mt-1');
+    expect(actions?.parentElement?.className).toContain('gap-1');
+  });
+
   it('reserves vote-control width in browse loading rows', () => {
     const markup = renderToStaticMarkup(<RankingEntryRowSkeleton rank={1} reserveVoteControls />);
 

@@ -90,6 +90,7 @@ describe('ClaimDebateReadiness', () => {
     const actionRow = screen.getByTestId('entity-response-buttons').parentElement;
     expect(actionRow).toBe(screen.getByRole('switch', { name: 'Debate' }).parentElement);
     expect(actionRow).toHaveClass('flex', 'items-center', 'gap-4');
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-7');
   });
 
   it('optimistically enables persisted readiness through the Debate switch', async () => {
