@@ -23,7 +23,7 @@ const ROW_RANK_CLASS =
 
 function RankingListRowSkeleton({ rank }: { rank: number }) {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2">
+    <div className="flex w-full min-w-0 flex-col gap-[6px]">
       <div className={ROW_CLASS}>
         <span className={ROW_RANK_CLASS}>{rank}</span>
         <div className="min-w-0 flex-1">
@@ -47,7 +47,7 @@ function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowP
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
-    <div className="flex w-full min-w-0 flex-col gap-2">
+    <div className="flex w-full min-w-0 flex-col gap-[6px]">
       <div className={ROW_CLASS}>
         <span className={ROW_RANK_CLASS}>{rank}</span>
         <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>

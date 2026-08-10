@@ -352,7 +352,7 @@ export function TableBlockGalleryItem({
             </div>
           );
         })}
-        <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="mt-[6px] flex items-center justify-between gap-2">
           <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} />
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">

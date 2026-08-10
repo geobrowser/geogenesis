@@ -149,7 +149,7 @@ export function TableBlockBulletedListItem({
             </Link>
           </CollectionMetadata>
         )}
-        <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} className="mt-2" />
+        <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} className="mt-[6px]" />
       </div>
       <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
         {!isPlaceholder && source.type !== 'COLLECTION' && (
