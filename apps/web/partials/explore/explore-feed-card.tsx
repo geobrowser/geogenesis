@@ -104,6 +104,15 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {item.description}
             </p>
           ) : null}
+          <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-2">
+            <Link
+              href={entityHref}
+              className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
+            >
+              <ExploreCommentsIcon className="text-grey-04" />
+              <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
+            </Link>
+          </EntityRowActions>
         </div>
         {item.imageUrl ? (
           <Link
@@ -114,16 +123,6 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
           </Link>
         ) : null}
       </div>
-
-      <EntityRowActions entityId={item.entityId} spaceId={item.spaceId}>
-        <Link
-          href={entityHref}
-          className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-        >
-          <ExploreCommentsIcon className="text-grey-04" />
-          <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-        </Link>
-      </EntityRowActions>
     </article>
   );
 }
