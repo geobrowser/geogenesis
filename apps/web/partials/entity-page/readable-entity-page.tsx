@@ -176,7 +176,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
     }
 
     return {
-      hasGroups: true,
+      hasGroups: groups.length > 0,
       groups,
       ungrouped: orderedUngrouped,
     };
