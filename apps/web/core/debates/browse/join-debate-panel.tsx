@@ -7,24 +7,18 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
-import {
-  useDebateActivity,
-  useDebateClaims,
-  useJoinDebateQueue,
-  useUpdateDebateAvailability,
-} from '~/core/debates/hooks';
+import type { DebateClaim } from '~/core/debates/api';
+import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
+import { useDebateActivity, useDebateClaims, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
 /**
  * "Join a debate" panel opened from the browse feed's Join debate button. Lists
- * the space's published claims with For/Against entry points into the debate
- * queue — the same mechanism the Claims tab uses.
+ * the space's published claims with their response-derived readiness controls.
  */
 export function JoinDebatePanel({ spaceId, onClose }: { spaceId: string; onClose: () => void }) {
   // geo-chat indexes the space's debatable claims, so ask it directly rather than
@@ -145,10 +139,7 @@ function JoinDebateCard({
   debateClaim: DebateClaim;
   topic: string | null;
 }) {
-  const joinQueue = useJoinDebateQueue(spaceId);
   const canJoin = !debateClaim.active_debate && !debateClaim.active_match;
-  const forChoice = debateClaim.online_choices.find(choice => choice.position === true);
-  const againstChoice = debateClaim.online_choices.find(choice => choice.position === false);
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-5">
@@ -160,78 +151,13 @@ function JoinDebateCard({
       <Text as="h3" variant="smallTitle" color="text" className="block">
         {debateClaim.claim}
       </Text>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <PositionButton
-          label={forChoice?.position_label ?? 'For'}
-          choice={forChoice}
-          position={true}
-          disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === true}
-          selected={debateClaim.viewer_waiting_position === true}
-          onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: true } })}
-        />
-        <PositionButton
-          label={againstChoice?.position_label ?? 'Against'}
-          choice={againstChoice}
-          position={false}
-          disabled={!canJoin || joinQueue.isPending || debateClaim.viewer_waiting_position === false}
-          selected={debateClaim.viewer_waiting_position === false}
-          onClick={() => joinQueue.mutate({ claimId: debateClaim.claim_entity_id, request: { position: false } })}
-        />
-      </div>
+      <ClaimDebateReadiness
+        debateClaim={debateClaim}
+        entityId={debateClaim.claim_entity_id}
+        spaceId={spaceId}
+        canEnable={canJoin}
+        className="mt-3"
+      />
     </article>
-  );
-}
-
-function PositionButton({
-  label,
-  choice,
-  position,
-  disabled,
-  selected,
-  onClick,
-}: {
-  label: string;
-  choice: DebateOnlineChoice | undefined;
-  position: boolean;
-  disabled: boolean;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={cx(
-        'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text transition-colors disabled:opacity-60',
-        selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg hover:bg-grey-01'
-      )}
-    >
-      <span className="truncate">{label}</span>
-      {choice && choice.participant_count > 0 && <ChoiceAvatars choice={choice} />}
-    </button>
-  );
-}
-
-function ChoiceAvatars({ choice }: { choice: DebateOnlineChoice }) {
-  const participants = choice.participants.slice(0, 2);
-  const overflow = Math.max(0, choice.participant_count - participants.length);
-  return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
-      {participants.map(participant => (
-        <span
-          key={participant.user_id}
-          className="relative box-content block size-5 overflow-hidden rounded-full border-2 border-white"
-        >
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
-        </span>
-      ))}
-      {overflow > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
-          +{overflow}
-        </span>
-      )}
-    </span>
   );
 }

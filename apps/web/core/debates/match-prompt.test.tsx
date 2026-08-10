@@ -777,6 +777,7 @@ function match(): DebateMatch {
   return {
     id: 'match-1',
     status: 'pending',
+    response_kind: null,
     claim: {
       id: 'claim-1',
       space_id: 'space-1',
@@ -831,6 +832,7 @@ function debate(): Debate {
       description: null,
     },
     status: 'ready',
+    response_kind: null,
     room_name: 'geo-debate-debate-1',
     first_participant_slot: 1,
     current_turn_index: 0,
