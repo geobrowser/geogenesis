@@ -288,6 +288,7 @@ function ClaimDebateReadinessContent({
         checked={checked}
         disabled={disabled}
         busy={isSaving}
+        compact={compact}
         className={compact ? className : undefined}
         onClick={handleToggle}
       />
@@ -317,6 +318,7 @@ function DebateToggle({
   checked,
   disabled,
   busy = false,
+  compact = false,
   className,
   onClick,
   title,
@@ -324,6 +326,7 @@ function DebateToggle({
   checked: boolean;
   disabled: boolean;
   busy?: boolean;
+  compact?: boolean;
   className?: string;
   onClick?: () => void;
   title?: string;
@@ -342,7 +345,8 @@ function DebateToggle({
       onClick={onClick}
       title={title}
       className={cx(
-        'inline-flex h-7 cursor-pointer items-center gap-2 rounded-sm text-button text-grey-04 transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-text disabled:cursor-default disabled:opacity-50',
+        'inline-flex cursor-pointer items-center gap-2 rounded-sm text-button text-grey-04 transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-text disabled:cursor-default disabled:opacity-50',
+        compact ? 'h-5' : 'h-7',
         className
       )}
     >

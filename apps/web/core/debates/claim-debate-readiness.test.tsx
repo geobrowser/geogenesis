@@ -73,6 +73,7 @@ describe('ClaimDebateReadiness', () => {
     );
 
     expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-5');
   });
 
   it('hides the Debate switch until the user responds', () => {
@@ -478,7 +479,7 @@ describe('ClaimDebateReadiness', () => {
   it('renders only the compact Debate switch in claim action rows', () => {
     renderReadiness(claim(), idleIndexingState(), true);
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveClass('h-5');
     expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
     expect(screen.queryByText(/your response/i)).not.toBeInTheDocument();
   });
