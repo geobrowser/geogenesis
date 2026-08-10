@@ -39,9 +39,7 @@ export function ClaimDebateReadiness({
   compact = false,
 }: ClaimDebateReadinessProps) {
   if (!debateClaim) {
-    return compact ? (
-      <DebateToggle checked={false} disabled className={className} title="Debate readiness is loading" />
-    ) : null;
+    return null;
   }
 
   return (
@@ -275,15 +273,16 @@ function ClaimDebateReadinessContent({
     });
   };
 
-  const toggle = (
-    <DebateToggle
-      checked={checked}
-      disabled={disabled}
-      busy={isSaving}
-      className={compact ? className : undefined}
-      onClick={handleToggle}
-    />
-  );
+  const toggle =
+    viewerPosition === null ? null : (
+      <DebateToggle
+        checked={checked}
+        disabled={disabled}
+        busy={isSaving}
+        className={compact ? className : undefined}
+        onClick={handleToggle}
+      />
+    );
 
   if (compact) return toggle;
 

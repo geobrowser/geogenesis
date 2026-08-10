@@ -247,7 +247,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 );
               }
               const rowContent = (
-                <div className="flex w-full min-w-0 items-center gap-4">
+                <div className="flex w-full min-w-0 flex-col gap-2">
                   <div className="min-w-0 flex-1">
                     <RankingEntryRow
                       rank={rank}
@@ -258,7 +258,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                       pending={pendingEntityIds.has(entityId)}
                     />
                   </div>
-                  <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                  <RankingEntryVoteControls
+                    entityId={entityId}
+                    spaceId={resolveEntitySpaceId(entityId)}
+                    className="ml-9"
+                  />
                 </div>
               );
               return (

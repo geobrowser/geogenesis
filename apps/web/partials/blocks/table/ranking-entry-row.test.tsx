@@ -19,8 +19,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
+vi.mock('~/partials/entity-page/entity-row-actions', () => ({
+  EntityRowActions: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
     <button aria-label="Upvote" data-entity-id={entityId} data-space-id={spaceId} data-vote-actions />
   ),
 }));

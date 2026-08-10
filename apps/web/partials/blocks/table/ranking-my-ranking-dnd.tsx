@@ -86,7 +86,7 @@ function RankingMyRankingSortableItem({
     <div ref={setNodeRef} style={style} className="relative">
       <div
         data-ranking-sortable-id={id}
-        className={cx('flex w-full min-w-0 items-center gap-4', isDragging && 'invisible')}
+        className={cx('flex w-full min-w-0 flex-col gap-2', isDragging && 'invisible')}
         aria-hidden={isDragging}
       >
         <div
@@ -100,7 +100,7 @@ function RankingMyRankingSortableItem({
         >
           {children}
         </div>
-        {trailing ? <div className="shrink-0">{trailing}</div> : null}
+        {trailing ? <div className="ml-9 shrink-0">{trailing}</div> : null}
       </div>
     </div>
   );
@@ -193,9 +193,9 @@ export function RankingMyRankingDndList({
         {items.map((entityId, index) => {
           const trailing = renderTrailing?.(entityId, index, false);
           return (
-            <div key={entityId} className="flex w-full min-w-0 items-center gap-4">
+            <div key={entityId} className="flex w-full min-w-0 flex-col gap-2">
               <div className="min-w-0 flex-1">{renderItem(entityId, index, false)}</div>
-              {trailing ? <div className="shrink-0">{trailing}</div> : null}
+              {trailing ? <div className="ml-9 shrink-0">{trailing}</div> : null}
             </div>
           );
         })}

@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
@@ -23,12 +23,14 @@ const ROW_RANK_CLASS =
 
 function RankingListRowSkeleton({ rank }: { rank: number }) {
   return (
-    <div className={ROW_CLASS}>
-      <span className={ROW_RANK_CLASS}>{rank}</span>
-      <div className="min-w-0 flex-1">
-        <Skeleton className="h-5 w-full max-w-md rounded" />
+    <div className="flex w-full min-w-0 flex-col gap-2">
+      <div className={ROW_CLASS}>
+        <span className={ROW_RANK_CLASS}>{rank}</span>
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-5 w-full max-w-md rounded" />
+        </div>
       </div>
-      <Skeleton className="h-5 w-16 shrink-0 rounded" />
+      <Skeleton className="ml-8 h-5 w-16 shrink-0 rounded" />
     </div>
   );
 }
@@ -45,14 +47,14 @@ function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowP
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
-    <div className={ROW_CLASS}>
-      <span className={ROW_RANK_CLASS}>{rank}</span>
-      <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
-        {name}
-      </Link>
-      <div className="flex h-5 shrink-0 items-center">
-        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+    <div className="flex w-full min-w-0 flex-col gap-2">
+      <div className={ROW_CLASS}>
+        <span className={ROW_RANK_CLASS}>{rank}</span>
+        <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
+          {name}
+        </Link>
       </div>
+      <EntityRowActions entityId={entityId} spaceId={voteSpaceId} className="ml-8" />
     </div>
   );
 }

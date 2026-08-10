@@ -56,11 +56,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimDebateReadiness', () => {
-  it('shows the disabled Debate switch until the user responds', () => {
+  it('hides the Debate switch until the user responds', () => {
     renderReadiness(claim({ viewer_response: null }));
 
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
     expect(screen.queryByText(/join debate|cancel join|check again/i)).not.toBeInTheDocument();
   });
 
@@ -295,15 +295,14 @@ describe('ClaimDebateReadiness', () => {
       );
     });
 
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(toggle).toBeDisabled();
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument());
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });
 
   it('turns readiness off immediately when the response is optimistically withdrawn', () => {
     renderReadiness(claim({ viewer_debate_ready: true }), indexingClear());
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
     expect(screen.queryByText('Waiting for someone with the opposite response.')).not.toBeInTheDocument();
     expect(mocks.leaveMutateAsync).not.toHaveBeenCalled();
   });
@@ -348,9 +347,7 @@ describe('ClaimDebateReadiness', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
     view.rerender(readiness(claim({ viewer_response: null }), view.queryClient));
 
-    await waitFor(() =>
-      expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false')
-    );
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument());
     expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -443,8 +440,7 @@ describe('ClaimDebateReadiness', () => {
 
     view.rerender(readiness(claim({ response_kind: 'veracity', viewer_response: null }), view.queryClient));
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });
 

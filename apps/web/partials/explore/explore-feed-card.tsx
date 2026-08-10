@@ -11,7 +11,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
@@ -115,8 +115,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
         ) : null}
       </div>
 
-      <div className="flex items-center gap-6">
-        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimResponderAvatarsPosition="trailing" />
+      <EntityRowActions entityId={item.entityId} spaceId={item.spaceId}>
         <Link
           href={entityHref}
           className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
@@ -124,7 +123,7 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
           <ExploreCommentsIcon className="text-grey-04" />
           <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
         </Link>
-      </div>
+      </EntityRowActions>
     </article>
   );
 }

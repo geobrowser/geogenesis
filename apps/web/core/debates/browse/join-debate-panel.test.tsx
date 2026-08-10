@@ -49,13 +49,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('JoinDebatePanel', () => {
-  it('prompts for a response with a disabled readiness switch', () => {
+  it('prompts for a response without showing readiness before a position exists', () => {
     mocks.claims = [claim({ viewer_response: null })];
 
     renderPanel();
 
     expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
   it('renders backend labels and one bodyless join toggle after a response', () => {

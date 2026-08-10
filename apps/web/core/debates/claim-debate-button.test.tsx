@@ -94,17 +94,17 @@ describe('ClaimDebateButton', () => {
     expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
-  it('renders a disabled compact switch for an unpublished claim', () => {
+  it('renders no switch for an unpublished claim without a position', () => {
     renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
-  it('shows the disabled Debate switch before a claim response', () => {
+  it('does not show the Debate switch before a claim response', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
     renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
     expect(screen.queryByText('Respond before debating', { selector: 'p' })).not.toBeInTheDocument();
   });
 

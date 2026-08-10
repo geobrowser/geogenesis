@@ -11,7 +11,7 @@ import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 const ROW_NAME_CLASS = 'block line-clamp-3 tracking-[-0.17px] text-text text-[19px] font-medium leading-[1.3]';
 const ROW_DESCRIPTION_CLASS = 'break-words text-[16px] leading-[24px] text-grey-04';
@@ -27,16 +27,18 @@ export function RankingEntryRowSkeleton({
   const showLeadingRank = rank != null && rank > 0;
 
   return (
-    <div className="flex w-full min-w-0 items-center gap-4 overflow-hidden">
-      {showLeadingRank ? (
-        <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
-      ) : null}
-      <Skeleton className="h-16 min-h-16 w-16 min-w-16 shrink-0 rounded-md" />
-      <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
-        <Skeleton className="h-4 w-1/3" />
-        <Skeleton className="h-3 w-3/5" />
+    <div className="flex w-full min-w-0 flex-col gap-2 overflow-hidden">
+      <div className="flex w-full min-w-0 items-center gap-4">
+        {showLeadingRank ? (
+          <span className="w-5 shrink-0 text-center text-button font-medium text-text tabular-nums">{rank}</span>
+        ) : null}
+        <Skeleton className="h-16 min-h-16 w-16 min-w-16 shrink-0 rounded-md" />
+        <div className="flex min-h-16 min-w-0 flex-1 flex-col justify-center gap-2">
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-3 w-3/5" />
+        </div>
       </div>
-      {reserveVoteControls ? <Skeleton className="h-5 w-16 shrink-0 rounded" /> : null}
+      {reserveVoteControls ? <Skeleton className={cx('h-5 w-16 shrink-0 rounded', showLeadingRank && 'ml-9')} /> : null}
     </div>
   );
 }
@@ -54,7 +56,7 @@ type Props = {
   linkToEntity?: boolean;
   /** `leading` = rank column left of avatar; `avatar-badge` = overlapping corner badge (default). */
   rankStyle?: 'leading' | 'avatar-badge';
-  /** Show entity vote controls (including claim variants) at the trailing edge of the row. */
+  /** Show entity vote controls (including claim variants) below the item content. */
   showVotes?: boolean;
 };
 
@@ -121,12 +123,12 @@ export function RankingEntryRow({
           </div>
         ) : null}
         {pending ? <p className="text-[12px] leading-[16px] font-medium text-grey-04">Pending approval</p> : null}
+        {showVotes ? (
+          <div className="pt-1" onClick={event => event.stopPropagation()}>
+            <EntityRowActions entityId={entry.entityId} spaceId={spaceId} />
+          </div>
+        ) : null}
       </div>
-      {showVotes ? (
-        <div className="shrink-0" onClick={event => event.stopPropagation()}>
-          <EntityVoteButtons entityId={entry.entityId} spaceId={spaceId} />
-        </div>
-      ) : null}
     </div>
   );
 }
