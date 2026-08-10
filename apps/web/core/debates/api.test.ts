@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GeoChatRequestError,
   blockDebateUser,
-  clearDebateIntent,
   completeLocalRecordingUpload,
   createDebateRequest,
   dismissDebateRequest,
@@ -16,7 +15,6 @@ import {
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
-  setDebateIntent,
   updateDebateAvailability,
 } from './api';
 

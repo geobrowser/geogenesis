@@ -134,7 +134,9 @@ export function ClaimsTab() {
               claim={entry.claim}
               positions={entry.positions}
               viewerPosition={entry.viewer_position}
-              disabled={entry.active_debate}
+              headerAction={
+                entry.active_debate ? <span className="text-footnote text-grey-04">Debate in progress</span> : null
+              }
             />
           ))}
           {claimsQuery.hasNextPage ? (

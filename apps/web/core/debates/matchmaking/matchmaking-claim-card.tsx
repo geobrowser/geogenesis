@@ -2,43 +2,36 @@
 
 import * as React from 'react';
 
+import Link from 'next/link';
+
 import cx from 'classnames';
 
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary } from '../api';
-import { useClearDebateIntent, useSetDebateIntent } from './hooks';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   viewerPosition: boolean | null;
-  disabled?: boolean;
   /** Rendered under the position row — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
-  /** Rendered on the header row opposite the space chip — e.g. the debate-intent toggle. */
+  /** Rendered on the header row opposite the space chip — e.g. the readiness toggle. */
   headerAction?: React.ReactNode;
 };
 
-export function MatchmakingClaimCard({ claim, positions, viewerPosition, disabled, footer, headerAction }: Props) {
-  const setIntent = useSetDebateIntent();
-  const clearIntent = useClearDebateIntent();
-
+/**
+ * A position is an on-chain claim response now, so the hub can only *show* the sides — taking one
+ * means responding to the claim itself. The card links out for that; readiness (the part the hub
+ * does own) rides in `headerAction`.
+ */
+export function MatchmakingClaimCard({ claim, positions, viewerPosition, footer, headerAction }: Props) {
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
-  const pending = setIntent.isPending || clearIntent.isPending;
-
-  // Clicking the position you already hold clears it, mirroring the claim popover on entity pages.
-  const choose = (position: boolean) => {
-    if (viewerPosition === position) {
-      clearIntent.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id });
-      return;
-    }
-    setIntent.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, position });
-  };
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-3">
@@ -46,23 +39,24 @@ export function MatchmakingClaimCard({ claim, positions, viewerPosition, disable
         <SpaceChip spaceId={claim.space_id} />
         {headerAction}
       </div>
-      <p className="mb-3 text-metadataMedium">{claim.claim}</p>
+      <Link
+        href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        className="mb-3 block text-metadataMedium hover:underline"
+      >
+        {claim.claim}
+      </Link>
       <div className="grid grid-cols-2 gap-2">
-        <PositionButton
-          label={forSide?.position_label ?? 'Yes'}
+        <PositionSummary
+          label={forSide?.position_label ?? 'For'}
           summary={forSide}
           position
           selected={viewerPosition === true}
-          disabled={disabled || pending}
-          onClick={() => choose(true)}
         />
-        <PositionButton
-          label={againstSide?.position_label ?? 'No'}
+        <PositionSummary
+          label={againstSide?.position_label ?? 'Against'}
           summary={againstSide}
           position={false}
           selected={viewerPosition === false}
-          disabled={disabled || pending}
-          onClick={() => choose(false)}
         />
       </div>
       {footer}
@@ -88,35 +82,30 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
   );
 }
 
-function PositionButton({
+function PositionSummary({
   label,
   summary,
   position,
   selected,
-  disabled,
-  onClick,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
   position: boolean;
   selected: boolean;
-  disabled?: boolean;
-  onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      aria-pressed={selected}
-      disabled={disabled}
-      onClick={onClick}
+    <div
       className={cx(
-        'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text transition-colors disabled:opacity-60',
-        selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg hover:bg-grey-01'
+        'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
+        selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg'
       )}
     >
-      <span className="truncate">{label}</span>
+      <span className="truncate">
+        {label}
+        {selected ? <span className="sr-only"> — your position</span> : null}
+      </span>
       {summary && summary.total_count > 0 ? <PositionAvatars summary={summary} /> : null}
-    </button>
+    </div>
   );
 }
 

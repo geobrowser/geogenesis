@@ -7,19 +7,21 @@ import cx from 'classnames';
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { SpaceTopicFilters } from './claims-tab';
-import { useClearDebateIntent, useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
+import { useClaimReadiness, useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 
 /**
- * Claims where you've set a position and someone holding the opposite one is online and ready.
- * Requesting sends to whoever has been waiting longest; the server advances to the next candidate
- * if they pass, so this tab never has to pick a person.
+ * Claims where you're ready to debate and someone holding the opposite response is online and
+ * ready too. Requesting sends to whoever has been online longest; the server advances to the next
+ * candidate if they pass, so this tab never has to pick a person.
+ *
+ * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is always empty, so this
+ * tab filters by space only.
  */
 export function MatchesTab() {
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
-  const [topicId, setTopicId] = React.useState<string | null>(null);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
@@ -29,22 +31,10 @@ export function MatchesTab() {
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
   const facetSpaceIds = React.useMemo(() => [...new Set(matches.map(match => match.claim.space_id))], [matches]);
-  const facetTopics = React.useMemo(() => {
-    const topics = new Map<string, { id: string; name: string | null }>();
-    for (const match of matches) {
-      for (const topic of match.topics) topics.set(topic.id, topic);
-    }
-    return [...topics.values()];
-  }, [matches]);
 
   const filtered = React.useMemo(
-    () =>
-      matches.filter(match => {
-        if (spaceId && match.claim.space_id !== spaceId) return false;
-        if (topicId && !match.topics.some(topic => topic.id === topicId)) return false;
-        return true;
-      }),
-    [matches, spaceId, topicId]
+    () => matches.filter(match => !spaceId || match.claim.space_id === spaceId),
+    [matches, spaceId]
   );
 
   return (
@@ -56,14 +46,7 @@ export function MatchesTab() {
       ) : null}
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        <SpaceTopicFilters
-          spaceId={spaceId}
-          onSpaceChange={setSpaceId}
-          topicId={topicId}
-          onTopicChange={setTopicId}
-          facetSpaceIds={facetSpaceIds}
-          facetTopics={facetTopics}
-        />
+        <SpaceTopicFilters spaceId={spaceId} onSpaceChange={setSpaceId} facetSpaceIds={facetSpaceIds} />
 
         <HubQueryState
           isLoading={matchesQuery.isLoading}
@@ -88,7 +71,7 @@ export function MatchesTab() {
 
 function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; hasOutboundRequest: boolean }) {
   const createRequest = useCreateDebateRequest();
-  const clearIntent = useClearDebateIntent();
+  const readiness = useClaimReadiness();
 
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
 
@@ -98,9 +81,15 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
       positions={match.positions}
       viewerPosition={match.viewer_position}
       headerAction={
-        <IntentToggle
-          onToggle={() => clearIntent.mutate({ spaceId: match.claim.space_id, claimId: match.claim.claim_entity_id })}
-          disabled={clearIntent.isPending}
+        <ReadinessToggle
+          onToggle={() =>
+            readiness.mutate({
+              spaceId: match.claim.space_id,
+              claimId: match.claim.claim_entity_id,
+              ready: false,
+            })
+          }
+          disabled={readiness.isPending}
         />
       }
       footer={
@@ -126,16 +115,16 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
 }
 
 /**
- * Turning the toggle off clears the position entirely, which is what removes the claim from
- * matchmaking — there is no separate "position set but not debating" state.
+ * Turning this off stands you down from the claim — your on-chain response stays, but you leave
+ * matchmaking for it. Turning it back on happens on the claim itself, where the response lives.
  */
-function IntentToggle({ onToggle, disabled }: { onToggle: () => void; disabled?: boolean }) {
+function ReadinessToggle({ onToggle, disabled }: { onToggle: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked
-      aria-label="Debate this claim"
+      aria-label="Ready to debate this claim"
       disabled={disabled}
       onClick={onToggle}
       className="flex shrink-0 items-center gap-1.5 text-footnote text-grey-04 transition-colors hover:text-text disabled:opacity-50"

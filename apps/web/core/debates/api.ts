@@ -1049,35 +1049,10 @@ export async function listMatchmakingMatches(
   });
 }
 
-export async function setDebateIntent(
-  spaceId: string,
-  claimId: string,
-  position: boolean,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-intent`, {
-    method: 'PUT',
-    body: { position },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
-
-export async function clearDebateIntent(
-  spaceId: string,
-  claimId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-intent`, {
-    method: 'DELETE',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
+/*
+ * There is no debate-intent endpoint. A position is an on-chain claim response, never something
+ * the client sends — `joinDebateQueue` / `leaveDebateQueue` toggle readiness on top of it.
+ */
 
 export async function listDebateRequests(
   getPrivyIdentityToken: GetPrivyIdentityToken,

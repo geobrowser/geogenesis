@@ -8,15 +8,15 @@ import {
   type MatchmakingClaimsQuery,
   acceptDebateRequest,
   blockDebateUser,
-  clearDebateIntent,
   createDebateRequest,
   dismissDebateRequest,
+  joinDebateQueue,
+  leaveDebateQueue,
   listDebateBlocks,
   listDebatePeople,
   listDebateRequests,
   listMatchmakingClaims,
   listMatchmakingMatches,
-  setDebateIntent,
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
@@ -106,24 +106,20 @@ export function useDebateBlocks(enabled: boolean) {
   });
 }
 
-export function useSetDebateIntent() {
+/**
+ * Readiness for one claim. A position is an on-chain claim response, so the hub can only turn
+ * readiness on (the server requires an indexed active response) or off — it never sends a side.
+ * Both directions are the plain queue endpoints, keyed per claim so cards can pass their own space.
+ */
+export function useClaimReadiness() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ spaceId, claimId, position }: { spaceId: string; claimId: string; position: boolean }) =>
-      setDebateIntent(spaceId, claimId, position, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
-  });
-}
-
-export function useClearDebateIntent() {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ spaceId, claimId }: { spaceId: string; claimId: string }) =>
-      clearDebateIntent(spaceId, claimId, getPrivyIdentityToken, accountKey),
+    mutationFn: ({ spaceId, claimId, ready }: { spaceId: string; claimId: string; ready: boolean }) =>
+      ready
+        ? joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey)
+        : leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
   });
 }
