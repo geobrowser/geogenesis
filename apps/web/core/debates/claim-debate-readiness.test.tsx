@@ -16,12 +16,22 @@ const mocks = vi.hoisted(() => ({
   joinReset: vi.fn(),
   leaveMutateAsync: vi.fn(),
   responseKinds: [] as Array<'stance' | 'veracity' | null>,
+  notifyResponseIndexed: vi.fn(),
   authenticated: true,
   accountKey: 'account-1' as string | null,
 }));
 
+vi.mock('./api', async importOriginal => ({
+  ...(await importOriginal<typeof import('./api')>()),
+  notifyClaimResponseIndexed: (...args: unknown[]) => mocks.notifyResponseIndexed(...args),
+}));
+
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
+  useGeoChatAuth: () => ({
+    authenticated: mocks.authenticated,
+    accountKey: mocks.accountKey,
+    getPrivyIdentityToken: vi.fn(),
+  }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
     reset: mocks.joinReset,
@@ -49,6 +59,8 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockReturnValue(deferred(queueResponse(false)).promise);
   mocks.responseKinds.length = 0;
+  mocks.notifyResponseIndexed.mockReset();
+  mocks.notifyResponseIndexed.mockResolvedValue(undefined);
   mocks.authenticated = true;
   mocks.accountKey = 'account-1';
 });
@@ -328,7 +340,7 @@ describe('ClaimDebateReadiness', () => {
     expect(mocks.leaveMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('refetches and retries once when geo-chat has not observed the response yet', async () => {
+  it('synchronizes the response and retries once when geo-chat has not observed it yet', async () => {
     mocks.joinMutateAsync.mockRejectedValueOnce(
       new GeoChatRequestError('Respond before debating', 'claim_response_required', 409)
     );
@@ -338,6 +350,15 @@ describe('ClaimDebateReadiness', () => {
 
     await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(2));
     expect(mocks.joinReset).toHaveBeenCalledOnce();
+    expect(mocks.notifyResponseIndexed).toHaveBeenCalledWith(
+      'space-1',
+      'claim-1',
+      'stance',
+      true,
+      expect.any(Function),
+      'account-1'
+    );
+    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByText('Respond before debating', { selector: '.text-red-01' })).not.toBeInTheDocument();
   });
 

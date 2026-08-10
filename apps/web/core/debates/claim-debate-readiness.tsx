@@ -14,7 +14,13 @@ import {
 import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
-import { type DebateClaim, type DebateClaimsResponse, type DebateResponseKind, GeoChatRequestError } from './api';
+import {
+  type DebateClaim,
+  type DebateClaimsResponse,
+  type DebateResponseKind,
+  GeoChatRequestError,
+  notifyClaimResponseIndexed,
+} from './api';
 import { DebateEntityResponseControls } from './debate-entity-response-controls';
 import { useDebateReadinessIntent } from './debate-readiness-intent';
 import { useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
@@ -77,7 +83,7 @@ function ClaimDebateReadinessContent({
   const queryClient = useQueryClient();
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
-  const { accountKey, authenticated } = useGeoChatAuth();
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const responseIndexing = useEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
@@ -226,11 +232,21 @@ function ClaimDebateReadinessContent({
 
           if (retryAfterRefetch) {
             joinQueue.reset();
-            void queryClient.refetchQueries({ queryKey: ['debates', 'claims', spaceId] }).finally(() => {
-              updateIntent(current =>
-                current?.desiredReady && current.refreshing ? { ...current, refreshing: false } : current
-              );
-            });
+            void notifyClaimResponseIndexed(
+              spaceId,
+              entityId,
+              responseKind,
+              confirmedViewerPosition,
+              getPrivyIdentityToken,
+              accountKey
+            )
+              .catch(() => undefined)
+              .then(() => queryClient.refetchQueries({ queryKey: ['debates', 'claims', spaceId] }))
+              .finally(() => {
+                updateIntent(current =>
+                  current?.desiredReady && current.refreshing ? { ...current, refreshing: false } : current
+                );
+              });
             return;
           }
         }
@@ -242,10 +258,12 @@ function ClaimDebateReadinessContent({
       backendReady,
       confirmedViewerPosition,
       entityId,
+      getPrivyIdentityToken,
       intent,
       joinQueue,
       queryClient,
       responseIndexing,
+      responseKind,
       responseWithdrawalPending,
       setIntent,
       spaceId,
