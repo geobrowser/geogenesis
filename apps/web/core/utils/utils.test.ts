@@ -339,35 +339,46 @@ describe('GeoDate', () => {
 describe('formatGovernanceOutcomeDate', () => {
   const now2026 = Date.UTC(2026, 3, 7);
 
-  it('uses month and day only when the year matches now (UTC)', () => {
+  it('uses month and day only when the year matches now in the given timezone', () => {
     const geoSeconds = Math.floor(Date.UTC(2026, 1, 26) / 1000);
-    expect(formatGovernanceOutcomeDate(geoSeconds, now2026)).toBe('Feb 26');
+    expect(formatGovernanceOutcomeDate(geoSeconds, now2026, 'UTC')).toBe('Feb 26');
   });
 
-  it('includes the year when the date is in a different calendar year than now (UTC)', () => {
+  it('includes the year when the date is in a different calendar year than now', () => {
     const geoSeconds = Math.floor(Date.UTC(2025, 11, 31) / 1000);
-    expect(formatGovernanceOutcomeDate(geoSeconds, now2026)).toBe('Dec 31, 2025');
+    expect(formatGovernanceOutcomeDate(geoSeconds, now2026, 'UTC')).toBe('Dec 31, 2025');
+  });
+
+  it('formats the calendar day in the viewer timezone', () => {
+    // 2026-04-08 02:00 UTC is still Apr 7 in America/Los_Angeles
+    const geoSeconds = Math.floor(Date.UTC(2026, 3, 8, 2, 0, 0) / 1000);
+    expect(formatGovernanceOutcomeDate(geoSeconds, now2026, 'America/Los_Angeles')).toBe('Apr 7');
   });
 });
 
 describe('formatGovernanceOutcomeTime', () => {
-  it('formats UTC time of day', () => {
+  it('formats time of day in the given timezone', () => {
     const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
-    expect(formatGovernanceOutcomeTime(geoSeconds)).toBe('2:21pm');
+    expect(formatGovernanceOutcomeTime(geoSeconds, 'UTC')).toBe('2:21pm');
+  });
+
+  it('converts UTC instants into the viewer timezone', () => {
+    const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
+    expect(formatGovernanceOutcomeTime(geoSeconds, 'America/Los_Angeles')).toBe('7:21am');
   });
 });
 
 describe('formatGovernanceOutcomeDateTime', () => {
   const now2026 = Date.UTC(2026, 3, 7);
 
-  it('includes time and omits year when the year matches now (UTC)', () => {
+  it('includes time and omits year when the year matches now', () => {
     const geoSeconds = Math.floor(Date.UTC(2026, 3, 7, 14, 21, 1) / 1000);
-    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026)).toBe('Apr 7 · 2:21pm');
+    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026, 'UTC')).toBe('Apr 7 · 2:21pm');
   });
 
-  it('includes year and time when the date is in another calendar year than now (UTC)', () => {
+  it('includes year and time when the date is in another calendar year than now', () => {
     const geoSeconds = Math.floor(Date.UTC(2025, 11, 31, 23, 59, 0) / 1000);
-    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026)).toBe('Dec 31, 2025 · 11:59pm');
+    expect(formatGovernanceOutcomeDateTime(geoSeconds, now2026, 'UTC')).toBe('Dec 31, 2025 · 11:59pm');
   });
 });
 
