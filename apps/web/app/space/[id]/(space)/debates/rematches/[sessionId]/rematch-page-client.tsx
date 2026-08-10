@@ -7,14 +7,13 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateRematchClaim,
   type DebateRematchParticipant,
   type DebateRematchSession,
   getCurrentGeoChatUserId,
 } from '~/core/debates/api';
-import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
@@ -26,11 +25,14 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
+import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 
@@ -98,7 +100,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             claim: claim.name!,
             description: claim.description,
           },
-          response_kind: null,
+          response_kind: claimResponseKind(claim, claim.spaces[0]!),
           participants: (session?.participants ?? []).map(participant => ({
             user_id: participant.user_id,
             position: null,
@@ -366,14 +368,15 @@ function RematchClaimCard({
   const localPosition = localResponse?.position ?? null;
   const remotePosition = remoteResponse?.position ?? null;
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  const responsePrompt =
-    localPosition === null
-      ? 'Respond before requesting'
-      : remotePosition === null
-        ? 'Waiting for the other participant to respond.'
-        : localPosition === remotePosition
-          ? 'You both have the same response. Change yours to request this debate.'
-          : null;
+  const { submitResponse, optimisticResponse, isConnected } = useEntityResponse({
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind: claim.response_kind,
+  });
+  let displayedLocalPosition = localPosition;
+  if (optimisticResponse !== undefined) {
+    displayedLocalPosition = optimisticResponse === null ? null : optimisticResponse === 'positive';
+  }
   const request = session?.request;
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
@@ -396,48 +399,34 @@ function RematchClaimCard({
 
       <div className="mt-5 grid grid-cols-2 gap-2">
         {[true, false].map(position => {
-          const positionSnapshot = claim.participants.find(
-            participant => participant.position === position && participant.position_label
+          const positionLabel = responsePositionLabel(claim.response_kind, position);
+          const holderIds = new Set(
+            claim.participants
+              .filter(participant => participant.user_id !== currentUserId && participant.position === position)
+              .map(participant => participant.user_id)
           );
-          const positionLabel =
-            positionSnapshot?.position_label ?? responsePositionLabel(claim.response_kind, position);
-          const holders = session
-            ? claim.participants
-                .filter(participant => participant.position === position)
-                .map(participant => session.participants.find(sp => sp.user_id === participant.user_id))
-                .filter((participant): participant is DebateRematchParticipant => Boolean(participant))
-            : [];
+          if (currentUserId && displayedLocalPosition === position) holderIds.add(currentUserId);
+          const holders = session?.participants.filter(participant => holderIds.has(participant.user_id)) ?? [];
+          const selected = displayedLocalPosition === position;
           return (
-            <div
+            <button
+              type="button"
               key={String(position)}
-              aria-label={positionLabel ? `${positionLabel} response` : 'No response'}
-              className="flex min-h-9 items-center justify-between gap-2 rounded-full bg-bg px-3 text-button text-text"
+              aria-pressed={selected}
+              disabled={!claim.response_kind || !isConnected}
+              onClick={() => submitResponse(selected ? 'clear' : position ? 'positive' : 'negative')}
+              className={cx(
+                'flex min-h-9 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors',
+                selected ? 'bg-text text-white' : 'bg-bg text-text hover:bg-grey-01',
+                (!claim.response_kind || !isConnected) && 'cursor-default opacity-50'
+              )}
             >
-              <span>{positionLabel ?? 'No response'}</span>
+              <span>{positionLabel}</span>
               {holders.length > 0 && <PositionAvatars participants={holders} />}
-            </div>
+            </button>
           );
         })}
       </div>
-
-      {responsePrompt && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-grey-02 p-3">
-          <Text as="p" variant="metadata" color="grey-04">
-            {responsePrompt}
-          </Text>
-          {claim.response_kind ? (
-            <DebateEntityResponseControls
-              entityId={claim.claim.claim_entity_id}
-              spaceId={claim.claim.space_id}
-              responseKind={claim.response_kind}
-            />
-          ) : (
-            <Text as="p" variant="metadata" color="grey-04">
-              Response controls are unavailable while this claim is being prepared for rematches.
-            </Text>
-          )}
-        </div>
-      )}
 
       {(opposing || requesting) && (
         <button
@@ -451,6 +440,22 @@ function RematchClaimCard({
       )}
     </article>
   );
+}
+
+function claimResponseKind(
+  entity: { values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }> },
+  spaceId: string
+): 'stance' | 'veracity' {
+  const isFactual =
+    getChecked(
+      entity.values?.find(
+        value =>
+          value.isDeleted !== true &&
+          uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+          uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
+      )?.value
+    ) === true;
+  return isFactual ? 'veracity' : 'stance';
 }
 
 function rematchCancellationMessage(reason: string) {

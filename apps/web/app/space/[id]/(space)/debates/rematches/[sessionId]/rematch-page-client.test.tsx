@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
-  responseKinds: [] as Array<'stance' | 'veracity' | null>,
+  submitResponse: vi.fn(),
+  optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -64,11 +65,12 @@ vi.mock('~/core/sync/use-store', () => ({
   }),
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ responseKind }: { responseKind: 'stance' | 'veracity' | null }) => {
-    mocks.responseKinds.push(responseKind);
-    return <button type="button">Change response</button>;
-  },
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponse: ({ entityId }: { entityId: string }) => ({
+    submitResponse: (direction: 'positive' | 'negative' | 'clear') => mocks.submitResponse(entityId, direction),
+    optimisticResponse: mocks.optimisticResponses.get(entityId),
+    isConnected: true,
+  }),
 }));
 
 function mutation(mutate = mocks.mutate) {
@@ -80,7 +82,8 @@ beforeEach(() => {
   mocks.mutate.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
-  mocks.responseKinds.length = 0;
+  mocks.submitResponse.mockReset();
+  mocks.optimisticResponses.clear();
   mocks.session = session();
   mocks.claims = [sharedClaim()];
   document.body.style.overflow = '';
@@ -128,18 +131,18 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
-  it('shows backend response labels and holder avatars without position-update controls', () => {
+  it('renders active semantic response buttons with holder avatars', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
     expect(sharedClaimCard).not.toBeNull();
-    expect(within(sharedClaimCard!).getByLabelText('Agree response').querySelector('img, svg')).not.toBeNull();
-    expect(within(sharedClaimCard!).getByLabelText('Disagree response').querySelector('img, svg')).not.toBeNull();
-    expect(within(sharedClaimCard!).queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
-    expect(within(sharedClaimCard!).queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Agree' })).toBeEnabled();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Disagree' })).toBeEnabled();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Agree' }).querySelector('img, svg')).not.toBeNull();
+    expect(within(sharedClaimCard!).getByRole('button', { name: 'Disagree' }).querySelector('img, svg')).not.toBeNull();
   });
 
-  it('shows response controls when the active responses are missing or on the same side', () => {
+  it('changes responses through the semantic buttons without rendering a second response area', () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -152,21 +155,36 @@ describe('DebateRematchPageClient', () => {
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(
-      screen.getByText('You both have the same response. Change yours to request this debate.')
-    ).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Change response' })).toHaveLength(1);
+    const sharedClaimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
+    expect(sharedClaimCard).not.toBeNull();
+    fireEvent.click(within(sharedClaimCard!).getByRole('button', { name: 'Disagree' }));
+    expect(mocks.submitResponse).toHaveBeenCalledWith('claim-shared', 'negative');
+    expect(screen.queryByText('You both have the same response. Change yours to request this debate.')).toBeNull();
     const syntheticClaimCard = screen.getByRole('heading', { name: 'A newly published claim' }).closest('article');
     expect(syntheticClaimCard).not.toBeNull();
-    expect(within(syntheticClaimCard!).getByText('Respond before requesting')).toBeInTheDocument();
-    expect(
-      within(syntheticClaimCard!).getByText(
-        'Response controls are unavailable while this claim is being prepared for rematches.'
-      )
-    ).toBeInTheDocument();
-    expect(within(syntheticClaimCard!).queryByRole('button', { name: 'Change response' })).not.toBeInTheDocument();
-    expect(mocks.responseKinds).toContain('stance');
-    expect(mocks.responseKinds).not.toContain(null);
+    expect(within(syntheticClaimCard!).queryByText('Respond before requesting')).toBeNull();
+    expect(within(syntheticClaimCard!).getByRole('button', { name: 'Agree' })).toBeEnabled();
+    expect(within(syntheticClaimCard!).getByRole('button', { name: 'Disagree' })).toBeEnabled();
+  });
+
+  it('uses Verify and Dispute for factual claims', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        response_kind: 'veracity',
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Verify' },
+          { user_id: 'user-remote', position: false, position_label: 'Dispute' },
+        ],
+      },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const claimCard = screen.getByRole('heading', { name: 'A claim both participants chose' }).closest('article');
+    expect(claimCard).not.toBeNull();
+    expect(within(claimCard!).getByRole('button', { name: 'Verify' })).toBeEnabled();
+    expect(within(claimCard!).getByRole('button', { name: 'Dispute' })).toBeEnabled();
   });
 
   it('shows authoritative stance labels in the incoming request dialog and preserves rematch actions', () => {
@@ -262,7 +280,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.getByRole('button', { name: 'Requesting...' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: /^(Agree|Disagree)$/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^(Agree|Disagree)$/ })).toHaveLength(4);
   });
 
   it('explains when response changes cancel a rematch request', () => {

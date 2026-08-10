@@ -7,7 +7,12 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { getEntityResponders } from '~/core/io/queries';
-import { type ResponseKind, type ResponseObjectType, entityRespondersQueryKey } from '~/core/responses/entity-response';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  type ResponseObjectType,
+  entityRespondersQueryKey,
+} from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
@@ -18,12 +23,16 @@ export function ClaimResponderAvatars({
   objectType,
   responseKind,
   totalResponders,
+  viewerSpaceId,
+  optimisticViewerResponse,
 }: {
   entityId: string;
   spaceId: string;
   objectType: ResponseObjectType;
   responseKind: ResponseKind;
   totalResponders: number;
+  viewerSpaceId?: string | null;
+  optimisticViewerResponse?: ActiveResponseDirection | null;
 }) {
   const responseBatch = useClaimResponseBatchState();
   const { data: responders } = useQuery({
@@ -33,7 +42,13 @@ export function ClaimResponderAvatars({
     staleTime: 30_000,
   });
 
-  const responderSpaceIds = React.useMemo(() => responders?.map(v => v.userId) ?? [], [responders]);
+  const responderSpaceIds = React.useMemo(() => {
+    const indexedResponderIds = responders?.map(v => v.userId) ?? [];
+    if (optimisticViewerResponse === undefined || !viewerSpaceId) return indexedResponderIds;
+
+    const otherResponderIds = indexedResponderIds.filter(id => id !== viewerSpaceId);
+    return optimisticViewerResponse === null ? otherResponderIds : [viewerSpaceId, ...otherResponderIds];
+  }, [optimisticViewerResponse, responders, viewerSpaceId]);
 
   if (responderSpaceIds.length === 0) return null;
 

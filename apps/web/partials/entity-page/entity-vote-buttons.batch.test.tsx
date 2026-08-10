@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   queryEntityOptions: [] as unknown[],
   smartAccount: null as object | null,
   submitResponse: vi.fn(),
+  responderAvatarProps: [] as unknown[],
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -79,7 +80,10 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
-  ClaimResponderAvatars: () => null,
+  ClaimResponderAvatars: (props: unknown) => {
+    mocks.responderAvatarProps.push(props);
+    return null;
+  },
 }));
 
 beforeEach(() => {
@@ -95,6 +99,7 @@ beforeEach(() => {
   mocks.queryEntityOptions.length = 0;
   mocks.smartAccount = null;
   mocks.submitResponse.mockReset();
+  mocks.responderAvatarProps.length = 0;
 });
 
 afterEach(cleanup);
@@ -120,13 +125,25 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
   });
 
-  it('renders factual claims with thumbs and the Is factual label', () => {
+  it('renders factual claims with the original chevron controls and no explanatory label', () => {
     const view = renderButtons(true, true, 'veracity');
 
-    expect(view.getByText('Is factual')).toBeInTheDocument();
+    expect(view.queryByText('Is factual')).not.toBeInTheDocument();
     const responseIcons = [...view.container.querySelectorAll('svg')];
     expect(responseIcons).toHaveLength(2);
-    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
+    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+  });
+
+  it('passes the optimistic viewer response to responder avatars immediately', () => {
+    mocks.optimisticResponse = 'negative';
+
+    renderButtons(true, true);
+
+    expect(mocks.responderAvatarProps.at(-1)).toMatchObject({
+      optimisticViewerResponse: 'negative',
+      totalResponders: 3,
+      viewerSpaceId: 'profile-1',
+    });
   });
 
   it('wires optimistic claim response changes without blocking subsequent clicks', () => {

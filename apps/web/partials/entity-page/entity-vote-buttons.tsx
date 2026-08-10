@@ -41,6 +41,8 @@ import { Profile } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
 import { getChecked } from '~/design-system/checkbox';
+import { ChevronDown } from '~/design-system/icons/chevron-down';
+import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
@@ -52,7 +54,7 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
-type ResponseVariant = 'default' | 'thumbs';
+type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
 const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
 const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
@@ -97,8 +99,8 @@ export function EntityVoteButtons({
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
   const queryResponseKind = responseKind ?? 'stance';
   const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
-  const variant: ResponseVariant = queryResponseKind === 'curation' ? 'default' : 'thumbs';
-  const isFactualResponse = queryResponseKind === 'veracity';
+  const variant: ResponseVariant =
+    queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
   const { submitResponse, optimisticResponse, isResponseIndexingDelayed, isConnected, personalSpaceId } =
@@ -246,6 +248,10 @@ export function EntityVoteButtons({
   const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
 
   const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
+    if (variant === 'chevrons') {
+      return direction === 'up' ? <ChevronUp /> : <ChevronDown />;
+    }
+
     if (variant === 'thumbs') {
       return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
     }
@@ -254,6 +260,9 @@ export function EntityVoteButtons({
   };
 
   const claimResponseButtonColor = (active: boolean) => {
+    if (variant === 'chevrons') {
+      return active ? 'text-[#2A2B2E]' : 'text-grey-03 hover:text-grey-04';
+    }
     return isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
   };
 
@@ -263,7 +272,9 @@ export function EntityVoteButtons({
       spaceId={spaceId}
       objectType={ENTITY_RESPONSE_OBJECT_TYPE}
       responseKind={queryResponseKind}
-      totalResponders={totalResponders}
+      totalResponders={effectiveTotal}
+      viewerSpaceId={personalSpaceId}
+      optimisticViewerResponse={optimisticResponse}
     />
   ) : null;
 
@@ -291,7 +302,6 @@ export function EntityVoteButtons({
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {isFactualResponse ? <span className="mr-1 text-metadata text-grey-04">Is factual</span> : null}
       {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
         <span className={cx(claimResponderAvatarsClassName, 'mr-1')}>{claimResponderAvatars}</span>
       ) : null}
