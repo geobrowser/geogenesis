@@ -243,7 +243,7 @@ export function ReadableEntityProperties({ id: entityId, spaceId }: Props) {
         <div className="flex flex-col gap-2">
           {groupedSections.hasGroups && (
             <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
-              Ungrouped properties
+              Other properties
             </Text>
           )}
           <div className="flex flex-col gap-6">
