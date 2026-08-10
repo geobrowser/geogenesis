@@ -6,6 +6,7 @@ export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' 
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+export type DebateResponseKind = 'stance' | 'veracity';
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -25,6 +26,8 @@ export type DebateClaimSummary = {
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
+  response_kind: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
@@ -175,6 +178,7 @@ export type Debate = {
   id: string;
   claim: DebateClaimSummary;
   status: DebateStatus;
+  response_kind: DebateResponseKind | null;
   room_name: string;
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
@@ -258,7 +262,11 @@ export type DebateRematchRequest = {
   requester_user_id: string;
   recipient_user_id: string;
   requester_position: boolean;
+  requester_position_label?: string | null;
   recipient_position: boolean;
+  recipient_position_label?: string | null;
+  response_kind?: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;
   expires_at: string;
@@ -283,10 +291,12 @@ export type DebateRematchSession = {
 export type DebateRematchClaimPosition = {
   user_id: string;
   position: boolean | null;
+  position_label: string | null;
 };
 
 export type DebateRematchClaim = {
   claim: DebateClaimSummary;
+  response_kind: DebateResponseKind | null;
   participants: DebateRematchClaimPosition[];
   shared_preference: boolean;
   recently_rejected: boolean;
@@ -329,7 +339,11 @@ export type DebateClaim = {
   claim_entity_id: string;
   claim: string;
   description: string | null;
-  viewer_waiting_position: boolean | null;
+  response_kind: DebateResponseKind;
+  viewer_response: { position: boolean; position_label: string } | null;
+  viewer_debate_ready: boolean;
+  readiness_disabled_reason: string | null;
+  readiness_changed_at: string | null;
   online_choices: DebateOnlineChoice[];
   active_match: DebateMatch | null;
   active_debate: Debate | null;
@@ -476,10 +490,6 @@ export type ObjectStoreUpload = {
 
 export type DebateClaimsResponse = {
   claims: DebateClaim[];
-};
-
-export type JoinDebateQueueRequest = {
-  position: boolean;
 };
 
 export type JoinDebateQueueResponse = {
@@ -634,7 +644,7 @@ export async function listDebateClaims(
 ) {
   const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
   return geoChatRequest<DebateClaimsResponse>(`/spaces/${spaceId}/debate-claims${query}`, {
-    auth: 'optional',
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -644,13 +654,11 @@ export async function listDebateClaims(
 export async function joinDebateQueue(
   spaceId: string,
   claimId: string,
-  request: JoinDebateQueueRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
-    body: request,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -671,20 +679,33 @@ export async function leaveDebateQueue(
   });
 }
 
-export async function updateDebatePreference(
+export async function notifyClaimResponseIndexed(
   spaceId: string,
   claimId: string,
-  request: JoinDebateQueueRequest,
+  responseKind: DebateResponseKind,
+  position: boolean | null,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  signal?: AbortSignal
 ) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-preference`, {
-    method: 'PUT',
-    body: request,
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
+  const request = () =>
+    geoChatRequest<void>(`/spaces/${spaceId}/claims/${claimId}/response-indexed`, {
+      method: 'POST',
+      body: { response_kind: responseKind, position },
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+      signal,
+    });
+
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (attempt >= 2 || !isTransientResponseNotificationError(error)) throw error;
+      await waitForResponseNotificationRetry(250 * 2 ** attempt, signal);
+    }
+  }
 }
 
 export async function acceptDebateMatch(
@@ -877,23 +898,6 @@ export async function listDebateRematchClaims(
     getPrivyIdentityToken,
     accountKey,
     signal,
-  });
-}
-
-export async function updateDebateRematchPosition(
-  sessionId: string,
-  claimId: string,
-  position: boolean,
-  sourceSpaceId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims/${claimId}/position`, {
-    method: 'PUT',
-    body: { position, source_space_id: sourceSpaceId },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
   });
 }
 
@@ -1328,6 +1332,8 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     throw await requestError(response);
   }
 
+  if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
 }
 
@@ -1348,6 +1354,31 @@ const debatePhaseBoundaryRetryCodes = new Set([
   'recording_not_cancellable',
   'recording_not_ready',
 ]);
+
+function isTransientResponseNotificationError(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  return !(error instanceof DOMException && error.name === 'AbortError');
+}
+
+function waitForResponseNotificationRetry(delayMs: number, signal?: AbortSignal) {
+  if (signal?.aborted)
+    return Promise.reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<T>): Promise<T> {
   try {

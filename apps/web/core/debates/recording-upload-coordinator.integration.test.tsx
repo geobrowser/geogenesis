@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -188,7 +188,7 @@ afterEach(() => {
 });
 
 describe('DebateRecordingUploadCoordinator', () => {
-  it('shows the publish choice while the recording is still being prepared and ignores stale activity for that debate', async () => {
+  it('shows progress and cancellation while the recording is still being prepared and ignores stale activity', async () => {
     mocks.queue = [];
     mocks.thankingHasPendingLocalRecording = true;
     mocks.activityDebate = { id: 'debate-1', status: 'in_progress' };
@@ -196,7 +196,8 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Preparing debate upload')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('progressbar', { name: 'Preparing debate upload' })).not.toHaveAttribute('aria-valuenow');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
   it('still hides the pending thank-you banner during an unrelated live debate', async () => {
@@ -269,7 +270,13 @@ describe('DebateRecordingUploadCoordinator', () => {
       expect(mocks.completeUpload).toHaveBeenCalledWith('debate-1', expect.anything(), expect.anything(), 'user-a')
     );
     // debate-1's bytes are out and debate-2 hasn't started, so half the queued bytes have shipped.
-    expect(screen.getByText('Uploading 2 debates · 50%')).toBeInTheDocument();
+    expect(screen.getByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
+        'aria-valuenow',
+        '50'
+      )
+    );
     expect(mocks.createUpload).not.toHaveBeenCalledWith('debate-2', expect.anything(), expect.anything(), 'user-a');
 
     firstCompletion.resolve();
@@ -397,14 +404,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
   });
 
-  it('cancels the upload and drops the local blob when publish is unchecked', async () => {
+  it('cancels the upload and drops the local blob from the banner action', async () => {
     // Keep the upload in flight so the banner stays on screen while we interact with it.
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(within(screen.getByRole('status')).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
@@ -417,7 +425,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledOnce());
@@ -439,8 +447,14 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Uploading 2 debates · 50%')).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).toHaveAttribute(
+        'aria-valuenow',
+        '50'
+      )
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-2'));
@@ -448,8 +462,8 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a');
     expect(mocks.deleteUpload).not.toHaveBeenCalledWith('user-a:debate-1');
     // The untouched recording keeps uploading, now without an opt-out.
-    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
   it('matches the thank-you debate even though the queue stores ids dashless', async () => {
@@ -460,7 +474,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     // The cancel request uses the dashless id the queue and backend already agree on.
@@ -473,26 +487,26 @@ describe('DebateRecordingUploadCoordinator', () => {
     );
   });
 
-  it('offers no publish opt-out once the thank-you period is over', async () => {
+  it('offers no cancellation action once the thank-you period is over', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = null;
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Uploading 1 debate...')).toBeInTheDocument();
-    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
-  it('keeps the banner and publish opt-out through the thank-you screen after the upload finishes', async () => {
-    // The fast-connection race: the upload finishes before the user can reach the checkbox.
+  it('keeps the banner and cancellation action through the thank-you screen after the upload finishes', async () => {
+    // The fast-connection race: the upload finishes before the user can reach the Cancel action.
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
   it('restores the uploaded banner from the debate snapshot after a remount', async () => {
@@ -502,7 +516,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(mocks.createUpload).not.toHaveBeenCalled();
   });
 
@@ -514,7 +528,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     await waitFor(() =>
       expect(mocks.createUpload).toHaveBeenCalledWith(
         'debate-2',
@@ -531,7 +545,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
@@ -548,7 +562,7 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith('user-a:debate-1'));
     expect(mocks.completeUpload).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
   it('keeps the confirmation and local upload when cancellation fails', async () => {
@@ -558,7 +572,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     expect(await screen.findByText('Cancellation failed')).toBeInTheDocument();
@@ -575,7 +589,7 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    fireEvent.click(await screen.findByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     expect(
@@ -584,19 +598,19 @@ describe('DebateRecordingUploadCoordinator', () => {
       )
     ).toBeInTheDocument();
     expect(mocks.cancelRecording).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Cancel' })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Publish debate' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument());
   });
 
-  it('still cancels an already uploaded recording when publish is unchecked during thanking', async () => {
+  it('still cancels an already uploaded recording from the banner during thanking', async () => {
     mocks.queue = [queuedRecording('debate-1')];
 
     render(<DebateRecordingUploadCoordinator />);
 
     expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
@@ -640,7 +654,13 @@ describe('DebateRecordingUploadCoordinator', () => {
     // byteSize is 9, so 3 bytes out is a third of the recording.
     mocks.reportProgress!(3);
 
-    expect(await screen.findByText('Uploading 1 debate · 33%')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' })).toHaveAttribute(
+        'aria-valuenow',
+        '33'
+      )
+    );
 
     held.resolve();
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());

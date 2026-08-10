@@ -12,6 +12,8 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
+import { useDebateAttention } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
 import {
@@ -44,7 +46,14 @@ export function DebateCoordinator() {
   const pathname = usePathname();
   const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
+  const debateAttention = useDebateAttention();
   const gateway = useDebateGateway(
+    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey,
+    debateAttention
+  );
+  useClaimResponseIndexedNotifier(
     isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey

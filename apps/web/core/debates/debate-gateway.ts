@@ -5,6 +5,10 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { queryClient } from '~/core/query-client';
+import {
+  claimResponseTargetKey,
+  isClaimResponseSummaryQueryKey,
+} from '~/core/responses/claim-response-summary-query-keys';
 
 import { type GeoChatSession, type GetPrivyIdentityToken, getGeoChatApiBaseUrl, getGeoChatSession } from './api';
 
@@ -95,6 +99,7 @@ export class DebateGatewayClient {
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
+  private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
 
   private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false, capabilities: EMPTY_CAPABILITIES };
   private capabilities: string[] = EMPTY_CAPABILITIES;
@@ -108,6 +113,8 @@ export class DebateGatewayClient {
   private reconnectAttempt = 0;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
+  private debatePresence = true;
+  private presenceTransitionPending = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,14 +137,26 @@ export class DebateGatewayClient {
     return () => this.listeners.delete(listener);
   };
 
-  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) {
+  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
     if (this.enabled && this.accountKey !== accountKey) this.stop();
+    if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false });
     void this.connect();
+  }
+
+  setDebatePresence(debatePresence: boolean) {
+    if (this.debatePresence === debatePresence) return;
+    this.debatePresence = debatePresence;
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    if (this.heartbeatsAwaitingAck > 0) {
+      this.presenceTransitionPending = true;
+      return;
+    }
+    this.sendHeartbeat();
   }
 
   stop() {
@@ -154,6 +173,7 @@ export class DebateGatewayClient {
     this.confirmedScopes.clear();
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
+    this.pendingChangedClaimsBySpace.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false });
   }
@@ -237,6 +257,7 @@ export class DebateGatewayClient {
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
+        if (this.presenceTransitionPending) this.sendHeartbeat();
         break;
       case 'RESUME':
         this.queueBroadReconcile();
@@ -260,6 +281,7 @@ export class DebateGatewayClient {
       this.heartbeatIntervalMs = Math.max(1_000, payload.heartbeat_interval_ms);
     }
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
     this.sendHeartbeat();
   }
 
@@ -388,7 +410,13 @@ export class DebateGatewayClient {
   }
 
   private queueBroadReconcile() {
-    this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
+    this.queueInvalidation(BROAD_INVALIDATION_KEY, {
+      predicate: query => {
+        const root = query.queryKey[0];
+        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+      },
+      refetchType: 'active',
+    });
   }
 
   /** A profile's `can_challenge` folds in the viewer's own activity, so it goes stale with it. */
@@ -413,17 +441,32 @@ export class DebateGatewayClient {
       this.queueQuery(['debates', 'claims', spaceId]);
       return;
     }
-    const changedClaims = new Set(claimEntityIds);
-    this.queueInvalidation(`claims:${spaceId}:${claimEntityIds.slice().sort().join(',')}`, {
+    let changedClaims = this.pendingChangedClaimsBySpace.get(spaceId);
+    if (!changedClaims) {
+      changedClaims = new Set();
+      this.pendingChangedClaimsBySpace.set(spaceId, changedClaims);
+    }
+    for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
+    const changedResponseTargets = new Set(
+      [...changedClaims].flatMap(entityId =>
+        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+      )
+    );
+    this.queueInvalidation(`claims:${spaceId}`, {
       predicate: query => {
         const [root, kind, querySpaceId, queryClaimIds] = query.queryKey;
-        return (
+        const isDebateClaimQuery =
           root === 'debates' &&
           kind === 'claims' &&
           querySpaceId === spaceId &&
           Array.isArray(queryClaimIds) &&
-          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))
-        );
+          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId));
+        if (isDebateClaimQuery) return true;
+
+        return isClaimResponseSummaryQueryKey(query.queryKey, {
+          spaceId,
+          targetKeys: changedResponseTargets,
+        });
       },
       refetchType: 'active',
     });
@@ -436,6 +479,7 @@ export class DebateGatewayClient {
   private queueInvalidation(key: string, filters: InvalidationFilters) {
     if (key === BROAD_INVALIDATION_KEY) {
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
     } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
       return;
     }
@@ -445,6 +489,7 @@ export class DebateGatewayClient {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
       void this.flushInvalidations(invalidations);
     }, INVALIDATION_COALESCE_MS);
   }
@@ -483,7 +528,8 @@ export class DebateGatewayClient {
       return;
     }
     this.heartbeatsAwaitingAck += 1;
-    this.sendEnvelope('HEARTBEAT', { debate_presence: true }, this.lastSequence);
+    this.presenceTransitionPending = false;
+    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
   }
 
@@ -558,6 +604,7 @@ export class DebateGatewayClient {
     this.clearTimer('handshake');
     this.clearTimer('token');
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
   }
 
   private clearAllTimers() {
@@ -604,8 +651,13 @@ const debateGateway = new DebateGatewayClient({
 export function useDebateGateway(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  debatePresence: boolean
 ) {
+  React.useEffect(() => {
+    debateGateway.setDebatePresence(debatePresence);
+  }, [debatePresence]);
+
   React.useEffect(() => {
     if (!enabled || !accountKey) {
       debateGateway.stop();

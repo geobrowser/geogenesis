@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,14 +17,16 @@ const mocks = vi.hoisted(() => ({
   debateClaims: vi.fn(),
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
-  matchmakingSupported: vi.fn(),
-  setIntentMutate: vi.fn(),
-  clearIntentMutate: vi.fn(),
-  openHub: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useDebatesEnabled: () => mocks.debatesEnabled(),
+}));
+
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponseIndexingState: () => 'idle',
+  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -29,34 +34,24 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('./hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
-  useJoinDebateQueue: () => ({ mutate: mocks.joinMutate, isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutate: mocks.leaveMutate, isPending: false, error: null }),
+  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
-vi.mock('./debate-gateway', () => ({
-  useDebateMatchmakingSupported: () => mocks.matchmakingSupported(),
-}));
-
-vi.mock('./matchmaking/hooks', () => ({
-  useSetDebateIntent: () => ({ mutate: mocks.setIntentMutate, isPending: false, error: null }),
-  useClearDebateIntent: () => ({ mutate: mocks.clearIntentMutate, isPending: false, error: null }),
-}));
-
-vi.mock('./matchmaking/use-debates-hub', () => ({
-  useDebatesHub: () => ({ open: mocks.openHub }),
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-response-buttons">Entity response buttons</div>,
 }));
 
 beforeEach(() => {
   mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
+  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
   mocks.leaveMutate.mockReset();
-  mocks.matchmakingSupported.mockReturnValue(false);
-  mocks.setIntentMutate.mockReset();
-  mocks.clearIntentMutate.mockReset();
-  mocks.openHub.mockReset();
+  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
 });
 
 afterEach(() => {
@@ -71,111 +66,72 @@ function entity(relations: Entity['relations'], types: { id: string }[] = [{ id:
 
 function debateClaim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   return {
+    id: 'debate-claim-1',
+    space_id: 'space-1',
     claim_entity_id: 'claim-entity-1',
+    claim: 'A claim',
+    description: null,
+    response_kind: 'stance',
+    viewer_response: null,
+    viewer_debate_ready: false,
+    readiness_disabled_reason: null,
+    readiness_changed_at: null,
     online_choices: [],
-    viewer_waiting_position: null,
     active_match: null,
     active_debate: null,
+    created_at: '2026-08-06T00:00:00.000Z',
+    updated_at: '2026-08-06T00:00:00.000Z',
     ...overrides,
   } as unknown as DebateClaim;
 }
 
-function openPopover() {
-  fireEvent.click(screen.getByRole('button', { name: 'Debate' }));
-}
-
 describe('ClaimDebateButton', () => {
   it('renders nothing when the entity is not a Claim', () => {
-    render(
+    renderButton(
       <ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([], [{ id: 'not-a-claim' }])} />
     );
 
-    expect(screen.queryByRole('button', { name: 'Debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
   });
 
-  it('prompts to publish and disables the positions for an unpublished claim', () => {
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
-    openPopover();
+  it('renders a disabled compact switch for an unpublished claim', () => {
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity(UNPUBLISHED)} />);
 
-    expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Yes,/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^No,/ })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 
-  it('enables the positions for a published claim and joins the queue on click', () => {
+  it('shows the disabled Debate switch before a claim response', () => {
     mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-    openPopover();
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
 
-    const yes = screen.getByRole('button', { name: /^Yes,/ });
-    expect(yes).toBeEnabled();
-    expect(yes).toHaveAttribute('aria-pressed', 'false');
-
-    fireEvent.click(yes);
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1', request: { position: true } });
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    expect(screen.queryByText('Respond before debating', { selector: 'p' })).not.toBeInTheDocument();
   });
 
-  it('marks the chosen position selected while waiting and leaves the queue when clicked again', () => {
-    mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
-    render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-    openPopover();
+  it('shows the inline checked Debate switch and leaves when ready', () => {
+    mocks.debateClaims.mockReturnValue({
+      data: {
+        claims: [
+          debateClaim({
+            viewer_response: { position: true, position_label: 'Agree' },
+            viewer_debate_ready: true,
+          }),
+        ],
+      },
+    });
+    renderButton(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
 
-    const yes = screen.getByRole('button', { name: /^Yes,.*selected/ });
-    expect(yes).toHaveAttribute('aria-pressed', 'true');
-    expect(yes).toBeEnabled();
-    expect(screen.getByText('Waiting for someone with the opposite position.')).toBeInTheDocument();
+    const leave = screen.getByRole('switch', { name: 'Debate' });
+    expect(leave).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByText('Waiting for someone with the opposite response.')).not.toBeInTheDocument();
 
-    fireEvent.click(yes);
+    fireEvent.click(leave);
     expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-entity-1' });
     expect(mocks.joinMutate).not.toHaveBeenCalled();
   });
-
-  // Once geo-chat advertises matchmaking, a position is only an intent — debates start from an
-  // explicit request in the hub instead of auto-pairing whoever is waiting.
-  describe('with matchmaking support', () => {
-    beforeEach(() => {
-      mocks.matchmakingSupported.mockReturnValue(true);
-    });
-
-    it('records an intent instead of joining the queue', () => {
-      mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] } });
-      render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-      openPopover();
-
-      expect(screen.getByText('Set your position')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /^Yes,/ }));
-
-      expect(mocks.setIntentMutate).toHaveBeenCalledWith({
-        spaceId: 'space-1',
-        claimId: 'claim-entity-1',
-        position: true,
-      });
-      expect(mocks.joinMutate).not.toHaveBeenCalled();
-    });
-
-    it('clears the intent when the held position is clicked again', () => {
-      mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
-      render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-      openPopover();
-
-      fireEvent.click(screen.getByRole('button', { name: /^Yes,.*selected/ }));
-
-      expect(mocks.clearIntentMutate).toHaveBeenCalledWith({ spaceId: 'space-1', claimId: 'claim-entity-1' });
-      expect(mocks.leaveMutate).not.toHaveBeenCalled();
-    });
-
-    it('points a saved position at the matchmaking hub rather than a passive wait', () => {
-      mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim({ viewer_waiting_position: true })] } });
-      render(<ClaimDebateButton entityId="claim-entity-1" spaceId="space-1" entity={entity([])} />);
-      openPopover();
-
-      expect(screen.queryByText('Waiting for someone with the opposite position.')).not.toBeInTheDocument();
-      expect(screen.getByText('Position saved. Find someone to debate it.')).toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Open Debates' }));
-
-      expect(mocks.openHub).toHaveBeenCalledWith('matches');
-    });
-  });
 });
+
+function renderButton(button: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{button}</QueryClientProvider>);
+}
