@@ -39,7 +39,11 @@ function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
       description: null,
     },
     topics: [],
+    response_kind: 'stance',
     viewer_position: true,
+    viewer_response: { position: true, position_label: 'Agree' },
+    viewer_debate_ready: true,
+    readiness_disabled_reason: null,
     positions: [
       { position: true, position_label: 'Agree', total_count: 2, available_now_count: 1, participants: [] },
       { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
@@ -63,6 +67,20 @@ describe('MatchesTab', () => {
 
     expect(screen.getByText('Agree')).toBeInTheDocument();
     expect(screen.getByText('Disagree')).toBeInTheDocument();
+  });
+
+  it('labels a factual claim with the veracity vocabulary', () => {
+    mocks.matches = [
+      match({
+        response_kind: 'veracity',
+        viewer_response: { position: true, position_label: 'Verify' },
+        positions: [],
+      }),
+    ];
+    render(<MatchesTab />);
+
+    expect(screen.getByText('Verify')).toBeInTheDocument();
+    expect(screen.getByText('Dispute')).toBeInTheDocument();
   });
 
   // A position is an on-chain response now — the card links to the claim rather than setting it.

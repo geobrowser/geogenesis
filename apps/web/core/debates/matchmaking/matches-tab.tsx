@@ -2,12 +2,11 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
+import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { SpaceTopicFilters } from './claims-tab';
-import { useClaimReadiness, useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
+import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -71,7 +70,6 @@ export function MatchesTab() {
 
 function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; hasOutboundRequest: boolean }) {
   const createRequest = useCreateDebateRequest();
-  const readiness = useClaimReadiness();
 
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
 
@@ -79,19 +77,9 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
     <MatchmakingClaimCard
       claim={match.claim}
       positions={match.positions}
-      viewerPosition={match.viewer_position}
-      headerAction={
-        <ReadinessToggle
-          onToggle={() =>
-            readiness.mutate({
-              spaceId: match.claim.space_id,
-              claimId: match.claim.claim_entity_id,
-              ready: false,
-            })
-          }
-          disabled={readiness.isPending}
-        />
-      }
+      responseKind={match.response_kind}
+      viewerResponse={match.viewer_response}
+      headerAction={<ClaimReadinessToggle claim={match.claim} readiness={match} />}
       footer={
         <>
           <button
@@ -111,28 +99,5 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
         </>
       }
     />
-  );
-}
-
-/**
- * Turning this off stands you down from the claim — your on-chain response stays, but you leave
- * matchmaking for it. Turning it back on happens on the claim itself, where the response lives.
- */
-function ReadinessToggle({ onToggle, disabled }: { onToggle: () => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked
-      aria-label="Ready to debate this claim"
-      disabled={disabled}
-      onClick={onToggle}
-      className="flex shrink-0 items-center gap-1.5 text-footnote text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-    >
-      <span aria-hidden className={cx('relative h-4 w-6 shrink-0 rounded-full bg-text')}>
-        <span className="absolute top-0.5 left-0.5 h-3 w-3 translate-x-2 rounded-full bg-white transition-transform" />
-      </span>
-      Debate
-    </button>
   );
 }

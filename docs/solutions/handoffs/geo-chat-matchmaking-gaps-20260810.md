@@ -17,6 +17,17 @@ response-derived positions). All `file:line` anchors refer to `de6c0c2`.
 
 ---
 
+> **Resolved 2026-08-10 by geo-chat `139fe19`** ("feat(debates): live matchmaking hub updates and
+> readiness-aware claim cards"). All three gaps below are closed, verified against the code:
+> the `Matchmaking` subscription variant exists and is cleaned up on disconnect; both events are
+> emitted from the shared invalidation helpers, with `emit_requests_changed` covering create,
+> accept, withdraw, dismiss (via advance/expire), auto-advance, single expiry, the sweeper, and
+> readiness withdrawal; and all four readiness fields are on both matchmaking payloads. The §4
+> expiry-sweeper question is answered too — `expire_pending_debate_requests` runs on the existing
+> debate-lifecycle ticker and emits `requests_changed`. `cargo check --workspace` is clean and the
+> `geo-debates` + `gateway_hub` tests pass. The client consumes all of it as of
+> `debates-side-panel-matchmaking`. Kept for the rationale; **no action remains**.
+
 ## 0. Verdict first
 
 `de6c0c2` is right. It is built on the response-derived model, positions come from

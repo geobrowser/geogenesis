@@ -389,10 +389,30 @@ export type MatchmakingTopic = {
   name: string | null;
 };
 
-export type MatchmakingClaim = {
+/** The viewer's active on-chain claim response. `position_label` is server-supplied and semantic. */
+export type DebateResponseSummary = {
+  position: boolean;
+  position_label: string;
+};
+
+/** Everything the hub needs to render a claim's readiness state alongside the viewer's response. */
+export type MatchmakingReadiness = {
+  /** Which vocabulary labels the sides: Agree/Disagree for `stance`, Verify/Dispute for `veracity`. */
+  response_kind: DebateResponseKind;
+  /** Present whenever the viewer has an active response — including while readiness is off. */
+  viewer_response: DebateResponseSummary | null;
+  viewer_debate_ready: boolean;
+  /** Why readiness can't be turned on, when the server knows a reason. */
+  readiness_disabled_reason: string | null;
+};
+
+export type MatchmakingClaim = MatchmakingReadiness & {
   claim: DebateClaimSummary;
   topics: MatchmakingTopic[];
-  /** The viewer's debate intent for this claim. */
+  /**
+   * Legacy shape of the viewer's side, gated on readiness. Prefer `viewer_response`, which also
+   * carries the label and survives readiness being switched off.
+   */
   viewer_position: boolean | null;
   positions: DebateClaimPositionSummary[];
   score: number;
@@ -401,10 +421,11 @@ export type MatchmakingClaim = {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
+/** No topic facet: topics are Knowledge Graph data geo-chat doesn't model, so the Claims tab
+ * resolves and filters them itself over the loaded pages. */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
-  topicId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
@@ -422,7 +443,7 @@ export type MatchmakingClaimsResponse = {
   facets?: MatchmakingFacets;
 };
 
-export type MatchmakingMatch = {
+export type MatchmakingMatch = MatchmakingReadiness & {
   claim: DebateClaimSummary;
   topics: MatchmakingTopic[];
   viewer_position: boolean;
@@ -1022,7 +1043,6 @@ export async function listMatchmakingClaims(
   const params = new URLSearchParams();
   if (query.search) params.set('search', query.search);
   if (query.spaceId) params.set('space_id', query.spaceId);
-  if (query.topicId) params.set('topic_id', query.topicId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));

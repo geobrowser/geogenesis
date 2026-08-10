@@ -9,9 +9,9 @@ import {
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
-  listMatchmakingClaims,
   joinDebateQueue,
   listDebateClaims,
+  listMatchmakingClaims,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
@@ -192,7 +192,7 @@ describe('matchmaking', () => {
   it('omits the default "all" filter and unset facets', async () => {
     const fetch = stubJson({ claims: [], next_cursor: null });
 
-    await listMatchmakingClaims({ filter: 'all', spaceId: null, topicId: null }, vi.fn(), 'user-a');
+    await listMatchmakingClaims({ filter: 'all', spaceId: null }, vi.fn(), 'user-a');
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
   });

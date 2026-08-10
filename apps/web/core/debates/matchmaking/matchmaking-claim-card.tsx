@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 
-import Link from 'next/link';
-
 import cx from 'classnames';
+import Link from 'next/link';
 
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { NavUtils } from '~/core/utils/utils';
@@ -12,26 +11,36 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary } from '../api';
+import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, DebateResponseSummary } from '../api';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
-  viewerPosition: boolean | null;
+  responseKind: DebateResponseKind;
+  /** The viewer's on-chain response, independent of whether they're ready to debate it. */
+  viewerResponse: DebateResponseSummary | null;
   /** Rendered under the position row — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
   /** Rendered on the header row opposite the space chip — e.g. the readiness toggle. */
   headerAction?: React.ReactNode;
 };
 
+/** Only used when a side has no participants yet and so carries no server-supplied label. */
+function fallbackLabels(responseKind: DebateResponseKind) {
+  return responseKind === 'veracity'
+    ? { agree: 'Verify', disagree: 'Dispute' }
+    : { agree: 'Agree', disagree: 'Disagree' };
+}
+
 /**
  * A position is an on-chain claim response now, so the hub can only *show* the sides — taking one
  * means responding to the claim itself. The card links out for that; readiness (the part the hub
  * does own) rides in `headerAction`.
  */
-export function MatchmakingClaimCard({ claim, positions, viewerPosition, footer, headerAction }: Props) {
+export function MatchmakingClaimCard({ claim, positions, responseKind, viewerResponse, footer, headerAction }: Props) {
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
+  const fallback = fallbackLabels(responseKind);
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-3">
@@ -47,16 +56,16 @@ export function MatchmakingClaimCard({ claim, positions, viewerPosition, footer,
       </Link>
       <div className="grid grid-cols-2 gap-2">
         <PositionSummary
-          label={forSide?.position_label ?? 'For'}
+          label={forSide?.position_label ?? fallback.agree}
           summary={forSide}
           position
-          selected={viewerPosition === true}
+          selected={viewerResponse?.position === true}
         />
         <PositionSummary
-          label={againstSide?.position_label ?? 'Against'}
+          label={againstSide?.position_label ?? fallback.disagree}
           summary={againstSide}
           position={false}
-          selected={viewerPosition === false}
+          selected={viewerResponse?.position === false}
         />
       </div>
       {footer}

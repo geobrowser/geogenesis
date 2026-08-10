@@ -12,6 +12,7 @@ import { validateEntityId } from '~/core/utils/utils';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubQueryState } from './hub-states';
@@ -133,9 +134,10 @@ export function ClaimsTab() {
               key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
               claim={entry.claim}
               positions={entry.positions}
-              viewerPosition={entry.viewer_position}
+              responseKind={entry.response_kind}
+              viewerResponse={entry.viewer_response}
               headerAction={
-                entry.active_debate ? <span className="text-footnote text-grey-04">Debate in progress</span> : null
+                <ClaimReadinessToggle claim={entry.claim} readiness={entry} activeDebate={entry.active_debate} />
               }
             />
           ))}
