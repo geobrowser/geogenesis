@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
 import {
   formatRollingSubmissionLabel,
   getRollingExpiryMs,
-  isRollingSubmissionLive,
   parseTimestampMs,
   shouldMintNewRankEntity,
 } from './ranking-rolling';
@@ -29,37 +27,6 @@ describe('parseTimestampMs', () => {
     expect(parseTimestampMs('')).toBe(0);
     expect(parseTimestampMs(null)).toBe(0);
     expect(parseTimestampMs('not-a-date')).toBe(0);
-  });
-});
-
-describe('isRollingSubmissionLive', () => {
-  const refs: AggregatedRankingSubmitterRef[] = [
-    { rankEntityId: 'rank-a', spaceId: 'space-a' },
-    { rankEntityId: 'rank-b', spaceId: 'space-b' },
-  ];
-
-  it('is live when the personal space is still aggregated', () => {
-    expect(
-      isRollingSubmissionLive({ personalSpaceId: 'space-b', myRankEntityId: 'other', aggregatedSubmitterRefs: refs })
-    ).toBe(true);
-  });
-
-  it('is live when the rank entity id is still aggregated', () => {
-    expect(
-      isRollingSubmissionLive({ personalSpaceId: 'unknown', myRankEntityId: 'rank-a', aggregatedSubmitterRefs: refs })
-    ).toBe(true);
-  });
-
-  it('is not live when neither the space nor the rank entity is aggregated (rolled off)', () => {
-    expect(
-      isRollingSubmissionLive({ personalSpaceId: 'space-z', myRankEntityId: 'rank-z', aggregatedSubmitterRefs: refs })
-    ).toBe(false);
-  });
-
-  it('is not live without any identifying id', () => {
-    expect(
-      isRollingSubmissionLive({ personalSpaceId: null, myRankEntityId: null, aggregatedSubmitterRefs: refs })
-    ).toBe(false);
   });
 });
 
