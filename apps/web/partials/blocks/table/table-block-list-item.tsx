@@ -27,7 +27,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import {
   LIST_GALLERY_BROWSE_BODY_CLASS,
@@ -348,8 +348,8 @@ export function TableBlockListItem({
               </div>
             );
           })}
-          <div className="mt-2 flex items-center justify-between gap-2">
-            {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} showVotes={showVoteButtons} />
             {!isPlaceholder && (
               <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (

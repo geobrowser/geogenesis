@@ -56,6 +56,10 @@ vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
 }));
 
+vi.mock('./claim-response-indexed-notifier', () => ({
+  useClaimResponseIndexedNotifier: vi.fn(),
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({
   useDebatesEnabled: () => true,
 }));
@@ -743,6 +747,7 @@ function activityWithMatch(): DebateActivity {
     match: {
       id: 'match-1',
       status: 'pending',
+      response_kind: null,
       claim: {
         id: 'claim-1',
         space_id: 'space-1',

@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateRematchClaim,
   type DebateRematchParticipant,
@@ -24,18 +24,22 @@ import {
   useDebateRematchClaims,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
-  useUpdateDebateRematchPosition,
 } from '~/core/debates/hooks';
+import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { uuidToHex } from '~/core/id/normalize';
+import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
+import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const currentUserId = getCurrentGeoChatUserId();
+  const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [publishedClaimsCursor, setPublishedClaimsCursor] = React.useState<string | undefined>();
   const {
@@ -63,7 +67,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const publishedClaimIds = React.useMemo(() => publishedClaims.map(claim => claim.id), [publishedClaims]);
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const publishedClaimsQuery = useDebateRematchClaims(sessionId, publishedClaimIds);
-  const updatePosition = useUpdateDebateRematchPosition(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);
   const leaveSession = useLeaveDebateRematch(sessionId);
   const acceptRequest = useAcceptDebateRematchRequest();
@@ -98,9 +101,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             claim: claim.name!,
             description: claim.description,
           },
+          response_kind: claimResponseKind(claim, claim.spaces[0]!),
           participants: (session?.participants ?? []).map(participant => ({
             user_id: participant.user_id,
             position: null,
+            position_label: null,
           })),
           shared_preference: false,
           recently_rejected: false,
@@ -149,7 +154,30 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const [tab, setTab] = React.useState<'all' | 'debate-now'>('all');
   const [topicFilter, setTopicFilter] = React.useState<string>('');
 
-  // "Debate now" = claims the opponent has taken a position on; the tab badge counts them.
+  const returnFromSession = React.useCallback(
+    (endedSession: DebateRematchSession) => {
+      if (exitStartedRef.current) return;
+      exitStartedRef.current = true;
+
+      if (endedSession.source_debate_id === null) {
+        if (window.history.length > 1) {
+          router.back();
+          return;
+        }
+
+        const opponentProfileSpaceId = endedSession.participants.find(
+          participant => participant.user_id !== currentUserId
+        )?.profile_space_id;
+        router.replace(`/space/${opponentProfileSpaceId ?? endedSession.source_space_id}`);
+        return;
+      }
+
+      router.replace(`/space/${endedSession.source_space_id}/debates`);
+    },
+    [currentUserId, router]
+  );
+
+  // "Debate now" = claims the opponent has responded to; the tab badge counts them.
   const opponentPositionCount = React.useMemo(
     () => claims.filter(claim => opponentPositionOf(claim) !== null).length,
     [claims, opponentPositionOf]
@@ -179,13 +207,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (session.status === 'converted' && session.converted_debate_id) {
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      router.replace(`/space/${session.source_space_id}/debates`);
+      returnFromSession(session);
     }
-  }, [router, session]);
+  }, [returnFromSession, router, session]);
 
   const leave = () => {
     leaveSession.mutate(undefined, {
-      onSuccess: ended => router.replace(`/space/${ended.source_space_id}/debates`),
+      onSuccess: returnFromSession,
     });
   };
 
@@ -194,15 +222,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const incomingRequestParticipants =
     incomingRequest && session
       ? session.participants.map(participant => {
-          const position =
-            participant.user_id === incomingRequest.requester_user_id
-              ? incomingRequest.requester_position
-              : incomingRequest.recipient_position;
+          const requester = participant.user_id === incomingRequest.requester_user_id;
+          const position = requester ? incomingRequest.requester_position : incomingRequest.recipient_position;
+          const positionLabel = requester
+            ? incomingRequest.requester_position_label
+            : incomingRequest.recipient_position_label;
 
           return {
             ...participant,
             position,
-            position_label: position ? 'Yes' : 'No',
+            position_label: positionLabel ?? responsePositionLabel(incomingRequest.response_kind ?? null, position),
           };
         })
       : [];
@@ -259,17 +288,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 : publishedClaimsQuery.error?.message}
           </Text>
         )}
-        {(updatePosition.error instanceof Error ||
-          createRequest.error instanceof Error ||
-          leaveSession.error instanceof Error) && (
+        {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
           <Text color="red-01" className="mb-4">
-            {updatePosition.error instanceof Error
-              ? updatePosition.error.message
-              : createRequest.error instanceof Error
-                ? createRequest.error.message
-                : leaveSession.error instanceof Error
-                  ? leaveSession.error.message
-                  : null}
+            {createRequest.error instanceof Error
+              ? createRequest.error.message
+              : leaveSession.error instanceof Error
+                ? leaveSession.error.message
+                : null}
+          </Text>
+        )}
+        {session?.request?.status === 'expired' && session.request.cancellation_reason && (
+          <Text color="red-01" className="mb-4">
+            {rematchCancellationMessage(session.request.cancellation_reason)}
           </Text>
         )}
 
@@ -281,13 +311,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               topic={topicsByClaimId.get(claim.claim.claim_entity_id)?.[0] ?? null}
               session={session}
               currentUserId={currentUserId}
-              onPositionChange={position =>
-                updatePosition.mutate({
-                  claimId: claim.claim.claim_entity_id,
-                  position,
-                  sourceSpaceId: claim.claim.space_id,
-                })
-              }
               onRequest={() =>
                 createRequest.mutate({
                   source_space_id: claim.claim.space_id,
@@ -295,7 +318,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   format_id: defaultDebateFormatId,
                 })
               }
-              busy={updatePosition.isPending || createRequest.isPending || session?.status === 'request_pending'}
+              busy={createRequest.isPending || session?.status === 'request_pending'}
             />
           ))}
         </div>
@@ -304,7 +327,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="rounded-lg border border-grey-02 bg-white p-6 text-center">
             <Text color="grey-04">
               {tab === 'debate-now'
-                ? `${remoteName} hasn't picked a side yet. When they do, those claims show up here.`
+                ? `${remoteName} hasn't responded yet. When they do, those claims show up here.`
                 : topicFilter
                   ? 'No claims match this topic.'
                   : 'No other eligible claims are available yet.'}
@@ -354,7 +377,6 @@ function RematchClaimCard({
   topic,
   session,
   currentUserId,
-  onPositionChange,
   onRequest,
   busy,
 }: {
@@ -362,13 +384,23 @@ function RematchClaimCard({
   topic: string | null;
   session: DebateRematchSession | null;
   currentUserId: string | null;
-  onPositionChange: (position: boolean) => void;
   onRequest: () => void;
   busy: boolean;
 }) {
-  const localPosition = claim.participants.find(position => position.user_id === currentUserId)?.position ?? null;
-  const remotePosition = claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null;
+  const localResponse = claim.participants.find(position => position.user_id === currentUserId) ?? null;
+  const remoteResponse = claim.participants.find(position => position.user_id !== currentUserId) ?? null;
+  const localPosition = localResponse?.position ?? null;
+  const remotePosition = remoteResponse?.position ?? null;
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
+  const { submitResponse, optimisticResponse, isConnected } = useEntityResponse({
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind: claim.response_kind,
+  });
+  let displayedLocalPosition = localPosition;
+  if (optimisticResponse !== undefined) {
+    displayedLocalPosition = optimisticResponse === null ? null : optimisticResponse === 'positive';
+  }
   const request = session?.request;
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
@@ -377,7 +409,7 @@ function RematchClaimCard({
     <article className="rounded-lg border border-grey-02 bg-white p-5">
       <div className="flex items-start justify-between gap-3">
         <Text as="div" variant="footnote" color="grey-04">
-          {topic ?? (claim.shared_preference ? 'You both picked a side' : 'More claims')}
+          {topic ?? (claim.shared_preference ? 'You both responded' : 'More claims')}
         </Text>
         {claim.recently_rejected && (
           <Text as="div" variant="footnote" color="grey-04">
@@ -391,23 +423,29 @@ function RematchClaimCard({
 
       <div className="mt-5 grid grid-cols-2 gap-2">
         {[true, false].map(position => {
-          const localOnPosition = localPosition === position;
-          const holders = session
-            ? claim.participants
-                .filter(participant => participant.position === position)
-                .map(participant => session.participants.find(sp => sp.user_id === participant.user_id))
-                .filter((participant): participant is DebateRematchParticipant => Boolean(participant))
-            : [];
+          const positionLabel = responsePositionLabel(claim.response_kind, position);
+          const holderIds = new Set(
+            claim.participants
+              .filter(participant => participant.user_id !== currentUserId && participant.position === position)
+              .map(participant => participant.user_id)
+          );
+          if (currentUserId && displayedLocalPosition === position) holderIds.add(currentUserId);
+          const holders = session?.participants.filter(participant => holderIds.has(participant.user_id)) ?? [];
+          const selected = displayedLocalPosition === position;
           return (
             <button
-              key={String(position)}
               type="button"
-              aria-pressed={localOnPosition}
-              onClick={() => onPositionChange(position)}
-              disabled={busy || requesting}
-              className="flex min-h-9 items-center justify-between gap-2 rounded-full bg-bg px-3 text-button text-text transition-colors hover:bg-grey-01 disabled:opacity-60 aria-pressed:bg-green"
+              key={String(position)}
+              aria-pressed={selected}
+              disabled={!claim.response_kind || !isConnected}
+              onClick={() => submitResponse(selected ? 'clear' : position ? 'positive' : 'negative')}
+              className={cx(
+                'flex min-h-9 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors',
+                selected ? 'bg-text text-white' : 'bg-bg text-text hover:bg-grey-01',
+                (!claim.response_kind || !isConnected) && 'cursor-default opacity-50'
+              )}
             >
-              <span>{position ? 'Yes' : 'No'}</span>
+              <span>{positionLabel}</span>
               {holders.length > 0 && <PositionAvatars participants={holders} />}
             </button>
           );
@@ -426,6 +464,37 @@ function RematchClaimCard({
       )}
     </article>
   );
+}
+
+function claimResponseKind(
+  entity: { values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }> },
+  spaceId: string
+): 'stance' | 'veracity' {
+  const isFactual =
+    getChecked(
+      entity.values?.find(
+        value =>
+          value.isDeleted !== true &&
+          uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+          uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
+      )?.value
+    ) === true;
+  return isFactual ? 'veracity' : 'stance';
+}
+
+function rematchCancellationMessage(reason: string) {
+  switch (reason) {
+    case 'claim_response_withdrawn':
+      return 'This request was cancelled because a participant withdrew their response.';
+    case 'claim_response_kind_changed':
+      return 'This request was cancelled because the claim’s response type changed.';
+    case 'claim_response_position_changed':
+    case 'claim_responses_not_opposed':
+    case 'claim_response_changed_during_accept':
+      return 'This request was cancelled because the responses no longer oppose each other.';
+    default:
+      return 'This debate request is no longer available.';
+  }
 }
 
 function PositionAvatars({ participants }: { participants: DebateRematchParticipant[] }) {

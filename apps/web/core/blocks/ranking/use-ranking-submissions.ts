@@ -21,7 +21,7 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
-import { isRollingSubmissionLive, parseTimestampMs } from './ranking-rolling';
+import { isRollingSubmissionLive, parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
@@ -137,7 +137,14 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
-  const mySubmission = hasRolledOff ? null : apiMySubmission;
+  // A rolled-off ballot is expired, not deleted, so it stays in the compose view.
+  // Blanking it here opened compose empty, authors rebuilt from scratch and
+  // published a single-entry ballot, and because the indexer keeps only the newest
+  // rank per (block, author space) that one entry permanently superseded the fuller
+  // ballot behind it — each roll-off ratcheting every participant's ballot down
+  // towards one entry. `hasRolledOff` still drives the "Submit new ranking" call to
+  // action and still forces a fresh rank entity below.
+  const mySubmission = apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
@@ -174,7 +181,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       try {
         const rankName = blockName.trim() || 'My ranking';
 
-        const reuseExistingRank = Boolean(myRankEntity) && !hasRolledOff;
+        const reuseExistingRank = !shouldMintNewRankEntity({
+          isRolling,
+          hasExistingBallot: Boolean(myRankEntity),
+          isSubmissionLive,
+        });
 
         let ops;
         let rankId: string;
@@ -301,7 +312,8 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     [
       blockId,
       blockName,
-      hasRolledOff,
+      isRolling,
+      isSubmissionLive,
       myRankEntity,
       personalSpaceId,
       profile?.avatarUrl,

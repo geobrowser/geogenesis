@@ -5,6 +5,10 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { queryClient } from '~/core/query-client';
+import {
+  claimResponseTargetKey,
+  isClaimResponseSummaryQueryKey,
+} from '~/core/responses/claim-response-summary-query-keys';
 
 import { type GeoChatSession, type GetPrivyIdentityToken, getGeoChatApiBaseUrl, getGeoChatSession } from './api';
 
@@ -83,6 +87,7 @@ export class DebateGatewayClient {
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
+  private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
 
   private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false };
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
@@ -154,6 +159,7 @@ export class DebateGatewayClient {
     this.sentScopes.clear();
     this.confirmedScopes.clear();
     this.pendingInvalidations.clear();
+    this.pendingChangedClaimsBySpace.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false });
   }
@@ -367,7 +373,13 @@ export class DebateGatewayClient {
   }
 
   private queueBroadReconcile() {
-    this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
+    this.queueInvalidation(BROAD_INVALIDATION_KEY, {
+      predicate: query => {
+        const root = query.queryKey[0];
+        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+      },
+      refetchType: 'active',
+    });
   }
 
   /** A profile's `can_challenge` folds in the viewer's own activity, so it goes stale with it. */
@@ -388,17 +400,32 @@ export class DebateGatewayClient {
       this.queueQuery(['debates', 'claims', spaceId]);
       return;
     }
-    const changedClaims = new Set(claimEntityIds);
-    this.queueInvalidation(`claims:${spaceId}:${claimEntityIds.slice().sort().join(',')}`, {
+    let changedClaims = this.pendingChangedClaimsBySpace.get(spaceId);
+    if (!changedClaims) {
+      changedClaims = new Set();
+      this.pendingChangedClaimsBySpace.set(spaceId, changedClaims);
+    }
+    for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
+    const changedResponseTargets = new Set(
+      [...changedClaims].flatMap(entityId =>
+        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+      )
+    );
+    this.queueInvalidation(`claims:${spaceId}`, {
       predicate: query => {
         const [root, kind, querySpaceId, queryClaimIds] = query.queryKey;
-        return (
+        const isDebateClaimQuery =
           root === 'debates' &&
           kind === 'claims' &&
           querySpaceId === spaceId &&
           Array.isArray(queryClaimIds) &&
-          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))
-        );
+          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId));
+        if (isDebateClaimQuery) return true;
+
+        return isClaimResponseSummaryQueryKey(query.queryKey, {
+          spaceId,
+          targetKeys: changedResponseTargets,
+        });
       },
       refetchType: 'active',
     });
@@ -411,6 +438,7 @@ export class DebateGatewayClient {
   private queueInvalidation(key: string, filters: InvalidationFilters) {
     if (key === BROAD_INVALIDATION_KEY) {
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
     } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
       return;
     }
@@ -420,6 +448,7 @@ export class DebateGatewayClient {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
       void this.flushInvalidations(invalidations);
     }, INVALIDATION_COALESCE_MS);
   }

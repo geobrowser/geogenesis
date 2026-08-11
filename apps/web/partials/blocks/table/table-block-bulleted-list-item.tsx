@@ -17,7 +17,7 @@ import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/cha
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -129,9 +129,6 @@ export function TableBlockBulletedListItem({
     <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
-        <div className="hidden md:float-right md:ml-2 md:block md:translate-y-[5px]">
-          {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
-        </div>
         {source.type !== 'COLLECTION' ? (
           <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="block min-w-0 text-body">
             {name}
@@ -156,6 +153,12 @@ export function TableBlockBulletedListItem({
             </Link>
           </CollectionMetadata>
         )}
+        <EntityRowActions
+          entityId={rowEntityId}
+          spaceId={currentSpaceId}
+          showVotes={showVoteButtons}
+          className="mt-1"
+        />
       </div>
       <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
         {!isPlaceholder && source.type !== 'COLLECTION' && (
@@ -167,7 +170,6 @@ export function TableBlockBulletedListItem({
             />
           </div>
         )}
-        {showVoteButtons ? <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} /> : null}
       </div>
     </div>
   );
