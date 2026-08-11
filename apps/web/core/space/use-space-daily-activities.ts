@@ -79,9 +79,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
 
   const typeRelations = useRelations({
     selector: r =>
-      blockIds.includes(r.fromEntity.id) &&
-      r.type.id === SystemIds.TYPES_PROPERTY &&
-      ID.equals(r.spaceId, spaceId),
+      blockIds.includes(r.fromEntity.id) && r.type.id === SystemIds.TYPES_PROPERTY && ID.equals(r.spaceId, spaceId),
   });
 
   const blockValues = useValues({
@@ -125,9 +123,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
       const localTypeRelations = typeRelations.filter(r => ID.equals(r.fromEntity.id, blockId));
       const snapshotTypeRelations = (initial?.relations ?? []).filter(
         r =>
-          ID.equals(r.fromEntity.id, blockId) &&
-          r.type.id === SystemIds.TYPES_PROPERTY &&
-          ID.equals(r.spaceId, spaceId)
+          ID.equals(r.fromEntity.id, blockId) && r.type.id === SystemIds.TYPES_PROPERTY && ID.equals(r.spaceId, spaceId)
       );
       const relationsForBlock = mergeRelations(localTypeRelations, snapshotTypeRelations).filter(r => !r.isDeleted);
 
