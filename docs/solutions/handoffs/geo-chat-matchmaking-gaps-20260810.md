@@ -230,3 +230,50 @@ something else depends on it. On `MatchmakingMatch`, `viewer_position` is curren
 
 Advertise `debate_matchmaking_v1` only once §1–§3 are live: the client flips its whole
 position/readiness UX on that capability.
+
+---
+
+## 6. Open, 2026-08-11 — the Matches tab returns nothing
+
+Reported from manual testing: two users, opposing positions on the same claim, both ready, and
+`GET /matchmaking/matches` returns `{ "matches": [] }` for both. Two candidate causes, both
+server-side. The client renders whatever the endpoint returns and applies no filter of its own
+unless the user picks a space, so an empty tab means an empty response.
+
+### 6.1 Auto-pairing is still live, and it eats the match
+
+`try_match_user_from_saved_preferences` still runs on preference upsert, gateway heartbeat, and
+availability-enable. The moment both users are ready on a claim the server pairs them into a
+`DebateMatch`. An in-match user is not eligible, so the opposite side's `available_now_count`
+falls to 0 and the claim drops out of `/matchmaking/matches` **for both of them** — the pairing
+consumes the very match the tab exists to show.
+
+This is already specified as deleted:
+[`docs/plans/2026-08-06-feat-geo-2514-matchmaking-lobby-plan.md:176`](../../plans/2026-08-06-feat-geo-2514-matchmaking-lobby-plan.md)
+and acceptance criterion 7 ("Preference upsert / heartbeat / availability-enable no longer create
+matches"). Please confirm whether it landed; the symptom says it did not.
+
+Symptom to check it by: a match prompt appears without either user having sent a request.
+
+### 6.2 The eligibility predicate may be wrong in either direction
+
+The product spec, restated by the client owner on 2026-08-11, is:
+
+> This tab should only include claims that **you have set your intention to debate** and there are
+> other people online who have the **opposite position and also have set their intention to
+> debate**.
+
+That is stricter on both sides than §6.2 of the
+[2026-08-06 handoff](./geo-chat-matchmaking-backend-20260806.md), which this supersedes:
+
+| | 2026-08-06 handoff | Product spec (authoritative) |
+|---|---|---|
+| Caller | has a *position* | has a position **and** debate intent on the claim |
+| Opposite side | `available_now_count ≥ 1` — online, available, not in a debate, unblocked | the same **and** debate intent on the claim |
+
+So `available_now_count` must count only opposite-position holders who are **debate-ready on that
+claim**, not merely online and available. If it currently counts the looser set, the Claims tab
+overstates who is matchable; if the matches query instead requires something the spec doesn't,
+it under-returns. Please state which predicate is implemented so the client copy can match it.
+
+No client change is possible for either item.

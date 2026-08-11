@@ -67,9 +67,14 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           error={matchesQuery.error}
           onRetry={() => void matchesQuery.refetch()}
           isEmpty={filtered.length === 0}
-          // Usually the real cause is that the viewer isn't ready on any claim yet, and the fix is
-          // one tab away.
-          emptyMessage="No one with the opposite response is available yet."
+          // A match needs three things at once, and the old copy asserted which one was missing
+          // without being able to know. Name all of them instead, starting with the half the
+          // viewer controls.
+          emptyMessage={
+            activity?.available_to_debate === false
+              ? 'You’re marked unavailable, so nobody can be matched with you.'
+              : 'Matches appear once you’ve turned Debate on for a claim and someone holding the opposite position is online and ready too.'
+          }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>
