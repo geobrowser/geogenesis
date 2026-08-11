@@ -141,14 +141,16 @@ function FeaturedRankingCard({
       {pageEntries.length > 0 ? (
         <ol className="mt-5 flex flex-col gap-1.5">
           {pageEntries.map((entry, index) => (
-            <li key={entry.entityId} className="flex items-center gap-3">
+            <li key={entry.entityId} className="flex min-h-6 items-center gap-3">
               <span className="w-3 shrink-0 text-[16px] leading-[18px] font-medium text-text tabular-nums">
                 {pageStart + index + 1}
               </span>
               <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="relative size-6 shrink-0 overflow-hidden rounded bg-grey-01">
-                  {entry.image ? <FallbackImage value={entry.image} sizes="24px" className="object-cover" /> : null}
-                </span>
+                {entry.image ? (
+                  <span className="relative size-6 shrink-0 overflow-hidden rounded bg-grey-01">
+                    <FallbackImage value={entry.image} sizes="24px" className="object-cover" />
+                  </span>
+                ) : null}
                 <span className="min-w-0 flex-1 truncate text-[16px] leading-[20px] text-text">{entry.name}</span>
               </span>
             </li>
