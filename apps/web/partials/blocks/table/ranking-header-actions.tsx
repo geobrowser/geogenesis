@@ -19,9 +19,11 @@ const ACTION_BUTTON_CLASS =
 export function RankingHeaderActions({ state }: Props) {
   const { periodState, periodLabel, hasMySubmission, isRollingRolledOff, isSaving, openRankingCompose } = state;
 
-  // A rolled-off rolling ballot invites a fresh submission, so the CTA returns
-  // to the primary "Rank" even though the expired ballot still exists (it
-  // prefills the compose view — see useRankingSubmissions).
+  // A rolled-off rolling ballot is treated as absent (useRankingSubmissions
+  // blanks mySubmission, so hasMySubmission is already false then) — the CTA
+  // returns to the primary "Rank" and compose opens fresh. The explicit
+  // isRollingRolledOff guard is belt-and-braces for any surface that still
+  // reports a submission while rolled off.
   const showViewAction = hasMySubmission && !isRollingRolledOff;
 
   return (
