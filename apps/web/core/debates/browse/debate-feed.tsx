@@ -34,7 +34,7 @@ const SHARE_PREPARATION_DWELL_MS = 5_000;
 const DEBATE_COLUMN_STYLE = {
   // At Figma's 1366x768 desktop frame this resolves to 480px. The height term
   // grows or shrinks the media with the viewport while reserving the navbar,
-  // header, media gap, and the design's 20px/40px vertical breathing room.
+  // header, media gap, and the design's vertical breathing room.
   '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 9.792rem)), 640px)',
 } as React.CSSProperties;
 
@@ -321,9 +321,12 @@ function DebateFeedItem({
   return (
     <section
       ref={itemRef}
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 pb-10 md:px-2 md:py-3"
+      className="flex h-full snap-start items-center justify-center px-4 md:items-start md:px-2 md:py-3"
     >
-      <div className="my-auto flex items-stretch gap-3 md:my-0">
+      {/* The feed starts below the 44px navbar. Shift its centered desktop
+          content up by half that height so the composition is centered against
+          the full viewport, not just the area beneath the navbar. */}
+      <div className="-translate-y-[1.375rem] flex items-stretch gap-3 md:translate-y-0">
         <div
           className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
