@@ -6,7 +6,6 @@ import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { getShareAriaLabel } from '~/core/debates/browse/debate-interaction-bar';
-import { Share } from '~/core/debates/browse/icons';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
@@ -17,13 +16,14 @@ import { ID } from '~/core/id';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
-import { InfoSmall } from '~/design-system/icons/info-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreCommentsIcon } from './explore-comments-icon';
+import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
 type DebateExploreFeedCardProps = {
@@ -173,7 +173,7 @@ function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean 
       }}
       className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
     >
-      <Share />
+      <ExploreShareIcon />
       <span className="text-[14px] font-normal">Share</span>
     </button>
   );
@@ -186,7 +186,7 @@ function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean 
         onClick={() => setClaimsOpen(true)}
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
-        <InfoSmall />
+        <ExploreClaimsIcon />
         {/* Claims are still a placeholder upstream — the full-screen feed passes 0 too. */}
         <span className="text-[14px] font-normal tabular-nums">0</span>
       </button>
