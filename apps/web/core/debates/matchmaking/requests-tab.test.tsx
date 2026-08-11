@@ -127,14 +127,15 @@ describe('RequestsTab', () => {
     expect(screen.getByText('Bitcoin will never go above $250K')).toBeInTheDocument();
     expect(screen.getByText(/^Expires in/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Not now' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toBeInTheDocument();
   });
 
-  // "Not now" here is the real answer, unlike the popup's — it frees the request to advance.
+  // The card's answer is the real one, unlike the popup's "Not now" — it frees the request to
+  // advance to the next candidate, which is why the two no longer share a label.
   it('declines the request from the card', () => {
     render(<RequestsTab />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
 
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' });
   });
@@ -150,6 +151,9 @@ describe('RequestsTab', () => {
     // Only the request you sent can be withdrawn, and only the ones you received can be accepted.
     expect(screen.getByRole('button', { name: 'Withdraw' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(1);
+    // Both sides run down the same 25-minute clock, so both say so — the sent one used to show
+    // only "Awaiting response", with no hint of how long it had left.
+    expect(screen.getAllByText(/^Expires in/)).toHaveLength(2);
   });
 
   it('narrows to one side with the status filter', () => {

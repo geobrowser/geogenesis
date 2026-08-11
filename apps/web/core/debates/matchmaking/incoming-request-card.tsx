@@ -21,6 +21,9 @@ import { useRequestCountdown } from './use-request-countdown';
  * A request someone sent you, listed under "Received" for its full lifetime. Turning it down here
  * behaves exactly like letting it expire for you, and frees the request to advance to the next
  * candidate on the server — unlike the popup's "Not now", which only closes the popup.
+ *
+ * Hence "Dismiss" rather than the popup's wording: the two used to share a label while doing
+ * opposite things, and this is the one that spends the request.
  */
 export function IncomingRequestCard({ request, ref }: { request: DebateRequest; ref?: React.Ref<HTMLElement> }) {
   const countdown = useRequestCountdown(request.expires_at);
@@ -92,9 +95,9 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
           onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }))}
           disabled={busy}
           pending={dismissRequest.isPending}
-          pendingLabel="Declining…"
+          pendingLabel="Dismissing…"
         >
-          Not now
+          Dismiss
         </HubPillButton>
         <HubPillButton
           variant="primary"

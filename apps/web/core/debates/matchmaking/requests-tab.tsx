@@ -156,6 +156,9 @@ function RequestSection({ label, children }: { label: string; children: React.Re
  * A claimless challenge has no claim to take a side on, so accepting opens a session where both
  * people pick one together — which is what "Explore claims" does here, exactly as in the popup.
  * Switching the hub to the Claims tab would leave the challenge unanswered.
+ *
+ * "Dismiss" for the same reason as `IncomingRequestCard`: this rejects the challenge outright,
+ * while the popup's "Not now" only closes the popup and leaves it here.
  */
 function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 'recipient' | 'requester' }) {
   const acceptChallenge = useAcceptDebateChallenge();
@@ -193,9 +196,9 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
             onClick={() => rejectChallenge.mutate(challenge.id)}
             disabled={busy}
             pending={rejectChallenge.isPending}
-            pendingLabel="Declining…"
+            pendingLabel="Dismissing…"
           >
-            Not now
+            Dismiss
           </HubPillButton>
           <HubPillButton
             variant="primary"
