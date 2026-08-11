@@ -320,7 +320,7 @@ function DebateFeedItem({
   return (
     <section
       ref={itemRef}
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
+      className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
       <div className="flex items-stretch gap-3">
         <div
