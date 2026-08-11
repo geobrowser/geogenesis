@@ -437,7 +437,7 @@ function DebateVotePill({
     >
       <button
         type="button"
-        aria-label="Upvote"
+        aria-label={positiveTitle}
         aria-pressed={positiveActive}
         disabled={disabled}
         title={positiveTitle}
@@ -449,7 +449,7 @@ function DebateVotePill({
       <span className="text-metadataMedium tabular-nums text-text">{score}</span>
       <button
         type="button"
-        aria-label="Downvote"
+        aria-label={negativeTitle}
         aria-pressed={negativeActive}
         disabled={disabled}
         title={negativeTitle}

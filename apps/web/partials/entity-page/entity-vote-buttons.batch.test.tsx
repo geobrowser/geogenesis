@@ -163,7 +163,7 @@ describe('EntityVoteButtons claims-page batching', () => {
     );
 
     expect(view.getByText('7')).toBeInTheDocument();
-    expect(view.getByRole('button', { name: 'Upvote' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.getByRole('button', { name: 'Remove upvote' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
     expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
   });
