@@ -315,7 +315,7 @@ function DebateFeedItem({
   return (
     <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
       <div className="flex items-stretch gap-3">
-        <div className="flex min-w-0 w-[480px] flex-col md:w-[calc(100vw-1rem)]">
+        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button

@@ -131,11 +131,7 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(heading.closest('section')).toHaveClass('items-start', 'pt-5', 'md:pt-3');
     const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
-    expect(mediaColumn).toHaveClass(
-      'min-w-0',
-      'w-[480px]',
-      'md:w-[calc(100vw-1rem)]'
-    );
+    expect(mediaColumn).toHaveClass('min-w-0', 'w-[480px]', 'md:w-[calc(100vw-1rem)]');
   });
 
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
