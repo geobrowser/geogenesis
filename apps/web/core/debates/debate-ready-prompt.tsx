@@ -27,6 +27,17 @@ export function DebateReadyPrompt({
   onNotNow: () => void;
 }) {
   const router = useRouter();
+  const [joining, setJoining] = React.useState(false);
+  const [, startJoining] = React.useTransition();
+
+  // The debate room is a server segment with no `loading` boundary, so the router holds this page
+  // on screen until its payload arrives — seconds, on a cold route. Without a pending state the
+  // dialog just sits there looking dead, and every extra click stacks another history entry.
+  const join = () => {
+    if (joining) return;
+    setJoining(true);
+    startJoining(() => router.push(debatePath(debate)));
+  };
 
   // Both sides are what the dialog is for; a debate that cannot name them is not worth interrupting
   // anyone over, and the room itself still recovers the flow.
@@ -41,7 +52,7 @@ export function DebateReadyPrompt({
       busy={false}
       error={null}
       actionsLayout="split"
-      acceptLabel="Join debate"
+      acceptLabel={joining ? 'Joining…' : 'Join debate'}
       rejectLabel="Not now"
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">
@@ -52,7 +63,7 @@ export function DebateReadyPrompt({
           </span>
         </span>
       }
-      onAccept={() => router.push(debatePath(debate))}
+      onAccept={join}
       onReject={onNotNow}
     />
   );
