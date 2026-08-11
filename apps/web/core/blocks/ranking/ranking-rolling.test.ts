@@ -6,6 +6,7 @@ import {
   getRollingExpiryMs,
   isRollingSubmissionLive,
   parseTimestampMs,
+  shouldMintNewRankEntity,
 } from './ranking-rolling';
 
 const HOUR = 60 * 60 * 1000;
@@ -65,6 +66,28 @@ describe('isRollingSubmissionLive', () => {
 describe('getRollingExpiryMs', () => {
   it('adds the frequency window to the submission time', () => {
     expect(getRollingExpiryMs(now, 24)).toBe(now + 24 * HOUR);
+  });
+});
+
+describe('shouldMintNewRankEntity', () => {
+  it('mints when the author has no ballot yet', () => {
+    expect(shouldMintNewRankEntity({ isRolling: false, hasExistingBallot: false, isSubmissionLive: true })).toBe(true);
+    expect(shouldMintNewRankEntity({ isRolling: true, hasExistingBallot: false, isSubmissionLive: false })).toBe(true);
+  });
+
+  it('updates in place while a ballot is still live', () => {
+    expect(shouldMintNewRankEntity({ isRolling: true, hasExistingBallot: true, isSubmissionLive: true })).toBe(false);
+  });
+
+  // A rolled-off ballot needs a fresh `submitted_at`, and the indexer only derives
+  // one from the edit that creates the rank entity — updating in place would leave
+  // the ballot expired forever.
+  it('mints again once a rolling ballot has rolled off', () => {
+    expect(shouldMintNewRankEntity({ isRolling: true, hasExistingBallot: true, isSubmissionLive: false })).toBe(true);
+  });
+
+  it('never mints for a non-rolling block with an existing ballot', () => {
+    expect(shouldMintNewRankEntity({ isRolling: false, hasExistingBallot: true, isSubmissionLive: false })).toBe(false);
   });
 });
 

@@ -39,6 +39,7 @@ import { Text } from '~/design-system/text';
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const currentUserId = getCurrentGeoChatUserId();
+  const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [publishedClaimsCursor, setPublishedClaimsCursor] = React.useState<string | undefined>();
   const {
@@ -153,6 +154,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const [tab, setTab] = React.useState<'all' | 'debate-now'>('all');
   const [topicFilter, setTopicFilter] = React.useState<string>('');
 
+  const returnFromSession = React.useCallback(
+    (endedSession: DebateRematchSession) => {
+      if (exitStartedRef.current) return;
+      exitStartedRef.current = true;
+
+      if (endedSession.source_debate_id === null) {
+        if (window.history.length > 1) {
+          router.back();
+          return;
+        }
+
+        const opponentProfileSpaceId = endedSession.participants.find(
+          participant => participant.user_id !== currentUserId
+        )?.profile_space_id;
+        router.replace(`/space/${opponentProfileSpaceId ?? endedSession.source_space_id}`);
+        return;
+      }
+
+      router.replace(`/space/${endedSession.source_space_id}/debates`);
+    },
+    [currentUserId, router]
+  );
+
   // "Debate now" = claims the opponent has responded to; the tab badge counts them.
   const opponentPositionCount = React.useMemo(
     () => claims.filter(claim => opponentPositionOf(claim) !== null).length,
@@ -183,13 +207,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (session.status === 'converted' && session.converted_debate_id) {
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
-      router.replace(`/space/${session.source_space_id}/debates`);
+      returnFromSession(session);
     }
-  }, [router, session]);
+  }, [returnFromSession, router, session]);
 
   const leave = () => {
     leaveSession.mutate(undefined, {
-      onSuccess: ended => router.replace(`/space/${ended.source_space_id}/debates`),
+      onSuccess: returnFromSession,
     });
   };
 
