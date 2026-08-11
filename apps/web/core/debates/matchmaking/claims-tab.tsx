@@ -18,7 +18,7 @@ import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
-import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { MatchmakingClaimCard, isResolvableClaim } from './matchmaking-claim-card';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -102,11 +102,13 @@ export function ClaimsTab() {
 
   const responseTargets = React.useMemo(
     () =>
-      claims.map(entry => ({
-        spaceId: entry.claim.space_id,
-        entityId: entry.claim.claim_entity_id,
-        responseKind: entry.response_kind,
-      })),
+      claims
+        .filter(entry => isResolvableClaim(entry.claim))
+        .map(entry => ({
+          spaceId: entry.claim.space_id,
+          entityId: entry.claim.claim_entity_id,
+          responseKind: entry.response_kind,
+        })),
     [claims]
   );
 

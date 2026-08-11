@@ -12,7 +12,7 @@ import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
-import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { MatchmakingClaimCard, isResolvableClaim } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { useStableListOrder } from './use-stable-list-order';
 import type { DebatesHubTab } from '~/atoms';
@@ -49,11 +49,13 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   const responseTargets = React.useMemo(
     () =>
-      serverMatches.map(match => ({
-        spaceId: match.claim.space_id,
-        entityId: match.claim.claim_entity_id,
-        responseKind: match.response_kind,
-      })),
+      serverMatches
+        .filter(match => isResolvableClaim(match.claim))
+        .map(match => ({
+          spaceId: match.claim.space_id,
+          entityId: match.claim.claim_entity_id,
+          responseKind: match.response_kind,
+        })),
     [serverMatches]
   );
 

@@ -7,10 +7,11 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
-import { NavUtils } from '~/core/utils/utils';
+import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { Text } from '~/design-system/text';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, MatchmakingReadiness } from '../api';
 import { DebateEntityResponseControls } from '../debate-entity-response-controls';
@@ -27,6 +28,15 @@ type Props = {
   footer?: React.ReactNode;
 };
 
+/**
+ * Whether the knowledge graph can actually resolve this claim. geo-chat keys claims by their graph
+ * entity id, but nothing guarantees the id it returns is one the graph will accept — a malformed
+ * one makes every graph query for it fail.
+ */
+export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | 'claim_entity_id'>) {
+  return validateEntityId(claim.claim_entity_id) && validateSpaceId(claim.space_id);
+}
+
 /** Only used when a side has no participants yet and so carries no server-supplied label. */
 function fallbackLabels(responseKind: DebateResponseKind) {
   return responseKind === 'veracity'
@@ -35,15 +45,18 @@ function fallbackLabels(responseKind: DebateResponseKind) {
 }
 
 /**
- * A position is an on-chain claim response now, so the hub can only *show* the sides — taking one
- * means responding to the claim itself. The card links out for that; readiness (the part the hub
- * does own) rides in `headerAction`.
+ * The side pills are read-only summaries of who is available to debate — geo-chat data. Taking a
+ * side is an on-chain response, so that goes through the same controls the claim page uses, paired
+ * here with the readiness toggle exactly as `ClaimDebateReadiness` pairs them.
  */
 export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer }: Props) {
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
   const fallback = fallbackLabels(readiness.response_kind);
   const viewerResponse = readiness.viewer_response;
+  // geo-chat is a separate system and can hand back a claim the knowledge graph has never seen.
+  // Responding to one is impossible, and asking the graph about it 400s, so don't offer or ask.
+  const isOnGraph = isResolvableClaim(claim);
 
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
@@ -52,12 +65,18 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
       <div className="mb-2">
         <SpaceChip spaceId={claim.space_id} />
       </div>
-      <Link
-        href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-        className="mb-3 block text-metadataMedium hover:underline"
-      >
-        {claim.claim}
-      </Link>
+      {isOnGraph ? (
+        <Link
+          href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+          className="mb-3 block text-metadataMedium hover:underline"
+        >
+          {claim.claim}
+        </Link>
+      ) : (
+        <Text as="p" variant="metadataMedium" className="mb-3">
+          {claim.claim}
+        </Text>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <PositionSummary
           label={forSide?.position_label ?? fallback.agree}
@@ -75,11 +94,17 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
       {/* Responding and going ready sit together here the same way they do on the claim page:
           the response is the on-chain half, the toggle is the matchmaking half. */}
       <div className="mt-3 flex items-start justify-between gap-3">
-        <DebateEntityResponseControls
-          entityId={claim.claim_entity_id}
-          spaceId={claim.space_id}
-          responseKind={readiness.response_kind}
-        />
+        {isOnGraph ? (
+          <DebateEntityResponseControls
+            entityId={claim.claim_entity_id}
+            spaceId={claim.space_id}
+            responseKind={readiness.response_kind}
+          />
+        ) : (
+          <Text as="span" variant="footnote" color="grey-04">
+            Claim unavailable
+          </Text>
+        )}
         <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
       </div>
       {footer}
@@ -88,7 +113,7 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
 }
 
 export function SpaceChip({ spaceId }: { spaceId: string }) {
-  const { spacesById } = useSpacesByIds(React.useMemo(() => [spaceId], [spaceId]));
+  const { spacesById } = useSpacesByIds(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
   const space = spacesById.get(spaceId);
   const name = space?.entity?.name ?? 'Space';
   const image = space?.entity?.image ?? null;

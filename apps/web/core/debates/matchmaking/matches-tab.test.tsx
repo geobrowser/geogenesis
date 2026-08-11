@@ -41,12 +41,17 @@ vi.mock('./hub-response-batch', () => ({
   HubResponseBatch: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+// Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
+// refuses to touch the graph for anything else.
+const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
+const CLAIM_ENTITY_ID = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
+
 function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
   return {
     claim: {
       id: 'debate-claim-1',
-      space_id: 'space-1',
-      claim_entity_id: 'claim-1',
+      space_id: SPACE_ID,
+      claim_entity_id: CLAIM_ENTITY_ID,
       claim: 'Chips are better than fries',
       description: null,
     },
@@ -101,14 +106,14 @@ describe('MatchesTab', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     const controls = screen.getByTestId('response-controls');
-    expect(controls).toHaveAttribute('data-entity', 'claim-1');
+    expect(controls).toHaveAttribute('data-entity', CLAIM_ENTITY_ID);
     expect(controls).toHaveAttribute('data-response-kind', 'stance');
 
     expect(screen.queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Chips are better than fries' })).toHaveAttribute(
       'href',
-      expect.stringContaining('claim-1')
+      expect.stringContaining(CLAIM_ENTITY_ID)
     );
   });
 
@@ -119,14 +124,38 @@ describe('MatchesTab', () => {
     expect(screen.getByTestId('response-controls')).toHaveAttribute('data-response-kind', 'veracity');
   });
 
+  // geo-chat can return a claim the knowledge graph has never seen. Querying the graph for one
+  // fails the whole request, so the card must not offer to respond to it or link to it.
+  it('does not reach for the graph when the claim id is not a graph id', () => {
+    mocks.matches = [
+      match({
+        claim: {
+          id: 'debate-claim-1',
+          space_id: 'matchmaking-space-019fedae72b67ab2927adf044d57c566',
+          claim_entity_id: 'matchmaking-claim-019fedae72b67ab2927adf044d57c566',
+          claim: 'Leftover fixture claim',
+          description: null,
+        },
+      }),
+    ];
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.queryByTestId('response-controls')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Leftover fixture claim' })).not.toBeInTheDocument();
+    expect(screen.getByText('Leftover fixture claim')).toBeInTheDocument();
+    expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
+    // Readiness is geo-chat state, so it still works for a claim the graph can't resolve.
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeInTheDocument();
+  });
+
   it('stands down from a claim by turning readiness off, never by clearing a position', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Ready to debate this claim' }));
 
     expect(mocks.readinessMutate).toHaveBeenCalledWith({
-      spaceId: 'space-1',
-      claimId: 'claim-1',
+      spaceId: SPACE_ID,
+      claimId: CLAIM_ENTITY_ID,
       ready: false,
     });
   });
@@ -135,7 +164,7 @@ describe('MatchesTab', () => {
     const { rerender } = render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
-    expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: 'space-1', claim_entity_id: 'claim-1' });
+    expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
 
     mocks.outbound = { id: 'request-1', claim: match().claim, expires_at: '2099-01-01T00:00:00.000Z' };
     rerender(<MatchesTab onTabChange={vi.fn()} />);
