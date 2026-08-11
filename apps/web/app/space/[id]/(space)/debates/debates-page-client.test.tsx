@@ -59,6 +59,17 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
 
+// The feed's comment button opens a panel backed by the entity-comments stack,
+// whose storage-backed atoms initialize at import time. Stub it (and the live
+// count) the way the other debate suites do.
+vi.mock('~/core/debates/browse/debate-comments-panel', () => ({
+  DebateCommentsPanel: () => <div>Comments panel</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
+}));
+
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));

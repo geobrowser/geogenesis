@@ -6,11 +6,13 @@ import { useState } from 'react';
 import cx from 'classnames';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Crown } from '~/core/debates/browse/icons';
 import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
 import type { DebateVoteRecord } from '~/core/debates/vote-tally';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
@@ -36,6 +38,36 @@ const COMMENT_AVATAR_COL_PX = 32;
 const COMMENT_HEADER_GAP_PX = 12;
 const COMMENT_BODY_INSET_PX = COMMENT_AVATAR_COL_PX + COMMENT_HEADER_GAP_PX;
 const COMMENT_AVATAR_COLUMN_CENTER_PX = COMMENT_AVATAR_COL_PX / 2;
+
+/**
+ * Row density. Entity pages use the roomy 32px-avatar layout; side panels (the
+ * debates feed's Comments panel) use the design's compact 20px avatar, which
+ * pulls the body up under the name instead of leaving it below a tall avatar
+ * row. The body inset stays 44px in both so nested threading geometry holds.
+ */
+type CommentDensity = {
+  avatarPx: number;
+  bodyInsetPx: number;
+  avatarCenterPx: number;
+};
+
+const PAGE_DENSITY: CommentDensity = {
+  avatarPx: COMMENT_AVATAR_COL_PX,
+  bodyInsetPx: COMMENT_BODY_INSET_PX,
+  avatarCenterPx: COMMENT_AVATAR_COLUMN_CENTER_PX,
+};
+
+const PANEL_DENSITY: CommentDensity = {
+  avatarPx: 20,
+  bodyInsetPx: COMMENT_BODY_INSET_PX,
+  avatarCenterPx: 10,
+};
+
+const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
+
+function useCommentDensity(): CommentDensity {
+  return React.useContext(CommentDensityContext);
+}
 const COMMENT_THREAD_LINE_HIT_PX = 20;
 
 const THREAD_LEVEL_BRANCH_SEGMENT = 'thread-level-branch-segment';
@@ -161,21 +193,34 @@ function branchPointerBlurProps(
   };
 }
 
+export type CommentSectionVariant = 'page' | 'panel';
+
 interface CommentSectionProps {
   entityId: string;
   spaceId: string;
-  /** Omit the built-in "Comments (N)" heading and top padding — for hosts that
-   *  supply their own header, like the debate feed's Comments panel. */
-  hideHeader?: boolean;
+  /**
+   * 'page' (default) is the entity page treatment. 'panel' matches the side
+   * panel design: no built-in heading (the host supplies one), compact rows,
+   * and the avatar + "Join the conversation..." composer.
+   */
+  variant?: CommentSectionVariant;
 }
 
-export function CommentSection({ entityId, spaceId, hideHeader = false }: CommentSectionProps) {
+export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
   const isLoggedIn = !!smartAccount;
+  const isPanel = variant === 'panel';
+  const density = isPanel ? PANEL_DENSITY : PAGE_DENSITY;
+  // The panel composer leads with the viewer's own avatar (design).
+  const walletAddress = smartAccount?.account.address;
+  const { profile: viewerProfile } = useGeoProfile(walletAddress);
+  const viewerAvatarUrl =
+    viewerProfile?.avatarUrl && viewerProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? viewerProfile.avatarUrl : null;
+  const viewerAvatarSeed = viewerProfile?.address ?? walletAddress ?? personalSpaceId ?? 'anonymous';
   const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
@@ -281,61 +326,66 @@ export function CommentSection({ entityId, spaceId, hideHeader = false }: Commen
   }, [comments, filter, editorSpaceIds, sortWithSessionPinned]);
 
   return (
-    <CommentBranchHighlightProvider>
-      <div id="entity-comments" className={cx('flex w-full flex-col', !hideHeader && 'pt-10')}>
-        {!hideHeader && (
-          <>
-            <div className="text-mediumTitle">Comments ({totalCount})</div>
-            <Spacer height={16} />
-          </>
-        )}
-        <TopLevelCommentInput
-          onSubmit={handleCreateComment}
-          isLoggedIn={isLoggedIn}
-          onSignInRequired={requireSignInToComment}
-        />
-        {totalCount > 0 && (
-          <>
-            <Spacer height={16} />
-            <CommentFilters
-              sortOrder={sortOrder}
-              onSortChange={setSortOrder}
-              filter={filter}
-              onFilterChange={setFilter}
-            />
-          </>
-        )}
-        {isLoading ? (
-          <div className="py-4">
-            <Text variant="body" color="grey-04">
-              Loading comments...
-            </Text>
-          </div>
-        ) : (
-          filteredComments.length > 0 && (
+    <CommentDensityContext.Provider value={density}>
+      <CommentBranchHighlightProvider>
+        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', !isPanel && 'pt-10')}>
+          {!isPanel && (
+            <>
+              <div className="text-mediumTitle">Comments ({totalCount})</div>
+              <Spacer height={16} />
+            </>
+          )}
+          <TopLevelCommentInput
+            onSubmit={handleCreateComment}
+            isLoggedIn={isLoggedIn}
+            onSignInRequired={requireSignInToComment}
+            variant={variant}
+            viewerAvatarUrl={viewerAvatarUrl}
+            viewerAvatarSeed={viewerAvatarSeed}
+          />
+          {totalCount > 0 && (
             <>
               <Spacer height={16} />
-              <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
-                <CommentList
-                  comments={filteredComments}
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  onReply={handleCreateComment}
-                  onEdit={handleEditComment}
-                  personalSpaceId={personalSpaceId}
-                  editorSpaceIds={editorSpaceIds}
-                  isThreadCollapsed={isThreadCollapsed}
-                  toggleThreadCollapsed={toggleThreadCollapsed}
-                  sortReplies={sortWithSessionPinned}
-                  isLoggedIn={isLoggedIn}
-                  onSignInRequired={requireSignInToComment}
-                />
-              </DebateVoteBadgeContext.Provider>
+              <CommentFilters
+                sortOrder={sortOrder}
+                onSortChange={setSortOrder}
+                filter={filter}
+                onFilterChange={setFilter}
+              />
             </>
-          )
-        )}
-      </div>
-    </CommentBranchHighlightProvider>
+          )}
+          {isLoading ? (
+            <div className="py-4">
+              <Text variant="body" color="grey-04">
+                Loading comments...
+              </Text>
+            </div>
+          ) : (
+            filteredComments.length > 0 && (
+              <>
+                <Spacer height={16} />
+                <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
+                  <CommentList
+                    comments={filteredComments}
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    onReply={handleCreateComment}
+                    onEdit={handleEditComment}
+                    personalSpaceId={personalSpaceId}
+                    editorSpaceIds={editorSpaceIds}
+                    isThreadCollapsed={isThreadCollapsed}
+                    toggleThreadCollapsed={toggleThreadCollapsed}
+                    sortReplies={sortWithSessionPinned}
+                    isLoggedIn={isLoggedIn}
+                    onSignInRequired={requireSignInToComment}
+                  />
+                </DebateVoteBadgeContext.Provider>
+              </>
+            )
+          )}
+        </div>
+      </CommentBranchHighlightProvider>
+    </CommentDensityContext.Provider>
   );
 }
 
@@ -409,23 +459,51 @@ function TopLevelCommentInput({
   onSubmit,
   isLoggedIn,
   onSignInRequired,
+  variant = 'page',
+  viewerAvatarUrl,
+  viewerAvatarSeed,
 }: {
   onSubmit: (text: string) => void;
   isLoggedIn: boolean;
   onSignInRequired: () => void;
+  variant?: CommentSectionVariant;
+  viewerAvatarUrl?: string | null;
+  viewerAvatarSeed?: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const density = useCommentDensity();
 
   if (!isExpanded) {
+    const openComposer = () => {
+      if (!isLoggedIn) {
+        onSignInRequired();
+        return;
+      }
+      setIsExpanded(true);
+    };
+
+    // The panel design is a borderless row — the viewer's avatar, prompt text,
+    // and a rule beneath — rather than the entity page's outlined box.
+    if (variant === 'panel') {
+      return (
+        <button
+          onClick={openComposer}
+          className="flex w-full items-center gap-3 border-b border-grey-02 pb-3 text-left"
+        >
+          <span
+            className="relative shrink-0 overflow-hidden rounded-full"
+            style={{ width: density.avatarPx, height: density.avatarPx }}
+          >
+            <Avatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} size={density.avatarPx} />
+          </span>
+          <span className="min-w-0 flex-1 truncate text-body text-grey-04">Join the conversation...</span>
+        </button>
+      );
+    }
+
     return (
       <button
-        onClick={() => {
-          if (!isLoggedIn) {
-            onSignInRequired();
-            return;
-          }
-          setIsExpanded(true);
-        }}
+        onClick={openComposer}
         className="w-full rounded-lg border border-grey-02 px-4 py-3 text-left text-body text-grey-04 hover:border-text"
       >
         Start the discussion...
@@ -847,15 +925,16 @@ function CommentItem({
     return getRelativeTime(comment.createdAt);
   }, [comment.createdAt]);
 
+  const density = useCommentDensity();
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
   const nestedSpineLeftPx = -28;
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
-  const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? COMMENT_AVATAR_COLUMN_CENTER_PX : nestedSpineLeftPx;
+  const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? density.avatarCenterPx : nestedSpineLeftPx;
   const threadLineStrokeCenterNudgePx = 0.5;
   /** X of thread line relative to body inner left (vote row). */
-  const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - COMMENT_BODY_INSET_PX;
+  const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - density.bodyInsetPx;
   const commentRef = React.useRef<HTMLDivElement>(null);
   const repliesRef = React.useRef<HTMLDivElement>(null);
   const [parentLineHeight, setParentLineHeight] = React.useState<number | null>(null);
@@ -884,12 +963,16 @@ function CommentItem({
 
   const expandedHeaderRow = (
     <div className="flex items-center gap-3">
-      <div className="flex w-8 shrink-0 items-center justify-center">
+      <div
+        className="flex shrink-0 items-center justify-center"
+        style={{ width: density.avatarPx, height: density.avatarPx }}
+      >
         <a
           href={NavUtils.toSpace(comment.author.spaceId)}
-          className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full"
+          className="relative shrink-0 overflow-hidden rounded-full"
+          style={{ width: density.avatarPx, height: density.avatarPx }}
         >
-          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={32} />
+          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={density.avatarPx} />
         </a>
       </div>
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -1057,7 +1140,7 @@ function CommentItem({
     <div ref={commentRef} className={cx('relative', !isLast && 'mb-6')}>
       {threadCollapsed ? (
         <div className="flex min-h-8 items-center gap-3">
-          <div className="flex w-8 shrink-0 items-center justify-center">
+          <div className="flex shrink-0 items-center justify-center" style={{ width: density.avatarPx }}>
             {showThreadToggle && (
               <button
                 type="button"
@@ -1111,7 +1194,7 @@ function CommentItem({
               {...parentThreadLeave}
               className="comment-branch-parent-hit comment-branch-parent-spine absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
               style={{
-                left: `${COMMENT_AVATAR_COLUMN_CENTER_PX}px`,
+                left: `${density.avatarCenterPx}px`,
                 top: '32px',
                 height: `${parentLineHeight}px`,
                 width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
@@ -1127,14 +1210,14 @@ function CommentItem({
             </button>
           )}
           {expandedHeaderRow}
-          <div className="comment-body-slot mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
+          <div className="comment-body-slot mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}
           </div>
         </div>
       ) : (
         <>
           {expandedHeaderRow}
-          <div className="mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
+          <div className="mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}
           </div>
         </>
