@@ -19,10 +19,11 @@ const mocks = vi.hoisted(() => ({
   },
   resetIndexing: vi.fn(),
   isConnected: true,
+  availableToDebate: true,
 }));
 
 vi.mock('../hooks', () => ({
-  useDebateActivity: () => ({ data: { outbound_request: null } }),
+  useDebateActivity: () => ({ data: { outbound_request: null, available_to_debate: mocks.availableToDebate } }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -104,6 +105,7 @@ beforeEach(() => {
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.resetIndexing.mockReset();
   mocks.isConnected = true;
+  mocks.availableToDebate = true;
 });
 
 afterEach(cleanup);
@@ -224,6 +226,17 @@ describe('MatchesTab', () => {
       ready: false,
     });
     expect(mocks.submitResponse).not.toHaveBeenCalled();
+  });
+
+  // A request you send while marked unavailable could not be answered, so the design drops the
+  // action in that state — kept visible here, with the reason, rather than silently missing.
+  it('cannot request a debate while the viewer is unavailable', () => {
+    mocks.availableToDebate = false;
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeDisabled();
+    expect(request).toHaveAttribute('title', 'Switch yourself to available to send a request.');
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {

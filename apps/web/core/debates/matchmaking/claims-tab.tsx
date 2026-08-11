@@ -10,8 +10,9 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
+import { Text } from '~/design-system/text';
 
-import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -107,6 +108,19 @@ export function ClaimsTab() {
     [claims, topicsByClaimId, topicId]
   );
 
+  // The claims you've already taken a side on lead, since those are the ones that can become
+  // debates. The split is dropped when a filter already narrows to one of the two groups, where a
+  // heading over the whole list would say nothing.
+  const showSections = filter === 'all';
+  const myClaims = React.useMemo(
+    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response !== null) : []),
+    [showSections, visibleClaims]
+  );
+  const otherClaims = React.useMemo(
+    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response === null) : visibleClaims),
+    [showSections, visibleClaims]
+  );
+
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       <Input
@@ -155,17 +169,10 @@ export function ClaimsTab() {
         }
       >
         <>
-          <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-              />
-            ))}
-          </HubCardList>
+          {myClaims.length > 0 ? <ClaimSection label="My positions" claims={myClaims} /> : null}
+          {otherClaims.length > 0 ? (
+            <ClaimSection label={showSections && myClaims.length > 0 ? 'All claims' : null} claims={otherClaims} />
+          ) : null}
           {claimsQuery.hasNextPage ? (
             <HubPillButton
               onClick={() => void claimsQuery.fetchNextPage()}
@@ -179,6 +186,29 @@ export function ClaimsTab() {
         </>
       </HubQueryState>
     </div>
+  );
+}
+
+function ClaimSection({ label, claims }: { label: string | null; claims: MatchmakingClaim[] }) {
+  return (
+    <section className="flex flex-col gap-2 not-first:mt-4">
+      {label ? (
+        <Text as="h3" variant="footnote" color="grey-04">
+          {label}
+        </Text>
+      ) : null}
+      <HubCardList>
+        {claims.map(entry => (
+          <MatchmakingClaimCard
+            key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+            claim={entry.claim}
+            positions={entry.positions}
+            readiness={entry}
+            activeDebate={entry.active_debate}
+          />
+        ))}
+      </HubCardList>
+    </section>
   );
 }
 

@@ -78,6 +78,8 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
                 key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
                 match={match}
                 hasOutboundRequest={Boolean(outbound)}
+                // Only when the server actually says so — a missing field must not block requesting.
+                unavailable={activity?.available_to_debate === false}
               />
             ))}
           </HubCardList>
@@ -87,10 +89,24 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
   );
 }
 
-function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; hasOutboundRequest: boolean }) {
+function MatchCard({
+  match,
+  hasOutboundRequest,
+  unavailable,
+}: {
+  match: MatchmakingMatch;
+  hasOutboundRequest: boolean;
+  /** The viewer has marked themselves unavailable, so a request they sent couldn't be answered. */
+  unavailable: boolean;
+}) {
   const createRequest = useCreateDebateRequest();
 
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
+  const blockedReason = unavailable
+    ? 'Switch yourself to available to send a request.'
+    : hasOutboundRequest
+      ? 'Withdraw your open request to send another.'
+      : undefined;
 
   return (
     <MatchmakingClaimCard
@@ -106,10 +122,10 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
                 claim_entity_id: match.claim.claim_entity_id,
               })
             }
-            disabled={hasOutboundRequest}
+            disabled={Boolean(blockedReason)}
             pending={createRequest.isPending}
             pendingLabel="Requesting…"
-            title={hasOutboundRequest ? 'Withdraw your open request to send another.' : undefined}
+            title={blockedReason}
             className="w-full"
           >
             Request debate
