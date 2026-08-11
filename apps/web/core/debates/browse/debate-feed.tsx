@@ -31,6 +31,12 @@ import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
 const SHARE_PREPARATION_DWELL_MS = 5_000;
+const DEBATE_COLUMN_STYLE = {
+  // At Figma's 1366x768 desktop frame this resolves to 480px. The height term
+  // grows or shrinks the media with the viewport while reserving the navbar,
+  // header, media gap, and the design's 20px/40px vertical breathing room.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 9.792rem)), 640px)',
+} as React.CSSProperties;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -144,7 +150,7 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
@@ -313,9 +319,15 @@ function DebateFeedItem({
   };
 
   return (
-    <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
-      <div className="flex items-stretch gap-3">
-        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
+    <section
+      ref={itemRef}
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 pb-10 md:px-2 md:py-3"
+    >
+      <div className="my-auto flex items-stretch gap-3 md:my-0">
+        <div
+          className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          style={DEBATE_COLUMN_STYLE}
+        >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button

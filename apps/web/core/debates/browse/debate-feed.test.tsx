@@ -128,10 +128,15 @@ describe('DebatesBrowseFeed video sharing', () => {
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
-    expect(heading.closest('section')).toHaveClass('items-start', 'pt-5', 'md:pt-3');
+    const feedItem = heading.closest('section');
+    expect(feedItem).toHaveClass('items-start', 'pt-5', 'pb-10', 'md:py-3');
+    expect(feedItem?.firstElementChild).toHaveClass('my-auto', 'md:my-0');
     const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
-    expect(mediaColumn).toHaveClass('min-w-0', 'w-[480px]', 'md:w-[calc(100vw-1rem)]');
+    expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
+    expect(mediaColumn).toHaveStyle({
+      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 9.792rem)), 640px)',
+    });
   });
 
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
