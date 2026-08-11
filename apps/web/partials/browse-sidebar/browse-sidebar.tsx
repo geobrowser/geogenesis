@@ -181,7 +181,7 @@ function BrowseNavPrimaryLinks({ personalSpaceId }: { personalSpaceId: string | 
         </Link>
       ) : null}
       {isSignedIn ? (
-        <Link href={NavUtils.toHome()} className={isGovernance ? navLinkActive : navLinkIdle}>
+        <Link href={NavUtils.toHome()} prefetch className={isGovernance ? navLinkActive : navLinkIdle}>
           <BrowseNavIconSwap
             idleSrc={BROWSE_NAV_ICON.governance}
             activeSrc={BROWSE_NAV_ICON.governanceFilled}

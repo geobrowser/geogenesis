@@ -21,14 +21,23 @@ type CreateDebateRoomOwnershipCoordinatorOptions = {
 
 export type DebateRoomOwnershipCoordinator = {
   readonly instanceId: string;
-  acquire: () => Promise<boolean>;
+  readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
+  acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
   requestTakeover: () => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
 };
 
+export type DebateRoomOwnershipAcquireResult = {
+  acquired: boolean;
+  waitedForLocalRelease: boolean;
+};
+
+export type DebateRoomOwnershipCoordinationMode = 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback';
+
 const takeoverResponseTimeoutMs = 1_500;
+const localReleaseBarriers = new Map<string, Promise<void>>();
 
 export function createDebateRoomOwnershipCoordinator({
   debateId,
@@ -37,24 +46,37 @@ export function createDebateRoomOwnershipCoordinator({
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
   const coordinationName = `geo:debate-room:${debateId}:${userId}`;
-  const canCoordinate =
-    typeof navigator !== 'undefined' && Boolean(navigator.locks?.request) && typeof BroadcastChannel !== 'undefined';
+  const lockManager =
+    typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function' ? navigator.locks : null;
   let channel: BroadcastChannel | null = null;
-  if (canCoordinate) {
+  if (lockManager && typeof BroadcastChannel !== 'undefined') {
     try {
       channel = new BroadcastChannel(coordinationName);
     } catch {
       channel = null;
     }
   }
-  const supportsCoordination = channel !== null;
+  let coordinationMode: DebateRoomOwnershipCoordinationMode = lockManager
+    ? channel
+      ? 'lock-and-broadcast'
+      : 'lock-only'
+    : 'livekit-fallback';
+  let lockRequestsAvailable = lockManager !== null;
   let ownsConnection = false;
   let closed = false;
   let releaseLock: (() => void) | null = null;
   let lockRequest: Promise<void> | null = null;
   let releaseRequest: Promise<void> | null = null;
-  let acquisition: Promise<boolean> | null = null;
+  let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
+  let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean) => void>();
+
+  const fallBackToLiveKitIdentity = () => {
+    lockRequestsAvailable = false;
+    coordinationMode = 'livekit-fallback';
+    channel?.close();
+    channel = null;
+  };
 
   const postTakeoverResponse = (message: TakeoverRequest, released: boolean) => {
     if (!channel || closed) return;
@@ -71,42 +93,70 @@ export function createDebateRoomOwnershipCoordinator({
     }
   };
 
-  const acquireLock = (): Promise<boolean> => {
-    if (releaseRequest) return releaseRequest.then(acquireLock);
-    if (ownsConnection) return Promise.resolve(true);
-    if (!supportsCoordination) {
+  const acquireLock = (): Promise<DebateRoomOwnershipAcquireResult> => {
+    if (ownsConnection) return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
+    if (closed) return Promise.resolve({ acquired: false, waitedForLocalRelease: false });
+    if (!lockManager || !lockRequestsAvailable) {
       ownsConnection = true;
-      return Promise.resolve(true);
+      return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
     }
-    if (closed) return Promise.resolve(false);
     if (acquisition) return acquisition;
 
-    acquisition = new Promise<boolean>(resolve => {
-      const request = navigator.locks.request(
-        coordinationName,
-        { ifAvailable: true, mode: 'exclusive' },
-        async lock => {
-          resolve(Boolean(lock));
-          if (!lock || closed) return;
-          ownsConnection = true;
-          await new Promise<void>(release => {
-            releaseLock = release;
+    const attempt = { cancelled: false };
+    activeAcquisitionAttempt = attempt;
+    let waitedForLocalRelease = false;
+    const currentAcquisition = (async () => {
+      if (localReleaseBarriers.has(coordinationName)) {
+        waitedForLocalRelease = await waitForLocalReleaseBarriers(coordinationName, () => closed || attempt.cancelled);
+      }
+      if (closed || attempt.cancelled) return { acquired: false, waitedForLocalRelease };
+      if (ownsConnection) return { acquired: true, waitedForLocalRelease };
+
+      const lockResult = await new Promise<'acquired' | 'blocked' | 'unavailable'>(resolve => {
+        let request: Promise<void>;
+        try {
+          request = lockManager.request(coordinationName, { ifAvailable: true, mode: 'exclusive' }, async lock => {
+            const acquiredLock = Boolean(lock) && !closed && !attempt.cancelled;
+            resolve(acquiredLock ? 'acquired' : 'blocked');
+            if (!acquiredLock) return;
+            ownsConnection = true;
+            await new Promise<void>(release => {
+              releaseLock = release;
+            });
+            releaseLock = null;
+            ownsConnection = false;
           });
-          releaseLock = null;
-          ownsConnection = false;
+        } catch {
+          resolve('unavailable');
+          return;
         }
-      );
-      lockRequest = request.then(
-        () => undefined,
-        () => resolve(false)
-      );
-    })
-      .catch(() => false)
-      .finally(() => {
-        acquisition = null;
+        const activeRequest = request.then(
+          () => undefined,
+          () => resolve('unavailable')
+        );
+        lockRequest = activeRequest;
+        void activeRequest.finally(() => {
+          if (lockRequest === activeRequest) lockRequest = null;
+        });
       });
 
-    return acquisition;
+      if (lockResult === 'unavailable') {
+        if (closed || attempt.cancelled) return { acquired: false, waitedForLocalRelease };
+        fallBackToLiveKitIdentity();
+        ownsConnection = true;
+        return { acquired: true, waitedForLocalRelease };
+      }
+
+      return { acquired: lockResult === 'acquired', waitedForLocalRelease };
+    })()
+      .catch(() => ({ acquired: false, waitedForLocalRelease }))
+      .finally(() => {
+        if (acquisition === currentAcquisition) acquisition = null;
+        if (activeAcquisitionAttempt === attempt) activeAcquisitionAttempt = null;
+      });
+
+    acquisition = currentAcquisition;
+    return currentAcquisition;
   };
 
   const release = async () => {
@@ -114,21 +164,21 @@ export function createDebateRoomOwnershipCoordinator({
       await releaseRequest;
       return;
     }
-    if (!supportsCoordination) {
+    if (!lockManager || !lockRequestsAvailable) {
       ownsConnection = false;
       return;
     }
-    if (!releaseLock) return;
-    const activeRequest = lockRequest;
-    const releaseCurrentLock = releaseLock;
+    const activeRequest = lockRequest ?? acquisition?.then(() => undefined);
+    if (!activeRequest) return;
+    if (activeAcquisitionAttempt) activeAcquisitionAttempt.cancelled = true;
     ownsConnection = false;
-    releaseCurrentLock();
-    const request = activeRequest ?? Promise.resolve();
-    const completion = request.finally(() => {
-      if (releaseRequest === completion) releaseRequest = null;
+    releaseLock?.();
+    const barrier = registerLocalReleaseBarrier(coordinationName, activeRequest);
+    releaseRequest = barrier;
+    void barrier.finally(() => {
+      if (releaseRequest === barrier) releaseRequest = null;
     });
-    releaseRequest = completion;
-    await releaseRequest;
+    await barrier;
   };
 
   if (channel) {
@@ -155,12 +205,17 @@ export function createDebateRoomOwnershipCoordinator({
 
   return {
     instanceId,
+    get coordinationMode() {
+      return coordinationMode;
+    },
     acquire: acquireLock,
     requestTakeover: async () => {
       if (ownsConnection) return true;
-      if (!supportsCoordination) return acquireLock();
-      if (!channel || closed) return false;
-      if (await acquireLock()) return true;
+      if (!lockManager || !lockRequestsAvailable) return (await acquireLock()).acquired;
+      if (closed) return false;
+      if ((await acquireLock()).acquired) return true;
+      if (!channel) return false;
+      const takeoverChannel = channel;
 
       const requestId = createInstanceId();
       const released = await new Promise<boolean>(resolve => {
@@ -174,7 +229,7 @@ export function createDebateRoomOwnershipCoordinator({
           resolve(result);
         });
         try {
-          channel.postMessage({
+          takeoverChannel.postMessage({
             type: 'takeover-request',
             requestId,
             requesterId: instanceId,
@@ -186,7 +241,7 @@ export function createDebateRoomOwnershipCoordinator({
         }
       });
       if (!released) return false;
-      return acquireLock();
+      return (await acquireLock()).acquired;
     },
     release,
     close: () => {
@@ -198,6 +253,27 @@ export function createDebateRoomOwnershipCoordinator({
     },
     ownsConnection: () => ownsConnection,
   };
+}
+
+function registerLocalReleaseBarrier(coordinationName: string, activeRequest: Promise<void>) {
+  const barrier = activeRequest
+    .catch(() => undefined)
+    .finally(() => {
+      if (localReleaseBarriers.get(coordinationName) === barrier) localReleaseBarriers.delete(coordinationName);
+    });
+  localReleaseBarriers.set(coordinationName, barrier);
+  return barrier;
+}
+
+async function waitForLocalReleaseBarriers(coordinationName: string, cancelled: () => boolean) {
+  let waited = false;
+  let barrier = localReleaseBarriers.get(coordinationName);
+  while (barrier && !cancelled()) {
+    waited = true;
+    await barrier;
+    barrier = localReleaseBarriers.get(coordinationName);
+  }
+  return waited;
 }
 
 function createInstanceId() {

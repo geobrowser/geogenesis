@@ -48,7 +48,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
-  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -138,6 +138,7 @@ function completedDebate(): Debate {
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: 'debate-1',
     first_participant_slot: 1,
     current_turn_index: 1,

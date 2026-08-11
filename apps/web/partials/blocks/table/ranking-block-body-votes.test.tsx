@@ -11,8 +11,18 @@ vi.mock('./ranking-compose-entity-sheet', () => ({
 }));
 
 vi.mock('./ranking-entry-row', () => ({
-  RankingEntryRow: ({ entry, spaceId }: { entry: { entityId: string }; spaceId: string }) => (
-    <div data-row-entity-id={entry.entityId} data-row-space-id={spaceId} />
+  RankingEntryRow: ({
+    entry,
+    spaceId,
+    actions,
+  }: {
+    entry: { entityId: string };
+    spaceId: string;
+    actions?: React.ReactNode;
+  }) => (
+    <div data-row-entity-id={entry.entityId} data-row-space-id={spaceId}>
+      {actions}
+    </div>
   ),
   RankingEntryRowSkeleton: () => <div data-row-skeleton />,
 }));

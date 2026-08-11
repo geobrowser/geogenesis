@@ -7,8 +7,6 @@ import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
-import { useDebateAttention } from './debate-attention';
-
 import {
   type Debate,
   type DebateActivity,
@@ -16,7 +14,6 @@ import {
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
   GeoChatRequestError,
-  type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type TranscriptFormat,
@@ -56,9 +53,9 @@ import {
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
-  updateDebatePreference,
-  updateDebateRematchPosition,
 } from './api';
+import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
+import { useDebateAttention } from './debate-attention';
 import { useDebateGatewayScope } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
@@ -124,8 +121,8 @@ export function useJoinDebateQueue(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
-      joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken, accountKey),
+    mutationFn: ({ claimId }: { claimId: string }) =>
+      joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
@@ -142,17 +139,6 @@ export function useLeaveDebateQueue(spaceId: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
-  });
-}
-
-export function useUpdateDebatePreference(spaceId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId, position }: { claimId: string; position: boolean }) =>
-      updateDebatePreference(spaceId, claimId, { position }, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
   });
 }
 
@@ -432,27 +418,33 @@ export function useLeaveDebateRematch(sessionId: string) {
 }
 
 export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [], enabled = true) {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  React.useEffect(
+    function refetchRematchClaimsAfterIndexedResponse() {
+      if (!enabled || !sessionId) return;
+
+      return queryClient.getQueryCache().subscribe(event => {
+        if (event.type !== 'updated' || event.action.type !== 'success') return;
+        const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+        if (!response || (claimIds.length > 0 && !claimIds.includes(response.entityId))) {
+          return;
+        }
+
+        void queryClient.invalidateQueries({
+          queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
+        });
+      });
+    },
+    [accountKey, claimIds, enabled, queryClient, sessionId]
+  );
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematchClaims(accountKey, sessionId, claimIds),
     queryFn: ({ signal }) => listDebateRematchClaims(sessionId, claimIds, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
-  });
-}
-
-export function useUpdateDebateRematchPosition(sessionId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId, position, sourceSpaceId }: { claimId: string; position: boolean; sourceSpaceId: string }) =>
-      updateDebateRematchPosition(sessionId, claimId, position, sourceSpaceId, getPrivyIdentityToken, accountKey),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
-      }),
   });
 }
 
