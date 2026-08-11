@@ -6,7 +6,11 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
-import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import {
+  useEntityResponse,
+  useEntityResponseIndexingSnapshot,
+  useResetEntityResponseIndexingSnapshot,
+} from '~/core/hooks/use-entity-vote';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -92,26 +96,42 @@ function RespondableControls({
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
 }) {
-  const { submitResponse, optimisticResponse, isProcessingResponse, isConnected } = useEntityResponse({
+  const target = {
     entityId: claim.claim_entity_id,
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
-  });
+  };
+  const { submitResponse, isConnected } = useEntityResponse(target);
+  const responseIndexing = useEntityResponseIndexingSnapshot(target);
+  const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
   // the claim page does.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
   const [responseError, setResponseError] = React.useState<string | null>(null);
-  // The client knows its own response before geo-chat does, so prefer the local view while a
-  // response is still making its way through publishing and indexing.
-  const pending = optimisticResponse === undefined ? undefined : optimisticResponse;
-  const viewerPosition =
-    pending === undefined
-      ? (readiness.viewer_response?.position ?? null)
-      : pending === null
-        ? null
-        : pending === 'positive';
+
+  // The client knows its own response long before geo-chat does — publishing, indexing, and then
+  // the notification round trip all have to finish first. Any non-idle snapshot means we know,
+  // including `indexed`; dropping back to geo-chat's copy too early is what made a successful
+  // response look like it had been discarded.
+  const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
+  const optimisticPosition =
+    pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
+  const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  const isPublishing = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+
+  // Hand back to the server's copy only once it actually agrees, so there is no window where
+  // neither side reports the response.
+  React.useEffect(() => {
+    if (responseIndexing.status !== 'indexed') return;
+    const expected = responseIndexing.pending.expectedResponse;
+    const confirmed =
+      expected === null
+        ? readiness.viewer_response === null
+        : readiness.viewer_response?.position === (expected === 'positive');
+    if (confirmed) resetResponseIndexing(responseIndexing.runId);
+  }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
     if (!isConnected || isAccountSetupPending) return;
@@ -138,7 +158,7 @@ function RespondableControls({
         responseKind={readiness.response_kind}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        disabled={!isConnected || isProcessingResponse || isAccountSetupPending}
+        disabled={!isConnected || isPublishing || isAccountSetupPending}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -154,7 +174,7 @@ function RespondableControls({
           readiness={readiness}
           activeDebate={activeDebate}
           hasResponse={viewerPosition !== null}
-          responseIndexing={isProcessingResponse}
+          responseIndexing={isPublishing}
         />
       </div>
     </>

@@ -12,8 +12,12 @@ const mocks = vi.hoisted(() => ({
   readinessMutate: vi.fn(),
   createRequestMutate: vi.fn(),
   submitResponse: vi.fn(),
-  optimisticResponse: undefined as 'positive' | 'negative' | null | undefined,
-  isProcessingResponse: false,
+  indexing: { status: 'idle', pending: null, runId: null } as {
+    status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
+    pending: { expectedResponse: 'positive' | 'negative' | null } | null;
+    runId: string | null;
+  },
+  resetIndexing: vi.fn(),
   isConnected: true,
 }));
 
@@ -34,12 +38,14 @@ vi.mock('./hooks', () => ({
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: mocks.submitResponse,
-    optimisticResponse: mocks.optimisticResponse,
-    isProcessingResponse: mocks.isProcessingResponse,
+    optimisticResponse: undefined,
+    isProcessingResponse: false,
     isResponseIndexingDelayed: false,
     isConnected: mocks.isConnected,
     personalSpaceId: 'personal-space',
   }),
+  useEntityResponseIndexingSnapshot: () => mocks.indexing,
+  useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -80,8 +86,8 @@ beforeEach(() => {
   mocks.readinessMutate.mockReset();
   mocks.createRequestMutate.mockReset();
   mocks.submitResponse.mockReset();
-  mocks.optimisticResponse = undefined;
-  mocks.isProcessingResponse = false;
+  mocks.indexing = { status: 'idle', pending: null, runId: null };
+  mocks.resetIndexing.mockReset();
   mocks.isConnected = true;
 });
 
@@ -134,11 +140,32 @@ describe('MatchesTab', () => {
 
   // The client knows its own response before geo-chat does, so the button reflects it immediately.
   it('shows the in-flight response rather than the stale server one', () => {
-    mocks.optimisticResponse = 'negative';
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  // The regression this replaced: once indexing finished, the card dropped back to geo-chat's copy
+  // — which hasn't caught up yet — so a response that had just succeeded read as never made.
+  it('keeps showing an indexed response while geo-chat is still catching up', () => {
+    mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+    mocks.matches = [match({ viewer_response: null, viewer_debate_ready: false })];
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeEnabled();
+    expect(mocks.resetIndexing).not.toHaveBeenCalled();
+  });
+
+  it('hands back to the server copy once it agrees', () => {
+    mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+    mocks.matches = [match({ viewer_response: { position: false, position_label: 'Disagree' } })];
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(mocks.resetIndexing).toHaveBeenCalledWith('run-1');
   });
 
   it('cannot respond without a connected personal space', () => {
