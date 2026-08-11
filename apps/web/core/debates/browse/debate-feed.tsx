@@ -4,6 +4,8 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
@@ -21,6 +23,7 @@ import { Text } from '~/design-system/text';
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
+import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 
@@ -148,6 +151,11 @@ export function DebatesBrowseFeed({
 
   const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 
+  // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
+  // hold above, and holds the nudge back while the media lookups land one at a time and
+  // the list re-sorts underneath the viewer. Nothing to nudge toward with one debate.
+  const scrollHint = useDebateScrollHint(!isLoading && visibleDebates.length > 1);
+
   // Keep an active debate whenever the list is non-empty — including when a
   // refetch, pagination, or space switch drops the current activeId out of view,
   // which would otherwise leave nothing active or autoplaying. While the anchor
@@ -171,7 +179,7 @@ export function DebatesBrowseFeed({
       className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
-      {visibleDebates.map(debate => (
+      {visibleDebates.map((debate, index) => (
         <DebateFeedItem
           key={debate.id}
           debate={debate}
@@ -181,6 +189,8 @@ export function DebatesBrowseFeed({
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           root={scrollEl}
+          // Only the debate the viewer is looking at carries the nudge and lifts with it.
+          scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
@@ -222,6 +232,7 @@ function DebateFeedItem({
   topics,
   active,
   root,
+  scrollHint,
   onActivate,
   onOpenJoin,
   onOpenClaims,
@@ -233,6 +244,7 @@ function DebateFeedItem({
   topics: string[];
   active: boolean;
   root: HTMLElement | null;
+  scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
@@ -271,9 +283,15 @@ function DebateFeedItem({
       ref={itemRef}
       className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
-      <div className="flex items-stretch gap-3">
+      {/* The whole debate lifts with the nudge — title, media and controls together — so the
+          gesture reads as the feed scrolling rather than as one element twitching. Shared
+          animation props keep the card and the indicator in step. */}
+      <div
+        className={cx('flex items-stretch gap-3', scrollHint?.isVisible && scrollHintBounceProps.className)}
+        style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
+      >
         <div
-          className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
@@ -304,6 +322,11 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
+          {/* `top-full` hangs it just below the debate without taking part in the column's
+              height, which the media sizing has no room to spare for. */}
+          {scrollHint?.isVisible && (
+            <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
+          )}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">
