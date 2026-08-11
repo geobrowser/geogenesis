@@ -114,12 +114,21 @@ export function DebatesBrowseFeed({
     [debates, initialDebateId]
   );
 
+  const anchorUnresolved = initialDebateId != null && !anchorPresent;
+
+  // An anchor absent after a failed lookup is *unknown*, not missing: falling
+  // back would misread a transient readiness/query error as "this debate has no
+  // video", so the feed stays up and shows its own error state instead.
+  const anchorErrored = anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null);
+
   // Hold an anchored feed until the anchor itself is ready: the per-debate
   // readiness lookups resolve one at a time, so painting the partial list would
   // open the feed on whichever debate resolved first and then reorder underneath
   // the viewer once the anchor's lookup lands — landing them on the wrong video.
   // Only the anchor's own readiness gates; other debates may still be resolving.
-  const anchorPending = !anchorPresent && isLoading;
+  // The same hold applies while errored — the anchor can't render, and starting
+  // the feed on some other debate is exactly the wrong-video landing.
+  const anchorPending = anchorUnresolved && (isLoading || anchorErrored);
 
   // One message at a time, most specific first. A readiness lookup that failed has to read as an
   // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
@@ -134,8 +143,9 @@ export function DebatesBrowseFeed({
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
-  // Debates tab passes none and keeps its own empty/error states.
-  const anchorMissing = initialDebateId != null && !isLoading && !anchorPresent;
+  // Debates tab passes none and keeps its own empty/error states. Requires a clean read — an
+  // errored lookup holds the feed's error state above rather than falling back.
+  const anchorMissing = anchorUnresolved && !isLoading && !anchorErrored;
 
   const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 

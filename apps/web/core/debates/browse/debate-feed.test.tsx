@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   /** null = every debate reads as processed (the common-case default). */
   processedIds: null as string[] | null,
   mediaLoading: false,
+  mediaError: false,
   mediaMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
     isLoading: mocks.mediaLoading,
-    hasError: false,
+    hasError: mocks.mediaError,
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
 }));
@@ -73,6 +74,7 @@ beforeEach(() => {
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
   mocks.mediaLoading = false;
+  mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
   mocks.fetch.mockResolvedValue(videoResponse());
   mocks.canShare.mockReturnValue(false);
@@ -382,6 +384,24 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
     const players = screen.getAllByTestId(/^player-/);
     expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
     expect(players[0]).toHaveAttribute('data-active', 'true');
+  });
+
+  it('shows the readiness error instead of falling back when the anchor lookup failed', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    // Lookups settled, but the anchor's failed — its absence is unknown, not definitive.
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaError = true;
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    expect(
+      screen.getByText('Could not check which debates are ready to watch. Try again shortly.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    // Painting the resolved sibling would land the viewer on the wrong video.
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
   });
 
   it('falls back to the entity page once loading settles without the anchor', () => {
