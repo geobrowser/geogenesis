@@ -3,7 +3,11 @@
 import * as React from 'react';
 
 import type { Debate } from '~/core/debates/api';
+import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
+import { getShareAriaLabel } from '~/core/debates/browse/debate-interaction-bar';
+import { Share } from '~/core/debates/browse/icons';
+import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
@@ -13,7 +17,9 @@ import { ID } from '~/core/id';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
+import { InfoSmall } from '~/design-system/icons/info-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { Tooltip } from '~/design-system/tooltip';
 
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
@@ -94,7 +100,7 @@ export function DebateExploreFeedCard({ item, hideSpaceLink = false, fallback }:
     return <>{fallback}</>;
   }
 
-  const ready = debate != null && watchable && processed;
+  const readyDebate = debate != null && watchable && processed ? debate : null;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
   const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
@@ -130,15 +136,71 @@ export function DebateExploreFeedCard({ item, hideSpaceLink = false, fallback }:
         </h2>
       </Link>
 
-      {ready ? <DebateCardVideos debate={debate} active={active} /> : <DebateVideoSkeleton />}
+      {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
+          especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
+      <div className="w-full max-w-[480px]">
+        {readyDebate ? <DebateCardVideos debate={readyDebate} active={active} /> : <DebateVideoSkeleton />}
+      </div>
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
         <Link href={entityHref} className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text">
           <ExploreCommentsIcon className="text-grey-04" />
           <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
         </Link>
+        {readyDebate ? <DebateCardExtras debate={readyDebate} active={active} /> : null}
       </EntityRowActions>
     </article>
+  );
+}
+
+/**
+ * The Claims and Share actions from the full-screen feed's interaction bar, restyled to sit in the
+ * explore card's footer. Claims opens the same DebateClaimsPanel (as a right-hand overlay, since
+ * the explore feed has no side rail); Share drives the same prepared-social-video state machine.
+ */
+function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean }) {
+  const [claimsOpen, setClaimsOpen] = React.useState(false);
+  const shareAction = useDebateShareAction(debate, active);
+  const shareUnavailable = shareAction.state === 'preparing' || shareAction.state === 'sharing';
+
+  const shareButton = (
+    <button
+      type="button"
+      aria-label={getShareAriaLabel(shareAction)}
+      aria-disabled={shareUnavailable}
+      onClick={() => {
+        if (!shareUnavailable) shareAction.onActivate();
+      }}
+      className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
+    >
+      <Share />
+      <span className="text-[14px] font-normal">Share</span>
+    </button>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Claims"
+        onClick={() => setClaimsOpen(true)}
+        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
+      >
+        <InfoSmall />
+        {/* Claims are still a placeholder upstream — the full-screen feed passes 0 too. */}
+        <span className="text-[14px] font-normal tabular-nums">0</span>
+      </button>
+      {shareAction.tooltipMessage ? (
+        <Tooltip trigger={shareButton} label={shareAction.tooltipMessage} position="top" />
+      ) : (
+        shareButton
+      )}
+      {claimsOpen ? (
+        <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
+          <DebateClaimsPanel debate={debate} count={0} onClose={() => setClaimsOpen(false)} />
+        </div>
+      ) : null}
+    </>
   );
 }
 

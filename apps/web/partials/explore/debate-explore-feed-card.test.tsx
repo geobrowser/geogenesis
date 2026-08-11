@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -45,6 +45,20 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
   DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
     <div data-testid="player" data-debate={debate.id} data-active={active} />
+  ),
+}));
+
+vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
+  useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
+}));
+
+vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
+  DebateClaimsPanel: ({ onClose }: { onClose: () => void }) => (
+    <aside data-testid="claims-panel">
+      <button type="button" onClick={onClose}>
+        Close
+      </button>
+    </aside>
   ),
 }));
 
@@ -187,5 +201,26 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  it('shows Claims and Share actions once the debate is ready, opening the claims panel on demand', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+
+    expect(screen.getByRole('button', { name: 'Share debate video' })).toBeDefined();
+
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    expect(screen.getByTestId('claims-panel')).toBeDefined();
+
+    fireEvent.click(screen.getByText('Close'));
+    expect(screen.queryByTestId('claims-panel')).toBeNull();
+  });
+
+  it('hides Claims and Share while the debate is still loading', () => {
+    renderCard();
+    expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
   });
 });
