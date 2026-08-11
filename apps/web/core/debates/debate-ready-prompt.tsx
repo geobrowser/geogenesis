@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { Text } from '~/design-system/text';
+
 import type { Debate } from './api';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { debatePath } from './debate-routes';
@@ -66,5 +68,38 @@ export function DebateReadyPrompt({
       onAccept={join}
       onReject={onNotNow}
     />
+  );
+}
+
+/**
+ * What "Not now" leaves behind. Nothing else in the app links to a debate that has not finished —
+ * the browse feed only lists `complete` ones — while an active debate greys out every Debate
+ * control, so dismissing the prompt with no trace strands the viewer until the server cancels the
+ * room out from under both of them.
+ */
+export function DebateRejoinBar({ debate }: { debate: Debate }) {
+  const router = useRouter();
+  const [joining, setJoining] = React.useState(false);
+  const [, startJoining] = React.useTransition();
+
+  return (
+    <div className="pointer-events-none fixed bottom-4 left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 justify-center">
+      <button
+        type="button"
+        disabled={joining}
+        onClick={() => {
+          setJoining(true);
+          startJoining(() => router.push(debatePath(debate)));
+        }}
+        className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-text py-2 pr-2 pl-4 text-white shadow-card transition-opacity hover:opacity-90 disabled:opacity-70"
+      >
+        <Text as="span" variant="metadata" color="white" className="truncate">
+          {debate.status === 'ready' ? 'Your debate is ready' : 'Your debate is under way'}
+        </Text>
+        <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-metadata text-text">
+          {joining ? 'Joining…' : 'Join'}
+        </span>
+      </button>
+    </div>
   );
 }

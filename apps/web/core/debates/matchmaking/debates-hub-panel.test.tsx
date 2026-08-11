@@ -14,7 +14,10 @@ const mocks = vi.hoisted(() => ({
   updateAvailability: vi.fn(),
   peopleError: null as unknown,
   people: [] as unknown[],
+  pathname: '/space/space-1/claims',
 }));
+
+vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useDebatesEnabled: () => true }));
 
@@ -52,12 +55,19 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 function renderOpen(tab: 'requests' | 'matches' | 'claims' | 'people' = 'requests') {
   const store = createStore();
   store.set(debatesHubAtom, { tab });
-  render(
+  const view = render(
     <Provider store={store}>
       <DebatesHubPanel />
     </Provider>
   );
-  return store;
+  return Object.assign(store, {
+    rerender: () =>
+      view.rerender(
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      ),
+  });
 }
 
 beforeEach(() => {
@@ -66,6 +76,7 @@ beforeEach(() => {
   mocks.people = [];
   mocks.peopleError = null;
   mocks.updateAvailability.mockReset();
+  mocks.pathname = '/space/space-1/claims';
 });
 
 afterEach(cleanup);
@@ -115,4 +126,16 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.getByText('Sign in to find people to debate.')).toBeInTheDocument();
   });
+});
+
+// Accepting a request from the Requests tab now walks the viewer into the debate room; the panel
+// would otherwise stay mounted on top of it, covering the pre-screen.
+it('closes itself once a navigation lands', () => {
+  const store = renderOpen('requests');
+  expect(screen.getByRole('button', { name: /^Requests/ })).toBeInTheDocument();
+
+  mocks.pathname = '/space/space-1/debates/debate-1';
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toBeNull();
 });

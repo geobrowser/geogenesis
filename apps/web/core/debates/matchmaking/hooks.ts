@@ -132,12 +132,14 @@ export function useClaimReadiness() {
         : leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
     // The switch moves now rather than a round trip and a refetch later, mirroring the
     // availability switch in the panel header.
-    onMutate: async ({ claimId, ready }) => {
+    onMutate: async ({ spaceId, claimId, ready }) => {
       const families = [debateQueryKeys.matchmakingClaimsRoot(accountKey), debateQueryKeys.matches(accountKey)];
       await Promise.all(families.map(queryKey => queryClient.cancelQueries({ queryKey })));
       const previous = families.flatMap(queryKey => queryClient.getQueriesData({ queryKey }));
       for (const queryKey of families) {
-        queryClient.setQueriesData({ queryKey }, (current: unknown) => patchClaimReadiness(current, claimId, ready));
+        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
+          patchClaimReadiness(current, spaceId, claimId, ready)
+        );
       }
       return { previous };
     },
@@ -162,10 +164,18 @@ export function useClaimReadiness() {
 /**
  * Flips `viewer_debate_ready` on one claim wherever it appears, in both the flat matches response
  * and the paged claims response. Anything else is returned untouched.
+ *
+ * Readiness is per (space, claim): geo-chat keys it on `(public_dao_space_id, claim_entity_id)`,
+ * and the Claims tab is cross-space, so the same claim entity can hold two rows with different
+ * readiness. Matching on the entity alone would move both switches for one round trip.
  */
-function patchClaimReadiness(data: unknown, claimId: string, ready: boolean): unknown {
-  const patchOne = <T extends { claim: { claim_entity_id: string }; viewer_debate_ready: boolean }>(entry: T) =>
-    entry.claim.claim_entity_id === claimId ? { ...entry, viewer_debate_ready: ready } : entry;
+function patchClaimReadiness(data: unknown, spaceId: string, claimId: string, ready: boolean): unknown {
+  const patchOne = <T extends { claim: { space_id: string; claim_entity_id: string }; viewer_debate_ready: boolean }>(
+    entry: T
+  ) =>
+    entry.claim.claim_entity_id === claimId && entry.claim.space_id === spaceId
+      ? { ...entry, viewer_debate_ready: ready }
+      : entry;
 
   if (!data || typeof data !== 'object') return data;
 

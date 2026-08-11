@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -57,6 +58,17 @@ export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const dragControls = useDragControls();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
+  const pathname = usePathname();
+  const lastPathnameRef = React.useRef(pathname);
+
+  // Anything that navigates has taken the viewer somewhere they asked to go — accepting a request
+  // walks them into the debate room — and the panel would otherwise sit on top of it. Only on a
+  // change: closing on mount would shut the panel the moment it opened.
+  React.useEffect(() => {
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    close();
+  }, [close, pathname]);
 
   React.useEffect(() => {
     if (!isOpen) return;

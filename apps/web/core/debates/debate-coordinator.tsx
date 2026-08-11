@@ -17,7 +17,7 @@ import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifi
 import { useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
-import { DebateReadyPrompt } from './debate-ready-prompt';
+import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -168,6 +168,7 @@ export function DebateCoordinator() {
           onNotNow={() => setSnoozedDebateId(promptedDebate.id)}
         />
       )}
+      {debate && !viewingDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
       {promptedChallenge && !debate && !activity?.rematch && (
         <DebateChallengeDialog
           challenge={promptedChallenge}

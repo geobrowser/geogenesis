@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from './api';
-import { DebateReadyPrompt } from './debate-ready-prompt';
+import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 
 const mocks = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -118,5 +118,17 @@ describe('DebateReadyPrompt', () => {
     );
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('DebateRejoinBar', () => {
+  // "Not now" used to be a one-way door: nothing else in the app links to an unfinished debate,
+  // while an active one greys out every Debate control.
+  it('keeps a way back into a dismissed debate', () => {
+    render(<DebateRejoinBar debate={debate()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Your debate is ready/ }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 });
