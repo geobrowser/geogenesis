@@ -1,6 +1,5 @@
 'use client';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ProposalStatus } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
@@ -22,7 +21,6 @@ interface Props {
 }
 
 export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, spaceId, proposalId }: Props) {
-  const { smartAccount } = useSmartAccount();
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -62,7 +60,13 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, 
         // self-gates on a registered personal space + an on-chain simulation,
         // falling back to the label while it checks or when the user can't
         // execute — so the status is never blank.
-        if (smartAccount && spaceId && proposalId) {
+        //
+        // Rendered without requiring a connected wallet: Execute's chain probe
+        // detects a proposal the DAO has no record of (permanently unexecutable)
+        // without one, and that is the case this label was lying about. Gating on
+        // `smartAccount` meant every signed-out viewer saw "Pending execution"
+        // forever on proposals nobody could ever execute.
+        if (spaceId && proposalId) {
           return (
             <div className="relative z-10">
               <Execute spaceId={spaceId} proposalId={proposalId} variant="small" fallback={pendingExecutionLabel} />
@@ -83,9 +87,7 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, 
 
       if (endTime <= 0) {
         return (
-          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">
-            Voting period open
-          </div>
+          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Voting period open</div>
         );
       }
 

@@ -144,7 +144,7 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
@@ -182,7 +182,7 @@ export function DebatesBrowseFeed({
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.
   return (
-    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch">
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
       <div className="min-w-0 flex-1">{feed}</div>
       {sidePanel}
     </div>
@@ -313,35 +313,34 @@ function DebateFeedItem({
   };
 
   return (
-    <section ref={itemRef} className="flex h-full snap-start items-center justify-center px-4">
+    <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
       <div className="flex items-stretch gap-3">
-        {/* Column width is driven by height so both 480×289 videos + header fit
-            the viewport at once (fills the screen, TikTok-style). */}
-        <div
-          className="flex max-w-[90vw] flex-col gap-4"
-          style={{ width: 'min(480px, calc((100dvh - 10rem) * 0.83))' }}
-        >
+        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button
             type="button"
             aria-label="Back"
             onClick={() => window.history.back()}
-            className="-mb-1 hidden size-8 items-center text-text md:flex"
+            className="-mb-3 hidden size-8 items-center justify-center text-text md:flex"
           >
             <ArrowLeft />
           </button>
-          <DebateTitleHeader
-            claim={debate.claim.claim}
-            spaceName={spaceName}
-            spaceImage={spaceImage}
-            topics={topics}
-            onOpenJoin={onOpenJoin}
-          />
-          <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
+          <div className="md:mt-4">
+            <DebateTitleHeader
+              claim={debate.claim.claim}
+              spaceName={spaceName}
+              spaceImage={spaceImage}
+              topics={topics}
+              onOpenJoin={onOpenJoin}
+            />
+          </div>
+          <div className="mt-6 md:mt-7">
+            <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
+          </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
               it doesn't collide with the bar's own `flex`. */}
-          <div className="hidden md:block">
+          <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
         </div>
@@ -374,25 +373,41 @@ function DebateTitleHeader({
           <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
             <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
           </span>
-          <Text as="span" variant="metadata" color="text" className="truncate">
+          <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
             {spaceName}
           </Text>
           {topics.map(topic => (
             <React.Fragment key={topic}>
-              <Text as="span" variant="metadata" color="grey-04">
+              <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
                 ·
               </Text>
-              <Text as="span" variant="metadata" color="grey-04" className="truncate">
+              <Text
+                as="span"
+                variant="metadata"
+                color="grey-04"
+                className="truncate !leading-[13px] !tracking-[-0.35px]"
+              >
                 {topic}
               </Text>
             </React.Fragment>
           ))}
         </div>
-        <Button type="button" variant="secondary" small onClick={onOpenJoin} className="shrink-0">
-          Join debate
+        <Button
+          type="button"
+          variant="secondary"
+          small
+          onClick={onOpenJoin}
+          className="!h-7 shrink-0 !rounded-full !px-[11px] !py-0 !text-[16px] !leading-[13px] !font-normal !tracking-[-0.35px] !shadow-none md:!px-3 md:!text-[18px] md:!leading-[22px] md:!tracking-[-0.36px]"
+        >
+          Join a debate
         </Button>
       </div>
-      <Text as="h2" variant="cardEntityTitle" color="text">
+      <Text
+        as="h2"
+        variant="cardEntityTitle"
+        color="text"
+        className="!text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px]"
+      >
         {claim}
       </Text>
     </div>

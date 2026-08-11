@@ -53,7 +53,10 @@ function buildMyRankingActionButton(state: RankingBlockState) {
 
   const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
 
-  return showEditRankingButton ? (
+  // A rolled-off ballot is retained, so `showEditRankingButton` is set even though
+  // the ranking no longer counts. Re-submitting is the action that matters then, so
+  // the roll-off call to action wins over "Edit my ranking".
+  return showEditRankingButton && !isRollingRolledOff ? (
     <Button
       variant="secondary"
       className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-3 text-[16px] whitespace-nowrap !text-text"
@@ -247,19 +250,15 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 );
               }
               const rowContent = (
-                <div className="flex w-full min-w-0 items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <RankingEntryRow
-                      rank={rank}
-                      rankStyle="leading"
-                      entry={entry}
-                      spaceId={spaceId}
-                      linkToEntity={!isMobile}
-                      pending={pendingEntityIds.has(entityId)}
-                    />
-                  </div>
-                  <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
-                </div>
+                <RankingEntryRow
+                  rank={rank}
+                  rankStyle="leading"
+                  entry={entry}
+                  spaceId={spaceId}
+                  linkToEntity={!isMobile}
+                  pending={pendingEntityIds.has(entityId)}
+                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
+                />
               );
               return (
                 <div key={entityId} className="w-full">
@@ -314,11 +313,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             }}
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
-            renderTrailing={(entityId, _index, isDragActive) => {
-              const entry = myRankingEntryByEntityId.get(entityId);
-              if (isDragActive || !entry || (entriesResolving && isPlaceholderRankingEntry(entry))) return null;
-              return <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />;
-            }}
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const rank = embeddedMyPageNumber * pageSize + index + 1;
               const resolvedEntry = myRankingEntryByEntityId.get(entityId);
@@ -343,6 +337,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={
+                    !isDragActive ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (
