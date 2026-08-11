@@ -16,10 +16,10 @@ import {
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
+  type MatchmakingClaimsQuery,
   type TranscriptFormat,
   abortDebate,
   acceptDebateChallenge,
-  acceptDebateMatch,
   acceptDebateRematchRequest,
   cancelDebateRecording,
   completeLocalRecordingUpload,
@@ -27,7 +27,6 @@ import {
   createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
-  declineDebateMatch,
   endDebateTurn,
   getDebate,
   getDebateActivity,
@@ -59,7 +58,7 @@ import { useDebateAttention } from './debate-attention';
 import { useDebateGatewayScope } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
-const debateQueryNetworkOptions = {
+export const debateQueryNetworkOptions = {
   retry: false,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,
@@ -79,6 +78,15 @@ export const debateQueryKeys = {
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
+  people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
+  /** Prefix covering every filter combination of the claims list. */
+  matchmakingClaimsRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+  matchmakingClaims: (accountKey: string | null, filters: MatchmakingClaimsQuery) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
+  matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
+  blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
 };
 
 export function useGeoChatAuth() {
@@ -217,36 +225,6 @@ export function useClearDebateActivity() {
   return useClearDebateActivityCache({ clearCooldown: false, reconcile: false });
 }
 
-export function useAcceptDebateMatch(spaceId?: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ matchId, formatId }: { matchId: string; formatId?: string }) =>
-      acceptDebateMatch(matchId, getPrivyIdentityToken, accountKey, formatId),
-    onSuccess: result => {
-      if (result.debate) {
-        queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
-      }
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-      if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
-    },
-  });
-}
-
-export function useDeclineDebateMatch(spaceId?: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: (matchId: string) => declineDebateMatch(matchId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-      if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
-    },
-  });
-}
-
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated);
@@ -367,7 +345,11 @@ export function useConsentToDebateRematch(debateId: string) {
       queryClient.setQueryData<Debate>(debateQueryKeys.debate(debateId), current =>
         current ? { ...current, rematch_session_id: session.id } : current
       );
+      // Spread what is already there: rebuilding the object from scratch dropped
+      // `incoming_request_count` and `outbound_request`, which zeroed the navbar badge and stopped
+      // the coordinator fetching requests until the invalidation below landed.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        ...current,
         online: current?.online ?? true,
         available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,

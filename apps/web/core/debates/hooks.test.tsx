@@ -63,10 +63,6 @@ vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: vi.fn(),
 }));
 
-vi.mock('./match-prompt', () => ({
-  DebateMatchPrompt: () => null,
-}));
-
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
   return {

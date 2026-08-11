@@ -81,6 +81,11 @@ const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m =>
   ssr: false,
 });
 
+const DebatesHubPanel = dynamic(
+  () => import('~/core/debates/matchmaking/debates-hub-panel').then(m => ({ default: m.DebatesHubPanel })),
+  { ssr: false }
+);
+
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
@@ -139,6 +144,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
+          <DebatesHubPanel />
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>
