@@ -11,18 +11,13 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { activeDebate, activeMatch } from './activity-state';
-import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { activeDebate } from './activity-state';
+import { type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { useDebateGateway } from './debate-gateway';
-import {
-  clearDebateMatchTabOwnership,
-  createDebateMatchTabOwnershipCoordinator,
-  debateMatchOwnershipMatchesDebate,
-  readDebateMatchTabOwnership,
-} from './debate-match-tab-ownership';
+import { DebateReadyPrompt } from './debate-ready-prompt';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -31,7 +26,6 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
-import { DebateMatchPrompt } from './match-prompt';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
@@ -63,8 +57,6 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const currentUserId = getCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
-  const match = activeMatch(activity);
-  const reportedDebate = activity?.debate ?? null;
   const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
@@ -76,14 +68,8 @@ export function DebateCoordinator() {
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
   const challengeError = acceptChallenge.error ?? rejectChallenge.error;
-  const lastMatchRef = React.useRef<DebateMatch | null>(null);
   const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
-  const retainedMatch =
-    !match && debate && !viewingDebate && lastMatchRef.current?.claim.id === debate.claim.id
-      ? lastMatchRef.current
-      : null;
-  const visibleMatch = match ?? retainedMatch;
-  const activeFlow = Boolean(match || debate || activity?.rematch || challenge);
+  const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
     activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
@@ -121,6 +107,16 @@ export function DebateCoordinator() {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
   }, [challenge, snoozedChallengeId]);
 
+  // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
+  // already, and this is the only thing that tells them. The accepting tab is on the debate page by
+  // the time its activity catches up, so `viewingDebate` keeps the prompt off its screen.
+  const [snoozedDebateId, setSnoozedDebateId] = React.useState<string | null>(null);
+  const promptedDebate = debate && !viewingDebate && debate.id !== snoozedDebateId ? debate : null;
+
+  React.useEffect(() => {
+    if (snoozedDebateId && debate?.id !== snoozedDebateId) setSnoozedDebateId(null);
+  }, [debate, snoozedDebateId]);
+
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
     setRetainedSharePrompt(queriedSharePrompt);
@@ -129,16 +125,6 @@ export function DebateCoordinator() {
   React.useEffect(() => {
     if (activeFlow) setRetainedSharePrompt(null);
   }, [activeFlow]);
-
-  React.useEffect(() => {
-    if (match) {
-      lastMatchRef.current = match;
-      return;
-    }
-    if (!debate || viewingDebate) {
-      lastMatchRef.current = null;
-    }
-  }, [debate, match, viewingDebate]);
 
   React.useEffect(() => {
     if (!activity) return;
@@ -159,51 +145,6 @@ export function DebateCoordinator() {
     }
   }, [activity, pathname, router]);
 
-  React.useEffect(() => {
-    if (!currentUserId || !activity) return;
-    if (debate && pathname.includes(`/debates/${debate.id}`)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    const record = readDebateMatchTabOwnership(currentUserId);
-    if (!record) return;
-    if (match) {
-      if (match.id !== record.matchId) clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (!debate || pathname.includes('/debates/rematches/')) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (visibleMatch) return;
-    if (!debateMatchOwnershipMatchesDebate(record, debate, currentUserId)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-
-    const ownership = createDebateMatchTabOwnershipCoordinator({
-      matchId: record.matchId,
-      claimId: record.claimId,
-      spaceId: record.spaceId,
-      userId: currentUserId,
-      onAcceptedElsewhere: () => undefined,
-    });
-    let active = true;
-    void ownership.recover().then(recovered => {
-      if (!active || !recovered) return;
-      if (record.state === 'pending') ownership.confirmAcceptance();
-      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
-    });
-    return () => {
-      active = false;
-      ownership.close();
-    };
-  }, [activity, currentUserId, debate, match, pathname, reportedDebate, router, visibleMatch]);
-
   if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
@@ -219,15 +160,15 @@ export function DebateCoordinator() {
           Live debate updates are paused while reconnecting.
         </div>
       )}
-      {visibleMatch && (
-        <DebateMatchPrompt
-          spaceId={visibleMatch.claim.space_id}
-          matches={[visibleMatch]}
-          debates={debate ? [debate] : []}
-          reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
+      {promptedDebate && currentUserId && !activity?.rematch && (
+        <DebateReadyPrompt
+          key={promptedDebate.id}
+          debate={promptedDebate}
+          currentUserId={currentUserId}
+          onNotNow={() => setSnoozedDebateId(promptedDebate.id)}
         />
       )}
-      {promptedChallenge && !visibleMatch && !debate && !activity?.rematch && (
+      {promptedChallenge && !debate && !activity?.rematch && (
         <DebateChallengeDialog
           challenge={promptedChallenge}
           role={promptedChallenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}

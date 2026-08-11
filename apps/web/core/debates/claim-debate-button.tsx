@@ -35,7 +35,7 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
 
   if (!isDebatesEnabled || !isClaim) return null;
 
-  const canEnable = published && !debateClaim?.active_debate && !debateClaim?.active_match && !hasActiveFlowElsewhere;
+  const canEnable = published && !debateClaim?.active_debate && !hasActiveFlowElsewhere;
 
   return (
     <ClaimDebateReadiness

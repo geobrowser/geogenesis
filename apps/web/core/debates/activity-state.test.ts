@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeDebate, activeMatch, hasActiveDebateFlow } from './activity-state';
+import { activeDebate, hasActiveDebateFlow } from './activity-state';
 import type { Debate, DebateActivity, DebateMatch } from './api';
 
 const debate = (status: Debate['status']) => ({ id: 'debate-1', status }) as Debate;
-const match = (status: DebateMatch['status']) => ({ id: 'match-1', status }) as DebateMatch;
 const activity = (overrides: Partial<DebateActivity>) => overrides as DebateActivity;
 
 describe('activity state', () => {
@@ -22,22 +21,21 @@ describe('activity state', () => {
     expect(hasActiveDebateFlow(activity({ debate: debate(status) }))).toBe(false);
   });
 
-  it.each(['pending', 'accepted'] as const)('counts a %s match', status => {
-    expect(activeMatch(activity({ match: match(status) }))).not.toBeNull();
-  });
-
-  it.each(['declined', 'expired'] as const)('does not count a %s match', status => {
-    expect(activeMatch(activity({ match: match(status) }))).toBeNull();
-    expect(hasActiveDebateFlow(activity({ match: match(status) }))).toBe(false);
-  });
-
   it('treats a rematch session as an active flow', () => {
     expect(hasActiveDebateFlow(activity({ rematch: { id: 'rematch-1' } as DebateActivity['rematch'] }))).toBe(true);
+  });
+
+  // GEO-2514 deleted auto-pairing, so the server never populates this again. Reading it would only
+  // resurrect the permanent "in a debate" latch from a match left over before the cutover.
+  it('ignores a reported match entirely', () => {
+    const stale = activity({ debate: null, match: { id: 'match-1', status: 'pending' } as DebateMatch });
+
+    expect(hasActiveDebateFlow(stale)).toBe(false);
   });
 
   it('reads missing activity as free', () => {
     expect(hasActiveDebateFlow(null)).toBe(false);
     expect(hasActiveDebateFlow(undefined)).toBe(false);
-    expect(hasActiveDebateFlow(activity({ match: null, debate: null }))).toBe(false);
+    expect(hasActiveDebateFlow(activity({ debate: null }))).toBe(false);
   });
 });
