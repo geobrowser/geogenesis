@@ -20,7 +20,7 @@ import { Text } from '~/design-system/text';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
+import { DebateInteractionBar } from './debate-interaction-bar';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 
@@ -175,6 +175,7 @@ export function DebatesBrowseFeed({
         <DebateFeedItem
           key={debate.id}
           debate={debate}
+          spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
@@ -215,6 +216,7 @@ export function DebatesBrowseFeed({
 
 function DebateFeedItem({
   debate,
+  spaceId,
   spaceName,
   spaceImage,
   topics,
@@ -225,6 +227,7 @@ function DebateFeedItem({
   onOpenClaims,
 }: {
   debate: Debate;
+  spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
@@ -235,7 +238,6 @@ function DebateFeedItem({
   onOpenClaims: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const [vote, setVote] = React.useState<DebateVote>(null);
   const winnerVotes = useDebateVotes(debate);
   const shareAction = useDebateShareAction(debate, active);
 
@@ -255,9 +257,8 @@ function DebateFeedItem({
   }, [onActivate, root]);
 
   const interactionProps = {
-    score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
-    vote,
-    onVote: setVote,
+    entityId: debate.id,
+    spaceId,
     commentCount: 0,
     claimsCount: 0,
     onComment: () => undefined,
@@ -434,4 +435,3 @@ function completedTime(debate: Debate) {
   const value = debate.completed_at ?? debate.started_at ?? debate.created_at;
   return value ? new Date(value).getTime() : 0;
 }
-
