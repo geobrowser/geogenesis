@@ -9,6 +9,7 @@ import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
+import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -19,6 +20,7 @@ import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
+import { DebateCommentsPanel } from './debate-comments-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
 import { JoinDebatePanel } from './join-debate-panel';
@@ -103,6 +105,7 @@ export function DebatesBrowseFeed({
   const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
+  const [commentsDebate, setCommentsDebate] = React.useState<Debate | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -183,11 +186,18 @@ export function DebatesBrowseFeed({
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
+            setCommentsDebate(null);
             setJoinOpen(true);
           }}
           onOpenClaims={() => {
             setJoinOpen(false);
+            setCommentsDebate(null);
             setClaimsDebate(debate);
+          }}
+          onOpenComments={() => {
+            setJoinOpen(false);
+            setClaimsDebate(null);
+            setCommentsDebate(debate);
           }}
         />
       ))}
@@ -201,6 +211,8 @@ export function DebatesBrowseFeed({
     <JoinDebatePanel spaceId={spaceId} onClose={() => setJoinOpen(false)} />
   ) : claimsDebate ? (
     <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
+  ) : commentsDebate ? (
+    <DebateCommentsPanel debate={commentsDebate} spaceId={spaceId} onClose={() => setCommentsDebate(null)} />
   ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
@@ -223,6 +235,7 @@ function DebateFeedItem({
   onActivate,
   onOpenJoin,
   onOpenClaims,
+  onOpenComments,
 }: {
   debate: Debate;
   spaceName: string;
@@ -233,11 +246,15 @@ function DebateFeedItem({
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
+  onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const [vote, setVote] = React.useState<DebateVote>(null);
   const winnerVotes = useDebateVotes(debate);
   const shareAction = useDebateShareAction(debate, active);
+  // Comments live on the Debate entity — same query key as the panel, so posting
+  // there updates this count without a refetch of our own.
+  const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId: debate.claim.space_id });
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -258,9 +275,9 @@ function DebateFeedItem({
     score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
     vote,
     onVote: setVote,
-    commentCount: 0,
+    commentCount,
     claimsCount: 0,
-    onComment: () => undefined,
+    onComment: onOpenComments,
     onClaims: onOpenClaims,
     shareAction,
   };
@@ -385,7 +402,7 @@ function DebateTitleHeader({
       <h2
         ref={claimRef}
         title={isClaimOverflowing ? claim : undefined}
-        className={`text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+        className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
         }`}
       >
@@ -434,4 +451,3 @@ function completedTime(debate: Debate) {
   const value = debate.completed_at ?? debate.started_at ?? debate.created_at;
   return value ? new Date(value).getTime() : 0;
 }
-

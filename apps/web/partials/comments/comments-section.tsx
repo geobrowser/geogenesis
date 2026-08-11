@@ -164,9 +164,12 @@ function branchPointerBlurProps(
 interface CommentSectionProps {
   entityId: string;
   spaceId: string;
+  /** Omit the built-in "Comments (N)" heading and top padding — for hosts that
+   *  supply their own header, like the debate feed's Comments panel. */
+  hideHeader?: boolean;
 }
 
-export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
+export function CommentSection({ entityId, spaceId, hideHeader = false }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
@@ -279,9 +282,13 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
 
   return (
     <CommentBranchHighlightProvider>
-      <div id="entity-comments" className="flex w-full flex-col pt-10">
-        <div className="text-mediumTitle">Comments ({totalCount})</div>
-        <Spacer height={16} />
+      <div id="entity-comments" className={cx('flex w-full flex-col', !hideHeader && 'pt-10')}>
+        {!hideHeader && (
+          <>
+            <div className="text-mediumTitle">Comments ({totalCount})</div>
+            <Spacer height={16} />
+          </>
+        )}
         <TopLevelCommentInput
           onSubmit={handleCreateComment}
           isLoggedIn={isLoggedIn}
