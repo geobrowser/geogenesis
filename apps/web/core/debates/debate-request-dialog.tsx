@@ -34,6 +34,9 @@ type DebateRequestDialogProps = {
   error: string | null;
   onAccept: () => void;
   onReject: () => void;
+  /** Defaults to "Accept". The GEO-2514 ready prompt says "Join debate" — there is nothing left
+   * to accept by then, only a room to walk into. */
+  acceptLabel?: string;
   /** Defaults to "Reject". GEO-2430 request popups say "Not now" instead. */
   rejectLabel?: string;
   /**
@@ -62,6 +65,7 @@ export function DebateRequestDialog({
   error,
   onAccept,
   onReject,
+  acceptLabel = 'Accept',
   rejectLabel = 'Reject',
   actionsLayout = 'stacked',
   eyebrow,
@@ -190,7 +194,7 @@ export function DebateRequestDialog({
                 disabled={busy}
                 className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
               >
-                Accept
+                {acceptLabel}
               </button>
             </div>
           ) : (
@@ -201,7 +205,7 @@ export function DebateRequestDialog({
                 disabled={busy}
                 className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
               >
-                Accept
+                {acceptLabel}
               </button>
               <button
                 type="button"

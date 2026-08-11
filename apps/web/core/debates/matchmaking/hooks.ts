@@ -2,6 +2,8 @@
 
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { useRouter } from 'next/navigation';
+
 import {
   type CreateDebateRequestBody,
   type DismissDebateRequestBody,
@@ -21,6 +23,7 @@ import {
   withdrawDebateRequest,
 } from '../api';
 import { useDebateGatewayScope } from '../debate-gateway';
+import { debatePath } from '../debate-routes';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
@@ -218,11 +221,13 @@ export function useDismissDebateRequest() {
 }
 
 /**
- * Accepting produces the match + debate('ready') that the existing prompt/pre-screen machinery
- * consumes, so we seed those caches the same way `useAcceptDebateMatch` does.
+ * Accepting creates the debate outright — GEO-2514 left requests as the only route into one — so
+ * this tab walks straight into the room, which owns the camera/mic pre-screen while the debate is
+ * `ready`. The other side is told by `DebateReadyPrompt` off its own activity.
  */
 export function useAcceptDebateRequest() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
@@ -231,6 +236,7 @@ export function useAcceptDebateRequest() {
     onSuccess: result => {
       if (result.debate) {
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
+        router.push(debatePath(result.debate));
       }
       void queryClient.invalidateQueries({ queryKey: ['debates'] });
     },
