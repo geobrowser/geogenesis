@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -96,8 +97,12 @@ function RespondableControls({
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   });
+  // Publishing before the personal space finishes registering fails, so wait it out the same way
+  // the claim page does.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
+  const [responseError, setResponseError] = React.useState<string | null>(null);
   // The client knows its own response before geo-chat does, so prefer the local view while a
   // response is still making its way through publishing and indexing.
   const pending = optimisticResponse === undefined ? undefined : optimisticResponse;
@@ -109,12 +114,19 @@ function RespondableControls({
         : pending === 'positive';
 
   const respond = (position: boolean) => {
-    if (!isConnected) return;
-    submitResponse(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative');
+    if (!isConnected || isAccountSetupPending) return;
+    setResponseError(null);
+    // A failed publish silently rolls the optimistic state back, which reads as the response
+    // simply vanishing. Catch it here so the reason is visible.
+    submitResponse(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative', {
+      onError: error =>
+        setResponseError(error instanceof Error ? error.message : 'Could not publish your response. Try again.'),
+    });
   };
 
   const actionTitle = (position: boolean) => {
     if (!isConnected) return copy.connect;
+    if (isAccountSetupPending) return 'Finishing account setup…';
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return position ? copy.positiveAction : copy.negativeAction;
   };
@@ -126,9 +138,16 @@ function RespondableControls({
         responseKind={readiness.response_kind}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        disabled={!isConnected || isProcessingResponse}
+        disabled={!isConnected || isProcessingResponse || isAccountSetupPending}
         titleFor={actionTitle}
       />
+      {responseError ? (
+        <div role="alert" className="mt-2">
+          <Text as="p" variant="footnote" color="red-01">
+            {responseError}
+          </Text>
+        </div>
+      ) : null}
       <div className="mt-3 flex justify-end">
         <ClaimReadinessToggle
           claim={claim}

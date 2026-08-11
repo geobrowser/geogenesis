@@ -108,7 +108,7 @@ describe('MatchesTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
-    expect(mocks.submitResponse).toHaveBeenCalledWith('negative');
+    expect(mocks.submitResponse.mock.calls[0]?.[0]).toBe('negative');
   });
 
   it('clears the response when the side already held is chosen again', () => {
@@ -116,7 +116,20 @@ describe('MatchesTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
-    expect(mocks.submitResponse).toHaveBeenCalledWith('clear');
+    expect(mocks.submitResponse.mock.calls[0]?.[0]).toBe('clear');
+  });
+
+  // A failed publish rolls the optimistic state back, so without this the response just appears to
+  // vanish a few seconds after being chosen.
+  it('says why when publishing the response fails', () => {
+    mocks.submitResponse.mockImplementation((_direction, options) => {
+      options?.onError?.(new Error('Transaction reverted.'));
+    });
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Transaction reverted.');
   });
 
   // The client knows its own response before geo-chat does, so the button reflects it immediately.
