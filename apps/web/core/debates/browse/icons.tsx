@@ -21,6 +21,17 @@ export function Crown({ color, size = 16 }: Props & { size?: number }) {
   );
 }
 
+/** Stacked double chevron used by the feed's scroll nudge. */
+export function ChevronsDown({ color }: Props) {
+  const themeColor = resolve(color);
+  return (
+    <svg width="9" height="9" viewBox="0 0 9 9" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0.5 0.5L4.5 4.5L8.5 0.5" stroke={themeColor} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M0.5 4.5L4.5 8.5L8.5 4.5" stroke={themeColor} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 export function Comment({ color }: Props) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

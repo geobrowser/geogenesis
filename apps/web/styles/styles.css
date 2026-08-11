@@ -76,6 +76,10 @@
   --breakpoint-*: initial;
 
   /* Animations */
+  /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
+     BOUNCE_DURATION_MS in core/debates/browse/debate-scroll-hint.tsx, which sets the
+     iteration count and times the auto-dismiss — keep the two in sync. */
+  --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-slide-down: slideDown 300ms ease-in-out;
@@ -245,6 +249,17 @@
 @custom-variant xl (@media (max-width: 1279px));
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
+
+/* Nudges the hint down and back, hinting at the direction the feed scrolls. */
+@keyframes debateScrollHint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(4px);
+  }
+}
 
 @keyframes fadeIn {
   0% {

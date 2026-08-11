@@ -60,6 +60,10 @@ vi.mock('./debate-feed-player', () => ({
   ),
 }));
 
+// Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
+// lifecycle is covered by debate-scroll-hint.test.tsx.
+vi.mock('./debate-scroll-hint', () => ({ DebateScrollHint: () => <div data-testid="scroll-hint" /> }));
+
 vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
 vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
 
@@ -132,6 +136,20 @@ describe('DebatesBrowseFeed video sharing', () => {
     const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[480px]', 'md:w-[calc(100vw-1rem)]');
+  });
+
+  it('nudges from the landing debate only, and only when there is something below it', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    // A lone debate has nothing to scroll to, so promising more would be a lie.
+    expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
+
+    cleanup();
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const hints = screen.getAllByTestId('scroll-hint');
+    expect(hints).toHaveLength(1);
+    expect(hints[0].closest('section')).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
   });
 
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {

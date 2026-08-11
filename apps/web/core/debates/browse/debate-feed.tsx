@@ -27,6 +27,7 @@ import { Text } from '~/design-system/text';
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar, type DebateShareAction, type DebateVote } from './debate-interaction-bar';
+import { DebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 
 const PAGE_SIZE = 5;
@@ -147,7 +148,7 @@ export function DebatesBrowseFeed({
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
-      {visibleDebates.map(debate => (
+      {visibleDebates.map((debate, index) => (
         <DebateFeedItem
           key={debate.id}
           debate={debate}
@@ -156,6 +157,9 @@ export function DebatesBrowseFeed({
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           root={scrollEl}
+          // Only the debate the viewer lands on carries the nudge, and only when there's
+          // something below it to scroll to.
+          showScrollHint={index === 0 && debates.length > 1}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
@@ -196,6 +200,7 @@ function DebateFeedItem({
   topics,
   active,
   root,
+  showScrollHint,
   onActivate,
   onOpenJoin,
   onOpenClaims,
@@ -206,6 +211,7 @@ function DebateFeedItem({
   topics: string[];
   active: boolean;
   root: HTMLElement | null;
+  showScrollHint: boolean;
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
@@ -343,6 +349,7 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
+          {showScrollHint && <DebateScrollHint scrollEl={root} className="mt-4 md:mt-[30px]" />}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">
