@@ -49,14 +49,12 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isRollingRolledOff, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isSaving, openRankingCompose } = state;
 
-  const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
-
-  // A rolled-off ballot is retained, so `showEditRankingButton` is set even though
-  // the ranking no longer counts. Re-submitting is the action that matters then, so
-  // the roll-off call to action wins over "Edit my ranking".
-  return showEditRankingButton && !isRollingRolledOff ? (
+  // A rolled-off ballot is treated as absent (useRankingSubmissions blanks
+  // `mySubmission`), so `showEditRankingButton` clears on roll-off and this
+  // naturally falls back to the fresh "Add my ranking" call to action.
+  return showEditRankingButton ? (
     <Button
       variant="secondary"
       className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-3 text-[16px] whitespace-nowrap !text-text"
@@ -74,7 +72,7 @@ function buildMyRankingActionButton(state: RankingBlockState) {
       disabled={isSaving}
       onClick={() => void openRankingCompose('edit')}
     >
-      {addLabel}
+      Add my ranking
     </Button>
   );
 }

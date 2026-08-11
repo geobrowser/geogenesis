@@ -25,6 +25,11 @@ import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 
 const PAGE_SIZE = 5;
+const DEBATE_COLUMN_STYLE = {
+  // Grow or shrink the media with the viewport while reserving the navbar,
+  // claim title, media gap, and vertical breathing room.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+} as React.CSSProperties;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -138,7 +143,7 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
@@ -236,9 +241,15 @@ function DebateFeedItem({
   };
 
   return (
-    <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
+    <section
+      ref={itemRef}
+      className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
+    >
       <div className="flex items-stretch gap-3">
-        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
+        <div
+          className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          style={DEBATE_COLUMN_STYLE}
+        >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button
@@ -251,6 +262,7 @@ function DebateFeedItem({
           </button>
           <div className="md:mt-4">
             <DebateTitleHeader
+              key={debate.claim.claim}
               claim={debate.claim.claim}
               spaceName={spaceName}
               spaceImage={spaceImage}
@@ -289,6 +301,26 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
+  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
+
+  React.useEffect(() => setIsClaimExpanded(false), [claim]);
+
+  React.useLayoutEffect(() => {
+    const element = claimRef.current;
+    if (!element || isClaimExpanded) return;
+
+    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measureOverflow();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [claim, isClaimExpanded]);
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -325,14 +357,25 @@ function DebateTitleHeader({
           Join a debate
         </Button>
       </div>
-      <Text
-        as="h2"
-        variant="cardEntityTitle"
-        color="text"
-        className="!text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px]"
+      <h2
+        ref={claimRef}
+        title={isClaimOverflowing ? claim : undefined}
+        className={`text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
+        }`}
       >
         {claim}
-      </Text>
+      </h2>
+      {isClaimOverflowing && (
+        <button
+          type="button"
+          aria-expanded={isClaimExpanded}
+          onClick={() => setIsClaimExpanded(expanded => !expanded)}
+          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
+        >
+          {isClaimExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
     </div>
   );
 }

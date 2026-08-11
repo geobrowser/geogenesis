@@ -139,7 +139,7 @@ function JoinDebateCard({
   debateClaim: DebateClaim;
   topic: string | null;
 }) {
-  const canJoin = !debateClaim.active_debate && !debateClaim.active_match;
+  const canJoin = !debateClaim.active_debate;
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white p-5">
