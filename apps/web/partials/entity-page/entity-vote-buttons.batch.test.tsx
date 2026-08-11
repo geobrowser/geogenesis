@@ -134,6 +134,40 @@ describe('EntityVoteButtons claims-page batching', () => {
     expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
   });
 
+  it('renders persisted curation state in the fullscreen debate pill', () => {
+    mocks.smartAccount = {};
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityResponseCountsQueryKey('debate-1', 'space-1', 0, 'curation'), {
+      positive: 8,
+      negative: 1,
+    });
+    queryClient.setQueryData(
+      userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'),
+      'positive'
+    );
+
+    const view = render(
+      <ClaimResponseBatchBoundary ready>
+        <EntityVoteButtons
+          entityId="debate-1"
+          spaceId="space-1"
+          responseKind="curation"
+          presentation="debate-vertical"
+        />
+      </ClaimResponseBatchBoundary>,
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    expect(view.getByText('7')).toBeInTheDocument();
+    expect(view.getByRole('button', { name: 'Upvote' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(view.getByRole('button', { name: 'Downvote' }));
+    expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.any(Object));
+  });
+
   it('passes the optimistic viewer response to responder avatars immediately', () => {
     mocks.optimisticResponse = 'negative';
 

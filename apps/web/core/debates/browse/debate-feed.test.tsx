@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   createObjectURL: vi.fn(() => 'blob:https://geo.test/social-video'),
   revokeObjectURL: vi.fn(),
   downloadClick: vi.fn(),
+  entityVoteProps: [] as Array<Record<string, unknown>>,
 }));
 
 type ObserverRecord = {
@@ -54,6 +55,13 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: (props: Record<string, unknown>) => {
+    mocks.entityVoteProps.push(props);
+    return <div data-testid={`entity-votes-${String(props.presentation)}`} />;
+  },
+}));
+
 vi.mock('./debate-feed-player', () => ({
   DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
     <div data-testid={`player-${debate.id}`} data-active={active} />
@@ -67,6 +75,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
   observers = [];
+  mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
   mocks.fetch.mockResolvedValue(videoResponse());
@@ -138,6 +147,13 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(mediaColumn).toHaveStyle({
       '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
     });
+    expect(screen.getByTestId('entity-votes-debate-horizontal')).toBeInTheDocument();
+    expect(screen.getByTestId('entity-votes-debate-vertical')).toBeInTheDocument();
+    expect(mocks.entityVoteProps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityId: 'debate-1', spaceId: 'space-1', responseKind: 'curation' }),
+      ])
+    );
   });
 
   it('renders when ResizeObserver is unavailable', () => {
