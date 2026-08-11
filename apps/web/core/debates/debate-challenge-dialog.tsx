@@ -6,6 +6,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
+import { useScrollLock } from './use-scroll-lock';
 
 type DebateChallengeDialogProps = {
   challenge: DebateChallenge;
@@ -41,18 +42,7 @@ export function DebateChallengeDialog({
   const you = isRecipient ? challenge.recipient : challenge.requester;
   const other = isRecipient ? challenge.requester : challenge.recipient;
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   return (
     <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">

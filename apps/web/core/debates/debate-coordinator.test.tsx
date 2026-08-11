@@ -69,6 +69,7 @@ vi.mock('./matchmaking/hooks', () => ({
   useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),
   useDismissDebateRequest: () => ({ mutate: mocks.dismissRequestMutate, isPending: false, error: null }),
   useBlockDebateUser: () => ({ mutate: mocks.blockUserMutate, isPending: false, error: null }),
+  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -159,7 +160,10 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    // Offered, never taken: the tab that accepted routed itself, and yanking every other tab into
+    // the room is what the deleted match-ownership handoff existed to prevent.
+    expect(await screen.findByRole('button', { name: /Your debate is/ })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   // GEO-2514: the person who sent the request is told their debate exists, and nothing else tells
@@ -198,24 +202,51 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
+  // The rematch the viewer is already looking at, plus the debate it came from still reported in
+  // activity. Neither may move them off the rematch page.
+  // The popup and its snooze had no coverage at all: the harness mocks the request hooks and never
+  // puts a request in the list, so every one of these paths was live and unexercised.
+  it('prompts for an incoming request and keeps "Not now" local to this session', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+    // Local only — nothing was sent, so the request is still the viewer's to answer in the hub.
+    expect(mocks.dismissRequestMutate).not.toHaveBeenCalled();
+    expect(mocks.acceptRequestMutate).not.toHaveBeenCalled();
+  });
+
+  it('does not prompt for a request while a debate is under way', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithDebate(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
   it('does not route stale debate activity over an active rematch page', async () => {
     mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
     mocks.activity = {
-      online: true,
-      available_to_debate: true,
-      cooldown_until: null,
-      match: null,
+      ...activityWithRematch('browsing'),
       debate: {
         id: 'debate-1',
         claim: { space_id: 'space-1' },
+        participants: bothParticipants(),
       } as NonNullable<DebateActivity['debate']>,
-      rematch: null,
-      challenge: null,
     };
 
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
@@ -680,4 +711,48 @@ function bothParticipants(): NonNullable<DebateActivity['debate']>['participants
       position: false,
     },
   ] as NonNullable<DebateActivity['debate']>['participants'];
+}
+
+function idleActivity(): DebateActivity {
+  return {
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: null,
+    debate: null,
+    rematch: null,
+    challenge: null,
+  };
+}
+
+function incomingRequest() {
+  const party = (userId: string, name: string, position: boolean) => ({
+    user_id: userId,
+    profile_space_id: `space-${userId}`,
+    display_name: name,
+    avatar_cid: null,
+    online: true,
+    available_to_debate: true,
+    in_debate: false,
+    online_since: '2026-08-11T11:00:00.000Z',
+    position,
+    position_label: position ? 'Yes' : 'No',
+  });
+
+  return {
+    id: 'request-1',
+    status: 'pending',
+    claim: {
+      id: 'claim-row-1',
+      space_id: 'space-1',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'Debates should hand off without flashing the page',
+      description: null,
+    },
+    requester: party('user-against', 'Salina Mitchell', false),
+    recipient: party('user-for', 'You', true),
+    turn_format_id: null,
+    created_at: '2026-08-11T12:00:00.000Z',
+    expires_at: '2099-01-01T00:00:00.000Z',
+  } as unknown as NonNullable<DebateRequestsResponse['incoming']>[number];
 }

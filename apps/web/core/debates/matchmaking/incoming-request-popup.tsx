@@ -46,6 +46,14 @@ export function IncomingRequestPopup({
   const error = [acceptRequest.error, dismissRequest.error, blockUser.error].find(
     (candidate): candidate is Error => candidate instanceof Error
   );
+  // `isPending` only disables the buttons on the *next* render, so a double tap gets two answers in
+  // before it takes effect — and the second one 409s over a request the first already took.
+  const answered = React.useRef(false);
+  const answerOnce = (answer: () => void) => {
+    if (answered.current) return;
+    answered.current = true;
+    answer();
+  };
 
   return (
     <DebateRequestDialog
@@ -64,11 +72,11 @@ export function IncomingRequestPopup({
           <span className="shrink-0">Debate request</span>
         </span>
       }
-      onAccept={() => acceptRequest.mutate({ requestId: request.id })}
+      onAccept={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }))}
       onReject={onNotNow}
       formatAction={{
         label: 'Dismiss forever',
-        onClick: () => dismissRequest.mutate({ requestId: request.id, removeIntent: true }),
+        onClick: () => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true })),
       }}
       footerNote={<ClaimDebateToggle request={request} disabled={busy} />}
       overflowMenu={
@@ -95,28 +103,41 @@ function ClaimDebateToggle({ request, disabled }: { request: DebateRequest; disa
   const setReadiness = useClaimReadiness();
   const [ready, setReady] = React.useState(true);
 
+  // The switch moves first, but a failed call has to move it back and say so — otherwise it reads
+  // as "you are out of matchmaking for this claim" while the server still has you standing ready.
+  const toggle = () => {
+    const next = !ready;
+    setReady(next);
+    setReadiness.mutate(
+      { spaceId: request.claim.space_id, claimId: request.claim.claim_entity_id, ready: next },
+      { onError: () => setReady(!next) }
+    );
+  };
+
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={ready}
-      aria-label="Debate this claim"
-      disabled={disabled || setReadiness.isPending}
-      onClick={() => {
-        setReady(!ready);
-        setReadiness.mutate({
-          spaceId: request.claim.space_id,
-          claimId: request.claim.claim_entity_id,
-          ready: !ready,
-        });
-      }}
-      className="flex items-center gap-1.5 px-4 py-1 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-    >
-      <Toggle checked={ready} className="shrink-0" />
-      <Text as="span" variant="metadata" color="current">
-        Debate this claim
-      </Text>
-    </button>
+    <div className="flex flex-col items-center gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={ready}
+        aria-label="Debate this claim"
+        disabled={disabled || setReadiness.isPending}
+        onClick={toggle}
+        className="flex items-center gap-1.5 px-4 py-1 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+      >
+        <Toggle checked={ready} className="shrink-0" />
+        <Text as="span" variant="metadata" color="current">
+          Debate this claim
+        </Text>
+      </button>
+      {setReadiness.error ? (
+        <div role="alert">
+          <Text as="p" variant="footnote" color="red-01">
+            Could not change your readiness for this claim.
+          </Text>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

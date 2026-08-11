@@ -455,12 +455,15 @@ export class DebateGatewayClient {
     this.queueInvalidation(`claims:${spaceId}`, {
       predicate: query => {
         const [root, kind, querySpaceId, queryClaimIds] = query.queryKey;
+        const isDebateSpaceClaimQuery = root === 'debates' && kind === 'claims' && querySpaceId === spaceId;
         const isDebateClaimQuery =
-          root === 'debates' &&
-          kind === 'claims' &&
-          querySpaceId === spaceId &&
-          Array.isArray(queryClaimIds) &&
-          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId));
+          isDebateSpaceClaimQuery &&
+          // `'all'` is what `debateQueryKeys.claims` stores for a whole-space subscription — it
+          // covers every claim in the space, so any change in it lands. Requiring an array here
+          // left the browse panel's list stale until a reconnect.
+          (queryClaimIds === 'all' ||
+            (Array.isArray(queryClaimIds) &&
+              queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))));
         if (isDebateClaimQuery) return true;
 
         return isClaimResponseSummaryQueryKey(query.queryKey, {
@@ -693,10 +696,6 @@ export function useDebateGatewaySnapshot() {
  * `true` once geo-chat advertises the matchmaking capability. Lets surfaces keep the legacy
  * debate-queue behavior until the backend ships GEO-2514.
  */
-export function useDebateMatchmakingSupported() {
-  const snapshot = useDebateGatewaySnapshot();
-  return snapshot.capabilities.includes(MATCHMAKING_CAPABILITY);
-}
 
 function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
   const url = new URL(apiBaseUrl);

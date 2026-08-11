@@ -15,13 +15,14 @@ import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
 import { ClaimsTab } from './claims-tab';
-import { useDebateRequests } from './hooks';
+import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
 import { HubMessage } from './hub-states';
 import { MatchesTab } from './matches-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { useDebatesHub } from './use-debates-hub';
+import { useFocusTrap } from './use-focus-trap';
 import { useUnexpiredRequests } from './use-request-countdown';
 import type { DebatesHubTab } from '~/atoms';
 
@@ -58,6 +59,10 @@ export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const dragControls = useDragControls();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
+  // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
+  useMatchmakingScope(isOpen);
+  // Only the mobile sheet claims `aria-modal`; the desktop aside is a non-modal companion panel.
+  const sheetRef = useFocusTrap(isOpen && isMobile);
   const pathname = usePathname();
   const lastPathnameRef = React.useRef(pathname);
 
@@ -130,6 +135,8 @@ export function DebatesHubPanel() {
         >
           <button type="button" className="absolute inset-0 bg-grey-04/50" onClick={close} aria-label="Close" />
           <motion.div
+            ref={sheetRef as React.RefObject<HTMLDivElement>}
+            tabIndex={-1}
             data-debates-hub
             role="dialog"
             aria-modal="true"

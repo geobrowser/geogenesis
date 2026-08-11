@@ -22,7 +22,7 @@ import { useRequestCountdown } from './use-request-countdown';
  * behaves exactly like letting it expire for you, and frees the request to advance to the next
  * candidate on the server — unlike the popup's "Not now", which only closes the popup.
  */
-export function IncomingRequestCard({ request }: { request: DebateRequest }) {
+export function IncomingRequestCard({ request, ref }: { request: DebateRequest; ref?: React.Ref<HTMLElement> }) {
   const countdown = useRequestCountdown(request.expires_at);
   const acceptRequest = useAcceptDebateRequest();
   const dismissRequest = useDismissDebateRequest();
@@ -30,11 +30,20 @@ export function IncomingRequestCard({ request }: { request: DebateRequest }) {
 
   const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
+  // `isPending` only disables the button on the *next* render, so a double tap gets two accepts in
+  // before it takes effect — and the second one 409s over a request the first already took.
+  const answered = React.useRef(false);
+  const answerOnce = (answer: () => void) => {
+    if (answered.current) return;
+    answered.current = true;
+    answer();
+  };
 
   return (
     // Expiry is owned by the list (`useUnexpiredRequests`) rather than this card, so the card can
     // animate out instead of vanishing mid-frame.
     <motion.article
+      ref={ref}
       {...hubCardMotion}
       className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
     >
@@ -80,7 +89,7 @@ export function IncomingRequestCard({ request }: { request: DebateRequest }) {
 
       <div className="grid grid-cols-2 gap-2">
         <HubPillButton
-          onClick={() => dismissRequest.mutate({ requestId: request.id })}
+          onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }))}
           disabled={busy}
           pending={dismissRequest.isPending}
           pendingLabel="Declining…"
@@ -89,7 +98,7 @@ export function IncomingRequestCard({ request }: { request: DebateRequest }) {
         </HubPillButton>
         <HubPillButton
           variant="primary"
-          onClick={() => acceptRequest.mutate({ requestId: request.id })}
+          onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }))}
           disabled={busy || unavailable}
           pending={acceptRequest.isPending}
           pendingLabel="Accepting…"

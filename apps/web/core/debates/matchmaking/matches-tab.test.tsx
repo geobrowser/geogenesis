@@ -116,6 +116,9 @@ describe('MatchesTab', () => {
 
     expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
+    // "Exactly two" is the point: the hub takes a side on the claim, it does not vote on it, so
+    // the vote arrows that live on the claim page must never appear here.
+    expect(screen.queryByRole('button', { name: /Upvote|Downvote|vote/i })).not.toBeInTheDocument();
   });
 
   it('uses the veracity vocabulary for a factual claim', () => {
@@ -236,7 +239,9 @@ describe('MatchesTab', () => {
 
     const request = screen.getByRole('button', { name: 'Request debate' });
     expect(request).toBeDisabled();
-    expect(request).toHaveAttribute('title', 'Switch yourself to available to send a request.');
+    // Shown rather than a `title`: tooltips never appear on touch and are unreliable on a disabled
+    // button, which is exactly when the reason matters.
+    expect(screen.getByText('Switch yourself to available to send a request.')).toBeInTheDocument();
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {

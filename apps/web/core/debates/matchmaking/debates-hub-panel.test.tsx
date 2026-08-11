@@ -32,6 +32,7 @@ vi.mock('../hooks', () => ({
 }));
 
 vi.mock('./hooks', () => ({
+  useMatchmakingScope: () => true,
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] }, isLoading: false, error: null }),
   useDebatePeople: () => ({
     data: mocks.peopleError ? undefined : { people: mocks.people },

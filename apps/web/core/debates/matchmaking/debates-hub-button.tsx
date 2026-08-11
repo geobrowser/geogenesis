@@ -9,7 +9,9 @@ import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { Megaphone } from '~/design-system/icons/megaphone';
 
 import { useDebateActivity } from '../hooks';
+import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
+import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * Navbar entry point for the matchmaking hub. Visible to every user once debates are enabled —
@@ -19,10 +21,14 @@ export function DebatesHubButton() {
   const isDebatesEnabled = useDebatesEnabled();
   const { isOpen, toggle } = useDebatesHub();
   const { data: activity } = useDebateActivity(isDebatesEnabled);
+  // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
+  // badge must agree with the one in the panel rather than counting requests that have expired.
+  const { data: requests } = useDebateRequests(false);
+  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
   if (!isDebatesEnabled) return null;
 
-  const requestCount = activity?.incoming_request_count ?? 0;
+  const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
 
   return (
     <button

@@ -118,6 +118,9 @@ export function useUnexpiredRequests<T extends { expires_at: string }>(requests:
 }
 
 export function formatCountdown(remainingMs: number) {
+  // An unparseable `expires_at` reaches here as NaN, which fails both comparisons below and used to
+  // render "Expires in NaNm". Such a request stays visible, so it needs a label that isn't a lie.
+  if (!Number.isFinite(remainingMs)) return 'Expires later';
   if (remainingMs <= 0) return 'Expired';
   if (remainingMs < MINUTE_MS) return `Expires in ${Math.ceil(remainingMs / 1_000)}s`;
   return `Expires in ${Math.ceil(remainingMs / MINUTE_MS)}m`;

@@ -121,11 +121,10 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(toggle);
 
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: 'space-1',
-      claimId: 'claim-1',
-      ready: false,
-    });
+    expect(mocks.setReadiness).toHaveBeenCalledWith(
+      { spaceId: 'space-1', claimId: 'claim-1', ready: false },
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
     expect(mocks.dismiss).not.toHaveBeenCalled();
     expect(mocks.accept).not.toHaveBeenCalled();
   });
@@ -137,5 +136,27 @@ describe('IncomingRequestPopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Block Salina Mitchell' }));
 
     expect(mocks.block).toHaveBeenCalledWith('user-them');
+  });
+});
+
+describe('IncomingRequestPopup answers', () => {
+  // A double tap used to send two accepts: `isPending` only disables the button a render later.
+  it('answers a request once however fast the taps land', () => {
+    render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    const accept = screen.getByRole('button', { name: 'Accept' });
+    fireEvent.click(accept);
+    fireEvent.click(accept);
+
+    expect(mocks.accept).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts the claim toggle back when standing down fails', () => {
+    mocks.setReadiness.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+    render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+
+    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
   });
 });

@@ -35,6 +35,7 @@ import {
   isAbortError,
   usePreparedSocialVideo,
 } from './social-video-share';
+import { useScrollLock } from './use-scroll-lock';
 
 export function DebateCoordinator() {
   const router = useRouter();
@@ -111,7 +112,11 @@ export function DebateCoordinator() {
   // already, and this is the only thing that tells them. The accepting tab is on the debate page by
   // the time its activity catches up, so `viewingDebate` keeps the prompt off its screen.
   const [snoozedDebateId, setSnoozedDebateId] = React.useState<string | null>(null);
-  const promptedDebate = debate && !viewingDebate && debate.id !== snoozedDebateId ? debate : null;
+  // The dialog names both sides, so it needs both. Deciding that here rather than letting the
+  // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
+  // without its participants would offer no way in at all.
+  const describable = (debate?.participants?.length ?? 0) >= 2;
+  const promptedDebate = debate && describable && !viewingDebate && debate.id !== snoozedDebateId ? debate : null;
 
   React.useEffect(() => {
     if (snoozedDebateId && debate?.id !== snoozedDebateId) setSnoozedDebateId(null);
@@ -222,16 +227,7 @@ function DebateSharePromptDialog({
   const promptActionRef = React.useRef(false);
   const preparedVideo = usePreparedSocialVideo(prompt.debate_id, { enabled: true, includePreview: true });
 
-  React.useEffect(() => {
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousDocumentOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   const closeDialog = () => {
     onClose();

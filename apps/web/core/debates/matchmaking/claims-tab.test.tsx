@@ -8,18 +8,22 @@ import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
+  lastQuery: null as unknown,
 }));
 
 vi.mock('./hooks', () => ({
-  useMatchmakingClaims: () => ({
-    data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: [] } }] },
-    isLoading: false,
-    error: null,
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    fetchNextPage: vi.fn(),
-    refetch: vi.fn(),
-  }),
+  useMatchmakingClaims: (query: unknown) => {
+    mocks.lastQuery = query;
+    return {
+      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: [] } }] },
+      isLoading: false,
+      error: null,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    };
+  },
   useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
@@ -105,4 +109,17 @@ describe('ClaimsTab', () => {
     expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
+});
+
+// Search, the space filter and the position filter all run server-side, so what this tab puts in
+// the query is the whole feature — a mock that ignores it cannot catch a dropped filter.
+it('asks the server for the filter the viewer picked', () => {
+  render(<ClaimsTab />);
+
+  expect(mocks.lastQuery).toMatchObject({ filter: 'all', spaceId: null });
+
+  fireEvent.click(screen.getByRole('button', { name: 'All claims' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+
+  expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
 });

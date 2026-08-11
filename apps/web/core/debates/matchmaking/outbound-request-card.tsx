@@ -18,11 +18,12 @@ import { RequestParties } from './request-parties';
  * you free yourself to ask someone else — which is why it sits in the header rather than behind a
  * menu.
  */
-export function OutboundRequestCard({ request }: { request: DebateRequest }) {
+export function OutboundRequestCard({ request, ref }: { request: DebateRequest; ref?: React.Ref<HTMLElement> }) {
   const withdrawRequest = useWithdrawDebateRequest();
 
   return (
     <motion.article
+      ref={ref}
       {...hubCardMotion}
       className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
     >

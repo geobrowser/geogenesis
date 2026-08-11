@@ -34,6 +34,9 @@ type Props = {
   activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
+  /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
+   * never pops out of flow and the rows above close the gap only after the fade finishes. */
+  ref?: React.Ref<HTMLElement>;
 };
 
 /**
@@ -50,7 +53,7 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer }: Props) {
+export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, ref }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -58,7 +61,7 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
+    <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
       <div className="mb-2">
         <SpaceChip spaceId={claim.space_id} />
       </div>

@@ -98,11 +98,13 @@ function MatchCard({
   match,
   hasOutboundRequest,
   unavailable,
+  ref,
 }: {
   match: MatchmakingMatch;
   hasOutboundRequest: boolean;
   /** The viewer has marked themselves unavailable, so a request they sent couldn't be answered. */
   unavailable: boolean;
+  ref?: React.Ref<HTMLElement>;
 }) {
   const createRequest = useCreateDebateRequest();
 
@@ -115,6 +117,7 @@ function MatchCard({
 
   return (
     <MatchmakingClaimCard
+      ref={ref}
       claim={match.claim}
       positions={match.positions}
       readiness={match}
@@ -130,11 +133,18 @@ function MatchCard({
             disabled={Boolean(blockedReason)}
             pending={createRequest.isPending}
             pendingLabel="Requesting…"
-            title={blockedReason}
             className="w-full"
           >
             Request debate
           </HubPillButton>
+          {/* Shown, not just a `title`: native tooltips never appear on touch and are unreliable on
+              a disabled button, which is exactly when the explanation matters. Mirrors
+              `ClaimReadinessToggle`. */}
+          {blockedReason ? (
+            <Text as="p" variant="footnote" color="grey-04">
+              {blockedReason}
+            </Text>
+          ) : null}
           {requestError ? (
             // role="alert" so a failed request is announced, not just drawn under the button.
             <div role="alert">

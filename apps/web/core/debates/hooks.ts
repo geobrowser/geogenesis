@@ -345,7 +345,11 @@ export function useConsentToDebateRematch(debateId: string) {
       queryClient.setQueryData<Debate>(debateQueryKeys.debate(debateId), current =>
         current ? { ...current, rematch_session_id: session.id } : current
       );
+      // Spread what is already there: rebuilding the object from scratch dropped
+      // `incoming_request_count` and `outbound_request`, which zeroed the navbar badge and stopped
+      // the coordinator fetching requests until the invalidation below landed.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        ...current,
         online: current?.online ?? true,
         available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,

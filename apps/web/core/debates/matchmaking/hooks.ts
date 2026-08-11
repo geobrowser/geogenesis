@@ -30,9 +30,14 @@ const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
 /**
  * Every hub query lives under the account-scoped `['debates','account',key,…]` shape the gateway
- * invalidates, and holds the `matchmaking` gateway scope only while the panel is open.
+ * invalidates, and the panel holds the `matchmaking` gateway scope for as long as it is open.
+ *
+ * The panel owns it, not the individual tabs: tabs cross-fade with `mode="wait"`, so the outgoing
+ * one unmounts before the incoming one mounts. Held per tab, the refcount dropped to zero on every
+ * switch and the round trip that followed — UNSUBSCRIBE, SUBSCRIBE, READY — re-reconciled the whole
+ * scope, refetching every loaded claims page and eating into the session's SUBSCRIBE budget.
  */
-function useMatchmakingScope(enabled: boolean) {
+export function useMatchmakingScope(enabled: boolean) {
   const { authenticated } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'matchmaking' }, enabled && authenticated);
   return authenticated;
@@ -135,16 +140,21 @@ export function useClaimReadiness() {
     onMutate: async ({ spaceId, claimId, ready }) => {
       const families = [debateQueryKeys.matchmakingClaimsRoot(accountKey), debateQueryKeys.matches(accountKey)];
       await Promise.all(families.map(queryKey => queryClient.cancelQueries({ queryKey })));
-      const previous = families.flatMap(queryKey => queryClient.getQueriesData({ queryKey }));
       for (const queryKey of families) {
         queryClient.setQueriesData({ queryKey }, (current: unknown) =>
           patchClaimReadiness(current, spaceId, claimId, ready)
         );
       }
-      return { previous };
     },
-    onError: (_error, _variables, context) => {
-      for (const [queryKey, data] of context?.previous ?? []) queryClient.setQueryData(queryKey, data);
+    // Undo just this claim rather than restoring a snapshot of both families: every card holds its
+    // own copy of this mutation, so a snapshot rollback would also revert a toggle on another claim
+    // and any gateway refetch that landed in between.
+    onError: (_error, { spaceId, claimId, ready }) => {
+      for (const queryKey of [debateQueryKeys.matchmakingClaimsRoot(accountKey), debateQueryKeys.matches(accountKey)]) {
+        queryClient.setQueriesData({ queryKey }, (current: unknown) =>
+          patchClaimReadiness(current, spaceId, claimId, !ready)
+        );
+      }
     },
     // Readiness changes who is matchable, so let the server re-sort — but only the families it
     // actually affects, rather than every debate query.

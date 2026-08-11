@@ -10,6 +10,7 @@ import { DebateFormatDetails } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import type { DebateFormatId } from './formats';
 import { speakerLabel } from './playback-utils';
+import { useScrollLock } from './use-scroll-lock';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -88,18 +89,7 @@ export function DebateRequestDialog({
   const firstParticipant = positionParticipants[0];
   const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   if (!firstParticipant || !secondParticipant) return null;
 
