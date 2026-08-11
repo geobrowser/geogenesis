@@ -106,17 +106,43 @@ describe('ClaimReadinessToggle', () => {
     expect(mocks.readinessMutate).toHaveBeenCalled();
   });
 
-  it('surfaces the server reason when readiness is unavailable', () => {
+  // Standing yourself down reports `user_disabled`. It is the normal off state, not a blocker, so
+  // it must neither be shown as a reason nor prevent standing back up.
+  it('can be turned back on after the viewer stood themselves down', () => {
     render(
       <ClaimReadinessToggle
         claim={claim}
-        readiness={readiness({ readiness_disabled_reason: 'Your response is still being indexed.' })}
+        readiness={readiness({ readiness_disabled_reason: 'user_disabled' })}
         hasResponse
       />
     );
 
-    expect(toggle()).toBeDisabled();
-    expect(screen.getByText('Your response is still being indexed.')).toBeInTheDocument();
+    expect(screen.queryByText('user_disabled')).not.toBeInTheDocument();
+    expect(toggle()).toBeEnabled();
+
+    fireEvent.click(toggle());
+
+    expect(mocks.readinessMutate).toHaveBeenCalledWith({
+      spaceId: claim.space_id,
+      claimId: claim.claim_entity_id,
+      ready: true,
+    });
+  });
+
+  // Other reasons explain the current state but still don't block turning readiness back on.
+  it('explains a server reason without blocking the toggle', () => {
+    render(
+      <ClaimReadinessToggle
+        claim={claim}
+        readiness={readiness({ readiness_disabled_reason: 'claim_response_kind_changed' })}
+        hasResponse
+      />
+    );
+
+    expect(
+      screen.getByText('This claim’s response type changed. Respond and enable Debate again.')
+    ).toBeInTheDocument();
+    expect(toggle()).toBeEnabled();
   });
 
   it('blocks readiness on a claim that is already being debated', () => {
@@ -130,7 +156,10 @@ describe('ClaimReadinessToggle', () => {
     render(
       <ClaimReadinessToggle
         claim={claim}
-        readiness={readiness({ viewer_debate_ready: true, readiness_disabled_reason: 'Cooling down.' })}
+        readiness={readiness({
+          viewer_debate_ready: true,
+          readiness_disabled_reason: 'claim_response_validation_failed',
+        })}
         hasResponse
       />
     );

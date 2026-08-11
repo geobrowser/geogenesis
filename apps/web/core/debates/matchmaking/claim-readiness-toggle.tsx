@@ -8,6 +8,7 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
 import type { DebateClaimSummary, MatchmakingReadiness } from '../api';
+import { readinessReasonMessage } from '../claim-debate-readiness';
 import { useClaimReadiness } from './hooks';
 
 type Props = {
@@ -34,20 +35,23 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasRespon
   const setReadiness = useClaimReadiness();
 
   const ready = readiness.viewer_debate_ready;
-  const blockedReason = activeDebate ? 'This claim is being debated right now.' : readiness.readiness_disabled_reason;
   // Offer the toggle as soon as the viewer has responded. If geo-chat hasn't caught up it rejects
   // the request and says so, which beats a dead control with no explanation.
-  const canTurnOn = hasResponse && !blockedReason && !responseIndexing;
+  const canTurnOn = hasResponse && !activeDebate && !responseIndexing;
   const disabled = setReadiness.isPending || (!ready && !canTurnOn);
 
+  // `readiness_disabled_reason` explains why readiness is currently off; it never blocks turning
+  // it back on. Standing yourself down reports `user_disabled`, which the mapper drops entirely —
+  // treating it as a blocker would make standing down a one-way door.
   const explanation = ready
     ? undefined
-    : (blockedReason ??
-      (responseIndexing
+    : activeDebate
+      ? 'This claim is being debated right now.'
+      : responseIndexing
         ? 'Publishing your response…'
         : !hasResponse
           ? 'Respond to this claim to debate it.'
-          : undefined));
+          : (readinessReasonMessage(readiness.readiness_disabled_reason) ?? undefined);
   const error = setReadiness.error instanceof Error ? setReadiness.error.message : null;
 
   const explanationId = React.useId();
