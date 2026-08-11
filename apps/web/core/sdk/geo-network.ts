@@ -155,6 +155,82 @@ export function isSpaceActiveOnChain(spaceId: string): Promise<boolean> {
   return probe.catch(() => false);
 }
 
+const SPACE_ID_TO_ADDRESS_ABI = [
+  {
+    type: 'function',
+    name: 'spaceIdToAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'spaceId', type: 'bytes16' }],
+    outputs: [{ name: '', type: 'address' }],
+  },
+] as const;
+
+const LATEST_PROPOSAL_VERSION_ABI = [
+  {
+    type: 'function',
+    name: 'latestProposalVersion',
+    stateMutability: 'view',
+    inputs: [{ name: '_proposalId', type: 'bytes16' }],
+    outputs: [{ name: '_version', type: 'uint8' }],
+  },
+] as const;
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+/**
+ * Whether `proposalId` exists on its space's DAO contract.
+ *
+ * `null` means "could not determine" — callers must treat that as "assume it
+ * exists" rather than as absence, since a wrong "absent" permanently labels a
+ * healthy proposal as unexecutable.
+ *
+ * This is the only reliable way to tell a proposal that can never execute from
+ * one that merely cannot execute yet. The migration copied proposal history into
+ * the database without recreating those proposals on chain, so the DAO has no
+ * record of them and `executeProposal` reverts forever. Both of the obvious
+ * checks are useless for detecting that: `canExecuteProposal` and
+ * `isSupportThresholdReached` each return `false` for an unknown proposal id,
+ * exactly as they do for one that simply has not passed yet. A zero version is
+ * unambiguous — the DAO assigns version 1 on creation.
+ *
+ * Needs no wallet, so signed-out viewers get the honest answer too.
+ */
+export async function proposalExistsOnChain(spaceId: string, proposalId: string): Promise<boolean | null> {
+  const spaceIdHex = (spaceId.startsWith('0x') ? spaceId : `0x${spaceId}`) as Hex;
+  const proposalIdHex = (proposalId.startsWith('0x') ? proposalId : `0x${proposalId}`) as Hex;
+
+  try {
+    // An eth_call against an address with no code returns empty data, which
+    // decodes as a zero version — indistinguishable from a real absence. Bail to
+    // `null` instead of reporting every proposal in the space as dead.
+    if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS_HEX))) return null;
+
+    const client = createPublicClient({ chain: GEOGENESIS, transport: http() });
+
+    const daoAddress = (await client.readContract({
+      address: SPACE_REGISTRY_ADDRESS_HEX,
+      abi: SPACE_ID_TO_ADDRESS_ABI,
+      functionName: 'spaceIdToAddress',
+      args: [spaceIdHex],
+    })) as Hex;
+
+    if (!daoAddress || daoAddress.toLowerCase() === ZERO_ADDRESS) return null;
+    if (!(await contractHasCode(daoAddress))) return null;
+
+    const version = await client.readContract({
+      address: daoAddress,
+      abi: LATEST_PROPOSAL_VERSION_ABI,
+      functionName: 'latestProposalVersion',
+      args: [proposalIdHex],
+    });
+
+    return Number(version) > 0;
+  } catch {
+    // Fail open: an RPC blip must never brand a live proposal unexecutable.
+    return null;
+  }
+}
+
 /** Throws before a write can be sent to a SpaceRegistry address with no code. */
 export async function assertSpaceRegistryDeployed(): Promise<void> {
   if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS_HEX))) {
