@@ -688,13 +688,31 @@ export async function joinDebateQueue(
   accountKey: string | null,
   source: 'hub' | 'legacy' = 'hub'
 ) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
-    method: 'POST',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-    body: source === 'hub' ? { source: 'hub' } : undefined,
-  });
+  const join = (body?: unknown) =>
+    geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
+      method: 'POST',
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+      body,
+    });
+
+  if (source === 'legacy') return join();
+
+  try {
+    return await join({ source: 'hub' });
+  } catch (error) {
+    // A geo-chat that predates `source` rejects *any* body here with 426, because a body used to
+    // mean a client-chosen position — which is retired. Falling back keeps readiness working
+    // against an older server instead of leaving the toggle dead; the cost is that such a server
+    // still auto-pairs, so this is noisy on purpose and should be deleted once every environment
+    // has the `source`-aware endpoint.
+    if (!(error instanceof GeoChatRequestError) || error.status !== 426) throw error;
+    console.warn(
+      '[debates] geo-chat rejected the readiness `source` field, so this server will still auto-pair on readiness. Update geo-chat to the source-aware /debate-queue endpoint.'
+    );
+    return join();
+  }
 }
 
 export async function leaveDebateQueue(

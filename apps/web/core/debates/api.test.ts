@@ -258,6 +258,49 @@ describe('debate queue readiness', () => {
     });
   });
 
+  // An older geo-chat rejects any body here as a retired client-chosen position. Readiness has to
+  // keep working against it — a dead toggle is worse than a server that still auto-pairs.
+  it('falls back to the bodyless join when the server has not learned about `source`', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'this client-selected debate position endpoint has been retired' }), {
+          status: 426,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ claim: { id: 'claim-1' }, match: null }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).resolves.toEqual({
+      claim: { id: 'claim-1' },
+      match: null,
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: undefined });
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('does not retry a readiness failure that is not the retired-body one', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'claim response required', code: 'claim_response_required' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).rejects.toBeInstanceOf(GeoChatRequestError);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('can still make the legacy bodyless join', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ claim: { id: 'claim-1' }, match: null }), {
