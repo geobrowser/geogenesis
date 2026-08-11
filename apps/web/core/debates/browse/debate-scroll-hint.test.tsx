@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DebateScrollHint } from './debate-scroll-hint';
+import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 
 const BOUNCE_MS = 6 * 700;
 const FADE_MS = 200;
@@ -34,10 +34,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderHint() {
+/** Mirrors how the feed wires the hook up: media bounces alongside the pinned nudge. */
+function Feed({ enabled = true }: { enabled?: boolean }) {
+  const hint = useDebateScrollHint(enabled);
+  return (
+    <>
+      <div
+        data-testid="media"
+        className={hint.isVisible ? scrollHintBounceProps.className : undefined}
+        style={hint.isVisible ? scrollHintBounceProps.style : undefined}
+      />
+      {hint.isVisible && <DebateScrollHint leaving={hint.isLeaving} className="absolute inset-x-0 bottom-4" />}
+    </>
+  );
+}
+
+function renderHint(enabled = true) {
   return render(
     <Provider store={store}>
-      <DebateScrollHint />
+      <Feed enabled={enabled} />
     </Provider>
   );
 }
@@ -80,6 +95,31 @@ describe('DebateScrollHint', () => {
     store = createStore();
     renderHint();
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+  });
+
+  it('bounces the media on the same animation, and only while the nudge is up', async () => {
+    renderHint();
+
+    // Same animation and iteration count on both, so they move as one gesture.
+    const media = screen.getByTestId('media');
+    expect(media).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none');
+    expect(media).toHaveStyle({ animationIterationCount: '6' });
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveStyle({ animationIterationCount: '6' });
+
+    // Split: the fade timer is only scheduled once the bounce timer has fired.
+    await advance(BOUNCE_MS);
+    await advance(FADE_MS);
+    expect(screen.getByTestId('media')).not.toHaveClass('animate-debate-scroll-hint');
+  });
+
+  it('stays dormant until the feed says it is ready', async () => {
+    renderHint(false);
+
+    await advance(BOUNCE_MS + FADE_MS);
+    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('media')).not.toHaveClass('animate-debate-scroll-hint');
+    // Still unspent, so it can play once the feed settles rather than being burned while loading.
+    expect(isSpent()).toBe(false);
   });
 
   // Regression: the feed is `snap-mandatory`, so the browser fires `scroll` as the videos

@@ -14,17 +14,29 @@ import { HINT_IDS, dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
 /** Length of one bounce; mirrors `--animate-debate-scroll-hint` in styles/styles.css. */
 const BOUNCE_DURATION_MS = 700;
-/** Drives both the CSS iteration count and the auto-dismiss, so the hint is on screen
- *  for exactly `BOUNCE_COUNT * BOUNCE_DURATION_MS` before it starts fading. */
 const BOUNCE_COUNT = 6;
 const FADE_OUT_MS = 200;
+
+/**
+ * Applied to both the hint and the debate media so they bounce as one gesture. Sharing the
+ * props is what keeps them in step: same animation, same iteration count, and both classes
+ * land in the same commit, so the browser starts them on the same frame.
+ */
+export const scrollHintBounceProps = {
+  className: 'animate-debate-scroll-hint motion-reduce:animate-none',
+  style: { animationIterationCount: BOUNCE_COUNT } as React.CSSProperties,
+};
 
 type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
 
 /**
- * One-time nudge that the full-screen debates feed scrolls to more debates. Bounces a few
- * times below the first debate, then fades out for good — the affordance is invisible
- * otherwise, since a single debate fills the viewport with no scrollbar to give it away.
+ * Lifecycle for the one-time nudge that the full-screen debates feed scrolls to more
+ * debates — the affordance is invisible otherwise, since a single debate fills the
+ * viewport with no scrollbar to give it away.
+ *
+ * Lives in the feed rather than a feed item so the media can bounce along with the hint,
+ * and so it can't be torn down by the item churn that happens while the per-debate media
+ * lookups land.
  *
  * Shown once per browser, persisted alongside the other product hints. The flag is only
  * written once the bounces have actually played: the feed is `snap-mandatory`, so the
@@ -33,18 +45,19 @@ type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
  * which is why there's no "viewer scrolled away" shortcut here — no scroll event can be
  * trusted this early in layout, and the hint is brief enough to just let it finish.
  */
-export function DebateScrollHint({ className }: { className?: string }) {
+export function useDebateScrollHint(enabled: boolean) {
   const hydrated = useHydrated();
   const [dismissedHints, setDismissedHints] = useAtom(dismissedHintsAtom);
   const [phase, setPhase] = React.useState<Phase>('pending');
 
-  // Decided once, on the first render after hydration: the persisted flag is written the
-  // moment the hint starts leaving, so re-reading it later would yank the fade-out.
-  // Waiting for hydration keeps SSR from flashing a hint the viewer already dismissed.
+  // Decided once, on the first render after hydration where the feed is ready: the
+  // persisted flag is written the moment the hint starts leaving, so re-reading it later
+  // would yank the fade-out. Waiting for hydration keeps SSR from flashing a hint the
+  // viewer already dismissed.
   React.useEffect(() => {
-    if (!hydrated || phase !== 'pending') return;
+    if (!enabled || !hydrated || phase !== 'pending') return;
     setPhase(dismissedHints.includes(HINT_IDS.debateScroll) ? 'done' : 'bouncing');
-  }, [dismissedHints, hydrated, phase]);
+  }, [dismissedHints, enabled, hydrated, phase]);
 
   React.useEffect(() => {
     if (phase !== 'bouncing') return;
@@ -59,18 +72,30 @@ export function DebateScrollHint({ className }: { className?: string }) {
     return () => window.clearTimeout(timer);
   }, [phase, setDismissedHints]);
 
-  if (phase === 'pending' || phase === 'done') return null;
+  return {
+    isVisible: phase === 'bouncing' || phase === 'leaving',
+    isLeaving: phase === 'leaving',
+  };
+}
 
+/**
+ * The chevrons-and-label nudge itself. Rendered as an overlay pinned to the bottom of the
+ * feed, never in the item's flow: the media column is sized to consume the viewport height
+ * minus a fixed reserve (`--debate-feed-column-width`), so anything added below it is
+ * pushed off the bottom of the screen.
+ */
+export function DebateScrollHint({ leaving, className }: { leaving: boolean; className?: string }) {
   return (
     <div
       aria-hidden
       data-testid="debate-scroll-hint"
       className={cx(
-        'pointer-events-none flex animate-debate-scroll-hint items-center justify-center gap-1.5 text-grey-04 transition-opacity motion-reduce:animate-none',
-        phase === 'leaving' ? 'opacity-0' : 'opacity-100',
+        scrollHintBounceProps.className,
+        'pointer-events-none flex items-center justify-center gap-1.5 text-grey-04 transition-opacity',
+        leaving ? 'opacity-0' : 'opacity-100',
         className
       )}
-      style={{ animationIterationCount: BOUNCE_COUNT, transitionDuration: `${FADE_OUT_MS}ms` }}
+      style={{ ...scrollHintBounceProps.style, transitionDuration: `${FADE_OUT_MS}ms` }}
     >
       <ChevronsDown />
       {/* NB: breakpoints here are desktop-first (md = max-width:767px), so md: targets

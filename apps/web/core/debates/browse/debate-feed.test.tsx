@@ -63,7 +63,11 @@ vi.mock('./debate-feed-player', () => ({
 
 // Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
 // lifecycle is covered by debate-scroll-hint.test.tsx.
-vi.mock('./debate-scroll-hint', () => ({ DebateScrollHint: () => <div data-testid="scroll-hint" /> }));
+vi.mock('./debate-scroll-hint', () => ({
+  useDebateScrollHint: (enabled: boolean) => ({ isVisible: enabled, isLeaving: false }),
+  scrollHintBounceProps: { className: 'bounce-stub', style: { animationIterationCount: 6 } },
+  DebateScrollHint: ({ className }: { className?: string }) => <div data-testid="scroll-hint" className={className} />,
+}));
 
 vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
 vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
@@ -186,7 +190,7 @@ describe('DebatesBrowseFeed video sharing', () => {
     }
   });
 
-  it('nudges from the landing debate only, and only when there is something below it', () => {
+  it('nudges only when there is something below to scroll to', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
     // A lone debate has nothing to scroll to, so promising more would be a lie.
     expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
@@ -195,14 +199,32 @@ describe('DebatesBrowseFeed video sharing', () => {
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    const hints = screen.getAllByTestId('scroll-hint');
-    expect(hints).toHaveLength(1);
-    expect(hints[0].closest('section')).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
+    expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
+  });
+
+  // The media column is sized to consume the viewport height minus a fixed reserve, so a
+  // hint placed under the debate lands off the bottom of the screen. It has to be pinned
+  // outside the scrolling item list instead.
+  it('pins the nudge outside the feed items so it cannot be pushed off-screen', () => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const hint = screen.getByTestId('scroll-hint');
+    expect(hint.closest('section')).toBeNull();
+    expect(hint.closest('.snap-y')).toBeNull();
+    expect(hint).toHaveClass('absolute', 'bottom-4');
+  });
+
+  it('bounces the landing debate media along with the nudge, and nothing below it', () => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getByTestId('player-debate-1').parentElement).toHaveClass('bounce-stub');
+    expect(screen.getByTestId('player-debate-2').parentElement).not.toHaveClass('bounce-stub');
   });
 
   // The per-debate media lookups resolve independently and the list re-sorts on each
-  // arrival, so index 0 changes identity while they land. Mounting the hint then means it
-  // remounts — and restarts — with every change, which reads as a flicker instead of a nudge.
+  // arrival, so the feed is still rearranging under the viewer while they land.
   it('holds the nudge back until the media lookups have settled', () => {
     mocks.mediaLoading = true;
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));

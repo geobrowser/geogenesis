@@ -4,6 +4,8 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
@@ -21,7 +23,7 @@ import { Text } from '~/design-system/text';
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
-import { DebateScrollHint } from './debate-scroll-hint';
+import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 
@@ -107,6 +109,11 @@ export function DebatesBrowseFeed({
   // flashes "no debates" and strands a valid anchor.
   const isLoading = debatesQuery.isLoading || mediaLoading;
 
+  // Held back until the media lookups settle: they resolve one debate at a time and the
+  // list re-sorts on every arrival, so the feed is still rearranging under the viewer
+  // until then. Nothing to nudge toward when there's only one debate, either.
+  const scrollHint = useDebateScrollHint(!isLoading && debates.length > 1);
+
   // One message at a time, most specific first. A readiness lookup that failed has to read as an
   // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
   const emptyMessage = isLoading
@@ -156,13 +163,8 @@ export function DebatesBrowseFeed({
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           root={scrollEl}
-          // Only the debate the viewer lands on carries the nudge, and only when there's
-          // something below it to scroll to. Held back until the media lookups settle:
-          // they resolve one debate at a time and the list re-sorts on every arrival, so
-          // index 0 changes identity repeatedly while loading. The hint would unmount and
-          // remount with it, restarting its animation each time — a flicker rather than a
-          // nudge. (Invisible on a warm cache, where every lookup lands in one tick.)
-          showScrollHint={index === 0 && !isLoading && debates.length > 1}
+          // Only the debate the viewer is looking at bounces along with the nudge.
+          bounceWithScrollHint={index === 0 && scrollHint.isVisible}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
@@ -190,7 +192,15 @@ export function DebatesBrowseFeed({
   // toggling the claims/join panel doesn't remount the players and restart playback.
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
-      <div className="min-w-0 flex-1">{feed}</div>
+      <div className="relative min-w-0 flex-1">
+        {feed}
+        {/* Pinned to the bottom of the feed viewport rather than placed under the debate:
+            the media column is sized to eat the viewport height minus a fixed reserve
+            (`--debate-feed-column-width`), so anything in flow below it lands off-screen. */}
+        {scrollHint.isVisible && (
+          <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 bottom-4" />
+        )}
+      </div>
       {sidePanel}
     </div>
   );
@@ -203,7 +213,7 @@ function DebateFeedItem({
   topics,
   active,
   root,
-  showScrollHint,
+  bounceWithScrollHint,
   onActivate,
   onOpenJoin,
   onOpenClaims,
@@ -214,7 +224,7 @@ function DebateFeedItem({
   topics: string[];
   active: boolean;
   root: HTMLElement | null;
-  showScrollHint: boolean;
+  bounceWithScrollHint: boolean;
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
@@ -280,7 +290,12 @@ function DebateFeedItem({
               onOpenJoin={onOpenJoin}
             />
           </div>
-          <div className="mt-6 md:mt-7">
+          {/* The media bounces with the nudge so the gesture is hard to miss — shared
+              animation props keep the two in step. */}
+          <div
+            className={cx('mt-6 md:mt-7', bounceWithScrollHint && scrollHintBounceProps.className)}
+            style={bounceWithScrollHint ? scrollHintBounceProps.style : undefined}
+          >
             <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
@@ -288,7 +303,6 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
-          {showScrollHint && <DebateScrollHint className="mt-4 md:mt-[30px]" />}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">
