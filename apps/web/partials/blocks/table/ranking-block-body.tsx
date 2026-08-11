@@ -53,7 +53,10 @@ function buildMyRankingActionButton(state: RankingBlockState) {
 
   const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
 
-  return showEditRankingButton ? (
+  // A rolled-off ballot is retained, so `showEditRankingButton` is set even though
+  // the ranking no longer counts. Re-submitting is the action that matters then, so
+  // the roll-off call to action wins over "Edit my ranking".
+  return showEditRankingButton && !isRollingRolledOff ? (
     <Button
       variant="secondary"
       className="h-8 shrink-0 !rounded-full !border-text !bg-white !px-3 text-[16px] whitespace-nowrap !text-text"

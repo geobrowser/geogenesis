@@ -41,6 +41,35 @@ export function getRollingExpiryMs(submittedAtMs: number, frequencyHours: number
   return submittedAtMs + frequencyHours * MS_PER_HOUR;
 }
 
+/**
+ * Whether publishing a ballot has to create a new rank entity rather than update
+ * the author's existing one.
+ *
+ * True with no existing ballot, and true again once a Rolling block has rolled
+ * one off. The roll-off case is the subtle one: the indexer derives
+ * `submitted_at` from the block timestamp of the edit that *creates* the rank
+ * entity, and an `updateRank` edit re-emits only the vote relations, never the
+ * rank entity itself. Updating in place would leave `submitted_at` frozen at the
+ * original submission, so a rolled-off ballot could never climb back inside its
+ * window — re-submission has to mint a fresh entity to get a fresh timestamp.
+ *
+ * Note this is orthogonal to *retaining* the rolled-off ordering: an expired
+ * ballot is still shown in the compose view (see `useRankingSubmissions`), so
+ * re-submission confirms the previous ranking instead of rebuilding it.
+ */
+export function shouldMintNewRankEntity({
+  isRolling,
+  hasExistingBallot,
+  isSubmissionLive,
+}: {
+  isRolling: boolean;
+  hasExistingBallot: boolean;
+  isSubmissionLive: boolean;
+}): boolean {
+  if (!hasExistingBallot) return true;
+  return isRolling && !isSubmissionLive;
+}
+
 export function formatRollingSubmissionLabel({
   hasSubmission,
   isLive,
