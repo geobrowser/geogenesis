@@ -11,6 +11,10 @@ const mocks = vi.hoisted(() => ({
   outbound: null as unknown,
   readinessMutate: vi.fn(),
   createRequestMutate: vi.fn(),
+  submitResponse: vi.fn(),
+  optimisticResponse: undefined as 'positive' | 'negative' | null | undefined,
+  isProcessingResponse: false,
+  isConnected: true,
 }));
 
 vi.mock('../hooks', () => ({
@@ -25,20 +29,21 @@ vi.mock('./hooks', () => ({
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+// The publish path itself is covered by the entity-response tests; here it only needs to record
+// what the card asked for.
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponse: () => ({
+    submitResponse: mocks.submitResponse,
+    optimisticResponse: mocks.optimisticResponse,
+    isProcessingResponse: mocks.isProcessingResponse,
+    isResponseIndexingDelayed: false,
+    isConnected: mocks.isConnected,
+    personalSpaceId: 'personal-space',
+  }),
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
-}));
-
-// The on-chain response controls are covered by their own tests; here they only need to prove the
-// card offers them.
-vi.mock('../debate-entity-response-controls', () => ({
-  DebateEntityResponseControls: ({ entityId, responseKind }: { entityId: string; responseKind: string }) => (
-    <div data-testid="response-controls" data-entity={entityId} data-response-kind={responseKind} />
-  ),
-}));
-
-vi.mock('./hub-response-batch', () => ({
-  HubResponseBatch: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
@@ -74,59 +79,65 @@ beforeEach(() => {
   mocks.outbound = null;
   mocks.readinessMutate.mockReset();
   mocks.createRequestMutate.mockReset();
+  mocks.submitResponse.mockReset();
+  mocks.optimisticResponse = undefined;
+  mocks.isProcessingResponse = false;
+  mocks.isConnected = true;
 });
 
 afterEach(cleanup);
 
 describe('MatchesTab', () => {
-  it('shows both sides with their semantic response labels', () => {
+  it('offers exactly two response actions, labelled for the claim', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
-    expect(screen.getByText('Agree')).toBeInTheDocument();
-    expect(screen.getByText('Disagree')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeInTheDocument();
   });
 
-  it('labels a factual claim with the veracity vocabulary', () => {
-    mocks.matches = [
-      match({
-        response_kind: 'veracity',
-        viewer_response: { position: true, position_label: 'Verify' },
-        positions: [],
-      }),
-    ];
+  it('uses the veracity vocabulary for a factual claim', () => {
+    mocks.matches = [match({ response_kind: 'veracity', positions: [] })];
     render(<MatchesTab onTabChange={vi.fn()} />);
 
-    expect(screen.getByText('Verify')).toBeInTheDocument();
-    expect(screen.getByText('Dispute')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Verify/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Dispute/ })).toBeInTheDocument();
   });
 
-  // A position is an on-chain response, so the side pills stay read-only summaries and taking a
-  // side goes through the same response controls the claim page uses.
-  it('offers the on-chain response controls instead of position buttons', () => {
+  it('publishes the opposite response when the other side is chosen', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
-    const controls = screen.getByTestId('response-controls');
-    expect(controls).toHaveAttribute('data-entity', CLAIM_ENTITY_ID);
-    expect(controls).toHaveAttribute('data-response-kind', 'stance');
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
-    expect(screen.queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Chips are better than fries' })).toHaveAttribute(
-      'href',
-      expect.stringContaining(CLAIM_ENTITY_ID)
-    );
+    expect(mocks.submitResponse).toHaveBeenCalledWith('negative');
   });
 
-  it('uses the veracity response kind for a factual claim', () => {
-    mocks.matches = [match({ response_kind: 'veracity' })];
+  it('clears the response when the side already held is chosen again', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
-    expect(screen.getByTestId('response-controls')).toHaveAttribute('data-response-kind', 'veracity');
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(mocks.submitResponse).toHaveBeenCalledWith('clear');
+  });
+
+  // The client knows its own response before geo-chat does, so the button reflects it immediately.
+  it('shows the in-flight response rather than the stale server one', () => {
+    mocks.optimisticResponse = 'negative';
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('cannot respond without a connected personal space', () => {
+    mocks.isConnected = false;
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeDisabled();
   });
 
   // geo-chat can return a claim the knowledge graph has never seen. Querying the graph for one
   // fails the whole request, so the card must not offer to respond to it or link to it.
-  it('does not reach for the graph when the claim id is not a graph id', () => {
+  it('does not offer a response when the claim id is not a graph id', () => {
     mocks.matches = [
       match({
         claim: {
@@ -140,15 +151,14 @@ describe('MatchesTab', () => {
     ];
     render(<MatchesTab onTabChange={vi.fn()} />);
 
-    expect(screen.queryByTestId('response-controls')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Agree/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Leftover fixture claim' })).not.toBeInTheDocument();
-    expect(screen.getByText('Leftover fixture claim')).toBeInTheDocument();
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
     // Readiness is geo-chat state, so it still works for a claim the graph can't resolve.
     expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeInTheDocument();
   });
 
-  it('stands down from a claim by turning readiness off, never by clearing a position', () => {
+  it('stands down from a claim by turning readiness off, never by clearing a response', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Ready to debate this claim' }));
@@ -158,6 +168,7 @@ describe('MatchesTab', () => {
       claimId: CLAIM_ENTITY_ID,
       ready: false,
     });
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {

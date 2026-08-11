@@ -6,25 +6,26 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
+import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { Text } from '~/design-system/text';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, MatchmakingReadiness } from '../api';
-import { DebateEntityResponseControls } from '../debate-entity-response-controls';
+import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
-  /** Drives both the response controls and the readiness toggle. */
+  /** Drives the response buttons and the readiness toggle. */
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
-  /** Rendered under the controls row — e.g. the Matches tab's "Request debate" button. */
+  /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
 };
 
@@ -37,25 +38,14 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
   return validateEntityId(claim.claim_entity_id) && validateSpaceId(claim.space_id);
 }
 
-/** Only used when a side has no participants yet and so carries no server-supplied label. */
-function fallbackLabels(responseKind: DebateResponseKind) {
-  return responseKind === 'veracity'
-    ? { agree: 'Verify', disagree: 'Dispute' }
-    : { agree: 'Agree', disagree: 'Disagree' };
-}
-
 /**
- * The side pills are read-only summaries of who is available to debate — geo-chat data. Taking a
- * side is an on-chain response, so that goes through the same controls the claim page uses, paired
- * here with the readiness toggle exactly as `ClaimDebateReadiness` pairs them.
+ * Taking a side is an on-chain claim response, so the two side buttons are the only way to do it —
+ * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
+ * alongside them.
  */
 export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer }: Props) {
-  const forSide = positions.find(position => position.position === true);
-  const againstSide = positions.find(position => position.position === false);
-  const fallback = fallbackLabels(readiness.response_kind);
-  const viewerResponse = readiness.viewer_response;
-  // geo-chat is a separate system and can hand back a claim the knowledge graph has never seen.
-  // Responding to one is impossible, and asking the graph about it 400s, so don't offer or ask.
+  // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
+  // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
 
   return (
@@ -77,38 +67,158 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
           {claim.claim}
         </Text>
       )}
-      <div className="grid grid-cols-2 gap-2">
-        <PositionSummary
-          label={forSide?.position_label ?? fallback.agree}
-          summary={forSide}
-          position
-          selected={viewerResponse?.position === true}
-        />
-        <PositionSummary
-          label={againstSide?.position_label ?? fallback.disagree}
-          summary={againstSide}
-          position={false}
-          selected={viewerResponse?.position === false}
-        />
-      </div>
-      {/* Responding and going ready sit together here the same way they do on the claim page:
-          the response is the on-chain half, the toggle is the matchmaking half. */}
-      <div className="mt-3 flex items-start justify-between gap-3">
-        {isOnGraph ? (
-          <DebateEntityResponseControls
-            entityId={claim.claim_entity_id}
-            spaceId={claim.space_id}
-            responseKind={readiness.response_kind}
-          />
-        ) : (
-          <Text as="span" variant="footnote" color="grey-04">
-            Claim unavailable
-          </Text>
-        )}
-        <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-      </div>
+
+      {isOnGraph ? (
+        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
+      ) : (
+        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+      )}
+
       {footer}
     </motion.article>
+  );
+}
+
+/** The live case: the side buttons publish the viewer's on-chain response. */
+function RespondableControls({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  activeDebate?: boolean;
+}) {
+  const { submitResponse, optimisticResponse, isProcessingResponse, isConnected } = useEntityResponse({
+    entityId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    responseKind: readiness.response_kind,
+  });
+
+  const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
+  // The client knows its own response before geo-chat does, so prefer the local view while a
+  // response is still making its way through publishing and indexing.
+  const pending = optimisticResponse === undefined ? undefined : optimisticResponse;
+  const viewerPosition =
+    pending === undefined
+      ? (readiness.viewer_response?.position ?? null)
+      : pending === null
+        ? null
+        : pending === 'positive';
+
+  const respond = (position: boolean) => {
+    if (!isConnected) return;
+    submitResponse(viewerPosition === position ? 'clear' : position ? 'positive' : 'negative');
+  };
+
+  const actionTitle = (position: boolean) => {
+    if (!isConnected) return copy.connect;
+    if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
+    return position ? copy.positiveAction : copy.negativeAction;
+  };
+
+  return (
+    <>
+      <PositionRow
+        positions={positions}
+        responseKind={readiness.response_kind}
+        viewerPosition={viewerPosition}
+        onRespond={respond}
+        disabled={!isConnected || isProcessingResponse}
+        titleFor={actionTitle}
+      />
+      <div className="mt-3 flex justify-end">
+        <ClaimReadinessToggle
+          claim={claim}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          hasResponse={viewerPosition !== null}
+          responseIndexing={isProcessingResponse}
+        />
+      </div>
+    </>
+  );
+}
+
+/** The graph can't resolve this claim, so the sides are read-only and there's nothing to respond to. */
+function UnresolvableControls({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  activeDebate?: boolean;
+}) {
+  return (
+    <>
+      <PositionRow
+        positions={positions}
+        responseKind={readiness.response_kind}
+        viewerPosition={readiness.viewer_response?.position ?? null}
+      />
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <Text as="span" variant="footnote" color="grey-04">
+          Claim unavailable
+        </Text>
+        {/* Readiness is geo-chat state, so it still works without a graph id. */}
+        <ClaimReadinessToggle
+          claim={claim}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          hasResponse={readiness.viewer_response !== null}
+        />
+      </div>
+    </>
+  );
+}
+
+function PositionRow({
+  positions,
+  responseKind,
+  viewerPosition,
+  onRespond,
+  disabled,
+  titleFor,
+}: {
+  positions: DebateClaimPositionSummary[];
+  responseKind: MatchmakingReadiness['response_kind'];
+  viewerPosition: boolean | null;
+  onRespond?: (position: boolean) => void;
+  disabled?: boolean;
+  titleFor?: (position: boolean) => string;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const forSide = positions.find(position => position.position === true);
+  const againstSide = positions.find(position => position.position === false);
+
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <PositionButton
+        // Server labels win when a side has responders; otherwise fall back to the vocabulary for
+        // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
+        label={forSide?.position_label ?? copy.positiveAction}
+        summary={forSide}
+        position
+        selected={viewerPosition === true}
+        onRespond={onRespond}
+        disabled={disabled}
+        title={titleFor?.(true)}
+      />
+      <PositionButton
+        label={againstSide?.position_label ?? copy.negativeAction}
+        summary={againstSide}
+        position={false}
+        selected={viewerPosition === false}
+        onRespond={onRespond}
+        disabled={disabled}
+        title={titleFor?.(false)}
+      />
+    </div>
   );
 }
 
@@ -130,30 +240,50 @@ export function SpaceChip({ spaceId }: { spaceId: string }) {
   );
 }
 
-function PositionSummary({
+function PositionButton({
   label,
   summary,
   position,
   selected,
+  onRespond,
+  disabled,
+  title,
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
   position: boolean;
   selected: boolean;
+  onRespond?: (position: boolean) => void;
+  disabled?: boolean;
+  title?: string;
 }) {
-  return (
-    <div
-      className={cx(
-        'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
-        selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg'
-      )}
-    >
+  const className = cx(
+    'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
+    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg'
+  );
+  const content = (
+    <>
       <span className="truncate">
         {label}
-        {selected ? <span className="sr-only"> — your position</span> : null}
+        {selected ? <span className="sr-only"> — your response</span> : null}
       </span>
       {summary && summary.total_count > 0 ? <PositionAvatars summary={summary} /> : null}
-    </div>
+    </>
+  );
+
+  if (!onRespond) return <div className={className}>{content}</div>;
+
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      disabled={disabled}
+      title={title}
+      onClick={() => onRespond(position)}
+      className={cx(className, 'transition-colors disabled:opacity-60', !selected && !disabled && 'hover:bg-grey-01')}
+    >
+      {content}
+    </button>
   );
 }
 

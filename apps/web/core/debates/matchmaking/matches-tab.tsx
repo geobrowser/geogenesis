@@ -10,9 +10,8 @@ import { SpaceTopicFilters } from './claims-tab';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
-import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
-import { MatchmakingClaimCard, isResolvableClaim } from './matchmaking-claim-card';
+import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { useStableListOrder } from './use-stable-list-order';
 import type { DebatesHubTab } from '~/atoms';
@@ -47,18 +46,6 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
     [serverMatches]
   );
 
-  const responseTargets = React.useMemo(
-    () =>
-      serverMatches
-        .filter(match => isResolvableClaim(match.claim))
-        .map(match => ({
-          spaceId: match.claim.space_id,
-          entityId: match.claim.claim_entity_id,
-          responseKind: match.response_kind,
-        })),
-    [serverMatches]
-  );
-
   const filtered = React.useMemo(
     () => matches.filter(match => !spaceId || match.claim.space_id === spaceId),
     [matches, spaceId]
@@ -85,17 +72,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyMessage="No one with the opposite response is available yet."
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
-          <HubResponseBatch targets={responseTargets}>
-            <HubCardList>
-              {filtered.map(match => (
-                <MatchCard
-                  key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
-                  match={match}
-                  hasOutboundRequest={Boolean(outbound)}
-                />
-              ))}
-            </HubCardList>
-          </HubResponseBatch>
+          <HubCardList>
+            {filtered.map(match => (
+              <MatchCard
+                key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
+                match={match}
+                hasOutboundRequest={Boolean(outbound)}
+              />
+            ))}
+          </HubCardList>
         </HubQueryState>
       </div>
     </div>

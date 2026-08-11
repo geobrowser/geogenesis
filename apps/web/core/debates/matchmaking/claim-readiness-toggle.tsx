@@ -15,25 +15,39 @@ type Props = {
   readiness: MatchmakingReadiness;
   /** A claim already being debated can't take new readiness. */
   activeDebate?: boolean;
+  /**
+   * Whether the viewer has a response as *this client* sees it. geo-chat only learns about a
+   * response once it has been published and indexed, so its own copy lags — trusting it alone
+   * leaves the toggle dead for someone who has just responded.
+   */
+  hasResponse: boolean;
+  /** A response is still being published or indexed. */
+  responseIndexing?: boolean;
 };
 
 /**
- * Readiness is the only half of matchmaking the hub owns — the position underneath it is an
- * on-chain claim response set on the claim itself. So this can always stand you down, but it can
- * only stand you up once the server has an indexed response to derive your side from.
+ * Readiness is the half of matchmaking the hub owns — the position underneath it is an on-chain
+ * claim response. So this can always stand you down, but it can only stand you up on a claim you
+ * have responded to.
  */
-export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) {
+export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasResponse, responseIndexing }: Props) {
   const setReadiness = useClaimReadiness();
 
   const ready = readiness.viewer_debate_ready;
   const blockedReason = activeDebate ? 'This claim is being debated right now.' : readiness.readiness_disabled_reason;
-  const missingResponse = readiness.viewer_response === null;
-  const canTurnOn = !missingResponse && !blockedReason;
+  // Offer the toggle as soon as the viewer has responded. If geo-chat hasn't caught up it rejects
+  // the request and says so, which beats a dead control with no explanation.
+  const canTurnOn = hasResponse && !blockedReason && !responseIndexing;
   const disabled = setReadiness.isPending || (!ready && !canTurnOn);
 
   const explanation = ready
     ? undefined
-    : (blockedReason ?? (missingResponse ? `Respond to this claim to debate it.` : undefined));
+    : (blockedReason ??
+      (responseIndexing
+        ? 'Publishing your response…'
+        : !hasResponse
+          ? 'Respond to this claim to debate it.'
+          : undefined));
   const error = setReadiness.error instanceof Error ? setReadiness.error.message : null;
 
   const explanationId = React.useId();

@@ -16,9 +16,8 @@ import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
-import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
-import { MatchmakingClaimCard, isResolvableClaim } from './matchmaking-claim-card';
+import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -100,18 +99,6 @@ export function ClaimsTab() {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
-  const responseTargets = React.useMemo(
-    () =>
-      claims
-        .filter(entry => isResolvableClaim(entry.claim))
-        .map(entry => ({
-          spaceId: entry.claim.space_id,
-          entityId: entry.claim.claim_entity_id,
-          responseKind: entry.response_kind,
-        })),
-    [claims]
-  );
-
   const visibleClaims = React.useMemo(
     () =>
       topicId
@@ -168,19 +155,17 @@ export function ClaimsTab() {
         }
       >
         <>
-          <HubResponseBatch targets={responseTargets}>
-            <HubCardList>
-              {visibleClaims.map(entry => (
-                <MatchmakingClaimCard
-                  key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-                  claim={entry.claim}
-                  positions={entry.positions}
-                  readiness={entry}
-                  activeDebate={entry.active_debate}
-                />
-              ))}
-            </HubCardList>
-          </HubResponseBatch>
+          <HubCardList>
+            {visibleClaims.map(entry => (
+              <MatchmakingClaimCard
+                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                claim={entry.claim}
+                positions={entry.positions}
+                readiness={entry}
+                activeDebate={entry.active_debate}
+              />
+            ))}
+          </HubCardList>
           {claimsQuery.hasNextPage ? (
             <HubPillButton
               onClick={() => void claimsQuery.fetchNextPage()}
