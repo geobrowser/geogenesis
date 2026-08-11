@@ -12,59 +12,43 @@ const dynamicTabs = [
 ];
 
 describe('buildSpaceTabs', () => {
-  it('omits Claims when the feature flag is disabled', () => {
+  it('omits system Claims and Debates tabs', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: false,
       isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Governance', 'Activity']);
-  });
-
-  it('inserts Claims after content tabs and before Governance when enabled', () => {
-    const tabs = buildSpaceTabs({
-      spaceId,
-      overviewHref,
-      dynamicTabs,
-      typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: true,
-      isDebugDebatesPageEnabled: false,
-    });
-
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Governance', 'Activity']);
-    expect(tabs.find(tab => tab.label === 'Claims')?.href).toBe(`/space/${spaceId}/claims`);
+    expect(tabs.find(tab => tab.label === 'Claims')).toBeUndefined();
     expect(tabs.find(tab => tab.label === 'Debates')).toBeUndefined();
   });
 
-  it('keeps personal spaces from showing Governance while still showing Claims', () => {
+  it('keeps personal spaces from showing Governance', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
-      isDebatesEnabled: true,
       isDebugDebatesPageEnabled: false,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Activity']);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Activity']);
   });
 
-  it('keeps the system Claims route when a dynamic tab has the same label', () => {
+  it('keeps an authored Claims tab because the system tab is no longer shown', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Claims', href: `${overviewHref}?tabId=dynamic-claims` }],
       typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: true,
       isDebugDebatesPageEnabled: false,
     });
 
     expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Claims', 'Governance', 'Activity']);
-    expect(tabs.find(tab => tab.label === 'Claims')?.href).toBe(`/space/${spaceId}/claims`);
+    expect(tabs.find(tab => tab.label === 'Claims')?.href).toBe(`${overviewHref}?tabId=dynamic-claims`);
   });
 
   it('keeps an authored Debates tab because the system tab is no longer shown', () => {
@@ -73,7 +57,6 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Debates', href: `${overviewHref}?tabId=dynamic-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: true,
       isDebugDebatesPageEnabled: false,
     });
 
@@ -82,7 +65,6 @@ describe('buildSpaceTabs', () => {
       'Facts',
       'Sources',
       'Debates',
-      'Claims',
       'Governance',
       'Activity',
     ]);
@@ -95,7 +77,6 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: false,
       isDebugDebatesPageEnabled: true,
     });
 
@@ -110,34 +91,12 @@ describe('buildSpaceTabs', () => {
     expect(tabs.find(tab => tab.label === 'Debug debates')?.href).toBe(`/space/${spaceId}/debug-debates`);
   });
 
-  it('inserts Claims and Debug debates when both flags are enabled', () => {
-    const tabs = buildSpaceTabs({
-      spaceId,
-      overviewHref,
-      dynamicTabs,
-      typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: true,
-      isDebugDebatesPageEnabled: true,
-    });
-
-    expect(tabs.map(tab => tab.label)).toEqual([
-      'Overview',
-      'Facts',
-      'Sources',
-      'Claims',
-      'Debug debates',
-      'Governance',
-      'Activity',
-    ]);
-  });
-
   it('shows Debug debates in personal spaces without Governance', () => {
     const tabs = buildSpaceTabs({
       spaceId,
       overviewHref,
       dynamicTabs,
       typeIds: [SystemIds.SPACE_TYPE, SystemIds.PERSON_TYPE],
-      isDebatesEnabled: false,
       isDebugDebatesPageEnabled: true,
     });
 
@@ -150,7 +109,6 @@ describe('buildSpaceTabs', () => {
       overviewHref,
       dynamicTabs: [...dynamicTabs, { label: 'Debug debates', href: `${overviewHref}?tabId=debug-debates` }],
       typeIds: [SystemIds.SPACE_TYPE],
-      isDebatesEnabled: false,
       isDebugDebatesPageEnabled: true,
     });
 
