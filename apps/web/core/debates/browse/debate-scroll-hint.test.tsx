@@ -82,17 +82,16 @@ describe('DebateScrollHint', () => {
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
   });
 
-  // Regression: the feed is `snap-mandatory`, so the browser fires `scroll` on the
-  // container as the videos load and it re-snaps. An earlier version dismissed on that
-  // event, which spent the one-and-only showing before the hint ever painted.
-  it('keeps bouncing through scroll activity on the feed and stays unspent until it has played', async () => {
-    const scrollEl = document.createElement('div');
-    document.body.appendChild(scrollEl);
+  // Regression: the feed is `snap-mandatory`, so the browser fires `scroll` as the videos
+  // load and it re-snaps. An earlier version dismissed on that event, which spent the
+  // one-and-only showing before the hint ever painted. The hint now subscribes to no
+  // scroll source at all, so this guards the two a reimplementation would reach for.
+  it('keeps bouncing through scroll activity and stays unspent until it has played', async () => {
     renderHint();
 
     await act(async () => {
-      fireEvent.scroll(scrollEl);
       fireEvent.scroll(window);
+      fireEvent.scroll(document);
     });
     expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
     expect(isSpent()).toBe(false);

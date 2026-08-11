@@ -30,8 +30,8 @@ type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
  * written once the bounces have actually played: the feed is `snap-mandatory`, so the
  * browser's own snap adjustment fires `scroll` on the container while the videos load.
  * An earlier version dismissed on that event and spent the hint before it ever painted,
- * which is why there's no "viewer scrolled away" shortcut here — 2.1s is short enough
- * that letting it finish costs nothing, and no scroll event can be trusted this early.
+ * which is why there's no "viewer scrolled away" shortcut here — no scroll event can be
+ * trusted this early in layout, and the hint is brief enough to just let it finish.
  */
 export function DebateScrollHint({ className }: { className?: string }) {
   const hydrated = useHydrated();

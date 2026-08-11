@@ -77,8 +77,8 @@
 
   /* Animations */
   /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
-     BOUNCE_DURATION_MS in core/debates/browse/debate-scroll-hint.tsx, which sets the
-     iteration count and times the auto-dismiss — keep the two in sync. */
+     BOUNCE_DURATION_MS in apps/web/core/debates/browse/debate-scroll-hint.tsx, which
+     sets the iteration count and times the auto-dismiss — keep the two in sync. */
   --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
