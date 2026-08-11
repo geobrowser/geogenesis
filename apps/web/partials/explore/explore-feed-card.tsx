@@ -40,6 +40,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
       <DebateExploreFeedCard
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );

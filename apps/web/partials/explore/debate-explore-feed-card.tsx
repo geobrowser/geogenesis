@@ -23,6 +23,7 @@ import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreCommentsIcon } from './explore-comments-icon';
+import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
@@ -30,6 +31,8 @@ type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row (same semantics as ExploreFeedCard). */
   hideSpaceLink?: boolean;
+  /** Hide the Join-space chip in the meta row (same semantics as ExploreFeedCard). */
+  hideJoinButton?: boolean;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -43,7 +46,12 @@ type DebateExploreFeedCardProps = {
  * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), framed
  * in the explore card chrome — meta row, claim title, and the standard entity actions.
  */
-export function DebateExploreFeedCard({ item, hideSpaceLink = false, fallback }: DebateExploreFeedCardProps) {
+export function DebateExploreFeedCard({
+  item,
+  hideSpaceLink = false,
+  hideJoinButton = false,
+  fallback,
+}: DebateExploreFeedCardProps) {
   const debatesEnabled = useDebatesEnabled();
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
@@ -116,6 +124,16 @@ export function DebateExploreFeedCard({ item, hideSpaceLink = false, fallback }:
               <SpaceThumb image={item.spaceImage} name={item.spaceName} />
               <span className="min-w-0 truncate">{item.spaceName}</span>
             </Link>
+          ) : null}
+          {!hideJoinButton && !item.isMemberOrEditor ? (
+            // The design puts the join CTA as a compact chip beside the space name (the right
+            // side holds "View all"), unlike the generic card's right-aligned button.
+            <ExploreJoinSpaceButton
+              spaceId={item.spaceId}
+              hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+              variant="pill"
+              label="Join"
+            />
           ) : null}
           <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
             Debate

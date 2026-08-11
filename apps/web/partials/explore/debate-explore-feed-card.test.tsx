@@ -74,6 +74,10 @@ vi.mock('~/partials/entity-page/entity-row-actions', () => ({
   EntityRowActions: ({ children }: { children: React.ReactNode }) => <div data-testid="row-actions">{children}</div>,
 }));
 
+vi.mock('./explore-join-space-button', () => ({
+  ExploreJoinSpaceButton: () => <button type="button" data-testid="join-button" />,
+}));
+
 const item: ExploreFeedItem = {
   entityId: 'fd51f9352063461780397b672b23364c',
   spaceId: 'space-1',
@@ -222,5 +226,21 @@ describe('DebateExploreFeedCard', () => {
     renderCard();
     expect(screen.queryByRole('button', { name: 'Claims' })).toBeNull();
     expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
+  });
+
+  it('shows the Join-space chip to non-members and honors hideJoinButton', () => {
+    const nonMemberItem = { ...item, isMemberOrEditor: false };
+
+    const { unmount } = render(<DebateExploreFeedCard item={nonMemberItem} fallback={<div />} />);
+    expect(screen.getByTestId('join-button')).toBeDefined();
+    unmount();
+
+    render(<DebateExploreFeedCard item={nonMemberItem} hideJoinButton fallback={<div />} />);
+    expect(screen.queryByTestId('join-button')).toBeNull();
+  });
+
+  it('does not show the Join-space chip to members', () => {
+    renderCard();
+    expect(screen.queryByTestId('join-button')).toBeNull();
   });
 });
