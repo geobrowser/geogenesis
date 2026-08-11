@@ -146,6 +146,22 @@ describe('fetchFeaturedRankings', () => {
     expect(result[0].spaceImage).toBe('ipfs://space-image');
   });
 
+  it('still returns the ranking (without a leaderboard) when the top-entries lookup fails', async () => {
+    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getOrderedRelationTargetIdsMock.mockReturnValue(['e1c9f267dcb0d270718c2a3c45a64afd']);
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) {
+        return Effect.die(new Error('entities lookup down'));
+      }
+      return Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] });
+    });
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].topEntries).toEqual([]);
+  });
+
   it('still returns rankings when the space metadata lookup fails', async () => {
     getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
     getSpacesMock.mockImplementation(() => Effect.die(new Error('boom')));

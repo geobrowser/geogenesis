@@ -125,23 +125,31 @@ async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): 
 
 /**
  * Resolve the aggregated leaderboard's top entries (name + thumbnail), in
- * standings order. Best-effort: an entity that fails to resolve still renders,
- * as "Untitled" with no image, so the list keeps its positions.
+ * standings order. Best-effort twice over: an entity missing from the response
+ * still renders (as "Untitled" with no image) so the list keeps its positions,
+ * and a failed lookup yields an empty list so the ranking card still renders
+ * without its leaderboard instead of being dropped by the per-ranking catch.
  */
 async function resolveTopEntries(entityIds: string[], spaceId: string): Promise<FeaturedRankingEntry[]> {
   if (entityIds.length === 0) return [];
-  const { entities } = await Effect.runPromise(
-    getAllEntities({ filter: { id: { in: entityIds } }, spaceId, limit: entityIds.length })
-  );
-  const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-  return entityIds.map(entityId => {
-    const entity = entitiesById.get(entityId);
-    return {
-      entityId,
-      name: entity?.name?.trim() || 'Untitled',
-      image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
-    };
-  });
+
+  try {
+    const { entities } = await Effect.runPromise(
+      getAllEntities({ filter: { id: { in: entityIds } }, spaceId, limit: entityIds.length })
+    );
+    const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+    return entityIds.map(entityId => {
+      const entity = entitiesById.get(entityId);
+      return {
+        entityId,
+        name: entity?.name?.trim() || 'Untitled',
+        image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
+      };
+    });
+  } catch (error) {
+    console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
+    return [];
+  }
 }
 
 /**
