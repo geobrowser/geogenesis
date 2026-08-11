@@ -33,6 +33,7 @@ import {
   readDailyUploadComplete,
 } from '~/core/space/daily-activities-storage';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { mergeRelations } from '~/core/sync/orm';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -78,8 +79,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
     selector: r =>
       blockIds.includes(r.fromEntity.id) &&
       r.type.id === SystemIds.TYPES_PROPERTY &&
-      ID.equals(r.spaceId, spaceId) &&
-      !r.isDeleted,
+      ID.equals(r.spaceId, spaceId),
   });
 
   const blockValues = useValues({
@@ -121,16 +121,14 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
 
     for (const blockId of blockIds) {
       const initial = initialBlockEntities.find(b => b.id === blockId);
-      const relationsForBlock = [
-        ...typeRelations.filter(r => ID.equals(r.fromEntity.id, blockId)),
-        ...(initial?.relations ?? []).filter(
-          r =>
-            ID.equals(r.fromEntity.id, blockId) &&
-            r.type.id === SystemIds.TYPES_PROPERTY &&
-            ID.equals(r.spaceId, spaceId) &&
-            !r.isDeleted
-        ),
-      ];
+      const localTypeRelations = typeRelations.filter(r => ID.equals(r.fromEntity.id, blockId));
+      const snapshotTypeRelations = (initial?.relations ?? []).filter(
+        r =>
+          ID.equals(r.fromEntity.id, blockId) &&
+          r.type.id === SystemIds.TYPES_PROPERTY &&
+          ID.equals(r.spaceId, spaceId)
+      );
+      const relationsForBlock = mergeRelations(localTypeRelations, snapshotTypeRelations).filter(r => !r.isDeleted);
 
       if (!isRankingBlockEntity(blockId, relationsForBlock, spaceId)) continue;
 
