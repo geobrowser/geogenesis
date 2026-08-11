@@ -290,18 +290,28 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
         // The poll above proves the new rank entity is indexed under a direct id
         // fetch, but useMyRanking is a *list* query filtered by the SUBMITTED_TO
-        // relation, which can lag a beat behind. A single refetch that lands in
-        // that gap returns the previous (possibly rolled-off, therefore blanked)
-        // ballot, and the Share button / My ranking views don't flip to the fresh
-        // submission until the next natural refetch. Keep refetching until the
-        // list surfaces the ballot we just published, on the same time budget.
+        // relation, which can lag behind. A single refetch that lands in that gap
+        // returns the previous (possibly rolled-off, therefore blanked) ballot,
+        // and the Share button / My ranking views don't flip to the fresh
+        // submission until the next natural refetch. Await one refetch — the
+        // common case where the list is already caught up — and if it's still
+        // stale, keep nudging it detached so the retries never extend the
+        // "Publishing..." state.
         try {
-          const refetchStartedAt = Date.now();
-          for (;;) {
-            const { myRankEntity: refetchedRankEntity } = await refetchMyRanking();
-            if (refetchedRankEntity && ID.equals(refetchedRankEntity.id, rankId)) break;
-            if (Date.now() - refetchStartedAt >= MAX_POLL_DURATION_MS) break;
-            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+          const { myRankEntity: refetchedRankEntity } = await refetchMyRanking();
+          if (!refetchedRankEntity || !ID.equals(refetchedRankEntity.id, rankId)) {
+            void (async () => {
+              const refetchStartedAt = Date.now();
+              while (Date.now() - refetchStartedAt < MAX_POLL_DURATION_MS) {
+                await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+                try {
+                  const { myRankEntity: retried } = await refetchMyRanking();
+                  if (retried && ID.equals(retried.id, rankId)) return;
+                } catch {
+                  // Transient refetch failure — keep retrying within the budget.
+                }
+              }
+            })();
           }
         } catch (e) {
           console.error('[useRankingSubmissions] Refetch after publish failed:', e);
