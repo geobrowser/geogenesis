@@ -18,6 +18,8 @@ import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils'
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { ThumbDown } from '~/design-system/icons/thumb-down';
+import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { Text } from '~/design-system/text';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
@@ -298,13 +300,17 @@ function PositionButton({
 }) {
   const className = cx(
     'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
-    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-bg'
+    selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-grey-01'
   );
   const content = (
     <>
-      <span className="truncate">
-        {label}
-        {selected ? <span className="sr-only"> — your response</span> : null}
+      <span className="flex min-w-0 items-center gap-1.5">
+        {/* Filled once it's the side you hold, so the pill reads as taken even in a screenshot. */}
+        <span className="shrink-0">{position ? <ThumbUp filled={selected} /> : <ThumbDown filled={selected} />}</span>
+        <span className="truncate">
+          {label}
+          {selected ? <span className="sr-only"> — your response</span> : null}
+        </span>
       </span>
       {summary && summary.total_count > 0 ? <PositionAvatars summary={summary} /> : null}
     </>

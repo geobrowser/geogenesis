@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderComponent, screen, waitFor, within } from '@testing-library/react';
 
-import { type ReactNode, StrictMode } from 'react';
+import { type ReactElement, type ReactNode, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -179,7 +179,42 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/**
+ * A match now arrives minimized so it can never take over whatever the viewer was doing. Almost
+ * every test here is about the dialog behind it, so this opens it — the minimizing itself is
+ * covered by its own test below.
+ */
+function openMinimizedMatch() {
+  const open = screen.queryByRole('button', { name: 'Open' });
+  if (open) fireEvent.click(open);
+}
+
+function render(ui: ReactElement) {
+  const view = renderComponent(ui);
+  openMinimizedMatch();
+  return {
+    ...view,
+    rerender: (next: ReactElement) => {
+      view.rerender(next);
+      openMinimizedMatch();
+    },
+  };
+}
+
 describe('DebateMatchPrompt', () => {
+  // The viewer decides which of their matches to take up; a match landing on them is an
+  // announcement, not an interruption.
+  it('announces a new match in the corner instead of taking the screen', () => {
+    renderComponent(<DebateMatchPrompt spaceId="space-1" matches={[match()]} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('Match found: Bri')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+
+    expect(screen.getByRole('dialog', { name: 'The protocol should ship debates' })).toBeInTheDocument();
+  });
+
   it('opens a match modal and disables accept immediately after submitting the default format', async () => {
     mocks.acceptMutate.mockImplementation((_variables, options) => {
       options.onSuccess({ match: { ...match(), debate_id: 'debate-1' }, debate: debate() });

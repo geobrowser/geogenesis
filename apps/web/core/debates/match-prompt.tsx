@@ -90,6 +90,8 @@ function DebateMatchPromptContent({
   const [acceptingMatchId, setAcceptingMatchId] = React.useState<string | null>(null);
   const [dismissedMatchIds, setDismissedMatchIds] = React.useState<string[]>([]);
   const [minimizedMatchIds, setMinimizedMatchIds] = React.useState<string[]>([]);
+  /** Matches already offered to the viewer, so re-opening one doesn't re-minimize it. */
+  const surfacedMatchIdsRef = React.useRef<Set<string>>(new Set());
   const navigatedDebateIdRef = React.useRef<string | null>(null);
   const readyHandoffDebateIdRef = React.useRef<string | null>(null);
   const readyValidationDebateIdRef = React.useRef<string | null>(null);
@@ -122,10 +124,20 @@ function DebateMatchPromptContent({
 
   React.useEffect(() => {
     const activeIds = new Set(matches.map(match => match.id));
+    // A match is never something the viewer asked for at this instant — it arrives because the
+    // server paired them or because someone accepted their request. So it announces itself in the
+    // corner and waits to be opened, rather than taking over whatever they were doing.
+    const unseen = [...activeIds].filter(id => !surfacedMatchIdsRef.current.has(id));
+    surfacedMatchIdsRef.current = activeIds;
+
     setQueuedReadyMatchIds(current => current.filter(id => activeIds.has(id)));
     setAcceptingMatchId(current => (current && activeIds.has(current) ? current : null));
     setDismissedMatchIds(current => current.filter(id => activeIds.has(id)));
-    setMinimizedMatchIds(current => current.filter(id => activeIds.has(id)));
+    setMinimizedMatchIds(current => {
+      const retained = current.filter(id => activeIds.has(id));
+      if (unseen.length === 0) return retained.length === current.length ? current : retained;
+      return [...retained, ...unseen];
+    });
     setSelectedFormatIds(
       current =>
         Object.fromEntries(Object.entries(current).filter(([id]) => activeIds.has(id))) as Record<
