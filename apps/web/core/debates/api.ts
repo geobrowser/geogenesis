@@ -207,6 +207,10 @@ export type DebateActivity = {
   online: boolean;
   available_to_debate: boolean;
   cooldown_until: string | null;
+  /**
+   * Always `null` since GEO-2514 removed auto-pairing: nothing populates `active_match_id` any
+   * more. geo-chat keeps the field until every client has stopped reading it — nothing here does.
+   */
   match: DebateMatch | null;
   debate: Debate | null;
   rematch: DebateRematchSession | null;
@@ -345,6 +349,8 @@ export type DebateClaim = {
   readiness_disabled_reason: string | null;
   readiness_changed_at: string | null;
   online_choices: DebateOnlineChoice[];
+  /** Always `null` after GEO-2514: this only ever reported a *pending* match, and nothing creates
+   * one now. Left in the shape until geo-chat drops the field. */
   active_match: DebateMatch | null;
   active_debate: Debate | null;
   created_at: string;
@@ -518,11 +524,6 @@ export type JoinDebateQueueResponse = {
   match: DebateMatch | null;
 };
 
-export type MatchActionResponse = {
-  match: DebateMatch;
-  debate: Debate | null;
-};
-
 export type SpaceDebatesResponse = {
   debates: Debate[];
   matches: DebateMatch[];
@@ -673,46 +674,23 @@ export async function listDebateClaims(
 }
 
 /**
- * Standing ready on a claim.
- *
- * `source: 'hub'` is what tells geo-chat this is matchmaking readiness rather than a legacy queue
- * join — without it the server treats the call as the old auto-pairing path and pairs the viewer
- * with the first opposite-position holder it finds, which consumes the match before it can ever be
- * offered in the Matches tab. Every readiness toggle in the app is matchmaking now, so every caller
- * sends it; the parameter exists only so the legacy shape stays expressible.
+ * Standing ready on a claim — pure intent, since GEO-2514's cutover left requests as the only route
+ * into a debate. The endpoint takes no body: one used to carry a client-chosen position, and a
+ * `source` discriminator briefly lived here to separate hub readiness from legacy queue joins, so
+ * geo-chat rejects any body at all with 426.
  */
 export async function joinDebateQueue(
   spaceId: string,
   claimId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null,
-  source: 'hub' | 'legacy' = 'hub'
+  accountKey: string | null
 ) {
-  const join = (body?: unknown) =>
-    geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
-      method: 'POST',
-      auth: true,
-      getPrivyIdentityToken,
-      accountKey,
-      body,
-    });
-
-  if (source === 'legacy') return join();
-
-  try {
-    return await join({ source: 'hub' });
-  } catch (error) {
-    // A geo-chat that predates `source` rejects *any* body here with 426, because a body used to
-    // mean a client-chosen position — which is retired. Falling back keeps readiness working
-    // against an older server instead of leaving the toggle dead; the cost is that such a server
-    // still auto-pairs, so this is noisy on purpose and should be deleted once every environment
-    // has the `source`-aware endpoint.
-    if (!(error instanceof GeoChatRequestError) || error.status !== 426) throw error;
-    console.warn(
-      '[debates] geo-chat rejected the readiness `source` field, so this server will still auto-pair on readiness. Update geo-chat to the source-aware /debate-queue endpoint.'
-    );
-    return join();
-  }
+  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
 }
 
 export async function leaveDebateQueue(
@@ -756,34 +734,6 @@ export async function notifyClaimResponseIndexed(
       await waitForResponseNotificationRetry(250 * 2 ** attempt, signal);
     }
   }
-}
-
-export async function acceptDebateMatch(
-  matchId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null,
-  formatId?: string
-) {
-  return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/accept`, {
-    method: 'POST',
-    body: { format_id: formatId },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
-
-export async function declineDebateMatch(
-  matchId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/decline`, {
-    method: 'POST',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
 }
 
 export async function listSpaceDebates(

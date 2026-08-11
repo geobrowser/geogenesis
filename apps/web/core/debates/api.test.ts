@@ -235,10 +235,9 @@ describe('matchmaking', () => {
 });
 
 describe('debate queue readiness', () => {
-  // Without `source: 'hub'` geo-chat reads the call as a legacy queue join and auto-pairs the
-  // viewer on the spot, consuming the match before the Matches tab can ever offer it. The body
-  // still carries no position — those are derived from the on-chain response and rejected here.
-  it('joins as matchmaking readiness, carrying a source but never a position', async () => {
+  // The endpoint takes no body at all: a body once meant a client-chosen position, and briefly a
+  // `source` discriminator for the legacy/hub split that GEO-2514 removed. geo-chat 426s either.
+  it('joins with no body', async () => {
     const response = { claim: { id: 'claim-1' }, match: null };
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(response), {
@@ -252,43 +251,13 @@ describe('debate queue readiness', () => {
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue', {
       method: 'POST',
-      headers: { Authorization: 'Bearer access-token', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: 'hub' }),
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
       signal: undefined,
     });
   });
 
-  // An older geo-chat rejects any body here as a retired client-chosen position. Readiness has to
-  // keep working against it — a dead toggle is worse than a server that still auto-pairs.
-  it('falls back to the bodyless join when the server has not learned about `source`', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const fetch = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: 'this client-selected debate position endpoint has been retired' }), {
-          status: 426,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ claim: { id: 'claim-1' }, match: null }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      );
-    vi.stubGlobal('fetch', fetch);
-
-    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).resolves.toEqual({
-      claim: { id: 'claim-1' },
-      match: null,
-    });
-
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: undefined });
-    expect(warn).toHaveBeenCalled();
-  });
-
-  it('does not retry a readiness failure that is not the retired-body one', async () => {
+  it('surfaces a readiness failure rather than retrying it', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ error: 'claim response required', code: 'claim_response_required' }), {
         status: 409,
@@ -299,23 +268,6 @@ describe('debate queue readiness', () => {
 
     await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).rejects.toBeInstanceOf(GeoChatRequestError);
     expect(fetch).toHaveBeenCalledOnce();
-  });
-
-  it('can still make the legacy bodyless join', async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ claim: { id: 'claim-1' }, match: null }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    );
-    vi.stubGlobal('fetch', fetch);
-
-    await joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a', 'legacy');
-
-    expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue',
-      expect.objectContaining({ method: 'POST', body: undefined })
-    );
   });
 });
 
