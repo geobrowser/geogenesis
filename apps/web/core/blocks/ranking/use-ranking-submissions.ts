@@ -36,6 +36,10 @@ export type RankingSubmissionPublishResult = {
   orderedEntityIds: string[];
   authorName: string | null;
   authorAvatarUrl: string | null;
+  /** Resolves once the indexer reflects the published order (or the poll budget
+   *  lapses). OG-image generation reads indexed data, so callers should chain it
+   *  on this — but never block navigation on it. Never rejects. */
+  indexingSettled: Promise<void>;
 };
 
 function createdAtToEpochMillis(value: string): number {
@@ -276,39 +280,43 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
         });
 
-        // Poll until the indexer reflects the exact order we just submitted, then
-        // return so the OG image generates against indexed data. A short upfront
-        // settle plus a dense interval detects indexing close to when it lands; the
-        // extra polls are light indexed reads. Bounded by an overall time budget.
-        const INITIAL_DELAY_MS = 500;
-        const POLL_INTERVAL_MS = 750;
-        const MAX_POLL_DURATION_MS = 60_000;
+        // Everything past this point is index convergence: the published ballot
+        // is already live in the UI via the pin, so the caller (and its
+        // post-publish redirect) must not wait on it. `indexingSettled` polls
+        // until the indexer reflects the exact order we just submitted (bounded
+        // by a time budget) — the earliest point OG images can be generated from
+        // indexed data — then refetches so the pinned query converges onto
+        // indexed truth. It never rejects.
+        const indexingSettled = (async () => {
+          const INITIAL_DELAY_MS = 500;
+          const POLL_INTERVAL_MS = 750;
+          const MAX_POLL_DURATION_MS = 60_000;
 
-        const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
-        const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+          const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
+          const matchesExpectedOrder = (ids: string[]) =>
+            ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
 
-        const pollStartedAt = Date.now();
-        await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
-        while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
-          try {
-            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
-              break;
+          const pollStartedAt = Date.now();
+          await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
+          while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
+            try {
+              const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+              if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+                break;
+              }
+            } catch (e) {
+              console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
             }
-          } catch (e) {
-            console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
           }
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-        }
 
-        // The UI already flipped to the published ballot when it was pinned
-        // above; this refetch just gives the pinned query a chance to converge
-        // onto indexed data now that the order poll has confirmed it landed.
-        try {
-          await refetchMyRanking();
-        } catch (e) {
-          console.error('[useRankingSubmissions] Refetch after publish failed:', e);
-        }
+          try {
+            await refetchMyRanking();
+          } catch (e) {
+            console.error('[useRankingSubmissions] Refetch after publish failed:', e);
+          }
+        })();
+
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
 
@@ -318,6 +326,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           orderedEntityIds: votes.map(vote => vote.entityId),
           authorName: profile?.name ?? null,
           authorAvatarUrl,
+          indexingSettled,
         };
       } finally {
         setIsSaving(false);
