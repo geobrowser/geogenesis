@@ -34,11 +34,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function renderHint(scrollEl: HTMLElement | null = null) {
+function renderHint() {
   return render(
     <Provider store={store}>
-      <DebateScrollHint scrollEl={scrollEl} />
+      <DebateScrollHint />
     </Provider>
+  );
+}
+
+function isSpent() {
+  return JSON.parse(localStorage.getItem('dismissedProductOnboardingHints') ?? '[]').includes(
+    'geoDebateScrollHintDismissedV1'
   );
 }
 
@@ -76,24 +82,30 @@ describe('DebateScrollHint', () => {
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
   });
 
-  it('retires early once the viewer scrolls the feed', async () => {
+  // Regression: the feed is `snap-mandatory`, so the browser fires `scroll` on the
+  // container as the videos load and it re-snaps. An earlier version dismissed on that
+  // event, which spent the one-and-only showing before the hint ever painted.
+  it('keeps bouncing through scroll activity on the feed and stays unspent until it has played', async () => {
     const scrollEl = document.createElement('div');
     document.body.appendChild(scrollEl);
-    renderHint(scrollEl);
+    renderHint();
 
-    await advance(300);
     await act(async () => {
       fireEvent.scroll(scrollEl);
+      fireEvent.scroll(window);
     });
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
+    expect(isSpent()).toBe(false);
+
+    await advance(BOUNCE_MS - 1);
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
+    expect(isSpent()).toBe(false);
+
+    await advance(1);
     expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-0');
 
     await advance(FADE_MS);
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
-
-    // A scroll counts as "message received" — the nudge is spent, not merely postponed.
-    cleanup();
-    store = createStore();
-    renderHint(scrollEl);
-    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+    expect(isSpent()).toBe(true);
   });
 });

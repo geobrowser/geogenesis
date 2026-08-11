@@ -349,7 +349,7 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
-          {showScrollHint && <DebateScrollHint scrollEl={root} className="mt-4 md:mt-[30px]" />}
+          {showScrollHint && <DebateScrollHint className="mt-4 md:mt-[30px]" />}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">

@@ -24,10 +24,14 @@ type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
  * times below the first debate, then fades out for good — the affordance is invisible
  * otherwise, since a single debate fills the viewport with no scrollbar to give it away.
  *
- * Shown once per browser (persisted alongside the other product hints) and retired early
- * the moment the viewer scrolls, since by then they've clearly found it themselves.
+ * Shown once per browser, persisted alongside the other product hints. The flag is only
+ * written once the bounces have actually played: the feed is `snap-mandatory`, so the
+ * browser's own snap adjustment fires `scroll` on the container while the videos load.
+ * An earlier version dismissed on that event and spent the hint before it ever painted,
+ * which is why there's no "viewer scrolled away" shortcut here — 2.1s is short enough
+ * that letting it finish costs nothing, and no scroll event can be trusted this early.
  */
-export function DebateScrollHint({ scrollEl, className }: { scrollEl: HTMLElement | null; className?: string }) {
+export function DebateScrollHint({ className }: { className?: string }) {
   const hydrated = useHydrated();
   const [dismissedHints, setDismissedHints] = useAtom(dismissedHintsAtom);
   const [phase, setPhase] = React.useState<Phase>('pending');
@@ -42,14 +46,9 @@ export function DebateScrollHint({ scrollEl, className }: { scrollEl: HTMLElemen
 
   React.useEffect(() => {
     if (phase !== 'bouncing') return;
-    const finish = () => setPhase('leaving');
-    const timer = window.setTimeout(finish, BOUNCE_COUNT * BOUNCE_DURATION_MS);
-    scrollEl?.addEventListener('scroll', finish, { passive: true, once: true });
-    return () => {
-      window.clearTimeout(timer);
-      scrollEl?.removeEventListener('scroll', finish);
-    };
-  }, [phase, scrollEl]);
+    const timer = window.setTimeout(() => setPhase('leaving'), BOUNCE_COUNT * BOUNCE_DURATION_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase]);
 
   React.useEffect(() => {
     if (phase !== 'leaving') return;
