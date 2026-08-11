@@ -188,8 +188,8 @@ export function DebatesBrowseFeed({
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           root={scrollEl}
-          // Only the debate the viewer is looking at bounces along with the nudge.
-          bounceWithScrollHint={index === 0 && scrollHint.isVisible}
+          // Only the debate the viewer is looking at carries the nudge and lifts with it.
+          scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);
@@ -217,15 +217,7 @@ export function DebatesBrowseFeed({
   // toggling the claims/join panel doesn't remount the players and restart playback.
   return (
     <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
-      <div className="relative min-w-0 flex-1">
-        {feed}
-        {/* Pinned to the bottom of the feed viewport rather than placed under the debate:
-            the media column is sized to eat the viewport height minus a fixed reserve
-            (`--debate-feed-column-width`), so anything in flow below it lands off-screen. */}
-        {scrollHint.isVisible && (
-          <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 bottom-4" />
-        )}
-      </div>
+      <div className="min-w-0 flex-1">{feed}</div>
       {sidePanel}
     </div>
   );
@@ -238,7 +230,7 @@ function DebateFeedItem({
   topics,
   active,
   root,
-  bounceWithScrollHint,
+  scrollHint,
   onActivate,
   onOpenJoin,
   onOpenClaims,
@@ -249,7 +241,7 @@ function DebateFeedItem({
   topics: string[];
   active: boolean;
   root: HTMLElement | null;
-  bounceWithScrollHint: boolean;
+  scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
@@ -294,11 +286,11 @@ function DebateFeedItem({
           gesture reads as the feed scrolling rather than as one element twitching. Shared
           animation props keep the card and the indicator in step. */}
       <div
-        className={cx('flex items-stretch gap-3', bounceWithScrollHint && scrollHintBounceProps.className)}
-        style={bounceWithScrollHint ? scrollHintBounceProps.style : undefined}
+        className={cx('flex items-stretch gap-3', scrollHint?.isVisible && scrollHintBounceProps.className)}
+        style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
       >
         <div
-          className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
@@ -329,6 +321,11 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
+          {/* `top-full` hangs it just below the debate without taking part in the column's
+              height, which the media sizing has no room to spare for. */}
+          {scrollHint?.isVisible && (
+            <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
+          )}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">

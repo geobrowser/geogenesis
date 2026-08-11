@@ -34,18 +34,17 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Mirrors how the feed wires the hook up: the debate card lifts alongside the pinned nudge. */
+/** Mirrors how the feed wires the hook up: the indicator rides inside the lifting card. */
 function Feed({ enabled = true }: { enabled?: boolean }) {
   const hint = useDebateScrollHint(enabled);
   return (
-    <>
-      <div
-        data-testid="card"
-        className={hint.isVisible ? scrollHintBounceProps.className : undefined}
-        style={hint.isVisible ? scrollHintBounceProps.style : undefined}
-      />
-      {hint.isVisible && <DebateScrollHint leaving={hint.isLeaving} className="absolute inset-x-0 bottom-4" />}
-    </>
+    <div
+      data-testid="card"
+      className={hint.isVisible ? scrollHintBounceProps.className : undefined}
+      style={hint.isVisible ? scrollHintBounceProps.style : undefined}
+    >
+      {hint.isVisible && <DebateScrollHint leaving={hint.isLeaving} className="absolute inset-x-0 top-full mt-4" />}
+    </div>
   );
 }
 
@@ -74,8 +73,7 @@ describe('DebateScrollHint', () => {
     renderHint();
 
     const hint = screen.getByTestId('debate-scroll-hint');
-    expect(hint).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none', 'opacity-100');
-    expect(hint).toHaveStyle({ animationIterationCount: '6' });
+    expect(hint).toHaveClass('opacity-100');
     expect(hint).toHaveTextContent('Scroll');
     expect(hint).toHaveTextContent('Swipe');
 
@@ -97,14 +95,18 @@ describe('DebateScrollHint', () => {
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
   });
 
-  it('lifts the card on the same animation, and only while the nudge is up', async () => {
+  it('lifts the card, carrying the indicator, and only while the nudge is up', async () => {
     renderHint();
 
-    // Same animation and iteration count on both, so they move as one gesture.
     const card = screen.getByTestId('card');
     expect(card).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none');
     expect(card).toHaveStyle({ animationIterationCount: '6' });
-    expect(screen.getByTestId('debate-scroll-hint')).toHaveStyle({ animationIterationCount: '6' });
+
+    // The indicator rides the card's transform. Animating it too would compound with its
+    // parent's and move it twice as far as the debate it's meant to travel with.
+    const hint = screen.getByTestId('debate-scroll-hint');
+    expect(card).toContainElement(hint);
+    expect(hint).not.toHaveClass('animate-debate-scroll-hint');
 
     // Split: the fade timer is only scheduled once the bounce timer has fired.
     await advance(BOUNCE_MS);

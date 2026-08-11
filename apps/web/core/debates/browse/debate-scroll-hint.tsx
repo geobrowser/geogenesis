@@ -18,9 +18,9 @@ const BOUNCE_COUNT = 6;
 const FADE_OUT_MS = 200;
 
 /**
- * Applied to both the hint and the debate media so they bounce as one gesture. Sharing the
- * props is what keeps them in step: same animation, same iteration count, and both classes
- * land in the same commit, so the browser starts them on the same frame.
+ * Applied to the debate card, which contains the indicator — so the whole thing travels as
+ * one gesture and the two can't drift out of step. Nothing else should apply this: an
+ * element inside the card would compound its parent's transform and move twice as far.
  */
 export const scrollHintBounceProps = {
   className: 'animate-debate-scroll-hint motion-reduce:animate-none',
@@ -79,10 +79,17 @@ export function useDebateScrollHint(enabled: boolean) {
 }
 
 /**
- * The chevrons-and-label nudge itself. Rendered as an overlay pinned to the bottom of the
- * feed, never in the item's flow: the media column is sized to consume the viewport height
- * minus a fixed reserve (`--debate-feed-column-width`), so anything added below it is
- * pushed off the bottom of the screen.
+ * The chevrons-and-label nudge itself. Positioned absolutely just under the debate rather
+ * than in flow — the media column is sized to consume the viewport height minus a fixed
+ * reserve (`--debate-feed-column-width`), so anything added below it in flow is pushed off
+ * the bottom of the screen.
+ *
+ * Anchored to the debate and not to the feed container: `100dvh` can overshoot the height
+ * actually on screen once browser chrome is accounted for, which drops the container's own
+ * bottom edge below the fold and takes anything pinned to it along. The debate's bottom is
+ * always visible, so measuring from there is the offset that holds.
+ *
+ * Carries no animation of its own; it sits inside the card, so it inherits the lift.
  */
 export function DebateScrollHint({ leaving, className }: { leaving: boolean; className?: string }) {
   return (
@@ -90,12 +97,11 @@ export function DebateScrollHint({ leaving, className }: { leaving: boolean; cla
       aria-hidden
       data-testid="debate-scroll-hint"
       className={cx(
-        scrollHintBounceProps.className,
         'pointer-events-none flex items-center justify-center gap-1.5 text-grey-04 transition-opacity',
         leaving ? 'opacity-0' : 'opacity-100',
         className
       )}
-      style={{ ...scrollHintBounceProps.style, transitionDuration: `${FADE_OUT_MS}ms` }}
+      style={{ transitionDuration: `${FADE_OUT_MS}ms` }}
     >
       <ChevronsDown />
       {/* NB: breakpoints here are desktop-first (md = max-width:767px), so md: targets

@@ -207,17 +207,18 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
   });
 
-  // The media column is sized to consume the viewport height minus a fixed reserve, so a
-  // hint placed under the debate lands off the bottom of the screen. It has to be pinned
-  // outside the scrolling item list instead.
-  it('pins the nudge outside the feed items so it cannot be pushed off-screen', () => {
+  // The media column has no height to spare for a hint in flow, and `100dvh` can overshoot
+  // what's actually on screen — so the nudge hangs off the debate out of flow, rather than
+  // being pinned to a container edge that may itself sit below the fold.
+  it('hangs the nudge off the debate, out of flow and inside the lifting card', () => {
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     const hint = screen.getByTestId('scroll-hint');
-    expect(hint.closest('section')).toBeNull();
-    expect(hint.closest('.snap-y')).toBeNull();
-    expect(hint).toHaveClass('absolute', 'bottom-4');
+    expect(hint).toHaveClass('absolute', 'top-full');
+    // Inside the card, so it travels with the debate instead of animating separately.
+    expect(hint.closest('.bounce-stub')).not.toBeNull();
+    expect(hint.closest('section')).toContainElement(screen.getByTestId('player-debate-1'));
   });
 
   it('lifts the whole landing debate with the nudge, and nothing below it', () => {
