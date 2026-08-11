@@ -52,10 +52,7 @@ export function useRankingAccumulatedRows() {
   // not an implicit filter on the entities they can rank. Keep browse mode in
   // sync with typed search by exposing every entity that matches the block's
   // persisted filters, including older entities in a rolling ranking.
-  const pageRows = React.useMemo(
-    () => mappingToRows(entities ?? [], shownColumnIds, []),
-    [entities, shownColumnIds]
-  );
+  const pageRows = React.useMemo(() => mappingToRows(entities ?? [], shownColumnIds, []), [entities, shownColumnIds]);
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 

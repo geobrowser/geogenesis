@@ -1,7 +1,7 @@
 'use client';
 
 import { useLogout } from '@geogenesis/auth';
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,6 +20,7 @@ import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboa
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
+import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { hasSeenAssistantAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import { E } from '~/core/sync/orm';
@@ -42,6 +43,7 @@ import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
+import { type OnboardingStep, shouldOpenOnboardingDialog } from './onboarding-dialog-visibility';
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export const nameAtom = atomWithStorage<string>('onboardingName', '');
@@ -49,12 +51,10 @@ export const topicIdAtom = atomWithStorage<string>('onboardingEntityId', '');
 export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
-type Step = 'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
-
 // 'start' and 'create-space' linger in the type only to normalize values
 // persisted by an older version — onboarding now opens straight on name/avatar
 // and runs to 'completed' with no separate create step (see effectiveStep).
-export const stepAtom = atomWithStorage<Step>('onboardingStep', 'enter-profile');
+export const stepAtom = atomWithStorage<OnboardingStep>('onboardingStep', 'enter-profile');
 
 const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the "Finalizing details…" animation plays before we route the user
@@ -183,7 +183,7 @@ export const OnboardingDialog = () => {
   return (
     // Stay open through the completion animation — `setPending` flips
     // `isOnboardingVisible` false, but we want the animation to finish first.
-    <Root open={isOnboardingVisible || step === 'completed'}>
+    <Root open={shouldOpenOnboardingDialog(isOnboardingVisible, step)}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text opacity-20" />
         <Content
@@ -324,7 +324,7 @@ function StepOnboarding({ onProfileContinue }: StepOnboardingProps) {
     const file = e.target.files[0];
     setIsUploadingAvatar(true);
     try {
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
+      const { cid } = await uploadGeoImage({ blob: file });
       setAvatar(cid);
     } catch (error) {
       console.error('Avatar upload failed:', error);

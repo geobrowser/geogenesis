@@ -1,7 +1,5 @@
 import * as React from 'react';
 
-import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
@@ -20,7 +18,7 @@ type GovernanceFilters = {
 
 type Props = {
   header: React.ReactNode;
-  sidebarCounts?: SidebarCounts;
+  sidebar: React.ReactNode;
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
@@ -33,7 +31,7 @@ type Props = {
 
 export async function Component({
   header,
-  sidebarCounts,
+  sidebar,
   proposalType,
   connectedAddress,
   connectedSpaceId,
@@ -94,7 +92,7 @@ export async function Component({
               </React.Suspense>
             )
           }
-          sidebarCounts={sidebarCounts}
+          sidebar={sidebar}
         />
       </div>
     </>

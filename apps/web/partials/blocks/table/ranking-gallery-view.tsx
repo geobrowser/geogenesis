@@ -4,13 +4,19 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { useEntityMedia, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
+import { type BlockMainMedia, useBlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
+import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
+import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
+
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
@@ -19,30 +25,62 @@ import type { RankingBlockState } from './use-ranking-block-state';
 function RankingGalleryCard({
   entityId,
   spaceId,
+  voteSpaceId,
   name,
   imageHint,
+  mainMedia,
 }: {
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
   imageHint?: string | null;
+  mainMedia: BlockMainMedia | null;
 }) {
-  const { avatarUrl, coverUrl } = useEntityMedia(entityId, spaceId);
-  const directIpfs = imageHint && imageHint.startsWith('ipfs://') ? imageHint : undefined;
-  const lookedUpFromHint = useImageUrlFromEntity(imageHint && !directIpfs ? imageHint : undefined, spaceId);
-  const imageUrl = directIpfs ?? lookedUpFromHint ?? coverUrl ?? avatarUrl ?? PLACEHOLDER_SPACE_IMAGE;
+  const imageUrl =
+    useBlockMainMediaUrl({
+      entityId,
+      spaceId,
+      mediaPropertyId: mainMedia?.propertyId ?? null,
+      mediaKind: mainMedia?.kind,
+      fallbackHint: imageHint,
+    }) ?? PLACEHOLDER_SPACE_IMAGE;
+
+  // When a property sets explicit dimensions, keep the card at the configured aspect ratio
+  // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
+  const mediaImageFitClassName = mediaFrame.hasCustomHeight ? 'object-contain' : 'object-cover';
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
     <div className="w-[240px] shrink-0 select-none">
       <Link href={href} className="block" draggable={false}>
-        <div className="relative h-[120px] w-[240px] overflow-hidden rounded-xl bg-grey-01">
-          <GeoImage value={imageUrl} className="pointer-events-none object-cover" fill alt="" draggable={false} />
+        <div
+          className={cx(
+            'relative w-[240px] overflow-hidden rounded-xl bg-grey-01',
+            !mediaFrame.hasCustomHeight && 'h-[120px]'
+          )}
+          style={mediaFrame.style}
+        >
+          <GeoImage
+            value={imageUrl}
+            className={cx('pointer-events-none', mediaImageFitClassName)}
+            fill
+            alt=""
+            draggable={false}
+          />
         </div>
       </Link>
       <Link href={href} className="mt-2 block" draggable={false}>
         <p className="line-clamp-2 text-[19px] leading-[1.3] font-medium text-text">{name}</p>
       </Link>
+      <div
+        className="mt-2 flex h-5 items-center"
+        onPointerDown={event => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
+      >
+        <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} />
+      </div>
     </div>
   );
 }
@@ -52,6 +90,7 @@ function RankingGalleryCardSkeleton({ keyId }: { keyId: string }) {
     <div key={keyId} className="w-[240px] shrink-0">
       <Skeleton className="h-[120px] w-[240px] rounded-xl" />
       <Skeleton className="mt-2 h-6 w-[180px]" />
+      <Skeleton className="mt-2 h-5 w-16" />
     </div>
   );
 }
@@ -164,6 +203,7 @@ type Props = {
 export function RankingGalleryView({ state }: Props) {
   const {
     spaceId,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     totalGlobalRankingEntityCount,
@@ -174,11 +214,14 @@ export function RankingGalleryView({ state }: Props) {
     aggregatedRankingCount,
     periodState,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
   } = state;
+
+  const { shownColumnIds } = useView();
+  const properties = useProperties(shownColumnIds, spaceId);
+  const mainMedia = useBlockMainMedia(shownColumnIds, properties);
 
   const cards = globalDisplayEntityIds
     .map(entityId => {
@@ -190,8 +233,10 @@ export function RankingGalleryView({ state }: Props) {
           key={entityId}
           entityId={entityId}
           spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
           name={entry.name}
           imageHint={entry.image}
+          mainMedia={mainMedia}
         />
       );
     })
@@ -225,7 +270,6 @@ export function RankingGalleryView({ state }: Props) {
         {showEmbeddedGlobalPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
               hasNextPage={hasEmbeddedGlobalNextPage}
               onSetPage={setEmbeddedGlobalPage}
