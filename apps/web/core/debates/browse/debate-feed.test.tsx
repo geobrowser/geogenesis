@@ -130,16 +130,56 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
-    expect(feedItem).toHaveClass('items-center', 'md:items-start', 'md:py-3');
+    expect(feedItem).toHaveClass(
+      'items-center',
+      'pb-[2.75rem]',
+      'md:h-auto',
+      'md:min-h-full',
+      'md:items-start',
+      'md:py-3'
+    );
     const feedContent = feedItem.firstElementChild;
     assert(feedContent, 'Expected the debate feed item to render its content');
-    expect(feedContent).toHaveClass('-translate-y-[1.375rem]', 'md:translate-y-0');
+    expect(feedContent).not.toHaveClass('-translate-y-[1.375rem]');
     const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 9.792rem)), 640px)',
+      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
     });
+  });
+
+  it('clamps long claims and lets mobile users expand them', () => {
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'H2' ? 72 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'H2' ? 48 : 0;
+      });
+
+    try {
+      const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      const heading = screen.getByRole('heading', { name: claim });
+      expect(heading).toHaveClass('line-clamp-2', 'min-h-[42px]');
+      expect(heading).toHaveAttribute('title', claim);
+
+      const toggle = screen.getByRole('button', { name: 'Show more' });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+
+      expect(heading).toHaveClass('md:line-clamp-none');
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+    }
   });
 
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {

@@ -32,10 +32,9 @@ import { JoinDebatePanel } from './join-debate-panel';
 const PAGE_SIZE = 5;
 const SHARE_PREPARATION_DWELL_MS = 5_000;
 const DEBATE_COLUMN_STYLE = {
-  // At Figma's 1366x768 desktop frame this resolves to 480px. The height term
-  // grows or shrinks the media with the viewport while reserving the navbar,
-  // header, media gap, and the design's vertical breathing room.
-  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 9.792rem)), 640px)',
+  // Grow or shrink the media with the viewport while reserving the navbar,
+  // a two-line claim title, the media gap, and vertical breathing room.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
 } as React.CSSProperties;
 
 export function DebatesBrowseFeed({
@@ -321,12 +320,11 @@ function DebateFeedItem({
   return (
     <section
       ref={itemRef}
-      className="flex h-full snap-start items-center justify-center px-4 md:items-start md:px-2 md:py-3"
+      className="flex h-full snap-start items-center justify-center px-4 pb-[2.75rem] md:h-auto md:min-h-full md:items-start md:px-2 md:py-3"
     >
-      {/* The feed starts below the 44px navbar. Shift its centered desktop
-          content up by half that height so the composition is centered against
-          the full viewport, not just the area beneath the navbar. */}
-      <div className="-translate-y-[1.375rem] flex items-stretch gap-3 md:translate-y-0">
+      {/* The feed starts below the 44px navbar. Matching that inset below the
+          content centers the complete desktop composition in the viewport. */}
+      <div className="flex items-stretch gap-3">
         <div
           className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
@@ -381,6 +379,24 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
+  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
+
+  React.useEffect(() => setIsClaimExpanded(false), [claim]);
+
+  React.useLayoutEffect(() => {
+    const element = claimRef.current;
+    if (!element || isClaimExpanded) return;
+
+    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measureOverflow();
+
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [claim, isClaimExpanded]);
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -417,14 +433,25 @@ function DebateTitleHeader({
           Join a debate
         </Button>
       </div>
-      <Text
-        as="h2"
-        variant="cardEntityTitle"
-        color="text"
-        className="!text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px]"
+      <h2
+        ref={claimRef}
+        title={isClaimOverflowing ? claim : undefined}
+        className={`min-h-[42px] text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:min-h-0 md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
+        }`}
       >
         {claim}
-      </Text>
+      </h2>
+      {isClaimOverflowing && (
+        <button
+          type="button"
+          aria-expanded={isClaimExpanded}
+          onClick={() => setIsClaimExpanded(expanded => !expanded)}
+          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
+        >
+          {isClaimExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
     </div>
   );
 }
