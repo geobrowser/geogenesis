@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
@@ -127,8 +127,12 @@ describe('DebatesBrowseFeed video sharing', () => {
 
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
     expect(heading.closest('section')).toHaveClass('items-start', 'pt-5', 'md:pt-3');
-    expect(screen.getByTestId('player-debate-1').parentElement?.parentElement).toHaveClass(
+    const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
+    assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
+    expect(mediaColumn).toHaveClass(
+      'min-w-0',
       'w-[480px]',
       'md:w-[calc(100vw-1rem)]'
     );
