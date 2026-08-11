@@ -11,6 +11,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
+import { activeDebate, activeMatch } from './activity-state';
 import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
@@ -62,9 +63,9 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity(isDebatesEnabled);
   const currentUserId = getCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
-  const match = activity?.match ?? null;
+  const match = activeMatch(activity);
   const reportedDebate = activity?.debate ?? null;
-  const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
+  const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
   // keeps prompting for a dead one until activity next refetches.

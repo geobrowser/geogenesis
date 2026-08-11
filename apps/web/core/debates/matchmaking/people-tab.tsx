@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
+import { activeDebate, activeMatch } from '../activity-state';
 import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
 import { speakerLabel } from '../playback-utils';
@@ -27,7 +28,7 @@ export function PeopleTab() {
   const blockedReason =
     activity?.challenge?.status === 'pending'
       ? 'You have a debate request awaiting a reply.'
-      : activity?.match || activity?.debate
+      : activeMatch(activity) || activeDebate(activity)
         ? "You're already in a debate."
         : activity?.outbound_request || requests?.outbound
           ? 'You already have an open request — withdraw it to challenge someone else.'
