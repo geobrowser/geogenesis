@@ -9,6 +9,9 @@ import { DebatesBrowseFeed } from './debate-feed';
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
+  /** null = every debate reads as processed (the common-case default). */
+  processedIds: null as string[] | null,
+  mediaLoading: false,
   mediaMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
@@ -29,8 +32,8 @@ let observers: ObserverRecord[] = [];
 vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
-    processedIds: mocks.debates.map(debate => debate.id),
-    isLoading: false,
+    processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
+    isLoading: mocks.mediaLoading,
     hasError: false,
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
@@ -68,6 +71,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   observers = [];
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
+  mocks.processedIds = null;
+  mocks.mediaLoading = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
   mocks.fetch.mockResolvedValue(videoResponse());
   mocks.canShare.mockReturnValue(false);
@@ -335,6 +340,58 @@ describe('DebatesBrowseFeed video sharing', () => {
 
     resolveShare?.();
     await flushPromises();
+  });
+});
+
+describe('DebatesBrowseFeed deep-link anchoring', () => {
+  it('starts the feed on the linked debate, hoisted first and active', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+    expect(screen.getByTestId('player-debate-1')).toHaveAttribute('data-active', 'false');
+  });
+
+  it('holds an anchored feed until the linked debate itself reads as ready', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    // The newest debate's readiness resolved first; the anchor's lookup is still in flight.
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaLoading = true;
+    const view = render(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />
+    );
+
+    // No partial paint: rendering debate-1 now would land the viewer on the
+    // wrong video and reorder once the anchor arrives.
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+
+    mocks.processedIds = ['debate-1', 'debate-2'];
+    mocks.mediaLoading = false;
+    view.rerender(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />
+    );
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+  });
+
+  it('falls back to the entity page once loading settles without the anchor', () => {
+    mocks.debates = [completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z')];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-9" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
   });
 });
 

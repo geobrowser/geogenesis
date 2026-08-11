@@ -99,13 +99,27 @@ export function DebatesBrowseFeed({
   // leave them with the initial null (i.e. the viewport).
   const [scrollEl, setScrollEl] = React.useState<HTMLDivElement | null>(null);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
-  const [activeId, setActiveId] = React.useState<string | null>(null);
+  // An anchored feed starts active on the anchor so the linked debate is the one
+  // that autoplays, before any IntersectionObserver has fired.
+  const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
   const [joinOpen, setJoinOpen] = React.useState(false);
   const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
   const isLoading = debatesQuery.isLoading || mediaLoading;
+
+  const anchorPresent = React.useMemo(
+    () => initialDebateId == null || debates.some(debate => ID.equals(debate.id, initialDebateId)),
+    [debates, initialDebateId]
+  );
+
+  // Hold an anchored feed until the anchor itself is ready: the per-debate
+  // readiness lookups resolve one at a time, so painting the partial list would
+  // open the feed on whichever debate resolved first and then reorder underneath
+  // the viewer once the anchor's lookup lands — landing them on the wrong video.
+  // Only the anchor's own readiness gates; other debates may still be resolving.
+  const anchorPending = !anchorPresent && isLoading;
 
   // One message at a time, most specific first. A readiness lookup that failed has to read as an
   // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
@@ -121,14 +135,15 @@ export function DebatesBrowseFeed({
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
   // Debates tab passes none and keeps its own empty/error states.
-  const anchorMissing =
-    initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
+  const anchorMissing = initialDebateId != null && !isLoading && !anchorPresent;
 
-  const visibleDebates = debates.slice(0, visibleCount);
+  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 
   // Keep an active debate whenever the list is non-empty — including when a
   // refetch, pagination, or space switch drops the current activeId out of view,
-  // which would otherwise leave nothing active or autoplaying.
+  // which would otherwise leave nothing active or autoplaying. While the anchor
+  // is pending nothing renders, so don't let a partial list steal the anchor's
+  // active slot before it appears.
   React.useEffect(() => {
     if (visibleDebates.length === 0) return;
     if (!activeId || !visibleDebates.some(debate => debate.id === activeId)) {
@@ -146,7 +161,7 @@ export function DebatesBrowseFeed({
       ref={setScrollEl}
       className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
-      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
+      {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map(debate => (
         <DebateFeedItem
           key={debate.id}
@@ -167,7 +182,7 @@ export function DebatesBrowseFeed({
           }}
         />
       ))}
-      {visibleCount < debates.length && (
+      {!anchorPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
