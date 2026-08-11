@@ -235,7 +235,10 @@ describe('matchmaking', () => {
 });
 
 describe('debate queue readiness', () => {
-  it('joins with a bodyless POST and no JSON content type', async () => {
+  // Without `source: 'hub'` geo-chat reads the call as a legacy queue join and auto-pairs the
+  // viewer on the spot, consuming the match before the Matches tab can ever offer it. The body
+  // still carries no position — those are derived from the on-chain response and rejected here.
+  it('joins as matchmaking readiness, carrying a source but never a position', async () => {
     const response = { claim: { id: 'claim-1' }, match: null };
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(response), {
@@ -249,10 +252,27 @@ describe('debate queue readiness', () => {
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue', {
       method: 'POST',
-      headers: { Authorization: 'Bearer access-token' },
-      body: undefined,
+      headers: { Authorization: 'Bearer access-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'hub' }),
       signal: undefined,
     });
+  });
+
+  it('can still make the legacy bodyless join', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ claim: { id: 'claim-1' }, match: null }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a', 'legacy');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue',
+      expect.objectContaining({ method: 'POST', body: undefined })
+    );
   });
 });
 

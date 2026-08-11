@@ -672,17 +672,28 @@ export async function listDebateClaims(
   });
 }
 
+/**
+ * Standing ready on a claim.
+ *
+ * `source: 'hub'` is what tells geo-chat this is matchmaking readiness rather than a legacy queue
+ * join — without it the server treats the call as the old auto-pairing path and pairs the viewer
+ * with the first opposite-position holder it finds, which consumes the match before it can ever be
+ * offered in the Matches tab. Every readiness toggle in the app is matchmaking now, so every caller
+ * sends it; the parameter exists only so the legacy shape stays expressible.
+ */
 export async function joinDebateQueue(
   spaceId: string,
   claimId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  source: 'hub' | 'legacy' = 'hub'
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+    body: source === 'hub' ? { source: 'hub' } : undefined,
   });
 }
 

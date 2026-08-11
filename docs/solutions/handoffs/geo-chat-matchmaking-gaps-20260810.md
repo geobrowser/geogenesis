@@ -235,6 +235,20 @@ position/readiness UX on that capability.
 
 ## 6. Open, 2026-08-11 — the Matches tab returns nothing
 
+> **Resolved 2026-08-11.** §6.2 needed no change — geo-chat confirms the strict predicate was
+> already implemented on both sides: `available_now_count` counts only opposite-position holders
+> who are debate-ready on that claim *and* online, available and unblocked. The authoritative
+> column below is the one in force; the looser 2026-08-06 row is wrong and is kept only to show
+> what was superseded.
+>
+> §6.1 is fixed server-side, with one client requirement: the readiness POST must carry
+> `{"source":"hub"}`, or geo-chat reads it as a legacy queue join and auto-pairs anyway. Landed in
+> `joinDebateQueue` (`apps/web/core/debates/api.ts`), which now sends it by default — so both the
+> hub's per-claim toggle and the Debate toggle on a claim page are matchmaking readiness. The
+> `'legacy'` argument keeps the old bodyless shape expressible but has no callers.
+>
+> Kept for the rationale; **no action remains**.
+
 Reported from manual testing: two users, opposing positions on the same claim, both ready, and
 `GET /matchmaking/matches` returns `{ "matches": [] }` for both. Two candidate causes, both
 server-side. The client renders whatever the endpoint returns and applies no filter of its own
