@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebateScrollHint } from './debate-scroll-hint';
 
-const BOUNCE_MS = 3 * 700;
+const BOUNCE_MS = 6 * 700;
 const FADE_MS = 200;
 
 let store: ReturnType<typeof createStore>;
@@ -60,7 +60,7 @@ describe('DebateScrollHint', () => {
 
     const hint = screen.getByTestId('debate-scroll-hint');
     expect(hint).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none', 'opacity-100');
-    expect(hint).toHaveStyle({ animationIterationCount: '3' });
+    expect(hint).toHaveStyle({ animationIterationCount: '6' });
     expect(hint).toHaveTextContent('Scroll');
     expect(hint).toHaveTextContent('Swipe');
 

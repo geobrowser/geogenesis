@@ -14,7 +14,9 @@ import { HINT_IDS, dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
 /** Length of one bounce; mirrors `--animate-debate-scroll-hint` in styles/styles.css. */
 const BOUNCE_DURATION_MS = 700;
-const BOUNCE_COUNT = 3;
+/** Drives both the CSS iteration count and the auto-dismiss, so the hint is on screen
+ *  for exactly `BOUNCE_COUNT * BOUNCE_DURATION_MS` before it starts fading. */
+const BOUNCE_COUNT = 6;
 const FADE_OUT_MS = 200;
 
 type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
