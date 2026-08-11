@@ -250,14 +250,15 @@
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
 
-/* Nudges the hint down and back, hinting at the direction the feed scrolls. */
+/* Lifts the debate and the indicator and settles them back, miming the direction the
+   content travels when the viewer scrolls on to the next debate. */
 @keyframes debateScrollHint {
   0%,
   100% {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(4px);
+    transform: translateY(-12px);
   }
 }
 

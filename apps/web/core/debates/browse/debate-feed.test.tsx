@@ -220,12 +220,17 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(hint).toHaveClass('absolute', 'bottom-4');
   });
 
-  it('bounces the landing debate media along with the nudge, and nothing below it', () => {
+  it('lifts the whole landing debate with the nudge, and nothing below it', () => {
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    expect(screen.getByTestId('player-debate-1').parentElement).toHaveClass('bounce-stub');
-    expect(screen.getByTestId('player-debate-2').parentElement).not.toHaveClass('bounce-stub');
+    // Title and controls travel with the media, so the card moves as one.
+    const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
+    assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
+    expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
+    expect(card.querySelectorAll('[aria-label="Comments"]').length).toBeGreaterThan(0);
+
+    expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
   });
 
   // An errored anchor holds the feed with nothing painted even though `isLoading` has gone

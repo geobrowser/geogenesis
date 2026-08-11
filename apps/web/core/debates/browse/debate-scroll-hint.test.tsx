@@ -34,13 +34,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Mirrors how the feed wires the hook up: media bounces alongside the pinned nudge. */
+/** Mirrors how the feed wires the hook up: the debate card lifts alongside the pinned nudge. */
 function Feed({ enabled = true }: { enabled?: boolean }) {
   const hint = useDebateScrollHint(enabled);
   return (
     <>
       <div
-        data-testid="media"
+        data-testid="card"
         className={hint.isVisible ? scrollHintBounceProps.className : undefined}
         style={hint.isVisible ? scrollHintBounceProps.style : undefined}
       />
@@ -97,19 +97,19 @@ describe('DebateScrollHint', () => {
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
   });
 
-  it('bounces the media on the same animation, and only while the nudge is up', async () => {
+  it('lifts the card on the same animation, and only while the nudge is up', async () => {
     renderHint();
 
     // Same animation and iteration count on both, so they move as one gesture.
-    const media = screen.getByTestId('media');
-    expect(media).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none');
-    expect(media).toHaveStyle({ animationIterationCount: '6' });
+    const card = screen.getByTestId('card');
+    expect(card).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none');
+    expect(card).toHaveStyle({ animationIterationCount: '6' });
     expect(screen.getByTestId('debate-scroll-hint')).toHaveStyle({ animationIterationCount: '6' });
 
     // Split: the fade timer is only scheduled once the bounce timer has fired.
     await advance(BOUNCE_MS);
     await advance(FADE_MS);
-    expect(screen.getByTestId('media')).not.toHaveClass('animate-debate-scroll-hint');
+    expect(screen.getByTestId('card')).not.toHaveClass('animate-debate-scroll-hint');
   });
 
   it('stays dormant until the feed says it is ready', async () => {
@@ -117,7 +117,7 @@ describe('DebateScrollHint', () => {
 
     await advance(BOUNCE_MS + FADE_MS);
     expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
-    expect(screen.getByTestId('media')).not.toHaveClass('animate-debate-scroll-hint');
+    expect(screen.getByTestId('card')).not.toHaveClass('animate-debate-scroll-hint');
     // Still unspent, so it can play once the feed settles rather than being burned while loading.
     expect(isSpent()).toBe(false);
   });

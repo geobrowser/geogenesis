@@ -290,7 +290,13 @@ function DebateFeedItem({
       ref={itemRef}
       className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
-      <div className="flex items-stretch gap-3">
+      {/* The whole debate lifts with the nudge — title, media and controls together — so the
+          gesture reads as the feed scrolling rather than as one element twitching. Shared
+          animation props keep the card and the indicator in step. */}
+      <div
+        className={cx('flex items-stretch gap-3', bounceWithScrollHint && scrollHintBounceProps.className)}
+        style={bounceWithScrollHint ? scrollHintBounceProps.style : undefined}
+      >
         <div
           className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
@@ -315,12 +321,7 @@ function DebateFeedItem({
               onOpenJoin={onOpenJoin}
             />
           </div>
-          {/* The media bounces with the nudge so the gesture is hard to miss — shared
-              animation props keep the two in step. */}
-          <div
-            className={cx('mt-6 md:mt-7', bounceWithScrollHint && scrollHintBounceProps.className)}
-            style={bounceWithScrollHint ? scrollHintBounceProps.style : undefined}
-          >
+          <div className="mt-6 md:mt-7">
             <DebateFeedPlayer debate={debate} active={active} votes={winnerVotes} />
           </div>
           {/* Mobile: horizontal bar below the videos. Wrapper controls display so
