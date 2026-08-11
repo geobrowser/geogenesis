@@ -339,6 +339,7 @@ function DebateFeedItem({
           </button>
           <div className="md:mt-4">
             <DebateTitleHeader
+              key={debate.claim.claim}
               claim={debate.claim.claim}
               spaceName={spaceName}
               spaceImage={spaceImage}
@@ -389,6 +390,8 @@ function DebateTitleHeader({
 
     const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
     measureOverflow();
+
+    if (typeof ResizeObserver === 'undefined') return;
 
     const observer = new ResizeObserver(measureOverflow);
     observer.observe(element);

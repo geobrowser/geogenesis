@@ -140,6 +140,12 @@ describe('DebatesBrowseFeed video sharing', () => {
     });
   });
 
+  it('renders when ResizeObserver is unavailable', () => {
+    vi.stubGlobal('ResizeObserver', undefined);
+
+    expect(() => render(<DebatesBrowseFeed spaceId="space-1" />)).not.toThrow();
+  });
+
   it('clamps long claims and lets mobile users expand them', () => {
     const scrollHeight = vi
       .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
