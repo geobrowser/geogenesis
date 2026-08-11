@@ -21,13 +21,12 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
-import { isRollingSubmissionLive, parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
+import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
 import { useMyRanking } from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
-import { useRankingBlockRelations } from './use-ranking-block-relations';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -114,26 +113,24 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   ]);
 
   const { isRolling, submissionFrequencyHours } = useRankingBlockConfig({ blockId, spaceId });
-  const { aggregatedSubmitterRefs } = useRankingBlockRelations({ blockId, spaceId });
 
+  // The submission clock runs from the rank entity's creation time, mirroring
+  // the indexer's `submitted_at` (frozen at the edit that created the entity).
+  // `updatedAt` is only a fallback for older entities indexed without a
+  // `createdAt` — it drifts later whenever the ballot is edited.
   const submittedAtMs = React.useMemo(
-    () => (myRankEntity ? parseTimestampMs(myRankEntity.updatedAt) : 0),
+    () => (myRankEntity ? parseTimestampMs(myRankEntity.createdAt ?? myRankEntity.updatedAt) : 0),
     [myRankEntity]
   );
 
+  // Purely clock-based: the ballot is live until the block's submission window
+  // has elapsed since it was created. The block's Aggregated rankings relations
+  // are no help here — they retain every past ballot indefinitely.
   const isSubmissionLive = React.useMemo(() => {
     if (!isRolling || !myRankEntity) return true;
-    const windowElapsed =
-      submissionFrequencyHours != null &&
-      submittedAtMs > 0 &&
-      Date.now() >= submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
-    if (!windowElapsed) return true;
-    return isRollingSubmissionLive({
-      personalSpaceId,
-      myRankEntityId: myRankEntity.id,
-      aggregatedSubmitterRefs,
-    });
-  }, [aggregatedSubmitterRefs, isRolling, myRankEntity, personalSpaceId, submissionFrequencyHours, submittedAtMs]);
+    if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
+    return Date.now() < submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
+  }, [isRolling, myRankEntity, submissionFrequencyHours, submittedAtMs]);
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 

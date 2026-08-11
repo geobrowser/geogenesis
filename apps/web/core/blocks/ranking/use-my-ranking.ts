@@ -14,7 +14,7 @@ import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   buildMyRankingEntityFilter,
   getMyRankingOrderedEntityIds,
-  pickMostRecentlyUpdatedRankingEntity,
+  pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
 
 export function useMyRanking(blockId: string) {
@@ -34,12 +34,12 @@ export function useMyRanking(blockId: string) {
           spaceId: personalSpaceId,
           typeId: RANK_TYPE_ID,
           filter: buildMyRankingEntityFilter(blockId),
-          orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+          orderBy: [EntitiesOrderBy.CreatedAtDesc],
           limit: 100,
         })
       );
 
-      const rankEntity = pickMostRecentlyUpdatedRankingEntity(entities);
+      const rankEntity = pickMostRecentlyCreatedRankingEntity(entities);
       if (!rankEntity) {
         return { rankEntity: null, orderedEntityIds: [] as string[] };
       }
