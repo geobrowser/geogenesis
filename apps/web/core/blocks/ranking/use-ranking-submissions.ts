@@ -288,8 +288,21 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         }
 
+        // The poll above proves the new rank entity is indexed under a direct id
+        // fetch, but useMyRanking is a *list* query filtered by the SUBMITTED_TO
+        // relation, which can lag a beat behind. A single refetch that lands in
+        // that gap returns the previous (possibly rolled-off, therefore blanked)
+        // ballot, and the Share button / My ranking views don't flip to the fresh
+        // submission until the next natural refetch. Keep refetching until the
+        // list surfaces the ballot we just published, on the same time budget.
         try {
-          await refetchMyRanking();
+          const refetchStartedAt = Date.now();
+          for (;;) {
+            const { myRankEntity: refetchedRankEntity } = await refetchMyRanking();
+            if (refetchedRankEntity && ID.equals(refetchedRankEntity.id, rankId)) break;
+            if (Date.now() - refetchStartedAt >= MAX_POLL_DURATION_MS) break;
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+          }
         } catch (e) {
           console.error('[useRankingSubmissions] Refetch after publish failed:', e);
         }
