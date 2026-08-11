@@ -62,12 +62,6 @@ export function buildSpaceTabs({
     priority: 2,
   };
 
-  const DEBATE_TAB: BuiltSpaceTab = {
-    label: 'Debates',
-    href: `/space/${spaceId}/debates`,
-    priority: 3,
-  };
-
   const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
     label: 'Debug debates',
     href: `/space/${spaceId}/debug-debates`,
@@ -93,7 +87,7 @@ export function buildSpaceTabs({
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
       const reservedLabels = new Set([
-        ...(isDebatesEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []),
+        ...(isDebatesEnabled ? [QUESTION_TAB.label] : []),
         ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
       ]);
       const visibleDynamicTabs =
@@ -105,7 +99,6 @@ export function buildSpaceTabs({
 
   if (isDebatesEnabled) {
     tabs.push(QUESTION_TAB);
-    tabs.push(DEBATE_TAB);
   }
 
   if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
@@ -178,7 +171,6 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   if (isDebatesEnabled) {
     systemTabsAfter.push({ label: 'Claims', href: `/space/${spaceId}/claims` });
-    systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
   }
 
   if (isDebugDebatesPageEnabled) {
