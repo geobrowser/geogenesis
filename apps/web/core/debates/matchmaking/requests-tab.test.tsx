@@ -3,21 +3,25 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateRequest, DebateRequestParty } from '../api';
+import type { DebateChallenge, DebateRequest, DebateRequestParty } from '../api';
 import { RequestsTab } from './requests-tab';
 
 const mocks = vi.hoisted(() => ({
   incoming: [] as DebateRequest[],
   outbound: null as DebateRequest | null,
+  challenge: null as DebateChallenge | null,
   accept: vi.fn(),
   dismiss: vi.fn(),
   withdraw: vi.fn(),
   block: vi.fn(),
+  acceptChallenge: vi.fn(),
+  rejectChallenge: vi.fn(),
 }));
 
 vi.mock('../hooks', () => ({
-  useDebateActivity: () => ({ data: { challenge: null, outbound_request: null } }),
-  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
+  useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
+  useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -74,13 +78,32 @@ function request(id: string, spaceId: string, claim: string): DebateRequest {
   };
 }
 
+function challenge(role: 'recipient' | 'requester'): DebateChallenge {
+  const me = { user_id: 'user-me', profile_space_id: 'profile-me', display_name: 'You', avatar_cid: null };
+  const them = { user_id: 'user-them', profile_space_id: 'profile-them', display_name: 'Arturas', avatar_cid: null };
+
+  return {
+    id: 'challenge-1',
+    status: 'pending',
+    source_space_id: SPACE_A,
+    requester: role === 'recipient' ? them : me,
+    recipient: role === 'recipient' ? me : them,
+    rematch_session_id: null,
+    created_at: '2026-08-05T12:00:00.000Z',
+    expires_at: '2099-01-01T00:00:00.000Z',
+  };
+}
+
 beforeEach(() => {
   mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
   mocks.outbound = null;
+  mocks.challenge = null;
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
   mocks.withdraw.mockReset();
   mocks.block.mockReset();
+  mocks.acceptChallenge.mockReset();
+  mocks.rejectChallenge.mockReset();
 
   // Radix popovers measure their content; jsdom ships neither observer.
   window.ResizeObserver ??= class {
@@ -98,7 +121,7 @@ describe('RequestsTab', () => {
   // The whole point of the popup's "Not now": the request is untouched, so it is still here with
   // its countdown for the rest of its 25-minute life.
   it('lists a request nobody has answered yet, with its countdown', () => {
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
     expect(screen.getByText('Bitcoin will never go above $250K')).toBeInTheDocument();
@@ -109,7 +132,7 @@ describe('RequestsTab', () => {
 
   // "Not now" here is the real answer, unlike the popup's — it frees the request to advance.
   it('declines the request from the card', () => {
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
 
@@ -118,7 +141,7 @@ describe('RequestsTab', () => {
 
   it('separates the request you sent from the ones you received', () => {
     mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     const sent = screen.getByRole('heading', { name: 'Sent' });
     const received = screen.getByRole('heading', { name: 'Received' });
@@ -131,7 +154,7 @@ describe('RequestsTab', () => {
 
   it('narrows to one side with the status filter', () => {
     mocks.outbound = request('request-2', SPACE_A, 'Chips are better than fries');
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     openFilter('Any status');
     fireEvent.click(screen.getByRole('button', { name: 'Awaiting response' }));
@@ -145,7 +168,7 @@ describe('RequestsTab', () => {
   // content is still on screen for a frame after the filter changes.
   it('offers a way back when the filters hide everything', async () => {
     mocks.incoming = [request('request-1', SPACE_B, 'Only in the other space')];
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     openFilter('Any status');
     fireEvent.click(screen.getByRole('button', { name: 'Awaiting response' }));
@@ -159,13 +182,41 @@ describe('RequestsTab', () => {
 
   it('says where requests will show up when there are none', () => {
     mocks.incoming = [];
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     expect(screen.getByText('Any debate requests you’ll receive will appear here.')).toBeInTheDocument();
   });
 
+  // A claimless challenge lands here too, so "Not now" in its popup is not the end of it.
+  it('keeps a claimless challenge under Received, with its countdown', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('recipient');
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.getByText('Someone wants to debate you')).toBeInTheDocument();
+    expect(screen.getByText(/^Expires in/)).toBeInTheDocument();
+
+    // Accepting is what opens the shared claim picker — switching tabs would leave it unanswered.
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    expect(mocks.acceptChallenge).toHaveBeenCalledWith('challenge-1');
+  });
+
+  it('files a challenge you sent under Sent, where you can cancel it', () => {
+    mocks.incoming = [];
+    mocks.challenge = challenge('requester');
+    render(<RequestsTab />);
+
+    expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
+    expect(screen.getByText('Waiting for a reply')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
+    expect(mocks.rejectChallenge).toHaveBeenCalledWith('challenge-1');
+  });
+
   it('shows both sides of a request and keeps blocking behind the overflow menu', () => {
-    render(<RequestsTab onTabChange={vi.fn()} />);
+    render(<RequestsTab />);
 
     const parties = screen.getByText('Arturas').closest('div')!;
     expect(within(parties).getByText('No')).toBeInTheDocument();

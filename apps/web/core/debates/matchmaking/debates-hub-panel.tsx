@@ -241,7 +241,7 @@ function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
         ) : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
-              <RequestsTab onTabChange={changeTab} />
+              <RequestsTab />
             ) : activeTab === 'matches' ? (
               <MatchesTab onTabChange={changeTab} />
             ) : activeTab === 'claims' ? (

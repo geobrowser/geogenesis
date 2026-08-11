@@ -3,10 +3,11 @@
 import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
+import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
-import { getCurrentGeoChatUserId } from '../api';
-import { useDebateActivity, useRejectDebateChallenge } from '../hooks';
+import { type DebateChallenge, getCurrentGeoChatUserId } from '../api';
+import { useAcceptDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
@@ -16,8 +17,7 @@ import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { useUnexpiredRequests } from './use-request-countdown';
-import type { DebatesHubTab } from '~/atoms';
+import { useRequestCountdown, useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -26,10 +26,6 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
   { value: 'sent', label: 'Awaiting response' },
   { value: 'received', label: 'Received' },
 ];
-
-type Props = {
-  onTabChange: (tab: DebatesHubTab) => void;
-};
 
 /**
  * Both halves of your request traffic, split the way the design does: the one request you have
@@ -41,7 +37,7 @@ type Props = {
  * presentation plus narrowing. (Requests carry no topics — the topic facet is a Claims/Matches
  * concern, so the design's third menu has nothing to offer here.)
  */
-export function RequestsTab({ onTabChange }: Props) {
+export function RequestsTab() {
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -64,14 +60,22 @@ export function RequestsTab({ onTabChange }: Props) {
     [incoming, outbound]
   );
 
-  const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
+  // in its popup leaves it here rather than answering it.
+  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const liveChallenges = useUnexpiredRequests(
+    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
+  );
+  const challenge = liveChallenges[0] ?? null;
   const currentUserId = getCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it.
-  const incomingChallenge =
-    challenge && challenge.recipient.user_id === currentUserId && status !== 'sent' && !spaceId ? challenge : null;
+  const challengeRole =
+    !challenge || spaceId ? null : challenge.recipient.user_id === currentUserId ? 'recipient' : 'requester';
+  const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
+  const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = Boolean(spaceId) || status !== 'all';
-  const isEmpty = !sent && received.length === 0 && !incomingChallenge;
+  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge;
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
@@ -110,26 +114,19 @@ export function RequestsTab({ onTabChange }: Props) {
         }
       >
         <div className="flex flex-col gap-4">
-          {sent ? (
+          {sent || outgoingChallenge ? (
             <RequestSection label="Sent">
-              <HubCardList>
-                <OutboundRequestCard key={sent.id} request={sent} />
-              </HubCardList>
+              <div className="flex flex-col gap-2">
+                {outgoingChallenge ? <ChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+                <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+              </div>
             </RequestSection>
           ) : null}
 
           {incomingChallenge || received.length > 0 ? (
             <RequestSection label="Received">
               <div className="flex flex-col gap-2">
-                {incomingChallenge ? (
-                  <ChallengeCard
-                    requesterName={speakerLabel(incomingChallenge.requester)}
-                    avatarUrl={incomingChallenge.requester.avatar_cid}
-                    avatarValue={incomingChallenge.requester.profile_space_id}
-                    challengeId={incomingChallenge.id}
-                    onExploreClaims={() => onTabChange('claims')}
-                  />
-                ) : null}
+                {incomingChallenge ? <ChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
                 <HubCardList>
                   {received.map(request => (
                     <IncomingRequestCard key={request.id} request={request} />
@@ -156,49 +153,71 @@ function RequestSection({ label, children }: { label: string; children: React.Re
 }
 
 /**
- * Claimless challenges have no claim to accept a side on, so accepting means picking one together
- * — which is what the Claims tab is for.
+ * A claimless challenge has no claim to take a side on, so accepting opens a session where both
+ * people pick one together — which is what "Explore claims" does here, exactly as in the popup.
+ * Switching the hub to the Claims tab would leave the challenge unanswered.
  */
-function ChallengeCard({
-  requesterName,
-  avatarUrl,
-  avatarValue,
-  challengeId,
-  onExploreClaims,
-}: {
-  requesterName: string;
-  avatarUrl: string | null;
-  avatarValue: string;
-  challengeId: string;
-  onExploreClaims: () => void;
-}) {
+function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 'recipient' | 'requester' }) {
+  const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
+  const countdown = useRequestCountdown(challenge.expires_at);
+
+  const isRecipient = role === 'recipient';
+  const other = isRecipient ? challenge.requester : challenge.recipient;
+  const busy = acceptChallenge.isPending || rejectChallenge.isPending;
 
   return (
-    <article className="rounded-lg border border-grey-02 bg-white p-3">
-      <Text as="p" variant="footnoteMedium" color="grey-04" className="mb-2">
-        Someone wants to debate you
-      </Text>
-      <div className="mb-3 flex items-center gap-2">
+    <article className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <Text as="span" variant="footnoteMedium" color="grey-04" className="truncate">
+          {isRecipient ? 'Someone wants to debate you' : 'Waiting for a reply'}
+        </Text>
+        <span className="flex shrink-0 items-center gap-1 text-footnote text-text">
+          <Time />
+          {countdown.label}
+        </span>
+      </div>
+
+      <div className="flex items-center gap-2">
         <span className="h-6 w-6 shrink-0 overflow-hidden rounded-full">
-          <Avatar avatarUrl={avatarUrl} value={avatarValue} size={24} />
+          <Avatar avatarUrl={other.avatar_cid} value={other.profile_space_id} size={24} />
         </span>
         <Text as="span" variant="metadataMedium" className="truncate">
-          {requesterName}
+          {speakerLabel(other)}
         </Text>
       </div>
-      <div className="grid grid-cols-2 gap-2">
+
+      {isRecipient ? (
+        <div className="grid grid-cols-2 gap-2">
+          <HubPillButton
+            onClick={() => rejectChallenge.mutate(challenge.id)}
+            disabled={busy}
+            pending={rejectChallenge.isPending}
+            pendingLabel="Declining…"
+          >
+            Not now
+          </HubPillButton>
+          <HubPillButton
+            variant="primary"
+            onClick={() => acceptChallenge.mutate(challenge.id)}
+            disabled={busy}
+            pending={acceptChallenge.isPending}
+            pendingLabel="Opening…"
+          >
+            Explore claims
+          </HubPillButton>
+        </div>
+      ) : (
         <HubPillButton
-          onClick={() => rejectChallenge.mutate(challengeId)}
+          onClick={() => rejectChallenge.mutate(challenge.id)}
+          disabled={busy}
           pending={rejectChallenge.isPending}
-          pendingLabel="Dismissing…"
+          pendingLabel="Cancelling…"
+          className="w-full"
         >
-          Dismiss
+          Cancel request
         </HubPillButton>
-        <HubPillButton variant="primary" onClick={onExploreClaims}>
-          Explore claims
-        </HubPillButton>
-      </div>
+      )}
     </article>
   );
 }

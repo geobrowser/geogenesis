@@ -65,7 +65,13 @@ export function DebateCoordinator() {
   const match = activity?.match ?? null;
   const reportedDebate = activity?.debate ?? null;
   const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
-  const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
+  // keeps prompting for a dead one until activity next refetches.
+  const liveChallenges = useUnexpiredRequests(
+    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
+  );
+  const challenge = liveChallenges[0] ?? null;
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
   const challengeError = acceptChallenge.error ?? rejectChallenge.error;
@@ -104,6 +110,15 @@ export function DebateCoordinator() {
       return next.length === current.length ? current : next;
     });
   }, [incomingRequests]);
+
+  // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
+  // challenge keeps its place in the hub's Requests tab until it is answered or expires.
+  const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
+  const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+
+  React.useEffect(() => {
+    if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
+  }, [challenge, snoozedChallengeId]);
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -211,14 +226,15 @@ export function DebateCoordinator() {
           reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
         />
       )}
-      {challenge && !visibleMatch && !debate && !activity?.rematch && (
+      {promptedChallenge && !visibleMatch && !debate && !activity?.rematch && (
         <DebateChallengeDialog
-          challenge={challenge}
-          role={challenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
+          challenge={promptedChallenge}
+          role={promptedChallenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
-          onAccept={() => acceptChallenge.mutate(challenge.id)}
-          onReject={() => rejectChallenge.mutate(challenge.id)}
+          onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
+          onReject={() => rejectChallenge.mutate(promptedChallenge.id)}
+          onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
       {promptedRequest && currentUserId && (
