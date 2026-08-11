@@ -377,9 +377,7 @@ describe('DebatesBrowseFeed deep-link anchoring', () => {
 
     mocks.processedIds = ['debate-1', 'debate-2'];
     mocks.mediaLoading = false;
-    view.rerender(
-      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />
-    );
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
 
     const players = screen.getAllByTestId(/^player-/);
     expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
