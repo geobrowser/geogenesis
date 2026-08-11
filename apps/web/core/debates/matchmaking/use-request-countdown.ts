@@ -24,10 +24,18 @@ function getServerClock() {
   return clockPromise;
 }
 
-export function useServerClock() {
+/**
+ * `enabled` exists because synchronizing costs three parallel round trips — it samples and keeps
+ * the fastest — and both the navbar button and `DebateCoordinator` mount on every page. Left
+ * ungated they bought that sync for every session, including the overwhelming majority with no
+ * request to time. Callers with nothing on the clock pass `false` and fall through to `Date.now()`,
+ * which cannot be wrong about a countdown that isn't running.
+ */
+export function useServerClock(enabled = true) {
   const [clock, setClock] = React.useState<ServerClock | null>(null);
 
   React.useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     void getServerClock().then(resolved => {
       if (!cancelled) setClock(resolved);
@@ -35,7 +43,7 @@ export function useServerClock() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return clock;
 }
@@ -85,7 +93,9 @@ export function useRequestCountdown(expiresAt: string): RequestCountdown {
  * for the server's `debate.requests_changed` event.
  */
 export function useUnexpiredRequests<T extends { expires_at: string }>(requests: T[]): T[] {
-  const clock = useServerClock();
+  // An empty list is the common case on the surfaces that mount globally, and it has no expiry to
+  // get wrong — so it doesn't pay for the clock. The sync starts when the first request lands.
+  const clock = useServerClock(requests.length > 0);
   const [now, setNow] = React.useState(() => Date.now());
 
   const nextExpiryMs = React.useMemo(() => {

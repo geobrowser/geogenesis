@@ -15,13 +15,14 @@ const mocks = vi.hoisted(() => ({
   peopleError: null as unknown,
   people: [] as unknown[],
   pathname: '/space/space-1/claims',
+  isMobile: false,
 }));
 
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useDebatesEnabled: () => true }));
 
-vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
+vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'user-a' }),
@@ -78,6 +79,7 @@ beforeEach(() => {
   mocks.peopleError = null;
   mocks.updateAvailability.mockReset();
   mocks.pathname = '/space/space-1/claims';
+  mocks.isMobile = false;
 });
 
 afterEach(cleanup);
@@ -126,6 +128,25 @@ describe('DebatesHubPanel', () => {
     renderOpen();
 
     expect(screen.getByText('Sign in to find people to debate.')).toBeInTheDocument();
+  });
+
+  // `aria-modal` on the sheet hides the navbar toggle and the backdrop from assistive tech, so
+  // without this the only way out is Escape — a key phones don't have.
+  it('gives the mobile sheet a close button that assistive tech can reach', () => {
+    mocks.isMobile = true;
+    const store = renderOpen();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close debates' }));
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
+
+  // The desktop aside is not modal: its navbar toggle stays reachable, and the design's header is
+  // the title and the availability switch, nothing else.
+  it('leaves the desktop panel header alone', () => {
+    renderOpen();
+
+    expect(screen.queryByRole('button', { name: 'Close debates' })).not.toBeInTheDocument();
   });
 });
 

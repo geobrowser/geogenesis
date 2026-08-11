@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useDebatesEnabled } from '~/core/state/feature-flags';
 
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -117,7 +118,12 @@ export function DebatesHubPanel() {
   if (!isDebatesEnabled || !isOpen) return null;
   if (typeof document === 'undefined' || !document.body) return null;
 
-  const body = <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} />;
+  // Only the sheet gets a close button. `aria-modal` hides the rest of the page from assistive
+  // tech, so the navbar toggle that opened it is out of reach and the backdrop below is
+  // deliberately not an announced control — leaving Escape, which a phone rarely has, as the only
+  // way out. The desktop aside is non-modal, so its toggle stays reachable and the design's
+  // header stands.
+  const body = <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />;
 
   if (isMobile) {
     return createPortal(
@@ -133,7 +139,10 @@ export function DebatesHubPanel() {
             if (shouldStartSheetDrag(event, event.currentTarget)) dragControls.start(event);
           }}
         >
-          <button type="button" className="absolute inset-0 bg-grey-04/50" onClick={close} aria-label="Close" />
+          {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
+              "Close" only promised a control nobody could hear about — the header's button is the
+              announced one. Tapping outside still closes, which is what this is for. */}
+          <div aria-hidden className="absolute inset-0 bg-grey-04/50" onClick={close} />
           <motion.div
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
@@ -183,9 +192,11 @@ export function DebatesHubPanel() {
 type SurfaceProps = {
   activeTab: DebatesHubTab;
   onTabChange: (tab: DebatesHubTab) => void;
+  /** Mobile only — see the call site. */
+  onClose?: () => void;
 };
 
-function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
+function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
@@ -210,7 +221,19 @@ function DebatesHubSurface({ activeTab, onTabChange }: SurfaceProps) {
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <AvailabilityToggle />
+        <div className="flex min-w-0 items-center gap-1">
+          <AvailabilityToggle />
+          {onClose ? (
+            <button
+              type="button"
+              aria-label="Close debates"
+              onClick={onClose}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            >
+              <CloseSmall />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="shrink-0 px-4">
