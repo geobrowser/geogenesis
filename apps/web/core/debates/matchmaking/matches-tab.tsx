@@ -6,11 +6,11 @@ import { Text } from '~/design-system/text';
 
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { SpaceTopicFilters } from './claims-tab';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
+import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -47,6 +47,16 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
     [serverMatches]
   );
 
+  const responseTargets = React.useMemo(
+    () =>
+      serverMatches.map(match => ({
+        spaceId: match.claim.space_id,
+        entityId: match.claim.claim_entity_id,
+        responseKind: match.response_kind,
+      })),
+    [serverMatches]
+  );
+
   const filtered = React.useMemo(
     () => matches.filter(match => !spaceId || match.claim.space_id === spaceId),
     [matches, spaceId]
@@ -73,15 +83,17 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyMessage="No one with the opposite response is available yet."
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
-          <HubCardList>
-            {filtered.map(match => (
-              <MatchCard
-                key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
-                match={match}
-                hasOutboundRequest={Boolean(outbound)}
-              />
-            ))}
-          </HubCardList>
+          <HubResponseBatch targets={responseTargets}>
+            <HubCardList>
+              {filtered.map(match => (
+                <MatchCard
+                  key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
+                  match={match}
+                  hasOutboundRequest={Boolean(outbound)}
+                />
+              ))}
+            </HubCardList>
+          </HubResponseBatch>
         </HubQueryState>
       </div>
     </div>
@@ -97,9 +109,7 @@ function MatchCard({ match, hasOutboundRequest }: { match: MatchmakingMatch; has
     <MatchmakingClaimCard
       claim={match.claim}
       positions={match.positions}
-      responseKind={match.response_kind}
-      viewerResponse={match.viewer_response}
-      headerAction={<ClaimReadinessToggle claim={match.claim} readiness={match} />}
+      readiness={match}
       footer={
         <div className="mt-3 flex flex-col gap-1">
           <HubPillButton

@@ -29,6 +29,18 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
 
+// The on-chain response controls are covered by their own tests; here they only need to prove the
+// card offers them.
+vi.mock('../debate-entity-response-controls', () => ({
+  DebateEntityResponseControls: ({ entityId, responseKind }: { entityId: string; responseKind: string }) => (
+    <div data-testid="response-controls" data-entity={entityId} data-response-kind={responseKind} />
+  ),
+}));
+
+vi.mock('./hub-response-batch', () => ({
+  HubResponseBatch: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}));
+
 function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
   return {
     claim: {
@@ -83,16 +95,28 @@ describe('MatchesTab', () => {
     expect(screen.getByText('Dispute')).toBeInTheDocument();
   });
 
-  // A position is an on-chain response now — the card links to the claim rather than setting it.
-  it('does not offer to change the position from the hub', () => {
+  // A position is an on-chain response, so the side pills stay read-only summaries and taking a
+  // side goes through the same response controls the claim page uses.
+  it('offers the on-chain response controls instead of position buttons', () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
+    const controls = screen.getByTestId('response-controls');
+    expect(controls).toHaveAttribute('data-entity', 'claim-1');
+    expect(controls).toHaveAttribute('data-response-kind', 'stance');
+
+    expect(screen.queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Chips are better than fries' })).toHaveAttribute(
       'href',
       expect.stringContaining('claim-1')
     );
-    expect(screen.queryByRole('button', { name: 'Agree' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Disagree' })).not.toBeInTheDocument();
+  });
+
+  it('uses the veracity response kind for a factual claim', () => {
+    mocks.matches = [match({ response_kind: 'veracity' })];
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByTestId('response-controls')).toHaveAttribute('data-response-kind', 'veracity');
   });
 
   it('stands down from a claim by turning readiness off, never by clearing a position', () => {

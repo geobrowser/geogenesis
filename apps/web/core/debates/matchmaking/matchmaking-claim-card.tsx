@@ -12,19 +12,19 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, DebateResponseSummary } from '../api';
+import type { DebateClaimPositionSummary, DebateClaimSummary, DebateResponseKind, MatchmakingReadiness } from '../api';
+import { DebateEntityResponseControls } from '../debate-entity-response-controls';
+import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
-  responseKind: DebateResponseKind;
-  /** The viewer's on-chain response, independent of whether they're ready to debate it. */
-  viewerResponse: DebateResponseSummary | null;
-  /** Rendered under the position row — e.g. the Matches tab's "Request debate" button. */
+  /** Drives both the response controls and the readiness toggle. */
+  readiness: MatchmakingReadiness;
+  activeDebate?: boolean;
+  /** Rendered under the controls row — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
-  /** Rendered on the header row opposite the space chip — e.g. the readiness toggle. */
-  headerAction?: React.ReactNode;
 };
 
 /** Only used when a side has no participants yet and so carries no server-supplied label. */
@@ -39,20 +39,18 @@ function fallbackLabels(responseKind: DebateResponseKind) {
  * means responding to the claim itself. The card links out for that; readiness (the part the hub
  * does own) rides in `headerAction`.
  */
-export function MatchmakingClaimCard({ claim, positions, responseKind, viewerResponse, footer, headerAction }: Props) {
+export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer }: Props) {
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
-  const fallback = fallbackLabels(responseKind);
+  const fallback = fallbackLabels(readiness.response_kind);
+  const viewerResponse = readiness.viewer_response;
 
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
     <motion.article {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
-      {/* items-start, not items-center: the readiness toggle grows when it shows an explanation,
-          and centering would drag the space chip out of line with it. */}
-      <div className="mb-2 flex items-start justify-between gap-2">
+      <div className="mb-2">
         <SpaceChip spaceId={claim.space_id} />
-        {headerAction}
       </div>
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
@@ -73,6 +71,16 @@ export function MatchmakingClaimCard({ claim, positions, responseKind, viewerRes
           position={false}
           selected={viewerResponse?.position === false}
         />
+      </div>
+      {/* Responding and going ready sit together here the same way they do on the claim page:
+          the response is the on-chain half, the toggle is the matchmaking half. */}
+      <div className="mt-3 flex items-start justify-between gap-3">
+        <DebateEntityResponseControls
+          entityId={claim.claim_entity_id}
+          spaceId={claim.space_id}
+          responseKind={readiness.response_kind}
+        />
+        <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
       </div>
       {footer}
     </motion.article>

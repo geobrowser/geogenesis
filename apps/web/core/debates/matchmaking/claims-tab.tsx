@@ -12,11 +12,11 @@ import { validateEntityId } from '~/core/utils/utils';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
+import { HubResponseBatch } from './hub-response-batch';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { useStableListOrder } from './use-stable-list-order';
@@ -100,6 +100,16 @@ export function ClaimsTab() {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
+  const responseTargets = React.useMemo(
+    () =>
+      claims.map(entry => ({
+        spaceId: entry.claim.space_id,
+        entityId: entry.claim.claim_entity_id,
+        responseKind: entry.response_kind,
+      })),
+    [claims]
+  );
+
   const visibleClaims = React.useMemo(
     () =>
       topicId
@@ -156,20 +166,19 @@ export function ClaimsTab() {
         }
       >
         <>
-          <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-                claim={entry.claim}
-                positions={entry.positions}
-                responseKind={entry.response_kind}
-                viewerResponse={entry.viewer_response}
-                headerAction={
-                  <ClaimReadinessToggle claim={entry.claim} readiness={entry} activeDebate={entry.active_debate} />
-                }
-              />
-            ))}
-          </HubCardList>
+          <HubResponseBatch targets={responseTargets}>
+            <HubCardList>
+              {visibleClaims.map(entry => (
+                <MatchmakingClaimCard
+                  key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                />
+              ))}
+            </HubCardList>
+          </HubResponseBatch>
           {claimsQuery.hasNextPage ? (
             <HubPillButton
               onClick={() => void claimsQuery.fetchNextPage()}
