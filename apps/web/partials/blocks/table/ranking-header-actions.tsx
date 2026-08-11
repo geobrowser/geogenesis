@@ -17,7 +17,14 @@ const ACTION_BUTTON_CLASS =
  * with the block title rather than sitting above the entries.
  */
 export function RankingHeaderActions({ state }: Props) {
-  const { periodState, periodLabel, hasMySubmission, isSaving, openRankingCompose } = state;
+  const { periodState, periodLabel, hasMySubmission, isRollingRolledOff, isSaving, openRankingCompose } = state;
+
+  // A rolled-off rolling ballot is treated as absent (useRankingSubmissions
+  // blanks mySubmission, so hasMySubmission is already false then) — the CTA
+  // returns to the primary "Rank" and compose opens fresh. The explicit
+  // isRollingRolledOff guard is belt-and-braces for any surface that still
+  // reports a submission while rolled off.
+  const showViewAction = hasMySubmission && !isRollingRolledOff;
 
   return (
     <>
@@ -27,7 +34,7 @@ export function RankingHeaderActions({ state }: Props) {
           {periodLabel}
         </span>
       ) : null}
-      {hasMySubmission ? (
+      {showViewAction ? (
         <Button
           variant="secondary"
           className={`${ACTION_BUTTON_CLASS} !border-grey-02 !bg-white !text-text hover:!border-grey-02 hover:!bg-white`}

@@ -349,7 +349,7 @@ function DebateToggle({
   );
 }
 
-function readinessReasonMessage(reason: string | null) {
+export function readinessReasonMessage(reason: string | null) {
   switch (reason) {
     case 'user_disabled':
     case 'claim_response_withdrawn':

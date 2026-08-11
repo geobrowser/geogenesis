@@ -481,10 +481,6 @@ export function useDebateMediaSession() {
   return session;
 }
 
-export function debateMatchMediaSessionKey(matchId: string) {
-  return `match:${matchId}`;
-}
-
 export function debateMediaSessionKey(debateId: string) {
   return `debate:${debateId}`;
 }

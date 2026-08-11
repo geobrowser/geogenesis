@@ -15,6 +15,11 @@ const NavbarActions = dynamic(() => import('./navbar-actions').then(m => ({ defa
   ssr: false,
 });
 
+const DebatesHubButton = dynamic(
+  () => import('~/core/debates/matchmaking/debates-hub-button').then(m => ({ default: m.DebatesHubButton })),
+  { ssr: false }
+);
+
 interface Props {
   onSearchClick: () => void;
 }
@@ -30,6 +35,8 @@ export function NavbarClientActions({ onSearchClick }: Props) {
       >
         <Search />
       </button>
+
+      <DebatesHubButton />
 
       <div className="flex items-center sm:hidden">
         <NavbarActions />

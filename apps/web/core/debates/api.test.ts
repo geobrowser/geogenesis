@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   GeoChatRequestError,
+  blockDebateUser,
   completeLocalRecordingUpload,
+  createDebateRequest,
+  dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
   joinDebateQueue,
   listDebateClaims,
+  listMatchmakingClaims,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
@@ -163,8 +167,77 @@ describe('debate availability', () => {
   });
 });
 
+describe('matchmaking', () => {
+  function stubJson(body: unknown) {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  it('only sends the claim filters that are set', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: 'chips', filter: 'debate_now', limit: 20 }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/claims?search=chips&filter=debate_now&limit=20',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  it('omits the default "all" filter and unset facets', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ filter: 'all', spaceId: null }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  it('creates a debate request for a claim', async () => {
+    const fetch = stubJson({ id: 'request-1' });
+
+    await createDebateRequest({ space_id: 'space-1', claim_entity_id: 'claim-1' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ space_id: 'space-1', claim_entity_id: 'claim-1' }),
+      })
+    );
+  });
+
+  it('dismisses a request and optionally drops the claim intent', async () => {
+    const fetch = stubJson({ request: {}, match: null, debate: null });
+
+    await dismissDebateRequest('request-1', { remove_intent: true }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests/request-1/dismiss',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ remove_intent: true }) })
+    );
+  });
+
+  it('blocks a user', async () => {
+    const fetch = stubJson({ blocked: [] });
+
+    await blockDebateUser('user-b', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/debate-blocks/user-b',
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+});
+
 describe('debate queue readiness', () => {
-  it('joins with a bodyless POST and no JSON content type', async () => {
+  // The endpoint takes no body at all: a body once meant a client-chosen position, and briefly a
+  // `source` discriminator for the legacy/hub split that GEO-2514 removed. geo-chat 426s either.
+  it('joins with no body', async () => {
     const response = { claim: { id: 'claim-1' }, match: null };
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(response), {
@@ -182,6 +255,19 @@ describe('debate queue readiness', () => {
       body: undefined,
       signal: undefined,
     });
+  });
+
+  it('surfaces a readiness failure rather than retrying it', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'claim response required', code: 'claim_response_required' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).rejects.toBeInstanceOf(GeoChatRequestError);
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });
 
