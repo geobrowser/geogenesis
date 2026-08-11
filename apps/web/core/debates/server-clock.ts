@@ -66,16 +66,21 @@ function roundTripMs(sample: ServerTimeSample) {
   return Math.max(0, sample.endedAt - sample.startedAt);
 }
 
+// Bare timer globals, not `window.*`: they resolve in browser, node, and — the
+// case that bites — a test whose in-flight sync settles after the jsdom
+// environment (and `window` with it) is torn down. A late rejection then stays
+// an ordinary rejection instead of throwing "window is not defined" from the
+// cleanup handler and failing the run as an unhandled error.
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new Error('Server time request timed out.')), timeoutMs);
+    const timer = setTimeout(() => reject(new Error('Server time request timed out.')), timeoutMs);
     void promise.then(
       value => {
-        window.clearTimeout(timer);
+        clearTimeout(timer);
         resolve(value);
       },
       error => {
-        window.clearTimeout(timer);
+        clearTimeout(timer);
         reject(error);
       }
     );
