@@ -25,7 +25,7 @@ import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
-import { useMyRanking } from './use-my-ranking';
+import { recordPublishedRank, useMyRanking } from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -263,6 +263,19 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
+        // The published ballot is fully known client-side, so surface it now:
+        // pin it for useMyRanking and nudge the query. The Share button and My
+        // ranking views flip immediately instead of waiting out the indexer.
+        recordPublishedRank(
+          personalSpaceId,
+          blockId,
+          rankId,
+          votes.map(vote => vote.entityId)
+        );
+        void refetchMyRanking().catch(e => {
+          console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
+        });
+
         // Poll until the indexer reflects the exact order we just submitted, then
         // return so the OG image generates against indexed data. A short upfront
         // settle plus a dense interval detects indexing close to when it lands; the
@@ -288,31 +301,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
         }
 
-        // The poll above proves the new rank entity is indexed under a direct id
-        // fetch, but useMyRanking is a *list* query filtered by the SUBMITTED_TO
-        // relation, which can lag behind. A single refetch that lands in that gap
-        // returns the previous (possibly rolled-off, therefore blanked) ballot,
-        // and the Share button / My ranking views don't flip to the fresh
-        // submission until the next natural refetch. Await one refetch — the
-        // common case where the list is already caught up — and if it's still
-        // stale, keep nudging it detached so the retries never extend the
-        // "Publishing..." state.
+        // The UI already flipped to the published ballot when it was pinned
+        // above; this refetch just gives the pinned query a chance to converge
+        // onto indexed data now that the order poll has confirmed it landed.
         try {
-          const { myRankEntity: refetchedRankEntity } = await refetchMyRanking();
-          if (!refetchedRankEntity || !ID.equals(refetchedRankEntity.id, rankId)) {
-            void (async () => {
-              const refetchStartedAt = Date.now();
-              while (Date.now() - refetchStartedAt < MAX_POLL_DURATION_MS) {
-                await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-                try {
-                  const { myRankEntity: retried } = await refetchMyRanking();
-                  if (retried && ID.equals(retried.id, rankId)) return;
-                } catch {
-                  // Transient refetch failure — keep retrying within the budget.
-                }
-              }
-            })();
-          }
+          await refetchMyRanking();
         } catch (e) {
           console.error('[useRankingSubmissions] Refetch after publish failed:', e);
         }
