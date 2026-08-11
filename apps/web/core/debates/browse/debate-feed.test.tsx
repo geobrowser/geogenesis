@@ -167,7 +167,8 @@ describe('DebatesBrowseFeed video sharing', () => {
       render(<DebatesBrowseFeed spaceId="space-1" />);
 
       const heading = screen.getByRole('heading', { name: claim });
-      expect(heading).toHaveClass('line-clamp-2', 'min-h-[42px]');
+      expect(heading).toHaveClass('line-clamp-2');
+      expect(heading).not.toHaveClass('min-h-[42px]');
       expect(heading).toHaveAttribute('title', claim);
 
       const toggle = screen.getByRole('button', { name: 'Show more' });

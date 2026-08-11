@@ -33,7 +33,7 @@ const PAGE_SIZE = 5;
 const SHARE_PREPARATION_DWELL_MS = 5_000;
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
-  // a two-line claim title, the media gap, and vertical breathing room.
+  // claim title, media gap, and vertical breathing room.
   '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
 } as React.CSSProperties;
 
@@ -436,7 +436,7 @@ function DebateTitleHeader({
       <h2
         ref={claimRef}
         title={isClaimOverflowing ? claim : undefined}
-        className={`min-h-[42px] text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:min-h-0 md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+        className={`text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
         }`}
       >
