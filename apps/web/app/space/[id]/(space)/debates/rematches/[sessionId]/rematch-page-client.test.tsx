@@ -94,7 +94,10 @@ beforeEach(() => {
   document.documentElement.style.overflow = '';
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 describe('DebateRematchPageClient', () => {
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
@@ -127,7 +130,7 @@ describe('DebateRematchPageClient', () => {
   });
 
   it('returns a profile challenge to the page before the debate flow after leaving', () => {
-    window.history.pushState({}, '', '/space/profile-remote?tabId=about');
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
     const endedSession = session({ source_debate_id: null, status: 'ended' });
     mocks.session = session({ source_debate_id: null });
     mocks.leaveMutate.mockImplementation(
