@@ -209,7 +209,7 @@ async function pinKeyframeToIpfs(debateId: string): Promise<string | null> {
   }
 }
 
-type DebateClaimsTurn = {
+type DebateExtractedClaimsTurn = {
   turn_index: number;
   participant_slot: number;
   /** The turn speaker's Geo personal-space entity id (the Authors relation target). */
@@ -217,8 +217,8 @@ type DebateClaimsTurn = {
   speaker_name: string | null;
   text: string;
 };
-type DebateClaimsClaim = { text: string; is_factual: boolean | null; turn_index: number };
-type DebateClaimsResponse = { turns: DebateClaimsTurn[]; claims: DebateClaimsClaim[] };
+type DebateExtractedClaimsClaim = { text: string; is_factual: boolean | null; turn_index: number };
+type DebateExtractedClaimsResponse = { turns: DebateExtractedClaimsTurn[]; claims: DebateExtractedClaimsClaim[] };
 
 /**
  * Load geo-chat's pre-computed, pre-attributed debate claims. geo-chat extracts them in its media
@@ -232,9 +232,9 @@ type DebateClaimsResponse = { turns: DebateClaimsTurn[]; claims: DebateClaimsCla
 async function loadDebateClaims(
   debateId: string
 ): Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null> {
-  let response: DebateClaimsResponse;
+  let response: DebateExtractedClaimsResponse;
   try {
-    response = await geoChatGet<DebateClaimsResponse>(`/debates/${debateId}/claims`);
+    response = await geoChatGet<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`);
   } catch (error) {
     // A missing/failed claims read shouldn't block publishing the Debate + Transcript.
     console.warn(`[debate-acceptor] could not load extracted claims for ${debateId}; using raw transcript.`, error);
