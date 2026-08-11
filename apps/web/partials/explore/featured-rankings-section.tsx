@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import { normId } from '~/core/utils/norm-id';
 
@@ -92,6 +93,8 @@ function FeaturedRankingCard({
     mode: 'view',
   });
 
+  const { openSidePanel } = useEntitySidePanel();
+
   const [page, setPage] = React.useState(0);
   const pageCount = Math.max(1, Math.ceil(ranking.topEntries.length / ENTRIES_PER_PAGE));
   const currentPage = Math.min(page, pageCount - 1);
@@ -151,7 +154,13 @@ function FeaturedRankingCard({
                     <FallbackImage value={entry.image} sizes="24px" className="object-cover" />
                   </span>
                 ) : null}
-                <span className="min-w-0 flex-1 truncate text-[16px] leading-[20px] text-text">{entry.name}</span>
+                <button
+                  type="button"
+                  onClick={() => openSidePanel(entry.entityId, ranking.spaceId, false)}
+                  className="min-w-0 flex-1 truncate text-left text-[16px] leading-[20px] text-text hover:underline"
+                >
+                  {entry.name}
+                </button>
               </span>
             </li>
           ))}
