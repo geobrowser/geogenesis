@@ -51,8 +51,8 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
     videoUrl: 'ipfs://bafyfinalvideo',
     keyframeUrl: 'ipfs://bafykeyframe',
     transcriptTurns: [
-      { speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Iran was building a nuke.' },
-      { speakerSpaceEntityId: NO_SPACE, speakerName: 'Preston', text: 'There was no congressional approval.' },
+      { turnIndex: 0, speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Iran was building a nuke.' },
+      { turnIndex: 1, speakerSpaceEntityId: NO_SPACE, speakerName: 'Preston', text: 'There was no congressional approval.' },
     ],
     ...overrides,
   };
@@ -194,6 +194,28 @@ describe('buildDebatePublishDraft', () => {
       draft.values.find(v => v.entity.id === opinionClaimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value
     ).toBe('false');
     expect(blockAuthoringClaim(draft, opinionClaimId)).toBe(NO_SPACE);
+  });
+
+  it('attributes claims by turn_index, not array position, when the two diverge', () => {
+    // geo-chat's turn_index need not equal the JS array position: a turn Rust kept but a JS-side
+    // whitespace filter would drop (e.g. a lone U+FEFF) leaves a gap. Keying claims by turnIndex —
+    // not forEach position — keeps each claim on its own speaker's block regardless.
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        transcriptTurns: [
+          { turnIndex: 3, speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Yes-side turn.' },
+          { turnIndex: 7, speakerSpaceEntityId: NO_SPACE, speakerName: 'Preston', text: 'No-side turn.' },
+        ],
+        claims: [
+          { text: 'Belongs to the no-side turn', isFactual: true, turnIndex: 7 },
+          { text: 'Belongs to the yes-side turn', isFactual: false, turnIndex: 3 },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    // Positional keying would drop turnIndex 7 (only two turns) and misplace turnIndex 3.
+    expect(blockAuthoringClaim(draft, claimIdByName(draft, 'Belongs to the no-side turn'))).toBe(NO_SPACE);
+    expect(blockAuthoringClaim(draft, claimIdByName(draft, 'Belongs to the yes-side turn'))).toBe(YES_SPACE);
   });
 
   it('omits the Is factual value when factuality is null', () => {

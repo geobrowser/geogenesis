@@ -245,6 +245,7 @@ async function loadDebateClaims(
   const transcriptTurns: DebatePublishTurn[] = [...response.turns]
     .sort((a, b) => a.turn_index - b.turn_index)
     .map(turn => ({
+      turnIndex: turn.turn_index,
       speakerSpaceEntityId: turn.attributed_space_id,
       speakerName: turn.speaker_name,
       text: turn.text,

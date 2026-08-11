@@ -36,6 +36,13 @@ export type DebatePublishParticipant = {
 };
 
 export type DebatePublishTurn = {
+  /**
+   * The turn's index in geo-chat's canonical `{ turns }` payload. Claims attach to their turn's block
+   * by this value — carried explicitly rather than re-derived from array position after a JS-side
+   * filter, so attribution stays correct even when Rust and JS disagree on what counts as whitespace
+   * (e.g. U+FEFF) and their turn arrays would otherwise drift out of alignment.
+   */
+  turnIndex: number;
   /** Space system entity id of whoever spoke this turn. */
   speakerSpaceEntityId: string;
   speakerName: string | null;
@@ -48,9 +55,9 @@ export type DebateClaimInput = {
   /** True = verifiable fact, False = opinion, null = unclassified. */
   isFactual: boolean | null;
   /**
-   * Index into the post-filter `transcriptTurns` (empty/whitespace turns removed) of the turn this
-   * claim was extracted from. The claim is attached to that turn's text block, whose Authors relation
-   * carries the speaker attribution.
+   * geo-chat's `turn_index` for the turn this claim was extracted from — matched against each turn's
+   * own `turnIndex` (not array position), so the claim attaches to the correct turn's text block and
+   * rides its Authors relation for speaker attribution.
    */
   turnIndex: number;
 };
@@ -127,8 +134,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     );
   };
 
-  // Group extracted claims by the turn they came from, so the transcript loop can attach each to
-  // its source block. turnIndex aligns with the post-filter `turns` order below.
+  // Group extracted claims by their turn's `turnIndex`, so the transcript loop can attach each to its
+  // source block by matching `turn.turnIndex` — independent of array position after the filter below.
   const claimsByTurnIndex = new Map<number, DebateClaimInput[]>();
   for (const claim of input.claims ?? []) {
     const list = claimsByTurnIndex.get(claim.turnIndex);
@@ -251,7 +258,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       toEntityName: transcriptName,
     });
 
-    turns.forEach((turn, turnIndex) => {
+    turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
       const blockId = createEntityId();
       const blockName = `${speakerName} — ${claimText}`;
@@ -287,7 +294,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       // the Claims relation — so attribution rides the block's Authors relation (the speaker), with no
       // separate claim→speaker property. Side (for/against) is recoverable from the participant's
       // Supported/Opposed-by membership on the Debate.
-      for (const claim of claimsByTurnIndex.get(turnIndex) ?? []) {
+      for (const claim of claimsByTurnIndex.get(turn.turnIndex) ?? []) {
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
         const claimId = createEntityId();
@@ -334,7 +341,12 @@ export function mergeTranscriptSegmentsIntoTurns(
     if (last && last.speakerSpaceEntityId === speaker.spaceEntityId) {
       last.text = `${last.text} ${text}`.trim();
     } else {
-      turns.push({ speakerSpaceEntityId: speaker.spaceEntityId, speakerName: speaker.displayName, text });
+      turns.push({
+        turnIndex: turns.length,
+        speakerSpaceEntityId: speaker.spaceEntityId,
+        speakerName: speaker.displayName,
+        text,
+      });
     }
   }
   return turns;
