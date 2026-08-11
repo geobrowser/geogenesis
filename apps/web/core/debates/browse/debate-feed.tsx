@@ -158,8 +158,12 @@ export function DebatesBrowseFeed({
           active={activeId === debate.id}
           root={scrollEl}
           // Only the debate the viewer lands on carries the nudge, and only when there's
-          // something below it to scroll to.
-          showScrollHint={index === 0 && debates.length > 1}
+          // something below it to scroll to. Held back until the media lookups settle:
+          // they resolve one debate at a time and the list re-sorts on every arrival, so
+          // index 0 changes identity repeatedly while loading. The hint would unmount and
+          // remount with it, restarting its animation each time — a flicker rather than a
+          // nudge. (Invisible on a warm cache, where every lookup lands in one tick.)
+          showScrollHint={index === 0 && !isLoading && debates.length > 1}
           onActivate={() => setActiveId(debate.id)}
           onOpenJoin={() => {
             setClaimsDebate(null);

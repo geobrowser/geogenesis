@@ -9,6 +9,7 @@ import { DebatesBrowseFeed } from './debate-feed';
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
+  mediaLoading: false,
   mediaMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.debates.map(debate => debate.id),
-    isLoading: false,
+    isLoading: mocks.mediaLoading,
     hasError: false,
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
@@ -71,6 +72,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
   observers = [];
+  mocks.mediaLoading = false;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
   mocks.fetch.mockResolvedValue(videoResponse());
@@ -150,6 +152,21 @@ describe('DebatesBrowseFeed video sharing', () => {
     const hints = screen.getAllByTestId('scroll-hint');
     expect(hints).toHaveLength(1);
     expect(hints[0].closest('section')).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
+  });
+
+  // The per-debate media lookups resolve independently and the list re-sorts on each
+  // arrival, so index 0 changes identity while they land. Mounting the hint then means it
+  // remounts — and restarts — with every change, which reads as a flicker instead of a nudge.
+  it('holds the nudge back until the media lookups have settled', () => {
+    mocks.mediaLoading = true;
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
+
+    cleanup();
+    mocks.mediaLoading = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
   });
 
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
