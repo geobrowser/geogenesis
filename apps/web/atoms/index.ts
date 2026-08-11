@@ -16,6 +16,11 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
+export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
+
+/** `null` while the debates matchmaking hub is closed. */
+export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

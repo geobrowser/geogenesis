@@ -210,7 +210,7 @@ function PillAction({
   return tooltipMessage ? <Tooltip trigger={button} label={tooltipMessage} position="top" /> : button;
 }
 
-function getShareAriaLabel(shareAction: DebateShareAction) {
+export function getShareAriaLabel(shareAction: DebateShareAction) {
   if (shareAction.state === 'preparing') return 'Share debate video (preparing)';
   if (shareAction.state === 'sharing') return 'Sharing debate video';
   if (shareAction.state === 'error') {

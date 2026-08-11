@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createDebateAttentionStore } from './debate-attention';
+import { createDebateAttentionStore, createDebatePresenceStore } from './debate-attention';
 
 describe('debate attention', () => {
   let focused: boolean;
@@ -112,6 +112,80 @@ describe('debate attention', () => {
     unsubscribe = undefined;
 
     focused = false;
+    unsubscribe = store.subscribe(vi.fn());
+
+    expect(store.getSnapshot()).toBe(false);
+  });
+});
+
+describe('debate presence', () => {
+  let focused: boolean;
+  let visibilityState: DocumentVisibilityState;
+  let store: ReturnType<typeof createDebatePresenceStore>;
+  let unsubscribe: (() => void) | undefined;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    focused = true;
+    visibilityState = 'visible';
+    vi.spyOn(document, 'hasFocus').mockImplementation(() => focused);
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+  });
+
+  afterEach(() => {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  function subscribe() {
+    store = createDebatePresenceStore(window, document);
+    unsubscribe = store.subscribe(vi.fn());
+  }
+
+  // The reason presence exists at all: geo-chat drops an offline user out of `/matchmaking/people`
+  // and drops their pending requests out of every recipient's inbox. Neither should happen because
+  // the viewer clicked into another window for a moment.
+  it('stays present through a blur, however long', () => {
+    subscribe();
+
+    focused = false;
+    window.dispatchEvent(new Event('blur'));
+    vi.advanceTimersByTime(60_000);
+
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('drops when the tab is hidden and returns when it is shown again', () => {
+    subscribe();
+    expect(store.getSnapshot()).toBe(true);
+
+    visibilityState = 'hidden';
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(store.getSnapshot()).toBe(false);
+
+    visibilityState = 'visible';
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('drops on pagehide and reconciles from the back-forward cache', () => {
+    subscribe();
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(store.getSnapshot()).toBe(false);
+
+    window.dispatchEvent(new Event('pageshow'));
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('reconciles when listeners return after a gap', () => {
+    subscribe();
+    unsubscribe?.();
+    unsubscribe = undefined;
+
+    visibilityState = 'hidden';
     unsubscribe = store.subscribe(vi.fn());
 
     expect(store.getSnapshot()).toBe(false);

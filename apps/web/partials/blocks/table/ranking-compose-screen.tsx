@@ -489,15 +489,19 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       authorName: published.authorName,
       authorAvatarUrl: published.authorAvatarUrl,
     });
-    void generatePersonalRankingOgImages({
-      rankEntityId: published.rankEntityId,
-      authorSpaceId: published.authorSpaceId,
-      blockEntityId: entityId,
-      blockEntitySpaceId: spaceId,
-      rankingStartDate,
-      rankingEndDate,
-      ogVersion,
-    });
+    // OG images render from indexed data, so generation waits for
+    // `indexingSettled` — detached, since the redirect below must not.
+    void published.indexingSettled.then(() =>
+      generatePersonalRankingOgImages({
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+      })
+    );
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);

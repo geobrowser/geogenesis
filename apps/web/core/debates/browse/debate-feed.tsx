@@ -8,12 +8,6 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
-import {
-  getPreparedSocialVideoHandoffMethod,
-  handoffPreparedSocialVideo,
-  isAbortError,
-  usePreparedSocialVideo,
-} from '~/core/debates/social-video-share';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
@@ -26,12 +20,17 @@ import { Text } from '~/design-system/text';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { DebateInteractionBar, type DebateShareAction, type DebateVote } from './debate-interaction-bar';
+import { DebateInteractionBar, type DebateVote } from './debate-interaction-bar';
 import { DebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
+import { useDebateShareAction } from './use-debate-share-action';
 
 const PAGE_SIZE = 5;
-const SHARE_PREPARATION_DWELL_MS = 5_000;
+const DEBATE_COLUMN_STYLE = {
+  // Grow or shrink the media with the viewport while reserving the navbar,
+  // claim title, media gap, and vertical breathing room.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+} as React.CSSProperties;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -145,7 +144,7 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
       {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -222,28 +221,8 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const [vote, setVote] = React.useState<DebateVote>(null);
-  const [preparationEnabled, setPreparationEnabled] = React.useState(false);
-  const [isSharing, setIsSharing] = React.useState(false);
-  const [shareError, setShareError] = React.useState<string | null>(null);
-  const sharingRef = React.useRef(false);
-  const activationGenerationRef = React.useRef(0);
   const winnerVotes = useDebateVotes(debate);
-  const preparedVideo = usePreparedSocialVideo(debate.id, {
-    enabled: active && preparationEnabled,
-    includePreview: false,
-  });
-
-  React.useEffect(() => {
-    setShareError(null);
-    if (!active) {
-      activationGenerationRef.current += 1;
-      setPreparationEnabled(false);
-      return;
-    }
-
-    const dwellTimer = window.setTimeout(() => setPreparationEnabled(true), SHARE_PREPARATION_DWELL_MS);
-    return () => window.clearTimeout(dwellTimer);
-  }, [active]);
+  const shareAction = useDebateShareAction(debate, active);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -260,52 +239,6 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
-  const handoffMethod = React.useMemo(
-    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
-    [preparedVideo.file]
-  );
-  let shareState: DebateShareAction['state'] = 'preparing';
-  if (isSharing) shareState = 'sharing';
-  else if (active && (shareError || preparedVideo.status === 'error')) shareState = 'error';
-  else if (active && preparedVideo.status === 'ready') shareState = 'ready';
-  const shareTooltipMessage = getShareTooltipMessage({
-    state: shareState,
-    method: handoffMethod,
-    error: shareError ?? preparedVideo.error,
-  });
-  const activateShare = () => {
-    if (!active || sharingRef.current) return;
-    if (preparedVideo.status === 'error') {
-      setShareError(null);
-      preparedVideo.retry();
-      return;
-    }
-    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
-
-    const file = preparedVideo.file;
-    const downloadUrl = preparedVideo.downloadUrl;
-    const activationGeneration = activationGenerationRef.current;
-    sharingRef.current = true;
-    setIsSharing(true);
-    setShareError(null);
-    const handoff = handoffPreparedSocialVideo({
-      debateId: debate.id,
-      title: debate.claim.claim,
-      file,
-      downloadUrl,
-    });
-    void handoff
-      .catch(error => {
-        if (activationGenerationRef.current === activationGeneration && !isAbortError(error)) {
-          setShareError(error instanceof Error ? error.message : 'Could not share the video.');
-        }
-      })
-      .finally(() => {
-        sharingRef.current = false;
-        setIsSharing(false);
-      });
-  };
-
   const interactionProps = {
     score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
     vote,
@@ -314,18 +247,19 @@ function DebateFeedItem({
     claimsCount: 0,
     onComment: () => undefined,
     onClaims: onOpenClaims,
-    shareAction: {
-      state: shareState,
-      method: handoffMethod,
-      tooltipMessage: shareTooltipMessage,
-      onActivate: activateShare,
-    } satisfies DebateShareAction,
+    shareAction,
   };
 
   return (
-    <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
+    <section
+      ref={itemRef}
+      className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
+    >
       <div className="flex items-stretch gap-3">
-        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
+        <div
+          className="flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          style={DEBATE_COLUMN_STYLE}
+        >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button
@@ -338,6 +272,7 @@ function DebateFeedItem({
           </button>
           <div className="md:mt-4">
             <DebateTitleHeader
+              key={debate.claim.claim}
               claim={debate.claim.claim}
               spaceName={spaceName}
               spaceImage={spaceImage}
@@ -377,6 +312,26 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
+  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
+
+  React.useEffect(() => setIsClaimExpanded(false), [claim]);
+
+  React.useLayoutEffect(() => {
+    const element = claimRef.current;
+    if (!element || isClaimExpanded) return;
+
+    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measureOverflow();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [claim, isClaimExpanded]);
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -413,14 +368,25 @@ function DebateTitleHeader({
           Join a debate
         </Button>
       </div>
-      <Text
-        as="h2"
-        variant="cardEntityTitle"
-        color="text"
-        className="!text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px]"
+      <h2
+        ref={claimRef}
+        title={isClaimOverflowing ? claim : undefined}
+        className={`text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
+        }`}
       >
         {claim}
-      </Text>
+      </h2>
+      {isClaimOverflowing && (
+        <button
+          type="button"
+          aria-expanded={isClaimExpanded}
+          onClick={() => setIsClaimExpanded(expanded => !expanded)}
+          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
+        >
+          {isClaimExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
     </div>
   );
 }
@@ -455,16 +421,3 @@ function completedTime(debate: Debate) {
   return value ? new Date(value).getTime() : 0;
 }
 
-function getShareTooltipMessage({
-  state,
-  method,
-  error,
-}: Pick<DebateShareAction, 'state' | 'method'> & { error: string | null }) {
-  if (state === 'preparing') return 'Preparing video for sharing… You can share soon.';
-  if (state === 'sharing') return undefined;
-  if (state === 'error') {
-    const fallback = method ? 'Could not share the video.' : 'Could not prepare the video.';
-    return `${error ?? fallback} Select to try again.`;
-  }
-  return method === 'download' ? 'Download the debate video.' : undefined;
-}

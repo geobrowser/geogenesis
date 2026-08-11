@@ -6,6 +6,7 @@ import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
+import { hasActiveDebateFlow } from './activity-state';
 import { ClaimDebateReadiness } from './claim-debate-readiness';
 import { useDebateActivity, useDebateClaims } from './hooks';
 
@@ -30,11 +31,11 @@ export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }:
   const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], isDebatesEnabled && isClaim);
   const debateClaim = debateClaimsQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
   const activity = useDebateActivity(isDebatesEnabled && isClaim).data ?? null;
-  const hasActiveFlowElsewhere = Boolean(activity?.match || activity?.debate || activity?.rematch);
+  const hasActiveFlowElsewhere = hasActiveDebateFlow(activity);
 
   if (!isDebatesEnabled || !isClaim) return null;
 
-  const canEnable = published && !debateClaim?.active_debate && !debateClaim?.active_match && !hasActiveFlowElsewhere;
+  const canEnable = published && !debateClaim?.active_debate && !hasActiveFlowElsewhere;
 
   return (
     <ClaimDebateReadiness
