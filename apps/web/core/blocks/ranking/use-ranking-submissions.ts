@@ -134,14 +134,15 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
-  // A rolled-off ballot is expired, not deleted, so it stays in the compose view.
-  // Blanking it here opened compose empty, authors rebuilt from scratch and
-  // published a single-entry ballot, and because the indexer keeps only the newest
-  // rank per (block, author space) that one entry permanently superseded the fuller
-  // ballot behind it — each roll-off ratcheting every participant's ballot down
-  // towards one entry. `hasRolledOff` still drives the "Submit new ranking" call to
-  // action and still forces a fresh rank entity below.
-  const mySubmission = apiMySubmission;
+  // A rolled-off ballot is treated as absent everywhere: the block's views and
+  // the compose flow open fresh, as if the author hadn't ranked yet. (An earlier
+  // iteration retained the expired ballot because the indexer kept only the
+  // newest rank per author, so a rebuilt-from-scratch short ballot permanently
+  // superseded the fuller one — see #2122. The indexer now retains every ballot
+  // in the aggregate, so a fresh submission adds to it instead of replacing.)
+  // `hasRolledOff` still drives the "Rank" call to action, and publishing still
+  // mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
+  const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
