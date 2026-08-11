@@ -122,6 +122,18 @@ afterEach(() => {
 });
 
 describe('DebatesBrowseFeed video sharing', () => {
+  it('uses the full-screen responsive layout and design copy', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
+    expect(heading.closest('section')).toHaveClass('items-start', 'pt-5', 'md:pt-3');
+    expect(screen.getByTestId('player-debate-1').parentElement?.parentElement).toHaveClass(
+      'w-[480px]',
+      'md:w-[calc(100vw-1rem)]'
+    );
+  });
+
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
     render(<DebatesBrowseFeed spaceId="space-1" />);
