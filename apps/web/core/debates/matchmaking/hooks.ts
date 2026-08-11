@@ -44,6 +44,9 @@ export function useDebatePeople(enabled: boolean) {
     queryKey: debateQueryKeys.people(accountKey),
     queryFn: ({ signal }) => listDebatePeople(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    // Presence is the most volatile thing the hub shows, and coming back to the window is exactly
+    // when it is most likely to have moved on without us.
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -95,6 +98,7 @@ export function useDebateRequests(enabled: boolean) {
     queryKey: debateQueryKeys.requests(accountKey),
     queryFn: ({ signal }) => listDebateRequests(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && authenticated,
+    refetchOnWindowFocus: true,
   });
 }
 

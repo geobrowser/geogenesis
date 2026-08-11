@@ -10,6 +10,7 @@ import { useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
+import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -18,17 +19,31 @@ import { OutboundRequestCard } from './outbound-request-card';
 import { useUnexpiredRequests } from './use-request-countdown';
 import type { DebatesHubTab } from '~/atoms';
 
+type RequestStatusFilter = 'all' | 'sent' | 'received';
+
+const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
+  { value: 'all', label: 'Any status' },
+  { value: 'sent', label: 'Awaiting response' },
+  { value: 'received', label: 'Received' },
+];
+
 type Props = {
   onTabChange: (tab: DebatesHubTab) => void;
 };
 
 /**
- * Every unexpired request pointed at you. The server already filters out offline requesters and
- * blocked users, so this tab only owns presentation plus space narrowing. (Requests carry no
- * topics — topic filtering is a Claims/Matches concern.)
+ * Both halves of your request traffic, split the way the design does: the one request you have
+ * sent under "Sent", and every unexpired request pointed at you under "Received". A received
+ * request lives here for its full 25-minute lifetime — dismissing the popup with "Not now" leaves
+ * it untouched, so this is where you come back to it.
+ *
+ * The server already filters out offline requesters and blocked users, so this tab only owns
+ * presentation plus narrowing. (Requests carry no topics — the topic facet is a Claims/Matches
+ * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab({ onTabChange }: Props) {
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
+  const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
   const requestsQuery = useDebateRequests(true);
   const { data: activity } = useDebateActivity(true);
@@ -36,47 +51,107 @@ export function RequestsTab({ onTabChange }: Props) {
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
-  const filtered = React.useMemo(
-    () => incoming.filter(request => !spaceId || request.claim.space_id === spaceId),
-    [incoming, spaceId]
-  );
+  const inSpace = React.useCallback((requestSpaceId: string) => !spaceId || requestSpaceId === spaceId, [spaceId]);
 
-  const facetSpaceIds = React.useMemo(() => [...new Set(incoming.map(request => request.claim.space_id))], [incoming]);
+  const received = React.useMemo(
+    () => (status === 'sent' ? [] : incoming.filter(request => inSpace(request.claim.space_id))),
+    [inSpace, incoming, status]
+  );
+  const sent = status === 'received' || !outbound || !inSpace(outbound.claim.space_id) ? null : outbound;
+
+  const facetSpaceIds = React.useMemo(
+    () => [...new Set([...(outbound ? [outbound.claim.space_id] : []), ...incoming.map(r => r.claim.space_id)])],
+    [incoming, outbound]
+  );
 
   const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   const currentUserId = getCurrentGeoChatUserId();
-  const incomingChallenge = challenge && challenge.recipient.user_id === currentUserId ? challenge : null;
+  // A claimless challenge belongs to no space, so a space filter can only hide it.
+  const incomingChallenge =
+    challenge && challenge.recipient.user_id === currentUserId && status !== 'sent' && !spaceId ? challenge : null;
+
+  const hasFilters = Boolean(spaceId) || status !== 'all';
+  const isEmpty = !sent && received.length === 0 && !incomingChallenge;
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
-      <SpaceTopicFilters spaceId={spaceId} onSpaceChange={setSpaceId} facetSpaceIds={facetSpaceIds} />
-
-      {outbound ? <OutboundRequestCard request={outbound} /> : null}
+      <SpaceTopicFilters
+        spaceId={spaceId}
+        onSpaceChange={setSpaceId}
+        facetSpaceIds={facetSpaceIds}
+        leading={
+          <HubFilterMenu
+            label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+            options={STATUS_OPTIONS}
+            value={status}
+            onChange={setStatus}
+          />
+        }
+      />
 
       <HubQueryState
         isLoading={requestsQuery.isLoading}
         error={requestsQuery.error}
-        isEmpty={filtered.length === 0 && !incomingChallenge}
-        emptyMessage="No debate requests right now."
+        onRetry={() => void requestsQuery.refetch()}
+        isEmpty={isEmpty}
+        emptyMessage={
+          hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
+        }
+        emptyAction={
+          hasFilters
+            ? {
+                label: 'Clear filters',
+                onClick: () => {
+                  setSpaceId(null);
+                  setStatus('all');
+                },
+              }
+            : undefined
+        }
       >
-        <div className="flex flex-col gap-2">
-          {incomingChallenge ? (
-            <ChallengeCard
-              requesterName={speakerLabel(incomingChallenge.requester)}
-              avatarUrl={incomingChallenge.requester.avatar_cid}
-              avatarValue={incomingChallenge.requester.profile_space_id}
-              challengeId={incomingChallenge.id}
-              onExploreClaims={() => onTabChange('claims')}
-            />
+        <div className="flex flex-col gap-4">
+          {sent ? (
+            <RequestSection label="Sent">
+              <HubCardList>
+                <OutboundRequestCard key={sent.id} request={sent} />
+              </HubCardList>
+            </RequestSection>
           ) : null}
-          <HubCardList>
-            {filtered.map(request => (
-              <IncomingRequestCard key={request.id} request={request} />
-            ))}
-          </HubCardList>
+
+          {incomingChallenge || received.length > 0 ? (
+            <RequestSection label="Received">
+              <div className="flex flex-col gap-2">
+                {incomingChallenge ? (
+                  <ChallengeCard
+                    requesterName={speakerLabel(incomingChallenge.requester)}
+                    avatarUrl={incomingChallenge.requester.avatar_cid}
+                    avatarValue={incomingChallenge.requester.profile_space_id}
+                    challengeId={incomingChallenge.id}
+                    onExploreClaims={() => onTabChange('claims')}
+                  />
+                ) : null}
+                <HubCardList>
+                  {received.map(request => (
+                    <IncomingRequestCard key={request.id} request={request} />
+                  ))}
+                </HubCardList>
+              </div>
+            </RequestSection>
+          ) : null}
         </div>
       </HubQueryState>
     </div>
+  );
+}
+
+function RequestSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2">
+      <Text as="h3" variant="footnote" color="grey-04">
+        {label}
+      </Text>
+      {children}
+    </section>
   );
 }
 

@@ -8,23 +8,39 @@ import type { DebateRequestParty } from '../api';
 import { speakerLabel } from '../playback-utils';
 
 /**
- * The "You vs Them" row shared by the incoming-request and awaiting-response cards. Positions are
- * omitted for claimless challenges, which have no side to take.
+ * The "You vs Them" row shared by the sent and received request cards: one inset strip, each side
+ * carrying a name and the position they hold, split by the VS marker. Positions are omitted for
+ * claimless challenges, which have no side to take.
  */
 export function RequestParties({
   viewer,
   opponent,
   showPositions = true,
+  overflow,
 }: {
   viewer: DebateRequestParty | null;
   opponent: DebateRequestParty;
   showPositions?: boolean;
+  /** The "…" menu, which the design anchors to the opponent's end of the row. */
+  overflow?: React.ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-grey-02 px-2 py-3">
+    <div className="flex items-stretch rounded-lg bg-grey-01">
       <PartySummary party={viewer} label="You" showPosition={showPositions} />
-      <span className="grid w-10 place-items-center text-footnote text-grey-04">vs</span>
-      <PartySummary party={opponent} label={speakerLabel(opponent)} showPosition={showPositions} />
+      <VersusMarker />
+      <PartySummary party={opponent} label={speakerLabel(opponent)} showPosition={showPositions} trailing={overflow} />
+    </div>
+  );
+}
+
+function VersusMarker() {
+  return (
+    <div aria-hidden className="flex shrink-0 flex-col items-center">
+      <span className="w-px flex-1 bg-grey-02" />
+      <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full border border-grey-02 bg-white text-footnoteMedium">
+        VS
+      </span>
+      <span className="w-px flex-1 bg-grey-02" />
     </div>
   );
 }
@@ -33,22 +49,31 @@ function PartySummary({
   party,
   label,
   showPosition,
+  trailing,
 }: {
   party: DebateRequestParty | null;
   label: string;
   showPosition: boolean;
+  trailing?: React.ReactNode;
 }) {
   return (
-    <div className="grid min-w-0 justify-items-center gap-1.5 text-center">
-      <span className="h-6 w-6 overflow-hidden rounded-full">
-        {party ? <Avatar avatarUrl={party.avatar_cid} value={party.profile_space_id} size={24} alt={label} /> : null}
-      </span>
-      <span className="max-w-full truncate text-footnoteMedium">{label}</span>
-      {showPosition && party ? (
-        <span className="max-w-full truncate rounded-full bg-grey-02 px-2 py-0.5 text-footnote">
-          {party.position_label}
+    <div className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3.5">
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="h-5 w-5 shrink-0 overflow-hidden rounded-full">
+            {party ? (
+              <Avatar avatarUrl={party.avatar_cid} value={party.profile_space_id} size={20} alt={label} />
+            ) : null}
+          </span>
+          <span className="truncate text-footnote">{label}</span>
         </span>
-      ) : null}
+        {showPosition && party ? (
+          <span className="max-w-full shrink-0 truncate rounded-full bg-grey-02 px-1.5 py-0.5 text-footnote">
+            {party.position_label}
+          </span>
+        ) : null}
+      </div>
+      {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { type ServerClock, createLocalServerClock, synchronizeServerClock } from
 const MINUTE_MS = 60_000;
 const MINUTE_TICK_MS = 15_000;
 const SECOND_TICK_MS = 1_000;
+/** `setTimeout` overflows past this and fires immediately instead, which reads as an expiry. */
+const MAX_TIMEOUT_MS = 2 ** 31 - 1;
 
 let clockPromise: Promise<ServerClock> | null = null;
 
@@ -100,7 +102,7 @@ export function useUnexpiredRequests<T extends { expires_at: string }>(requests:
     setNow(read());
     if (!Number.isFinite(nextExpiryMs)) return;
 
-    const timeout = setTimeout(() => setNow(read()), Math.max(0, nextExpiryMs - read()) + 1);
+    const timeout = setTimeout(() => setNow(read()), Math.min(MAX_TIMEOUT_MS, Math.max(0, nextExpiryMs - read()) + 1));
     return () => clearTimeout(timeout);
   }, [clock, nextExpiryMs]);
 

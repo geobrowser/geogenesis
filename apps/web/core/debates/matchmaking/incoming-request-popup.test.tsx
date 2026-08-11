@@ -10,12 +10,18 @@ const mocks = vi.hoisted(() => ({
   accept: vi.fn(),
   dismiss: vi.fn(),
   block: vi.fn(),
+  setReadiness: vi.fn(),
 }));
 
 vi.mock('./hooks', () => ({
   useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, error: null }),
   useDismissDebateRequest: () => ({ mutate: mocks.dismiss, isPending: false, error: null }),
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, error: null }),
+  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
+}));
+
+vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
+  useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
 
 const request: DebateRequest = {
@@ -61,6 +67,7 @@ beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
   mocks.block.mockReset();
+  mocks.setReadiness.mockReset();
 
   // Radix popovers measure their content; jsdom ships neither observer.
   window.ResizeObserver ??= class {
@@ -96,12 +103,31 @@ describe('IncomingRequestPopup', () => {
     expect(mocks.accept).not.toHaveBeenCalled();
   });
 
-  it('drops the claim intent when declining the claim itself', () => {
+  it('drops the claim intent when dismissing the claim forever', () => {
     renderPopup();
 
-    fireEvent.click(screen.getByRole('button', { name: "I don't want to debate this claim" }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss forever' }));
 
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
+  });
+
+  // Standing down from the claim is not an answer to this request — the request is left alone so
+  // it can still be accepted, or left to expire, from the Requests tab.
+  it('stands the viewer down from the claim without answering the request', () => {
+    renderPopup();
+
+    const toggle = screen.getByRole('switch', { name: 'Debate this claim' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(toggle);
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: 'space-1',
+      claimId: 'claim-1',
+      ready: false,
+    });
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+    expect(mocks.accept).not.toHaveBeenCalled();
   });
 
   it('offers blocking behind the overflow menu', () => {

@@ -36,8 +36,18 @@ type DebateRequestDialogProps = {
   onReject: () => void;
   /** Defaults to "Reject". GEO-2430 request popups say "Not now" instead. */
   rejectLabel?: string;
-  /** GEO-2430: an extra text action under the footer, e.g. "I don't want to debate this claim". */
-  tertiaryAction?: { label: string; onClick: () => void };
+  /**
+   * `stacked` (the default) leads with Accept and puts the reject below it — right for a match,
+   * which you are expected to take. `split` sets them side by side, which is what GEO-2430's
+   * request popup does: turning a request down is an ordinary answer, not a way out.
+   */
+  actionsLayout?: 'stacked' | 'split';
+  /** Replaces the plain "Debate request" eyebrow, e.g. with the claim's space. */
+  eyebrow?: React.ReactNode;
+  /** GEO-2430: a text action beside the "Debate format" heading, e.g. "Dismiss forever". */
+  formatAction?: { label: string; onClick: () => void };
+  /** GEO-2430: rendered centred under the actions, e.g. the claim's Debate toggle. */
+  footerNote?: React.ReactNode;
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;
 };
@@ -53,7 +63,10 @@ export function DebateRequestDialog({
   onAccept,
   onReject,
   rejectLabel = 'Reject',
-  tertiaryAction,
+  actionsLayout = 'stacked',
+  eyebrow,
+  formatAction,
+  footerNote,
   overflowMenu,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
@@ -95,9 +108,11 @@ export function DebateRequestDialog({
         className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card"
       >
         <header className="min-w-0 text-center">
-          <Text as="div" variant="metadata" color="text">
-            Debate request
-          </Text>
+          {eyebrow ?? (
+            <Text as="div" variant="metadata" color="text">
+              Debate request
+            </Text>
+          )}
           <h2 id={titleId} className="mt-3 text-cardEntityTitle leading-[1.375rem]">
             {claim}
           </h2>
@@ -124,6 +139,16 @@ export function DebateRequestDialog({
               <Text as="h3" variant="metadata" color="text">
                 Debate format
               </Text>
+              {formatAction && (
+                <button
+                  type="button"
+                  onClick={formatAction.onClick}
+                  disabled={busy}
+                  className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
+                >
+                  {formatAction.label}
+                </button>
+              )}
               {formatSelector && (
                 <DebateFormatSelector
                   value={formatSelector.value}
@@ -149,32 +174,46 @@ export function DebateRequestDialog({
         </div>
 
         <footer className="grid gap-5">
-          <button
-            type="button"
-            onClick={onAccept}
-            disabled={busy}
-            className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-          >
-            Accept
-          </button>
-          <button
-            type="button"
-            onClick={onReject}
-            disabled={busy}
-            className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
-          >
-            {rejectLabel}
-          </button>
-          {tertiaryAction ? (
-            <button
-              type="button"
-              onClick={tertiaryAction.onClick}
-              disabled={busy}
-              className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
-            >
-              {tertiaryAction.label}
-            </button>
-          ) : null}
+          {actionsLayout === 'split' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+              >
+                {rejectLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+              >
+                Accept
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+              >
+                Accept
+              </button>
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={busy}
+                className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
+              >
+                {rejectLabel}
+              </button>
+            </>
+          )}
+          {footerNote ? <div className="-mt-3 flex justify-center">{footerNote}</div> : null}
         </footer>
       </section>
     </div>

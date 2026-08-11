@@ -57,6 +57,21 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 const CLAIM_ENTITY_ID = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 
+function party(userId: string, displayName: string, position: boolean, positionLabel: string) {
+  return {
+    user_id: userId,
+    profile_space_id: `profile-${userId}`,
+    display_name: displayName,
+    avatar_cid: null,
+    online: true,
+    available_to_debate: true,
+    in_debate: false,
+    online_since: '2026-08-05T11:00:00.000Z',
+    position,
+    position_label: positionLabel,
+  };
+}
+
 function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
   return {
     claim: {
@@ -217,7 +232,13 @@ describe('MatchesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
     expect(mocks.createRequestMutate).toHaveBeenCalledWith({ space_id: SPACE_ID, claim_entity_id: CLAIM_ENTITY_ID });
 
-    mocks.outbound = { id: 'request-1', claim: match().claim, expires_at: '2099-01-01T00:00:00.000Z' };
+    mocks.outbound = {
+      id: 'request-1',
+      claim: match().claim,
+      expires_at: '2099-01-01T00:00:00.000Z',
+      requester: party('user-me', 'You', true, 'Agree'),
+      recipient: party('user-them', 'Arturas', false, 'Disagree'),
+    };
     rerender(<MatchesTab onTabChange={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
