@@ -13,18 +13,22 @@ import { fetchFeaturedRankings } from './fetch-featured-rankings';
 const getAllEntitiesMock = vi.fn();
 const getEntityPageMock = vi.fn();
 const getRelationsByToEntityIdsMock = vi.fn();
+const getSpacesMock = vi.fn();
 const getSubmitterRefsMock = vi.fn();
 const getSubmissionCountMock = vi.fn();
+const getOrderedRelationTargetIdsMock = vi.fn();
 
 vi.mock('~/core/io/queries', () => ({
   getAllEntities: (...args: unknown[]) => getAllEntitiesMock(...args),
   getEntityPage: (...args: unknown[]) => getEntityPageMock(...args),
   getRelationsByToEntityIds: (...args: unknown[]) => getRelationsByToEntityIdsMock(...args),
+  getSpaces: (...args: unknown[]) => getSpacesMock(...args),
 }));
 
 vi.mock('~/core/blocks/ranking/ranking-block-relations', () => ({
   getAggregatedRankingSubmitterRefs: (...args: unknown[]) => getSubmitterRefsMock(...args),
   getAggregatedRankingSubmissionCount: (...args: unknown[]) => getSubmissionCountMock(...args),
+  getOrderedRelationTargetIds: (...args: unknown[]) => getOrderedRelationTargetIdsMock(...args),
 }));
 
 const BLOCK = 'cb5afff8d4f04436ab8110c238008926';
@@ -72,14 +76,18 @@ describe('fetchFeaturedRankings', () => {
     getAllEntitiesMock.mockReset();
     getEntityPageMock.mockReset();
     getRelationsByToEntityIdsMock.mockReset();
+    getSpacesMock.mockReset();
     getSubmitterRefsMock.mockReset();
     getSubmissionCountMock.mockReset();
+    getOrderedRelationTargetIdsMock.mockReset();
 
     // Sensible happy-path defaults; individual tests override as needed.
     getAllEntitiesMock.mockReturnValue(Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] }));
     getRelationsByToEntityIdsMock.mockReturnValue(Effect.succeed(blocksRelation()));
+    getSpacesMock.mockReturnValue(Effect.succeed([]));
     getSubmitterRefsMock.mockReturnValue([{ rankEntityId: RANK_ENTITY, spaceId: SUBMITTER_SPACE }]);
     getSubmissionCountMock.mockReturnValue(3);
+    getOrderedRelationTargetIdsMock.mockReturnValue([]);
   });
 
   it('keeps a live ranking and resolves its space/block/parent coordinates and submitters', async () => {
@@ -98,8 +106,55 @@ describe('fetchFeaturedRankings', () => {
         rankingEndDate: FUTURE,
         submitterSpaceIds: [SUBMITTER_SPACE],
         submissionCount: 3,
+        spaceName: null,
+        spaceImage: null,
+        topEntries: [],
       },
     ]);
+  });
+
+  it('resolves leaderboard top entries in standings order and attaches space metadata', async () => {
+    const FIRST = 'e1c9f267dcb0d270718c2a3c45a64afd';
+    const SECOND = 'e2c9f267dcb0d270718c2a3c45a64afd';
+
+    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getOrderedRelationTargetIdsMock.mockReturnValue([FIRST, SECOND]);
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) {
+        // Returned out of order — the fetcher must re-order to the standings.
+        return Effect.succeed({
+          entities: [
+            { id: SECOND, name: 'Rome', relations: [] },
+            { id: FIRST, name: 'Paris', relations: [] },
+          ],
+        });
+      }
+      return Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] });
+    });
+    getSpacesMock.mockReturnValue(
+      Effect.succeed([{ id: SPACE, entity: { name: 'Travel', image: 'ipfs://space-image' } }])
+    );
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].topEntries).toEqual([
+      { entityId: FIRST, name: 'Paris', image: null },
+      { entityId: SECOND, name: 'Rome', image: null },
+    ]);
+    expect(result[0].spaceName).toBe('Travel');
+    expect(result[0].spaceImage).toBe('ipfs://space-image');
+  });
+
+  it('still returns rankings when the space metadata lookup fails', async () => {
+    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getSpacesMock.mockImplementation(() => Effect.die(new Error('boom')));
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].spaceName).toBeNull();
+    expect(result[0].spaceImage).toBeNull();
   });
 
   it('resolves the window from the legacy date properties when the current ones are absent', async () => {
