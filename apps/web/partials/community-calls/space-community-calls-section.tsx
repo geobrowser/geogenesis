@@ -14,7 +14,6 @@ import { Button } from '~/design-system/button';
 
 import { ExploreJoinSpaceButton } from '~/partials/explore/explore-join-space-button';
 
-import { AddToCalendarMenu } from './add-to-calendar-menu';
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
 import { RsvpButton } from './rsvp-button';
 
@@ -147,27 +146,22 @@ function UpcomingCard({
         <Title row={row} />
         <CardAction call={row.call} isMember={isMember} isEditor={isEditor} accessLoading={accessLoading} />
       </div>
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</span>
-        <AddToCalendarMenu
-          spaceId={row.call.spaceId}
-          callId={row.call.callId}
-          name={row.call.name}
-          startMs={row.occ.startMs}
-          endMs={row.occ.endMs}
-          schedule={row.call.schedule}
-        />
-      </div>
+      <div className="mt-6 text-[16px] leading-[20px] text-grey-04">{formatDateLabel(row.occ.startMs)}</div>
     </CardShell>
   );
 }
 
 /**
- * Mirrors explore-community-calls-section's upcoming-card treatment: editors get
- * an RSVP button (curator's `isCreator`/`isEditor` gate on "RSVP via email" —
- * regular members never see it), everyone else gets "Join space" — we don't have a
- * server-computed "request already pending" signal for a single space page, so
- * ExploreJoinSpaceButton's own post-click optimistic state covers that instead.
+ * Mirrors explore-community-calls-section's upcoming-card treatment: anyone who
+ * belongs to the space gets an RSVP button, everyone else gets "Join space" — we
+ * don't have a server-computed "request already pending" signal for a single space
+ * page, so ExploreJoinSpaceButton's own post-click optimistic state covers that
+ * instead.
+ *
+ * `isMember` and `isEditor` are independent flags out of useAccessControl (an editor
+ * is not implicitly a member), so both have to be checked. Gating RSVP on `isEditor`
+ * alone — curator's rule — left plain members with an empty action slot: no RSVP and
+ * no Join space, i.e. a card with nothing to do at all (GEO-2480).
  */
 function CardAction({
   call,
@@ -181,8 +175,7 @@ function CardAction({
   accessLoading: boolean;
 }) {
   if (accessLoading) return null;
-  if (isEditor) return <RsvpButton call={call} />;
-  if (isMember) return null;
+  if (isMember || isEditor) return <RsvpButton call={call} />;
   return (
     <div className="shrink-0 whitespace-nowrap">
       <ExploreJoinSpaceButton spaceId={call.spaceId} hasRequestedSpaceMembership={false} variant="text" />

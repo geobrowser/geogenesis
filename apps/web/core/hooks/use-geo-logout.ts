@@ -7,6 +7,7 @@ import { useSetAtom } from 'jotai';
 
 import { loggedOut } from '~/core/analytics';
 import { Cookie } from '~/core/cookie';
+import { resetGeoChatSession } from '~/core/debates/api';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
@@ -49,18 +50,22 @@ export function useGeoLogoutCleanup() {
       // Drop out of edit mode so the flow bar / "Review edits" popup hides — on
       // sign-out ModeToggle unmounts and can no longer reset `editable` itself.
       setEditable(false);
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      setName('');
-      setTopicId('');
-      setAvatar('');
-      setSpaceId('');
-      setStep('enter-profile');
-      setDismissedHints([]);
-      setPending(null);
+      resetGeoChatSession();
       queryClient.clear();
-      // Bulletproof reset — see the doc comment. `/root` is the public home and
-      // drops the user out of any onboarding/pending context they logged out of.
-      window.location.assign('/root');
+      try {
+        await Cookie.onConnectionChange({ type: 'disconnect' });
+      } finally {
+        setName('');
+        setTopicId('');
+        setAvatar('');
+        setSpaceId('');
+        setStep('enter-profile');
+        setDismissedHints([]);
+        setPending(null);
+        // Bulletproof reset — see the doc comment. `/root` is the public home and
+        // drops the user out of any onboarding/pending context they logged out of.
+        window.location.assign('/root');
+      }
     },
   });
 }

@@ -3,7 +3,7 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { Plugin, PluginKey, Transaction } from '@tiptap/pm/state';
 import { ReplaceAroundStep, ReplaceStep } from '@tiptap/pm/transform';
 
-import { detectWeb2URLsInMarkdown, isWeb2Url, normalizeWeb2Url } from '~/core/utils/url-detection';
+import { detectWeb2URLsInMarkdown, isWeb2Url, normalizeWeb2Url, parseMarkdownLink } from '~/core/utils/url-detection';
 
 // Re-exported so existing importers (and tests) can keep importing from here.
 export { isWeb2Url, normalizeWeb2Url } from '~/core/utils/url-detection';
@@ -190,6 +190,17 @@ export const Web2URLExtension = Extension.create({
           let updateTimeout: ReturnType<typeof setTimeout> | null = null;
           let isDestroyed = false;
           let previousEditableState = editor.isEditable;
+
+          // Circuit breaker. Healthy content reaches a fixed point in a handful
+          // of passes: each detected link is expanded/marked once, then the next
+          // pass is a no-op. Malformed content can instead grow the document on
+          // every self-dispatched pass (a detector that mis-parses a link emits
+          // text the next pass re-detects, and so on) — an unbounded loop that
+          // freezes the tab. We count consecutive passes that GREW the document
+          // and stop dispatching once that streak is implausibly long. The bound
+          // is far above any legitimate convergence, so real edits never hit it.
+          let consecutiveGrowingDispatches = 0;
+          const MAX_GROWING_DISPATCHES = 20;
 
           interface TextNodeInfo {
             node: PMNode;
@@ -436,8 +447,8 @@ export const Web2URLExtension = Extension.create({
                                     const shouldBeEditMode = isInEditMode;
 
                                     // Extract current URL from markdown for comparison
-                                    const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                                    const currentUrl = markdownMatch ? markdownMatch[2] : url;
+                                    const parsedLink = parseMarkdownLink(url);
+                                    const currentUrl = parsedLink ? parsedLink.url : url;
                                     const existingUrl = existingMark.attrs?.url || '';
 
                                     // Need to update if mode doesn't match OR URL has changed
@@ -449,10 +460,10 @@ export const Web2URLExtension = Extension.create({
 
                                 if (needsProcessing) {
                                   // Check if this is a markdown link or standalone URL
-                                  const markdownMatch = url.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                                  const isMarkdownLink = !!markdownMatch;
-                                  const actualUrl = markdownMatch ? markdownMatch[2] : url;
-                                  const linkText = markdownMatch ? markdownMatch[1] : url;
+                                  const parsedLink = parseMarkdownLink(url);
+                                  const isMarkdownLink = !!parsedLink;
+                                  const actualUrl = parsedLink ? parsedLink.url : url;
+                                  const linkText = parsedLink ? parsedLink.label : url;
 
                                   if (schema.marks.web2URL) {
                                     // Remove existing web2URL mark first if updating mode
@@ -511,7 +522,29 @@ export const Web2URLExtension = Extension.create({
 
                   // Apply changes if any were made and editor is still valid
                   if (hasChanges && !editorView.isDestroyed) {
+                    // Track runaway growth: if the document keeps getting larger
+                    // on every self-dispatched pass, a detection/rewrite loop is
+                    // corrupting it. Bail out rather than freeze the tab.
+                    if (newTr.doc.content.size > state.doc.content.size) {
+                      consecutiveGrowingDispatches += 1;
+                    } else {
+                      consecutiveGrowingDispatches = 0;
+                    }
+
+                    if (consecutiveGrowingDispatches > MAX_GROWING_DISPATCHES) {
+                      consecutiveGrowingDispatches = 0;
+                      console.warn(
+                        'Web2URLExtension: link detection stopped — the document kept growing across passes, ' +
+                          'which indicates malformed link content. Skipping further rewrites to avoid freezing the editor.'
+                      );
+                      rafId = null;
+                      return;
+                    }
+
                     editorView.dispatch(newTr);
+                  } else {
+                    // Reached a fixed point (or nothing to do) — reset the streak.
+                    consecutiveGrowingDispatches = 0;
                   }
                 } catch (error) {
                   console.warn('Web2URLExtension update error:', error);

@@ -7,6 +7,12 @@ import * as React from 'react';
 
 import { DATA_BLOCK_TOOLS_PROPERTY_ID, LINK_INGESTION_TOOL_ID } from '~/core/blocks/data/block-ontology-ids';
 import { isRollingRankingBlock } from '~/core/blocks/ranking/ensure-ranking-type';
+import {
+  RANKING_DATE_PROPERTY_IDS,
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDateValue,
+} from '~/core/blocks/ranking/ranking-block-dates';
 import { getAggregatedRankingSubmitterRefs } from '~/core/blocks/ranking/ranking-block-relations';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '~/core/blocks/ranking/ranking-block-state';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
@@ -16,11 +22,7 @@ import { getRankingSubmissionFrequencyHours } from '~/core/blocks/ranking/use-ra
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
-import {
-  RANKING_END_DATE_PROPERTY_ID,
-  RANKING_START_DATE_PROPERTY_ID,
-  SUBMISSION_FREQUENCY_PROPERTY_ID,
-} from '~/core/ranking-block-ids';
+import { SUBMISSION_FREQUENCY_PROPERTY_ID } from '~/core/ranking-block-ids';
 import {
   type DailyActivityTask,
   RANKING_ACTIVITY_DESCRIPTION,
@@ -89,8 +91,7 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
       !v.isDeleted &&
       (v.property.id === SystemIds.NAME_PROPERTY ||
         v.property.id === SystemIds.FILTER ||
-        v.property.id === RANKING_START_DATE_PROPERTY_ID ||
-        v.property.id === RANKING_END_DATE_PROPERTY_ID),
+        RANKING_DATE_PROPERTY_IDS.has(v.property.id)),
   });
 
   const toolRelations = useRelations({
@@ -156,18 +157,14 @@ export function useSpaceDailyActivityTasks(spaceId: string): {
       }
 
       const isRolling = isRollingRankingBlock(relationsForBlock, blockId, spaceId);
-      const startDate =
-        readBlockValue(blockValues, blockId, RANKING_START_DATE_PROPERTY_ID, spaceId) ||
+      const readBlockDate = (propertyId: string) =>
+        readBlockValue(blockValues, blockId, propertyId, spaceId) ||
         (initial?.values ?? []).find(
-          v => ID.equals(v.property.id, RANKING_START_DATE_PROPERTY_ID) && ID.equals(v.spaceId, spaceId) && !v.isDeleted
+          v => ID.equals(v.property.id, propertyId) && ID.equals(v.spaceId, spaceId) && !v.isDeleted
         )?.value ||
         '';
-      const endDate =
-        readBlockValue(blockValues, blockId, RANKING_END_DATE_PROPERTY_ID, spaceId) ||
-        (initial?.values ?? []).find(
-          v => ID.equals(v.property.id, RANKING_END_DATE_PROPERTY_ID) && ID.equals(v.spaceId, spaceId) && !v.isDeleted
-        )?.value ||
-        '';
+      const startDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
+      const endDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
       const periodState = getRankingPeriodState(startDate, endDate);
       const submissionsOpen = isRolling || rankingSubmissionsOpen(periodState);
       if (!submissionsOpen) continue;

@@ -3,15 +3,43 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import {
   DebateCancelUploadDialog,
   DebateRecordingUploadBanner,
+  isPermanentRecordingUploadError,
   processDebateRecordingUpload,
   recordingUploadRetryDelay,
 } from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 afterEach(cleanup);
+
+describe('isPermanentRecordingUploadError', () => {
+  it('treats unpublishable backend rejections as permanent', () => {
+    for (const code of [
+      'recording_cancelled',
+      'recording_not_ready',
+      'invalid_recording',
+      'invalid_recording_mime_type',
+      'recording_upload_missing',
+      'recording_upload_size_mismatch',
+      'recording_upload_type_mismatch',
+    ]) {
+      expect(isPermanentRecordingUploadError(new GeoChatRequestError('nope', code, 400))).toBe(true);
+    }
+  });
+
+  it('keeps transient failures retryable', () => {
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('down', 'object_store_not_configured', 503))).toBe(
+      false
+    );
+    // A 5xx that happens to reuse a permanent code is still transient.
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('flaky', 'recording_not_ready', 500))).toBe(false);
+    expect(isPermanentRecordingUploadError(new GeoChatRequestError('unknown 400', 'some_new_code', 400))).toBe(false);
+    expect(isPermanentRecordingUploadError(new Error('network'))).toBe(false);
+  });
+});
 
 describe('debate recording uploader', () => {
   it('uploads, persists the filename, finalizes, and deletes a queued recording', async () => {
@@ -104,19 +132,66 @@ describe('debate recording uploader', () => {
 });
 
 describe('DebateRecordingUploadBanner', () => {
-  it('shows the upload count with the publish checkbox checked', () => {
+  it('shows the upload and publishing state with determinate progress and a cancel action', () => {
+    const cancel = vi.fn();
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        percent={57}
+        waitingReason={null}
+        errorMessage={null}
+        canCancel
+        onCancel={cancel}
+      />
+    );
+
+    expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    const banner = screen.getByRole('status');
+    const content = screen.getByText('Uploading & publishing 1 debate').parentElement;
+    expect(banner).toHaveClass('h-7', 'items-center', 'justify-center');
+    expect(content).toHaveClass('w-auto', 'items-center', 'gap-2', 'md:w-full');
+    expect(screen.getByText('Uploading & publishing 1 debate')).toHaveClass('flex-initial', 'md:flex-1');
+    const progress = screen.getByRole('progressbar', { name: 'Uploading and publishing 1 debate' });
+    expect(progress).toHaveAttribute('aria-valuemin', '0');
+    expect(progress).toHaveAttribute('aria-valuemax', '100');
+    expect(progress).toHaveAttribute('aria-valuenow', '57');
+    expect(progress.firstElementChild).toHaveStyle({ width: '57%' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('pluralizes the count and shows indeterminate progress while the percentage is unavailable', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={2}
+        waitingReason={null}
+        errorMessage={null}
+        canCancel
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Uploading and publishing 2 debates' })).not.toHaveAttribute(
+      'aria-valuenow'
+    );
+  });
+
+  it('drops the cancel action once the thank-you period is over', () => {
     render(
       <DebateRecordingUploadBanner
         count={1}
         waitingReason={null}
         errorMessage={null}
-        publishChecked
-        onUncheckPublish={() => undefined}
+        canCancel={false}
+        onCancel={() => undefined}
       />
     );
 
-    expect(screen.getByText('Uploading 1 debate')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Publish debate' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
   it('shows generic plural waiting copy when no reason is available', () => {
@@ -125,12 +200,14 @@ describe('DebateRecordingUploadBanner', () => {
         count={2}
         waitingReason="waiting"
         errorMessage={null}
-        publishChecked
-        onUncheckPublish={() => undefined}
+        canCancel
+        onCancel={() => undefined}
       />
     );
 
     expect(screen.getByText('Waiting to upload 2 debates')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('explains that offline uploads are waiting for a connection', () => {
@@ -139,13 +216,14 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason="offline"
         errorMessage="stale upload failure"
-        publishChecked
-        onUncheckPublish={() => undefined}
+        canCancel
+        onCancel={() => undefined}
       />
     );
 
     expect(screen.getByText('Waiting to upload 1 debate — waiting for a connection')).toBeInTheDocument();
     expect(screen.queryByText(/stale upload failure/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('shows the latest failure and says retries are automatic', () => {
@@ -154,14 +232,16 @@ describe('DebateRecordingUploadBanner', () => {
         count={2}
         waitingReason="retry"
         errorMessage="Finalization unavailable"
-        publishChecked
-        onUncheckPublish={() => undefined}
+        canCancel
+        onCancel={() => undefined}
       />
     );
 
     expect(
       screen.getByText('Waiting to upload 2 debates — Finalization unavailable. Retrying automatically.')
     ).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 
   it('keeps long failure text in the live region while visually truncating it', () => {
@@ -171,8 +251,8 @@ describe('DebateRecordingUploadBanner', () => {
         count={1}
         waitingReason="retry"
         errorMessage={longError}
-        publishChecked
-        onUncheckPublish={() => undefined}
+        canCancel
+        onCancel={() => undefined}
       />
     );
 
@@ -181,32 +261,22 @@ describe('DebateRecordingUploadBanner', () => {
     expect(screen.getByText(message)).toHaveClass('truncate');
   });
 
-  it('asks to cancel only when unchecking a checked publish box', () => {
-    const uncheck = vi.fn();
-    const { rerender } = render(
+  it('keeps uploaded copy and hides progress after the upload finishes', () => {
+    render(
       <DebateRecordingUploadBanner
         count={1}
+        thankingUploadFinished
         waitingReason={null}
         errorMessage={null}
-        publishChecked
-        onUncheckPublish={uncheck}
+        canCancel
+        onCancel={() => undefined}
       />
     );
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
-    expect(uncheck).toHaveBeenCalledOnce();
-
-    rerender(
-      <DebateRecordingUploadBanner
-        count={1}
-        waitingReason={null}
-        errorMessage={null}
-        publishChecked={false}
-        onUncheckPublish={uncheck}
-      />
-    );
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Publish debate' }));
-    expect(uncheck).toHaveBeenCalledOnce();
+    expect(screen.getByText('Debate uploaded')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 });
 
@@ -216,7 +286,7 @@ describe('DebateCancelUploadDialog', () => {
     const close = vi.fn();
     render(<DebateCancelUploadDialog busy={false} error={null} onConfirm={confirm} onClose={close} />);
 
-    expect(screen.getByText("Don't want to publish?")).toBeInTheDocument();
+    expect(screen.getByText('Don’t want to publish?')).toBeInTheDocument();
     expect(
       screen.getByText('This action permanently removes this debate video on behalf of you and your opponent.')
     ).toBeInTheDocument();

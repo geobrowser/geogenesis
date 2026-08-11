@@ -32,7 +32,7 @@ export function PreviousButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'text';
 
   return (
-    <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
+    <TextButton aria-label="Previous page" disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <LeftArrowLong color={color} />
     </TextButton>
   );
@@ -42,7 +42,7 @@ export function NextButton({ onClick, isDisabled }: PageButtonProps) {
   const color: ColorName = isDisabled ? 'grey-03' : 'text';
 
   return (
-    <TextButton disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
+    <TextButton aria-label="Next page" disabled={isDisabled} onClick={isDisabled ? undefined : onClick}>
       <span
         style={{
           transform: 'rotate(180deg)',

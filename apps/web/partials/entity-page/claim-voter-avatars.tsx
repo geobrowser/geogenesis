@@ -1,0 +1,63 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { Effect } from 'effect';
+
+import { getEntityResponders } from '~/core/io/queries';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  type ResponseObjectType,
+  entityRespondersQueryKey,
+} from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+
+import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
+
+export function ClaimResponderAvatars({
+  entityId,
+  spaceId,
+  objectType,
+  responseKind,
+  totalResponders,
+  viewerSpaceId,
+  optimisticViewerResponse,
+}: {
+  entityId: string;
+  spaceId: string;
+  objectType: ResponseObjectType;
+  responseKind: ResponseKind;
+  totalResponders: number;
+  viewerSpaceId?: string | null;
+  optimisticViewerResponse?: ActiveResponseDirection | null;
+}) {
+  const responseBatch = useClaimResponseBatchState();
+  const { data: responders } = useQuery({
+    queryKey: entityRespondersQueryKey(entityId, spaceId, objectType, responseKind),
+    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
+    enabled: !responseBatch.managed,
+    staleTime: 30_000,
+  });
+
+  const responderSpaceIds = React.useMemo(() => {
+    const indexedResponderIds = responders?.map(v => v.userId) ?? [];
+    if (optimisticViewerResponse === undefined || !viewerSpaceId) return indexedResponderIds;
+
+    const otherResponderIds = indexedResponderIds.filter(id => id !== viewerSpaceId);
+    return optimisticViewerResponse === null ? otherResponderIds : [viewerSpaceId, ...otherResponderIds];
+  }, [optimisticViewerResponse, responders, viewerSpaceId]);
+
+  if (responderSpaceIds.length === 0) return null;
+
+  return (
+    <RankingAggregatedSubmitterAvatars
+      submitterSpaceIds={responderSpaceIds}
+      totalCount={Math.max(totalResponders, responderSpaceIds.length)}
+      size={12}
+      queriesEnabled={!responseBatch.managed}
+    />
+  );
+}

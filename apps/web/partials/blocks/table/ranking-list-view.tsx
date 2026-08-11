@@ -4,14 +4,13 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { isScorePropertyShown } from '~/core/blocks/data/is-score-property-shown';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { RankingBlockGlobalPagination } from './ranking-block-global-pagination';
 import { RankingPeriodMetadata } from './ranking-period-metadata';
@@ -21,15 +20,20 @@ const ROW_NAME_CLASS = 'block text-[16px] leading-[20px] font-normal tracking-[-
 const ROW_CLASS = 'flex w-full min-w-0 items-start gap-3';
 const ROW_RANK_CLASS =
   'w-5 shrink-0 text-center text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 tabular-nums';
+// The compact 20px ranking line box needs 2px of optical compensation to match
+// the visible 4px content-to-actions spacing of the 29px data-block body text.
+const ROW_ACTIONS_GAP_CLASS = 'gap-[6px]';
 
 function RankingListRowSkeleton({ rank }: { rank: number }) {
   return (
-    <div className={ROW_CLASS}>
-      <span className={ROW_RANK_CLASS}>{rank}</span>
-      <div className="min-w-0 flex-1">
-        <Skeleton className="h-5 w-full max-w-md rounded" />
+    <div className={cx('flex w-full min-w-0 flex-col', ROW_ACTIONS_GAP_CLASS)}>
+      <div className={ROW_CLASS}>
+        <span className={ROW_RANK_CLASS}>{rank}</span>
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-5 w-full max-w-md rounded" />
+        </div>
       </div>
-      <Skeleton className="h-5 w-16 shrink-0 rounded" />
+      <Skeleton className="ml-8 h-5 w-16 shrink-0 rounded" />
     </div>
   );
 }
@@ -38,24 +42,22 @@ type ListRowProps = {
   rank: number;
   entityId: string;
   spaceId: string;
+  voteSpaceId: string;
   name: string;
-  showVoteButtons: boolean;
 };
 
-function RankingListRow({ rank, entityId, spaceId, name, showVoteButtons }: ListRowProps) {
+function RankingListRow({ rank, entityId, spaceId, voteSpaceId, name }: ListRowProps) {
   const href = NavUtils.toEntity(spaceId, entityId);
 
   return (
-    <div className={ROW_CLASS}>
-      <span className={ROW_RANK_CLASS}>{rank}</span>
-      <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
-        {name}
-      </Link>
-      {showVoteButtons ? (
-        <div className="flex h-5 shrink-0 items-center">
-          <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
-        </div>
-      ) : null}
+    <div className={cx('flex w-full min-w-0 flex-col', ROW_ACTIONS_GAP_CLASS)}>
+      <div className={ROW_CLASS}>
+        <span className={ROW_RANK_CLASS}>{rank}</span>
+        <Link href={href} className={cx(ROW_NAME_CLASS, 'min-w-0 flex-1 hover:underline')} title={name}>
+          {name}
+        </Link>
+      </div>
+      <EntityRowActions entityId={entityId} spaceId={voteSpaceId} className="ml-8" />
     </div>
   );
 }
@@ -67,7 +69,7 @@ type Props = {
 export function RankingListView({ state }: Props) {
   const {
     spaceId,
-    shownColumnIds,
+    resolveEntitySpaceId,
     globalDisplayEntityIds,
     globalRankingEntryByEntityId,
     globalRankByEntityId,
@@ -79,13 +81,10 @@ export function RankingListView({ state }: Props) {
     aggregatedRankingCount,
     periodState,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
   } = state;
-
-  const showVoteButtons = isScorePropertyShown(shownColumnIds);
 
   const rows = globalDisplayEntityIds
     .map(entityId => {
@@ -103,8 +102,8 @@ export function RankingListView({ state }: Props) {
           rank={rank}
           entityId={entityId}
           spaceId={spaceId}
+          voteSpaceId={resolveEntitySpaceId(entityId)}
           name={entry.name}
-          showVoteButtons={showVoteButtons}
         />
       );
     })
@@ -140,7 +139,6 @@ export function RankingListView({ state }: Props) {
         {showEmbeddedGlobalPagination ? (
           <div className="ml-auto self-end [&>div:first-child]:hidden [&>div:last-child]:!mt-0 [&>div:last-child]:!mb-0 [&>div:last-child]:!justify-end">
             <RankingBlockGlobalPagination
-              pageNumber={embeddedGlobalPageNumber}
               hasPreviousPage={hasEmbeddedGlobalPreviousPage}
               hasNextPage={hasEmbeddedGlobalNextPage}
               onSetPage={setEmbeddedGlobalPage}

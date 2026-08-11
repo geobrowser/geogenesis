@@ -25,6 +25,7 @@ import * as React from 'react';
 import { Effect, Either } from 'effect';
 import { useSetAtom } from 'jotai';
 
+import { isBlockMediaProperty, resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import type { Source } from '~/core/blocks/data/source';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
@@ -66,7 +67,11 @@ type TableBlockPropertiesMenuProps = {
   filterableProperties: Property[];
   shownColumnIds: string[];
   orderedShownColumnRelations: Relation[];
-  toggleProperty: (column: { id: string; name: string | null }) => void;
+  toggleProperty: (
+    column: { id: string; name: string | null },
+    selector?: string,
+    options?: { insertAt?: 'start' | 'end' }
+  ) => void;
   hideAllShownPropertyColumns: () => void;
   reorderShownPropertyRelations: (fromIndex: number, toIndex: number) => void;
   disabled?: boolean;
@@ -76,12 +81,14 @@ function SortablePropertyRow({
   id,
   label,
   isShown,
+  isMainMedia,
   onToggleVisibility,
   dragDisabled,
 }: {
   id: string;
   label: string;
   isShown: boolean;
+  isMainMedia?: boolean;
   onToggleVisibility: () => void;
   dragDisabled?: boolean;
 }) {
@@ -123,6 +130,7 @@ function SortablePropertyRow({
         <OrderDots color="grey-04" className="shrink-0" />
       </button>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      {isMainMedia ? <span className="shrink-0 text-footnote text-grey-04">Main media</span> : null}
       <button
         type="button"
         onClick={e => {
@@ -248,6 +256,22 @@ export function TableBlockPropertiesMenu({
 
   const nameRowMatchesSearch = !q || labelMatchesQuery('Name', SystemIds.NAME_PROPERTY, q);
 
+  const mainMedia = React.useMemo(
+    () => resolveMainMediaProperty(shownColumnIds, filterableProperties),
+    [shownColumnIds, filterableProperties]
+  );
+
+  const showProperty = React.useCallback(
+    (column: { id: string; name: string | null }, property?: Property | null) => {
+      if (isBlockMediaProperty(property)) {
+        toggleProperty(column, undefined, { insertAt: 'start' });
+        return;
+      }
+      toggleProperty(column);
+    },
+    [toggleProperty]
+  );
+
   const schemaAndShownPropertyIds = React.useMemo(
     () => new Set<string>([...shownColumnIds, ...filterableProperties.map(p => p.id)]),
     [shownColumnIds, filterableProperties]
@@ -343,18 +367,20 @@ export function TableBlockPropertiesMenu({
               )}
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                 <SortableContext items={shownRelationIds} strategy={verticalListSortingStrategy}>
-                  {filteredSortableShown.map(rel => (
-                    <SortablePropertyRow
-                      key={rel.id}
-                      id={rel.id}
-                      label={rel.toEntity.name ?? rel.toEntity.id}
-                      isShown
-                      dragDisabled={dragDisabledWhileSearch}
-                      onToggleVisibility={() =>
-                        toggleProperty({ id: columnPropertyIdFromRelation(rel), name: rel.toEntity.name })
-                      }
-                    />
-                  ))}
+                  {filteredSortableShown.map(rel => {
+                    const propertyId = columnPropertyIdFromRelation(rel);
+                    return (
+                      <SortablePropertyRow
+                        key={rel.id}
+                        id={rel.id}
+                        label={rel.toEntity.name ?? rel.toEntity.id}
+                        isShown
+                        isMainMedia={Boolean(mainMedia && ID.equals(mainMedia.propertyId, propertyId))}
+                        dragDisabled={dragDisabledWhileSearch}
+                        onToggleVisibility={() => toggleProperty({ id: propertyId, name: rel.toEntity.name })}
+                      />
+                    );
+                  })}
                 </SortableContext>
               </DndContext>
             </div>
@@ -381,11 +407,11 @@ export function TableBlockPropertiesMenu({
                       role="button"
                       tabIndex={0}
                       className={rowClass}
-                      onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                      onClick={() => showProperty({ id: p.id, name: p.name }, p)}
                       onKeyDown={e => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          toggleProperty({ id: p.id, name: p.name });
+                          showProperty({ id: p.id, name: p.name }, p);
                         }
                       }}
                     >
@@ -395,7 +421,7 @@ export function TableBlockPropertiesMenu({
                         type="button"
                         onClick={e => {
                           e.stopPropagation();
-                          toggleProperty({ id: p.id, name: p.name });
+                          showProperty({ id: p.id, name: p.name }, p);
                         }}
                         className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
                         aria-label="Show in table"
@@ -410,11 +436,11 @@ export function TableBlockPropertiesMenu({
                       role="button"
                       tabIndex={0}
                       className={rowClass}
-                      onClick={() => toggleProperty({ id: p.id, name: p.name })}
+                      onClick={() => showProperty({ id: p.id, name: p.name }, p)}
                       onKeyDown={e => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          toggleProperty({ id: p.id, name: p.name });
+                          showProperty({ id: p.id, name: p.name }, p);
                         }
                       }}
                     >
@@ -424,7 +450,7 @@ export function TableBlockPropertiesMenu({
                         type="button"
                         onClick={e => {
                           e.stopPropagation();
-                          toggleProperty({ id: p.id, name: p.name });
+                          showProperty({ id: p.id, name: p.name }, p);
                         }}
                         className="inline-flex shrink-0 rounded p-0.5 text-grey-04 hover:bg-bg hover:text-text"
                         aria-label="Show in table"

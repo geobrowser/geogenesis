@@ -23,6 +23,7 @@ import {
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
+import { RankingEntryVoteControls } from './ranking-entry-vote-controls';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -135,7 +136,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     pendingEntityIds,
     entriesResolving,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
@@ -152,6 +152,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     isSharedRankingView,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
     activeSwipeRowKey,
     setActiveSwipeRowKey,
     isMyRankingDragging,
@@ -212,7 +213,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const globalRankingPagination =
     presentation === 'embedded' && showEmbeddedGlobalPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedGlobalPageNumber}
         hasPreviousPage={hasEmbeddedGlobalPreviousPage}
         hasNextPage={hasEmbeddedGlobalNextPage}
         onSetPage={setEmbeddedGlobalPage}
@@ -242,7 +242,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
                 return (
                   <div key={entityId} className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
@@ -254,6 +254,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
                 />
               );
               return (
@@ -283,7 +284,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingPagination =
     presentation === 'embedded' && showEmbeddedMyPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedMyPageNumber}
         hasPreviousPage={hasEmbeddedMyPreviousPage}
         hasNextPage={hasEmbeddedMyNextPage}
         onSetPage={setEmbeddedMyPage}
@@ -320,7 +320,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!resolvedEntry || (entriesResolving && isPlaceholderRankingEntry(resolvedEntry))) {
                 return (
                   <div className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
@@ -334,6 +334,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={
+                    !isDragActive ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (
