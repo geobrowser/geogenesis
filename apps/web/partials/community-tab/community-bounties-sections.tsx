@@ -140,6 +140,19 @@ function EmptyState({ message, action }: { message: string; action?: React.React
   );
 }
 
+function BountiesErrorState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <EmptyState
+      message="Could not load bounties."
+      action={
+        <button type="button" onClick={onRetry} className={FILTER_PILL_CLASS}>
+          Try again
+        </button>
+      }
+    />
+  );
+}
+
 function BountiesEmptyState({
   totalCount,
   emptyMessage,
@@ -164,7 +177,7 @@ function BountiesEmptyState({
 }
 
 function useSpaceBounties(spaceId: string, taskStatusId: string) {
-  const { data } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['space-bounties', spaceId, taskStatusId],
     queryFn: async () => {
       const params = new URLSearchParams({ taskStatusId });
@@ -173,10 +186,12 @@ function useSpaceBounties(spaceId: string, taskStatusId: string) {
       return (await response.json()) as SpaceBountiesResult;
     },
     staleTime: 60_000,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
   });
 
   const { bounties, skills } = data ?? EMPTY_RESULT;
-  return { bounties, skills, isLoading: !data };
+  return { bounties, skills, isLoading: isPending, isError, refetch };
 }
 
 type BountyFilterValues = {
@@ -334,7 +349,7 @@ function BountiesSection({
   /** "View all" navigates to this full-screen route. */
   viewAllHref: string;
 }) {
-  const { bounties, skills, isLoading } = useSpaceBounties(spaceId, taskStatusId);
+  const { bounties, skills, isLoading, isError, refetch } = useSpaceBounties(spaceId, taskStatusId);
   const { filtered, filterKey, controls: filterControls, clearFilters } = useBountyFilterState(bounties, skills);
 
   const [visibleCount, setVisibleCount] = React.useState(INFINITE_PAGE_SIZE);
@@ -374,7 +389,9 @@ function BountiesSection({
         </div>
       </div>
 
-      {isLoading ? (
+      {isError ? (
+        <BountiesErrorState onRetry={() => void refetch()} />
+      ) : isLoading ? (
         <div className="flex flex-wrap gap-4">
           {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
             <Skeleton key={index} className="rounded-lg" style={{ width: cardWidthPx, height: cardHeightPx }} />
@@ -434,7 +451,7 @@ function BountiesFullView({
   cardWidthPx?: number;
   emptyMessage: string;
 }) {
-  const { bounties, skills, isLoading } = useSpaceBounties(spaceId, taskStatusId);
+  const { bounties, skills, isLoading, isError, refetch } = useSpaceBounties(spaceId, taskStatusId);
   const { filtered, controls: filterControls, clearFilters } = useUrlBountyFilterState(bounties, skills);
 
   return (
@@ -454,7 +471,9 @@ function BountiesFullView({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        {isLoading ? (
+        {isError ? (
+          <BountiesErrorState onRetry={() => void refetch()} />
+        ) : isLoading ? (
           <div className="flex flex-wrap gap-4">
             {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
               <Skeleton key={index} className="rounded-lg" style={{ width: cardWidthPx, height: cardHeightPx }} />
