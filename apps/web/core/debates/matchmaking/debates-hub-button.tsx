@@ -8,17 +8,22 @@ import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { Megaphone } from '~/design-system/icons/megaphone';
 
-import { useDebateActivity } from '../hooks';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
- * Navbar entry point for the matchmaking hub. Visible to every user once debates are enabled —
- * including those who are not available to debate, since the hub is where they turn it on.
+ * Navbar entry point for the matchmaking hub. Shown to signed-in users once debates are enabled —
+ * including those who are not available to debate, since the hub is where they turn it on. Every
+ * tab behind it is geo-chat data that needs an identity, so a signed-out visitor has nothing to
+ * open it for.
  */
 export function DebatesHubButton() {
   const isDebatesEnabled = useDebatesEnabled();
+  // False until Privy has restored the session, so the button stays hidden until we actually know
+  // — appearing late beats flashing in and out for someone who was never signed in.
+  const { authenticated } = useGeoChatAuth();
   const { isOpen, toggle } = useDebatesHub();
   const { data: activity } = useDebateActivity(isDebatesEnabled);
   // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
@@ -26,7 +31,7 @@ export function DebatesHubButton() {
   const { data: requests } = useDebateRequests(false);
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  if (!isDebatesEnabled) return null;
+  if (!isDebatesEnabled || !authenticated) return null;
 
   const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
 
