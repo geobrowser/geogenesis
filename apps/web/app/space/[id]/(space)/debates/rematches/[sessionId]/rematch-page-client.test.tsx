@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
   openSidePanel: vi.fn(),
+  entityQueries: [] as unknown[],
   claimReadiness: [] as Array<{
     claim_entity_id: string;
     viewer_debate_ready: boolean;
@@ -63,24 +64,27 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({
-    entities: [
-      {
-        id: CLAIM_MORE,
-        name: 'A newly published claim',
-        description: null,
-        spaces: [SPACE_2],
-        relations: [
-          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
-          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
-        ],
-      },
-    ],
-    isLoading: false,
-    isPlaceholderData: false,
-    endCursor: null,
-    hasNextPage: false,
-  }),
+  useQueryEntities: (options: { where?: unknown }) => {
+    mocks.entityQueries.push(options.where);
+    return {
+      entities: [
+        {
+          id: CLAIM_MORE,
+          name: 'A newly published claim',
+          description: null,
+          spaces: [SPACE_2],
+          relations: [
+            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
+          ],
+        },
+      ],
+      isLoading: false,
+      isPlaceholderData: false,
+      endCursor: null,
+      hasNextPage: false,
+    };
+  },
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -130,6 +134,7 @@ beforeEach(() => {
   mocks.claimReadiness = [];
   mocks.setReadiness.mockReset();
   mocks.openSidePanel.mockReset();
+  mocks.entityQueries.length = 0;
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -510,6 +515,17 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(claim);
 
     expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
+  });
+
+  // The All tab browses every published claim a page at a time, so filtering the loaded pages
+  // only ever searched what had been paged in. The hub's Claims tab searches server-side.
+  it('searches the whole claim corpus rather than the loaded pages', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Fast fashion' } });
+
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'Fast fashion' } }));
   });
 
   it('renders the card’s Debate toggle against real readiness', () => {

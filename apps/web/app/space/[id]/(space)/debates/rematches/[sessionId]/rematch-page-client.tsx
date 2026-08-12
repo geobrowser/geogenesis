@@ -63,7 +63,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const currentUserId = getCurrentGeoChatUserId();
   const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
+  const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [search]);
+
   const [publishedClaimsCursor, setPublishedClaimsCursor] = React.useState<string | undefined>();
+
+  // A new term is a new corpus, so paging starts over.
+  React.useEffect(() => {
+    setPublishedClaimsCursor(undefined);
+  }, [debouncedSearch]);
+
   const {
     entities: publishedClaimsPage,
     isLoading: publishedClaimsLoading,
@@ -71,22 +85,38 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     endCursor: publishedClaimsEndCursor,
     hasNextPage: publishedClaimsHasNextPage,
   } = useQueryEntities({
-    where: { types: [{ id: { equals: CLAIM_TYPE_ID } }] },
+    // Search runs in the query rather than over the loaded pages. The All tab browses every
+    // published claim 50 at a time, so filtering locally only ever searched what had been paged
+    // in — the hub's Claims tab searches server-side, and this now matches it. `contains` maps to
+    // the same case-insensitive substring its `?search=` does.
+    where: {
+      types: [{ id: { equals: CLAIM_TYPE_ID } }],
+      ...(debouncedSearch ? { name: { contains: debouncedSearch } } : {}),
+    },
     first: 50,
     after: publishedClaimsCursor,
     placeholderData: keepPreviousData,
   });
-  const [publishedClaims, setPublishedClaims] = React.useState<typeof publishedClaimsPage>([]);
+
+  // Pages accumulate as the viewer loads more, but a change of term replaces them rather than
+  // piling the new matches on top of the previous corpus.
+  const [publishedClaims, setPublishedClaims] = React.useState<{
+    search: string;
+    entities: typeof publishedClaimsPage;
+  }>({ search: '', entities: [] });
   React.useEffect(() => {
     setPublishedClaims(current => {
-      const next = new Map(current.map(claim => [claim.id, claim]));
+      const sameSearch = current.search === debouncedSearch;
+      const base = sameSearch ? current.entities : [];
+      const next = new Map(base.map(claim => [claim.id, claim]));
       for (const claim of publishedClaimsPage) {
         if (!next.has(claim.id)) next.set(claim.id, claim);
       }
-      return next.size === current.length ? current : [...next.values()];
+      if (sameSearch && next.size === base.length) return current;
+      return { search: debouncedSearch, entities: [...next.values()] };
     });
-  }, [publishedClaimsPage]);
-  const publishedClaimIds = React.useMemo(() => publishedClaims.map(claim => claim.id), [publishedClaims]);
+  }, [debouncedSearch, publishedClaimsPage]);
+  const publishedClaimIds = React.useMemo(() => publishedClaims.entities.map(claim => claim.id), [publishedClaims]);
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const publishedClaimsQuery = useDebateRematchClaims(sessionId, publishedClaimIds);
   const createRequest = useCreateDebateRematchRequest(sessionId);
@@ -107,7 +137,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
       ...(publishedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
-    for (const claim of publishedClaims) {
+    for (const claim of publishedClaims.entities) {
       if (
         claim.name &&
         claim.spaces[0] &&
@@ -139,7 +169,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
-    publishedClaims,
+    publishedClaims.entities,
     publishedClaimsQuery.data,
     savedClaimsQuery.data,
     session?.participants,
@@ -164,26 +194,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // label each card and drive the "Any topic" filter. A claim can carry several topics.
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of publishedClaims) {
+    for (const entity of publishedClaims.entities) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
       if (topics.length > 0) map.set(entity.id, topics);
     }
     return map;
-  }, [publishedClaims]);
+  }, [publishedClaims.entities]);
 
   // Opens on the opponent's positions: those are the claims that can turn into a debate now.
   const [tab, setTab] = React.useState<PickerTab>('opponent');
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [topicId, setTopicId] = React.useState<string | null>(null);
-  const [search, setSearch] = React.useState('');
-  const [debouncedSearch, setDebouncedSearch] = React.useState('');
-
-  React.useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeout);
-  }, [search]);
 
   const returnFromSession = React.useCallback(
     (endedSession: DebateRematchSession) => {
@@ -236,7 +259,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         if (spaceId && claim.claim.space_id !== spaceId) return false;
         if (topicId && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => t.id === topicId))
           return false;
-        if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch)) return false;
+        // Still applied locally: the session's own claims come from geo-chat, not the query above,
+        // so they'd otherwise ignore the term. Case-insensitive substring, matching what the
+        // query does to the published half.
+        if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
         return true;
       }),
     [claims, debouncedSearch, opponentPositionOf, spaceId, tab, topicId, topicsByClaimId]
