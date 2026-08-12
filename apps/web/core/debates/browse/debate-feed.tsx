@@ -282,7 +282,9 @@ function DebateFeedItem({
   const shareAction = useDebateShareAction(debate, active);
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
-  const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId: debate.claim.space_id });
+  // Same arguments as the Comments panel's own useComments, so the two share a
+  // cache entry and posting there updates this count without a refetch.
+  const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
 
   React.useEffect(() => {
     const element = itemRef.current;

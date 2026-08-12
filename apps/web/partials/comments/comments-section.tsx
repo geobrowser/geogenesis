@@ -232,7 +232,9 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   const density = isPanel ? PANEL_DENSITY : PAGE_DENSITY;
   // The panel composer leads with the viewer's own avatar (design).
   const walletAddress = smartAccount?.account.address;
-  const { profile: viewerProfile } = useGeoProfile(walletAddress);
+  // Only the panel composer renders this avatar, so entity pages don't pay for
+  // the profile lookup (useGeoProfile disables itself without an account).
+  const { profile: viewerProfile } = useGeoProfile(isPanel ? walletAddress : undefined);
   const viewerAvatarUrl =
     viewerProfile?.avatarUrl && viewerProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? viewerProfile.avatarUrl : null;
   const viewerAvatarSeed = viewerProfile?.address ?? walletAddress ?? personalSpaceId ?? 'anonymous';
