@@ -31,6 +31,16 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
+  claimReadiness: [] as Array<{
+    claim_entity_id: string;
+    viewer_debate_ready: boolean;
+    readiness_disabled_reason: string | null;
+  }>,
+  setReadiness: vi.fn(),
+}));
+
+vi.mock('~/core/debates/matchmaking/hooks', () => ({
+  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -50,6 +60,8 @@ vi.mock('~/core/debates/hooks', () => ({
     error: null,
   }),
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
+  // Readiness comes from the per-space debate-claims endpoint, keyed by claim entity id.
+  useDebateClaimsBySpaces: () => mocks.claimReadiness,
   useCreateDebateRematchRequest: () => mutation(),
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
@@ -113,6 +125,8 @@ beforeEach(() => {
   mocks.rejectMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.optimisticResponses.clear();
+  mocks.claimReadiness = [];
+  mocks.setReadiness.mockReset();
   mocks.session = session();
   mocks.claims = [sharedClaim()];
   // The hub's filter menus measure their dropdown.
@@ -194,6 +208,7 @@ describe('DebateRematchPageClient', () => {
 
   it('pins shared preferences above additional published claims and enables opposing requests', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     const shared = screen.getByText('A claim both participants chose');
     const additional = screen.getByText('A newly published claim');
@@ -232,6 +247,8 @@ describe('DebateRematchPageClient', () => {
     ];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    // This one also inspects the published claim, which only the All tab lists.
+    showAllClaims();
 
     const sharedClaimCard = screen.getByText('A claim both participants chose').closest('article');
     expect(sharedClaimCard).not.toBeNull();
@@ -356,6 +373,7 @@ describe('DebateRematchPageClient', () => {
     });
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     expect(screen.getByRole('button', { name: 'Requesting…' })).toBeDisabled();
     // Two sides on each of the two claims; the held side's name carries a "your response" suffix.
@@ -389,6 +407,87 @@ describe('DebateRematchPageClient', () => {
     ).toBeInTheDocument();
   });
 
+  it('opens on the opponent’s positions rather than the whole list', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The published claim carries no position from Salina, so it waits on the All tab.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByText('A newly published claim')).toBeNull();
+  });
+
+  it('shortens the opponent tab to their first name', () => {
+    mocks.session = session({
+      participants: [session().participants[0], { ...session().participants[1], display_name: 'Salina Okonkwo' }],
+    });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Okonkwo/ })).toBeNull();
+  });
+
+  // Waiting for geo-chat to echo the response back left the side you just picked unhighlighted
+  // and "Request debate" missing for seconds after the click.
+  it('reflects a just-picked side and offers the debate straight away', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Nothing to request yet: the viewer holds no side.
+    expect(screen.queryByRole('button', { name: 'Request debate' })).toBeNull();
+
+    // The client knows its own answer before the server does.
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    cleanup();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+  });
+
+  it('shows the Debate toggle against real readiness', () => {
+    mocks.claimReadiness = [
+      { claim_entity_id: CLAIM_SHARED, viewer_debate_ready: true, readiness_disabled_reason: null },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeChecked();
+  });
+
+  // Picking a side here means you want to debate it, so readiness shouldn't be a second step.
+  it('opts into readiness when a side is picked in this flow', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED, ready: true });
+  });
+
+  // Standing down from elsewhere is deliberate; arriving here mustn't silently undo it.
+  it('does not opt in for positions that were already held on arrival', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+  });
+
   // The opponent tab is the old "Debate now": claims they've already taken a side on.
   it('names the opponent tab after them and counts their positions', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -400,6 +499,7 @@ describe('DebateRematchPageClient', () => {
 
   it('filters to opponent-committed claims on their positions tab', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     // The opponent has taken a side on the shared claim but not the newly published one.
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
@@ -422,6 +522,7 @@ describe('DebateRematchPageClient', () => {
 
   it('narrows the list to the selected topic', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     selectFilter('Any topic', 'Governance');
 
@@ -432,6 +533,7 @@ describe('DebateRematchPageClient', () => {
 
   it('matches the topic filter on any of a claim topics, not just the first', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     // The published claim is tagged Governance and Ethics; filtering on the second still matches.
     selectFilter('Any topic', 'Ethics');
@@ -442,6 +544,7 @@ describe('DebateRematchPageClient', () => {
   // The hub's Claims tab narrows by space too, so the picker does the same.
   it('narrows the list to the selected space', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     // The shared claim sits in Crypto; the newly published one is in Governance space.
     selectFilter('Any space', 'Crypto');
@@ -452,6 +555,7 @@ describe('DebateRematchPageClient', () => {
 
   it('searches the claim text, and both filters and search survive a tab switch', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), {
       target: { value: 'newly published' },
@@ -467,6 +571,11 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
   });
 });
+
+/** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
+function showAllClaims() {
+  fireEvent.click(screen.getByRole('button', { name: 'All' }));
+}
 
 /**
  * Opens one of the hub filter menus and picks an option. Names are matched loosely: a space

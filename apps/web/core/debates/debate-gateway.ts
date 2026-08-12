@@ -466,6 +466,15 @@ export class DebateGatewayClient {
               queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))));
         if (isDebateClaimQuery) return true;
 
+        // A rematch picker lists claims from many spaces and renders both participants' sides, so
+        // it has to refresh when *anyone's* response lands — not just the viewer's, which is all
+        // the picker's own indexed-response subscription covers. Without this the opponent's
+        // choices only appeared after leaving and rejoining the session.
+        const [, accountSegment, , rematchSegment, , claimsSegment] = query.queryKey;
+        if (accountSegment === 'account' && rematchSegment === 'rematch' && claimsSegment === 'claims') {
+          return true;
+        }
+
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
           targetKeys: changedResponseTargets,

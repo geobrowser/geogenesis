@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateClaimPositionSummary,
+  type DebateClaimSummary,
   type DebateRematchClaim,
   type DebateRematchParticipant,
   type DebateRematchSession,
@@ -23,16 +24,19 @@ import {
   useAcceptDebateRematchRequest,
   useCreateDebateRematchRequest,
   useDebate,
+  useDebateClaimsBySpaces,
   useDebateRematch,
   useDebateRematchClaims,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
+import { useClaimReadiness } from '~/core/debates/matchmaking/hooks';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -46,9 +50,13 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 type PickerTab = 'opponent' | 'all';
 
-/** "Jenna" -> "Jenna’s", "Chris" -> "Chris’". */
-function possessive(name: string) {
-  return name.endsWith('s') ? `${name}\u2019` : `${name}\u2019s`;
+/**
+ * The tab is tight, so it uses the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
+ * A name already ending in s takes the bare apostrophe: "Chris" -> "Chris’".
+ */
+function firstNamePossessive(name: string) {
+  const firstName = name.trim().split(/\s+/)[0] || name;
+  return firstName.endsWith('s') ? `${firstName}\u2019` : `${firstName}\u2019s`;
 }
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
@@ -166,7 +174,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return map;
   }, [publishedClaims]);
 
-  const [tab, setTab] = React.useState<PickerTab>('all');
+  const [tab, setTab] = React.useState<PickerTab>('opponent');
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [topicId, setTopicId] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
@@ -207,6 +215,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   const facetSpaceIds = React.useMemo(() => [...new Set(claims.map(claim => claim.claim.space_id))], [claims]);
+
+  // The rematch claims response carries no readiness, so pull it from the per-space debate-claims
+  // endpoint — one query per space the picker is showing — and key it by claim entity id.
+  const claimIdsBySpace = React.useMemo(() => {
+    const bySpace = new Map<string, string[]>();
+    for (const claim of claims) {
+      const existing = bySpace.get(claim.claim.space_id);
+      if (existing) existing.push(claim.claim.claim_entity_id);
+      else bySpace.set(claim.claim.space_id, [claim.claim.claim_entity_id]);
+    }
+    return bySpace;
+  }, [claims]);
+  const readinessByClaimId = useRematchClaimReadiness(claimIdsBySpace);
 
   const facetTopics = React.useMemo(() => {
     const seen = new Map<string, MatchmakingTopic>();
@@ -277,7 +298,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <h1 className="sr-only">Rematch {remoteName}</h1>
           <div className="flex min-w-0 items-center gap-5">
             <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
-              <span className="truncate">{possessive(remoteName)} positions</span>
+              <span className="truncate">{firstNamePossessive(remoteName)} positions</span>
               <span
                 className={cx(
                   'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
@@ -373,6 +394,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 claim={claim}
                 session={session}
                 currentUserId={currentUserId}
+                readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
                 onRequest={() =>
                   createRequest.mutate({
                     source_space_id: claim.claim.space_id,
@@ -426,6 +448,36 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 }
 
+/** What the per-space debate-claims endpoint knows about a claim's readiness. */
+type ClaimReadinessState = { viewer_debate_ready: boolean; readiness_disabled_reason: string | null };
+
+/**
+ * Readiness for every claim on screen, from the per-space debate-claims endpoint — the rematch
+ * claims response doesn't carry it. One query per space, so the picker can render the hub's Debate
+ * toggle against real state rather than drawing it permanently off.
+ */
+function useRematchClaimReadiness(claimIdsBySpace: Map<string, string[]>) {
+  const spaceIds = React.useMemo(() => [...claimIdsBySpace.keys()].sort(), [claimIdsBySpace]);
+
+  const results = useDebateClaimsBySpaces(
+    React.useMemo(
+      () => spaceIds.map(spaceId => ({ spaceId, claimIds: claimIdsBySpace.get(spaceId) ?? [] })),
+      [claimIdsBySpace, spaceIds]
+    )
+  );
+
+  return React.useMemo(() => {
+    const byClaimId = new Map<string, ClaimReadinessState>();
+    for (const claim of results) {
+      byClaimId.set(claim.claim_entity_id, {
+        viewer_debate_ready: claim.viewer_debate_ready,
+        readiness_disabled_reason: claim.readiness_disabled_reason,
+      });
+    }
+    return byClaimId;
+  }, [results]);
+}
+
 /**
  * A rematch claim in the hub's card, so this picker and the debates side panel read as one
  * surface. The rematch API models positions per session participant, so the shared
@@ -435,25 +487,51 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  readiness: claimReadiness,
   onRequest,
   busy,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  readiness: ClaimReadinessState | null;
   onRequest: () => void;
   busy: boolean;
 }) {
-  const localPosition = claim.participants.find(position => position.user_id === currentUserId)?.position ?? null;
+  const serverLocalPosition = claim.participants.find(position => position.user_id === currentUserId)?.position ?? null;
   const remotePosition = claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null;
+
+  // A claim whose stored kind didn't parse still has to render; 'stance' is the same fallback
+  // `responsePositionLabel` applies, so the labels agree either way.
+  const responseKind = claim.response_kind ?? 'stance';
+  const target = {
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind,
+  };
+
+  // Read the client's own optimistic copy rather than waiting for geo-chat to catch up. Without
+  // this the side you just picked stays unhighlighted, and "Request debate" only appears once the
+  // rematch claims query refetches — seconds after the click.
+  const { optimisticResponse } = useEntityResponse(target);
+  const localPosition =
+    optimisticResponse === undefined
+      ? serverLocalPosition
+      : optimisticResponse === null
+        ? null
+        : optimisticResponse === 'positive';
+
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
   const request = session?.request;
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
 
-  // A claim whose stored kind didn't parse still has to render; 'stance' is the same fallback
-  // `responsePositionLabel` applies, so the labels agree either way.
-  const responseKind = claim.response_kind ?? 'stance';
+  useAutoReadinessOptIn({
+    claim: claim.claim,
+    localPosition,
+    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
+  });
+
   const positions = React.useMemo(
     () => rematchPositionSummaries(claim, session, responseKind),
     [claim, responseKind, session]
@@ -464,10 +542,8 @@ function RematchClaimCard({
       localPosition === null
         ? null
         : { position: localPosition, position_label: responsePositionLabel(responseKind, localPosition) },
-    // Unread: the readiness toggle is hidden below, because a rematch session carries no readiness
-    // state to drive it from.
-    viewer_debate_ready: false,
-    readiness_disabled_reason: null,
+    viewer_debate_ready: claimReadiness?.viewer_debate_ready ?? false,
+    readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
 
   return (
@@ -475,7 +551,6 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
-      hideReadinessToggle
       footer={
         opposing || requesting ? (
           <div className="mt-3">
@@ -498,6 +573,37 @@ function RematchClaimCard({
       }
     />
   );
+}
+
+/**
+ * Taking a side in this flow means you want to debate it, so standing ready is implied — the
+ * viewer shouldn't have to flip the toggle as a second step. Only fires on a side picked while the
+ * picker is open: opting in for positions that were already held would silently undo a deliberate
+ * stand-down from elsewhere.
+ */
+function useAutoReadinessOptIn({
+  claim,
+  localPosition,
+  alreadyReady,
+}: {
+  claim: DebateClaimSummary;
+  localPosition: boolean | null;
+  alreadyReady: boolean;
+}) {
+  const setReadiness = useClaimReadiness();
+  const previousPosition = React.useRef<boolean | null>(localPosition);
+  const optedInFor = React.useRef<boolean | null>(null);
+
+  React.useEffect(() => {
+    const previous = previousPosition.current;
+    previousPosition.current = localPosition;
+
+    if (localPosition === null || previous === localPosition) return;
+    if (alreadyReady || optedInFor.current === localPosition) return;
+
+    optedInFor.current = localPosition;
+    setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
+  }, [alreadyReady, claim.claim_entity_id, claim.space_id, localPosition, setReadiness]);
 }
 
 /** Both sides of a rematch claim in the shape the shared card renders avatars from. */
