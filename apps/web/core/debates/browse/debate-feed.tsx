@@ -5,6 +5,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
@@ -28,6 +29,7 @@ import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
+import { debateFeedFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
 const DEBATE_COLUMN_STYLE = {
@@ -97,6 +99,15 @@ export function DebatesBrowseFeed({
     }
     return map;
   }, [claims]);
+
+  // Reached from a Debate entity route, this feed renders inside Main's centred
+  // 1200px column, which gutters the feed and its Comments panel. Flag it so
+  // Main goes full-bleed for as long as the feed is mounted.
+  const setDebateFeedFullscreenActive = useSetAtom(debateFeedFullscreenActiveAtom);
+  React.useEffect(() => {
+    setDebateFeedFullscreenActive(true);
+    return () => setDebateFeedFullscreenActive(false);
+  }, [setDebateFeedFullscreenActive]);
 
   // State-backed so children re-render once the scroll container mounts and can
   // observe against it as their IntersectionObserver root — a plain ref would

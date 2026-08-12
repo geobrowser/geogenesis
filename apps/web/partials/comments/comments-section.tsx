@@ -555,6 +555,7 @@ function CommentInput({
   initialValue?: string;
 }) {
   const [text, setText] = useState(initialValue);
+  const density = useCommentDensity();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   // Guards against a rapid second click (or Enter + click) firing before React re-renders
   // with the cleared text. Set synchronously at the start of submit, released after the
@@ -583,8 +584,10 @@ function CommentInput({
     }
   };
 
-  // Auto-resize textarea
-  React.useEffect(() => {
+  // Auto-resize: start at one line and grow with the content, so an empty
+  // composer doesn't open with blank rows above the buttons. Runs on mount too,
+  // which is what collapses the initial box to a single line.
+  React.useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
@@ -603,8 +606,11 @@ function CommentInput({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        rows={3}
-        className="w-full resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-04"
+        rows={1}
+        className={cx(
+          density.bodyClass,
+          'w-full resize-none bg-transparent text-text outline-none placeholder:text-grey-04'
+        )}
       />
       <div className="flex items-center justify-end gap-2">
         {onCancel && (

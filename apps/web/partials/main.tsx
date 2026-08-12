@@ -3,9 +3,12 @@
 import * as React from 'react';
 
 import { motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { useDiff } from '~/core/state/diff-store';
+
+import { debateFeedFullscreenActiveAtom } from '~/atoms';
 
 type MainProps = {
   children: React.ReactNode;
@@ -15,8 +18,12 @@ export const Main = ({ children }: MainProps) => {
   const { isReviewOpen } = useDiff();
   const isHidden = isReviewOpen;
   const pathname = usePathname();
+  // A Debate entity route renders the same full-screen feed as /debates but
+  // can't be told apart by pathname, so the feed itself flags the state.
+  const debateFeedFullscreen = useAtomValue(debateFeedFullscreenActiveAtom);
   const isFullWidth =
     pathname === '/explore' ||
+    debateFeedFullscreen ||
     /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
     /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
 
