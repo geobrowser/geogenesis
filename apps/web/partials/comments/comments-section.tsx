@@ -23,7 +23,6 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
-import { EditSmall } from '~/design-system/icons/edit-small';
 import { Minus } from '~/design-system/icons/minus';
 import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
@@ -974,21 +973,15 @@ function CommentItem({
           <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={density.avatarPx} />
         </a>
       </div>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <a href={NavUtils.toSpace(comment.author.spaceId)} className="shrink-0 hover:underline">
+      {/* Single line, no wrapping: a wrapped header doubles the row height, and
+          because the avatar is centred against it the body ends up stranded far
+          below the name. A long name truncates instead. */}
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+        <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
           <Text variant="bodySemibold" as="span">
             {comment.author.name ?? 'Anonymous'}
           </Text>
         </a>
-        {comment.isEdited && (
-          <span
-            title="Edited"
-            aria-label="Edited"
-            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-grey-01"
-          >
-            <EditSmall color="grey-04" />
-          </span>
-        )}
         {/* While publishing, this stands in for the timestamp — a just-posted
             comment has no meaningful age yet, and showing both read as noise. */}
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
@@ -1155,8 +1148,8 @@ function CommentItem({
               </button>
             )}
           </div>
-          <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <a href={NavUtils.toSpace(comment.author.spaceId)} className="shrink-0 hover:underline">
+          <div className="flex min-h-8 min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+            <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
               <Text variant="bodySemibold" as="span">
                 {comment.author.name ?? 'Anonymous'}
               </Text>
