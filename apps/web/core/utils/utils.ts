@@ -715,29 +715,58 @@ export function getProposalTimeRemaining(endTime: number) {
 }
 
 /**
- * Calendar date for a resolved proposal (uses voting end time as resolution time; UTC).
- * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
+ * Resolves the current runtime's IANA timezone (e.g. "America/New_York"),
+ * falling back to "UTC" if it can't be determined.
+ *
+ * NOTE: "viewer" here means the JS runtime this executes in. In the browser
+ * that's the actual user's timezone, but during SSR / server actions / route
+ * handlers it resolves to the *server's* timezone (typically UTC), NOT the
+ * viewer's. Only call this in client components — or code guaranteed to run in
+ * the browser — when you need the real viewer timezone. On the server, pass an
+ * explicit timeZone to the formatting functions instead of relying on this
+ * default.
  */
-export function formatGovernanceOutcomeDate(geoTimeSeconds: number, nowMs: number = Date.now()): string {
-  const date = GeoDate.fromGeoTime(geoTimeSeconds);
-  const now = new Date(nowMs);
-  if (date.getUTCFullYear() === now.getUTCFullYear()) {
-    return formatInTimeZone(date, 'UTC', 'MMM d');
+export function getViewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
   }
-  return formatInTimeZone(date, 'UTC', 'MMM d, yyyy');
-}
-
-/** Time of day (UTC) for governance resolution, e.g. "2:30pm". */
-export function formatGovernanceOutcomeTime(geoTimeSeconds: number): string {
-  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), 'UTC', 'h:mmaaa');
 }
 
 /**
- * Single string date + time (UTC). Prefer separate `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime`
- * in flex layouts so middot spacing matches between name, date, and time.
+ * Calendar date for when a proposal was submitted (voting start), in the viewer's timezone.
+ * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
  */
-export function formatGovernanceOutcomeDateTime(geoTimeSeconds: number, nowMs: number = Date.now()): string {
-  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs)} · ${formatGovernanceOutcomeTime(geoTimeSeconds)}`;
+export function formatGovernanceOutcomeDate(
+  geoTimeSeconds: number,
+  nowMs: number = Date.now(),
+  timeZone: string = getViewerTimeZone()
+): string {
+  const date = GeoDate.fromGeoTime(geoTimeSeconds);
+  const nowYear = formatInTimeZone(new Date(nowMs), timeZone, 'yyyy');
+  const dateYear = formatInTimeZone(date, timeZone, 'yyyy');
+  if (dateYear === nowYear) {
+    return formatInTimeZone(date, timeZone, 'MMM d');
+  }
+  return formatInTimeZone(date, timeZone, 'MMM d, yyyy');
+}
+
+/** Time of day for when a proposal was submitted, in the viewer's timezone, e.g. "2:30pm". */
+export function formatGovernanceOutcomeTime(geoTimeSeconds: number, timeZone: string = getViewerTimeZone()): string {
+  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), timeZone, 'h:mmaaa');
+}
+
+/**
+ * Single string date + time in the viewer's timezone. Prefer separate
+ * `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime` in flex layouts.
+ */
+export function formatGovernanceOutcomeDateTime(
+  geoTimeSeconds: number,
+  nowMs: number = Date.now(),
+  timeZone: string = getViewerTimeZone()
+): string {
+  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs, timeZone)} · ${formatGovernanceOutcomeTime(geoTimeSeconds, timeZone)}`;
 }
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;

@@ -25,6 +25,7 @@ import { useSyncEngine } from './use-sync-engine';
 type QueryEntityOptions = {
   id?: string;
   spaceId?: string;
+  includeDeleted?: boolean;
   /**
    * By default we query the local store for the entity without
    * querying the remote server. This assumes that the entity
@@ -204,7 +205,7 @@ export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEnti
  * not stable (as of July 2025). Once it's stable we should just
  * migrate to @tanstack/db and use that instead.
  */
-export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
+export function useQueryEntity({ id, spaceId, includeDeleted = false, enabled = true }: QueryEntityOptions) {
   const { store } = useSyncEngine();
   const { isFetched } = useHydrateEntity({ id, enabled });
 
@@ -215,7 +216,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
         return null;
       }
 
-      return store.getEntity(id, { spaceId }) ?? null;
+      return store.getEntity(id, { includeDeleted, spaceId }) ?? null;
     },
     equal
   );

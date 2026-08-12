@@ -49,10 +49,11 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 }
 
 function buildMyRankingActionButton(state: RankingBlockState) {
-  const { showEditRankingButton, isRollingRolledOff, isSaving, openRankingCompose } = state;
+  const { showEditRankingButton, isSaving, openRankingCompose } = state;
 
-  const addLabel = isRollingRolledOff ? 'Submit new ranking' : 'Add my ranking';
-
+  // A rolled-off ballot is treated as absent (useRankingSubmissions blanks
+  // `mySubmission`), so `showEditRankingButton` clears on roll-off and this
+  // naturally falls back to the fresh "Add my ranking" call to action.
   return showEditRankingButton ? (
     <Button
       variant="secondary"
@@ -71,7 +72,7 @@ function buildMyRankingActionButton(state: RankingBlockState) {
       disabled={isSaving}
       onClick={() => void openRankingCompose('edit')}
     >
-      {addLabel}
+      Add my ranking
     </Button>
   );
 }
@@ -247,19 +248,15 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                 );
               }
               const rowContent = (
-                <div className="flex w-full min-w-0 items-center gap-4">
-                  <div className="min-w-0 flex-1">
-                    <RankingEntryRow
-                      rank={rank}
-                      rankStyle="leading"
-                      entry={entry}
-                      spaceId={spaceId}
-                      linkToEntity={!isMobile}
-                      pending={pendingEntityIds.has(entityId)}
-                    />
-                  </div>
-                  <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
-                </div>
+                <RankingEntryRow
+                  rank={rank}
+                  rankStyle="leading"
+                  entry={entry}
+                  spaceId={spaceId}
+                  linkToEntity={!isMobile}
+                  pending={pendingEntityIds.has(entityId)}
+                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
+                />
               );
               return (
                 <div key={entityId} className="w-full">
@@ -314,11 +311,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             }}
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
-            renderTrailing={(entityId, _index, isDragActive) => {
-              const entry = myRankingEntryByEntityId.get(entityId);
-              if (isDragActive || !entry || (entriesResolving && isPlaceholderRankingEntry(entry))) return null;
-              return <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />;
-            }}
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const rank = embeddedMyPageNumber * pageSize + index + 1;
               const resolvedEntry = myRankingEntryByEntityId.get(entityId);
@@ -343,6 +335,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={
+                    !isDragActive ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (

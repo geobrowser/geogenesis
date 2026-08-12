@@ -11,19 +11,28 @@ import {
   type AggregatedRankingSubmitterRef,
   getAggregatedRankingSubmissionCount,
   getAggregatedRankingSubmitterRefs,
+  getOrderedRelationTargetIds,
 } from '~/core/blocks/ranking/ranking-block-relations';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import type { EntityFilter } from '~/core/gql/graphql';
-import { getAllEntities, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
-import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+import { getAllEntities, getEntityPage, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { RANKING_BLOCK_TYPE_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
+import { normId } from '~/core/utils/norm-id';
 
 // A featured ranking is a Ranking Block entity carrying a TAG_PROPERTY relation
 // to the Featured tag entity. We surface only the ones whose voting window is
 // currently open ("live"), each resolved down to the coordinates the fullscreen
 // vote view needs (space + block + parent placement).
+export interface FeaturedRankingEntry {
+  entityId: string;
+  name: string;
+  image: string | null;
+}
+
 export interface FeaturedRanking {
   blockEntityId: string;
   spaceId: string;
@@ -37,6 +46,11 @@ export interface FeaturedRanking {
   /** Personal spaces that submitted a ranking — feeds the "Ranked by" avatars. */
   submitterSpaceIds: string[];
   submissionCount: number;
+  /** Name/image of the space the block lives in — feeds the card's space badge. */
+  spaceName: string | null;
+  spaceImage: string | null;
+  /** Current aggregated leaderboard, best first — the card pages through it in threes. */
+  topEntries: FeaturedRankingEntry[];
 }
 
 // Pull a small window of candidates, then keep only the live ones. A handful of
@@ -45,6 +59,10 @@ export interface FeaturedRanking {
 const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
 const RESOLVE_CONCURRENCY = 6;
+
+// The card shows three leaderboard entries per page; nine covers three pages
+// without fetching the whole standings.
+const MAX_TOP_ENTRIES = 9;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
@@ -106,6 +124,62 @@ async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): 
 }
 
 /**
+ * Resolve the aggregated leaderboard's top entries (name + thumbnail), in
+ * standings order. Best-effort twice over: an entity missing from the response
+ * still renders (as "Untitled" with no image) so the list keeps its positions,
+ * and a failed lookup yields an empty list so the ranking card still renders
+ * without its leaderboard instead of being dropped by the per-ranking catch.
+ */
+async function resolveTopEntries(entityIds: string[], spaceId: string): Promise<FeaturedRankingEntry[]> {
+  if (entityIds.length === 0) return [];
+
+  try {
+    const { entities } = await Effect.runPromise(
+      getAllEntities({ filter: { id: { in: entityIds } }, spaceId, limit: entityIds.length })
+    );
+    const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+    return entityIds.map(entityId => {
+      const entity = entitiesById.get(entityId);
+      return {
+        entityId,
+        name: entity?.name?.trim() || 'Untitled',
+        image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
+      };
+    });
+  } catch (error) {
+    console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
+    return [];
+  }
+}
+
+/**
+ * Attach each ranking's space name/image via one batched spaces lookup.
+ * Best-effort: on failure the cards render without the space badge rather than
+ * dropping the section.
+ */
+async function attachSpaceMetadata(rankings: FeaturedRanking[]): Promise<FeaturedRanking[]> {
+  const spaceIds = dedupePreserveOrder(rankings.map(ranking => ranking.spaceId));
+  if (spaceIds.length === 0) return rankings;
+
+  try {
+    const spaces = await Effect.runPromise(getSpaces({ spaceIds }));
+    const spacesById = new Map(spaces.map(space => [normId(space.id), space]));
+    return rankings.map(ranking => {
+      const space = spacesById.get(normId(ranking.spaceId));
+      if (!space) return ranking;
+      return {
+        ...ranking,
+        spaceName: space.entity.name?.trim() || null,
+        spaceImage: space.entity.image ?? null,
+      };
+    });
+  } catch (error) {
+    console.error('Unable to resolve featured ranking space metadata', error);
+    return rankings;
+  }
+}
+
+/**
  * Find where a block is embedded: its parent entity id and the id of the BLOCKS
  * relation binding them. The block is the target of a BLOCKS relation from its
  * parent, so we read the block's backlinks. Returns null when the placement
@@ -149,47 +223,67 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
 
   // 2. Resolve each candidate scoped to its space: date window (for the live
   //    check), aggregated submitters, and parent placement.
-  const resolved = await mapWithConcurrency(candidates, RESOLVE_CONCURRENCY, async ({ blockEntityId, spaceId }) => {
-    try {
-      const page = await Effect.runPromise(getEntityPage(blockEntityId, spaceId));
-      if (!page?.entity) return null;
+  const resolved = await mapWithConcurrency(
+    candidates,
+    RESOLVE_CONCURRENCY,
+    async ({ blockEntityId, spaceId }): Promise<FeaturedRanking | null> => {
+      try {
+        const page = await Effect.runPromise(getEntityPage(blockEntityId, spaceId));
+        if (!page?.entity) return null;
 
-      const entity = page.entity;
-      const relations = page.relations.length > 0 ? page.relations : entity.relations;
+        const entity = page.entity;
+        const relations = page.relations.length > 0 ? page.relations : entity.relations;
 
-      const readBlockDate = (propertyId: string) => readDateValue(entity, propertyId, spaceId);
-      const rankingStartDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
-      const rankingEndDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
+        const readBlockDate = (propertyId: string) => readDateValue(entity, propertyId, spaceId);
+        const rankingStartDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
+        const rankingEndDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
 
-      // "Live" == voting is currently open (in-progress, or no bounded window).
-      const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
-      if (!rankingSubmissionsOpen(periodState)) return null;
+        // "Live" == voting is currently open (in-progress, or no bounded window).
+        const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
+        if (!rankingSubmissionsOpen(periodState)) return null;
 
-      const placement = await resolveBlockPlacement(blockEntityId, spaceId);
-      if (!placement) return null;
+        const placement = await resolveBlockPlacement(blockEntityId, spaceId);
+        if (!placement) return null;
 
-      const submitterRefs = getAggregatedRankingSubmitterRefs(relations, blockEntityId, spaceId);
-      const submitterSpaceIds = await resolveSubmitterSpaceIds(submitterRefs);
+        const submitterRefs = getAggregatedRankingSubmitterRefs(relations, blockEntityId, spaceId);
+        const submitterSpaceIds = await resolveSubmitterSpaceIds(submitterRefs);
 
-      return {
-        blockEntityId,
-        spaceId,
-        parentEntityId: placement.parentEntityId,
-        relationId: placement.relationId,
-        name: entity.name?.trim() || 'Untitled ranking',
-        rankingStartDate: rankingStartDate.value,
-        rankingEndDate: rankingEndDate.value,
-        submitterSpaceIds,
-        submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
-      } satisfies FeaturedRanking;
-    } catch (error) {
-      // Best-effort per ranking: a single block that fails to resolve is skipped
-      // rather than failing the whole section, but log it so silently-missing
-      // featured rankings stay debuggable in production.
-      console.error(`Unable to resolve featured ranking (block ${blockEntityId}, space ${spaceId})`, error);
-      return null;
+        const orderedEntityIds = getOrderedRelationTargetIds(
+          relations,
+          blockEntityId,
+          RANK_POSITION_PROPERTY_ID,
+          spaceId
+        ).slice(0, MAX_TOP_ENTRIES);
+        const topEntries = await resolveTopEntries(orderedEntityIds, spaceId);
+
+        return {
+          blockEntityId,
+          spaceId,
+          parentEntityId: placement.parentEntityId,
+          relationId: placement.relationId,
+          name: entity.name?.trim() || 'Untitled ranking',
+          rankingStartDate: rankingStartDate.value,
+          rankingEndDate: rankingEndDate.value,
+          submitterSpaceIds,
+          submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
+          // Space metadata is attached in one batched lookup after the per-block resolve.
+          spaceName: null,
+          spaceImage: null,
+          topEntries,
+        } satisfies FeaturedRanking;
+      } catch (error) {
+        // Best-effort per ranking: a single block that fails to resolve is skipped
+        // rather than failing the whole section, but log it so silently-missing
+        // featured rankings stay debuggable in production.
+        console.error(`Unable to resolve featured ranking (block ${blockEntityId}, space ${spaceId})`, error);
+        return null;
+      }
     }
-  });
+  );
 
-  return resolved.filter((ranking): ranking is FeaturedRanking => ranking !== null).slice(0, MAX_FEATURED_RANKINGS);
+  const rankings = resolved
+    .filter((ranking): ranking is FeaturedRanking => ranking !== null)
+    .slice(0, MAX_FEATURED_RANKINGS);
+
+  return attachSpaceMetadata(rankings);
 }

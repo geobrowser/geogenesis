@@ -2,7 +2,7 @@
 
 import cx from 'classnames';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 type Props = {
   entityId: string;
@@ -25,7 +25,7 @@ export function RankingEntryVoteControls({ entityId, spaceId, className }: Props
       onTouchStart={event => event.stopPropagation()}
       onClick={event => event.stopPropagation()}
     >
-      <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
+      <EntityRowActions entityId={entityId} spaceId={spaceId} />
     </div>
   );
 }

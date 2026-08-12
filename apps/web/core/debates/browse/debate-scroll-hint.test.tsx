@@ -1,0 +1,152 @@
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+import { Provider, createStore } from 'jotai';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+
+const BOUNCE_MS = 6 * 700;
+const FADE_MS = 200;
+
+let store: ReturnType<typeof createStore>;
+
+// `atomWithStorage` re-reads localStorage on mount, so a fresh jotai store alone doesn't
+// isolate tests — the backing storage has to be fresh too.
+function memoryStorage() {
+  const entries = new Map<string, string>();
+  return {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => void entries.set(key, value),
+    removeItem: (key: string) => void entries.delete(key),
+  };
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.stubGlobal('localStorage', memoryStorage());
+  store = createStore();
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+/** Mirrors how the feed wires the hook up: the indicator rides inside the lifting card. */
+function Feed({ enabled = true }: { enabled?: boolean }) {
+  const hint = useDebateScrollHint(enabled);
+  return (
+    <div
+      data-testid="card"
+      className={hint.isVisible ? scrollHintBounceProps.className : undefined}
+      style={hint.isVisible ? scrollHintBounceProps.style : undefined}
+    >
+      {hint.isVisible && <DebateScrollHint leaving={hint.isLeaving} className="absolute inset-x-0 top-full mt-4" />}
+    </div>
+  );
+}
+
+function renderHint(enabled = true) {
+  return render(
+    <Provider store={store}>
+      <Feed enabled={enabled} />
+    </Provider>
+  );
+}
+
+function isSpent() {
+  return JSON.parse(localStorage.getItem('dismissedProductOnboardingHints') ?? '[]').includes(
+    'geoDebateScrollHintDismissedV1'
+  );
+}
+
+async function advance(milliseconds: number) {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(milliseconds);
+  });
+}
+
+describe('DebateScrollHint', () => {
+  it('bounces a fixed number of times, then fades out and never returns', async () => {
+    renderHint();
+
+    const hint = screen.getByTestId('debate-scroll-hint');
+    expect(hint).toHaveClass('opacity-100');
+    expect(hint).toHaveTextContent('Scroll');
+    expect(hint).toHaveTextContent('Swipe');
+
+    // Still bouncing right up to the last frame of the final bounce.
+    await advance(BOUNCE_MS - 1);
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
+
+    await advance(1);
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-0');
+
+    await advance(FADE_MS);
+    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+
+    // A fresh store stands in for a later page load: the dismissal has to survive in
+    // storage, not just in memory.
+    cleanup();
+    store = createStore();
+    renderHint();
+    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+  });
+
+  it('lifts the card, carrying the indicator, and only while the nudge is up', async () => {
+    renderHint();
+
+    const card = screen.getByTestId('card');
+    expect(card).toHaveClass('animate-debate-scroll-hint', 'motion-reduce:animate-none');
+    expect(card).toHaveStyle({ animationIterationCount: '6' });
+
+    // The indicator rides the card's transform. Animating it too would compound with its
+    // parent's and move it twice as far as the debate it's meant to travel with.
+    const hint = screen.getByTestId('debate-scroll-hint');
+    expect(card).toContainElement(hint);
+    expect(hint).not.toHaveClass('animate-debate-scroll-hint');
+
+    // Split: the fade timer is only scheduled once the bounce timer has fired.
+    await advance(BOUNCE_MS);
+    await advance(FADE_MS);
+    expect(screen.getByTestId('card')).not.toHaveClass('animate-debate-scroll-hint');
+  });
+
+  it('stays dormant until the feed says it is ready', async () => {
+    renderHint(false);
+
+    await advance(BOUNCE_MS + FADE_MS);
+    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('card')).not.toHaveClass('animate-debate-scroll-hint');
+    // Still unspent, so it can play once the feed settles rather than being burned while loading.
+    expect(isSpent()).toBe(false);
+  });
+
+  // Regression: the feed is `snap-mandatory`, so the browser fires `scroll` as the videos
+  // load and it re-snaps. An earlier version dismissed on that event, which spent the
+  // one-and-only showing before the hint ever painted. The hint now subscribes to no
+  // scroll source at all, so this guards the two a reimplementation would reach for.
+  it('keeps bouncing through scroll activity and stays unspent until it has played', async () => {
+    renderHint();
+
+    await act(async () => {
+      fireEvent.scroll(window);
+      fireEvent.scroll(document);
+    });
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
+    expect(isSpent()).toBe(false);
+
+    await advance(BOUNCE_MS - 1);
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-100');
+    expect(isSpent()).toBe(false);
+
+    await advance(1);
+    expect(screen.getByTestId('debate-scroll-hint')).toHaveClass('opacity-0');
+
+    await advance(FADE_MS);
+    expect(screen.queryByTestId('debate-scroll-hint')).not.toBeInTheDocument();
+    expect(isSpent()).toBe(true);
+  });
+});
