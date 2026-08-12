@@ -168,6 +168,11 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
   const isRecipient = role === 'recipient';
   const other = isRecipient ? challenge.requester : challenge.recipient;
   const busy = acceptChallenge.isPending || rejectChallenge.isPending;
+  // Both roles act from this card and neither could report a failure before: the sender has no
+  // popup left to carry one, and the recipient's Dismiss/Explore claims live here as well as in
+  // theirs. Each `useMutation` call owns its own state, so only the action this card actually
+  // offers can ever set this.
+  const actionError = acceptChallenge.error ?? rejectChallenge.error;
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
@@ -221,6 +226,15 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
           Cancel request
         </HubPillButton>
       )}
+
+      {actionError instanceof Error ? (
+        // role="alert" so a failed action is announced, not just drawn under the button.
+        <div role="alert">
+          <Text as="p" variant="footnote" color="red-01">
+            {actionError.message}
+          </Text>
+        </div>
+      ) : null}
     </article>
   );
 }
