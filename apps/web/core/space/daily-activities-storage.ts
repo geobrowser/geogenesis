@@ -11,6 +11,10 @@ function storageKey(spaceId: string, day = localDayKey()): string {
   return `${STORAGE_PREFIX}:${spaceId}:${day}`;
 }
 
+export function isDailyUploadStorageKey(key: string | null | undefined, spaceId: string): boolean {
+  return key != null && key.startsWith(`${STORAGE_PREFIX}:${spaceId}:`);
+}
+
 export function readDailyUploadComplete(spaceId: string, now = new Date()): boolean {
   if (typeof window === 'undefined') return false;
   try {

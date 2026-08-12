@@ -28,6 +28,7 @@ import {
   UPLOAD_ACTIVITY_TITLE,
 } from '~/core/space/daily-activities';
 import {
+  isDailyUploadStorageKey,
   markDailyUploadComplete,
   msUntilNextLocalMidnight,
   readDailyUploadComplete,
@@ -245,7 +246,7 @@ export function useDailyUploadActivityComplete(spaceId: string): boolean {
     setComplete(readDailyUploadComplete(spaceId));
 
     const onStorage = (event: StorageEvent) => {
-      if (event.key?.startsWith(`geogenesis.daily-activities.upload.v1:${spaceId}:`)) {
+      if (isDailyUploadStorageKey(event.key, spaceId)) {
         setComplete(readDailyUploadComplete(spaceId));
       }
     };
