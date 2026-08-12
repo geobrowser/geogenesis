@@ -5,16 +5,28 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { queryClient } from '~/core/query-client';
+import {
+  claimResponseTargetKey,
+  isClaimResponseSummaryQueryKey,
+} from '~/core/responses/claim-response-summary-query-keys';
 
 import { type GeoChatSession, type GetPrivyIdentityToken, getGeoChatApiBaseUrl, getGeoChatSession } from './api';
 
 export type DebateGatewaySession = GeoChatSession;
 
-export type DebateGatewayScope = { scope: 'space'; space_id: string } | { scope: 'debate'; debate_id: string };
+export type DebateGatewayScope =
+  | { scope: 'space'; space_id: string }
+  | { scope: 'debate'; debate_id: string }
+  /** Subscribed only while the matchmaking hub is open, so presence fan-out stays narrow. */
+  | { scope: 'matchmaking' };
+
+export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
   paused: boolean;
+  /** Capabilities advertised by the last READY. Used to detect `debate_matchmaking_v1`. */
+  capabilities: string[];
 };
 
 type DebateEventPayload = {
@@ -22,6 +34,7 @@ type DebateEventPayload = {
   debate_id?: string;
   rematch_session_id?: string;
   claim_entity_ids?: string[];
+  sections?: MatchmakingSection[];
 };
 
 type DebateInvalidationEvent = {
@@ -64,6 +77,9 @@ type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries
 
 const OPEN = 1;
 const CAPABILITY = 'debate_invalidations_v1';
+export const MATCHMAKING_CAPABILITY = 'debate_matchmaking_v1';
+const EMPTY_CAPABILITIES: string[] = [];
+const MATCHMAKING_SECTIONS: MatchmakingSection[] = ['people', 'claims', 'matches'];
 const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
@@ -83,8 +99,10 @@ export class DebateGatewayClient {
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
+  private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
 
-  private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false };
+  private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false, capabilities: EMPTY_CAPABILITIES };
+  private capabilities: string[] = EMPTY_CAPABILITIES;
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
   private accountKey: string | null = null;
   private socket: WebSocketLike | null = null;
@@ -95,6 +113,8 @@ export class DebateGatewayClient {
   private reconnectAttempt = 0;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
+  private debatePresence = true;
+  private presenceTransitionPending = false;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -117,14 +137,26 @@ export class DebateGatewayClient {
     return () => this.listeners.delete(listener);
   };
 
-  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) {
+  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
     if (this.enabled && this.accountKey !== accountKey) this.stop();
+    if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false });
     void this.connect();
+  }
+
+  setDebatePresence(debatePresence: boolean) {
+    if (this.debatePresence === debatePresence) return;
+    this.debatePresence = debatePresence;
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    if (this.heartbeatsAwaitingAck > 0) {
+      this.presenceTransitionPending = true;
+      return;
+    }
+    this.sendHeartbeat();
   }
 
   stop() {
@@ -140,6 +172,8 @@ export class DebateGatewayClient {
     this.sentScopes.clear();
     this.confirmedScopes.clear();
     this.pendingInvalidations.clear();
+    this.capabilities = EMPTY_CAPABILITIES;
+    this.pendingChangedClaimsBySpace.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false });
   }
@@ -223,6 +257,7 @@ export class DebateGatewayClient {
         break;
       case 'HEARTBEAT_ACK':
         this.heartbeatsAwaitingAck = 0;
+        if (this.presenceTransitionPending) this.sendHeartbeat();
         break;
       case 'RESUME':
         this.queueBroadReconcile();
@@ -246,13 +281,17 @@ export class DebateGatewayClient {
       this.heartbeatIntervalMs = Math.max(1_000, payload.heartbeat_interval_ms);
     }
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
     this.sendHeartbeat();
   }
 
   private handleReady(payload: unknown) {
     this.clearTimer('handshake');
     const ready = isRecord(payload) ? (payload as ReadyPayload) : {};
-    const supportsDebates = Array.isArray(ready.capabilities) && ready.capabilities.includes(CAPABILITY);
+    this.capabilities = Array.isArray(ready.capabilities)
+      ? ready.capabilities.filter((capability): capability is string => typeof capability === 'string')
+      : EMPTY_CAPABILITIES;
+    const supportsDebates = this.capabilities.includes(CAPABILITY);
     if (!supportsDebates) {
       this.readyForDebates = false;
       this.setSnapshot({ status: 'degraded', paused: true });
@@ -328,6 +367,22 @@ export class DebateGatewayClient {
       case 'debate.share_prompts_changed':
         this.queueAccountQuery('share-prompts');
         break;
+      case 'debate.requests_changed':
+        this.queueAccountQuery('requests');
+        this.queueAccountActivity();
+        break;
+      case 'debate.matchmaking_changed':
+        this.queueMatchmakingSections(identifiers.sections);
+        break;
+    }
+  }
+
+  private queueMatchmakingSections(sections?: MatchmakingSection[]) {
+    const changed = sections?.length ? sections : MATCHMAKING_SECTIONS;
+    for (const section of changed) {
+      if (section === 'people') this.queueAccountQuery('people');
+      if (section === 'claims') this.queueAccountQuery('matchmaking-claims');
+      if (section === 'matches') this.queueAccountQuery('matches');
     }
   }
 
@@ -345,13 +400,23 @@ export class DebateGatewayClient {
       this.queueQuery(['debates', 'space', scope.space_id]);
       return;
     }
+    if (scope.scope === 'matchmaking') {
+      this.queueMatchmakingSections();
+      return;
+    }
     this.queueQuery(['debates', 'detail', scope.debate_id]);
     this.queueQuery(['debates', 'media', scope.debate_id]);
     this.queueQuery(['debates', 'transcript', scope.debate_id]);
   }
 
   private queueBroadReconcile() {
-    this.queueInvalidation(BROAD_INVALIDATION_KEY, { queryKey: ['debates'], refetchType: 'active' });
+    this.queueInvalidation(BROAD_INVALIDATION_KEY, {
+      predicate: query => {
+        const root = query.queryKey[0];
+        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+      },
+      refetchType: 'active',
+    });
   }
 
   /** A profile's `can_challenge` folds in the viewer's own activity, so it goes stale with it. */
@@ -360,7 +425,11 @@ export class DebateGatewayClient {
     this.queueAccountQuery('profile');
   }
 
-  private queueAccountQuery(kind: 'activity' | 'rematch' | 'share-prompts' | 'profile', id?: string) {
+  private queueAccountQuery(
+    kind:
+      'activity' | 'rematch' | 'share-prompts' | 'profile' | 'people' | 'matchmaking-claims' | 'matches' | 'requests',
+    id?: string
+  ) {
     if (!this.accountKey) return;
     this.queueQuery(
       id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
@@ -372,17 +441,43 @@ export class DebateGatewayClient {
       this.queueQuery(['debates', 'claims', spaceId]);
       return;
     }
-    const changedClaims = new Set(claimEntityIds);
-    this.queueInvalidation(`claims:${spaceId}:${claimEntityIds.slice().sort().join(',')}`, {
+    let changedClaims = this.pendingChangedClaimsBySpace.get(spaceId);
+    if (!changedClaims) {
+      changedClaims = new Set();
+      this.pendingChangedClaimsBySpace.set(spaceId, changedClaims);
+    }
+    for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
+    const changedResponseTargets = new Set(
+      [...changedClaims].flatMap(entityId =>
+        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+      )
+    );
+    this.queueInvalidation(`claims:${spaceId}`, {
       predicate: query => {
         const [root, kind, querySpaceId, queryClaimIds] = query.queryKey;
-        return (
-          root === 'debates' &&
-          kind === 'claims' &&
-          querySpaceId === spaceId &&
-          Array.isArray(queryClaimIds) &&
-          queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))
-        );
+        const isDebateSpaceClaimQuery = root === 'debates' && kind === 'claims' && querySpaceId === spaceId;
+        const isDebateClaimQuery =
+          isDebateSpaceClaimQuery &&
+          // `'all'` is what `debateQueryKeys.claims` stores for a whole-space subscription — it
+          // covers every claim in the space, so any change in it lands. Requiring an array here
+          // left the browse panel's list stale until a reconnect.
+          (queryClaimIds === 'all' ||
+            (Array.isArray(queryClaimIds) &&
+              queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))));
+        if (isDebateClaimQuery) return true;
+
+        // The rematch picker lists claims from many spaces and draws both participants' sides, so
+        // it has to refresh whenever *anyone's* response lands — its own subscription only covers
+        // the viewer's. Without this the opponent's choices appeared only after rejoining.
+        const [, accountSegment, , rematchSegment, , claimsSegment] = query.queryKey;
+        if (accountSegment === 'account' && rematchSegment === 'rematch' && claimsSegment === 'claims') {
+          return true;
+        }
+
+        return isClaimResponseSummaryQueryKey(query.queryKey, {
+          spaceId,
+          targetKeys: changedResponseTargets,
+        });
       },
       refetchType: 'active',
     });
@@ -395,6 +490,7 @@ export class DebateGatewayClient {
   private queueInvalidation(key: string, filters: InvalidationFilters) {
     if (key === BROAD_INVALIDATION_KEY) {
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
     } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
       return;
     }
@@ -404,6 +500,7 @@ export class DebateGatewayClient {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
       void this.flushInvalidations(invalidations);
     }, INVALIDATION_COALESCE_MS);
   }
@@ -442,7 +539,8 @@ export class DebateGatewayClient {
       return;
     }
     this.heartbeatsAwaitingAck += 1;
-    this.sendEnvelope('HEARTBEAT', { debate_presence: true }, this.lastSequence);
+    this.presenceTransitionPending = false;
+    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
     this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
   }
 
@@ -517,6 +615,7 @@ export class DebateGatewayClient {
     this.clearTimer('handshake');
     this.clearTimer('token');
     this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
   }
 
   private clearAllTimers() {
@@ -540,9 +639,16 @@ export class DebateGatewayClient {
     this[field] = null;
   }
 
-  private setSnapshot(snapshot: DebateGatewaySnapshot) {
-    if (snapshot.status === this.snapshot.status && snapshot.paused === this.snapshot.paused) return;
-    this.snapshot = snapshot;
+  private setSnapshot(snapshot: Omit<DebateGatewaySnapshot, 'capabilities'>) {
+    const capabilities = this.capabilities;
+    if (
+      snapshot.status === this.snapshot.status &&
+      snapshot.paused === this.snapshot.paused &&
+      capabilities === this.snapshot.capabilities
+    ) {
+      return;
+    }
+    this.snapshot = { ...snapshot, capabilities };
     for (const listener of this.listeners) listener();
   }
 }
@@ -556,8 +662,13 @@ const debateGateway = new DebateGatewayClient({
 export function useDebateGateway(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
+  accountKey: string | null,
+  debatePresence: boolean
 ) {
+  React.useEffect(() => {
+    debateGateway.setDebatePresence(debatePresence);
+  }, [debatePresence]);
+
   React.useEffect(() => {
     if (!enabled || !accountKey) {
       debateGateway.stop();
@@ -572,15 +683,45 @@ export function useDebateGateway(
 
 export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolean) {
   const scopeType = scope.scope;
-  const scopeId = scope.scope === 'space' ? scope.space_id : scope.debate_id;
+  const scopeId = scope.scope === 'space' ? scope.space_id : scope.scope === 'debate' ? scope.debate_id : null;
 
   React.useEffect(() => {
-    if (!enabled || !scopeId) return;
+    if (!enabled) return;
+    if (scopeType === 'matchmaking') return debateGateway.retainScope({ scope: 'matchmaking' });
+    if (!scopeId) return;
     return debateGateway.retainScope(
       scopeType === 'space' ? { scope: 'space', space_id: scopeId } : { scope: 'debate', debate_id: scopeId }
     );
   }, [enabled, scopeId, scopeType]);
 }
+
+/**
+ * Retains a space scope for every id in the list. `debate.claims_changed` is space-scoped, so a
+ * surface showing claims from several spaces at once — the rematch picker — has to hold them all
+ * or it only hears about some of its own rows.
+ */
+export function useDebateGatewaySpaceScopes(spaceIds: string[], enabled: boolean) {
+  // Joined so the effect keys off the ids themselves rather than a fresh array each render.
+  const key = spaceIds.join(',');
+
+  React.useEffect(() => {
+    if (!enabled || !key) return;
+    const releases = key.split(',').map(spaceId => debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
+    return () => {
+      for (const release of releases) release();
+    };
+  }, [enabled, key]);
+}
+
+/** Read-only view of the gateway snapshot. Unlike `useDebateGateway` this never starts a socket. */
+export function useDebateGatewaySnapshot() {
+  return React.useSyncExternalStore(debateGateway.subscribe, debateGateway.getSnapshot, debateGateway.getSnapshot);
+}
+
+/**
+ * `true` once geo-chat advertises the matchmaking capability. Lets surfaces keep the legacy
+ * debate-queue behavior until the backend ships GEO-2514.
+ */
 
 function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
   const url = new URL(apiBaseUrl);
@@ -592,7 +733,9 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
 }
 
 function scopeKey(scope: DebateGatewayScope) {
-  return scope.scope === 'space' ? `space:${scope.space_id}` : `debate:${scope.debate_id}`;
+  if (scope.scope === 'space') return `space:${scope.space_id}`;
+  if (scope.scope === 'matchmaking') return 'matchmaking';
+  return `debate:${scope.debate_id}`;
 }
 
 function parseScope(value: unknown): DebateGatewayScope | null {
@@ -602,6 +745,9 @@ function parseScope(value: unknown): DebateGatewayScope | null {
   }
   if (value.scope === 'debate' && typeof value.debate_id === 'string') {
     return { scope: 'debate', debate_id: value.debate_id };
+  }
+  if (value.scope === 'matchmaking') {
+    return { scope: 'matchmaking' };
   }
   return null;
 }

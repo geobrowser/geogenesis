@@ -1,3 +1,5 @@
+import { cache } from 'react';
+
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
@@ -11,7 +13,7 @@ type EditorSpacesResult = {
   };
 };
 
-export async function fetchEditorSpaceIds(memberSpaceId: string): Promise<string[]> {
+export const fetchEditorSpaceIds = cache(async (memberSpaceId: string): Promise<string[]> => {
   const query = `query {
     spacesConnection(
       filter: {
@@ -41,4 +43,4 @@ export async function fetchEditorSpaceIds(memberSpaceId: string): Promise<string
   }
 
   return result.right.spacesConnection.nodes.map(n => n.id).filter(id => id !== memberSpaceId);
-}
+});

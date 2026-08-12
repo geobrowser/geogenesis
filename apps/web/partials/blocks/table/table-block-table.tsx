@@ -29,7 +29,7 @@ import { Text } from '~/design-system/text';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
@@ -356,7 +356,7 @@ export const TableBlockTable = ({
                             />
                           </div>
                         )}
-                        <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
+                        <EntityRowActions entityId={row.original.entityId} spaceId={space} />
                       </div>
                     </TableCell>
                   )}

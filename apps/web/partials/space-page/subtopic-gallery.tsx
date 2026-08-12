@@ -60,7 +60,7 @@ export function SubtopicGallery({ spaceId, subtopics }: SubtopicGalleryProps) {
                     <div className="text-smallTitle font-medium text-text">{subtopic.name}</div>
                   </Link>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="mt-1 flex items-center justify-between gap-2">
                   <EntityVoteButtons entityId={subtopic.id} spaceId={spaceId} />
                 </div>
               </div>

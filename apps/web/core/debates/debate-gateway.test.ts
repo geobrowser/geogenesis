@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -150,7 +150,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.open();
     sockets[0]!.receive('READY', readyPayload([]));
     await flushInvalidations();
-    expectInvalidated(invalidateQueries, { queryKey: ['debates'], refetchType: 'active' });
+    expectBroadInvalidated(invalidateQueries);
     invalidateQueries.mockClear();
 
     const event = {
@@ -208,6 +208,32 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.share_prompts_changed', payload: {} },
       [['debates', 'account', 'user-a', 'share-prompts']],
     ],
+    [
+      'requests',
+      { event_type: 'debate.requests_changed', payload: {} },
+      [
+        ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'account', 'user-a', 'activity'],
+        ['debates', 'account', 'user-a', 'profile'],
+      ],
+    ],
+    [
+      'matchmaking sections',
+      { event_type: 'debate.matchmaking_changed', payload: { sections: ['people', 'matches'] } },
+      [
+        ['debates', 'account', 'user-a', 'people'],
+        ['debates', 'account', 'user-a', 'matches'],
+      ],
+    ],
+    [
+      'matchmaking without sections',
+      { event_type: 'debate.matchmaking_changed', payload: {} },
+      [
+        ['debates', 'account', 'user-a', 'people'],
+        ['debates', 'account', 'user-a', 'matchmaking-claims'],
+        ['debates', 'account', 'user-a', 'matches'],
+      ],
+    ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -228,9 +254,68 @@ describe('DebateGatewayClient', () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
   });
 
+  it('subscribes to the matchmaking scope and reconciles every hub query on confirmation', async () => {
+    const release = client.retainScope({ scope: 'matchmaking' });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
+    await flushInvalidations();
+
+    for (const kind of ['people', 'matchmaking-claims', 'matches']) {
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', kind],
+        refetchType: 'active',
+      });
+    }
+
+    release();
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'UNSUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+  });
+
+  it('exposes the advertised capabilities so surfaces can detect matchmaking support', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    expect(client.getSnapshot().capabilities).toEqual([]);
+
+    sockets[0]!.receive('READY', {
+      ...readyPayload([]),
+      capabilities: ['debate_invalidations_v1', 'debate_matchmaking_v1'],
+    });
+    await flushInvalidations();
+
+    expect(client.getSnapshot().capabilities).toEqual(['debate_invalidations_v1', 'debate_matchmaking_v1']);
+
+    client.stop();
+    expect(client.getSnapshot().capabilities).toEqual([]);
+  });
+
   it('filters claim invalidations to active claim queries that intersect the event', async () => {
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-1']], {});
     queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-2']], {});
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
     const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
 
     client.start(
@@ -259,7 +344,163 @@ describe('DebateGatewayClient', () => {
     expect(
       predicate!(queryClient.getQueryCache().find({ queryKey: ['debates', 'claims', 'space-1', ['claim-2']] })!)
     ).toBe(true);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']] })!
+      )
+    ).toBe(false);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+      )
+    ).toBe(true);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+      )
+    ).toBe(true);
+    // The rematch picker draws both participants' sides, so any claim change has to reach it —
+    // even one it isn't holding an id for, since the opponent's response is what it's waiting on.
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']] })!
+      )
+    ).toBe(true);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']] })!
+      )
+    ).toBe(false);
     expect(refetchQueries).not.toHaveBeenCalled();
+  });
+
+  it('coalesces adjacent claim events into one active summary-data refresh', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockRestore();
+
+    const responseTargets = ['claim-1:stance', 'claim-2:veracity'];
+    const summaryDataKey = ['claim-response-summary-data', 'profile-1', 'space-1', responseTargets] as const;
+    const responseBatchKey = ['claim-response-summaries', 'profile-1', 'space-1', responseTargets] as const;
+    const fetchSummaryData = vi.fn(async () => new Map([['claim-2:veracity', { negative: 1 }]]));
+    const observer = new QueryObserver(queryClient, {
+      queryKey: responseBatchKey,
+      queryFn: () =>
+        queryClient.fetchQuery({
+          queryKey: summaryDataKey,
+          queryFn: fetchSummaryData,
+          staleTime: 30_000,
+        }),
+      staleTime: 30_000,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    await observer.refetch();
+    expect(fetchSummaryData).toHaveBeenCalledOnce();
+
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-response-summary',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-2'] },
+    });
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-response-summary-adjacent',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-1'] },
+    });
+    await flushInvalidations();
+    await vi.runAllTicks();
+
+    expect(fetchSummaryData).toHaveBeenCalledTimes(2);
+    unsubscribe();
+  });
+
+  it('broadly reconciles debate and active claim response batches', async () => {
+    queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-1']], {});
+    queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']], new Map());
+    queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-1:stance']], new Map());
+    queryClient.setQueryData(['unrelated', 'space-1'], {});
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+    const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
+    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    expect(
+      predicate!(queryClient.getQueryCache().find({ queryKey: ['debates', 'claims', 'space-1', ['claim-1']] })!)
+    ).toBe(true);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-1', ['claim-1:stance']] })!
+      )
+    ).toBe(true);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-1:stance']] })!
+      )
+    ).toBe(true);
+    expect(predicate!(queryClient.getQueryCache().find({ queryKey: ['unrelated', 'space-1'] })!)).toBe(false);
+  });
+
+  it('refetches an active response batch during broad reconnect reconciliation', async () => {
+    invalidateQueries.mockRestore();
+    const responseTargets = ['claim-1:stance'];
+    const summaryDataKey = ['claim-response-summary-data', 'profile-1', 'space-1', responseTargets] as const;
+    const responseBatchKey = ['claim-response-summaries', 'profile-1', 'space-1', responseTargets] as const;
+    const fetchSummaryData = vi.fn(async () => new Map([['claim-1:stance', { positive: 1 }]]));
+    const observer = new QueryObserver(queryClient, {
+      queryKey: responseBatchKey,
+      queryFn: () =>
+        queryClient.fetchQuery({
+          queryKey: summaryDataKey,
+          queryFn: fetchSummaryData,
+          staleTime: 30_000,
+        }),
+      staleTime: 30_000,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    await observer.refetch();
+    expect(fetchSummaryData).toHaveBeenCalledOnce();
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    await vi.runAllTicks();
+
+    expect(fetchSummaryData).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 
   it('sends presence heartbeats and reconnects after two missed acknowledgements', async () => {
@@ -282,6 +523,57 @@ describe('DebateGatewayClient', () => {
 
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
+  });
+
+  it('sends the current inactive presence without disconnecting the gateway', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      false
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+
+    expect(sockets[0]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+  });
+
+  it('coalesces rapid attention changes behind an outstanding heartbeat and preserves the final state', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a',
+      true
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('HELLO', { heartbeat_interval_ms: 1_000 });
+    const initialHeartbeatCount = sockets[0]!.sent.filter(message => message.op === 'HEARTBEAT').length;
+
+    client.setDebatePresence(false);
+    client.setDebatePresence(true);
+    client.setDebatePresence(false);
+    expect(sockets[0]!.sent.filter(message => message.op === 'HEARTBEAT')).toHaveLength(initialHeartbeatCount);
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: false } })
+    );
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+
+    sockets[0]!.receive('HEARTBEAT_ACK', {});
+    client.setDebatePresence(true);
+    expect(sockets[0]!.sent.at(-1)).toEqual(
+      expect.objectContaining({ op: 'HEARTBEAT', payload: { debate_presence: true } })
+    );
   });
 
   it('resets missed acknowledgements and keeps the live socket connected', async () => {
@@ -322,12 +614,12 @@ describe('DebateGatewayClient', () => {
     sockets[1]!.open();
     sockets[1]!.receive('READY', readyPayload([]));
     await flushInvalidations();
-    expectInvalidated(invalidateQueries, { queryKey: ['debates'], refetchType: 'active' });
+    expectBroadInvalidated(invalidateQueries);
 
     invalidateQueries.mockClear();
     sockets[1]!.receive('ERROR', { code: 'events_lagged', message: 'events skipped' });
     await flushInvalidations();
-    expectInvalidated(invalidateQueries, { queryKey: ['debates'], refetchType: 'active' });
+    expectBroadInvalidated(invalidateQueries);
   });
 
   it('abandons a socket that never completes the protocol handshake', async () => {
@@ -342,7 +634,7 @@ describe('DebateGatewayClient', () => {
     await vi.advanceTimersByTimeAsync(1);
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
   });
@@ -359,7 +651,7 @@ describe('DebateGatewayClient', () => {
     await flushInvalidations();
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
   });
@@ -375,7 +667,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([]));
     await flushInvalidations();
 
-    expect(cancelQueries).toHaveBeenCalledWith({ queryKey: ['debates'], refetchType: 'active' });
+    expect(cancelQueries).toHaveBeenCalledWith({ predicate: expect.any(Function), refetchType: 'active' });
     expect(cancelQueries.mock.invocationCallOrder[0]).toBeLessThan(invalidateQueries.mock.invocationCallOrder[0]!);
   });
 
@@ -432,7 +724,7 @@ describe('DebateGatewayClient', () => {
 
     sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'retry after 5 seconds' });
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
 
     await vi.advanceTimersByTimeAsync(4_999);
     expect(sockets).toHaveLength(1);
@@ -474,7 +766,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('ERROR', { code: 'subscription_limit_reached', message: 'too many subscriptions' });
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
   it('pauses live updates when a subscription is rejected', async () => {
@@ -488,7 +780,7 @@ describe('DebateGatewayClient', () => {
 
     sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
 
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
   it('reconnects with a new session when the authenticated account changes', async () => {
@@ -519,7 +811,7 @@ describe('DebateGatewayClient', () => {
     await vi.runAllTicks();
 
     expect(sockets).toHaveLength(0);
-    expect(client.getSnapshot()).toEqual({ status: 'idle', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'idle', paused: false });
   });
 
   it('enters degraded mode when the server lacks the required capability and recovers on READY', async () => {
@@ -531,10 +823,10 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.open();
     sockets[0]!.receive('READY', { ...readyPayload([]), capabilities: [] });
 
-    expect(client.getSnapshot()).toEqual({ status: 'degraded', paused: true });
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
 
     sockets[0]!.receive('READY', readyPayload([]));
-    expect(client.getSnapshot()).toEqual({ status: 'ready', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
   });
 
   it('ignores malformed protocol envelopes', async () => {
@@ -550,7 +842,7 @@ describe('DebateGatewayClient', () => {
       sockets[0]!.receiveRaw('42');
       sockets[0]!.receiveRaw(JSON.stringify({ v: 1, op: 5, payload: {} }));
     }).not.toThrow();
-    expect(client.getSnapshot()).toEqual({ status: 'connecting', paused: false });
+    expect(client.getSnapshot()).toMatchObject({ status: 'connecting', paused: false });
   });
 });
 
@@ -569,4 +861,11 @@ async function flushInvalidations() {
 
 function expectInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>, filters: unknown) {
   expect(invalidateQueries.mock.calls).toContainEqual([filters, { throwOnError: true }]);
+}
+
+function expectBroadInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>) {
+  expect(invalidateQueries).toHaveBeenCalledWith(
+    { predicate: expect.any(Function), refetchType: 'active' },
+    { throwOnError: true }
+  );
 }

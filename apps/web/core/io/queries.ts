@@ -15,11 +15,18 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
-  SortOrder,
   UserHasEntityVoteDocument,
+  type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  type ResponseObjectType,
+  decodeActiveResponseDirection,
+  entityResponseQueryVariables,
+} from '~/core/responses/entity-response';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -35,6 +42,7 @@ import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
+  claimResponseSummariesQuery,
   entitiesBatchQuery,
   entitiesPageQuery,
   entityBacklinksQuery,
@@ -42,11 +50,11 @@ import {
   entityPageQuery,
   entityQuery,
   entityRelationsPageQuery,
+  entityRespondersQuery,
+  entityResponseCountsQuery,
   entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
-  entityVoteCountQuery,
-  entityVotersQuery,
   importNameValuesQuery,
   isEditorOfSpaceQuery,
   isMemberOfSpaceQuery,
@@ -62,9 +70,10 @@ import {
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
-  userEntityVoteQuery,
+  userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 import { UserEntityVotesByTypeDocument } from './user-entity-votes-by-type-document';
@@ -1208,38 +1217,44 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-export function getEntityVoteCount(
+export function getEntityResponseCounts(
   entityId: string,
-  objectType: 0 | 1 = 0, // objectType: 0 = Entity, 1 = Relation
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0, // objectType: 0 = Entity, 1 = Relation
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVoteCountQuery,
+    query: entityResponseCountsQuery,
     decoder: data => {
-      const nodes = data.votesCountsConnection?.nodes;
-      if (!nodes || nodes.length === 0) return null;
-      const upvotes = nodes.reduce((sum: number, n: { upvotes: string }) => sum + Number(n.upvotes), 0);
-      const downvotes = nodes.reduce((sum: number, n: { downvotes: string }) => sum + Number(n.downvotes), 0);
-      return { upvotes, downvotes };
+      const counts = data.votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind;
+      if (!counts) return null;
+      return { positive: Number(counts.positive), negative: Number(counts.negative) };
     },
-    variables: { objectId: entityId, objectType },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
     signal,
   });
 }
 
-export function getUserEntityVote(
+export function getUserEntityResponse(
   userId: string,
   entityId: string,
   spaceId: string,
-  objectType: 0 | 1 = 0,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: userEntityVoteQuery,
+    query: userEntityResponseQuery,
     decoder: data => {
-      return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
+      return decodeActiveResponseDirection(
+        data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind?.voteType
+      );
     },
-    variables: { userId, objectId: entityId, objectType, spaceId },
+    variables: {
+      userId,
+      ...entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
+    },
     signal,
   });
 }
@@ -1253,20 +1268,51 @@ export function getUserHasEntityVote(userId: string, signal?: AbortController['s
   });
 }
 
-export type EntityVoter = { userId: string; voteType: number };
+export type EntityResponder = { userId: string; direction: ActiveResponseDirection };
 
-export function getEntityVoters(
-  entityId: string,
-  spaceId: string,
-  objectType: 0 | 1 = 0,
+export type ClaimResponseSummaryRow = {
+  userId: string;
+  objectId: string;
+  voteType: number;
+  voteKind: number;
+};
+
+export function getClaimResponseSummaryPage(
+  filter: UserVoteFilter,
+  first: number,
+  offset: number,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVotersQuery,
+    query: claimResponseSummariesQuery,
+    decoder: data =>
+      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+        userId: String(vote.userId),
+        objectId: String(vote.objectId),
+        voteType: vote.voteType,
+        voteKind: vote.voteKind,
+      })),
+    variables: { filter, first, offset },
+    signal,
+  });
+}
+
+export function getEntityResponders(
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entityRespondersQuery,
     decoder: data => {
-      return (data.userVotes ?? []) as EntityVoter[];
+      return (data.userVotes ?? []).flatMap(vote => {
+        const direction = decodeActiveResponseDirection(vote.voteType);
+        return direction ? [{ userId: String(vote.userId), direction }] : [];
+      });
     },
-    variables: { objectId: entityId, objectType, spaceId },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
     signal,
   });
 }

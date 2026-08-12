@@ -2,11 +2,14 @@ import { renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import {
+  useCreateDebateChallenge,
   useDebate,
   useDebateActivity,
   useDebateClaims,
   useDebateMedia,
+  useDebateProfile,
   useDebateRematch,
   useDebateRematchClaims,
   useDebateSharePrompts,
@@ -16,8 +19,16 @@ import {
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
-  queryClient: { setQueryData: vi.fn() },
-  useQuery: vi.fn((options: unknown) => options),
+  attention: true,
+  queryCache: { subscribe: vi.fn(() => vi.fn()) },
+  queryClient: {
+    getQueryCache: vi.fn(() => mocks.queryCache),
+    invalidateQueries: vi.fn(),
+    setQueryData: vi.fn(),
+  },
+  queryRefetch: vi.fn(),
+  useMutation: vi.fn((options: unknown) => options),
+  useQuery: vi.fn((options: unknown) => ({ options, refetch: mocks.queryRefetch })),
   useScope: vi.fn(),
 }));
 
@@ -28,6 +39,7 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: mocks.useQuery,
+  useMutation: mocks.useMutation,
   useQueryClient: () => mocks.queryClient,
 }));
 
@@ -40,9 +52,19 @@ vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: mocks.useScope,
 }));
 
+vi.mock('./debate-attention', () => ({
+  useDebateAttention: () => mocks.attention,
+}));
+
 beforeEach(() => {
   mocks.authenticated = true;
+  mocks.attention = true;
+  mocks.queryClient.invalidateQueries.mockClear();
+  mocks.queryClient.getQueryCache.mockClear();
+  mocks.queryCache.subscribe.mockClear();
   mocks.queryClient.setQueryData.mockClear();
+  mocks.queryRefetch.mockClear();
+  mocks.useMutation.mockClear();
   mocks.useQuery.mockClear();
   mocks.useScope.mockClear();
 });
@@ -66,6 +88,35 @@ describe('debate query network ownership', () => {
       expect(options).toMatchObject({ retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false });
       expect(options).not.toHaveProperty('refetchInterval');
     }
+  });
+
+  it('polls profile eligibility every thirty seconds only while foregrounded and refetches on return', () => {
+    const { rerender } = renderHook(() => useDebateProfile('profile-b'));
+    expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 30_000 });
+    expect(mocks.queryRefetch).not.toHaveBeenCalled();
+
+    mocks.attention = false;
+    rerender();
+    expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: false });
+
+    mocks.attention = true;
+    rerender();
+    expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates the challenged profile after an availability rejection', () => {
+    const { result } = renderHook(() => useCreateDebateChallenge());
+    const mutation = result.current as unknown as {
+      onError(error: Error, request: { recipient_profile_space_id: string }): void;
+    };
+
+    mutation.onError(new GeoChatRequestError('Unavailable', 'challenge_unavailable', 400), {
+      recipient_profile_space_id: 'profile-b',
+    });
+
+    expect(mocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['debates', 'account', 'user-a', 'profile', 'profile-b'],
+    });
   });
 
   it('registers only authenticated space and debate scopes', () => {

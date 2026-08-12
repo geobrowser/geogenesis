@@ -27,17 +27,12 @@ import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
-import {
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getIsProposalEnded,
-  getMembershipProposalDisplayName,
-  getProposalName,
-} from '~/core/utils/utils';
+import { getIsProposalEnded, getMembershipProposalDisplayName, getProposalName } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from './governance-outcome-timestamp';
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
@@ -174,13 +169,11 @@ export async function GovernanceProposalsList({
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <span className="shrink-0">{formatGovernanceOutcomeDate(p.endTime)}</span>
+                        <GovernanceOutcomeDate geoTimeSeconds={p.startTime} className="shrink-0" />
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <time className="shrink-0 tabular-nums" dateTime={new Date(p.endTime * 1000).toISOString()}>
-                          {formatGovernanceOutcomeTime(p.endTime)}
-                        </time>
+                        <GovernanceOutcomeTime geoTimeSeconds={p.startTime} className="shrink-0 tabular-nums" />
                       </>
                     )}
                   </div>

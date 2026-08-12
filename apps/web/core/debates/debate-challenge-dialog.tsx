@@ -6,46 +6,42 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
+import { useScrollLock } from './use-scroll-lock';
 
 type DebateChallengeDialogProps = {
   challenge: DebateChallenge;
-  /** The sender sees a waiting state; only the recipient can accept. */
-  role: 'requester' | 'recipient';
   busy: boolean;
   error: string | null;
   onAccept: () => void;
+  /** Rejects the challenge for good. */
   onReject: () => void;
+  /** Closes this popup and nothing else. The challenge stays live in the hub's Requests tab. */
+  onNotNow: () => void;
 };
 
 /**
- * The claimless debate request sent from someone's profile. Accepting drops both
- * people into the claim picker to choose one.
+ * The claimless debate request sent from someone's profile, shown to the person it was sent to.
+ * Accepting drops both people into the claim picker to choose one.
+ *
+ * Only the recipient is interrupted: the sender has nothing to decide, so their challenge waits
+ * in the hub's Requests tab under Sent rather than behind a modal.
+ *
+ * Turning it down and putting it off are deliberately separate: a challenge lives until it
+ * expires, so "Not now" only closes this popup, and rejecting is the text action underneath.
  */
 export function DebateChallengeDialog({
   challenge,
-  role,
   busy,
   error,
   onAccept,
   onReject,
+  onNotNow,
 }: DebateChallengeDialogProps) {
   const titleId = React.useId();
-  const isRecipient = role === 'recipient';
-  const you = isRecipient ? challenge.recipient : challenge.requester;
-  const other = isRecipient ? challenge.requester : challenge.recipient;
+  const you = challenge.recipient;
+  const other = challenge.requester;
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   return (
     <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
@@ -84,7 +80,15 @@ export function DebateChallengeDialog({
         )}
 
         <footer className="grid gap-5">
-          {isRecipient ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onNotNow}
+              disabled={busy}
+              className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+            >
+              Not now
+            </button>
             <button
               type="button"
               onClick={onAccept}
@@ -93,18 +97,14 @@ export function DebateChallengeDialog({
             >
               Explore claims
             </button>
-          ) : (
-            <Text as="p" variant="body" color="grey-04" className="text-center">
-              Waiting for {participantName(other)} to accept...
-            </Text>
-          )}
+          </div>
           <button
             type="button"
             onClick={onReject}
             disabled={busy}
-            className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
+            className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
-            {isRecipient ? 'Reject' : 'Cancel'}
+            Reject request
           </button>
         </footer>
       </section>
