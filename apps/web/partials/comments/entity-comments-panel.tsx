@@ -37,7 +37,13 @@ export function EntityCommentsPanel({
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key !== 'Escape' || event.isComposing || event.defaultPrevented) return;
+      // The entity side panel opens on top of this one (from a comment author's
+      // name) and has its own Escape handler. Both listen on the window, so
+      // without this one press would dismiss both layers at once — leave it to
+      // the top layer and close on the next press.
+      if (document.querySelector('[data-entity-side-panel]')) return;
+      onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

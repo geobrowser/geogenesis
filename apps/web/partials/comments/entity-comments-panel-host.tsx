@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
@@ -21,6 +22,19 @@ export function EntityCommentsPanelHost() {
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => setMounted(true), []);
+
+  // Navigating has taken the reader somewhere they asked to go — a card title,
+  // browser back, a keyboard link — and none of those routes produce the outside
+  // pointerdown below, so the overlay would sit over the destination (and could
+  // double up with the debates feed's own docked panel). Only on a change:
+  // closing on mount would shut the panel the moment it opened.
+  const pathname = usePathname();
+  const lastPathnameRef = React.useRef(pathname);
+  React.useEffect(() => {
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    closeComments();
+  }, [closeComments, pathname]);
 
   // Dismiss on a click outside the panel. Capture phase so it still fires when a
   // card's own handler stops propagation. Exempt: the panel itself; comment

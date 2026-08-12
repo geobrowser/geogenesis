@@ -7,6 +7,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EntityCommentsPanelHost } from './entity-comments-panel-host';
 import { entityCommentsPanelAtom } from '~/atoms';
 
+const pathname = { current: '/explore' };
+vi.mock('next/navigation', () => ({
+  usePathname: () => pathname.current,
+}));
+
 vi.mock('./entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId, onClose }: { entityId: string; onClose: () => void }) => (
     <aside data-entity-comments-panel>
@@ -16,7 +21,10 @@ vi.mock('./entity-comments-panel', () => ({
   ),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  pathname.current = '/explore';
+});
 
 function renderHost() {
   const store = createStore();
@@ -74,5 +82,21 @@ describe('EntityCommentsPanelHost', () => {
 
     expect(store.get(entityCommentsPanelAtom)).not.toBeNull();
     opener.remove();
+  });
+
+  // Browser back, a keyboard-activated link, or programmatic routing produce no
+  // outside pointerdown, so without this the panel rides along to the next page.
+  it('closes when the reader navigates', () => {
+    const { store, view } = renderHost();
+
+    pathname.current = '/space/space-1/entity-2';
+    view.rerender(
+      <Provider store={store}>
+        <div data-testid="page">Page behind the panel</div>
+        <EntityCommentsPanelHost />
+      </Provider>
+    );
+
+    expect(store.get(entityCommentsPanelAtom)).toBeNull();
   });
 });

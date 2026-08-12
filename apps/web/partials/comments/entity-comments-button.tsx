@@ -26,7 +26,8 @@ export function EntityCommentsButton({
   count: number;
   className?: string;
 }) {
-  const { openComments } = useEntityCommentsPanel();
+  const { commentsTarget, openComments } = useEntityCommentsPanel();
+  const isOpen = commentsTarget?.entityId === entityId;
 
   return (
     <button
@@ -35,6 +36,7 @@ export function EntityCommentsButton({
       // it to that entity rather than dismissing it as an outside click.
       data-entity-comments-opener
       aria-label={`Comments (${count})`}
+      aria-expanded={isOpen}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.
         event.preventDefault();
