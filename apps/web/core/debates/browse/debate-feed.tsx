@@ -211,9 +211,22 @@ export function DebatesBrowseFeed({
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
-          onOpenJoin={() => setOpenPanel('join')}
-          onOpenClaims={() => setOpenPanel('claims')}
-          onOpenComments={() => setOpenPanel('comments')}
+          // Pressing a debate's own control makes it the active one rather than
+          // waiting for the scroll observer: its bar is reachable from 0%
+          // visibility but activation needs 60%, so mid-scroll the panel would
+          // otherwise open on the debate being scrolled away from.
+          onOpenJoin={() => {
+            setActiveId(debate.id);
+            setOpenPanel('join');
+          }}
+          onOpenClaims={() => {
+            setActiveId(debate.id);
+            setOpenPanel('claims');
+          }}
+          onOpenComments={() => {
+            setActiveId(debate.id);
+            setOpenPanel('comments');
+          }}
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (

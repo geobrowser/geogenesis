@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -582,6 +582,21 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
     activateDebate('Adjacent debate');
 
     expect(screen.getByText('Claims panel for debate-2')).toBeInTheDocument();
+  });
+
+  // A debate's bar is clickable from the moment any of it is on screen, but the
+  // scroll observer only activates it at 60% — so mid-scroll a press would
+  // otherwise open the panel on the debate being scrolled away from.
+  it('opens the panel for the pressed debate even before the scroll observer activates it', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    // debate-1 is active; debate-2 has not crossed the activation threshold.
+    const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
+    assert(adjacent, 'Expected a section for the adjacent debate');
+
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: 'Comments' })[0]);
+
+    expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
   });
 
   it('leaves a closed panel closed while scrolling', () => {
