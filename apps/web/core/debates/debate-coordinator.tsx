@@ -103,6 +103,9 @@ export function DebateCoordinator() {
   // challenge keeps its place in the hub's Requests tab until it is answered or expires.
   const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
   const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+  // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
+  // above reads it to keep other popups from stacking on top of an outstanding challenge.
+  const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
 
   React.useEffect(() => {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
@@ -174,10 +177,12 @@ export function DebateCoordinator() {
         />
       )}
       {debate && !viewingDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
-      {promptedChallenge && !debate && !activity?.rematch && (
+      {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
+          hub's Requests tab, and the rematch routing effect above walks them into the claim picker
+          the moment it is accepted. */}
+      {promptedChallenge && isChallengeRecipient && !debate && !activity?.rematch && (
         <DebateChallengeDialog
           challenge={promptedChallenge}
-          role={promptedChallenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
           onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
