@@ -45,19 +45,22 @@ type ProposeInterestArgs = {
 /**
  * Registers interest in a bounty by writing an `Interested in` relation from the
  * user's personal-space system entity to the bounty.
+ *
+ * The system entity is the one whose entity id *is* the space id, which is why the
+ * relation comes from `personalSpaceId` rather than the space's topic entity.
  */
 export function useInterestedInBounty() {
   const { storage } = useMutate();
   const { makeProposal } = usePublish();
-  const { personalSpaceId, personalEntityId, isRegistered } = usePersonalSpaceId();
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [pendingBountyId, setPendingBountyId] = React.useState<string | null>(null);
 
-  const canRegisterInterest = Boolean(personalSpaceId && isRegistered && personalEntityId);
+  const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
     async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
-      if (!personalSpaceId || !isRegistered || !personalEntityId) return;
+      if (!personalSpaceId || !isRegistered) return;
 
       setPendingBountyId(bountyId);
 
@@ -72,7 +75,7 @@ export function useInterestedInBounty() {
         hasBeenPublished: false,
         isDeleted: false,
         type: { id: INTERESTED_IN_RELATION_TYPE_ID, name: 'Interested in' },
-        fromEntity: { id: personalEntityId, name: null },
+        fromEntity: { id: personalSpaceId, name: null },
         toEntity: { id: bountyId, name: bountyName, value: bountyId },
       };
 
@@ -92,7 +95,7 @@ export function useInterestedInBounty() {
         setPendingBountyId(null);
       }
     },
-    [isRegistered, makeProposal, personalSpaceId, personalEntityId, queryClient, storage.relations]
+    [isRegistered, makeProposal, personalSpaceId, queryClient, storage.relations]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };
