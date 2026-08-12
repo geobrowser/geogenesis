@@ -20,7 +20,9 @@ import { useGeoChatAuth } from './hooks';
 export function useCurrentGeoChatUserId(): string | null {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const stored = getCurrentGeoChatUserId();
-  const [resolved, setResolved] = React.useState<string | null>(null);
+  // Kept with the account it was resolved for. Switching accounts clears the stored session, so a
+  // bare id would go on answering for the account the viewer just left.
+  const [resolved, setResolved] = React.useState<{ accountKey: string | null; id: string } | null>(null);
 
   React.useEffect(() => {
     // The stored session already answers it, and it stays authoritative — a resolved id from an
@@ -37,7 +39,7 @@ export function useCurrentGeoChatUserId(): string | null {
     let cancelled = false;
     void resolveCurrentGeoChatUserId(getPrivyIdentityToken, accountKey)
       .then(id => {
-        if (!cancelled && id) setResolved(id);
+        if (!cancelled && id) setResolved({ accountKey, id });
       })
       // Nothing to recover here: the session write that follows any authenticated request puts the
       // id back within reach of the synchronous read above.
@@ -48,5 +50,6 @@ export function useCurrentGeoChatUserId(): string | null {
     };
   }, [accountKey, authenticated, getPrivyIdentityToken, stored]);
 
-  return stored ?? resolved;
+  if (stored) return stored;
+  return resolved && resolved.accountKey === accountKey ? resolved.id : null;
 }
