@@ -168,8 +168,10 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
   const isRecipient = role === 'recipient';
   const other = isRecipient ? challenge.requester : challenge.recipient;
   const busy = acceptChallenge.isPending || rejectChallenge.isPending;
-  // This card is the sender's only view of an outgoing challenge, so a failed cancel has to report
-  // itself here — there is no popup left to carry the message.
+  // Both roles act from this card and neither could report a failure before: the sender has no
+  // popup left to carry one, and the recipient's Dismiss/Explore claims live here as well as in
+  // theirs. Each `useMutation` call owns its own state, so only the action this card actually
+  // offers can ever set this.
   const actionError = acceptChallenge.error ?? rejectChallenge.error;
 
   return (
@@ -226,7 +228,7 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
       )}
 
       {actionError instanceof Error ? (
-        // role="alert" so a failed cancel is announced, not just drawn under the button.
+        // role="alert" so a failed action is announced, not just drawn under the button.
         <div role="alert">
           <Text as="p" variant="footnote" color="red-01">
             {actionError.message}
