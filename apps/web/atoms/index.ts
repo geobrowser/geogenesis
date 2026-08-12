@@ -30,6 +30,8 @@ export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
 export const rankingFullscreenActiveAtom = atom<boolean>(false);
 
+export const communityFullscreenActiveAtom = atom<boolean>(false);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);

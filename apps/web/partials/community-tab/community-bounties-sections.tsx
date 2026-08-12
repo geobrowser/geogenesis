@@ -38,7 +38,7 @@ import {
 import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
-import { rankingFullscreenActiveAtom } from '~/atoms';
+import { communityFullscreenActiveAtom } from '~/atoms';
 
 const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [] };
 
@@ -411,7 +411,7 @@ function BountiesSection({
 
 function CommunityFullscreen({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobileLayout();
-  const setFullscreenActive = useSetAtom(rankingFullscreenActiveAtom);
+  const setFullscreenActive = useSetAtom(communityFullscreenActiveAtom);
 
   React.useEffect(() => {
     setFullscreenActive(true);
