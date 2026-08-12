@@ -20,7 +20,12 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   const { personalSpaceId } = usePersonalSpaceId();
   const key = [...bountyIds].sort().join(',');
 
-  const { data } = useQuery({
+  // Scoped to the personal space but deliberately not to a `fromEntityId`: interest
+  // registered before the switch to the system entity (0c82f19) comes from the space's
+  // topic entity instead, and those should still read as interested. Only the viewer's
+  // own relations are in scope either way, so the looser filter can't leak someone
+  // else's interest.
+  const { data, isLoading } = useQuery({
     enabled: Boolean(personalSpaceId) && bountyIds.length > 0,
     queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId, key],
     queryFn: () => {
@@ -30,10 +35,14 @@ export function useInterestedBountyIds(bountyIds: string[]) {
     staleTime: 60_000,
   });
 
-  return React.useMemo(
+  const interestedIds = React.useMemo(
     () => new Set((data ?? []).map(relation => relation.toEntityId).filter(Boolean) as string[]),
     [data]
   );
+
+  // Until the first fetch settles every bounty looks un-registered, so callers need
+  // this to avoid offering a button that would write a duplicate relation.
+  return { interestedIds, isLoading };
 }
 
 type ProposeInterestArgs = {
@@ -55,13 +64,20 @@ export function useInterestedInBounty() {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [pendingBountyId, setPendingBountyId] = React.useState<string | null>(null);
+  // Bounties already submitted this session. The interested-in query only refreshes
+  // once the proposal is indexed, so without this a second click in that window
+  // would write a duplicate relation. A ref, not state, so the guard is readable
+  // synchronously within a single click's handler.
+  const submittedBountyIds = React.useRef<Set<string>>(new Set());
 
   const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
     async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
       if (!personalSpaceId || !isRegistered) return;
+      if (submittedBountyIds.current.has(bountyId)) return;
 
+      submittedBountyIds.current.add(bountyId);
       setPendingBountyId(bountyId);
 
       const relation: Relation = {
@@ -89,6 +105,11 @@ export function useInterestedInBounty() {
           name: `Interested in: ${bountyName}`,
           onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId] });
+          },
+          onError: () => {
+            storage.relations.delete(relation);
+            // Failed publishes are retryable, so release the guard.
+            submittedBountyIds.current.delete(bountyId);
           },
         });
       } finally {

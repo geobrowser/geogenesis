@@ -227,11 +227,14 @@ const INTEREST_BUTTON_CLASS =
 function InterestButton({
   isInterested,
   isPending,
+  isInterestLoading,
   canRegisterInterest,
   onClick,
 }: {
   isInterested: boolean;
   isPending: boolean;
+  /** Interest state is still unknown; every bounty reads as un-registered until it settles. */
+  isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onClick: () => void;
 }) {
@@ -257,7 +260,7 @@ function InterestButton({
 
         onClick();
       }}
-      disabled={isPending || (isLoggedIn && !canRegisterInterest)}
+      disabled={isPending || (isLoggedIn && (isInterestLoading || !canRegisterInterest))}
       title={
         !isLoggedIn || canRegisterInterest ? undefined : 'You need a registered personal space to register interest'
       }
@@ -275,12 +278,14 @@ export function AvailableBountyCard({
   bounty,
   isInterested,
   isPending,
+  isInterestLoading,
   canRegisterInterest,
   onRegisterInterest,
 }: {
   bounty: SpaceBounty;
   isInterested: boolean;
   isPending: boolean;
+  isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onRegisterInterest: (bounty: SpaceBounty) => void;
 }) {
@@ -291,6 +296,7 @@ export function AvailableBountyCard({
         <InterestButton
           isInterested={isInterested}
           isPending={isPending}
+          isInterestLoading={isInterestLoading}
           canRegisterInterest={canRegisterInterest}
           onClick={() => onRegisterInterest(bounty)}
         />
