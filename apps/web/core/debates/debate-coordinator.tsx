@@ -12,7 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
-import { type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
@@ -35,6 +35,7 @@ import {
   isAbortError,
   usePreparedSocialVideo,
 } from './social-video-share';
+import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useScrollLock } from './use-scroll-lock';
 
 export function DebateCoordinator() {
@@ -56,7 +57,7 @@ export function DebateCoordinator() {
     geoChatAuth.accountKey
   );
   const activityQuery = useDebateActivity(isDebatesEnabled);
-  const currentUserId = getCurrentGeoChatUserId();
+  const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
   const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
