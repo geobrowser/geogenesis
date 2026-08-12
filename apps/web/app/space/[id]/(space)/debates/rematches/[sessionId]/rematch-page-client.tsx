@@ -140,21 +140,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => (session?.participants ?? []).map(participant => participant.profile_space_id),
     [session?.participants]
   );
-  const recommendedSections = useRecommendedClaimSections(participantSpaceIds);
-  const recommendedClaimIds = React.useMemo(
-    () => [...new Set(recommendedSections.flatMap(section => section.claimIds))],
-    [recommendedSections]
-  );
-
-  // Curated claims are picked by hand, so they can be ones the browsed pages haven't reached.
-  // Fetching their entities puts them in the same pool, and everything downstream — the session
-  // lookup, response kinds, the cards — treats them like any other published claim.
-  const { entities: recommendedEntities } = useQueryEntities({
-    where: { id: { in: recommendedClaimIds } },
-    first: 100,
-    enabled: recommendedClaimIds.length > 0,
-    placeholderData: keepPreviousData,
-  });
+  // Curated claims are picked by hand, so they can be ones the browsed pages haven't reached. The
+  // hook hands back their entities along with the sections, and they join the same pool the browsed
+  // claims feed — so the session lookup, response kinds and the cards treat them like any other
+  // published claim.
+  const { sections: recommendedSections, claimEntities: recommendedEntities } =
+    useRecommendedClaimSections(participantSpaceIds);
 
   const claimEntities = React.useMemo(() => {
     const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
@@ -514,8 +505,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         </HubQueryState>
 
         {/* Outside the empty state deliberately: when a filter empties the list, fetching another
-            page is the way out, so the control has to stay reachable. */}
-        {publishedClaimsHasNextPage && (
+            page is the way out, so the control has to stay reachable. Not on the curated tab
+            though — its sections come from the page whole, so there is no next page to fetch. */}
+        {tab !== 'recommended' && publishedClaimsHasNextPage && (
           <div className="mt-5 flex justify-center">
             <Button
               type="button"

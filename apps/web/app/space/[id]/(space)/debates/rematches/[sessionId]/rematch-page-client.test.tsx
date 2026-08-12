@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   openSidePanel: vi.fn(),
   entityQueries: [] as unknown[],
   entityQueryPlaceholder: false,
+  entityQueryHasNextPage: false,
   entities: [] as Array<Record<string, unknown>>,
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   claimReadinessLoading: false,
@@ -84,8 +85,8 @@ vi.mock('~/core/sync/use-store', () => ({
       entities: mocks.entities,
       isLoading: false,
       isPlaceholderData: mocks.entityQueryPlaceholder,
-      endCursor: null,
-      hasNextPage: false,
+      endCursor: mocks.entityQueryHasNextPage ? 'cursor-1' : null,
+      hasNextPage: mocks.entityQueryHasNextPage,
     };
   },
 }));
@@ -108,7 +109,7 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
 
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
-  useRecommendedClaimSections: () => mocks.recommendedSections,
+  useRecommendedClaimSections: () => ({ sections: mocks.recommendedSections, claimEntities: [] }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -146,6 +147,7 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
+  mocks.entityQueryHasNextPage = false;
   mocks.entities = [publishedEntity()];
   mocks.recommendedSections = [];
   // The hub's filter menus measure their dropdown.
@@ -488,6 +490,19 @@ describe('DebateRematchPageClient', () => {
 
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull());
     expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
+  });
+
+  // Recommended comes from the curator's page whole, so paging the browsed corpus means nothing
+  // there — offering it implies there are more recommendations waiting.
+  it('keeps Load more off the Recommended tab while offering it on the others', () => {
+    mocks.entityQueryHasNextPage = true;
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+
+    showAllClaims();
+    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
   });
 
   it('shortens the opponent tab to their first name', () => {

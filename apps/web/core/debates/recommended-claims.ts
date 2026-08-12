@@ -4,8 +4,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 
 /** A curated "Recommended claims" page: claims a curator has picked out for a specific pairing. */
 export const RECOMMENDED_CLAIMS_TYPE_ID = '2f8a7be40c5242368bac78511bf0b47f';
@@ -41,7 +43,11 @@ export type RecommendedClaimSection = {
  * Two round trips by necessity: the page carries its blocks as relations, but a block's claims
  * live on the block entity, which has to be fetched in turn.
  */
-export function useRecommendedClaimSections(participantSpaceIds: string[]): RecommendedClaimSection[] {
+export function useRecommendedClaimSections(participantSpaceIds: string[]): {
+  sections: RecommendedClaimSection[];
+  /** The claims themselves, so callers don't fetch what this already resolved. */
+  claimEntities: Entity[];
+} {
   const enabled = participantSpaceIds.length > 0;
 
   const { entities: pages } = useQueryEntities({
@@ -80,29 +86,52 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): Reco
     enabled: blockIds.length > 0,
   });
 
-  return React.useMemo(() => {
+  // Item ids per block, in block order. These are whatever the curator collected — a collection
+  // can hold anything, so what they *are* isn't known until they're fetched.
+  const itemIdsByBlock = React.useMemo(() => {
     const byId = new Map(blocks.map(block => [block.id, block]));
 
-    return blockIds
-      .map(blockId => {
-        const block = byId.get(blockId);
-        if (!block) return null;
+    return blockIds.flatMap(blockId => {
+      const block = byId.get(blockId);
+      if (!block) return [];
 
-        const claimIds = block.relations
-          .filter(
-            relation => relation.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE && relation.isDeleted !== true
-          )
-          .slice()
-          .sort(byPosition)
-          .map(relation => relation.toEntity.id);
+      const itemIds = block.relations
+        .filter(relation => relation.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE && relation.isDeleted !== true)
+        .slice()
+        .sort(byPosition)
+        .map(relation => relation.toEntity.id);
 
-        // A block with nothing in it would render as an empty heading.
-        if (claimIds.length === 0) return null;
-
-        return { id: block.id, name: block.name ?? 'Recommended', claimIds };
-      })
-      .filter((section): section is RecommendedClaimSection => section !== null);
+      return [{ id: block.id, name: block.name ?? 'Recommended', itemIds }];
+    });
   }, [blockIds, blocks]);
+
+  const itemIds = React.useMemo(() => [...new Set(itemIdsByBlock.flatMap(block => block.itemIds))], [itemIdsByBlock]);
+
+  const { entities: items } = useQueryEntities({
+    where: { id: { in: itemIds } },
+    first: 100,
+    enabled: itemIds.length > 0,
+  });
+
+  const claimEntities = React.useMemo(
+    () => items.filter(item => item.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))),
+    [items]
+  );
+
+  const sections = React.useMemo(() => {
+    // A collection can hold anything the curator dropped in it, but this tab feeds a claim picker:
+    // anything that isn't a claim has no side to take and no debate to request.
+    const claimIds = new Set(claimEntities.map(claim => claim.id));
+
+    return (
+      itemIdsByBlock
+        .map(block => ({ id: block.id, name: block.name, claimIds: block.itemIds.filter(id => claimIds.has(id)) }))
+        // A block holding no claims would render as a heading over nothing.
+        .filter(section => section.claimIds.length > 0)
+    );
+  }, [claimEntities, itemIdsByBlock]);
+
+  return React.useMemo(() => ({ sections, claimEntities }), [claimEntities, sections]);
 }
 
 /** Blocks and collection items both carry a fractional index; absent, they fall to the end. */
