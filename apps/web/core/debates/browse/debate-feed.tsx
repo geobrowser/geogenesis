@@ -5,6 +5,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
@@ -26,6 +27,8 @@ import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
+
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
 const DEBATE_COLUMN_STYLE = {
@@ -148,6 +151,18 @@ export function DebatesBrowseFeed({
   // Debates tab passes none and keeps its own empty/error states. Requires a clean read — an
   // errored lookup holds the feed's error state above rather than falling back.
   const anchorMissing = anchorUnresolved && !isLoading && !anchorErrored;
+
+  // Tell the app shell it's hosting a viewport-filling takeover, so a Debate entity page —
+  // whose route `Main` can't recognise as full-width — drops its page chrome. Not set on the
+  // fallback path, where an ordinary entity page renders and does want that chrome. A layout
+  // effect so the padded layout is never painted, only to snap away a frame later.
+  const rendersFeed = !(anchorMissing && fallback != null);
+  const setDebateFullscreenActive = useSetAtom(debateFullscreenActiveAtom);
+  React.useLayoutEffect(() => {
+    if (!rendersFeed) return;
+    setDebateFullscreenActive(true);
+    return () => setDebateFullscreenActive(false);
+  }, [rendersFeed, setDebateFullscreenActive]);
 
   const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 

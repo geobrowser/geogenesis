@@ -1,9 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 import { DebatesBrowseFeed } from './debate-feed';
 
@@ -209,6 +212,33 @@ describe('DebatesBrowseFeed video sharing', () => {
       scrollHeight.mockRestore();
       clientHeight.mockRestore();
     }
+  });
+
+  // The takeover fills the viewport, but a Debate entity page reaches it through a route the app
+  // shell reads as an ordinary entity page. Left wrapped in that page's chrome, the document
+  // grows taller than the viewport and the feed scrolls up under the sticky navbar.
+  it('tells the app shell to drop its page chrome while the feed is on screen', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+
+    expect(store.get(debateFullscreenActiveAtom)).toBe(true);
+  });
+
+  it('leaves the chrome alone when it falls back to the entity page', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="not-in-this-space" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    // An ordinary entity page renders here and does want the chrome.
+    expect(store.get(debateFullscreenActiveAtom)).toBe(false);
   });
 
   it('nudges only when there is something below to scroll to', () => {
