@@ -71,9 +71,11 @@ function applyFilters(
 
 type BountyCardComponent = (props: { bounty: SpaceBounty }) => React.ReactElement;
 
+const GRID_CLASS = 'flex flex-wrap gap-4';
+
 function BountyGrid({ bounties, card: Card }: { bounties: SpaceBounty[]; card: BountyCardComponent }) {
   return (
-    <div className="flex flex-wrap gap-4">
+    <div className={GRID_CLASS}>
       {bounties.map(bounty => (
         <Card key={bounty.id} bounty={bounty} />
       ))}
@@ -81,38 +83,48 @@ function BountyGrid({ bounties, card: Card }: { bounties: SpaceBounty[]; card: B
   );
 }
 
+type BountyGridProps = {
+  bounties: SpaceBounty[];
+  allBounties: SpaceBounty[];
+};
+
+type BountyGridComponent = (props: BountyGridProps) => React.ReactElement;
+
+function CompletedBountyGrid({ bounties }: BountyGridProps) {
+  return <BountyGrid bounties={bounties} card={BountyCard} />;
+}
+
+function InProgressBountyGrid({ bounties }: BountyGridProps) {
+  return <BountyGrid bounties={bounties} card={InProgressBountyCard} />;
+}
+
 /**
  * Available bounties bind each card to the viewer's interest state
  */
-function useAvailableBountyCard(bounties: SpaceBounty[]): BountyCardComponent {
-  const bountyIds = React.useMemo(() => bounties.map(bounty => bounty.id), [bounties]);
+function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
+  const bountyIds = React.useMemo(() => allBounties.map(bounty => bounty.id), [allBounties]);
   const interestedIds = useInterestedBountyIds(bountyIds);
   const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
 
-  const latest = React.useRef({ interestedIds, pendingBountyId, canRegisterInterest, registerInterest });
-  latest.current = { interestedIds, pendingBountyId, canRegisterInterest, registerInterest };
-
-  return React.useMemo<BountyCardComponent>(
-    () =>
-      function AvailableBountyCardConnected({ bounty }: { bounty: SpaceBounty }) {
-        const { interestedIds, pendingBountyId, canRegisterInterest, registerInterest } = latest.current;
-        return (
-          <AvailableBountyCard
-            bounty={bounty}
-            isInterested={interestedIds.has(bounty.id)}
-            isPending={pendingBountyId === bounty.id}
-            canRegisterInterest={canRegisterInterest}
-            onRegisterInterest={target =>
-              void registerInterest({
-                bountyId: target.id,
-                bountyName: target.name,
-                bountySpaceId: target.spaceId,
-              })
-            }
-          />
-        );
-      },
-    []
+  return (
+    <div className={GRID_CLASS}>
+      {bounties.map(bounty => (
+        <AvailableBountyCard
+          key={bounty.id}
+          bounty={bounty}
+          isInterested={interestedIds.has(bounty.id)}
+          isPending={pendingBountyId === bounty.id}
+          canRegisterInterest={canRegisterInterest}
+          onRegisterInterest={target =>
+            void registerInterest({
+              bountyId: target.id,
+              bountyName: target.name,
+              bountySpaceId: target.spaceId,
+            })
+          }
+        />
+      ))}
+    </div>
   );
 }
 
@@ -123,15 +135,6 @@ function EmptyState({ message }: { message: string }) {
     </div>
   );
 }
-
-type UseBountyCard = (bounties: SpaceBounty[]) => BountyCardComponent;
-
-function staticCard(Component: BountyCardComponent): UseBountyCard {
-  return () => Component;
-}
-
-const USE_COMPLETED_CARD = staticCard(BountyCard);
-const USE_IN_PROGRESS_CARD = staticCard(InProgressBountyCard);
 
 function useSpaceBounties(spaceId: string, taskStatusId: string) {
   const { data } = useQuery({
@@ -176,7 +179,7 @@ function useBountyFilterPresentation(
   { scope, difficulties, selectedSkills }: BountyFilterValues,
   { setScope, setDifficulties, setSelectedSkills }: BountyFilterSetters
 ): BountyFilterState {
-  const skillSelection = selectedSkills ?? new Set(skills);
+  const skillSelection = React.useMemo(() => selectedSkills ?? new Set(skills), [selectedSkills, skills]);
 
   const filtered = React.useMemo(
     () => applyFilters(bounties, scope, difficulties, skillSelection, skills),
@@ -276,7 +279,7 @@ function BountiesSection({
   title,
   taskStatusId,
   emptyMessage,
-  useCard,
+  grid: Grid,
   cardHeightPx,
   cardWidthPx = CARD_WIDTH_PX,
   isInfinite = false,
@@ -286,7 +289,7 @@ function BountiesSection({
   title: string;
   taskStatusId: string;
   emptyMessage: string;
-  useCard: UseBountyCard;
+  grid: BountyGridComponent;
   cardHeightPx: number;
   cardWidthPx?: number;
   isInfinite?: boolean;
@@ -313,7 +316,6 @@ function BountiesSection({
   });
 
   const inlineBounties = filtered.slice(0, isInfinite ? visibleCount : INLINE_CARD_LIMIT);
-  const card = useCard(bounties);
 
   const viewAllDisabled = filtered.length === 0;
 
@@ -344,7 +346,7 @@ function BountiesSection({
         <EmptyState message={emptyMessage} />
       ) : (
         <>
-          <BountyGrid bounties={inlineBounties} card={card} />
+          <Grid bounties={inlineBounties} allBounties={bounties} />
           {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
         </>
       )}
@@ -380,7 +382,7 @@ function BountiesFullView({
   title,
   taskStatusId,
   backHref,
-  useCard,
+  grid: Grid,
   cardHeightPx,
   cardWidthPx = CARD_WIDTH_PX,
   emptyMessage,
@@ -389,14 +391,13 @@ function BountiesFullView({
   title: string;
   taskStatusId: string;
   backHref: string;
-  useCard: UseBountyCard;
+  grid: BountyGridComponent;
   cardHeightPx: number;
   cardWidthPx?: number;
   emptyMessage: string;
 }) {
   const { bounties, skills, isLoading } = useSpaceBounties(spaceId, taskStatusId);
   const { filtered, controls: filterControls } = useUrlBountyFilterState(bounties, skills);
-  const card = useCard(bounties);
 
   return (
     <CommunityFullscreen>
@@ -424,7 +425,7 @@ function BountiesFullView({
         ) : filtered.length === 0 ? (
           <EmptyState message={emptyMessage} />
         ) : (
-          <BountyGrid bounties={filtered} card={card} />
+          <Grid bounties={filtered} allBounties={bounties} />
         )}
       </div>
     </CommunityFullscreen>
@@ -434,7 +435,7 @@ function BountiesFullView({
 type BountyStatusConfig = {
   title: string;
   taskStatusId: string;
-  useCard: UseBountyCard;
+  grid: BountyGridComponent;
   cardHeightPx: number;
   cardWidthPx: number;
   emptyMessage: string;
@@ -444,7 +445,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   completed: {
     title: 'Completed bounties',
     taskStatusId: BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
-    useCard: USE_COMPLETED_CARD,
+    grid: CompletedBountyGrid,
     cardHeightPx: COMPLETED_CARD_HEIGHT_PX,
     cardWidthPx: CARD_WIDTH_PX,
     emptyMessage: 'No completed bounties match these filters.',
@@ -452,7 +453,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   'in-progress': {
     title: 'In progress bounties',
     taskStatusId: BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
-    useCard: USE_IN_PROGRESS_CARD,
+    grid: InProgressBountyGrid,
     cardHeightPx: IN_PROGRESS_CARD_HEIGHT_PX,
     cardWidthPx: CARD_WIDTH_PX,
     emptyMessage: 'No in progress bounties match these filters.',
@@ -460,7 +461,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   available: {
     title: 'Available bounties',
     taskStatusId: BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
-    useCard: useAvailableBountyCard,
+    grid: AvailableBountyGrid,
     cardHeightPx: AVAILABLE_CARD_HEIGHT_PX,
     cardWidthPx: AVAILABLE_CARD_WIDTH_PX,
     emptyMessage: 'No available bounties match these filters.',
@@ -480,7 +481,7 @@ export function CompletedBountiesSection({ spaceId }: { spaceId: string }) {
       title="Completed bounties"
       taskStatusId={BOUNTY_TASK_STATUS_DONE_ENTITY_ID}
       emptyMessage="No completed bounties match these filters."
-      useCard={USE_COMPLETED_CARD}
+      grid={CompletedBountyGrid}
       cardHeightPx={COMPLETED_CARD_HEIGHT_PX}
       viewAllHref={NavUtils.toCommunityBounties(spaceId, 'completed')}
     />
@@ -494,7 +495,7 @@ export function InProgressBountiesSection({ spaceId }: { spaceId: string }) {
       title="In progress bounties"
       taskStatusId={BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID}
       emptyMessage="No in progress bounties match these filters."
-      useCard={USE_IN_PROGRESS_CARD}
+      grid={InProgressBountyGrid}
       cardHeightPx={IN_PROGRESS_CARD_HEIGHT_PX}
       viewAllHref={NavUtils.toCommunityBounties(spaceId, 'in-progress')}
     />
@@ -508,7 +509,7 @@ export function AvailableBountiesSection({ spaceId }: { spaceId: string }) {
       title="Available bounties"
       taskStatusId={BOUNTY_TASK_STATUS_TODO_ENTITY_ID}
       emptyMessage="No available bounties match these filters."
-      useCard={useAvailableBountyCard}
+      grid={AvailableBountyGrid}
       cardHeightPx={AVAILABLE_CARD_HEIGHT_PX}
       cardWidthPx={AVAILABLE_CARD_WIDTH_PX}
       isInfinite
