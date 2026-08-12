@@ -109,9 +109,10 @@ export function DebatesBrowseFeed({
   // An anchored feed starts active on the anchor so the linked debate is the one
   // that autoplays, before any IntersectionObserver has fired.
   const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
-  const [joinOpen, setJoinOpen] = React.useState(false);
-  const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
-  const [commentsDebate, setCommentsDebate] = React.useState<Debate | null>(null);
+  // Which panel is open, not which debate it was opened from: the claims and
+  // comments panels describe the debate you're watching, so they follow the feed
+  // as you scroll rather than staying pinned to the one whose button you pressed.
+  const [openPanel, setOpenPanel] = React.useState<'join' | 'claims' | 'comments' | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -210,21 +211,9 @@ export function DebatesBrowseFeed({
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
-          onOpenJoin={() => {
-            setClaimsDebate(null);
-            setCommentsDebate(null);
-            setJoinOpen(true);
-          }}
-          onOpenClaims={() => {
-            setJoinOpen(false);
-            setCommentsDebate(null);
-            setClaimsDebate(debate);
-          }}
-          onOpenComments={() => {
-            setJoinOpen(false);
-            setClaimsDebate(null);
-            setCommentsDebate(debate);
-          }}
+          onOpenJoin={() => setOpenPanel('join')}
+          onOpenClaims={() => setOpenPanel('claims')}
+          onOpenComments={() => setOpenPanel('comments')}
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (
@@ -233,13 +222,19 @@ export function DebatesBrowseFeed({
     </div>
   );
 
-  const sidePanel = joinOpen ? (
-    <JoinDebatePanel spaceId={spaceId} onClose={() => setJoinOpen(false)} />
-  ) : claimsDebate ? (
-    <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
-  ) : commentsDebate ? (
-    <EntityCommentsPanel entityId={commentsDebate.id} spaceId={spaceId} onClose={() => setCommentsDebate(null)} />
-  ) : null;
+  const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
+  const closePanel = () => setOpenPanel(null);
+
+  const sidePanel =
+    openPanel === 'join' ? (
+      <JoinDebatePanel spaceId={spaceId} onClose={closePanel} />
+    ) : openPanel === 'claims' && activeDebate ? (
+      <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
+    ) : openPanel === 'comments' && activeDebate ? (
+      // Keyed so scrolling to the next debate resets the panel rather than
+      // carrying a half-typed reply across to a different debate's thread.
+      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+    ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.

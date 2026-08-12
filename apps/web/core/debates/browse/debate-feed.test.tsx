@@ -82,7 +82,9 @@ vi.mock('./debate-scroll-hint', () => ({
   DebateScrollHint: ({ className }: { className?: string }) => <div data-testid="scroll-hint" className={className} />,
 }));
 
-vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
+vi.mock('./debate-claims-panel', () => ({
+  DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
+}));
 vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
@@ -544,12 +546,51 @@ describe('DebatesBrowseFeed comments', () => {
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
-    expect(screen.getByText('Claims panel')).toBeInTheDocument();
+    expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
-    expect(screen.queryByText('Claims panel')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
+  });
+});
+
+// The panels describe the debate on screen, so scrolling the feed under an open
+// panel has to bring the panel along — otherwise you're reading one debate's
+// video beside another's comments.
+describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
+  beforeEach(() => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+  });
+
+  it('moves the comments panel to the next debate on scroll', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
+  });
+
+  it('moves the claims panel to the next debate on scroll', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.getByText('Claims panel for debate-2')).toBeInTheDocument();
+  });
+
+  it('leaves a closed panel closed while scrolling', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
 });
 
