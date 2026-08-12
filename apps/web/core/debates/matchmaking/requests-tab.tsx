@@ -168,6 +168,9 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
   const isRecipient = role === 'recipient';
   const other = isRecipient ? challenge.requester : challenge.recipient;
   const busy = acceptChallenge.isPending || rejectChallenge.isPending;
+  // This card is the sender's only view of an outgoing challenge, so a failed cancel has to report
+  // itself here — there is no popup left to carry the message.
+  const actionError = acceptChallenge.error ?? rejectChallenge.error;
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
@@ -221,6 +224,15 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
           Cancel request
         </HubPillButton>
       )}
+
+      {actionError instanceof Error ? (
+        // role="alert" so a failed cancel is announced, not just drawn under the button.
+        <div role="alert">
+          <Text as="p" variant="footnote" color="red-01">
+            {actionError.message}
+          </Text>
+        </div>
+      ) : null}
     </article>
   );
 }
