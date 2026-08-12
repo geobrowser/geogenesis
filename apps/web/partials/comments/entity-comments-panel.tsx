@@ -45,6 +45,7 @@ export function EntityCommentsPanel({
 
   return (
     <aside
+      data-entity-comments-panel
       className={cx(
         'flex w-[360px] shrink-0 flex-col border-l border-divider bg-white',
         'md:fixed md:inset-x-0 md:top-auto md:bottom-0 md:z-[80] md:h-[85dvh] md:w-full md:rounded-t-[16px] md:border-t md:border-l-0',

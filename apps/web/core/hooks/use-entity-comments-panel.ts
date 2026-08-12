@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import { useAtom } from 'jotai';
 
 import { entityCommentsPanelAtom } from '~/atoms';
@@ -12,9 +14,12 @@ import { entityCommentsPanelAtom } from '~/atoms';
 export function useEntityCommentsPanel() {
   const [target, setTarget] = useAtom(entityCommentsPanelAtom);
 
-  return {
-    commentsTarget: target,
-    openComments: (entityId: string, spaceId: string) => setTarget({ entityId, spaceId }),
-    closeComments: () => setTarget(null),
-  };
+  // Stable identities: the host keys a document-level listener off these.
+  const openComments = React.useCallback(
+    (entityId: string, spaceId: string) => setTarget({ entityId, spaceId }),
+    [setTarget]
+  );
+  const closeComments = React.useCallback(() => setTarget(null), [setTarget]);
+
+  return { commentsTarget: target, openComments, closeComments };
 }

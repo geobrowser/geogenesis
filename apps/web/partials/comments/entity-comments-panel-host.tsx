@@ -22,6 +22,32 @@ export function EntityCommentsPanelHost() {
 
   React.useEffect(() => setMounted(true), []);
 
+  // Dismiss on a click outside the panel. Capture phase so it still fires when a
+  // card's own handler stops propagation. Exempt: the panel itself; comment
+  // buttons, which switch the panel to their entity instead of closing it; the
+  // entity side panel, which opens on top from a comment author's name; and
+  // anything Radix portals out of the panel (the sort/filter menus) or any
+  // dialog, which live outside the panel in the DOM but not to the reader.
+  React.useEffect(() => {
+    if (!commentsTarget) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (
+        target.closest(
+          '[data-entity-comments-panel], [data-entity-comments-opener], [data-entity-side-panel], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"]'
+        )
+      ) {
+        return;
+      }
+      closeComments();
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [commentsTarget, closeComments]);
+
   if (!mounted || !commentsTarget) return null;
 
   return createPortal(

@@ -31,6 +31,9 @@ export function EntityCommentsButton({
   return (
     <button
       type="button"
+      // Marks this as an opener: clicking one while the panel is open switches
+      // it to that entity rather than dismissing it as an outside click.
+      data-entity-comments-opener
       aria-label={`Comments (${count})`}
       onClick={event => {
         // These rows are commonly wrapped in a link to the entity.
