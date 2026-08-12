@@ -48,18 +48,34 @@ type CommentDensity = {
   avatarPx: number;
   bodyInsetPx: number;
   avatarCenterPx: number;
+  /** Author name. */
+  nameClass: string;
+  /** Timestamp, Reply/Edit actions — anything secondary in grey. */
+  metaClass: string;
+  /** Comment body copy and the composer prompt. */
+  bodyClass: string;
 };
 
 const PAGE_DENSITY: CommentDensity = {
   avatarPx: COMMENT_AVATAR_COL_PX,
   bodyInsetPx: COMMENT_BODY_INSET_PX,
   avatarCenterPx: COMMENT_AVATAR_COLUMN_CENTER_PX,
+  nameClass: 'text-bodySemibold',
+  metaClass: 'text-smallButton',
+  bodyClass: 'text-body',
 };
 
+// Figma's comment type ramp (Geo "Comment name" / "Comment text" / "Comment
+// button" tokens): everything is 16px — the page's 20px body and 11px footnote
+// are much larger/smaller respectively, and the oversized body is what made the
+// column wrap early and look narrow in the panel.
 const PANEL_DENSITY: CommentDensity = {
   avatarPx: 20,
   bodyInsetPx: COMMENT_BODY_INSET_PX,
   avatarCenterPx: 10,
+  nameClass: 'text-[16px] leading-[13px] font-medium tracking-[-0.35px]',
+  metaClass: 'text-[16px] leading-[13px] tracking-[-0.35px]',
+  bodyClass: 'text-[16px] leading-[20px] tracking-[-0.35px]',
 };
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
@@ -495,7 +511,9 @@ function TopLevelCommentInput({
           >
             <Avatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} size={density.avatarPx} />
           </span>
-          <span className="min-w-0 flex-1 truncate text-body text-grey-04">Join the conversation...</span>
+          <span className={cx(density.bodyClass, 'min-w-0 flex-1 truncate text-grey-04')}>
+            Join the conversation...
+          </span>
         </button>
       );
     }
@@ -976,17 +994,15 @@ function CommentItem({
       {/* Single line, no wrapping: a wrapped header doubles the row height, and
           because the avatar is centred against it the body ends up stranded far
           below the name. A long name truncates instead. */}
-      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
         <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
-          <Text variant="bodySemibold" as="span">
-            {comment.author.name ?? 'Anonymous'}
-          </Text>
+          <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
         {/* While publishing, this stands in for the timestamp — a just-posted
             comment has no meaningful age yet, and showing both read as noise. */}
-        <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+        <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
           {comment.isPublishing ? 'Publishing…' : relativeTime}
-        </Text>
+        </span>
         <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
         {comment.resolved && (
           <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
@@ -1040,7 +1056,12 @@ function CommentItem({
           initialValue={comment.markdownContent}
         />
       ) : (
-        <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
+        <div
+          className={cx(
+            'prose prose-sm max-w-none text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:font-semibold [&_p]:my-1',
+            density.bodyClass
+          )}
+        >
           {renderedContent}
         </div>
       )}
@@ -1076,12 +1097,15 @@ function CommentItem({
               }
               setIsReplying(!isReplying);
             }}
-            className="text-smallButton text-grey-04 hover:text-text"
+            className={cx(density.metaClass, 'text-grey-04 hover:text-text')}
           >
             Reply
           </button>
           {isOwnComment && (
-            <button onClick={() => setIsEditing(true)} className="text-smallButton text-grey-04 hover:text-text">
+            <button
+              onClick={() => setIsEditing(true)}
+              className={cx(density.metaClass, 'text-grey-04 hover:text-text')}
+            >
               Edit
             </button>
           )}
@@ -1150,13 +1174,11 @@ function CommentItem({
           </div>
           <div className="flex min-h-8 min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
             <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
-              <Text variant="bodySemibold" as="span">
-                {comment.author.name ?? 'Anonymous'}
-              </Text>
+              <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
-            <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
+            <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
               {comment.isPublishing ? 'Publishing…' : relativeTime}
-            </Text>
+            </span>
             <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
             {collapsedHeaderBlankExpands && (
               <button
