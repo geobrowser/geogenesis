@@ -56,7 +56,7 @@ import {
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
-import { useDebateGatewayScope } from './debate-gateway';
+import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
 export const debateQueryNetworkOptions = {
@@ -132,6 +132,11 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
  */
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
+  // delivers this space's claim changes, so nothing here would refresh when someone responds.
+  const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
+  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
 
   // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
   // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
