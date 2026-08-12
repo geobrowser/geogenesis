@@ -34,6 +34,17 @@ type Props = {
   activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
+  /**
+   * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
+   * following a link there would navigate out of the app shell and abandon the live session.
+   */
+  onOpenClaim?: () => void;
+  /**
+   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
+   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
+   * report "not ready" on a claim they are in fact ready on.
+   */
+  hideReadinessToggle?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -53,7 +64,16 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, ref }: Props) {
+export function MatchmakingClaimCard({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  footer,
+  onOpenClaim,
+  hideReadinessToggle,
+  ref,
+}: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -63,9 +83,23 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
     // collapse to its content width as it fades.
     <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
       {isOnGraph ? (
-        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
+        <RespondableControls
+          claim={claim}
+          positions={positions}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       ) : (
-        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+        <UnresolvableControls
+          positions={positions}
+          readiness={readiness}
+          claim={claim}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       )}
 
       {footer}
@@ -82,11 +116,32 @@ function ClaimHeader({
   claim,
   isOnGraph,
   toggle,
+  onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
   toggle: React.ReactNode;
+  onOpenClaim?: () => void;
 }) {
+  const openable = isOnGraph ? (
+    onOpenClaim ? (
+      <button type="button" onClick={onOpenClaim} className="mb-3 block text-left text-metadataMedium hover:underline">
+        {claim.claim}
+      </button>
+    ) : (
+      <Link
+        href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        className="mb-3 block text-metadataMedium hover:underline"
+      >
+        {claim.claim}
+      </Link>
+    )
+  ) : (
+    <Text as="p" variant="metadataMedium" className="mb-3">
+      {claim.claim}
+    </Text>
+  );
+
   return (
     <>
       {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
@@ -94,18 +149,7 @@ function ClaimHeader({
         <SpaceChip spaceId={claim.space_id} />
         {toggle}
       </div>
-      {isOnGraph ? (
-        <Link
-          href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-          className="mb-3 block text-metadataMedium hover:underline"
-        >
-          {claim.claim}
-        </Link>
-      ) : (
-        <Text as="p" variant="metadataMedium" className="mb-3">
-          {claim.claim}
-        </Text>
-      )}
+      {openable}
     </>
   );
 }
@@ -116,11 +160,15 @@ function RespondableControls({
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -182,14 +230,17 @@ function RespondableControls({
       <ClaimHeader
         claim={claim}
         isOnGraph
+        onOpenClaim={onOpenClaim}
         toggle={
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={viewerPosition !== null}
-            responseIndexing={isPublishing}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={viewerPosition !== null}
+              responseIndexing={isPublishing}
+            />
+          )
         }
       />
       <PositionRow
@@ -217,25 +268,32 @@ function UnresolvableControls({
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
       <ClaimHeader
         claim={claim}
         isOnGraph={false}
+        onOpenClaim={onOpenClaim}
         toggle={
           /* Readiness is geo-chat state, so it still works without a graph id. */
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={readiness.viewer_response !== null}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={readiness.viewer_response !== null}
+            />
+          )
         }
       />
       <PositionRow
