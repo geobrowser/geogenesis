@@ -13,13 +13,11 @@ import {
   RANKING_START_PROPERTY_IDS,
   resolveRankingDateValue,
 } from '~/core/blocks/ranking/ranking-block-dates';
-import { getAggregatedRankingSubmitterRefs } from '~/core/blocks/ranking/ranking-block-relations';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '~/core/blocks/ranking/ranking-block-state';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
-import { isRollingSubmissionLive, parseTimestampMs } from '~/core/blocks/ranking/ranking-rolling';
+import { parseTimestampMs } from '~/core/blocks/ranking/ranking-rolling';
 import { useMyRanking } from '~/core/blocks/ranking/use-my-ranking';
 import { getRankingSubmissionFrequencyHours } from '~/core/blocks/ranking/use-ranking-block-config';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { SUBMISSION_FREQUENCY_PROPERTY_ID } from '~/core/ranking-block-ids';
@@ -200,7 +198,6 @@ export function useRankingDailyActivityComplete(
   complete: boolean;
   isLoading: boolean;
 } {
-  const { personalSpaceId } = usePersonalSpaceId();
   const { myRankEntity, orderedEntityIds, isLoading } = useMyRanking(blockId);
   const { initialBlockEntities } = useEditorStoreLite();
   const initialBlockEntity = initialBlockEntities.find(b => b.id === blockId) ?? null;
@@ -224,29 +221,16 @@ export function useRankingDailyActivityComplete(
     [frequencyValues]
   );
 
-  const aggregatedSubmitterRefs = React.useMemo(
-    () => getAggregatedRankingSubmitterRefs(blockRelations, blockId, spaceId),
-    [blockRelations, blockId, spaceId]
-  );
-
   const submittedAtMs = React.useMemo(
-    () => (myRankEntity ? parseTimestampMs(myRankEntity.updatedAt) : 0),
+    () => (myRankEntity ? parseTimestampMs(myRankEntity.createdAt ?? myRankEntity.updatedAt) : 0),
     [myRankEntity]
   );
 
   const isSubmissionLive = React.useMemo(() => {
     if (!isRolling || !myRankEntity) return true;
-    const windowElapsed =
-      submissionFrequencyHours != null &&
-      submittedAtMs > 0 &&
-      Date.now() >= submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
-    if (!windowElapsed) return true;
-    return isRollingSubmissionLive({
-      personalSpaceId,
-      myRankEntityId: myRankEntity.id,
-      aggregatedSubmitterRefs,
-    });
-  }, [aggregatedSubmitterRefs, isRolling, myRankEntity, personalSpaceId, submissionFrequencyHours, submittedAtMs]);
+    if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
+    return Date.now() < submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
+  }, [isRolling, myRankEntity, submissionFrequencyHours, submittedAtMs]);
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
   const complete = !hasRolledOff && orderedEntityIds.length > 0;
