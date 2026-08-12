@@ -41,9 +41,7 @@ export function DebateCommentsPanel({
 
   return (
     <aside className="flex w-[360px] shrink-0 flex-col border-l border-divider bg-white md:fixed md:inset-x-0 md:top-auto md:bottom-0 md:z-[80] md:h-[85dvh] md:w-full md:rounded-t-[16px] md:border-t md:border-l-0">
-      {/* Just enough room to breathe: a taller padded band reads as a white
-          banner the comments disappear beneath as you scroll. */}
-      <header className="flex items-center justify-between px-5 pt-3 pb-2">
+      <header className="flex items-center justify-between px-5 py-4">
         <Text as="h2" variant="cardEntityTitle" color="text">
           Comments · {totalCount}
         </Text>
