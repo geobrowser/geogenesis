@@ -5,7 +5,7 @@ import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession } from '~/core/debates/api';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as unknown[],
   entityQueryPlaceholder: false,
   entities: [] as Array<Record<string, unknown>>,
+  recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -100,6 +101,11 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
 }));
 
+// The curated lookup has its own tests; these cover the picker around it.
+vi.mock('~/core/debates/recommended-claims', () => ({
+  useRecommendedClaimSections: () => mocks.recommendedSections,
+}));
+
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
 }));
@@ -136,6 +142,7 @@ beforeEach(() => {
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
   mocks.entities = [publishedEntity()];
+  mocks.recommendedSections = [];
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -424,6 +431,60 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByText('A newly published claim')).toBeNull();
   });
 
+  // A curator's page for this pairing is the best thing to land on; without one the tab has no
+  // reason to exist.
+  it('hides the Recommended tab when nothing is curated for this pairing', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
+  });
+
+  it('opens on Recommended when a curator has, grouping each block into its own section', () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+    const geopolitics = screen.getByRole('heading', { name: 'Geopolitics & chips' });
+    const openWeight = screen.getByRole('heading', { name: 'Open weight AI' });
+    expect(geopolitics.compareDocumentPosition(openWeight) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Each block lists its own claims.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  it('collapses a section without touching the others', () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Geopolitics & chips/ }));
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // A curated claim the session hasn't heard of still has to render, so it joins the same pool the
+  // browsed pages feed rather than being listed separately.
+  it('drops a section whose claims all fall out of the filters', async () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
+  });
+
   it('shortens the opponent tab to their first name', () => {
     const base = session();
     mocks.session = session({
@@ -554,7 +615,7 @@ describe('DebateRematchPageClient', () => {
     mocks.entities = [publishedEntity(STALE, 'A stale claim from the previous search')];
     mocks.entityQueryPlaceholder = true;
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'claim' } });
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'claim' } }));
+    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'claim' } }));
 
     // The real page for this term lands.
     mocks.entities = [publishedEntity()];
@@ -621,7 +682,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Fast fashion' } });
 
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'Fast fashion' } }));
+    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'Fast fashion' } }));
   });
 
   it('renders the card’s Debate toggle against real readiness', () => {
@@ -653,6 +714,17 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 });
+
+/** The where clause of the query that browses published claims, not the curated lookups beside it. */
+function browsedClaimsWhere() {
+  return mocks.entityQueries
+    .filter(
+      (where): where is { types?: Array<{ id?: { equals?: string } }> } =>
+        typeof where === 'object' && where !== null && 'types' in where
+    )
+    .filter(where => where.types?.[0]?.id?.equals === CLAIM_TYPE_ID)
+    .at(-1);
+}
 
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
 function showAllClaims() {
