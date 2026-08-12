@@ -29,7 +29,7 @@ import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
-import { debateFeedFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
 const DEBATE_COLUMN_STYLE = {
@@ -100,15 +100,6 @@ export function DebatesBrowseFeed({
     return map;
   }, [claims]);
 
-  // Reached from a Debate entity route, this feed renders inside Main's centred
-  // 1200px column, which gutters the feed and its Comments panel. Flag it so
-  // Main goes full-bleed for as long as the feed is mounted.
-  const setDebateFeedFullscreenActive = useSetAtom(debateFeedFullscreenActiveAtom);
-  React.useEffect(() => {
-    setDebateFeedFullscreenActive(true);
-    return () => setDebateFeedFullscreenActive(false);
-  }, [setDebateFeedFullscreenActive]);
-
   // State-backed so children re-render once the scroll container mounts and can
   // observe against it as their IntersectionObserver root — a plain ref would
   // leave them with the initial null (i.e. the viewport).
@@ -162,6 +153,18 @@ export function DebatesBrowseFeed({
   // Debates tab passes none and keeps its own empty/error states. Requires a clean read — an
   // errored lookup holds the feed's error state above rather than falling back.
   const anchorMissing = anchorUnresolved && !isLoading && !anchorErrored;
+
+  // Tell the app shell it's hosting a viewport-filling takeover, so a Debate entity page —
+  // whose route `Main` can't recognise as full-width — drops its page chrome. Not set on the
+  // fallback path, where an ordinary entity page renders and does want that chrome. A layout
+  // effect so the padded layout is never painted, only to snap away a frame later.
+  const rendersFeed = !(anchorMissing && fallback != null);
+  const setDebateFullscreenActive = useSetAtom(debateFullscreenActiveAtom);
+  React.useLayoutEffect(() => {
+    if (!rendersFeed) return;
+    setDebateFullscreenActive(true);
+    return () => setDebateFullscreenActive(false);
+  }, [rendersFeed, setDebateFullscreenActive]);
 
   const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 
@@ -309,7 +312,10 @@ function DebateFeedItem({
   return (
     <section
       ref={itemRef}
-      className="flex h-full snap-start items-start justify-center px-4 md:h-auto md:min-h-full md:px-2 md:py-3"
+      // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
+      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
+      // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
       {/* The whole debate lifts with the nudge — title, media and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared

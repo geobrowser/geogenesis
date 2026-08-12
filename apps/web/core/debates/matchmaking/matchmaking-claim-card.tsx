@@ -62,8 +62,37 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
     <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
-      <div className="mb-2">
+      {isOnGraph ? (
+        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
+      ) : (
+        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+      )}
+
+      {footer}
+    </motion.article>
+  );
+}
+
+/**
+ * Space chip, readiness toggle, and the claim itself — the chrome both control variants share.
+ * The toggle rides in the header's top right per the design, but whether it can be turned on
+ * depends on response state only the respondable variant tracks, so each passes its own.
+ */
+function ClaimHeader({
+  claim,
+  isOnGraph,
+  toggle,
+}: {
+  claim: DebateClaimSummary;
+  isOnGraph: boolean;
+  toggle: React.ReactNode;
+}) {
+  return (
+    <>
+      {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
+      <div className="mb-2 flex items-start justify-between gap-3">
         <SpaceChip spaceId={claim.space_id} />
+        {toggle}
       </div>
       {isOnGraph ? (
         <Link
@@ -77,15 +106,7 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
           {claim.claim}
         </Text>
       )}
-
-      {isOnGraph ? (
-        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
-      ) : (
-        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
-      )}
-
-      {footer}
-    </motion.article>
+    </>
   );
 }
 
@@ -158,6 +179,19 @@ function RespondableControls({
 
   return (
     <>
+      <ClaimHeader
+        claim={claim}
+        isOnGraph
+        toggle={
+          <ClaimReadinessToggle
+            claim={claim}
+            readiness={readiness}
+            activeDebate={activeDebate}
+            hasResponse={viewerPosition !== null}
+            responseIndexing={isPublishing}
+          />
+        }
+      />
       <PositionRow
         positions={positions}
         responseKind={readiness.response_kind}
@@ -173,15 +207,6 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
-      <div className="mt-3 flex justify-end">
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={viewerPosition !== null}
-          responseIndexing={isPublishing}
-        />
-      </div>
     </>
   );
 }
@@ -200,22 +225,28 @@ function UnresolvableControls({
 }) {
   return (
     <>
+      <ClaimHeader
+        claim={claim}
+        isOnGraph={false}
+        toggle={
+          /* Readiness is geo-chat state, so it still works without a graph id. */
+          <ClaimReadinessToggle
+            claim={claim}
+            readiness={readiness}
+            activeDebate={activeDebate}
+            hasResponse={readiness.viewer_response !== null}
+          />
+        }
+      />
       <PositionRow
         positions={positions}
         responseKind={readiness.response_kind}
         viewerPosition={readiness.viewer_response?.position ?? null}
       />
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
           Claim unavailable
         </Text>
-        {/* Readiness is geo-chat state, so it still works without a graph id. */}
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={readiness.viewer_response !== null}
-        />
       </div>
     </>
   );

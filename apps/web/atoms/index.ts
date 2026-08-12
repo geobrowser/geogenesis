@@ -35,13 +35,11 @@ export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
 export const rankingFullscreenActiveAtom = atom<boolean>(false);
 
-/**
- * The full-screen debates feed is also reachable from a Debate *entity* route
- * (/space/{spaceId}/{entityId}), which Main can't distinguish from any other
- * entity page by pathname — so it would otherwise render inside Main's centred
- * 1200px column, leaving gutters beside the feed and its Comments panel.
- */
-export const debateFeedFullscreenActiveAtom = atom<boolean>(false);
+// Set while the full-screen debates feed is on screen. A Debate entity page renders the feed
+// from a route `Main` otherwise treats as an ordinary entity page, so without this it wraps a
+// viewport-filling takeover in `max-w-[1200px] pt-8 pb-16` — which makes the document taller
+// than the viewport and lets the feed scroll up under the sticky navbar.
+export const debateFullscreenActiveAtom = atom<boolean>(false);
 
 export const entitySidePanelWantsEditAtom = atom(false);
 
