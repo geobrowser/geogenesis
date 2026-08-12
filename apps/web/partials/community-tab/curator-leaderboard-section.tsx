@@ -17,8 +17,10 @@ import {
   CURATOR_LEADERBOARD_PERIOD_OPTIONS,
 } from '~/core/community/curator-leaderboard-types';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { SingleSelectPill } from './community-filter-pill';
@@ -90,7 +92,13 @@ function CuratorCell({ row }: { row: CuratorLeaderboardRow }) {
       <div className="relative size-8 shrink-0 overflow-hidden rounded-full">
         <Avatar value={row.curatorSpaceId} avatarUrl={row.avatarUrl} alt={row.name} size={32} />
       </div>
-      <span className={cx('min-w-0 truncate', CELL_TEXT_CLASS, INK)}>{row.isCurrentUser ? 'You' : row.name}</span>
+      <Link
+        href={NavUtils.toSpace(row.curatorSpaceId)}
+        title={row.name}
+        className={cx('min-w-0 truncate hover:underline', CELL_TEXT_CLASS, INK)}
+      >
+        {row.isCurrentUser ? 'You' : row.name}
+      </Link>
     </div>
   );
 }
