@@ -4,17 +4,21 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { SpaceThumb } from './space-thumb';
 
 type ExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -24,23 +28,27 @@ type ExploreFeedCardProps = {
   hideJoinButton?: boolean;
 };
 
-function SpaceThumb({ image, name }: { image: string | null; name: string }) {
-  if (!image) {
-    const initial = name.trim().slice(0, 1).toUpperCase() || '?';
+/**
+ * Debates get the same custom rendition they have on the full-screen `/debates` feed — the two
+ * debater videos with winner voting — with the generic card as the fallback whenever the debate
+ * can't actually be watched. Everything else renders the generic card.
+ */
+export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  const isDebate = props.item.types.some(type => ID.equals(type.id, DEBATE_TYPE_ID));
+  if (isDebate) {
     return (
-      <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04">
-        {initial}
-      </span>
+      <DebateExploreFeedCard
+        item={props.item}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        fallback={<BaseExploreFeedCard {...props} />}
+      />
     );
   }
-  return (
-    <span className="relative h-3 w-3 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-      <FallbackImage value={image} sizes="24px" className="object-cover" />
-    </span>
-  );
+  return <BaseExploreFeedCard {...props} />;
 }
 
-export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
+function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
     const out: { id: string; name: string }[] = [];
@@ -104,6 +112,15 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
               {item.description}
             </p>
           ) : null}
+          <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
+            <Link
+              href={entityHref}
+              className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
+            >
+              <ExploreCommentsIcon className="text-grey-04" />
+              <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
+            </Link>
+          </EntityRowActions>
         </div>
         {item.imageUrl ? (
           <Link
@@ -113,17 +130,6 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
             <FallbackImage value={item.imageUrl} sizes="186px" className="object-cover" />
           </Link>
         ) : null}
-      </div>
-
-      <div className="flex items-center gap-6">
-        <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimVoterAvatarsPosition="trailing" />
-        <Link
-          href={entityHref}
-          className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-        >
-          <ExploreCommentsIcon className="text-grey-04" />
-          <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-        </Link>
       </div>
     </article>
   );

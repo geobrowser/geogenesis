@@ -3136,6 +3136,7 @@ function completedDebate(): Debate {
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: 'geo-debate-debate-1',
     first_participant_slot: 1,
     current_turn_index: 0,

@@ -1,10 +1,9 @@
 import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SortOrder } from '~/core/gql/graphql';
-
 import { graphql } from './graphql-client';
 import { getEntitiesOrderedByPropertyConnection } from './queries';
+import { SortOrder } from './sort-order';
 
 vi.mock('./graphql-client', () => ({
   graphql: vi.fn(),

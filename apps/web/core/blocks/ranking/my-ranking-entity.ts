@@ -55,13 +55,21 @@ function parseEntityTimestampMs(raw: string | number | undefined | null): number
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-export function pickMostRecentlyUpdatedRankingEntity(entities: Entity[]): Entity | null {
+/**
+ * The current ballot is the most recently *created* rank entity: re-submission
+ * after a rolling window elapses mints a fresh entity, while in-window edits
+ * update the existing one in place (bumping `updatedAt` but not `createdAt`).
+ * Picking by `updatedAt` could resurface a superseded ballot that was merely
+ * touched after a newer one was minted. `updatedAt` is only a fallback for
+ * older entities indexed without a `createdAt`.
+ */
+export function pickMostRecentlyCreatedRankingEntity(entities: Entity[]): Entity | null {
   if (entities.length === 0) return null;
 
   return entities.reduce<Entity | null>((latest, entity) => {
     if (!latest) return entity;
-    const latestTs = parseEntityTimestampMs(latest.updatedAt);
-    const entityTs = parseEntityTimestampMs(entity.updatedAt);
+    const latestTs = parseEntityTimestampMs(latest.createdAt ?? latest.updatedAt);
+    const entityTs = parseEntityTimestampMs(entity.createdAt ?? entity.updatedAt);
     return entityTs >= latestTs ? entity : latest;
   }, null);
 }

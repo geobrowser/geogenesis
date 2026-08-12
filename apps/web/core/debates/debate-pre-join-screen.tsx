@@ -20,6 +20,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { CameraIcon, CloseIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
+import { useScrollLock } from './use-scroll-lock';
 
 export type DebatePreScreenParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -95,18 +96,7 @@ export function DebatePreScreen({
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   React.useEffect(() => {
     const video = localVideoRef.current;

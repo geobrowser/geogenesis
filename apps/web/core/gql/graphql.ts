@@ -1,610 +1,127 @@
 /* eslint-disable */
-import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
-export type Maybe<T> = T | null;
-export type InputMaybe<T> = T | null | undefined;
-export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
-export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
-export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
-export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
+/** Internal type. DO NOT USE DIRECTLY. */
+type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+/** Internal type. DO NOT USE DIRECTLY. */
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
-/** All built-in and custom scalars, mapped to their actual values */
-export type Scalars = {
-  ID: { input: string; output: string; }
-  String: { input: string; output: string; }
-  Boolean: { input: boolean; output: boolean; }
-  Int: { input: number; output: number; }
-  Float: { input: number; output: number; }
-  /** A floating point number that requires more precision than IEEE 754 binary 64 */
-  BigFloat: { input: any; output: any; }
-  /**
-   * A signed eight-byte integer. The upper big integer values are greater than the
-   * max value for a JavaScript number. Therefore all big integers will be output as
-   * strings and not numbers.
-   */
-  BigInt: { input: any; output: any; }
-  /** Base64-encoded binary data (RFC 4648). */
-  Bytes: { input: any; output: any; }
-  /** A location in a connection that can be used for resuming pagination. */
-  Cursor: { input: any; output: any; }
-  /** Calendar date without time or timezone. Format: "YYYY-MM-DD" (ISO 8601). Unlike the Date scalar, this preserves the original string representation. */
-  DateString: { input: any; output: any; }
-  /** Date and time with optional timezone. Format: ISO 8601 (e.g., "2024-01-15T14:30:00" or "2024-01-15T14:30:00+05:30"). Preserves original timezone offset. */
-  DateTimeString: { input: any; output: any; }
-  /**
-   * A point in time as described by the [ISO
-   * 8601](https://en.wikipedia.org/wiki/ISO_8601) standard. May or may not include a timezone.
-   */
-  Datetime: { input: any; output: any; }
-  /** WGS84 geographic coordinate. Format: "lat,lon" or "lat,lon,alt" where lat is [-90,90], lon is [-180,180], and alt is meters above ellipsoid. */
-  GeoPoint: { input: any; output: any; }
-  /** WGS84 axis-aligned bounding box. Format: "min_lat,min_lon,max_lat,max_lon" (southwest corner, then northeast corner). Coordinates follow same bounds as GeoPoint. */
-  GeoRect: { input: any; output: any; }
-  /** The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf). */
-  JSON: { input: any; output: any; }
-  /** BCP 47 language tag (e.g., "en", "en-US", "zh-Hans-CN"). */
-  LanguageTag: { input: any; output: any; }
-  /** The exact time of day, does not include the date. May or may not have a timezone offset. */
-  Time: { input: any; output: any; }
-  /** Time of day without date. Format: "HH:MM:SS" or "HH:MM:SS.sss" (ISO 8601). May include timezone offset. */
-  TimeString: { input: any; output: any; }
-  /** A universally unique identifier (UUID) as per RFC 4122. Accepts dashed or undashed input; always serializes without dashes. */
-  UUID: { input: any; output: any; }
-};
-
-export type AppWebhook = Node & {
-  __typename?: 'AppWebhook';
-  appName: Scalars['String']['output'];
-  createdAt: Scalars['Datetime']['output'];
-  id: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads and enables pagination through a set of `NotificationDelivery`. */
-  notificationDeliveriesByWebhookId: Array<NotificationDelivery>;
-  /** Reads and enables pagination through a set of `NotificationDelivery`. */
-  notificationDeliveriesByWebhookIdConnection: NotificationDeliveriesConnection;
-  notificationTypes?: Maybe<Array<Maybe<Scalars['String']['output']>>>;
-  secret: Scalars['String']['output'];
-  spaceIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
-  updatedAt: Scalars['Datetime']['output'];
-  url: Scalars['String']['output'];
-};
-
-
-export type AppWebhookNotificationDeliveriesByWebhookIdArgs = {
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-
-export type AppWebhookNotificationDeliveriesByWebhookIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-/**
- * A condition to be used against `AppWebhook` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type AppWebhookCondition = {
-  /** Checks for equality with the object’s `appName` field. */
-  appName?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `notificationTypes` field. */
-  notificationTypes?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Checks for equality with the object’s `secret` field. */
-  secret?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `spaceIds` field. */
-  spaceIds?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `url` field. */
-  url?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** A filter to be used against `AppWebhook` object types. All fields are combined with a logical ‘and.’ */
-export type AppWebhookFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<AppWebhookFilter>>;
-  /** Filter by the object’s `appName` field. */
-  appName?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<AppWebhookFilter>;
-  /** Filter by the object’s `notificationDeliveriesByWebhookIdConnection` relation. */
-  notificationDeliveriesByWebhookIdConnection?: InputMaybe<AppWebhookToManyNotificationDeliveryFilter>;
-  /** Some related `notificationDeliveriesByWebhookIdConnection` exist. */
-  notificationDeliveriesByWebhookIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Filter by the object’s `notificationTypes` field. */
-  notificationTypes?: InputMaybe<StringListFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<AppWebhookFilter>>;
-  /** Filter by the object’s `secret` field. */
-  secret?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `spaceIds` field. */
-  spaceIds?: InputMaybe<UuidListFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `url` field. */
-  url?: InputMaybe<StringFilter>;
-};
-
-/** A filter to be used against many `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
-export type AppWebhookToManyNotificationDeliveryFilter = {
-  /** Every related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<NotificationDeliveryFilter>;
-  /** No related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<NotificationDeliveryFilter>;
-  /** Some related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<NotificationDeliveryFilter>;
-};
-
-/** A connection to a list of `AppWebhook` values. */
-export type AppWebhooksConnection = {
-  __typename?: 'AppWebhooksConnection';
-  /** A list of edges which contains the `AppWebhook` and cursor to aid in pagination. */
-  edges: Array<AppWebhooksEdge>;
-  /** A list of `AppWebhook` objects. */
-  nodes: Array<AppWebhook>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `AppWebhook` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `AppWebhook` edge in the connection. */
-export type AppWebhooksEdge = {
-  __typename?: 'AppWebhooksEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `AppWebhook` at the end of the edge. */
-  node: AppWebhook;
-};
-
-/** Methods to use when ordering `AppWebhook`. */
-export enum AppWebhooksOrderBy {
-  AppNameAsc = 'APP_NAME_ASC',
-  AppNameDesc = 'APP_NAME_DESC',
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  NotificationTypesAsc = 'NOTIFICATION_TYPES_ASC',
-  NotificationTypesDesc = 'NOTIFICATION_TYPES_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SecretAsc = 'SECRET_ASC',
-  SecretDesc = 'SECRET_DESC',
-  SpaceIdsAsc = 'SPACE_IDS_ASC',
-  SpaceIdsDesc = 'SPACE_IDS_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC',
-  UrlAsc = 'URL_ASC',
-  UrlDesc = 'URL_DESC'
-}
-
-export type AtlasCheckpoint = Node & {
-  __typename?: 'AtlasCheckpoint';
-  blockNumber: Scalars['BigInt']['output'];
-  cursor: Scalars['String']['output'];
-  graphStateBlob: Scalars['JSON']['output'];
-  graphStateVersion: Scalars['Int']['output'];
-  indexerId: Scalars['String']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  rootSpaceId: Scalars['String']['output'];
-  runtimeCompatibilityMarker: Scalars['String']['output'];
-  schemaVersion: Scalars['Int']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `AtlasCheckpoint` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type AtlasCheckpointCondition = {
-  /** Checks for equality with the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `cursor` field. */
-  cursor?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `graphStateBlob` field. */
-  graphStateBlob?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `graphStateVersion` field. */
-  graphStateVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `indexerId` field. */
-  indexerId?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `rootSpaceId` field. */
-  rootSpaceId?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `runtimeCompatibilityMarker` field. */
-  runtimeCompatibilityMarker?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `schemaVersion` field. */
-  schemaVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `AtlasCheckpoint` object types. All fields are combined with a logical ‘and.’ */
-export type AtlasCheckpointFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<AtlasCheckpointFilter>>;
-  /** Filter by the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `cursor` field. */
-  cursor?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `graphStateBlob` field. */
-  graphStateBlob?: InputMaybe<JsonFilter>;
-  /** Filter by the object’s `graphStateVersion` field. */
-  graphStateVersion?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `indexerId` field. */
-  indexerId?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<AtlasCheckpointFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<AtlasCheckpointFilter>>;
-  /** Filter by the object’s `rootSpaceId` field. */
-  rootSpaceId?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `runtimeCompatibilityMarker` field. */
-  runtimeCompatibilityMarker?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `schemaVersion` field. */
-  schemaVersion?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `AtlasCheckpoint` values. */
-export type AtlasCheckpointsConnection = {
-  __typename?: 'AtlasCheckpointsConnection';
-  /** A list of edges which contains the `AtlasCheckpoint` and cursor to aid in pagination. */
-  edges: Array<AtlasCheckpointsEdge>;
-  /** A list of `AtlasCheckpoint` objects. */
-  nodes: Array<AtlasCheckpoint>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `AtlasCheckpoint` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `AtlasCheckpoint` edge in the connection. */
-export type AtlasCheckpointsEdge = {
-  __typename?: 'AtlasCheckpointsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `AtlasCheckpoint` at the end of the edge. */
-  node: AtlasCheckpoint;
-};
-
-/** Methods to use when ordering `AtlasCheckpoint`. */
-export enum AtlasCheckpointsOrderBy {
-  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
-  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
-  CursorAsc = 'CURSOR_ASC',
-  CursorDesc = 'CURSOR_DESC',
-  GraphStateBlobAsc = 'GRAPH_STATE_BLOB_ASC',
-  GraphStateBlobDesc = 'GRAPH_STATE_BLOB_DESC',
-  GraphStateVersionAsc = 'GRAPH_STATE_VERSION_ASC',
-  GraphStateVersionDesc = 'GRAPH_STATE_VERSION_DESC',
-  IndexerIdAsc = 'INDEXER_ID_ASC',
-  IndexerIdDesc = 'INDEXER_ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  RootSpaceIdAsc = 'ROOT_SPACE_ID_ASC',
-  RootSpaceIdDesc = 'ROOT_SPACE_ID_DESC',
-  RuntimeCompatibilityMarkerAsc = 'RUNTIME_COMPATIBILITY_MARKER_ASC',
-  RuntimeCompatibilityMarkerDesc = 'RUNTIME_COMPATIBILITY_MARKER_DESC',
-  SchemaVersionAsc = 'SCHEMA_VERSION_ASC',
-  SchemaVersionDesc = 'SCHEMA_VERSION_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
+import { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 /** A filter to be used against BigFloat fields. All fields are combined with a logical ‘and.’ */
 export type BigFloatFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['BigFloat']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['BigFloat']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['BigFloat']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['BigFloat']['input']>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['BigFloat']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['BigFloat']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['BigFloat']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['BigFloat']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['BigFloat']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['BigFloat']['input']>>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against BigInt fields. All fields are combined with a logical ‘and.’ */
 export type BigIntFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['BigInt']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['BigInt']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['BigInt']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['BigInt']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['BigInt']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['BigInt']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['BigInt']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['BigInt']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['BigInt']['input']>>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against Boolean fields. All fields are combined with a logical ‘and.’ */
 export type BooleanFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['Boolean']['input']>;
+  distinctFrom?: boolean | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['Boolean']['input']>;
+  greaterThan?: boolean | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['Boolean']['input']>;
+  greaterThanOrEqualTo?: boolean | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['Boolean']['input']>>;
+  in?: Array<boolean> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['Boolean']['input']>;
+  is?: boolean | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['Boolean']['input']>;
+  isNot?: boolean | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['Boolean']['input']>;
+  lessThan?: boolean | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['Boolean']['input']>;
+  lessThanOrEqualTo?: boolean | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['Boolean']['input']>;
+  notDistinctFrom?: boolean | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['Boolean']['input']>>;
+  notIn?: Array<boolean> | null | undefined;
 };
 
 /** A filter to be used against Datetime fields. All fields are combined with a logical ‘and.’ */
 export type DatetimeFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['Datetime']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['Datetime']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['Datetime']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['Datetime']['input']>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['Datetime']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['Datetime']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['Datetime']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['Datetime']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['Datetime']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['Datetime']['input']>>;
-};
-
-export type EditVersion = Node & {
-  __typename?: 'EditVersion';
-  blockNumber: Scalars['BigInt']['output'];
-  createdAt: Scalars['Datetime']['output'];
-  createdById?: Maybe<Scalars['UUID']['output']>;
-  editId: Scalars['UUID']['output'];
-  name?: Maybe<Scalars['String']['output']>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  sequence: Scalars['BigInt']['output'];
-  versionKey: Scalars['BigInt']['output'];
-};
-
-/**
- * A condition to be used against `EditVersion` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type EditVersionCondition = {
-  /** Checks for equality with the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `createdById` field. */
-  createdById?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `editId` field. */
-  editId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `name` field. */
-  name?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `sequence` field. */
-  sequence?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `versionKey` field. */
-  versionKey?: InputMaybe<Scalars['BigInt']['input']>;
-};
-
-/** A filter to be used against `EditVersion` object types. All fields are combined with a logical ‘and.’ */
-export type EditVersionFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<EditVersionFilter>>;
-  /** Filter by the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `createdById` field. */
-  createdById?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `editId` field. */
-  editId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<EditVersionFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<EditVersionFilter>>;
-  /** Filter by the object’s `sequence` field. */
-  sequence?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `versionKey` field. */
-  versionKey?: InputMaybe<BigIntFilter>;
-};
-
-/** A connection to a list of `EditVersion` values. */
-export type EditVersionsConnection = {
-  __typename?: 'EditVersionsConnection';
-  /** A list of edges which contains the `EditVersion` and cursor to aid in pagination. */
-  edges: Array<EditVersionsEdge>;
-  /** A list of `EditVersion` objects. */
-  nodes: Array<EditVersion>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `EditVersion` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `EditVersion` edge in the connection. */
-export type EditVersionsEdge = {
-  __typename?: 'EditVersionsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `EditVersion` at the end of the edge. */
-  node: EditVersion;
-};
-
-/** Methods to use when ordering `EditVersion`. */
-export enum EditVersionsOrderBy {
-  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
-  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  CreatedByIdAsc = 'CREATED_BY_ID_ASC',
-  CreatedByIdDesc = 'CREATED_BY_ID_DESC',
-  EditIdAsc = 'EDIT_ID_ASC',
-  EditIdDesc = 'EDIT_ID_DESC',
-  NameAsc = 'NAME_ASC',
-  NameDesc = 'NAME_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SequenceAsc = 'SEQUENCE_ASC',
-  SequenceDesc = 'SEQUENCE_DESC',
-  VersionKeyAsc = 'VERSION_KEY_ASC',
-  VersionKeyDesc = 'VERSION_KEY_DESC'
-}
-
-export type Editor = Node & {
-  __typename?: 'Editor';
-  memberSpaceId: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `Space` that is related to this `Editor`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-};
-
-/** A condition to be used against `Editor` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type EditorCondition = {
-  /** Checks for equality with the object’s `memberSpaceId` field. */
-  memberSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against `Editor` object types. All fields are combined with a logical ‘and.’ */
 export type EditorFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<EditorFilter>>;
+  and?: Array<EditorFilter> | null | undefined;
   /** Filter by the object’s `memberSpaceId` field. */
-  memberSpaceId?: InputMaybe<UuidFilter>;
+  memberSpaceId?: UuidFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<EditorFilter>;
+  not?: EditorFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<EditorFilter>>;
+  or?: Array<EditorFilter> | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-};
-
-/** A connection to a list of `Editor` values. */
-export type EditorsConnection = {
-  __typename?: 'EditorsConnection';
-  /** A list of edges which contains the `Editor` and cursor to aid in pagination. */
-  edges: Array<EditorsEdge>;
-  /** A list of `Editor` objects. */
-  nodes: Array<Editor>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Editor` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Editor` edge in the connection. */
-export type EditorsEdge = {
-  __typename?: 'EditorsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Editor` at the end of the edge. */
-  node: Editor;
-};
-
-/** Methods to use when ordering `Editor`. */
-export enum EditorsOrderBy {
-  MemberSpaceIdAsc = 'MEMBER_SPACE_ID_ASC',
-  MemberSpaceIdDesc = 'MEMBER_SPACE_ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC'
-}
-
-/** A connection to a list of `Entity` values. */
-export type EntitiesConnection = {
-  __typename?: 'EntitiesConnection';
-  /** A list of edges which contains the `Entity` and cursor to aid in pagination. */
-  edges: Array<EntitiesEdge>;
-  /** A list of `Entity` objects. */
-  nodes: Array<Entity>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Entity` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Entity` edge in the connection. */
-export type EntitiesEdge = {
-  __typename?: 'EntitiesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Entity` at the end of the edge. */
-  node: Entity;
+  spaceId?: UuidFilter | null | undefined;
 };
 
 /** Methods to use when ordering `Entity`. */
@@ -624,1296 +141,250 @@ export enum EntitiesOrderBy {
   UpdatedAtDesc = 'UPDATED_AT_DESC'
 }
 
-export type Entity = Node & {
-  __typename?: 'Entity';
-  /** Reads and enables pagination through a set of `Relation`. */
-  backlinks: RelationsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  backlinksList: Array<Relation>;
-  createdAt: Scalars['String']['output'];
-  createdAtBlock: Scalars['String']['output'];
-  description?: Maybe<Scalars['String']['output']>;
-  id: Scalars['UUID']['output'];
-  name?: Maybe<Scalars['String']['output']>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads and enables pagination through a set of `Relation`. */
-  relations: RelationsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsList: Array<Relation>;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsWhereEntity: RelationsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsWhereEntityList: Array<Relation>;
-  spaceIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
-  /** Reads and enables pagination through a set of `Space`. */
-  spacesByTopicId: Array<Space>;
-  /** Reads and enables pagination through a set of `Space`. */
-  spacesByTopicIdConnection: SpacesConnection;
-  /** Reads and enables pagination through a set of `Space`. */
-  spacesIn?: Maybe<Array<Space>>;
-  /** Reads and enables pagination through a set of `Space`. */
-  spacesInConnection: SpacesConnection;
-  /** Reads and enables pagination through a set of `SubspaceTopic`. */
-  subspaceTopicsByTopicId: Array<SubspaceTopic>;
-  /** Reads and enables pagination through a set of `SubspaceTopic`. */
-  subspaceTopicsByTopicIdConnection: SubspaceTopicsConnection;
-  systemTypeIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
-  typeIds?: Maybe<Array<Maybe<Scalars['UUID']['output']>>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  types?: Maybe<Array<Entity>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  typesConnection: EntitiesConnection;
-  updatedAt: Scalars['String']['output'];
-  updatedAtBlock: Scalars['String']['output'];
-  /** Reads and enables pagination through a set of `Value`. */
-  values: ValuesConnection;
-  /** Reads and enables pagination through a set of `Value`. */
-  valuesList: Array<Value>;
-};
-
-
-export type EntityBacklinksArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntityBacklinksListArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntityRelationsArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntityRelationsListArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntityRelationsWhereEntityArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntityRelationsWhereEntityListArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type EntitySpacesByTopicIdArgs = {
-  condition?: InputMaybe<SpaceCondition>;
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
-};
-
-
-export type EntitySpacesByTopicIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceCondition>;
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
-};
-
-
-export type EntitySpacesInArgs = {
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type EntitySpacesInConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type EntitySubspaceTopicsByTopicIdArgs = {
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-export type EntitySubspaceTopicsByTopicIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-export type EntityTypesArgs = {
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type EntityTypesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-};
-
-
-export type EntityValuesArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-
-export type EntityValuesListArgs = {
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-/** A condition to be used against `Entity` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type EntityCondition = {
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `updatedAtBlock` field. */
-  updatedAtBlock?: InputMaybe<Scalars['String']['input']>;
-};
-
 /** A filter to be used against `Entity` object types. All fields are combined with a logical ‘and.’ */
 export type EntityFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<EntityFilter>>;
+  and?: Array<EntityFilter> | null | undefined;
   /** Filter by the object’s `backlinks` relation. */
-  backlinks?: InputMaybe<EntityToManyRelationFilter>;
+  backlinks?: EntityToManyRelationFilter | null | undefined;
   /** Some related `backlinks` exist. */
-  backlinksExist?: InputMaybe<Scalars['Boolean']['input']>;
+  backlinksExist?: boolean | null | undefined;
   /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<StringFilter>;
+  createdAt?: StringFilter | null | undefined;
   /** Filter by the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<StringFilter>;
+  createdAtBlock?: StringFilter | null | undefined;
   /** Filter by the object’s `description` field. */
-  description?: InputMaybe<StringFilter>;
+  description?: StringFilter | null | undefined;
   /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
+  id?: UuidFilter | null | undefined;
   /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
+  name?: StringFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<EntityFilter>;
+  not?: EntityFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<EntityFilter>>;
+  or?: Array<EntityFilter> | null | undefined;
   /** Filter by the object’s `relations` relation. */
-  relations?: InputMaybe<EntityToManyRelationFilter>;
+  relations?: EntityToManyRelationFilter | null | undefined;
   /** Filter by the object’s `relationsByTypeIdConnection` relation. */
-  relationsByTypeIdConnection?: InputMaybe<EntityToManyRelationFilter>;
+  relationsByTypeIdConnection?: EntityToManyRelationFilter | null | undefined;
   /** Some related `relationsByTypeIdConnection` exist. */
-  relationsByTypeIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsByTypeIdConnectionExist?: boolean | null | undefined;
   /** Some related `relations` exist. */
-  relationsExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsExist?: boolean | null | undefined;
   /** Filter by the object’s `relationsWhereEntity` relation. */
-  relationsWhereEntity?: InputMaybe<EntityToManyRelationFilter>;
+  relationsWhereEntity?: EntityToManyRelationFilter | null | undefined;
   /** Some related `relationsWhereEntity` exist. */
-  relationsWhereEntityExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsWhereEntityExist?: boolean | null | undefined;
   /** Filter by the object’s `spaceIds` field. */
-  spaceIds?: InputMaybe<UuidListFilter>;
+  spaceIds?: UuidListFilter | null | undefined;
   /** Filter by the object’s `spacesByTopicIdConnection` relation. */
-  spacesByTopicIdConnection?: InputMaybe<EntityToManySpaceFilter>;
+  spacesByTopicIdConnection?: EntityToManySpaceFilter | null | undefined;
   /** Some related `spacesByTopicIdConnection` exist. */
-  spacesByTopicIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  spacesByTopicIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `subspaceTopicsByTopicIdConnection` relation. */
-  subspaceTopicsByTopicIdConnection?: InputMaybe<EntityToManySubspaceTopicFilter>;
+  subspaceTopicsByTopicIdConnection?: EntityToManySubspaceTopicFilter | null | undefined;
   /** Some related `subspaceTopicsByTopicIdConnection` exist. */
-  subspaceTopicsByTopicIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  subspaceTopicsByTopicIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `systemTypeIds` field. */
-  systemTypeIds?: InputMaybe<UuidListFilter>;
+  systemTypeIds?: UuidListFilter | null | undefined;
   /** Filter by the object’s `typeIds` field. */
-  typeIds?: InputMaybe<UuidListFilter>;
+  typeIds?: UuidListFilter | null | undefined;
   /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<StringFilter>;
+  updatedAt?: StringFilter | null | undefined;
   /** Filter by the object’s `updatedAtBlock` field. */
-  updatedAtBlock?: InputMaybe<StringFilter>;
+  updatedAtBlock?: StringFilter | null | undefined;
   /** Filter by the object’s `values` relation. */
-  values?: InputMaybe<EntityToManyValueFilter>;
+  values?: EntityToManyValueFilter | null | undefined;
   /** Filter by the object’s `valuesByPropertyIdConnection` relation. */
-  valuesByPropertyIdConnection?: InputMaybe<EntityToManyValueFilter>;
+  valuesByPropertyIdConnection?: EntityToManyValueFilter | null | undefined;
   /** Some related `valuesByPropertyIdConnection` exist. */
-  valuesByPropertyIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  valuesByPropertyIdConnectionExist?: boolean | null | undefined;
   /** Some related `values` exist. */
-  valuesExist?: InputMaybe<Scalars['Boolean']['input']>;
+  valuesExist?: boolean | null | undefined;
 };
 
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
 export type EntityToManyRelationFilter = {
   /** Every related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<RelationFilter>;
+  every?: RelationFilter | null | undefined;
   /** No related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<RelationFilter>;
+  none?: RelationFilter | null | undefined;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<RelationFilter>;
+  some?: RelationFilter | null | undefined;
 };
 
 /** A filter to be used against many `Space` object types. All fields are combined with a logical ‘and.’ */
 export type EntityToManySpaceFilter = {
   /** Every related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<SpaceFilter>;
+  every?: SpaceFilter | null | undefined;
   /** No related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<SpaceFilter>;
+  none?: SpaceFilter | null | undefined;
   /** Some related `Space` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<SpaceFilter>;
+  some?: SpaceFilter | null | undefined;
 };
 
 /** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
 export type EntityToManySubspaceTopicFilter = {
   /** Every related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<SubspaceTopicFilter>;
+  every?: SubspaceTopicFilter | null | undefined;
   /** No related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<SubspaceTopicFilter>;
+  none?: SubspaceTopicFilter | null | undefined;
   /** Some related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<SubspaceTopicFilter>;
+  some?: SubspaceTopicFilter | null | undefined;
 };
 
 /** A filter to be used against many `Value` object types. All fields are combined with a logical ‘and.’ */
 export type EntityToManyValueFilter = {
   /** Every related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ValueFilter>;
+  every?: ValueFilter | null | undefined;
   /** No related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ValueFilter>;
+  none?: ValueFilter | null | undefined;
   /** Some related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ValueFilter>;
+  some?: ValueFilter | null | undefined;
 };
 
 /** A filter to be used against Float fields. All fields are combined with a logical ‘and.’ */
 export type FloatFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['Float']['input']>;
+  distinctFrom?: number | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['Float']['input']>;
+  greaterThan?: number | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['Float']['input']>;
+  greaterThanOrEqualTo?: number | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['Float']['input']>>;
+  in?: Array<number> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['Float']['input']>;
+  is?: number | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['Float']['input']>;
+  isNot?: number | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['Float']['input']>;
+  lessThan?: number | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['Float']['input']>;
+  lessThanOrEqualTo?: number | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['Float']['input']>;
+  notDistinctFrom?: number | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['Float']['input']>>;
+  notIn?: Array<number> | null | undefined;
 };
-
-export type GlobalScore = Node & {
-  __typename?: 'GlobalScore';
-  entityId: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  score: Scalars['BigFloat']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `GlobalScore` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type GlobalScoreCondition = {
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `score` field. */
-  score?: InputMaybe<Scalars['BigFloat']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `GlobalScore` object types. All fields are combined with a logical ‘and.’ */
-export type GlobalScoreFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<GlobalScoreFilter>>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<GlobalScoreFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<GlobalScoreFilter>>;
-  /** Filter by the object’s `score` field. */
-  score?: InputMaybe<BigFloatFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `GlobalScore` values. */
-export type GlobalScoresConnection = {
-  __typename?: 'GlobalScoresConnection';
-  /** A list of edges which contains the `GlobalScore` and cursor to aid in pagination. */
-  edges: Array<GlobalScoresEdge>;
-  /** A list of `GlobalScore` objects. */
-  nodes: Array<GlobalScore>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `GlobalScore` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `GlobalScore` edge in the connection. */
-export type GlobalScoresEdge = {
-  __typename?: 'GlobalScoresEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `GlobalScore` at the end of the edge. */
-  node: GlobalScore;
-};
-
-/** Methods to use when ordering `GlobalScore`. */
-export enum GlobalScoresOrderBy {
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ScoreAsc = 'SCORE_ASC',
-  ScoreDesc = 'SCORE_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
 
 /** A filter to be used against Int fields. All fields are combined with a logical ‘and.’ */
 export type IntFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['Int']['input']>;
+  distinctFrom?: number | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['Int']['input']>;
+  greaterThan?: number | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['Int']['input']>;
+  greaterThanOrEqualTo?: number | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['Int']['input']>>;
+  in?: Array<number> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['Int']['input']>;
+  is?: number | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['Int']['input']>;
+  isNot?: number | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['Int']['input']>;
+  lessThan?: number | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['Int']['input']>;
+  lessThanOrEqualTo?: number | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['Int']['input']>;
+  notDistinctFrom?: number | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['Int']['input']>>;
+  notIn?: Array<number> | null | undefined;
 };
 
 /** A filter to be used against JSON fields. All fields are combined with a logical ‘and.’ */
 export type JsonFilter = {
   /** Contained by the specified JSON. */
-  containedBy?: InputMaybe<Scalars['JSON']['input']>;
+  containedBy?: any;
   /** Contains all of the specified keys. */
-  containsAllKeys?: InputMaybe<Array<Scalars['String']['input']>>;
+  containsAllKeys?: Array<string> | null | undefined;
   /** Contains any of the specified keys. */
-  containsAnyKeys?: InputMaybe<Array<Scalars['String']['input']>>;
+  containsAnyKeys?: Array<string> | null | undefined;
   /** Contains the specified key. */
-  containsKey?: InputMaybe<Scalars['String']['input']>;
+  containsKey?: string | null | undefined;
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['JSON']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['JSON']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['JSON']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Contains the specified JSON. */
-  in?: InputMaybe<Scalars['JSON']['input']>;
+  in?: any;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['JSON']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['JSON']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['JSON']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['JSON']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['JSON']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['JSON']['input']>>;
-};
-
-export type LocalScore = Node & {
-  __typename?: 'LocalScore';
-  entityId: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  score: Scalars['BigFloat']['output'];
-  spaceId: Scalars['UUID']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `LocalScore` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type LocalScoreCondition = {
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `score` field. */
-  score?: InputMaybe<Scalars['BigFloat']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `LocalScore` object types. All fields are combined with a logical ‘and.’ */
-export type LocalScoreFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<LocalScoreFilter>>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<LocalScoreFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<LocalScoreFilter>>;
-  /** Filter by the object’s `score` field. */
-  score?: InputMaybe<BigFloatFilter>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `LocalScore` values. */
-export type LocalScoresConnection = {
-  __typename?: 'LocalScoresConnection';
-  /** A list of edges which contains the `LocalScore` and cursor to aid in pagination. */
-  edges: Array<LocalScoresEdge>;
-  /** A list of `LocalScore` objects. */
-  nodes: Array<LocalScore>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `LocalScore` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `LocalScore` edge in the connection. */
-export type LocalScoresEdge = {
-  __typename?: 'LocalScoresEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `LocalScore` at the end of the edge. */
-  node: LocalScore;
-};
-
-/** Methods to use when ordering `LocalScore`. */
-export enum LocalScoresOrderBy {
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ScoreAsc = 'SCORE_ASC',
-  ScoreDesc = 'SCORE_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
-export type Member = Node & {
-  __typename?: 'Member';
-  memberSpaceId: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `Space` that is related to this `Member`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-};
-
-/** A condition to be used against `Member` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type MemberCondition = {
-  /** Checks for equality with the object’s `memberSpaceId` field. */
-  memberSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against `Member` object types. All fields are combined with a logical ‘and.’ */
 export type MemberFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<MemberFilter>>;
+  and?: Array<MemberFilter> | null | undefined;
   /** Filter by the object’s `memberSpaceId` field. */
-  memberSpaceId?: InputMaybe<UuidFilter>;
+  memberSpaceId?: UuidFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<MemberFilter>;
+  not?: MemberFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<MemberFilter>>;
+  or?: Array<MemberFilter> | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-};
-
-/** A connection to a list of `Member` values. */
-export type MembersConnection = {
-  __typename?: 'MembersConnection';
-  /** A list of edges which contains the `Member` and cursor to aid in pagination. */
-  edges: Array<MembersEdge>;
-  /** A list of `Member` objects. */
-  nodes: Array<Member>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Member` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Member` edge in the connection. */
-export type MembersEdge = {
-  __typename?: 'MembersEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Member` at the end of the edge. */
-  node: Member;
-};
-
-/** Methods to use when ordering `Member`. */
-export enum MembersOrderBy {
-  MemberSpaceIdAsc = 'MEMBER_SPACE_ID_ASC',
-  MemberSpaceIdDesc = 'MEMBER_SPACE_ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC'
-}
-
-export type Meta = Node & {
-  __typename?: 'Meta';
-  blockNumber: Scalars['String']['output'];
-  cursor: Scalars['String']['output'];
-  id: Scalars['String']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-};
-
-/** A condition to be used against `Meta` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type MetaCondition = {
-  /** Checks for equality with the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `cursor` field. */
-  cursor?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** A filter to be used against `Meta` object types. All fields are combined with a logical ‘and.’ */
-export type MetaFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<MetaFilter>>;
-  /** Filter by the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `cursor` field. */
-  cursor?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<MetaFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<MetaFilter>>;
-};
-
-/** A connection to a list of `Meta` values. */
-export type MetasConnection = {
-  __typename?: 'MetasConnection';
-  /** A list of edges which contains the `Meta` and cursor to aid in pagination. */
-  edges: Array<MetasEdge>;
-  /** A list of `Meta` objects. */
-  nodes: Array<Meta>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Meta` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Meta` edge in the connection. */
-export type MetasEdge = {
-  __typename?: 'MetasEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Meta` at the end of the edge. */
-  node: Meta;
-};
-
-/** Methods to use when ordering `Meta`. */
-export enum MetasOrderBy {
-  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
-  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
-  CursorAsc = 'CURSOR_ASC',
-  CursorDesc = 'CURSOR_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC'
-}
-
-/** An object with a globally unique `ID`. */
-export type Node = {
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-};
-
-/** A connection to a list of `NotificationDelivery` values. */
-export type NotificationDeliveriesConnection = {
-  __typename?: 'NotificationDeliveriesConnection';
-  /** A list of edges which contains the `NotificationDelivery` and cursor to aid in pagination. */
-  edges: Array<NotificationDeliveriesEdge>;
-  /** A list of `NotificationDelivery` objects. */
-  nodes: Array<NotificationDelivery>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `NotificationDelivery` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `NotificationDelivery` edge in the connection. */
-export type NotificationDeliveriesEdge = {
-  __typename?: 'NotificationDeliveriesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `NotificationDelivery` at the end of the edge. */
-  node: NotificationDelivery;
-};
-
-/** Methods to use when ordering `NotificationDelivery`. */
-export enum NotificationDeliveriesOrderBy {
-  AttemptsAsc = 'ATTEMPTS_ASC',
-  AttemptsDesc = 'ATTEMPTS_DESC',
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  DeliveredAtAsc = 'DELIVERED_AT_ASC',
-  DeliveredAtDesc = 'DELIVERED_AT_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  LastErrorAsc = 'LAST_ERROR_ASC',
-  LastErrorDesc = 'LAST_ERROR_DESC',
-  Natural = 'NATURAL',
-  NextRetryAtAsc = 'NEXT_RETRY_AT_ASC',
-  NextRetryAtDesc = 'NEXT_RETRY_AT_DESC',
-  OutboxIdAsc = 'OUTBOX_ID_ASC',
-  OutboxIdDesc = 'OUTBOX_ID_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  StatusAsc = 'STATUS_ASC',
-  StatusDesc = 'STATUS_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC',
-  WebhookIdAsc = 'WEBHOOK_ID_ASC',
-  WebhookIdDesc = 'WEBHOOK_ID_DESC'
-}
-
-export type NotificationDelivery = Node & {
-  __typename?: 'NotificationDelivery';
-  attempts: Scalars['Int']['output'];
-  createdAt: Scalars['Datetime']['output'];
-  deliveredAt?: Maybe<Scalars['Datetime']['output']>;
-  id: Scalars['UUID']['output'];
-  lastError?: Maybe<Scalars['String']['output']>;
-  nextRetryAt: Scalars['Datetime']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `NotificationOutbox` that is related to this `NotificationDelivery`. */
-  outbox?: Maybe<NotificationOutbox>;
-  outboxId: Scalars['UUID']['output'];
-  status: Scalars['String']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-  /** Reads a single `AppWebhook` that is related to this `NotificationDelivery`. */
-  webhook?: Maybe<AppWebhook>;
-  webhookId: Scalars['UUID']['output'];
-};
-
-/**
- * A condition to be used against `NotificationDelivery` object types. All fields
- * are tested for equality and combined with a logical ‘and.’
- */
-export type NotificationDeliveryCondition = {
-  /** Checks for equality with the object’s `attempts` field. */
-  attempts?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `deliveredAt` field. */
-  deliveredAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `lastError` field. */
-  lastError?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `nextRetryAt` field. */
-  nextRetryAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `outboxId` field. */
-  outboxId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `status` field. */
-  status?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `webhookId` field. */
-  webhookId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-/** A filter to be used against `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
-export type NotificationDeliveryFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<NotificationDeliveryFilter>>;
-  /** Filter by the object’s `attempts` field. */
-  attempts?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `deliveredAt` field. */
-  deliveredAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `lastError` field. */
-  lastError?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `nextRetryAt` field. */
-  nextRetryAt?: InputMaybe<DatetimeFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<NotificationDeliveryFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<NotificationDeliveryFilter>>;
-  /** Filter by the object’s `outbox` relation. */
-  outbox?: InputMaybe<NotificationOutboxFilter>;
-  /** Filter by the object’s `outboxId` field. */
-  outboxId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `status` field. */
-  status?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `webhook` relation. */
-  webhook?: InputMaybe<AppWebhookFilter>;
-  /** Filter by the object’s `webhookId` field. */
-  webhookId?: InputMaybe<UuidFilter>;
-};
-
-export type NotificationOutbox = Node & {
-  __typename?: 'NotificationOutbox';
-  createdAt: Scalars['Datetime']['output'];
-  eventType: Scalars['String']['output'];
-  id: Scalars['UUID']['output'];
-  idempotencyKey: Scalars['String']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads and enables pagination through a set of `NotificationDelivery`. */
-  notificationDeliveriesByOutboxId: Array<NotificationDelivery>;
-  /** Reads and enables pagination through a set of `NotificationDelivery`. */
-  notificationDeliveriesByOutboxIdConnection: NotificationDeliveriesConnection;
-  payload: Scalars['JSON']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-
-export type NotificationOutboxNotificationDeliveriesByOutboxIdArgs = {
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-
-export type NotificationOutboxNotificationDeliveriesByOutboxIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-/**
- * A condition to be used against `NotificationOutbox` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type NotificationOutboxCondition = {
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `eventType` field. */
-  eventType?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `idempotencyKey` field. */
-  idempotencyKey?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `payload` field. */
-  payload?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `NotificationOutbox` object types. All fields are combined with a logical ‘and.’ */
-export type NotificationOutboxFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<NotificationOutboxFilter>>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `eventType` field. */
-  eventType?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `idempotencyKey` field. */
-  idempotencyKey?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<NotificationOutboxFilter>;
-  /** Filter by the object’s `notificationDeliveriesByOutboxIdConnection` relation. */
-  notificationDeliveriesByOutboxIdConnection?: InputMaybe<NotificationOutboxToManyNotificationDeliveryFilter>;
-  /** Some related `notificationDeliveriesByOutboxIdConnection` exist. */
-  notificationDeliveriesByOutboxIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<NotificationOutboxFilter>>;
-  /** Filter by the object’s `payload` field. */
-  payload?: InputMaybe<JsonFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A filter to be used against many `NotificationDelivery` object types. All fields are combined with a logical ‘and.’ */
-export type NotificationOutboxToManyNotificationDeliveryFilter = {
-  /** Every related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<NotificationDeliveryFilter>;
-  /** No related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<NotificationDeliveryFilter>;
-  /** Some related `NotificationDelivery` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<NotificationDeliveryFilter>;
-};
-
-/** A connection to a list of `NotificationOutbox` values. */
-export type NotificationOutboxesConnection = {
-  __typename?: 'NotificationOutboxesConnection';
-  /** A list of edges which contains the `NotificationOutbox` and cursor to aid in pagination. */
-  edges: Array<NotificationOutboxesEdge>;
-  /** A list of `NotificationOutbox` objects. */
-  nodes: Array<NotificationOutbox>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `NotificationOutbox` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `NotificationOutbox` edge in the connection. */
-export type NotificationOutboxesEdge = {
-  __typename?: 'NotificationOutboxesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `NotificationOutbox` at the end of the edge. */
-  node: NotificationOutbox;
-};
-
-/** Methods to use when ordering `NotificationOutbox`. */
-export enum NotificationOutboxesOrderBy {
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  EventTypeAsc = 'EVENT_TYPE_ASC',
-  EventTypeDesc = 'EVENT_TYPE_DESC',
-  IdempotencyKeyAsc = 'IDEMPOTENCY_KEY_ASC',
-  IdempotencyKeyDesc = 'IDEMPOTENCY_KEY_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  PayloadAsc = 'PAYLOAD_ASC',
-  PayloadDesc = 'PAYLOAD_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
-export type NotificationPollCursor = Node & {
-  __typename?: 'NotificationPollCursor';
-  cursorId: Scalars['BigInt']['output'];
-  cursorUpdatedAt: Scalars['Datetime']['output'];
-  name: Scalars['String']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `NotificationPollCursor` object types. All fields
- * are tested for equality and combined with a logical ‘and.’
- */
-export type NotificationPollCursorCondition = {
-  /** Checks for equality with the object’s `cursorId` field. */
-  cursorId?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `cursorUpdatedAt` field. */
-  cursorUpdatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `name` field. */
-  name?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `NotificationPollCursor` object types. All fields are combined with a logical ‘and.’ */
-export type NotificationPollCursorFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<NotificationPollCursorFilter>>;
-  /** Filter by the object’s `cursorId` field. */
-  cursorId?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `cursorUpdatedAt` field. */
-  cursorUpdatedAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<NotificationPollCursorFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<NotificationPollCursorFilter>>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `NotificationPollCursor` values. */
-export type NotificationPollCursorsConnection = {
-  __typename?: 'NotificationPollCursorsConnection';
-  /** A list of edges which contains the `NotificationPollCursor` and cursor to aid in pagination. */
-  edges: Array<NotificationPollCursorsEdge>;
-  /** A list of `NotificationPollCursor` objects. */
-  nodes: Array<NotificationPollCursor>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `NotificationPollCursor` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `NotificationPollCursor` edge in the connection. */
-export type NotificationPollCursorsEdge = {
-  __typename?: 'NotificationPollCursorsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `NotificationPollCursor` at the end of the edge. */
-  node: NotificationPollCursor;
-};
-
-/** Methods to use when ordering `NotificationPollCursor`. */
-export enum NotificationPollCursorsOrderBy {
-  CursorIdAsc = 'CURSOR_ID_ASC',
-  CursorIdDesc = 'CURSOR_ID_DESC',
-  CursorUpdatedAtAsc = 'CURSOR_UPDATED_AT_ASC',
-  CursorUpdatedAtDesc = 'CURSOR_UPDATED_AT_DESC',
-  NameAsc = 'NAME_ASC',
-  NameDesc = 'NAME_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
-/** Information about pagination in a connection. */
-export type PageInfo = {
-  __typename?: 'PageInfo';
-  /** When paginating forwards, the cursor to continue. */
-  endCursor?: Maybe<Scalars['Cursor']['output']>;
-  /** When paginating forwards, are there more items? */
-  hasNextPage: Scalars['Boolean']['output'];
-  /** When paginating backwards, are there more items? */
-  hasPreviousPage: Scalars['Boolean']['output'];
-  /** When paginating backwards, the cursor to continue. */
-  startCursor?: Maybe<Scalars['Cursor']['output']>;
-};
-
-export type PropertyInfo = {
-  __typename?: 'PropertyInfo';
-  dataTypeId?: Maybe<Scalars['UUID']['output']>;
-  dataTypeName?: Maybe<Scalars['String']['output']>;
-  description?: Maybe<Scalars['String']['output']>;
-  format?: Maybe<Scalars['String']['output']>;
-  id?: Maybe<Scalars['UUID']['output']>;
-  isType?: Maybe<Scalars['Boolean']['output']>;
-  name?: Maybe<Scalars['String']['output']>;
-  renderableTypeId?: Maybe<Scalars['UUID']['output']>;
-  renderableTypeName?: Maybe<Scalars['String']['output']>;
-};
-
-/** A filter to be used against `PropertyInfo` object types. All fields are combined with a logical ‘and.’ */
-export type PropertyInfoFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<PropertyInfoFilter>>;
-  /** Filter by the object’s `dataTypeId` field. */
-  dataTypeId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `dataTypeName` field. */
-  dataTypeName?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `description` field. */
-  description?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `format` field. */
-  format?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `isType` field. */
-  isType?: InputMaybe<BooleanFilter>;
-  /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<PropertyInfoFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<PropertyInfoFilter>>;
-  /** Filter by the object’s `renderableTypeId` field. */
-  renderableTypeId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `renderableTypeName` field. */
-  renderableTypeName?: InputMaybe<StringFilter>;
-};
-
-/** A connection to a list of `PropertyInfo` values. */
-export type PropertyInfosConnection = {
-  __typename?: 'PropertyInfosConnection';
-  /** A list of edges which contains the `PropertyInfo` and cursor to aid in pagination. */
-  edges: Array<PropertyInfosEdge>;
-  /** A list of `PropertyInfo` objects. */
-  nodes: Array<PropertyInfo>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `PropertyInfo` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `PropertyInfo` edge in the connection. */
-export type PropertyInfosEdge = {
-  __typename?: 'PropertyInfosEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `PropertyInfo` at the end of the edge. */
-  node: PropertyInfo;
-};
-
-export type Proposal = Node & {
-  __typename?: 'Proposal';
-  createdAt: Scalars['String']['output'];
-  createdAtBlock: Scalars['String']['output'];
-  currentVersion: Scalars['Int']['output'];
-  executedAt?: Maybe<Scalars['BigInt']['output']>;
-  id: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `ProposalTallyQueue` that is related to this `Proposal`. */
-  proposalTallyQueue?: Maybe<ProposalTallyQueue>;
-  /**
-   * Reads and enables pagination through a set of `ProposalTallyQueue`.
-   * @deprecated Please use proposalTallyQueue instead
-   */
-  proposalTallyQueuesConnection: ProposalTallyQueuesConnection;
-  /** Reads and enables pagination through a set of `ProposalVersion`. */
-  proposalVersions: Array<ProposalVersion>;
-  /** Reads and enables pagination through a set of `ProposalVersion`. */
-  proposalVersionsConnection: ProposalVersionsConnection;
-  proposedBy: Scalars['UUID']['output'];
-  /** Reads a single `Space` that is related to this `Proposal`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-};
-
-
-export type ProposalProposalTallyQueuesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalTallyQueueCondition>;
-  filter?: InputMaybe<ProposalTallyQueueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalTallyQueuesOrderBy>>;
-};
-
-
-export type ProposalProposalVersionsArgs = {
-  condition?: InputMaybe<ProposalVersionCondition>;
-  filter?: InputMaybe<ProposalVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
-};
-
-
-export type ProposalProposalVersionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVersionCondition>;
-  filter?: InputMaybe<ProposalVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
-};
-
-export type ProposalAction = Node & {
-  __typename?: 'ProposalAction';
-  actionType: ProposalActionType;
-  contentId?: Maybe<Scalars['String']['output']>;
-  contentUri?: Maybe<Scalars['String']['output']>;
-  disableFastPathAccessForNewMembers?: Maybe<Scalars['Boolean']['output']>;
-  duration?: Maybe<Scalars['BigInt']['output']>;
-  executionGracePeriod?: Maybe<Scalars['BigInt']['output']>;
-  fastThreshold?: Maybe<Scalars['BigInt']['output']>;
-  flatSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-  index: Scalars['Int']['output'];
-  metadata?: Maybe<Scalars['String']['output']>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  partialPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-  proposalId: Scalars['UUID']['output'];
-  proposalVersion: Scalars['Int']['output'];
-  /** Reads a single `ProposalVersion` that is related to this `ProposalAction`. */
-  proposalVersionByProposalIdAndProposalVersion?: Maybe<ProposalVersion>;
-  quorum?: Maybe<Scalars['BigInt']['output']>;
-  slowThreshold?: Maybe<Scalars['BigInt']['output']>;
-  targetId?: Maybe<Scalars['UUID']['output']>;
-  universalPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-};
-
-/**
- * A condition to be used against `ProposalAction` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ProposalActionCondition = {
-  /** Checks for equality with the object’s `actionType` field. */
-  actionType?: InputMaybe<ProposalActionType>;
-  /** Checks for equality with the object’s `contentId` field. */
-  contentId?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `contentUri` field. */
-  contentUri?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `disableFastPathAccessForNewMembers` field. */
-  disableFastPathAccessForNewMembers?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for equality with the object’s `duration` field. */
-  duration?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `executionGracePeriod` field. */
-  executionGracePeriod?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `fastThreshold` field. */
-  fastThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `index` field. */
-  index?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `metadata` field. */
-  metadata?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `proposalId` field. */
-  proposalId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `quorum` field. */
-  quorum?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `slowThreshold` field. */
-  slowThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `targetId` field. */
-  targetId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
+  spaceId?: UuidFilter | null | undefined;
 };
 
 /** A filter to be used against `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalActionFilter = {
   /** Filter by the object’s `actionType` field. */
-  actionType?: InputMaybe<ProposalActionTypeFilter>;
+  actionType?: ProposalActionTypeFilter | null | undefined;
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalActionFilter>>;
+  and?: Array<ProposalActionFilter> | null | undefined;
   /** Filter by the object’s `contentUri` field. */
-  contentUri?: InputMaybe<StringFilter>;
+  contentUri?: StringFilter | null | undefined;
   /** Filter by the object’s `disableFastPathAccessForNewMembers` field. */
-  disableFastPathAccessForNewMembers?: InputMaybe<BooleanFilter>;
+  disableFastPathAccessForNewMembers?: BooleanFilter | null | undefined;
   /** Filter by the object’s `duration` field. */
-  duration?: InputMaybe<BigIntFilter>;
+  duration?: BigIntFilter | null | undefined;
   /** Filter by the object’s `executionGracePeriod` field. */
-  executionGracePeriod?: InputMaybe<BigIntFilter>;
+  executionGracePeriod?: BigIntFilter | null | undefined;
   /** Filter by the object’s `fastThreshold` field. */
-  fastThreshold?: InputMaybe<BigIntFilter>;
+  fastThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  flatSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `index` field. */
-  index?: InputMaybe<IntFilter>;
+  index?: IntFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ProposalActionFilter>;
+  not?: ProposalActionFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalActionFilter>>;
+  or?: Array<ProposalActionFilter> | null | undefined;
   /** Filter by the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  partialPercentageSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `proposalId` field. */
-  proposalId?: InputMaybe<UuidFilter>;
+  proposalId?: UuidFilter | null | undefined;
   /** Filter by the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<IntFilter>;
+  proposalVersion?: IntFilter | null | undefined;
   /** Filter by the object’s `proposalVersionByProposalIdAndProposalVersion` relation. */
-  proposalVersionByProposalIdAndProposalVersion?: InputMaybe<ProposalVersionFilter>;
+  proposalVersionByProposalIdAndProposalVersion?: ProposalVersionFilter | null | undefined;
   /** Filter by the object’s `quorum` field. */
-  quorum?: InputMaybe<BigIntFilter>;
+  quorum?: BigIntFilter | null | undefined;
   /** Filter by the object’s `slowThreshold` field. */
-  slowThreshold?: InputMaybe<BigIntFilter>;
+  slowThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `targetId` field. */
-  targetId?: InputMaybe<UuidFilter>;
+  targetId?: UuidFilter | null | undefined;
   /** Filter by the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  universalPercentageSupportThreshold?: BigIntFilter | null | undefined;
 };
 
 export enum ProposalActionType {
@@ -1940,3401 +411,393 @@ export enum ProposalActionType {
 /** A filter to be used against ProposalActionType fields. All fields are combined with a logical ‘and.’ */
 export type ProposalActionTypeFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<ProposalActionType>;
+  distinctFrom?: ProposalActionType | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<ProposalActionType>;
+  greaterThan?: ProposalActionType | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<ProposalActionType>;
+  greaterThanOrEqualTo?: ProposalActionType | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<ProposalActionType>>;
+  in?: Array<ProposalActionType> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<ProposalActionType>;
+  is?: ProposalActionType | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<ProposalActionType>;
+  isNot?: ProposalActionType | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<ProposalActionType>;
+  lessThan?: ProposalActionType | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<ProposalActionType>;
+  lessThanOrEqualTo?: ProposalActionType | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<ProposalActionType>;
+  notDistinctFrom?: ProposalActionType | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<ProposalActionType>>;
-};
-
-/** A connection to a list of `ProposalAction` values. */
-export type ProposalActionsConnection = {
-  __typename?: 'ProposalActionsConnection';
-  /** A list of edges which contains the `ProposalAction` and cursor to aid in pagination. */
-  edges: Array<ProposalActionsEdge>;
-  /** A list of `ProposalAction` objects. */
-  nodes: Array<ProposalAction>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ProposalAction` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ProposalAction` edge in the connection. */
-export type ProposalActionsEdge = {
-  __typename?: 'ProposalActionsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ProposalAction` at the end of the edge. */
-  node: ProposalAction;
-};
-
-/** Methods to use when ordering `ProposalAction`. */
-export enum ProposalActionsOrderBy {
-  ActionTypeAsc = 'ACTION_TYPE_ASC',
-  ActionTypeDesc = 'ACTION_TYPE_DESC',
-  ContentIdAsc = 'CONTENT_ID_ASC',
-  ContentIdDesc = 'CONTENT_ID_DESC',
-  ContentUriAsc = 'CONTENT_URI_ASC',
-  ContentUriDesc = 'CONTENT_URI_DESC',
-  DisableFastPathAccessForNewMembersAsc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_ASC',
-  DisableFastPathAccessForNewMembersDesc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_DESC',
-  DurationAsc = 'DURATION_ASC',
-  DurationDesc = 'DURATION_DESC',
-  ExecutionGracePeriodAsc = 'EXECUTION_GRACE_PERIOD_ASC',
-  ExecutionGracePeriodDesc = 'EXECUTION_GRACE_PERIOD_DESC',
-  FastThresholdAsc = 'FAST_THRESHOLD_ASC',
-  FastThresholdDesc = 'FAST_THRESHOLD_DESC',
-  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
-  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
-  IndexAsc = 'INDEX_ASC',
-  IndexDesc = 'INDEX_DESC',
-  MetadataAsc = 'METADATA_ASC',
-  MetadataDesc = 'METADATA_DESC',
-  Natural = 'NATURAL',
-  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ProposalIdAsc = 'PROPOSAL_ID_ASC',
-  ProposalIdDesc = 'PROPOSAL_ID_DESC',
-  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
-  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
-  QuorumAsc = 'QUORUM_ASC',
-  QuorumDesc = 'QUORUM_DESC',
-  SlowThresholdAsc = 'SLOW_THRESHOLD_ASC',
-  SlowThresholdDesc = 'SLOW_THRESHOLD_DESC',
-  TargetIdAsc = 'TARGET_ID_ASC',
-  TargetIdDesc = 'TARGET_ID_DESC',
-  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC'
-}
-
-/**
- * A condition to be used against `Proposal` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type ProposalCondition = {
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `currentVersion` field. */
-  currentVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `executedAt` field. */
-  executedAt?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `proposedBy` field. */
-  proposedBy?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  notIn?: Array<ProposalActionType> | null | undefined;
 };
 
 /** A filter to be used against `Proposal` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalFilter>>;
+  and?: Array<ProposalFilter> | null | undefined;
   /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<StringFilter>;
+  createdAt?: StringFilter | null | undefined;
   /** Filter by the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<StringFilter>;
+  createdAtBlock?: StringFilter | null | undefined;
   /** Filter by the object’s `currentVersion` field. */
-  currentVersion?: InputMaybe<IntFilter>;
+  currentVersion?: IntFilter | null | undefined;
   /** Filter by the object’s `executedAt` field. */
-  executedAt?: InputMaybe<BigIntFilter>;
+  executedAt?: BigIntFilter | null | undefined;
   /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
+  id?: UuidFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ProposalFilter>;
+  not?: ProposalFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalFilter>>;
+  or?: Array<ProposalFilter> | null | undefined;
   /** Filter by the object’s `proposalTallyQueue` relation. */
-  proposalTallyQueue?: InputMaybe<ProposalTallyQueueFilter>;
+  proposalTallyQueue?: ProposalTallyQueueFilter | null | undefined;
   /** A related `proposalTallyQueue` exists. */
-  proposalTallyQueueExists?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalTallyQueueExists?: boolean | null | undefined;
   /** Filter by the object’s `proposalVersionsConnection` relation. */
-  proposalVersionsConnection?: InputMaybe<ProposalToManyProposalVersionFilter>;
+  proposalVersionsConnection?: ProposalToManyProposalVersionFilter | null | undefined;
   /** Some related `proposalVersionsConnection` exist. */
-  proposalVersionsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalVersionsConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `proposedBy` field. */
-  proposedBy?: InputMaybe<UuidFilter>;
+  proposedBy?: UuidFilter | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-};
-
-export type ProposalTallyQueue = Node & {
-  __typename?: 'ProposalTallyQueue';
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `Proposal` that is related to this `ProposalTallyQueue`. */
-  proposal?: Maybe<Proposal>;
-  proposalId: Scalars['UUID']['output'];
-  queuedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `ProposalTallyQueue` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ProposalTallyQueueCondition = {
-  /** Checks for equality with the object’s `proposalId` field. */
-  proposalId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `queuedAt` field. */
-  queuedAt?: InputMaybe<Scalars['Datetime']['input']>;
+  spaceId?: UuidFilter | null | undefined;
 };
 
 /** A filter to be used against `ProposalTallyQueue` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalTallyQueueFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalTallyQueueFilter>>;
+  and?: Array<ProposalTallyQueueFilter> | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ProposalTallyQueueFilter>;
+  not?: ProposalTallyQueueFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalTallyQueueFilter>>;
+  or?: Array<ProposalTallyQueueFilter> | null | undefined;
   /** Filter by the object’s `proposal` relation. */
-  proposal?: InputMaybe<ProposalFilter>;
+  proposal?: ProposalFilter | null | undefined;
   /** Filter by the object’s `proposalId` field. */
-  proposalId?: InputMaybe<UuidFilter>;
+  proposalId?: UuidFilter | null | undefined;
   /** Filter by the object’s `queuedAt` field. */
-  queuedAt?: InputMaybe<DatetimeFilter>;
+  queuedAt?: DatetimeFilter | null | undefined;
 };
-
-/** A connection to a list of `ProposalTallyQueue` values. */
-export type ProposalTallyQueuesConnection = {
-  __typename?: 'ProposalTallyQueuesConnection';
-  /** A list of edges which contains the `ProposalTallyQueue` and cursor to aid in pagination. */
-  edges: Array<ProposalTallyQueuesEdge>;
-  /** A list of `ProposalTallyQueue` objects. */
-  nodes: Array<ProposalTallyQueue>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ProposalTallyQueue` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ProposalTallyQueue` edge in the connection. */
-export type ProposalTallyQueuesEdge = {
-  __typename?: 'ProposalTallyQueuesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ProposalTallyQueue` at the end of the edge. */
-  node: ProposalTallyQueue;
-};
-
-/** Methods to use when ordering `ProposalTallyQueue`. */
-export enum ProposalTallyQueuesOrderBy {
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ProposalIdAsc = 'PROPOSAL_ID_ASC',
-  ProposalIdDesc = 'PROPOSAL_ID_DESC',
-  QueuedAtAsc = 'QUEUED_AT_ASC',
-  QueuedAtDesc = 'QUEUED_AT_DESC'
-}
 
 /** A filter to be used against many `ProposalVersion` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalToManyProposalVersionFilter = {
   /** Every related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalVersionFilter>;
+  every?: ProposalVersionFilter | null | undefined;
   /** No related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalVersionFilter>;
+  none?: ProposalVersionFilter | null | undefined;
   /** Some related `ProposalVersion` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalVersionFilter>;
-};
-
-export type ProposalVersion = Node & {
-  __typename?: 'ProposalVersion';
-  abstainCount: Scalars['BigInt']['output'];
-  endTime: Scalars['BigInt']['output'];
-  executeBy?: Maybe<Scalars['BigInt']['output']>;
-  flatSupportThreshold: Scalars['BigInt']['output'];
-  name?: Maybe<Scalars['String']['output']>;
-  noCount: Scalars['BigInt']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  partialPercentageSupportThreshold: Scalars['BigInt']['output'];
-  /** Reads a single `Proposal` that is related to this `ProposalVersion`. */
-  proposal?: Maybe<Proposal>;
-  /** Reads and enables pagination through a set of `ProposalAction`. */
-  proposalActionsByProposalIdAndProposalVersion: Array<ProposalAction>;
-  /** Reads and enables pagination through a set of `ProposalAction`. */
-  proposalActionsByProposalIdAndProposalVersionConnection: ProposalActionsConnection;
-  proposalId: Scalars['UUID']['output'];
-  proposalVersion: Scalars['Int']['output'];
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesByProposalIdAndProposalVersion: Array<ProposalVote>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesByProposalIdAndProposalVersionConnection: ProposalVotesConnection;
-  quorum: Scalars['BigInt']['output'];
-  startTime: Scalars['BigInt']['output'];
-  threshold: Scalars['BigInt']['output'];
-  universalPercentageSupportThreshold: Scalars['BigInt']['output'];
-  versionCreatedAt: Scalars['String']['output'];
-  versionCreatedAtBlock: Scalars['String']['output'];
-  votingMode: VotingMode;
-  yesCount: Scalars['BigInt']['output'];
-};
-
-
-export type ProposalVersionProposalActionsByProposalIdAndProposalVersionArgs = {
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-export type ProposalVersionProposalActionsByProposalIdAndProposalVersionConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-export type ProposalVersionProposalVotesByProposalIdAndProposalVersionArgs = {
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type ProposalVersionProposalVotesByProposalIdAndProposalVersionConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-/**
- * A condition to be used against `ProposalVersion` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ProposalVersionCondition = {
-  /** Checks for equality with the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `endTime` field. */
-  endTime?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `executeBy` field. */
-  executeBy?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `name` field. */
-  name?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `noCount` field. */
-  noCount?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `proposalId` field. */
-  proposalId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `quorum` field. */
-  quorum?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `startTime` field. */
-  startTime?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `threshold` field. */
-  threshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `versionCreatedAt` field. */
-  versionCreatedAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `versionCreatedAtBlock` field. */
-  versionCreatedAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingMode>;
-  /** Checks for equality with the object’s `yesCount` field. */
-  yesCount?: InputMaybe<Scalars['BigInt']['input']>;
+  some?: ProposalVersionFilter | null | undefined;
 };
 
 /** A filter to be used against `ProposalVersion` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalVersionFilter = {
   /** Filter by the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<BigIntFilter>;
+  abstainCount?: BigIntFilter | null | undefined;
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalVersionFilter>>;
+  and?: Array<ProposalVersionFilter> | null | undefined;
   /** Filter by the object’s `endTime` field. */
-  endTime?: InputMaybe<BigIntFilter>;
+  endTime?: BigIntFilter | null | undefined;
   /** Filter by the object’s `executeBy` field. */
-  executeBy?: InputMaybe<BigIntFilter>;
+  executeBy?: BigIntFilter | null | undefined;
   /** Filter by the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  flatSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
+  name?: StringFilter | null | undefined;
   /** Filter by the object’s `noCount` field. */
-  noCount?: InputMaybe<BigIntFilter>;
+  noCount?: BigIntFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ProposalVersionFilter>;
+  not?: ProposalVersionFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalVersionFilter>>;
+  or?: Array<ProposalVersionFilter> | null | undefined;
   /** Filter by the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  partialPercentageSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `proposal` relation. */
-  proposal?: InputMaybe<ProposalFilter>;
+  proposal?: ProposalFilter | null | undefined;
   /** Filter by the object’s `proposalActionsByProposalIdAndProposalVersionConnection` relation. */
-  proposalActionsByProposalIdAndProposalVersionConnection?: InputMaybe<ProposalVersionToManyProposalActionFilter>;
+  proposalActionsByProposalIdAndProposalVersionConnection?: ProposalVersionToManyProposalActionFilter | null | undefined;
   /** Some related `proposalActionsByProposalIdAndProposalVersionConnection` exist. */
-  proposalActionsByProposalIdAndProposalVersionConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalActionsByProposalIdAndProposalVersionConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `proposalId` field. */
-  proposalId?: InputMaybe<UuidFilter>;
+  proposalId?: UuidFilter | null | undefined;
   /** Filter by the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<IntFilter>;
+  proposalVersion?: IntFilter | null | undefined;
   /** Filter by the object’s `proposalVotesByProposalIdAndProposalVersionConnection` relation. */
-  proposalVotesByProposalIdAndProposalVersionConnection?: InputMaybe<ProposalVersionToManyProposalVoteFilter>;
+  proposalVotesByProposalIdAndProposalVersionConnection?: ProposalVersionToManyProposalVoteFilter | null | undefined;
   /** Some related `proposalVotesByProposalIdAndProposalVersionConnection` exist. */
-  proposalVotesByProposalIdAndProposalVersionConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalVotesByProposalIdAndProposalVersionConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `quorum` field. */
-  quorum?: InputMaybe<BigIntFilter>;
+  quorum?: BigIntFilter | null | undefined;
   /** Filter by the object’s `startTime` field. */
-  startTime?: InputMaybe<BigIntFilter>;
+  startTime?: BigIntFilter | null | undefined;
   /** Filter by the object’s `threshold` field. */
-  threshold?: InputMaybe<BigIntFilter>;
+  threshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  universalPercentageSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `versionCreatedAt` field. */
-  versionCreatedAt?: InputMaybe<StringFilter>;
+  versionCreatedAt?: StringFilter | null | undefined;
   /** Filter by the object’s `versionCreatedAtBlock` field. */
-  versionCreatedAtBlock?: InputMaybe<StringFilter>;
+  versionCreatedAtBlock?: StringFilter | null | undefined;
   /** Filter by the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingModeFilter>;
+  votingMode?: VotingModeFilter | null | undefined;
   /** Filter by the object’s `yesCount` field. */
-  yesCount?: InputMaybe<BigIntFilter>;
+  yesCount?: BigIntFilter | null | undefined;
 };
 
 /** A filter to be used against many `ProposalAction` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalVersionToManyProposalActionFilter = {
   /** Every related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalActionFilter>;
+  every?: ProposalActionFilter | null | undefined;
   /** No related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalActionFilter>;
+  none?: ProposalActionFilter | null | undefined;
   /** Some related `ProposalAction` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalActionFilter>;
+  some?: ProposalActionFilter | null | undefined;
 };
 
 /** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalVersionToManyProposalVoteFilter = {
   /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalVoteFilter>;
+  every?: ProposalVoteFilter | null | undefined;
   /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalVoteFilter>;
+  none?: ProposalVoteFilter | null | undefined;
   /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalVoteFilter>;
-};
-
-/** A connection to a list of `ProposalVersion` values. */
-export type ProposalVersionsConnection = {
-  __typename?: 'ProposalVersionsConnection';
-  /** A list of edges which contains the `ProposalVersion` and cursor to aid in pagination. */
-  edges: Array<ProposalVersionsEdge>;
-  /** A list of `ProposalVersion` objects. */
-  nodes: Array<ProposalVersion>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ProposalVersion` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ProposalVersion` edge in the connection. */
-export type ProposalVersionsEdge = {
-  __typename?: 'ProposalVersionsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ProposalVersion` at the end of the edge. */
-  node: ProposalVersion;
-};
-
-/** Methods to use when ordering `ProposalVersion`. */
-export enum ProposalVersionsOrderBy {
-  AbstainCountAsc = 'ABSTAIN_COUNT_ASC',
-  AbstainCountDesc = 'ABSTAIN_COUNT_DESC',
-  EndTimeAsc = 'END_TIME_ASC',
-  EndTimeDesc = 'END_TIME_DESC',
-  ExecuteByAsc = 'EXECUTE_BY_ASC',
-  ExecuteByDesc = 'EXECUTE_BY_DESC',
-  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
-  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
-  NameAsc = 'NAME_ASC',
-  NameDesc = 'NAME_DESC',
-  Natural = 'NATURAL',
-  NoCountAsc = 'NO_COUNT_ASC',
-  NoCountDesc = 'NO_COUNT_DESC',
-  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ProposalIdAsc = 'PROPOSAL_ID_ASC',
-  ProposalIdDesc = 'PROPOSAL_ID_DESC',
-  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
-  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
-  QuorumAsc = 'QUORUM_ASC',
-  QuorumDesc = 'QUORUM_DESC',
-  StartTimeAsc = 'START_TIME_ASC',
-  StartTimeDesc = 'START_TIME_DESC',
-  ThresholdAsc = 'THRESHOLD_ASC',
-  ThresholdDesc = 'THRESHOLD_DESC',
-  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  VersionCreatedAtAsc = 'VERSION_CREATED_AT_ASC',
-  VersionCreatedAtBlockAsc = 'VERSION_CREATED_AT_BLOCK_ASC',
-  VersionCreatedAtBlockDesc = 'VERSION_CREATED_AT_BLOCK_DESC',
-  VersionCreatedAtDesc = 'VERSION_CREATED_AT_DESC',
-  VotingModeAsc = 'VOTING_MODE_ASC',
-  VotingModeDesc = 'VOTING_MODE_DESC',
-  YesCountAsc = 'YES_COUNT_ASC',
-  YesCountDesc = 'YES_COUNT_DESC'
-}
-
-export type ProposalVote = Node & {
-  __typename?: 'ProposalVote';
-  createdAt: Scalars['String']['output'];
-  createdAtBlock: Scalars['String']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  proposalId: Scalars['UUID']['output'];
-  proposalVersion: Scalars['Int']['output'];
-  /** Reads a single `ProposalVersion` that is related to this `ProposalVote`. */
-  proposalVersionByProposalIdAndProposalVersion?: Maybe<ProposalVersion>;
-  /** Reads a single `Space` that is related to this `ProposalVote`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-  vote: VoteOption;
-  voterId: Scalars['UUID']['output'];
-};
-
-/**
- * A condition to be used against `ProposalVote` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ProposalVoteCondition = {
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `proposalId` field. */
-  proposalId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `vote` field. */
-  vote?: InputMaybe<VoteOption>;
-  /** Checks for equality with the object’s `voterId` field. */
-  voterId?: InputMaybe<Scalars['UUID']['input']>;
+  some?: ProposalVoteFilter | null | undefined;
 };
 
 /** A filter to be used against `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
 export type ProposalVoteFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalVoteFilter>>;
+  and?: Array<ProposalVoteFilter> | null | undefined;
   /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<StringFilter>;
+  createdAt?: StringFilter | null | undefined;
   /** Filter by the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<StringFilter>;
+  createdAtBlock?: StringFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ProposalVoteFilter>;
+  not?: ProposalVoteFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalVoteFilter>>;
+  or?: Array<ProposalVoteFilter> | null | undefined;
   /** Filter by the object’s `proposalId` field. */
-  proposalId?: InputMaybe<UuidFilter>;
+  proposalId?: UuidFilter | null | undefined;
   /** Filter by the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<IntFilter>;
+  proposalVersion?: IntFilter | null | undefined;
   /** Filter by the object’s `proposalVersionByProposalIdAndProposalVersion` relation. */
-  proposalVersionByProposalIdAndProposalVersion?: InputMaybe<ProposalVersionFilter>;
+  proposalVersionByProposalIdAndProposalVersion?: ProposalVersionFilter | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `vote` field. */
-  vote?: InputMaybe<VoteOptionFilter>;
+  vote?: VoteOptionFilter | null | undefined;
   /** Filter by the object’s `voterId` field. */
-  voterId?: InputMaybe<UuidFilter>;
-};
-
-/** A connection to a list of `ProposalVote` values. */
-export type ProposalVotesConnection = {
-  __typename?: 'ProposalVotesConnection';
-  /** A list of edges which contains the `ProposalVote` and cursor to aid in pagination. */
-  edges: Array<ProposalVotesEdge>;
-  /** A list of `ProposalVote` objects. */
-  nodes: Array<ProposalVote>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ProposalVote` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ProposalVote` edge in the connection. */
-export type ProposalVotesEdge = {
-  __typename?: 'ProposalVotesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ProposalVote` at the end of the edge. */
-  node: ProposalVote;
-};
-
-/** Methods to use when ordering `ProposalVote`. */
-export enum ProposalVotesOrderBy {
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
-  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ProposalIdAsc = 'PROPOSAL_ID_ASC',
-  ProposalIdDesc = 'PROPOSAL_ID_DESC',
-  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
-  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  VoterIdAsc = 'VOTER_ID_ASC',
-  VoterIdDesc = 'VOTER_ID_DESC',
-  VoteAsc = 'VOTE_ASC',
-  VoteDesc = 'VOTE_DESC'
-}
-
-/** A connection to a list of `Proposal` values. */
-export type ProposalsConnection = {
-  __typename?: 'ProposalsConnection';
-  /** A list of edges which contains the `Proposal` and cursor to aid in pagination. */
-  edges: Array<ProposalsEdge>;
-  /** A list of `Proposal` objects. */
-  nodes: Array<Proposal>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Proposal` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-export type ProposalsCurrent = {
-  __typename?: 'ProposalsCurrent';
-  abstainCount?: Maybe<Scalars['BigInt']['output']>;
-  createdAt?: Maybe<Scalars['String']['output']>;
-  createdAtBlock?: Maybe<Scalars['String']['output']>;
-  currentVersion?: Maybe<Scalars['Int']['output']>;
-  endTime?: Maybe<Scalars['BigInt']['output']>;
-  executeBy?: Maybe<Scalars['BigInt']['output']>;
-  executedAt?: Maybe<Scalars['BigInt']['output']>;
-  flatSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-  id?: Maybe<Scalars['UUID']['output']>;
-  name?: Maybe<Scalars['String']['output']>;
-  noCount?: Maybe<Scalars['BigInt']['output']>;
-  partialPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-  proposalId?: Maybe<Scalars['UUID']['output']>;
-  proposalVersion?: Maybe<Scalars['Int']['output']>;
-  proposedBy?: Maybe<Scalars['UUID']['output']>;
-  quorum?: Maybe<Scalars['BigInt']['output']>;
-  spaceId?: Maybe<Scalars['UUID']['output']>;
-  startTime?: Maybe<Scalars['BigInt']['output']>;
-  threshold?: Maybe<Scalars['BigInt']['output']>;
-  universalPercentageSupportThreshold?: Maybe<Scalars['BigInt']['output']>;
-  versionCreatedAt?: Maybe<Scalars['String']['output']>;
-  versionCreatedAtBlock?: Maybe<Scalars['String']['output']>;
-  votingMode?: Maybe<VotingMode>;
-  yesCount?: Maybe<Scalars['BigInt']['output']>;
-};
-
-/**
- * A condition to be used against `ProposalsCurrent` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ProposalsCurrentCondition = {
-  /** Checks for equality with the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `currentVersion` field. */
-  currentVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `endTime` field. */
-  endTime?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `executeBy` field. */
-  executeBy?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `executedAt` field. */
-  executedAt?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `name` field. */
-  name?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `noCount` field. */
-  noCount?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `proposalId` field. */
-  proposalId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `proposedBy` field. */
-  proposedBy?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `quorum` field. */
-  quorum?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `startTime` field. */
-  startTime?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `threshold` field. */
-  threshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `versionCreatedAt` field. */
-  versionCreatedAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `versionCreatedAtBlock` field. */
-  versionCreatedAtBlock?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingMode>;
-  /** Checks for equality with the object’s `yesCount` field. */
-  yesCount?: InputMaybe<Scalars['BigInt']['input']>;
-};
-
-/** A filter to be used against `ProposalsCurrent` object types. All fields are combined with a logical ‘and.’ */
-export type ProposalsCurrentFilter = {
-  /** Filter by the object’s `abstainCount` field. */
-  abstainCount?: InputMaybe<BigIntFilter>;
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ProposalsCurrentFilter>>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `createdAtBlock` field. */
-  createdAtBlock?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `currentVersion` field. */
-  currentVersion?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `endTime` field. */
-  endTime?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `executeBy` field. */
-  executeBy?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `executedAt` field. */
-  executedAt?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `name` field. */
-  name?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `noCount` field. */
-  noCount?: InputMaybe<BigIntFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<ProposalsCurrentFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ProposalsCurrentFilter>>;
-  /** Filter by the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `proposalId` field. */
-  proposalId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `proposalVersion` field. */
-  proposalVersion?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `proposedBy` field. */
-  proposedBy?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `quorum` field. */
-  quorum?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `startTime` field. */
-  startTime?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `threshold` field. */
-  threshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `versionCreatedAt` field. */
-  versionCreatedAt?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `versionCreatedAtBlock` field. */
-  versionCreatedAtBlock?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `votingMode` field. */
-  votingMode?: InputMaybe<VotingModeFilter>;
-  /** Filter by the object’s `yesCount` field. */
-  yesCount?: InputMaybe<BigIntFilter>;
-};
-
-/** A connection to a list of `ProposalsCurrent` values. */
-export type ProposalsCurrentsConnection = {
-  __typename?: 'ProposalsCurrentsConnection';
-  /** A list of edges which contains the `ProposalsCurrent` and cursor to aid in pagination. */
-  edges: Array<ProposalsCurrentsEdge>;
-  /** A list of `ProposalsCurrent` objects. */
-  nodes: Array<ProposalsCurrent>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ProposalsCurrent` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ProposalsCurrent` edge in the connection. */
-export type ProposalsCurrentsEdge = {
-  __typename?: 'ProposalsCurrentsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ProposalsCurrent` at the end of the edge. */
-  node: ProposalsCurrent;
-};
-
-/** Methods to use when ordering `ProposalsCurrent`. */
-export enum ProposalsCurrentsOrderBy {
-  AbstainCountAsc = 'ABSTAIN_COUNT_ASC',
-  AbstainCountDesc = 'ABSTAIN_COUNT_DESC',
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
-  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  CurrentVersionAsc = 'CURRENT_VERSION_ASC',
-  CurrentVersionDesc = 'CURRENT_VERSION_DESC',
-  EndTimeAsc = 'END_TIME_ASC',
-  EndTimeDesc = 'END_TIME_DESC',
-  ExecutedAtAsc = 'EXECUTED_AT_ASC',
-  ExecutedAtDesc = 'EXECUTED_AT_DESC',
-  ExecuteByAsc = 'EXECUTE_BY_ASC',
-  ExecuteByDesc = 'EXECUTE_BY_DESC',
-  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
-  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  NameAsc = 'NAME_ASC',
-  NameDesc = 'NAME_DESC',
-  Natural = 'NATURAL',
-  NoCountAsc = 'NO_COUNT_ASC',
-  NoCountDesc = 'NO_COUNT_DESC',
-  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  ProposalIdAsc = 'PROPOSAL_ID_ASC',
-  ProposalIdDesc = 'PROPOSAL_ID_DESC',
-  ProposalVersionAsc = 'PROPOSAL_VERSION_ASC',
-  ProposalVersionDesc = 'PROPOSAL_VERSION_DESC',
-  ProposedByAsc = 'PROPOSED_BY_ASC',
-  ProposedByDesc = 'PROPOSED_BY_DESC',
-  QuorumAsc = 'QUORUM_ASC',
-  QuorumDesc = 'QUORUM_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  StartTimeAsc = 'START_TIME_ASC',
-  StartTimeDesc = 'START_TIME_DESC',
-  ThresholdAsc = 'THRESHOLD_ASC',
-  ThresholdDesc = 'THRESHOLD_DESC',
-  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  VersionCreatedAtAsc = 'VERSION_CREATED_AT_ASC',
-  VersionCreatedAtBlockAsc = 'VERSION_CREATED_AT_BLOCK_ASC',
-  VersionCreatedAtBlockDesc = 'VERSION_CREATED_AT_BLOCK_DESC',
-  VersionCreatedAtDesc = 'VERSION_CREATED_AT_DESC',
-  VotingModeAsc = 'VOTING_MODE_ASC',
-  VotingModeDesc = 'VOTING_MODE_DESC',
-  YesCountAsc = 'YES_COUNT_ASC',
-  YesCountDesc = 'YES_COUNT_DESC'
-}
-
-/** A `Proposal` edge in the connection. */
-export type ProposalsEdge = {
-  __typename?: 'ProposalsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Proposal` at the end of the edge. */
-  node: Proposal;
-};
-
-/** Methods to use when ordering `Proposal`. */
-export enum ProposalsOrderBy {
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtBlockAsc = 'CREATED_AT_BLOCK_ASC',
-  CreatedAtBlockDesc = 'CREATED_AT_BLOCK_DESC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  CurrentVersionAsc = 'CURRENT_VERSION_ASC',
-  CurrentVersionDesc = 'CURRENT_VERSION_DESC',
-  ExecutedAtAsc = 'EXECUTED_AT_ASC',
-  ExecutedAtDesc = 'EXECUTED_AT_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ProposedByAsc = 'PROPOSED_BY_ASC',
-  ProposedByDesc = 'PROPOSED_BY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC'
-}
-
-/** The root query type which gives access points into the data universe. */
-export type Query = Node & {
-  __typename?: 'Query';
-  appWebhook?: Maybe<AppWebhook>;
-  appWebhookByAppName?: Maybe<AppWebhook>;
-  /** Reads a single `AppWebhook` using its globally unique `ID`. */
-  appWebhookByNodeId?: Maybe<AppWebhook>;
-  /** Reads a set of `AppWebhook`. */
-  appWebhooks?: Maybe<Array<AppWebhook>>;
-  /** Reads and enables pagination through a set of `AppWebhook`. */
-  appWebhooksConnection?: Maybe<AppWebhooksConnection>;
-  atlasCheckpoint?: Maybe<AtlasCheckpoint>;
-  /** Reads a single `AtlasCheckpoint` using its globally unique `ID`. */
-  atlasCheckpointByNodeId?: Maybe<AtlasCheckpoint>;
-  /** Reads a set of `AtlasCheckpoint`. */
-  atlasCheckpoints?: Maybe<Array<AtlasCheckpoint>>;
-  /** Reads and enables pagination through a set of `AtlasCheckpoint`. */
-  atlasCheckpointsConnection?: Maybe<AtlasCheckpointsConnection>;
-  buildPropertyInfo?: Maybe<PropertyInfo>;
-  editVersion?: Maybe<EditVersion>;
-  editVersionByBlockNumberAndSequence?: Maybe<EditVersion>;
-  /** Reads a single `EditVersion` using its globally unique `ID`. */
-  editVersionByNodeId?: Maybe<EditVersion>;
-  /** Reads a set of `EditVersion`. */
-  editVersions?: Maybe<Array<EditVersion>>;
-  /** Reads and enables pagination through a set of `EditVersion`. */
-  editVersionsConnection?: Maybe<EditVersionsConnection>;
-  editor?: Maybe<Editor>;
-  /** Reads a single `Editor` using its globally unique `ID`. */
-  editorByNodeId?: Maybe<Editor>;
-  /** Reads a set of `Editor`. */
-  editors?: Maybe<Array<Editor>>;
-  /** Reads and enables pagination through a set of `Editor`. */
-  editorsConnection?: Maybe<EditorsConnection>;
-  /** Reads a set of `Entity`. */
-  entities?: Maybe<Array<Entity>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  entitiesConnection?: Maybe<EntitiesConnection>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  entitiesOrderedByProperty?: Maybe<Array<Entity>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  entitiesOrderedByPropertyConnection?: Maybe<EntitiesConnection>;
-  entity?: Maybe<Entity>;
-  /** Reads a single `Entity` using its globally unique `ID`. */
-  entityByNodeId?: Maybe<Entity>;
-  globalScore?: Maybe<GlobalScore>;
-  /** Reads a single `GlobalScore` using its globally unique `ID`. */
-  globalScoreByNodeId?: Maybe<GlobalScore>;
-  /** Reads a set of `GlobalScore`. */
-  globalScores?: Maybe<Array<GlobalScore>>;
-  /** Reads and enables pagination through a set of `GlobalScore`. */
-  globalScoresConnection?: Maybe<GlobalScoresConnection>;
-  localScore?: Maybe<LocalScore>;
-  /** Reads a single `LocalScore` using its globally unique `ID`. */
-  localScoreByNodeId?: Maybe<LocalScore>;
-  /** Reads a set of `LocalScore`. */
-  localScores?: Maybe<Array<LocalScore>>;
-  /** Reads and enables pagination through a set of `LocalScore`. */
-  localScoresConnection?: Maybe<LocalScoresConnection>;
-  member?: Maybe<Member>;
-  /** Reads a single `Member` using its globally unique `ID`. */
-  memberByNodeId?: Maybe<Member>;
-  /** Reads a set of `Member`. */
-  members?: Maybe<Array<Member>>;
-  /** Reads and enables pagination through a set of `Member`. */
-  membersConnection?: Maybe<MembersConnection>;
-  meta?: Maybe<Meta>;
-  /** Reads a single `Meta` using its globally unique `ID`. */
-  metaByNodeId?: Maybe<Meta>;
-  /** Reads a set of `Meta`. */
-  metas?: Maybe<Array<Meta>>;
-  /** Reads and enables pagination through a set of `Meta`. */
-  metasConnection?: Maybe<MetasConnection>;
-  /** Fetches an object given its globally unique `ID`. */
-  node?: Maybe<Node>;
-  /** The root query type must be a `Node` to work well with Relay 1 mutations. This just resolves to `query`. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a set of `NotificationDelivery`. */
-  notificationDeliveries?: Maybe<Array<NotificationDelivery>>;
-  /** Reads and enables pagination through a set of `NotificationDelivery`. */
-  notificationDeliveriesConnection?: Maybe<NotificationDeliveriesConnection>;
-  notificationDelivery?: Maybe<NotificationDelivery>;
-  /** Reads a single `NotificationDelivery` using its globally unique `ID`. */
-  notificationDeliveryByNodeId?: Maybe<NotificationDelivery>;
-  notificationDeliveryByOutboxIdAndWebhookId?: Maybe<NotificationDelivery>;
-  notificationOutbox?: Maybe<NotificationOutbox>;
-  notificationOutboxByIdempotencyKey?: Maybe<NotificationOutbox>;
-  /** Reads a single `NotificationOutbox` using its globally unique `ID`. */
-  notificationOutboxByNodeId?: Maybe<NotificationOutbox>;
-  /** Reads a set of `NotificationOutbox`. */
-  notificationOutboxes?: Maybe<Array<NotificationOutbox>>;
-  /** Reads and enables pagination through a set of `NotificationOutbox`. */
-  notificationOutboxesConnection?: Maybe<NotificationOutboxesConnection>;
-  notificationPollCursor?: Maybe<NotificationPollCursor>;
-  /** Reads a single `NotificationPollCursor` using its globally unique `ID`. */
-  notificationPollCursorByNodeId?: Maybe<NotificationPollCursor>;
-  /** Reads a set of `NotificationPollCursor`. */
-  notificationPollCursors?: Maybe<Array<NotificationPollCursor>>;
-  /** Reads and enables pagination through a set of `NotificationPollCursor`. */
-  notificationPollCursorsConnection?: Maybe<NotificationPollCursorsConnection>;
-  /** Reads and enables pagination through a set of `PropertyInfo`. */
-  properties?: Maybe<Array<PropertyInfo>>;
-  /** Reads and enables pagination through a set of `PropertyInfo`. */
-  propertiesConnection?: Maybe<PropertyInfosConnection>;
-  property?: Maybe<PropertyInfo>;
-  proposal?: Maybe<Proposal>;
-  proposalAction?: Maybe<ProposalAction>;
-  /** Reads a single `ProposalAction` using its globally unique `ID`. */
-  proposalActionByNodeId?: Maybe<ProposalAction>;
-  /** Reads a set of `ProposalAction`. */
-  proposalActions?: Maybe<Array<ProposalAction>>;
-  /** Reads and enables pagination through a set of `ProposalAction`. */
-  proposalActionsConnection?: Maybe<ProposalActionsConnection>;
-  /** Reads a single `Proposal` using its globally unique `ID`. */
-  proposalByNodeId?: Maybe<Proposal>;
-  proposalTallyQueue?: Maybe<ProposalTallyQueue>;
-  /** Reads a single `ProposalTallyQueue` using its globally unique `ID`. */
-  proposalTallyQueueByNodeId?: Maybe<ProposalTallyQueue>;
-  /** Reads a set of `ProposalTallyQueue`. */
-  proposalTallyQueues?: Maybe<Array<ProposalTallyQueue>>;
-  /** Reads and enables pagination through a set of `ProposalTallyQueue`. */
-  proposalTallyQueuesConnection?: Maybe<ProposalTallyQueuesConnection>;
-  proposalVersion?: Maybe<ProposalVersion>;
-  /** Reads a single `ProposalVersion` using its globally unique `ID`. */
-  proposalVersionByNodeId?: Maybe<ProposalVersion>;
-  proposalVersionByProposalIdAndVersionCreatedAtBlock?: Maybe<ProposalVersion>;
-  /** Reads a set of `ProposalVersion`. */
-  proposalVersions?: Maybe<Array<ProposalVersion>>;
-  /** Reads and enables pagination through a set of `ProposalVersion`. */
-  proposalVersionsConnection?: Maybe<ProposalVersionsConnection>;
-  proposalVote?: Maybe<ProposalVote>;
-  /** Reads a single `ProposalVote` using its globally unique `ID`. */
-  proposalVoteByNodeId?: Maybe<ProposalVote>;
-  /** Reads a set of `ProposalVote`. */
-  proposalVotes?: Maybe<Array<ProposalVote>>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesConnection?: Maybe<ProposalVotesConnection>;
-  /** Reads a set of `Proposal`. */
-  proposals?: Maybe<Array<Proposal>>;
-  /** Reads and enables pagination through a set of `Proposal`. */
-  proposalsConnection?: Maybe<ProposalsConnection>;
-  /** Reads a set of `ProposalsCurrent`. */
-  proposalsCurrents?: Maybe<Array<ProposalsCurrent>>;
-  /** Reads and enables pagination through a set of `ProposalsCurrent`. */
-  proposalsCurrentsConnection?: Maybe<ProposalsCurrentsConnection>;
-  /**
-   * Exposes the root query type nested one level down. This is helpful for Relay 1
-   * which can only query top level fields if they are in a particular form.
-   */
-  query: Query;
-  relation?: Maybe<Relation>;
-  /** Reads a single `Relation` using its globally unique `ID`. */
-  relationByNodeId?: Maybe<Relation>;
-  relationVersion?: Maybe<RelationVersion>;
-  /** Reads a single `RelationVersion` using its globally unique `ID`. */
-  relationVersionByNodeId?: Maybe<RelationVersion>;
-  /** Reads a set of `RelationVersion`. */
-  relationVersions?: Maybe<Array<RelationVersion>>;
-  /** Reads and enables pagination through a set of `RelationVersion`. */
-  relationVersionsConnection?: Maybe<RelationVersionsConnection>;
-  /** Reads a set of `Relation`. */
-  relations?: Maybe<Array<Relation>>;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsConnection?: Maybe<RelationsConnection>;
-  scoringTopologyDistance?: Maybe<ScoringTopologyDistance>;
-  /** Reads a single `ScoringTopologyDistance` using its globally unique `ID`. */
-  scoringTopologyDistanceByNodeId?: Maybe<ScoringTopologyDistance>;
-  /** Reads a set of `ScoringTopologyDistance`. */
-  scoringTopologyDistances?: Maybe<Array<ScoringTopologyDistance>>;
-  /** Reads and enables pagination through a set of `ScoringTopologyDistance`. */
-  scoringTopologyDistancesConnection?: Maybe<ScoringTopologyDistancesConnection>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  search?: Maybe<Array<Entity>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  searchConnection?: Maybe<EntitiesConnection>;
-  space?: Maybe<Space>;
-  /** Reads a single `Space` using its globally unique `ID`. */
-  spaceByNodeId?: Maybe<Space>;
-  /** Reads a set of `SpaceEditorCount`. */
-  spaceEditorCounts?: Maybe<Array<SpaceEditorCount>>;
-  /** Reads and enables pagination through a set of `SpaceEditorCount`. */
-  spaceEditorCountsConnection?: Maybe<SpaceEditorCountsConnection>;
-  spaceScore?: Maybe<SpaceScore>;
-  /** Reads a single `SpaceScore` using its globally unique `ID`. */
-  spaceScoreByNodeId?: Maybe<SpaceScore>;
-  /** Reads a set of `SpaceScore`. */
-  spaceScores?: Maybe<Array<SpaceScore>>;
-  /** Reads and enables pagination through a set of `SpaceScore`. */
-  spaceScoresConnection?: Maybe<SpaceScoresConnection>;
-  spaceVotingSetting?: Maybe<SpaceVotingSetting>;
-  /** Reads a single `SpaceVotingSetting` using its globally unique `ID`. */
-  spaceVotingSettingByNodeId?: Maybe<SpaceVotingSetting>;
-  /** Reads a set of `SpaceVotingSetting`. */
-  spaceVotingSettings?: Maybe<Array<SpaceVotingSetting>>;
-  /** Reads and enables pagination through a set of `SpaceVotingSetting`. */
-  spaceVotingSettingsConnection?: Maybe<SpaceVotingSettingsConnection>;
-  /** Reads a set of `Space`. */
-  spaces?: Maybe<Array<Space>>;
-  /** Reads and enables pagination through a set of `Space`. */
-  spacesConnection?: Maybe<SpacesConnection>;
-  subspace?: Maybe<Subspace>;
-  /** Reads a single `Subspace` using its globally unique `ID`. */
-  subspaceByNodeId?: Maybe<Subspace>;
-  subspaceTopic?: Maybe<SubspaceTopic>;
-  /** Reads a single `SubspaceTopic` using its globally unique `ID`. */
-  subspaceTopicByNodeId?: Maybe<SubspaceTopic>;
-  /** Reads a set of `SubspaceTopic`. */
-  subspaceTopics?: Maybe<Array<SubspaceTopic>>;
-  /** Reads and enables pagination through a set of `SubspaceTopic`. */
-  subspaceTopicsConnection?: Maybe<SubspaceTopicsConnection>;
-  /** Reads a set of `Subspace`. */
-  subspaces?: Maybe<Array<Subspace>>;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesConnection?: Maybe<SubspacesConnection>;
-  type?: Maybe<Entity>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  typesList?: Maybe<Array<Entity>>;
-  /** Reads and enables pagination through a set of `Entity`. */
-  typesListConnection?: Maybe<EntitiesConnection>;
-  userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?: Maybe<UserVote>;
-  /** Reads a set of `UserVote`. */
-  userVotes?: Maybe<Array<UserVote>>;
-  /** Reads and enables pagination through a set of `UserVote`. */
-  userVotesConnection?: Maybe<UserVotesConnection>;
-  value?: Maybe<Value>;
-  /** Reads a single `Value` using its globally unique `ID`. */
-  valueByNodeId?: Maybe<Value>;
-  valueVersion?: Maybe<ValueVersion>;
-  /** Reads a single `ValueVersion` using its globally unique `ID`. */
-  valueVersionByNodeId?: Maybe<ValueVersion>;
-  /** Reads a set of `ValueVersion`. */
-  valueVersions?: Maybe<Array<ValueVersion>>;
-  /** Reads and enables pagination through a set of `ValueVersion`. */
-  valueVersionsConnection?: Maybe<ValueVersionsConnection>;
-  /** Reads a set of `Value`. */
-  values?: Maybe<Array<Value>>;
-  /** Reads and enables pagination through a set of `Value`. */
-  valuesConnection?: Maybe<ValuesConnection>;
-  vote?: Maybe<Vote>;
-  /** Reads a single `Vote` using its globally unique `ID`. */
-  voteByNodeId?: Maybe<Vote>;
-  /** Reads a set of `Vote`. */
-  votes?: Maybe<Array<Vote>>;
-  /** Reads and enables pagination through a set of `Vote`. */
-  votesConnection?: Maybe<VotesConnection>;
-  votesCount?: Maybe<VotesCount>;
-  /** Reads a single `VotesCount` using its globally unique `ID`. */
-  votesCountByNodeId?: Maybe<VotesCount>;
-  votesCountByObjectIdAndObjectTypeAndSpaceId?: Maybe<VotesCount>;
-  /** Reads a set of `VotesCount`. */
-  votesCounts?: Maybe<Array<VotesCount>>;
-  /** Reads and enables pagination through a set of `VotesCount`. */
-  votesCountsConnection?: Maybe<VotesCountsConnection>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAppWebhookArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAppWebhookByAppNameArgs = {
-  appName: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAppWebhookByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAppWebhooksArgs = {
-  condition?: InputMaybe<AppWebhookCondition>;
-  filter?: InputMaybe<AppWebhookFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<AppWebhooksOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAppWebhooksConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<AppWebhookCondition>;
-  filter?: InputMaybe<AppWebhookFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<AppWebhooksOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAtlasCheckpointArgs = {
-  indexerId: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAtlasCheckpointByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAtlasCheckpointsArgs = {
-  condition?: InputMaybe<AtlasCheckpointCondition>;
-  filter?: InputMaybe<AtlasCheckpointFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<AtlasCheckpointsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryAtlasCheckpointsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<AtlasCheckpointCondition>;
-  filter?: InputMaybe<AtlasCheckpointFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<AtlasCheckpointsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryBuildPropertyInfoArgs = {
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditVersionArgs = {
-  editId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditVersionByBlockNumberAndSequenceArgs = {
-  blockNumber: Scalars['BigInt']['input'];
-  sequence: Scalars['BigInt']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditVersionByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditVersionsArgs = {
-  condition?: InputMaybe<EditVersionCondition>;
-  filter?: InputMaybe<EditVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditVersionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<EditVersionCondition>;
-  filter?: InputMaybe<EditVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditorArgs = {
-  memberSpaceId: Scalars['UUID']['input'];
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditorByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditorsArgs = {
-  condition?: InputMaybe<EditorCondition>;
-  filter?: InputMaybe<EditorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditorsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEditorsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<EditorCondition>;
-  filter?: InputMaybe<EditorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditorsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntitiesArgs = {
-  condition?: InputMaybe<EntityCondition>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EntitiesOrderBy>>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  spaceIds?: InputMaybe<UuidFilter>;
-  systemTypeId?: InputMaybe<Scalars['UUID']['input']>;
-  systemTypeIds?: InputMaybe<UuidFilter>;
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  typeIds?: InputMaybe<UuidFilter>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntitiesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<EntityCondition>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EntitiesOrderBy>>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  spaceIds?: InputMaybe<UuidFilter>;
-  systemTypeId?: InputMaybe<Scalars['UUID']['input']>;
-  systemTypeIds?: InputMaybe<UuidFilter>;
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  typeIds?: InputMaybe<UuidFilter>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntitiesOrderedByPropertyArgs = {
-  dataType?: InputMaybe<Scalars['String']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  propertyId?: InputMaybe<Scalars['UUID']['input']>;
-  sortDirection?: InputMaybe<SortOrder>;
-  spaceIds?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-  typeIds?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntitiesOrderedByPropertyConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  dataType?: InputMaybe<Scalars['String']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  includeWithoutValue?: InputMaybe<Scalars['Boolean']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  propertyId?: InputMaybe<Scalars['UUID']['input']>;
-  sortDirection?: InputMaybe<SortOrder>;
-  spaceIds?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-  typeIds?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntityArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryEntityByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryGlobalScoreArgs = {
-  entityId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryGlobalScoreByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryGlobalScoresArgs = {
-  condition?: InputMaybe<GlobalScoreCondition>;
-  filter?: InputMaybe<GlobalScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<GlobalScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryGlobalScoresConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<GlobalScoreCondition>;
-  filter?: InputMaybe<GlobalScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<GlobalScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryLocalScoreArgs = {
-  entityId: Scalars['UUID']['input'];
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryLocalScoreByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryLocalScoresArgs = {
-  condition?: InputMaybe<LocalScoreCondition>;
-  filter?: InputMaybe<LocalScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<LocalScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryLocalScoresConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<LocalScoreCondition>;
-  filter?: InputMaybe<LocalScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<LocalScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMemberArgs = {
-  memberSpaceId: Scalars['UUID']['input'];
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMemberByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMembersArgs = {
-  condition?: InputMaybe<MemberCondition>;
-  filter?: InputMaybe<MemberFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MembersOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMembersConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<MemberCondition>;
-  filter?: InputMaybe<MemberFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MembersOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMetaArgs = {
-  id: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMetaByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMetasArgs = {
-  condition?: InputMaybe<MetaCondition>;
-  filter?: InputMaybe<MetaFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MetasOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryMetasConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<MetaCondition>;
-  filter?: InputMaybe<MetaFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MetasOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNodeArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationDeliveriesArgs = {
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationDeliveriesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<NotificationDeliveryCondition>;
-  filter?: InputMaybe<NotificationDeliveryFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationDeliveriesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationDeliveryArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationDeliveryByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationDeliveryByOutboxIdAndWebhookIdArgs = {
-  outboxId: Scalars['UUID']['input'];
-  webhookId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationOutboxArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationOutboxByIdempotencyKeyArgs = {
-  idempotencyKey: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationOutboxByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationOutboxesArgs = {
-  condition?: InputMaybe<NotificationOutboxCondition>;
-  filter?: InputMaybe<NotificationOutboxFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationOutboxesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationOutboxesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<NotificationOutboxCondition>;
-  filter?: InputMaybe<NotificationOutboxFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationOutboxesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationPollCursorArgs = {
-  name: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationPollCursorByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationPollCursorsArgs = {
-  condition?: InputMaybe<NotificationPollCursorCondition>;
-  filter?: InputMaybe<NotificationPollCursorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationPollCursorsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryNotificationPollCursorsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<NotificationPollCursorCondition>;
-  filter?: InputMaybe<NotificationPollCursorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<NotificationPollCursorsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryPropertiesArgs = {
-  filter?: InputMaybe<PropertyInfoFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryPropertiesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  filter?: InputMaybe<PropertyInfoFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryPropertyArgs = {
-  id?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalActionArgs = {
-  index: Scalars['Int']['input'];
-  proposalId: Scalars['UUID']['input'];
-  proposalVersion: Scalars['Int']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalActionByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalActionsArgs = {
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalActionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalActionCondition>;
-  filter?: InputMaybe<ProposalActionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalActionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalTallyQueueArgs = {
-  proposalId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalTallyQueueByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalTallyQueuesArgs = {
-  condition?: InputMaybe<ProposalTallyQueueCondition>;
-  filter?: InputMaybe<ProposalTallyQueueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalTallyQueuesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalTallyQueuesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalTallyQueueCondition>;
-  filter?: InputMaybe<ProposalTallyQueueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalTallyQueuesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVersionArgs = {
-  proposalId: Scalars['UUID']['input'];
-  proposalVersion: Scalars['Int']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVersionByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVersionByProposalIdAndVersionCreatedAtBlockArgs = {
-  proposalId: Scalars['UUID']['input'];
-  versionCreatedAtBlock: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVersionsArgs = {
-  condition?: InputMaybe<ProposalVersionCondition>;
-  filter?: InputMaybe<ProposalVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVersionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVersionCondition>;
-  filter?: InputMaybe<ProposalVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVoteArgs = {
-  proposalId: Scalars['UUID']['input'];
-  proposalVersion: Scalars['Int']['input'];
-  voterId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVoteByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVotesArgs = {
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalsArgs = {
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalsCurrentsArgs = {
-  condition?: InputMaybe<ProposalsCurrentCondition>;
-  filter?: InputMaybe<ProposalsCurrentFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsCurrentsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryProposalsCurrentsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalsCurrentCondition>;
-  filter?: InputMaybe<ProposalsCurrentFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsCurrentsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationVersionArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationVersionByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationVersionsArgs = {
-  condition?: InputMaybe<RelationVersionCondition>;
-  filter?: InputMaybe<RelationVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationVersionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationVersionCondition>;
-  filter?: InputMaybe<RelationVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationsArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryRelationsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryScoringTopologyDistanceArgs = {
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryScoringTopologyDistanceByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryScoringTopologyDistancesArgs = {
-  condition?: InputMaybe<ScoringTopologyDistanceCondition>;
-  filter?: InputMaybe<ScoringTopologyDistanceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ScoringTopologyDistancesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryScoringTopologyDistancesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ScoringTopologyDistanceCondition>;
-  filter?: InputMaybe<ScoringTopologyDistanceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ScoringTopologyDistancesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySearchArgs = {
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  query?: InputMaybe<Scalars['String']['input']>;
-  similarityThreshold?: InputMaybe<Scalars['Float']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySearchConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  query?: InputMaybe<Scalars['String']['input']>;
-  similarityThreshold?: InputMaybe<Scalars['Float']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceEditorCountsArgs = {
-  condition?: InputMaybe<SpaceEditorCountCondition>;
-  filter?: InputMaybe<SpaceEditorCountFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceEditorCountsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceEditorCountsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceEditorCountCondition>;
-  filter?: InputMaybe<SpaceEditorCountFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceEditorCountsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceScoreArgs = {
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceScoreByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceScoresArgs = {
-  condition?: InputMaybe<SpaceScoreCondition>;
-  filter?: InputMaybe<SpaceScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceScoresConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceScoreCondition>;
-  filter?: InputMaybe<SpaceScoreFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceScoresOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceVotingSettingArgs = {
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceVotingSettingByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceVotingSettingsArgs = {
-  condition?: InputMaybe<SpaceVotingSettingCondition>;
-  filter?: InputMaybe<SpaceVotingSettingFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpaceVotingSettingsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceVotingSettingCondition>;
-  filter?: InputMaybe<SpaceVotingSettingFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpacesArgs = {
-  condition?: InputMaybe<SpaceCondition>;
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySpacesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceCondition>;
-  filter?: InputMaybe<SpaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpacesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceArgs = {
-  childSpaceId: Scalars['UUID']['input'];
-  parentSpaceId: Scalars['UUID']['input'];
-  type: SubspaceType;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceTopicArgs = {
-  spaceId: Scalars['UUID']['input'];
-  topicId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceTopicByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceTopicsArgs = {
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspaceTopicsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspacesArgs = {
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QuerySubspacesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryTypeArgs = {
-  id?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryTypesListArgs = {
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryTypesListConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryUserVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdArgs = {
-  objectId: Scalars['UUID']['input'];
-  objectType: Scalars['Int']['input'];
-  spaceId: Scalars['UUID']['input'];
-  userId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryUserVotesArgs = {
-  condition?: InputMaybe<UserVoteCondition>;
-  filter?: InputMaybe<UserVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryUserVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<UserVoteCondition>;
-  filter?: InputMaybe<UserVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<UserVotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueArgs = {
-  id: Scalars['String']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueVersionArgs = {
-  id: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueVersionByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueVersionsArgs = {
-  condition?: InputMaybe<ValueVersionCondition>;
-  filter?: InputMaybe<ValueVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValueVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValueVersionsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ValueVersionCondition>;
-  filter?: InputMaybe<ValueVersionFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValueVersionsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValuesArgs = {
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryValuesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVoteArgs = {
-  id: Scalars['Int']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVoteByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesArgs = {
-  condition?: InputMaybe<VoteCondition>;
-  filter?: InputMaybe<VoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<VotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<VoteCondition>;
-  filter?: InputMaybe<VoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<VotesOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountArgs = {
-  id: Scalars['Int']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountByNodeIdArgs = {
-  nodeId: Scalars['ID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountByObjectIdAndObjectTypeAndSpaceIdArgs = {
-  objectId: Scalars['UUID']['input'];
-  objectType: Scalars['Int']['input'];
-  spaceId: Scalars['UUID']['input'];
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountsArgs = {
-  condition?: InputMaybe<VotesCountCondition>;
-  filter?: InputMaybe<VotesCountFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<VotesCountsOrderBy>>;
-};
-
-
-/** The root query type which gives access points into the data universe. */
-export type QueryVotesCountsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<VotesCountCondition>;
-  filter?: InputMaybe<VotesCountFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<VotesCountsOrderBy>>;
-};
-
-export type Relation = Node & {
-  __typename?: 'Relation';
-  /** Reads a single `Entity` that is related to this `Relation`. */
-  entity?: Maybe<Entity>;
-  entityId: Scalars['UUID']['output'];
-  /** Reads a single `Entity` that is related to this `Relation`. */
-  fromEntity?: Maybe<Entity>;
-  fromEntityId: Scalars['UUID']['output'];
-  /** Reads a single `Space` that is related to this `Relation`. */
-  fromSpace?: Maybe<Space>;
-  fromSpaceId?: Maybe<Scalars['UUID']['output']>;
-  fromVersionId?: Maybe<Scalars['UUID']['output']>;
-  id: Scalars['UUID']['output'];
-  isSystem: Scalars['Boolean']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  position?: Maybe<Scalars['String']['output']>;
-  /** Reads a single `Space` that is related to this `Relation`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-  /** Reads a single `Entity` that is related to this `Relation`. */
-  toEntity?: Maybe<Entity>;
-  toEntityId: Scalars['UUID']['output'];
-  /** Reads a single `Space` that is related to this `Relation`. */
-  toSpace?: Maybe<Space>;
-  toSpaceId?: Maybe<Scalars['UUID']['output']>;
-  toVersionId?: Maybe<Scalars['UUID']['output']>;
-  type?: Maybe<PropertyInfo>;
-  /** Reads a single `Entity` that is related to this `Relation`. */
-  typeEntity?: Maybe<Entity>;
-  typeId: Scalars['UUID']['output'];
-  verified?: Maybe<Scalars['Boolean']['output']>;
-};
-
-/**
- * A condition to be used against `Relation` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type RelationCondition = {
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `fromEntityId` field. */
-  fromEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `fromSpaceId` field. */
-  fromSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `fromVersionId` field. */
-  fromVersionId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `isSystem` field. */
-  isSystem?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for equality with the object’s `position` field. */
-  position?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `toEntityId` field. */
-  toEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `toSpaceId` field. */
-  toSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `toVersionId` field. */
-  toVersionId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `typeId` field. */
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `verified` field. */
-  verified?: InputMaybe<Scalars['Boolean']['input']>;
+  voterId?: UuidFilter | null | undefined;
 };
 
 /** A filter to be used against `Relation` object types. All fields are combined with a logical ‘and.’ */
 export type RelationFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<RelationFilter>>;
+  and?: Array<RelationFilter> | null | undefined;
   /** Filter by the object’s `entity` relation. */
-  entity?: InputMaybe<EntityFilter>;
+  entity?: EntityFilter | null | undefined;
   /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
+  entityId?: UuidFilter | null | undefined;
   /** Filter by the object’s `fromEntity` relation. */
-  fromEntity?: InputMaybe<EntityFilter>;
+  fromEntity?: EntityFilter | null | undefined;
   /** Filter by the object’s `fromEntityId` field. */
-  fromEntityId?: InputMaybe<UuidFilter>;
+  fromEntityId?: UuidFilter | null | undefined;
   /** Filter by the object’s `fromSpace` relation. */
-  fromSpace?: InputMaybe<SpaceFilter>;
+  fromSpace?: SpaceFilter | null | undefined;
   /** A related `fromSpace` exists. */
-  fromSpaceExists?: InputMaybe<Scalars['Boolean']['input']>;
+  fromSpaceExists?: boolean | null | undefined;
   /** Filter by the object’s `fromSpaceId` field. */
-  fromSpaceId?: InputMaybe<UuidFilter>;
+  fromSpaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `fromVersionId` field. */
-  fromVersionId?: InputMaybe<UuidFilter>;
+  fromVersionId?: UuidFilter | null | undefined;
   /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
+  id?: UuidFilter | null | undefined;
   /** Filter by the object’s `isSystem` field. */
-  isSystem?: InputMaybe<BooleanFilter>;
+  isSystem?: BooleanFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<RelationFilter>;
+  not?: RelationFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<RelationFilter>>;
+  or?: Array<RelationFilter> | null | undefined;
   /** Filter by the object’s `position` field. */
-  position?: InputMaybe<StringFilter>;
+  position?: StringFilter | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `toEntity` relation. */
-  toEntity?: InputMaybe<EntityFilter>;
+  toEntity?: EntityFilter | null | undefined;
   /** Filter by the object’s `toEntityId` field. */
-  toEntityId?: InputMaybe<UuidFilter>;
+  toEntityId?: UuidFilter | null | undefined;
   /** Filter by the object’s `toSpace` relation. */
-  toSpace?: InputMaybe<SpaceFilter>;
+  toSpace?: SpaceFilter | null | undefined;
   /** A related `toSpace` exists. */
-  toSpaceExists?: InputMaybe<Scalars['Boolean']['input']>;
+  toSpaceExists?: boolean | null | undefined;
   /** Filter by the object’s `toSpaceId` field. */
-  toSpaceId?: InputMaybe<UuidFilter>;
+  toSpaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `toVersionId` field. */
-  toVersionId?: InputMaybe<UuidFilter>;
+  toVersionId?: UuidFilter | null | undefined;
   /** Filter by the object’s `typeEntity` relation. */
-  typeEntity?: InputMaybe<EntityFilter>;
+  typeEntity?: EntityFilter | null | undefined;
   /** Filter by the object’s `typeId` field. */
-  typeId?: InputMaybe<UuidFilter>;
+  typeId?: UuidFilter | null | undefined;
   /** Filter by the object’s `verified` field. */
-  verified?: InputMaybe<BooleanFilter>;
+  verified?: BooleanFilter | null | undefined;
 };
-
-export type RelationVersion = Node & {
-  __typename?: 'RelationVersion';
-  contextEdgeTypeId?: Maybe<Scalars['UUID']['output']>;
-  contextLastToEntityId?: Maybe<Scalars['UUID']['output']>;
-  contextRootId?: Maybe<Scalars['UUID']['output']>;
-  entityId: Scalars['UUID']['output'];
-  fromEntityId: Scalars['UUID']['output'];
-  fromSpaceId?: Maybe<Scalars['UUID']['output']>;
-  id: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  position?: Maybe<Scalars['String']['output']>;
-  relationId: Scalars['UUID']['output'];
-  spaceId: Scalars['UUID']['output'];
-  toEntityId: Scalars['UUID']['output'];
-  toSpaceId?: Maybe<Scalars['UUID']['output']>;
-  typeId: Scalars['UUID']['output'];
-  validFromKey: Scalars['BigInt']['output'];
-  validToKey?: Maybe<Scalars['BigInt']['output']>;
-  verified?: Maybe<Scalars['Boolean']['output']>;
-};
-
-/**
- * A condition to be used against `RelationVersion` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type RelationVersionCondition = {
-  /** Checks for equality with the object’s `contextEdgeTypeId` field. */
-  contextEdgeTypeId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `contextLastToEntityId` field. */
-  contextLastToEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `contextRootId` field. */
-  contextRootId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `fromEntityId` field. */
-  fromEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `fromSpaceId` field. */
-  fromSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `position` field. */
-  position?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `relationId` field. */
-  relationId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `toEntityId` field. */
-  toEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `toSpaceId` field. */
-  toSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `typeId` field. */
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `validFromKey` field. */
-  validFromKey?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `validToKey` field. */
-  validToKey?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `verified` field. */
-  verified?: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-/** A filter to be used against `RelationVersion` object types. All fields are combined with a logical ‘and.’ */
-export type RelationVersionFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<RelationVersionFilter>>;
-  /** Filter by the object’s `contextEdgeTypeId` field. */
-  contextEdgeTypeId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `contextLastToEntityId` field. */
-  contextLastToEntityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `contextRootId` field. */
-  contextRootId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `fromEntityId` field. */
-  fromEntityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `fromSpaceId` field. */
-  fromSpaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<RelationVersionFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<RelationVersionFilter>>;
-  /** Filter by the object’s `position` field. */
-  position?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `relationId` field. */
-  relationId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `toEntityId` field. */
-  toEntityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `toSpaceId` field. */
-  toSpaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `typeId` field. */
-  typeId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `validFromKey` field. */
-  validFromKey?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `validToKey` field. */
-  validToKey?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `verified` field. */
-  verified?: InputMaybe<BooleanFilter>;
-};
-
-/** A connection to a list of `RelationVersion` values. */
-export type RelationVersionsConnection = {
-  __typename?: 'RelationVersionsConnection';
-  /** A list of edges which contains the `RelationVersion` and cursor to aid in pagination. */
-  edges: Array<RelationVersionsEdge>;
-  /** A list of `RelationVersion` objects. */
-  nodes: Array<RelationVersion>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `RelationVersion` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `RelationVersion` edge in the connection. */
-export type RelationVersionsEdge = {
-  __typename?: 'RelationVersionsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `RelationVersion` at the end of the edge. */
-  node: RelationVersion;
-};
-
-/** Methods to use when ordering `RelationVersion`. */
-export enum RelationVersionsOrderBy {
-  ContextEdgeTypeIdAsc = 'CONTEXT_EDGE_TYPE_ID_ASC',
-  ContextEdgeTypeIdDesc = 'CONTEXT_EDGE_TYPE_ID_DESC',
-  ContextLastToEntityIdAsc = 'CONTEXT_LAST_TO_ENTITY_ID_ASC',
-  ContextLastToEntityIdDesc = 'CONTEXT_LAST_TO_ENTITY_ID_DESC',
-  ContextRootIdAsc = 'CONTEXT_ROOT_ID_ASC',
-  ContextRootIdDesc = 'CONTEXT_ROOT_ID_DESC',
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  FromEntityIdAsc = 'FROM_ENTITY_ID_ASC',
-  FromEntityIdDesc = 'FROM_ENTITY_ID_DESC',
-  FromSpaceIdAsc = 'FROM_SPACE_ID_ASC',
-  FromSpaceIdDesc = 'FROM_SPACE_ID_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  PositionAsc = 'POSITION_ASC',
-  PositionDesc = 'POSITION_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  RelationIdAsc = 'RELATION_ID_ASC',
-  RelationIdDesc = 'RELATION_ID_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  ToEntityIdAsc = 'TO_ENTITY_ID_ASC',
-  ToEntityIdDesc = 'TO_ENTITY_ID_DESC',
-  ToSpaceIdAsc = 'TO_SPACE_ID_ASC',
-  ToSpaceIdDesc = 'TO_SPACE_ID_DESC',
-  TypeIdAsc = 'TYPE_ID_ASC',
-  TypeIdDesc = 'TYPE_ID_DESC',
-  ValidFromKeyAsc = 'VALID_FROM_KEY_ASC',
-  ValidFromKeyDesc = 'VALID_FROM_KEY_DESC',
-  ValidToKeyAsc = 'VALID_TO_KEY_ASC',
-  ValidToKeyDesc = 'VALID_TO_KEY_DESC',
-  VerifiedAsc = 'VERIFIED_ASC',
-  VerifiedDesc = 'VERIFIED_DESC'
-}
-
-/** A connection to a list of `Relation` values. */
-export type RelationsConnection = {
-  __typename?: 'RelationsConnection';
-  /** A list of edges which contains the `Relation` and cursor to aid in pagination. */
-  edges: Array<RelationsEdge>;
-  /** A list of `Relation` objects. */
-  nodes: Array<Relation>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Relation` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Relation` edge in the connection. */
-export type RelationsEdge = {
-  __typename?: 'RelationsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Relation` at the end of the edge. */
-  node: Relation;
-};
-
-/** Methods to use when ordering `Relation`. */
-export enum RelationsOrderBy {
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  FromEntityIdAsc = 'FROM_ENTITY_ID_ASC',
-  FromEntityIdDesc = 'FROM_ENTITY_ID_DESC',
-  FromSpaceIdAsc = 'FROM_SPACE_ID_ASC',
-  FromSpaceIdDesc = 'FROM_SPACE_ID_DESC',
-  FromVersionIdAsc = 'FROM_VERSION_ID_ASC',
-  FromVersionIdDesc = 'FROM_VERSION_ID_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  IsSystemAsc = 'IS_SYSTEM_ASC',
-  IsSystemDesc = 'IS_SYSTEM_DESC',
-  Natural = 'NATURAL',
-  PositionAsc = 'POSITION_ASC',
-  PositionDesc = 'POSITION_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  ToEntityIdAsc = 'TO_ENTITY_ID_ASC',
-  ToEntityIdDesc = 'TO_ENTITY_ID_DESC',
-  ToSpaceIdAsc = 'TO_SPACE_ID_ASC',
-  ToSpaceIdDesc = 'TO_SPACE_ID_DESC',
-  ToVersionIdAsc = 'TO_VERSION_ID_ASC',
-  ToVersionIdDesc = 'TO_VERSION_ID_DESC',
-  TypeIdAsc = 'TYPE_ID_ASC',
-  TypeIdDesc = 'TYPE_ID_DESC',
-  VerifiedAsc = 'VERIFIED_ASC',
-  VerifiedDesc = 'VERIFIED_DESC'
-}
-
-export type ScoringTopologyDistance = Node & {
-  __typename?: 'ScoringTopologyDistance';
-  distance: Scalars['Int']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  spaceId: Scalars['UUID']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `ScoringTopologyDistance` object types. All
- * fields are tested for equality and combined with a logical ‘and.’
- */
-export type ScoringTopologyDistanceCondition = {
-  /** Checks for equality with the object’s `distance` field. */
-  distance?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `ScoringTopologyDistance` object types. All fields are combined with a logical ‘and.’ */
-export type ScoringTopologyDistanceFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ScoringTopologyDistanceFilter>>;
-  /** Filter by the object’s `distance` field. */
-  distance?: InputMaybe<IntFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<ScoringTopologyDistanceFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ScoringTopologyDistanceFilter>>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `ScoringTopologyDistance` values. */
-export type ScoringTopologyDistancesConnection = {
-  __typename?: 'ScoringTopologyDistancesConnection';
-  /** A list of edges which contains the `ScoringTopologyDistance` and cursor to aid in pagination. */
-  edges: Array<ScoringTopologyDistancesEdge>;
-  /** A list of `ScoringTopologyDistance` objects. */
-  nodes: Array<ScoringTopologyDistance>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ScoringTopologyDistance` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ScoringTopologyDistance` edge in the connection. */
-export type ScoringTopologyDistancesEdge = {
-  __typename?: 'ScoringTopologyDistancesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ScoringTopologyDistance` at the end of the edge. */
-  node: ScoringTopologyDistance;
-};
-
-/** Methods to use when ordering `ScoringTopologyDistance`. */
-export enum ScoringTopologyDistancesOrderBy {
-  DistanceAsc = 'DISTANCE_ASC',
-  DistanceDesc = 'DISTANCE_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
-export enum SortOrder {
-  Asc = 'ASC',
-  Desc = 'DESC'
-}
-
-export type Space = Node & {
-  __typename?: 'Space';
-  address: Scalars['String']['output'];
-  /** Reads and enables pagination through a set of `Editor`. */
-  editors: EditorsConnection;
-  /** Reads and enables pagination through a set of `Editor`. */
-  editorsList: Array<Editor>;
-  id: Scalars['UUID']['output'];
-  /** Reads and enables pagination through a set of `Member`. */
-  members: MembersConnection;
-  /** Reads and enables pagination through a set of `Member`. */
-  membersList: Array<Member>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  page?: Maybe<Entity>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotes: Array<ProposalVote>;
-  /** Reads and enables pagination through a set of `ProposalVote`. */
-  proposalVotesConnection: ProposalVotesConnection;
-  /** Reads and enables pagination through a set of `Proposal`. */
-  proposals: Array<Proposal>;
-  /** Reads and enables pagination through a set of `Proposal`. */
-  proposalsConnection: ProposalsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relations: Array<Relation>;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsByFromSpaceId: Array<Relation>;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsByFromSpaceIdConnection: RelationsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsByToSpaceId: Array<Relation>;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsByToSpaceIdConnection: RelationsConnection;
-  /** Reads and enables pagination through a set of `Relation`. */
-  relationsConnection: RelationsConnection;
-  /** Reads a single `SpaceVotingSetting` that is related to this `Space`. */
-  spaceVotingSetting?: Maybe<SpaceVotingSetting>;
-  /**
-   * Reads and enables pagination through a set of `SpaceVotingSetting`.
-   * @deprecated Please use spaceVotingSetting instead
-   */
-  spaceVotingSettingsConnection: SpaceVotingSettingsConnection;
-  /** Reads and enables pagination through a set of `SubspaceTopic`. */
-  subspaceTopics: Array<SubspaceTopic>;
-  /** Reads and enables pagination through a set of `SubspaceTopic`. */
-  subspaceTopicsConnection: SubspaceTopicsConnection;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByChildSpaceId: Array<Subspace>;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByChildSpaceIdConnection: SubspacesConnection;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByParentSpaceId: Array<Subspace>;
-  /** Reads and enables pagination through a set of `Subspace`. */
-  subspacesByParentSpaceIdConnection: SubspacesConnection;
-  /** Reads a single `Entity` that is related to this `Space`. */
-  topic?: Maybe<Entity>;
-  topicId?: Maybe<Scalars['UUID']['output']>;
-  type: SpaceTypes;
-  /** Reads and enables pagination through a set of `Value`. */
-  values: Array<Value>;
-  /** Reads and enables pagination through a set of `Value`. */
-  valuesConnection: ValuesConnection;
-};
-
-
-export type SpaceEditorsArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<EditorCondition>;
-  filter?: InputMaybe<EditorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditorsOrderBy>>;
-};
-
-
-export type SpaceEditorsListArgs = {
-  condition?: InputMaybe<EditorCondition>;
-  filter?: InputMaybe<EditorFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<EditorsOrderBy>>;
-};
-
-
-export type SpaceMembersArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<MemberCondition>;
-  filter?: InputMaybe<MemberFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MembersOrderBy>>;
-};
-
-
-export type SpaceMembersListArgs = {
-  condition?: InputMaybe<MemberCondition>;
-  filter?: InputMaybe<MemberFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<MembersOrderBy>>;
-};
-
-
-export type SpaceProposalVotesArgs = {
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type SpaceProposalVotesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalVoteCondition>;
-  filter?: InputMaybe<ProposalVoteFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalVotesOrderBy>>;
-};
-
-
-export type SpaceProposalsArgs = {
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
-};
-
-
-export type SpaceProposalsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ProposalCondition>;
-  filter?: InputMaybe<ProposalFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ProposalsOrderBy>>;
-};
-
-
-export type SpaceRelationsArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceRelationsByFromSpaceIdArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceRelationsByFromSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceRelationsByToSpaceIdArgs = {
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceRelationsByToSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceRelationsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<RelationCondition>;
-  filter?: InputMaybe<RelationFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<RelationsOrderBy>>;
-};
-
-
-export type SpaceSpaceVotingSettingsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SpaceVotingSettingCondition>;
-  filter?: InputMaybe<SpaceVotingSettingFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SpaceVotingSettingsOrderBy>>;
-};
-
-
-export type SpaceSubspaceTopicsArgs = {
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-export type SpaceSubspaceTopicsConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceTopicCondition>;
-  filter?: InputMaybe<SubspaceTopicFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspaceTopicsOrderBy>>;
-};
-
-
-export type SpaceSubspacesByChildSpaceIdArgs = {
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByChildSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByParentSpaceIdArgs = {
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceSubspacesByParentSpaceIdConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<SubspaceCondition>;
-  filter?: InputMaybe<SubspaceFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<SubspacesOrderBy>>;
-};
-
-
-export type SpaceValuesArgs = {
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-
-export type SpaceValuesConnectionArgs = {
-  after?: InputMaybe<Scalars['Cursor']['input']>;
-  before?: InputMaybe<Scalars['Cursor']['input']>;
-  condition?: InputMaybe<ValueCondition>;
-  filter?: InputMaybe<ValueFilter>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  last?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  orderBy?: InputMaybe<Array<ValuesOrderBy>>;
-};
-
-/** A condition to be used against `Space` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type SpaceCondition = {
-  /** Checks for equality with the object’s `address` field. */
-  address?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `topicId` field. */
-  topicId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `type` field. */
-  type?: InputMaybe<SpaceTypes>;
-};
-
-export type SpaceEditorCount = {
-  __typename?: 'SpaceEditorCount';
-  spaceId?: Maybe<Scalars['UUID']['output']>;
-  totalEditors?: Maybe<Scalars['BigInt']['output']>;
-};
-
-/**
- * A condition to be used against `SpaceEditorCount` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type SpaceEditorCountCondition = {
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `totalEditors` field. */
-  totalEditors?: InputMaybe<Scalars['BigInt']['input']>;
-};
-
-/** A filter to be used against `SpaceEditorCount` object types. All fields are combined with a logical ‘and.’ */
-export type SpaceEditorCountFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SpaceEditorCountFilter>>;
-  /** Negates the expression. */
-  not?: InputMaybe<SpaceEditorCountFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SpaceEditorCountFilter>>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `totalEditors` field. */
-  totalEditors?: InputMaybe<BigIntFilter>;
-};
-
-/** A connection to a list of `SpaceEditorCount` values. */
-export type SpaceEditorCountsConnection = {
-  __typename?: 'SpaceEditorCountsConnection';
-  /** A list of edges which contains the `SpaceEditorCount` and cursor to aid in pagination. */
-  edges: Array<SpaceEditorCountsEdge>;
-  /** A list of `SpaceEditorCount` objects. */
-  nodes: Array<SpaceEditorCount>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `SpaceEditorCount` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `SpaceEditorCount` edge in the connection. */
-export type SpaceEditorCountsEdge = {
-  __typename?: 'SpaceEditorCountsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `SpaceEditorCount` at the end of the edge. */
-  node: SpaceEditorCount;
-};
-
-/** Methods to use when ordering `SpaceEditorCount`. */
-export enum SpaceEditorCountsOrderBy {
-  Natural = 'NATURAL',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  TotalEditorsAsc = 'TOTAL_EDITORS_ASC',
-  TotalEditorsDesc = 'TOTAL_EDITORS_DESC'
-}
 
 /** A filter to be used against `Space` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceFilter = {
   /** Filter by the object’s `address` field. */
-  address?: InputMaybe<StringFilter>;
+  address?: StringFilter | null | undefined;
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SpaceFilter>>;
+  and?: Array<SpaceFilter> | null | undefined;
   /** Filter by the object’s `editors` relation. */
-  editors?: InputMaybe<SpaceToManyEditorFilter>;
+  editors?: SpaceToManyEditorFilter | null | undefined;
   /** Some related `editors` exist. */
-  editorsExist?: InputMaybe<Scalars['Boolean']['input']>;
+  editorsExist?: boolean | null | undefined;
   /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
+  id?: UuidFilter | null | undefined;
   /** Filter by the object’s `members` relation. */
-  members?: InputMaybe<SpaceToManyMemberFilter>;
+  members?: SpaceToManyMemberFilter | null | undefined;
   /** Some related `members` exist. */
-  membersExist?: InputMaybe<Scalars['Boolean']['input']>;
+  membersExist?: boolean | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<SpaceFilter>;
+  not?: SpaceFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SpaceFilter>>;
+  or?: Array<SpaceFilter> | null | undefined;
   /** Filter by the object’s `proposalVotesConnection` relation. */
-  proposalVotesConnection?: InputMaybe<SpaceToManyProposalVoteFilter>;
+  proposalVotesConnection?: SpaceToManyProposalVoteFilter | null | undefined;
   /** Some related `proposalVotesConnection` exist. */
-  proposalVotesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalVotesConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `proposalsConnection` relation. */
-  proposalsConnection?: InputMaybe<SpaceToManyProposalFilter>;
+  proposalsConnection?: SpaceToManyProposalFilter | null | undefined;
   /** Some related `proposalsConnection` exist. */
-  proposalsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  proposalsConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `relationsByFromSpaceIdConnection` relation. */
-  relationsByFromSpaceIdConnection?: InputMaybe<SpaceToManyRelationFilter>;
+  relationsByFromSpaceIdConnection?: SpaceToManyRelationFilter | null | undefined;
   /** Some related `relationsByFromSpaceIdConnection` exist. */
-  relationsByFromSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsByFromSpaceIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `relationsByToSpaceIdConnection` relation. */
-  relationsByToSpaceIdConnection?: InputMaybe<SpaceToManyRelationFilter>;
+  relationsByToSpaceIdConnection?: SpaceToManyRelationFilter | null | undefined;
   /** Some related `relationsByToSpaceIdConnection` exist. */
-  relationsByToSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsByToSpaceIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `relationsConnection` relation. */
-  relationsConnection?: InputMaybe<SpaceToManyRelationFilter>;
+  relationsConnection?: SpaceToManyRelationFilter | null | undefined;
   /** Some related `relationsConnection` exist. */
-  relationsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  relationsConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `spaceVotingSetting` relation. */
-  spaceVotingSetting?: InputMaybe<SpaceVotingSettingFilter>;
+  spaceVotingSetting?: SpaceVotingSettingFilter | null | undefined;
   /** A related `spaceVotingSetting` exists. */
-  spaceVotingSettingExists?: InputMaybe<Scalars['Boolean']['input']>;
+  spaceVotingSettingExists?: boolean | null | undefined;
   /** Filter by the object’s `subspaceTopicsConnection` relation. */
-  subspaceTopicsConnection?: InputMaybe<SpaceToManySubspaceTopicFilter>;
+  subspaceTopicsConnection?: SpaceToManySubspaceTopicFilter | null | undefined;
   /** Some related `subspaceTopicsConnection` exist. */
-  subspaceTopicsConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  subspaceTopicsConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `subspacesByChildSpaceIdConnection` relation. */
-  subspacesByChildSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  subspacesByChildSpaceIdConnection?: SpaceToManySubspaceFilter | null | undefined;
   /** Some related `subspacesByChildSpaceIdConnection` exist. */
-  subspacesByChildSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  subspacesByChildSpaceIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `subspacesByParentSpaceIdConnection` relation. */
-  subspacesByParentSpaceIdConnection?: InputMaybe<SpaceToManySubspaceFilter>;
+  subspacesByParentSpaceIdConnection?: SpaceToManySubspaceFilter | null | undefined;
   /** Some related `subspacesByParentSpaceIdConnection` exist. */
-  subspacesByParentSpaceIdConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  subspacesByParentSpaceIdConnectionExist?: boolean | null | undefined;
   /** Filter by the object’s `topic` relation. */
-  topic?: InputMaybe<EntityFilter>;
+  topic?: EntityFilter | null | undefined;
   /** A related `topic` exists. */
-  topicExists?: InputMaybe<Scalars['Boolean']['input']>;
+  topicExists?: boolean | null | undefined;
   /** Filter by the object’s `topicId` field. */
-  topicId?: InputMaybe<UuidFilter>;
+  topicId?: UuidFilter | null | undefined;
   /** Filter by the object’s `type` field. */
-  type?: InputMaybe<SpaceTypesFilter>;
+  type?: SpaceTypesFilter | null | undefined;
   /** Filter by the object’s `valuesConnection` relation. */
-  valuesConnection?: InputMaybe<SpaceToManyValueFilter>;
+  valuesConnection?: SpaceToManyValueFilter | null | undefined;
   /** Some related `valuesConnection` exist. */
-  valuesConnectionExist?: InputMaybe<Scalars['Boolean']['input']>;
+  valuesConnectionExist?: boolean | null | undefined;
 };
-
-export type SpaceScore = Node & {
-  __typename?: 'SpaceScore';
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  score: Scalars['BigFloat']['output'];
-  spaceId: Scalars['UUID']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `SpaceScore` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type SpaceScoreCondition = {
-  /** Checks for equality with the object’s `score` field. */
-  score?: InputMaybe<Scalars['BigFloat']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-};
-
-/** A filter to be used against `SpaceScore` object types. All fields are combined with a logical ‘and.’ */
-export type SpaceScoreFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SpaceScoreFilter>>;
-  /** Negates the expression. */
-  not?: InputMaybe<SpaceScoreFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SpaceScoreFilter>>;
-  /** Filter by the object’s `score` field. */
-  score?: InputMaybe<BigFloatFilter>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `SpaceScore` values. */
-export type SpaceScoresConnection = {
-  __typename?: 'SpaceScoresConnection';
-  /** A list of edges which contains the `SpaceScore` and cursor to aid in pagination. */
-  edges: Array<SpaceScoresEdge>;
-  /** A list of `SpaceScore` objects. */
-  nodes: Array<SpaceScore>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `SpaceScore` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `SpaceScore` edge in the connection. */
-export type SpaceScoresEdge = {
-  __typename?: 'SpaceScoresEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `SpaceScore` at the end of the edge. */
-  node: SpaceScore;
-};
-
-/** Methods to use when ordering `SpaceScore`. */
-export enum SpaceScoresOrderBy {
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  ScoreAsc = 'SCORE_ASC',
-  ScoreDesc = 'SCORE_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
 
 /** A filter to be used against many `Editor` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyEditorFilter = {
   /** Every related `Editor` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<EditorFilter>;
+  every?: EditorFilter | null | undefined;
   /** No related `Editor` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<EditorFilter>;
+  none?: EditorFilter | null | undefined;
   /** Some related `Editor` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<EditorFilter>;
+  some?: EditorFilter | null | undefined;
 };
 
 /** A filter to be used against many `Member` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyMemberFilter = {
   /** Every related `Member` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<MemberFilter>;
+  every?: MemberFilter | null | undefined;
   /** No related `Member` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<MemberFilter>;
+  none?: MemberFilter | null | undefined;
   /** Some related `Member` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<MemberFilter>;
+  some?: MemberFilter | null | undefined;
 };
 
 /** A filter to be used against many `Proposal` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyProposalFilter = {
   /** Every related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalFilter>;
+  every?: ProposalFilter | null | undefined;
   /** No related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalFilter>;
+  none?: ProposalFilter | null | undefined;
   /** Some related `Proposal` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalFilter>;
+  some?: ProposalFilter | null | undefined;
 };
 
 /** A filter to be used against many `ProposalVote` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyProposalVoteFilter = {
   /** Every related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ProposalVoteFilter>;
+  every?: ProposalVoteFilter | null | undefined;
   /** No related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ProposalVoteFilter>;
+  none?: ProposalVoteFilter | null | undefined;
   /** Some related `ProposalVote` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ProposalVoteFilter>;
+  some?: ProposalVoteFilter | null | undefined;
 };
 
 /** A filter to be used against many `Relation` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyRelationFilter = {
   /** Every related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<RelationFilter>;
+  every?: RelationFilter | null | undefined;
   /** No related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<RelationFilter>;
+  none?: RelationFilter | null | undefined;
   /** Some related `Relation` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<RelationFilter>;
+  some?: RelationFilter | null | undefined;
 };
 
 /** A filter to be used against many `Subspace` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManySubspaceFilter = {
   /** Every related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<SubspaceFilter>;
+  every?: SubspaceFilter | null | undefined;
   /** No related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<SubspaceFilter>;
+  none?: SubspaceFilter | null | undefined;
   /** Some related `Subspace` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<SubspaceFilter>;
+  some?: SubspaceFilter | null | undefined;
 };
 
 /** A filter to be used against many `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManySubspaceTopicFilter = {
   /** Every related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<SubspaceTopicFilter>;
+  every?: SubspaceTopicFilter | null | undefined;
   /** No related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<SubspaceTopicFilter>;
+  none?: SubspaceTopicFilter | null | undefined;
   /** Some related `SubspaceTopic` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<SubspaceTopicFilter>;
+  some?: SubspaceTopicFilter | null | undefined;
 };
 
 /** A filter to be used against many `Value` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceToManyValueFilter = {
   /** Every related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  every?: InputMaybe<ValueFilter>;
+  every?: ValueFilter | null | undefined;
   /** No related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  none?: InputMaybe<ValueFilter>;
+  none?: ValueFilter | null | undefined;
   /** Some related `Value` matches the filter criteria. All fields are combined with a logical ‘and.’ */
-  some?: InputMaybe<ValueFilter>;
+  some?: ValueFilter | null | undefined;
 };
 
 export enum SpaceTypes {
@@ -5345,429 +808,176 @@ export enum SpaceTypes {
 /** A filter to be used against SpaceTypes fields. All fields are combined with a logical ‘and.’ */
 export type SpaceTypesFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<SpaceTypes>;
+  distinctFrom?: SpaceTypes | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<SpaceTypes>;
+  greaterThan?: SpaceTypes | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<SpaceTypes>;
+  greaterThanOrEqualTo?: SpaceTypes | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<SpaceTypes>>;
+  in?: Array<SpaceTypes> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<SpaceTypes>;
+  is?: SpaceTypes | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<SpaceTypes>;
+  isNot?: SpaceTypes | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<SpaceTypes>;
+  lessThan?: SpaceTypes | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<SpaceTypes>;
+  lessThanOrEqualTo?: SpaceTypes | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<SpaceTypes>;
+  notDistinctFrom?: SpaceTypes | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<SpaceTypes>>;
-};
-
-export type SpaceVotingSetting = Node & {
-  __typename?: 'SpaceVotingSetting';
-  disableFastPathAccessForNewMembers: Scalars['Boolean']['output'];
-  duration: Scalars['BigInt']['output'];
-  executionGracePeriod: Scalars['BigInt']['output'];
-  flatSupportThreshold: Scalars['BigInt']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  partialPercentageSupportThreshold: Scalars['BigInt']['output'];
-  quorum: Scalars['BigInt']['output'];
-  /** Reads a single `Space` that is related to this `SpaceVotingSetting`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-  universalPercentageSupportThreshold: Scalars['BigInt']['output'];
-  updatedAt: Scalars['String']['output'];
-  updatedAtBlock: Scalars['String']['output'];
-};
-
-/**
- * A condition to be used against `SpaceVotingSetting` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type SpaceVotingSettingCondition = {
-  /** Checks for equality with the object’s `disableFastPathAccessForNewMembers` field. */
-  disableFastPathAccessForNewMembers?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for equality with the object’s `duration` field. */
-  duration?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `executionGracePeriod` field. */
-  executionGracePeriod?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `quorum` field. */
-  quorum?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `updatedAtBlock` field. */
-  updatedAtBlock?: InputMaybe<Scalars['String']['input']>;
+  notIn?: Array<SpaceTypes> | null | undefined;
 };
 
 /** A filter to be used against `SpaceVotingSetting` object types. All fields are combined with a logical ‘and.’ */
 export type SpaceVotingSettingFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SpaceVotingSettingFilter>>;
+  and?: Array<SpaceVotingSettingFilter> | null | undefined;
   /** Filter by the object’s `disableFastPathAccessForNewMembers` field. */
-  disableFastPathAccessForNewMembers?: InputMaybe<BooleanFilter>;
+  disableFastPathAccessForNewMembers?: BooleanFilter | null | undefined;
   /** Filter by the object’s `duration` field. */
-  duration?: InputMaybe<BigIntFilter>;
+  duration?: BigIntFilter | null | undefined;
   /** Filter by the object’s `executionGracePeriod` field. */
-  executionGracePeriod?: InputMaybe<BigIntFilter>;
+  executionGracePeriod?: BigIntFilter | null | undefined;
   /** Filter by the object’s `flatSupportThreshold` field. */
-  flatSupportThreshold?: InputMaybe<BigIntFilter>;
+  flatSupportThreshold?: BigIntFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<SpaceVotingSettingFilter>;
+  not?: SpaceVotingSettingFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SpaceVotingSettingFilter>>;
+  or?: Array<SpaceVotingSettingFilter> | null | undefined;
   /** Filter by the object’s `partialPercentageSupportThreshold` field. */
-  partialPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  partialPercentageSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `quorum` field. */
-  quorum?: InputMaybe<BigIntFilter>;
+  quorum?: BigIntFilter | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `universalPercentageSupportThreshold` field. */
-  universalPercentageSupportThreshold?: InputMaybe<BigIntFilter>;
+  universalPercentageSupportThreshold?: BigIntFilter | null | undefined;
   /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<StringFilter>;
+  updatedAt?: StringFilter | null | undefined;
   /** Filter by the object’s `updatedAtBlock` field. */
-  updatedAtBlock?: InputMaybe<StringFilter>;
+  updatedAtBlock?: StringFilter | null | undefined;
 };
-
-/** A connection to a list of `SpaceVotingSetting` values. */
-export type SpaceVotingSettingsConnection = {
-  __typename?: 'SpaceVotingSettingsConnection';
-  /** A list of edges which contains the `SpaceVotingSetting` and cursor to aid in pagination. */
-  edges: Array<SpaceVotingSettingsEdge>;
-  /** A list of `SpaceVotingSetting` objects. */
-  nodes: Array<SpaceVotingSetting>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `SpaceVotingSetting` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `SpaceVotingSetting` edge in the connection. */
-export type SpaceVotingSettingsEdge = {
-  __typename?: 'SpaceVotingSettingsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `SpaceVotingSetting` at the end of the edge. */
-  node: SpaceVotingSetting;
-};
-
-/** Methods to use when ordering `SpaceVotingSetting`. */
-export enum SpaceVotingSettingsOrderBy {
-  DisableFastPathAccessForNewMembersAsc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_ASC',
-  DisableFastPathAccessForNewMembersDesc = 'DISABLE_FAST_PATH_ACCESS_FOR_NEW_MEMBERS_DESC',
-  DurationAsc = 'DURATION_ASC',
-  DurationDesc = 'DURATION_DESC',
-  ExecutionGracePeriodAsc = 'EXECUTION_GRACE_PERIOD_ASC',
-  ExecutionGracePeriodDesc = 'EXECUTION_GRACE_PERIOD_DESC',
-  FlatSupportThresholdAsc = 'FLAT_SUPPORT_THRESHOLD_ASC',
-  FlatSupportThresholdDesc = 'FLAT_SUPPORT_THRESHOLD_DESC',
-  Natural = 'NATURAL',
-  PartialPercentageSupportThresholdAsc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  PartialPercentageSupportThresholdDesc = 'PARTIAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  QuorumAsc = 'QUORUM_ASC',
-  QuorumDesc = 'QUORUM_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UniversalPercentageSupportThresholdAsc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_ASC',
-  UniversalPercentageSupportThresholdDesc = 'UNIVERSAL_PERCENTAGE_SUPPORT_THRESHOLD_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtBlockAsc = 'UPDATED_AT_BLOCK_ASC',
-  UpdatedAtBlockDesc = 'UPDATED_AT_BLOCK_DESC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC'
-}
-
-/** A connection to a list of `Space` values. */
-export type SpacesConnection = {
-  __typename?: 'SpacesConnection';
-  /** A list of edges which contains the `Space` and cursor to aid in pagination. */
-  edges: Array<SpacesEdge>;
-  /** A list of `Space` objects. */
-  nodes: Array<Space>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Space` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Space` edge in the connection. */
-export type SpacesEdge = {
-  __typename?: 'SpacesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Space` at the end of the edge. */
-  node: Space;
-};
-
-/** Methods to use when ordering `Space`. */
-export enum SpacesOrderBy {
-  AddressAsc = 'ADDRESS_ASC',
-  AddressDesc = 'ADDRESS_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  TopicIdAsc = 'TOPIC_ID_ASC',
-  TopicIdDesc = 'TOPIC_ID_DESC',
-  TypeAsc = 'TYPE_ASC',
-  TypeDesc = 'TYPE_DESC'
-}
 
 /** A filter to be used against String fields. All fields are combined with a logical ‘and.’ */
 export type StringFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['String']['input']>;
+  distinctFrom?: string | null | undefined;
   /** Not equal to the specified value, treating null like an ordinary value (case-insensitive). */
-  distinctFromInsensitive?: InputMaybe<Scalars['String']['input']>;
+  distinctFromInsensitive?: string | null | undefined;
   /** Ends with the specified string (case-sensitive). */
-  endsWith?: InputMaybe<Scalars['String']['input']>;
+  endsWith?: string | null | undefined;
   /** Ends with the specified string (case-insensitive). */
-  endsWithInsensitive?: InputMaybe<Scalars['String']['input']>;
+  endsWithInsensitive?: string | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['String']['input']>;
+  greaterThan?: string | null | undefined;
   /** Greater than the specified value (case-insensitive). */
-  greaterThanInsensitive?: InputMaybe<Scalars['String']['input']>;
+  greaterThanInsensitive?: string | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['String']['input']>;
+  greaterThanOrEqualTo?: string | null | undefined;
   /** Greater than or equal to the specified value (case-insensitive). */
-  greaterThanOrEqualToInsensitive?: InputMaybe<Scalars['String']['input']>;
+  greaterThanOrEqualToInsensitive?: string | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['String']['input']>>;
+  in?: Array<string> | null | undefined;
   /** Included in the specified list (case-insensitive). */
-  inInsensitive?: InputMaybe<Array<Scalars['String']['input']>>;
+  inInsensitive?: Array<string> | null | undefined;
   /** Contains the specified string (case-sensitive). */
-  includes?: InputMaybe<Scalars['String']['input']>;
+  includes?: string | null | undefined;
   /** Contains the specified string (case-insensitive). */
-  includesInsensitive?: InputMaybe<Scalars['String']['input']>;
+  includesInsensitive?: string | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['String']['input']>;
+  is?: string | null | undefined;
   /** Equal to the specified value (case-insensitive). */
-  isInsensitive?: InputMaybe<Scalars['String']['input']>;
+  isInsensitive?: string | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['String']['input']>;
+  isNot?: string | null | undefined;
   /** Not equal to the specified value (case-insensitive). */
-  isNotInsensitive?: InputMaybe<Scalars['String']['input']>;
+  isNotInsensitive?: string | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['String']['input']>;
+  lessThan?: string | null | undefined;
   /** Less than the specified value (case-insensitive). */
-  lessThanInsensitive?: InputMaybe<Scalars['String']['input']>;
+  lessThanInsensitive?: string | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['String']['input']>;
+  lessThanOrEqualTo?: string | null | undefined;
   /** Less than or equal to the specified value (case-insensitive). */
-  lessThanOrEqualToInsensitive?: InputMaybe<Scalars['String']['input']>;
+  lessThanOrEqualToInsensitive?: string | null | undefined;
   /** Matches the specified pattern (case-sensitive). An underscore (_) matches any single character; a percent sign (%) matches any sequence of zero or more characters. */
-  like?: InputMaybe<Scalars['String']['input']>;
+  like?: string | null | undefined;
   /** Matches the specified pattern (case-insensitive). An underscore (_) matches any single character; a percent sign (%) matches any sequence of zero or more characters. */
-  likeInsensitive?: InputMaybe<Scalars['String']['input']>;
+  likeInsensitive?: string | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['String']['input']>;
+  notDistinctFrom?: string | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value (case-insensitive). */
-  notDistinctFromInsensitive?: InputMaybe<Scalars['String']['input']>;
+  notDistinctFromInsensitive?: string | null | undefined;
   /** Does not end with the specified string (case-sensitive). */
-  notEndsWith?: InputMaybe<Scalars['String']['input']>;
+  notEndsWith?: string | null | undefined;
   /** Does not end with the specified string (case-insensitive). */
-  notEndsWithInsensitive?: InputMaybe<Scalars['String']['input']>;
+  notEndsWithInsensitive?: string | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['String']['input']>>;
+  notIn?: Array<string> | null | undefined;
   /** Not included in the specified list (case-insensitive). */
-  notInInsensitive?: InputMaybe<Array<Scalars['String']['input']>>;
+  notInInsensitive?: Array<string> | null | undefined;
   /** Does not contain the specified string (case-sensitive). */
-  notIncludes?: InputMaybe<Scalars['String']['input']>;
+  notIncludes?: string | null | undefined;
   /** Does not contain the specified string (case-insensitive). */
-  notIncludesInsensitive?: InputMaybe<Scalars['String']['input']>;
+  notIncludesInsensitive?: string | null | undefined;
   /** Does not match the specified pattern (case-sensitive). An underscore (_) matches any single character; a percent sign (%) matches any sequence of zero or more characters. */
-  notLike?: InputMaybe<Scalars['String']['input']>;
+  notLike?: string | null | undefined;
   /** Does not match the specified pattern (case-insensitive). An underscore (_) matches any single character; a percent sign (%) matches any sequence of zero or more characters. */
-  notLikeInsensitive?: InputMaybe<Scalars['String']['input']>;
+  notLikeInsensitive?: string | null | undefined;
   /** Does not start with the specified string (case-sensitive). */
-  notStartsWith?: InputMaybe<Scalars['String']['input']>;
+  notStartsWith?: string | null | undefined;
   /** Does not start with the specified string (case-insensitive). */
-  notStartsWithInsensitive?: InputMaybe<Scalars['String']['input']>;
+  notStartsWithInsensitive?: string | null | undefined;
   /** Starts with the specified string (case-sensitive). */
-  startsWith?: InputMaybe<Scalars['String']['input']>;
+  startsWith?: string | null | undefined;
   /** Starts with the specified string (case-insensitive). */
-  startsWithInsensitive?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** A filter to be used against String List fields. All fields are combined with a logical ‘and.’ */
-export type StringListFilter = {
-  /** Any array item is equal to the specified value. */
-  anyEqualTo?: InputMaybe<Scalars['String']['input']>;
-  /** Any array item is greater than the specified value. */
-  anyGreaterThan?: InputMaybe<Scalars['String']['input']>;
-  /** Any array item is greater than or equal to the specified value. */
-  anyGreaterThanOrEqualTo?: InputMaybe<Scalars['String']['input']>;
-  /** Any array item is less than the specified value. */
-  anyLessThan?: InputMaybe<Scalars['String']['input']>;
-  /** Any array item is less than or equal to the specified value. */
-  anyLessThanOrEqualTo?: InputMaybe<Scalars['String']['input']>;
-  /** Any array item is not equal to the specified value. */
-  anyNotEqualTo?: InputMaybe<Scalars['String']['input']>;
-  /** Contained by the specified list of values. */
-  containedBy?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Contains the specified list of values. */
-  in?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Equal to the specified value. */
-  is?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Not equal to the specified value. */
-  isNot?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Less than the specified value. */
-  lessThan?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-  /** Overlaps the specified list of values. */
-  overlaps?: InputMaybe<Array<InputMaybe<Scalars['String']['input']>>>;
-};
-
-export type Subspace = Node & {
-  __typename?: 'Subspace';
-  /** Reads a single `Space` that is related to this `Subspace`. */
-  childSpace?: Maybe<Space>;
-  childSpaceId: Scalars['UUID']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `Space` that is related to this `Subspace`. */
-  parentSpace?: Maybe<Space>;
-  parentSpaceId: Scalars['UUID']['output'];
-  type: SubspaceType;
-};
-
-/**
- * A condition to be used against `Subspace` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type SubspaceCondition = {
-  /** Checks for equality with the object’s `childSpaceId` field. */
-  childSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `parentSpaceId` field. */
-  parentSpaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `type` field. */
-  type?: InputMaybe<SubspaceType>;
+  startsWithInsensitive?: string | null | undefined;
 };
 
 /** A filter to be used against `Subspace` object types. All fields are combined with a logical ‘and.’ */
 export type SubspaceFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SubspaceFilter>>;
+  and?: Array<SubspaceFilter> | null | undefined;
   /** Filter by the object’s `childSpace` relation. */
-  childSpace?: InputMaybe<SpaceFilter>;
+  childSpace?: SpaceFilter | null | undefined;
   /** Filter by the object’s `childSpaceId` field. */
-  childSpaceId?: InputMaybe<UuidFilter>;
+  childSpaceId?: UuidFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<SubspaceFilter>;
+  not?: SubspaceFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SubspaceFilter>>;
+  or?: Array<SubspaceFilter> | null | undefined;
   /** Filter by the object’s `parentSpace` relation. */
-  parentSpace?: InputMaybe<SpaceFilter>;
+  parentSpace?: SpaceFilter | null | undefined;
   /** Filter by the object’s `parentSpaceId` field. */
-  parentSpaceId?: InputMaybe<UuidFilter>;
+  parentSpaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `type` field. */
-  type?: InputMaybe<SubspaceTypeFilter>;
-};
-
-export type SubspaceTopic = Node & {
-  __typename?: 'SubspaceTopic';
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  /** Reads a single `Space` that is related to this `SubspaceTopic`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-  /** Reads a single `Entity` that is related to this `SubspaceTopic`. */
-  topic?: Maybe<Entity>;
-  topicId: Scalars['UUID']['output'];
-};
-
-/**
- * A condition to be used against `SubspaceTopic` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type SubspaceTopicCondition = {
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `topicId` field. */
-  topicId?: InputMaybe<Scalars['UUID']['input']>;
+  type?: SubspaceTypeFilter | null | undefined;
 };
 
 /** A filter to be used against `SubspaceTopic` object types. All fields are combined with a logical ‘and.’ */
 export type SubspaceTopicFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<SubspaceTopicFilter>>;
+  and?: Array<SubspaceTopicFilter> | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<SubspaceTopicFilter>;
+  not?: SubspaceTopicFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<SubspaceTopicFilter>>;
+  or?: Array<SubspaceTopicFilter> | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `topic` relation. */
-  topic?: InputMaybe<EntityFilter>;
+  topic?: EntityFilter | null | undefined;
   /** Filter by the object’s `topicId` field. */
-  topicId?: InputMaybe<UuidFilter>;
+  topicId?: UuidFilter | null | undefined;
 };
-
-/** A connection to a list of `SubspaceTopic` values. */
-export type SubspaceTopicsConnection = {
-  __typename?: 'SubspaceTopicsConnection';
-  /** A list of edges which contains the `SubspaceTopic` and cursor to aid in pagination. */
-  edges: Array<SubspaceTopicsEdge>;
-  /** A list of `SubspaceTopic` objects. */
-  nodes: Array<SubspaceTopic>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `SubspaceTopic` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `SubspaceTopic` edge in the connection. */
-export type SubspaceTopicsEdge = {
-  __typename?: 'SubspaceTopicsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `SubspaceTopic` at the end of the edge. */
-  node: SubspaceTopic;
-};
-
-/** Methods to use when ordering `SubspaceTopic`. */
-export enum SubspaceTopicsOrderBy {
-  Natural = 'NATURAL',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  TopicIdAsc = 'TOPIC_ID_ASC',
-  TopicIdDesc = 'TOPIC_ID_DESC'
-}
 
 export enum SubspaceType {
   Related = 'RELATED',
@@ -5777,754 +987,199 @@ export enum SubspaceType {
 /** A filter to be used against SubspaceType fields. All fields are combined with a logical ‘and.’ */
 export type SubspaceTypeFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<SubspaceType>;
+  distinctFrom?: SubspaceType | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<SubspaceType>;
+  greaterThan?: SubspaceType | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<SubspaceType>;
+  greaterThanOrEqualTo?: SubspaceType | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<SubspaceType>>;
+  in?: Array<SubspaceType> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<SubspaceType>;
+  is?: SubspaceType | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<SubspaceType>;
+  isNot?: SubspaceType | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<SubspaceType>;
+  lessThan?: SubspaceType | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<SubspaceType>;
+  lessThanOrEqualTo?: SubspaceType | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<SubspaceType>;
+  notDistinctFrom?: SubspaceType | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<SubspaceType>>;
+  notIn?: Array<SubspaceType> | null | undefined;
 };
-
-/** A connection to a list of `Subspace` values. */
-export type SubspacesConnection = {
-  __typename?: 'SubspacesConnection';
-  /** A list of edges which contains the `Subspace` and cursor to aid in pagination. */
-  edges: Array<SubspacesEdge>;
-  /** A list of `Subspace` objects. */
-  nodes: Array<Subspace>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Subspace` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Subspace` edge in the connection. */
-export type SubspacesEdge = {
-  __typename?: 'SubspacesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Subspace` at the end of the edge. */
-  node: Subspace;
-};
-
-/** Methods to use when ordering `Subspace`. */
-export enum SubspacesOrderBy {
-  ChildSpaceIdAsc = 'CHILD_SPACE_ID_ASC',
-  ChildSpaceIdDesc = 'CHILD_SPACE_ID_DESC',
-  Natural = 'NATURAL',
-  ParentSpaceIdAsc = 'PARENT_SPACE_ID_ASC',
-  ParentSpaceIdDesc = 'PARENT_SPACE_ID_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  TypeAsc = 'TYPE_ASC',
-  TypeDesc = 'TYPE_DESC'
-}
 
 /** A filter to be used against Time fields. All fields are combined with a logical ‘and.’ */
 export type TimeFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['Time']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['Time']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['Time']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['Time']['input']>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['Time']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['Time']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['Time']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['Time']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['Time']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['Time']['input']>>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against UUID fields. All fields are combined with a logical ‘and.’ */
 export type UuidFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Scalars['UUID']['input']>;
+  distinctFrom?: any;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Scalars['UUID']['input']>;
+  greaterThan?: any;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  greaterThanOrEqualTo?: any;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<Scalars['UUID']['input']>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Scalars['UUID']['input']>;
+  is?: any;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Scalars['UUID']['input']>;
+  isNot?: any;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Scalars['UUID']['input']>;
+  lessThan?: any;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  lessThanOrEqualTo?: any;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Scalars['UUID']['input']>;
+  notDistinctFrom?: any;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<Scalars['UUID']['input']>>;
+  notIn?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against UUID List fields. All fields are combined with a logical ‘and.’ */
 export type UuidListFilter = {
   /** Any array item is equal to the specified value. */
-  anyEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  anyEqualTo?: any;
   /** Any array item is greater than the specified value. */
-  anyGreaterThan?: InputMaybe<Scalars['UUID']['input']>;
+  anyGreaterThan?: any;
   /** Any array item is greater than or equal to the specified value. */
-  anyGreaterThanOrEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  anyGreaterThanOrEqualTo?: any;
   /** Any array item is less than the specified value. */
-  anyLessThan?: InputMaybe<Scalars['UUID']['input']>;
+  anyLessThan?: any;
   /** Any array item is less than or equal to the specified value. */
-  anyLessThanOrEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  anyLessThanOrEqualTo?: any;
   /** Any array item is not equal to the specified value. */
-  anyNotEqualTo?: InputMaybe<Scalars['UUID']['input']>;
+  anyNotEqualTo?: any;
   /** Contained by the specified list of values. */
-  containedBy?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  containedBy?: Array<any> | null | undefined;
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  distinctFrom?: Array<any> | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  greaterThan?: Array<any> | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  greaterThanOrEqualTo?: Array<any> | null | undefined;
   /** Contains the specified list of values. */
-  in?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  in?: Array<any> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  is?: Array<any> | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  isNot?: Array<any> | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  lessThan?: Array<any> | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  lessThanOrEqualTo?: Array<any> | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
+  notDistinctFrom?: Array<any> | null | undefined;
   /** Overlaps the specified list of values. */
-  overlaps?: InputMaybe<Array<InputMaybe<Scalars['UUID']['input']>>>;
-};
-
-export type UserVote = {
-  __typename?: 'UserVote';
-  objectId: Scalars['UUID']['output'];
-  objectType: Scalars['Int']['output'];
-  spaceId: Scalars['UUID']['output'];
-  userId: Scalars['UUID']['output'];
-  voteType: Scalars['Int']['output'];
-  votedAt: Scalars['Datetime']['output'];
-};
-
-/**
- * A condition to be used against `UserVote` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type UserVoteCondition = {
-  /** Checks for equality with the object’s `objectId` field. */
-  objectId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `objectType` field. */
-  objectType?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `userId` field. */
-  userId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `voteType` field. */
-  voteType?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `votedAt` field. */
-  votedAt?: InputMaybe<Scalars['Datetime']['input']>;
+  overlaps?: Array<any> | null | undefined;
 };
 
 /** A filter to be used against `UserVote` object types. All fields are combined with a logical ‘and.’ */
 export type UserVoteFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<UserVoteFilter>>;
+  and?: Array<UserVoteFilter> | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<UserVoteFilter>;
+  not?: UserVoteFilter | null | undefined;
   /** Filter by the object’s `objectId` field. */
-  objectId?: InputMaybe<UuidFilter>;
+  objectId?: UuidFilter | null | undefined;
   /** Filter by the object’s `objectType` field. */
-  objectType?: InputMaybe<IntFilter>;
+  objectType?: IntFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<UserVoteFilter>>;
+  or?: Array<UserVoteFilter> | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `userId` field. */
-  userId?: InputMaybe<UuidFilter>;
+  userId?: UuidFilter | null | undefined;
+  /** Filter by the object’s `voteKind` field. */
+  voteKind?: IntFilter | null | undefined;
   /** Filter by the object’s `voteType` field. */
-  voteType?: InputMaybe<IntFilter>;
+  voteType?: IntFilter | null | undefined;
   /** Filter by the object’s `votedAt` field. */
-  votedAt?: InputMaybe<DatetimeFilter>;
-};
-
-/** A connection to a list of `UserVote` values. */
-export type UserVotesConnection = {
-  __typename?: 'UserVotesConnection';
-  /** A list of edges which contains the `UserVote` and cursor to aid in pagination. */
-  edges: Array<UserVotesEdge>;
-  /** A list of `UserVote` objects. */
-  nodes: Array<UserVote>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `UserVote` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `UserVote` edge in the connection. */
-export type UserVotesEdge = {
-  __typename?: 'UserVotesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `UserVote` at the end of the edge. */
-  node: UserVote;
-};
-
-/** Methods to use when ordering `UserVote`. */
-export enum UserVotesOrderBy {
-  Natural = 'NATURAL',
-  ObjectIdAsc = 'OBJECT_ID_ASC',
-  ObjectIdDesc = 'OBJECT_ID_DESC',
-  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
-  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UserIdAsc = 'USER_ID_ASC',
-  UserIdDesc = 'USER_ID_DESC',
-  VotedAtAsc = 'VOTED_AT_ASC',
-  VotedAtDesc = 'VOTED_AT_DESC',
-  VoteTypeAsc = 'VOTE_TYPE_ASC',
-  VoteTypeDesc = 'VOTE_TYPE_DESC'
-}
-
-export type Value = Node & {
-  __typename?: 'Value';
-  boolean?: Maybe<Scalars['Boolean']['output']>;
-  bytes?: Maybe<Scalars['Bytes']['output']>;
-  date?: Maybe<Scalars['DateString']['output']>;
-  datetime?: Maybe<Scalars['DateTimeString']['output']>;
-  datetimeUtc?: Maybe<Scalars['Datetime']['output']>;
-  decimal?: Maybe<Scalars['BigFloat']['output']>;
-  embedding?: Maybe<Scalars['JSON']['output']>;
-  /** Reads a single `Entity` that is related to this `Value`. */
-  entity?: Maybe<Entity>;
-  entityId: Scalars['UUID']['output'];
-  float?: Maybe<Scalars['Float']['output']>;
-  id: Scalars['String']['output'];
-  integer?: Maybe<Scalars['BigInt']['output']>;
-  language?: Maybe<Scalars['LanguageTag']['output']>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  point?: Maybe<Scalars['GeoPoint']['output']>;
-  property?: Maybe<PropertyInfo>;
-  /** Reads a single `Entity` that is related to this `Value`. */
-  propertyEntity?: Maybe<Entity>;
-  propertyId: Scalars['UUID']['output'];
-  rect?: Maybe<Scalars['GeoRect']['output']>;
-  schedule?: Maybe<Scalars['JSON']['output']>;
-  /** Reads a single `Space` that is related to this `Value`. */
-  space?: Maybe<Space>;
-  spaceId: Scalars['UUID']['output'];
-  text?: Maybe<Scalars['String']['output']>;
-  time?: Maybe<Scalars['TimeString']['output']>;
-  timeUtc?: Maybe<Scalars['Time']['output']>;
-  unit?: Maybe<Scalars['String']['output']>;
-};
-
-/** A condition to be used against `Value` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type ValueCondition = {
-  /** Checks for equality with the object’s `boolean` field. */
-  boolean?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for equality with the object’s `bytes` field. */
-  bytes?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `date` field. */
-  date?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `datetime` field. */
-  datetime?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `datetimeUtc` field. */
-  datetimeUtc?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `decimal` field. */
-  decimal?: InputMaybe<Scalars['BigFloat']['input']>;
-  /** Checks for equality with the object’s `embedding` field. */
-  embedding?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `float` field. */
-  float?: InputMaybe<Scalars['Float']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `integer` field. */
-  integer?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `language` field. */
-  language?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `point` field. */
-  point?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `propertyId` field. */
-  propertyId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `rect` field. */
-  rect?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `schedule` field. */
-  schedule?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `text` field. */
-  text?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `time` field. */
-  time?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `timeUtc` field. */
-  timeUtc?: InputMaybe<Scalars['Time']['input']>;
-  /** Checks for equality with the object’s `unit` field. */
-  unit?: InputMaybe<Scalars['String']['input']>;
+  votedAt?: DatetimeFilter | null | undefined;
 };
 
 /** A filter to be used against `Value` object types. All fields are combined with a logical ‘and.’ */
 export type ValueFilter = {
   /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ValueFilter>>;
+  and?: Array<ValueFilter> | null | undefined;
   /** Filter by the object’s `boolean` field. */
-  boolean?: InputMaybe<BooleanFilter>;
+  boolean?: BooleanFilter | null | undefined;
   /** Filter by the object’s `date` field. */
-  date?: InputMaybe<StringFilter>;
+  date?: StringFilter | null | undefined;
   /** Filter by the object’s `datetime` field. */
-  datetime?: InputMaybe<StringFilter>;
+  datetime?: StringFilter | null | undefined;
   /** Filter by the object’s `datetimeUtc` field. */
-  datetimeUtc?: InputMaybe<DatetimeFilter>;
+  datetimeUtc?: DatetimeFilter | null | undefined;
   /** Filter by the object’s `decimal` field. */
-  decimal?: InputMaybe<BigFloatFilter>;
+  decimal?: BigFloatFilter | null | undefined;
   /** Filter by the object’s `embedding` field. */
-  embedding?: InputMaybe<JsonFilter>;
+  embedding?: JsonFilter | null | undefined;
   /** Filter by the object’s `entity` relation. */
-  entity?: InputMaybe<EntityFilter>;
+  entity?: EntityFilter | null | undefined;
   /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
+  entityId?: UuidFilter | null | undefined;
   /** Filter by the object’s `float` field. */
-  float?: InputMaybe<FloatFilter>;
+  float?: FloatFilter | null | undefined;
   /** Filter by the object’s `id` field. */
-  id?: InputMaybe<StringFilter>;
+  id?: StringFilter | null | undefined;
   /** Filter by the object’s `integer` field. */
-  integer?: InputMaybe<BigIntFilter>;
+  integer?: BigIntFilter | null | undefined;
   /** Filter by the object’s `language` field. */
-  language?: InputMaybe<StringFilter>;
+  language?: StringFilter | null | undefined;
   /** Negates the expression. */
-  not?: InputMaybe<ValueFilter>;
+  not?: ValueFilter | null | undefined;
   /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ValueFilter>>;
+  or?: Array<ValueFilter> | null | undefined;
   /** Filter by the object’s `point` field. */
-  point?: InputMaybe<StringFilter>;
+  point?: StringFilter | null | undefined;
   /** Filter by the object’s `propertyEntity` relation. */
-  propertyEntity?: InputMaybe<EntityFilter>;
+  propertyEntity?: EntityFilter | null | undefined;
   /** Filter by the object’s `propertyId` field. */
-  propertyId?: InputMaybe<UuidFilter>;
+  propertyId?: UuidFilter | null | undefined;
   /** Filter by the object’s `rect` field. */
-  rect?: InputMaybe<StringFilter>;
+  rect?: StringFilter | null | undefined;
   /** Filter by the object’s `schedule` field. */
-  schedule?: InputMaybe<JsonFilter>;
+  schedule?: JsonFilter | null | undefined;
   /** Filter by the object’s `space` relation. */
-  space?: InputMaybe<SpaceFilter>;
+  space?: SpaceFilter | null | undefined;
   /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
+  spaceId?: UuidFilter | null | undefined;
   /** Filter by the object’s `text` field. */
-  text?: InputMaybe<StringFilter>;
+  text?: StringFilter | null | undefined;
   /** Filter by the object’s `time` field. */
-  time?: InputMaybe<StringFilter>;
+  time?: StringFilter | null | undefined;
   /** Filter by the object’s `timeUtc` field. */
-  timeUtc?: InputMaybe<TimeFilter>;
+  timeUtc?: TimeFilter | null | undefined;
   /** Filter by the object’s `unit` field. */
-  unit?: InputMaybe<StringFilter>;
-};
-
-export type ValueVersion = Node & {
-  __typename?: 'ValueVersion';
-  boolean?: Maybe<Scalars['Boolean']['output']>;
-  bytes?: Maybe<Scalars['Bytes']['output']>;
-  contextEdgeTypeId?: Maybe<Scalars['UUID']['output']>;
-  contextLastToEntityId?: Maybe<Scalars['UUID']['output']>;
-  contextRootId?: Maybe<Scalars['UUID']['output']>;
-  date?: Maybe<Scalars['DateString']['output']>;
-  datetime?: Maybe<Scalars['DateTimeString']['output']>;
-  datetimeUtc?: Maybe<Scalars['Datetime']['output']>;
-  decimal?: Maybe<Scalars['BigFloat']['output']>;
-  embedding?: Maybe<Scalars['JSON']['output']>;
-  entityId: Scalars['UUID']['output'];
-  float?: Maybe<Scalars['Float']['output']>;
-  id: Scalars['UUID']['output'];
-  integer?: Maybe<Scalars['BigInt']['output']>;
-  language?: Maybe<Scalars['LanguageTag']['output']>;
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  point?: Maybe<Scalars['GeoPoint']['output']>;
-  propertyId: Scalars['UUID']['output'];
-  rect?: Maybe<Scalars['GeoRect']['output']>;
-  schedule?: Maybe<Scalars['JSON']['output']>;
-  spaceId: Scalars['UUID']['output'];
-  text?: Maybe<Scalars['String']['output']>;
-  time?: Maybe<Scalars['TimeString']['output']>;
-  timeUtc?: Maybe<Scalars['Time']['output']>;
-  unit?: Maybe<Scalars['String']['output']>;
-  validFromKey: Scalars['BigInt']['output'];
-  validToKey?: Maybe<Scalars['BigInt']['output']>;
-};
-
-/**
- * A condition to be used against `ValueVersion` object types. All fields are
- * tested for equality and combined with a logical ‘and.’
- */
-export type ValueVersionCondition = {
-  /** Checks for equality with the object’s `boolean` field. */
-  boolean?: InputMaybe<Scalars['Boolean']['input']>;
-  /** Checks for equality with the object’s `bytes` field. */
-  bytes?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `contextEdgeTypeId` field. */
-  contextEdgeTypeId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `contextLastToEntityId` field. */
-  contextLastToEntityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `contextRootId` field. */
-  contextRootId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `date` field. */
-  date?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `datetime` field. */
-  datetime?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `datetimeUtc` field. */
-  datetimeUtc?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `decimal` field. */
-  decimal?: InputMaybe<Scalars['BigFloat']['input']>;
-  /** Checks for equality with the object’s `embedding` field. */
-  embedding?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `entityId` field. */
-  entityId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `float` field. */
-  float?: InputMaybe<Scalars['Float']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `integer` field. */
-  integer?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `language` field. */
-  language?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `point` field. */
-  point?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `propertyId` field. */
-  propertyId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `rect` field. */
-  rect?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `schedule` field. */
-  schedule?: InputMaybe<Scalars['JSON']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `text` field. */
-  text?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `time` field. */
-  time?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `timeUtc` field. */
-  timeUtc?: InputMaybe<Scalars['Time']['input']>;
-  /** Checks for equality with the object’s `unit` field. */
-  unit?: InputMaybe<Scalars['String']['input']>;
-  /** Checks for equality with the object’s `validFromKey` field. */
-  validFromKey?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `validToKey` field. */
-  validToKey?: InputMaybe<Scalars['BigInt']['input']>;
-};
-
-/** A filter to be used against `ValueVersion` object types. All fields are combined with a logical ‘and.’ */
-export type ValueVersionFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<ValueVersionFilter>>;
-  /** Filter by the object’s `boolean` field. */
-  boolean?: InputMaybe<BooleanFilter>;
-  /** Filter by the object’s `contextEdgeTypeId` field. */
-  contextEdgeTypeId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `contextLastToEntityId` field. */
-  contextLastToEntityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `contextRootId` field. */
-  contextRootId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `date` field. */
-  date?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `datetime` field. */
-  datetime?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `datetimeUtc` field. */
-  datetimeUtc?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `decimal` field. */
-  decimal?: InputMaybe<BigFloatFilter>;
-  /** Filter by the object’s `embedding` field. */
-  embedding?: InputMaybe<JsonFilter>;
-  /** Filter by the object’s `entityId` field. */
-  entityId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `float` field. */
-  float?: InputMaybe<FloatFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `integer` field. */
-  integer?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `language` field. */
-  language?: InputMaybe<StringFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<ValueVersionFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<ValueVersionFilter>>;
-  /** Filter by the object’s `point` field. */
-  point?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `propertyId` field. */
-  propertyId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `rect` field. */
-  rect?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `schedule` field. */
-  schedule?: InputMaybe<JsonFilter>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `text` field. */
-  text?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `time` field. */
-  time?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `timeUtc` field. */
-  timeUtc?: InputMaybe<TimeFilter>;
-  /** Filter by the object’s `unit` field. */
-  unit?: InputMaybe<StringFilter>;
-  /** Filter by the object’s `validFromKey` field. */
-  validFromKey?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `validToKey` field. */
-  validToKey?: InputMaybe<BigIntFilter>;
-};
-
-/** A connection to a list of `ValueVersion` values. */
-export type ValueVersionsConnection = {
-  __typename?: 'ValueVersionsConnection';
-  /** A list of edges which contains the `ValueVersion` and cursor to aid in pagination. */
-  edges: Array<ValueVersionsEdge>;
-  /** A list of `ValueVersion` objects. */
-  nodes: Array<ValueVersion>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `ValueVersion` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `ValueVersion` edge in the connection. */
-export type ValueVersionsEdge = {
-  __typename?: 'ValueVersionsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `ValueVersion` at the end of the edge. */
-  node: ValueVersion;
-};
-
-/** Methods to use when ordering `ValueVersion`. */
-export enum ValueVersionsOrderBy {
-  BooleanAsc = 'BOOLEAN_ASC',
-  BooleanDesc = 'BOOLEAN_DESC',
-  BytesAsc = 'BYTES_ASC',
-  BytesDesc = 'BYTES_DESC',
-  ContextEdgeTypeIdAsc = 'CONTEXT_EDGE_TYPE_ID_ASC',
-  ContextEdgeTypeIdDesc = 'CONTEXT_EDGE_TYPE_ID_DESC',
-  ContextLastToEntityIdAsc = 'CONTEXT_LAST_TO_ENTITY_ID_ASC',
-  ContextLastToEntityIdDesc = 'CONTEXT_LAST_TO_ENTITY_ID_DESC',
-  ContextRootIdAsc = 'CONTEXT_ROOT_ID_ASC',
-  ContextRootIdDesc = 'CONTEXT_ROOT_ID_DESC',
-  DatetimeAsc = 'DATETIME_ASC',
-  DatetimeDesc = 'DATETIME_DESC',
-  DatetimeUtcAsc = 'DATETIME_UTC_ASC',
-  DatetimeUtcDesc = 'DATETIME_UTC_DESC',
-  DateAsc = 'DATE_ASC',
-  DateDesc = 'DATE_DESC',
-  DecimalAsc = 'DECIMAL_ASC',
-  DecimalDesc = 'DECIMAL_DESC',
-  EmbeddingAsc = 'EMBEDDING_ASC',
-  EmbeddingDesc = 'EMBEDDING_DESC',
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  FloatAsc = 'FLOAT_ASC',
-  FloatDesc = 'FLOAT_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  IntegerAsc = 'INTEGER_ASC',
-  IntegerDesc = 'INTEGER_DESC',
-  LanguageAsc = 'LANGUAGE_ASC',
-  LanguageDesc = 'LANGUAGE_DESC',
-  Natural = 'NATURAL',
-  PointAsc = 'POINT_ASC',
-  PointDesc = 'POINT_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  PropertyIdAsc = 'PROPERTY_ID_ASC',
-  PropertyIdDesc = 'PROPERTY_ID_DESC',
-  RectAsc = 'RECT_ASC',
-  RectDesc = 'RECT_DESC',
-  ScheduleAsc = 'SCHEDULE_ASC',
-  ScheduleDesc = 'SCHEDULE_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  TextAsc = 'TEXT_ASC',
-  TextDesc = 'TEXT_DESC',
-  TimeAsc = 'TIME_ASC',
-  TimeDesc = 'TIME_DESC',
-  TimeUtcAsc = 'TIME_UTC_ASC',
-  TimeUtcDesc = 'TIME_UTC_DESC',
-  UnitAsc = 'UNIT_ASC',
-  UnitDesc = 'UNIT_DESC',
-  ValidFromKeyAsc = 'VALID_FROM_KEY_ASC',
-  ValidFromKeyDesc = 'VALID_FROM_KEY_DESC',
-  ValidToKeyAsc = 'VALID_TO_KEY_ASC',
-  ValidToKeyDesc = 'VALID_TO_KEY_DESC'
-}
-
-/** A connection to a list of `Value` values. */
-export type ValuesConnection = {
-  __typename?: 'ValuesConnection';
-  /** A list of edges which contains the `Value` and cursor to aid in pagination. */
-  edges: Array<ValuesEdge>;
-  /** A list of `Value` objects. */
-  nodes: Array<Value>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Value` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `Value` edge in the connection. */
-export type ValuesEdge = {
-  __typename?: 'ValuesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Value` at the end of the edge. */
-  node: Value;
-};
-
-/** Methods to use when ordering `Value`. */
-export enum ValuesOrderBy {
-  BooleanAsc = 'BOOLEAN_ASC',
-  BooleanDesc = 'BOOLEAN_DESC',
-  BytesAsc = 'BYTES_ASC',
-  BytesDesc = 'BYTES_DESC',
-  DatetimeAsc = 'DATETIME_ASC',
-  DatetimeDesc = 'DATETIME_DESC',
-  DatetimeUtcAsc = 'DATETIME_UTC_ASC',
-  DatetimeUtcDesc = 'DATETIME_UTC_DESC',
-  DateAsc = 'DATE_ASC',
-  DateDesc = 'DATE_DESC',
-  DecimalAsc = 'DECIMAL_ASC',
-  DecimalDesc = 'DECIMAL_DESC',
-  EmbeddingAsc = 'EMBEDDING_ASC',
-  EmbeddingDesc = 'EMBEDDING_DESC',
-  EntityIdAsc = 'ENTITY_ID_ASC',
-  EntityIdDesc = 'ENTITY_ID_DESC',
-  FloatAsc = 'FLOAT_ASC',
-  FloatDesc = 'FLOAT_DESC',
-  GlobalScoreAsc = 'GLOBAL_SCORE_ASC',
-  GlobalScoreDesc = 'GLOBAL_SCORE_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  IntegerAsc = 'INTEGER_ASC',
-  IntegerDesc = 'INTEGER_DESC',
-  LanguageAsc = 'LANGUAGE_ASC',
-  LanguageDesc = 'LANGUAGE_DESC',
-  LocalScoreAsc = 'LOCAL_SCORE_ASC',
-  LocalScoreDesc = 'LOCAL_SCORE_DESC',
-  Natural = 'NATURAL',
-  PointAsc = 'POINT_ASC',
-  PointDesc = 'POINT_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  PropertyIdAsc = 'PROPERTY_ID_ASC',
-  PropertyIdDesc = 'PROPERTY_ID_DESC',
-  RawScoreAsc = 'RAW_SCORE_ASC',
-  RawScoreDesc = 'RAW_SCORE_DESC',
-  RectAsc = 'RECT_ASC',
-  RectDesc = 'RECT_DESC',
-  ScheduleAsc = 'SCHEDULE_ASC',
-  ScheduleDesc = 'SCHEDULE_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  TextAsc = 'TEXT_ASC',
-  TextDesc = 'TEXT_DESC',
-  TimeAsc = 'TIME_ASC',
-  TimeDesc = 'TIME_DESC',
-  TimeUtcAsc = 'TIME_UTC_ASC',
-  TimeUtcDesc = 'TIME_UTC_DESC',
-  UnitAsc = 'UNIT_ASC',
-  UnitDesc = 'UNIT_DESC'
-}
-
-export type Vote = Node & {
-  __typename?: 'Vote';
-  blockNumber: Scalars['BigInt']['output'];
-  blockTimestamp: Scalars['Datetime']['output'];
-  createdAt: Scalars['Datetime']['output'];
-  id: Scalars['Int']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  objectId: Scalars['UUID']['output'];
-  objectType: Scalars['Int']['output'];
-  spaceId: Scalars['UUID']['output'];
-  vote: Scalars['Int']['output'];
-  voterId: Scalars['UUID']['output'];
-};
-
-/** A condition to be used against `Vote` object types. All fields are tested for equality and combined with a logical ‘and.’ */
-export type VoteCondition = {
-  /** Checks for equality with the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `blockTimestamp` field. */
-  blockTimestamp?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `createdAt` field. */
-  createdAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `objectId` field. */
-  objectId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `objectType` field. */
-  objectType?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `vote` field. */
-  vote?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `voterId` field. */
-  voterId?: InputMaybe<Scalars['UUID']['input']>;
-};
-
-/** A filter to be used against `Vote` object types. All fields are combined with a logical ‘and.’ */
-export type VoteFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<VoteFilter>>;
-  /** Filter by the object’s `blockNumber` field. */
-  blockNumber?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `blockTimestamp` field. */
-  blockTimestamp?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `createdAt` field. */
-  createdAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<IntFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<VoteFilter>;
-  /** Filter by the object’s `objectId` field. */
-  objectId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `objectType` field. */
-  objectType?: InputMaybe<IntFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<VoteFilter>>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `vote` field. */
-  vote?: InputMaybe<IntFilter>;
-  /** Filter by the object’s `voterId` field. */
-  voterId?: InputMaybe<UuidFilter>;
+  unit?: StringFilter | null | undefined;
 };
 
 export enum VoteOption {
@@ -6536,176 +1191,28 @@ export enum VoteOption {
 /** A filter to be used against VoteOption fields. All fields are combined with a logical ‘and.’ */
 export type VoteOptionFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<VoteOption>;
+  distinctFrom?: VoteOption | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<VoteOption>;
+  greaterThan?: VoteOption | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<VoteOption>;
+  greaterThanOrEqualTo?: VoteOption | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<VoteOption>>;
+  in?: Array<VoteOption> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<VoteOption>;
+  is?: VoteOption | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<VoteOption>;
+  isNot?: VoteOption | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<VoteOption>;
+  lessThan?: VoteOption | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<VoteOption>;
+  lessThanOrEqualTo?: VoteOption | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<VoteOption>;
+  notDistinctFrom?: VoteOption | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<VoteOption>>;
+  notIn?: Array<VoteOption> | null | undefined;
 };
-
-/** A connection to a list of `Vote` values. */
-export type VotesConnection = {
-  __typename?: 'VotesConnection';
-  /** A list of edges which contains the `Vote` and cursor to aid in pagination. */
-  edges: Array<VotesEdge>;
-  /** A list of `Vote` objects. */
-  nodes: Array<Vote>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `Vote` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-export type VotesCount = Node & {
-  __typename?: 'VotesCount';
-  downvotes: Scalars['BigInt']['output'];
-  id: Scalars['Int']['output'];
-  /** A globally unique identifier. Can be used in various places throughout the system to identify this single value. */
-  nodeId: Scalars['ID']['output'];
-  objectId: Scalars['UUID']['output'];
-  objectType: Scalars['Int']['output'];
-  spaceId: Scalars['UUID']['output'];
-  updatedAt: Scalars['Datetime']['output'];
-  upvotes: Scalars['BigInt']['output'];
-};
-
-/**
- * A condition to be used against `VotesCount` object types. All fields are tested
- * for equality and combined with a logical ‘and.’
- */
-export type VotesCountCondition = {
-  /** Checks for equality with the object’s `downvotes` field. */
-  downvotes?: InputMaybe<Scalars['BigInt']['input']>;
-  /** Checks for equality with the object’s `id` field. */
-  id?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `objectId` field. */
-  objectId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `objectType` field. */
-  objectType?: InputMaybe<Scalars['Int']['input']>;
-  /** Checks for equality with the object’s `spaceId` field. */
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  /** Checks for equality with the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<Scalars['Datetime']['input']>;
-  /** Checks for equality with the object’s `upvotes` field. */
-  upvotes?: InputMaybe<Scalars['BigInt']['input']>;
-};
-
-/** A filter to be used against `VotesCount` object types. All fields are combined with a logical ‘and.’ */
-export type VotesCountFilter = {
-  /** Checks for all expressions in this list. */
-  and?: InputMaybe<Array<VotesCountFilter>>;
-  /** Filter by the object’s `downvotes` field. */
-  downvotes?: InputMaybe<BigIntFilter>;
-  /** Filter by the object’s `id` field. */
-  id?: InputMaybe<IntFilter>;
-  /** Negates the expression. */
-  not?: InputMaybe<VotesCountFilter>;
-  /** Filter by the object’s `objectId` field. */
-  objectId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `objectType` field. */
-  objectType?: InputMaybe<IntFilter>;
-  /** Checks for any expressions in this list. */
-  or?: InputMaybe<Array<VotesCountFilter>>;
-  /** Filter by the object’s `spaceId` field. */
-  spaceId?: InputMaybe<UuidFilter>;
-  /** Filter by the object’s `updatedAt` field. */
-  updatedAt?: InputMaybe<DatetimeFilter>;
-  /** Filter by the object’s `upvotes` field. */
-  upvotes?: InputMaybe<BigIntFilter>;
-};
-
-/** A connection to a list of `VotesCount` values. */
-export type VotesCountsConnection = {
-  __typename?: 'VotesCountsConnection';
-  /** A list of edges which contains the `VotesCount` and cursor to aid in pagination. */
-  edges: Array<VotesCountsEdge>;
-  /** A list of `VotesCount` objects. */
-  nodes: Array<VotesCount>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-  /** The count of *all* `VotesCount` you could get from the connection. */
-  totalCount: Scalars['Int']['output'];
-};
-
-/** A `VotesCount` edge in the connection. */
-export type VotesCountsEdge = {
-  __typename?: 'VotesCountsEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `VotesCount` at the end of the edge. */
-  node: VotesCount;
-};
-
-/** Methods to use when ordering `VotesCount`. */
-export enum VotesCountsOrderBy {
-  DownvotesAsc = 'DOWNVOTES_ASC',
-  DownvotesDesc = 'DOWNVOTES_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  ObjectIdAsc = 'OBJECT_ID_ASC',
-  ObjectIdDesc = 'OBJECT_ID_DESC',
-  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
-  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  UpdatedAtAsc = 'UPDATED_AT_ASC',
-  UpdatedAtDesc = 'UPDATED_AT_DESC',
-  UpvotesAsc = 'UPVOTES_ASC',
-  UpvotesDesc = 'UPVOTES_DESC'
-}
-
-/** A `Vote` edge in the connection. */
-export type VotesEdge = {
-  __typename?: 'VotesEdge';
-  /** A cursor for use in pagination. */
-  cursor?: Maybe<Scalars['Cursor']['output']>;
-  /** The `Vote` at the end of the edge. */
-  node: Vote;
-};
-
-/** Methods to use when ordering `Vote`. */
-export enum VotesOrderBy {
-  BlockNumberAsc = 'BLOCK_NUMBER_ASC',
-  BlockNumberDesc = 'BLOCK_NUMBER_DESC',
-  BlockTimestampAsc = 'BLOCK_TIMESTAMP_ASC',
-  BlockTimestampDesc = 'BLOCK_TIMESTAMP_DESC',
-  CreatedAtAsc = 'CREATED_AT_ASC',
-  CreatedAtDesc = 'CREATED_AT_DESC',
-  IdAsc = 'ID_ASC',
-  IdDesc = 'ID_DESC',
-  Natural = 'NATURAL',
-  ObjectIdAsc = 'OBJECT_ID_ASC',
-  ObjectIdDesc = 'OBJECT_ID_DESC',
-  ObjectTypeAsc = 'OBJECT_TYPE_ASC',
-  ObjectTypeDesc = 'OBJECT_TYPE_DESC',
-  PrimaryKeyAsc = 'PRIMARY_KEY_ASC',
-  PrimaryKeyDesc = 'PRIMARY_KEY_DESC',
-  SpaceIdAsc = 'SPACE_ID_ASC',
-  SpaceIdDesc = 'SPACE_ID_DESC',
-  VoterIdAsc = 'VOTER_ID_ASC',
-  VoterIdDesc = 'VOTER_ID_DESC',
-  VoteAsc = 'VOTE_ASC',
-  VoteDesc = 'VOTE_DESC'
-}
 
 export enum VotingMode {
   Fast = 'FAST',
@@ -6715,409 +1222,344 @@ export enum VotingMode {
 /** A filter to be used against VotingMode fields. All fields are combined with a logical ‘and.’ */
 export type VotingModeFilter = {
   /** Not equal to the specified value, treating null like an ordinary value. */
-  distinctFrom?: InputMaybe<VotingMode>;
+  distinctFrom?: VotingMode | null | undefined;
   /** Greater than the specified value. */
-  greaterThan?: InputMaybe<VotingMode>;
+  greaterThan?: VotingMode | null | undefined;
   /** Greater than or equal to the specified value. */
-  greaterThanOrEqualTo?: InputMaybe<VotingMode>;
+  greaterThanOrEqualTo?: VotingMode | null | undefined;
   /** Included in the specified list. */
-  in?: InputMaybe<Array<VotingMode>>;
+  in?: Array<VotingMode> | null | undefined;
   /** Equal to the specified value. */
-  is?: InputMaybe<VotingMode>;
+  is?: VotingMode | null | undefined;
   /** Not equal to the specified value. */
-  isNot?: InputMaybe<VotingMode>;
+  isNot?: VotingMode | null | undefined;
   /** Is null (if `true` is specified) or is not null (if `false` is specified). */
-  isNull?: InputMaybe<Scalars['Boolean']['input']>;
+  isNull?: boolean | null | undefined;
   /** Less than the specified value. */
-  lessThan?: InputMaybe<VotingMode>;
+  lessThan?: VotingMode | null | undefined;
   /** Less than or equal to the specified value. */
-  lessThanOrEqualTo?: InputMaybe<VotingMode>;
+  lessThanOrEqualTo?: VotingMode | null | undefined;
   /** Equal to the specified value, treating null like an ordinary value. */
-  notDistinctFrom?: InputMaybe<VotingMode>;
+  notDistinctFrom?: VotingMode | null | undefined;
   /** Not included in the specified list. */
-  notIn?: InputMaybe<Array<VotingMode>>;
+  notIn?: Array<VotingMode> | null | undefined;
 };
 
-export type RelationToEntityFragment = { __typename?: 'Entity', id: any, name?: string | null, types?: Array<{ __typename?: 'Entity', id: any }> | null, valuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any, text?: string | null }> } & { ' $fragmentName'?: 'RelationToEntityFragment' };
+export type RelationToEntityFragment = { id: any, name: string | null, types: Array<{ id: any }> | null, valuesList: Array<{ spaceId: any, propertyId: any, text: string | null }> } & { ' $fragmentName'?: 'RelationToEntityFragment' };
 
-export type EntityValueFieldsFragment = { __typename?: 'Value', spaceId: any, text?: string | null, integer?: any | null, float?: number | null, point?: any | null, boolean?: boolean | null, time?: any | null, language?: any | null, unit?: string | null, datetime?: any | null, date?: any | null, decimal?: any | null, schedule?: any | null, property?: (
-    { __typename?: 'PropertyInfo' }
-    & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
-  ) | null } & { ' $fragmentName'?: 'EntityValueFieldsFragment' };
+export type EntityValueFieldsFragment = { spaceId: any, text: string | null, integer: any, float: number | null, point: any, boolean: boolean | null, time: any, language: any, unit: string | null, datetime: any, date: any, decimal: any, schedule: any, property: { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } } | null } & { ' $fragmentName'?: 'EntityValueFieldsFragment' };
 
-export type RelationFieldsFragment = { __typename?: 'Relation', id: any, spaceId: any, position?: string | null, verified?: boolean | null, entityId: any, toSpaceId?: any | null, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: (
-    { __typename?: 'Entity' }
-    & { ' $fragmentRefs'?: { 'RelationToEntityFragment': RelationToEntityFragment } }
-  ) | null, type?: { __typename?: 'PropertyInfo', id?: any | null, name?: string | null } | null } & { ' $fragmentName'?: 'RelationFieldsFragment' };
+export type RelationFieldsFragment = { id: any, spaceId: any, position: string | null, verified: boolean | null, entityId: any, toSpaceId: any, fromEntity: { id: any, name: string | null } | null, toEntity: { ' $fragmentRefs'?: { 'RelationToEntityFragment': RelationToEntityFragment } } | null, type: { id: any, name: string | null } | null } & { ' $fragmentName'?: 'RelationFieldsFragment' };
 
-export type FullEntityFragment = { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, createdAt: string, createdAtBlock: string, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<(
-    { __typename?: 'Value' }
-    & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-  )>, relationsList: Array<(
-    { __typename?: 'Relation' }
-    & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-  )> } & { ' $fragmentName'?: 'FullEntityFragment' };
+export type FullEntityFragment = { id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, createdAt: string, createdAtBlock: string, updatedAt: string, types: Array<{ id: any, name: string | null }> | null, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relationsList: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> } & { ' $fragmentName'?: 'FullEntityFragment' };
 
 export type AllEntitiesQueryVariables = Exact<{
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  spaceIds?: InputMaybe<UuidFilter>;
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  typeIds?: InputMaybe<UuidFilter>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
-  filter?: InputMaybe<EntityFilter>;
-  orderBy?: InputMaybe<Array<EntitiesOrderBy> | EntitiesOrderBy>;
+  spaceId?: any;
+  spaceIds?: UuidFilter | null | undefined;
+  typeId?: any;
+  typeIds?: UuidFilter | null | undefined;
+  limit?: number | null | undefined;
+  offset?: number | null | undefined;
+  filter?: EntityFilter | null | undefined;
+  orderBy?: Array<EntitiesOrderBy> | EntitiesOrderBy | null | undefined;
 }>;
 
 
-export type AllEntitiesQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, allValuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any }>, allRelationsList: Array<{ __typename?: 'Relation', spaceId: any }>, valuesList: Array<(
-      { __typename?: 'Value' }
-      & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-    )>, relationsList: Array<(
-      { __typename?: 'Relation' }
-      & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-    )> }> | null };
+export type AllEntitiesQuery = { entities: Array<{ id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, updatedAt: string, types: Array<{ id: any, name: string | null }> | null, allValuesList: Array<{ spaceId: any, propertyId: any }>, allRelationsList: Array<{ spaceId: any }>, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relationsList: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> }> | null };
 
 export type EntitiesBatchQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  filter?: EntityFilter | null | undefined;
+  spaceId?: any;
 }>;
 
 
-export type EntitiesBatchQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<(
-      { __typename?: 'Value' }
-      & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-    )>, relationsList: Array<(
-      { __typename?: 'Relation' }
-      & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-    )> }> | null };
+export type EntitiesBatchQuery = { entities: Array<{ id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relationsList: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> }> | null };
 
 export type EntitySpacesBatchQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
+  filter?: EntityFilter | null | undefined;
 }>;
 
 
-export type EntitySpacesBatchQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, spaceIds?: Array<any | null> | null, allValuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any }>, allRelationsList: Array<{ __typename?: 'Relation', spaceId: any }> }> | null };
+export type EntitySpacesBatchQuery = { entities: Array<{ id: any, spaceIds: Array<any> | null, allValuesList: Array<{ spaceId: any, propertyId: any }>, allRelationsList: Array<{ spaceId: any }> }> | null };
 
 export type EntityQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  cursor?: InputMaybe<Scalars['Cursor']['input']>;
+  id: any;
+  spaceId?: any;
+  cursor?: any;
 }>;
 
 
-export type EntityQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, allValuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any }>, allRelationsList: Array<{ __typename?: 'Relation', spaceId: any }>, valuesList: Array<(
-      { __typename?: 'Value' }
-      & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-    )>, relations: { __typename?: 'RelationsConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: any | null }, nodes: Array<(
-        { __typename?: 'Relation' }
-        & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-      )> } } | null };
+export type EntityQuery = { entity: { id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, updatedAt: string, types: Array<{ id: any, name: string | null }> | null, allValuesList: Array<{ spaceId: any, propertyId: any }>, allRelationsList: Array<{ spaceId: any }>, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relations: { pageInfo: { hasNextPage: boolean, endCursor: any }, nodes: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> } } | null };
 
 export type EntityRelationsPageQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  cursor?: InputMaybe<Scalars['Cursor']['input']>;
+  id: any;
+  spaceId?: any;
+  cursor?: any;
 }>;
 
 
-export type EntityRelationsPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', relations: { __typename?: 'RelationsConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: any | null }, nodes: Array<(
-        { __typename?: 'Relation' }
-        & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-      )> } } | null };
+export type EntityRelationsPageQuery = { entity: { relations: { pageInfo: { hasNextPage: boolean, endCursor: any }, nodes: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> } } | null };
 
 export type FullRelationFragment = (
-  { __typename?: 'Relation', entity?: { __typename?: 'Entity', id: any, name?: string | null } | null }
+  { entity: { id: any, name: string | null } | null }
   & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
 ) & { ' $fragmentName'?: 'FullRelationFragment' };
 
 export type RelationEntityRelationsQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  id: any;
+  spaceId?: any;
 }>;
 
 
-export type RelationEntityRelationsQuery = { __typename?: 'Query', relations?: Array<(
-    { __typename?: 'Relation' }
-    & { ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }
-  )> | null };
+export type RelationEntityRelationsQuery = { relations: Array<{ ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }> | null };
 
 export type RelationsByToEntityIdsQueryVariables = Exact<{
-  toEntityIds: Array<Scalars['UUID']['input']> | Scalars['UUID']['input'];
-  typeId?: InputMaybe<Scalars['UUID']['input']>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  toEntityIds: Array<any> | any;
+  typeId?: any;
+  spaceId?: any;
 }>;
 
 
-export type RelationsByToEntityIdsQuery = { __typename?: 'Query', relations?: Array<{ __typename?: 'Relation', id: any, toEntityId: any, spaceId: any, fromEntityId: any }> | null };
+export type RelationsByToEntityIdsQuery = { relations: Array<{ id: any, toEntityId: any, spaceId: any, fromEntityId: any }> | null };
 
 export type RelationsByFromEntityIdQueryVariables = Exact<{
-  fromEntityId: Scalars['UUID']['input'];
-  typeId: Scalars['UUID']['input'];
-  spaceId: Scalars['UUID']['input'];
+  fromEntityId: any;
+  typeId: any;
+  spaceId: any;
 }>;
 
 
-export type RelationsByFromEntityIdQuery = { __typename?: 'Query', relations?: Array<(
-    { __typename?: 'Relation' }
-    & { ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }
-  )> | null };
+export type RelationsByFromEntityIdQuery = { relations: Array<{ ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }> | null };
 
 export type EntityPageQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  id: any;
+  spaceId?: any;
 }>;
 
 
-export type EntityPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, allValuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any }>, allRelationsList: Array<{ __typename?: 'Relation', spaceId: any }>, valuesList: Array<(
-      { __typename?: 'Value' }
-      & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-    )>, relationsList: Array<(
-      { __typename?: 'Relation' }
-      & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-    )> } | null, relations?: Array<(
-    { __typename?: 'Relation' }
-    & { ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }
-  )> | null };
+export type EntityPageQuery = { entity: { id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null, allValuesList: Array<{ spaceId: any, propertyId: any }>, allRelationsList: Array<{ spaceId: any }>, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relationsList: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> } | null, relations: Array<{ ' $fragmentRefs'?: { 'FullRelationFragment': FullRelationFragment } }> | null };
 
 export type EntityTypesQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  id: any;
+  spaceId?: any;
 }>;
 
 
-export type EntityTypesQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null };
+export type EntityTypesQuery = { entity: { types: Array<{ id: any, name: string | null }> | null } | null };
 
 export type EntityExistsQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
+  id: any;
 }>;
 
 
-export type EntityExistsQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any } | null };
+export type EntityExistsQuery = { entity: { id: any } | null };
 
 export type EntityCommentReplyBacklinksPageQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  replyToTypeId: Scalars['UUID']['input'];
-  commentTypeId: Scalars['UUID']['input'];
-  first: Scalars['Int']['input'];
-  offset: Scalars['Int']['input'];
+  id: any;
+  replyToTypeId: any;
+  commentTypeId: any;
+  first: number;
+  offset: number;
 }>;
 
 
-export type EntityCommentReplyBacklinksPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', backlinksList: Array<{ __typename?: 'Relation', fromEntity?: { __typename?: 'Entity', id: any } | null }> } | null };
+export type EntityCommentReplyBacklinksPageQuery = { entity: { backlinksList: Array<{ fromEntity: { id: any } | null }> } | null };
 
 export type EntitiesBatchForCommentsQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
+  filter?: EntityFilter | null | undefined;
 }>;
 
 
-export type EntitiesBatchForCommentsQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, createdAt: string, updatedAt: string, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, valuesList: Array<(
-      { __typename?: 'Value' }
-      & { ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }
-    )>, relationsList: Array<(
-      { __typename?: 'Relation' }
-      & { ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }
-    )> }> | null };
+export type EntitiesBatchForCommentsQuery = { entities: Array<{ id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, createdAt: string, updatedAt: string, types: Array<{ id: any, name: string | null }> | null, valuesList: Array<{ ' $fragmentRefs'?: { 'EntityValueFieldsFragment': EntityValueFieldsFragment } }>, relationsList: Array<{ ' $fragmentRefs'?: { 'RelationFieldsFragment': RelationFieldsFragment } }> }> | null };
 
 export type EntityBacklinksPageQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  id: any;
+  spaceId?: any;
 }>;
 
 
-export type EntityBacklinksPageQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', backlinksList: Array<{ __typename?: 'Relation', spaceId: any, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null, spaceIds?: Array<any | null> | null }> | null } | null }> } | null };
+export type EntityBacklinksPageQuery = { entity: { backlinksList: Array<{ spaceId: any, fromEntity: { id: any, name: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null, spaceIds: Array<any> | null }> | null } | null }> } | null };
 
-export type FullSpaceFragment = { __typename?: 'Space', id: any, type: SpaceTypes, address: string, topicId?: any | null, topic?: (
-    { __typename?: 'Entity' }
-    & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
-  ) | null, members: { __typename?: 'MembersConnection', totalCount: number }, membersList: Array<{ __typename?: 'Member', memberSpaceId: any }>, editors: { __typename?: 'EditorsConnection', totalCount: number }, editorsList: Array<{ __typename?: 'Editor', memberSpaceId: any }>, spaceVotingSetting?: { __typename?: 'SpaceVotingSetting', flatSupportThreshold: any } | null, page?: (
-    { __typename?: 'Entity' }
-    & { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } }
-  ) | null } & { ' $fragmentName'?: 'FullSpaceFragment' };
+export type FullSpaceFragment = { id: any, type: SpaceTypes, address: string, topicId: any, topic: { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } } | null, members: { totalCount: number }, membersList: Array<{ memberSpaceId: any }>, editors: { totalCount: number }, editorsList: Array<{ memberSpaceId: any }>, spaceVotingSetting: { flatSupportThreshold: any } | null, page: { ' $fragmentRefs'?: { 'FullEntityFragment': FullEntityFragment } } | null } & { ' $fragmentName'?: 'FullSpaceFragment' };
 
 export type SpaceQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
+  id: any;
 }>;
 
 
-export type SpaceQuery = { __typename?: 'Query', space?: (
-    { __typename?: 'Space' }
-    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
-  ) | null };
+export type SpaceQuery = { space: { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } } | null };
 
 export type SpacesQueryVariables = Exact<{
-  filter?: InputMaybe<SpaceFilter>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
+  filter?: SpaceFilter | null | undefined;
+  limit?: number | null | undefined;
+  offset?: number | null | undefined;
 }>;
 
 
-export type SpacesQuery = { __typename?: 'Query', spaces?: Array<(
-    { __typename?: 'Space' }
-    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
-  )> | null };
+export type SpacesQuery = { spaces: Array<{ ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }> | null };
 
 export type SpacesWhereMemberQueryVariables = Exact<{
-  memberSpaceId: Scalars['UUID']['input'];
+  memberSpaceId: any;
 }>;
 
 
-export type SpacesWhereMemberQuery = { __typename?: 'Query', spaces?: Array<(
-    { __typename?: 'Space' }
-    & { ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }
-  )> | null };
+export type SpacesWhereMemberQuery = { spaces: Array<{ ' $fragmentRefs'?: { 'FullSpaceFragment': FullSpaceFragment } }> | null };
 
 export type IsMemberOfSpaceQueryVariables = Exact<{
-  spaceId: Scalars['UUID']['input'];
-  memberSpaceId: Scalars['UUID']['input'];
+  spaceId: any;
+  memberSpaceId: any;
 }>;
 
 
-export type IsMemberOfSpaceQuery = { __typename?: 'Query', space?: { __typename?: 'Space', membersList: Array<{ __typename?: 'Member', memberSpaceId: any }> } | null };
+export type IsMemberOfSpaceQuery = { space: { membersList: Array<{ memberSpaceId: any }> } | null };
 
 export type IsEditorOfSpaceQueryVariables = Exact<{
-  spaceId: Scalars['UUID']['input'];
-  memberSpaceId: Scalars['UUID']['input'];
+  spaceId: any;
+  memberSpaceId: any;
 }>;
 
 
-export type IsEditorOfSpaceQuery = { __typename?: 'Query', space?: { __typename?: 'Space', editorsList: Array<{ __typename?: 'Editor', memberSpaceId: any }> } | null };
+export type IsEditorOfSpaceQuery = { space: { editorsList: Array<{ memberSpaceId: any }> } | null };
 
 export type SpaceMembersPageQueryVariables = Exact<{
-  spaceId: Scalars['UUID']['input'];
-  first: Scalars['Int']['input'];
-  offset: Scalars['Int']['input'];
+  spaceId: any;
+  first: number;
+  offset: number;
 }>;
 
 
-export type SpaceMembersPageQuery = { __typename?: 'Query', space?: { __typename?: 'Space', members: { __typename?: 'MembersConnection', totalCount: number }, membersList: Array<{ __typename?: 'Member', memberSpaceId: any }> } | null };
+export type SpaceMembersPageQuery = { space: { members: { totalCount: number }, membersList: Array<{ memberSpaceId: any }> } | null };
 
 export type SpaceEditorsPageQueryVariables = Exact<{
-  spaceId: Scalars['UUID']['input'];
-  first: Scalars['Int']['input'];
-  offset: Scalars['Int']['input'];
+  spaceId: any;
+  first: number;
+  offset: number;
 }>;
 
 
-export type SpaceEditorsPageQuery = { __typename?: 'Query', space?: { __typename?: 'Space', editors: { __typename?: 'EditorsConnection', totalCount: number }, editorsList: Array<{ __typename?: 'Editor', memberSpaceId: any }> } | null };
+export type SpaceEditorsPageQuery = { space: { editors: { totalCount: number }, editorsList: Array<{ memberSpaceId: any }> } | null };
 
-export type PropertyFragmentFragment = { __typename?: 'PropertyInfo', id?: any | null, name?: string | null, dataTypeId?: any | null, dataTypeName?: string | null, renderableTypeId?: any | null, renderableTypeName?: string | null, format?: string | null, isType?: boolean | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
+export type PropertyFragmentFragment = { id: any, name: string | null, dataTypeId: any, dataTypeName: string | null, renderableTypeId: any, renderableTypeName: string | null, format: string | null, isType: boolean | null } & { ' $fragmentName'?: 'PropertyFragmentFragment' };
 
 export type PropertyQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
+  id: any;
 }>;
 
 
-export type PropertyQuery = { __typename?: 'Query', property?: (
-    { __typename?: 'PropertyInfo' }
-    & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
-  ) | null };
+export type PropertyQuery = { property: { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } } | null };
 
 export type PropertiesBatchQueryVariables = Exact<{
-  ids: Array<Scalars['UUID']['input']> | Scalars['UUID']['input'];
+  ids: Array<any> | any;
 }>;
 
 
-export type PropertiesBatchQuery = { __typename?: 'Query', properties?: Array<(
-    { __typename?: 'PropertyInfo' }
-    & { ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }
-  )> | null };
+export type PropertiesBatchQuery = { properties: Array<{ ' $fragmentRefs'?: { 'PropertyFragmentFragment': PropertyFragmentFragment } }> | null };
 
 export type EntityNamesQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
+  filter?: EntityFilter | null | undefined;
 }>;
 
 
-export type EntityNamesQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null };
+export type EntityNamesQuery = { entities: Array<{ id: any, name: string | null }> | null };
 
 export type ResultQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
+  id: any;
 }>;
 
 
-export type ResultQuery = { __typename?: 'Query', entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null } | null };
+export type ResultQuery = { entity: { id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null } | null };
 
 export type ResultsQueryVariables = Exact<{
-  query: Scalars['String']['input'];
-  filter?: InputMaybe<EntityFilter>;
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
-  limit?: InputMaybe<Scalars['Int']['input']>;
-  offset?: InputMaybe<Scalars['Int']['input']>;
+  query: string;
+  filter?: EntityFilter | null | undefined;
+  spaceId?: any;
+  limit?: number | null | undefined;
+  offset?: number | null | undefined;
 }>;
 
 
-export type ResultsQuery = { __typename?: 'Query', search?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null }> | null };
+export type ResultsQuery = { search: Array<{ id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null }> | null };
 
 export type EntitiesPageQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
-  first: Scalars['Int']['input'];
-  offset: Scalars['Int']['input'];
+  filter?: EntityFilter | null | undefined;
+  first: number;
+  offset: number;
 }>;
 
 
-export type EntitiesPageQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null }> | null };
+export type EntitiesPageQuery = { entities: Array<{ id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null }> | null };
 
 export type ImportNameValuesQueryVariables = Exact<{
-  propertyId: Scalars['UUID']['input'];
-  texts?: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
-  first?: InputMaybe<Scalars['Int']['input']>;
-  entityFilter?: InputMaybe<EntityFilter>;
+  propertyId: any;
+  texts?: Array<string> | string | null | undefined;
+  first?: number | null | undefined;
+  entityFilter?: EntityFilter | null | undefined;
 }>;
 
 
-export type ImportNameValuesQuery = { __typename?: 'Query', values?: Array<{ __typename?: 'Value', id: string, text?: string | null, spaceId: any, entity?: { __typename?: 'Entity', id: any, name?: string | null, typeIds?: Array<any | null> | null, backlinks: { __typename?: 'RelationsConnection', totalCount: number }, relations: { __typename?: 'RelationsConnection', totalCount: number } } | null }> | null };
+export type ImportNameValuesQuery = { values: Array<{ id: string, text: string | null, spaceId: any, entity: { id: any, name: string | null, typeIds: Array<any> | null, backlinks: { totalCount: number }, relations: { totalCount: number } } | null }> | null };
 
 export type EntityTiebreakerBatchQueryVariables = Exact<{
-  filter?: InputMaybe<EntityFilter>;
+  filter?: EntityFilter | null | undefined;
 }>;
 
 
-export type EntityTiebreakerBatchQuery = { __typename?: 'Query', entities?: Array<{ __typename?: 'Entity', id: any, createdAt: string, backlinks: { __typename?: 'RelationsConnection', totalCount: number }, relations: { __typename?: 'RelationsConnection', totalCount: number }, values: { __typename?: 'ValuesConnection', totalCount: number } }> | null };
+export type EntityTiebreakerBatchQuery = { entities: Array<{ id: any, createdAt: string, backlinks: { totalCount: number }, relations: { totalCount: number }, values: { totalCount: number } }> | null };
 
 export type RelationEntityMinimalQueryVariables = Exact<{
-  id: Scalars['UUID']['input'];
-  spaceId?: InputMaybe<Scalars['UUID']['input']>;
+  id: any;
+  spaceId?: any;
 }>;
 
 
-export type RelationEntityMinimalQuery = { __typename?: 'Query', relation?: { __typename?: 'Relation', id: any, entity?: { __typename?: 'Entity', id: any, name?: string | null, description?: string | null, spaceIds?: Array<any | null> | null, types?: Array<{ __typename?: 'Entity', id: any, name?: string | null }> | null, allValuesList: Array<{ __typename?: 'Value', spaceId: any, propertyId: any }>, allRelationsList: Array<{ __typename?: 'Relation', spaceId: any }>, valuesList: Array<{ __typename?: 'Value', spaceId: any, text?: string | null, integer?: any | null, float?: number | null, point?: any | null, boolean?: boolean | null, time?: any | null, language?: any | null, unit?: string | null, datetime?: any | null, date?: any | null, decimal?: any | null, schedule?: any | null, property?: { __typename?: 'PropertyInfo', id?: any | null, name?: string | null, dataTypeId?: any | null, dataTypeName?: string | null, renderableTypeId?: any | null, renderableTypeName?: string | null, format?: string | null } | null }>, relationsList: Array<{ __typename?: 'Relation', verified?: boolean | null, toSpaceId?: any | null, position?: string | null, spaceId: any, id: any, entityId: any, fromEntity?: { __typename?: 'Entity', id: any, name?: string | null } | null, toEntity?: (
-          { __typename?: 'Entity' }
-          & { ' $fragmentRefs'?: { 'RelationToEntityFragment': RelationToEntityFragment } }
-        ) | null, type?: { __typename?: 'PropertyInfo', id?: any | null, name?: string | null, description?: string | null } | null }> } | null } | null };
+export type RelationEntityMinimalQuery = { relation: { id: any, entity: { id: any, name: string | null, description: string | null, spaceIds: Array<any> | null, types: Array<{ id: any, name: string | null }> | null, allValuesList: Array<{ spaceId: any, propertyId: any }>, allRelationsList: Array<{ spaceId: any }>, valuesList: Array<{ spaceId: any, text: string | null, integer: any, float: number | null, point: any, boolean: boolean | null, time: any, language: any, unit: string | null, datetime: any, date: any, decimal: any, schedule: any, property: { id: any, name: string | null, dataTypeId: any, dataTypeName: string | null, renderableTypeId: any, renderableTypeName: string | null, format: string | null } | null }>, relationsList: Array<{ verified: boolean | null, toSpaceId: any, position: string | null, spaceId: any, id: any, entityId: any, fromEntity: { id: any, name: string | null } | null, toEntity: { ' $fragmentRefs'?: { 'RelationToEntityFragment': RelationToEntityFragment } } | null, type: { id: any, name: string | null, description: string | null } | null }> } | null } | null };
 
-export type EntityVoteCountQueryVariables = Exact<{
-  objectId: Scalars['UUID']['input'];
-  objectType: Scalars['Int']['input'];
+export type EntityResponseCountsQueryVariables = Exact<{
+  objectId: any;
+  objectType: number;
+  spaceId: any;
+  voteKind: number;
 }>;
 
 
-export type EntityVoteCountQuery = { __typename?: 'Query', votesCountsConnection?: { __typename?: 'VotesCountsConnection', nodes: Array<{ __typename?: 'VotesCount', spaceId: any, upvotes: any, downvotes: any }> } | null };
+export type EntityResponseCountsQuery = { votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind: { positive: any, negative: any, voteKind: number } | null };
 
-export type UserEntityVoteQueryVariables = Exact<{
-  userId: Scalars['UUID']['input'];
-  objectId: Scalars['UUID']['input'];
-  objectType: Scalars['Int']['input'];
-  spaceId: Scalars['UUID']['input'];
+export type UserEntityResponseQueryVariables = Exact<{
+  userId: any;
+  objectId: any;
+  objectType: number;
+  spaceId: any;
+  voteKind: number;
 }>;
 
 
-export type UserEntityVoteQuery = { __typename?: 'Query', userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?: { __typename?: 'UserVote', voteType: number } | null };
+export type UserEntityResponseQuery = { userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind: { voteType: number } | null };
 
-export type EntityVotersQueryVariables = Exact<{
-  objectId: Scalars['UUID']['input'];
-  objectType: Scalars['Int']['input'];
-  spaceId: Scalars['UUID']['input'];
+export type EntityRespondersQueryVariables = Exact<{
+  objectId: any;
+  objectType: number;
+  spaceId: any;
+  voteKind: number;
 }>;
 
 
-export type EntityVotersQuery = { __typename?: 'Query', userVotes?: Array<{ __typename?: 'UserVote', userId: any, voteType: number }> | null };
+export type EntityRespondersQuery = { userVotes: Array<{ userId: any, voteType: number }> | null };
+
+export type ClaimResponseSummariesQueryVariables = Exact<{
+  filter: UserVoteFilter;
+  first: number;
+  offset: number;
+}>;
+
+
+export type ClaimResponseSummariesQuery = { userVotes: Array<{ userId: any, objectId: any, voteType: number, voteKind: number }> | null };
 
 export type UserHasEntityVoteQueryVariables = Exact<{
-  userId: Scalars['UUID']['input'];
+  userId: any;
 }>;
 
 
-export type UserHasEntityVoteQuery = { __typename?: 'Query', userVotes?: Array<{ __typename?: 'UserVote', userId: any }> | null };
+export type UserHasEntityVoteQuery = { userVotes: Array<{ userId: any }> | null };
 
 export const RelationToEntityFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}}]} as unknown as DocumentNode<RelationToEntityFragment, unknown>;
 export const RelationFieldsFragmentDoc = {"kind":"Document","definitions":[{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationFields"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Relation"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}}]} as unknown as DocumentNode<RelationFieldsFragment, unknown>;
@@ -7156,7 +1598,8 @@ export const EntitiesPageDocument = {"kind":"Document","definitions":[{"kind":"O
 export const ImportNameValuesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ImportNameValues"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"propertyId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"texts"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"entityFilter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"values"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"condition"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"propertyId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"propertyId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"text"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"inInsensitive"},"value":{"kind":"Variable","name":{"kind":"Name","value":"texts"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"entity"},"value":{"kind":"Variable","name":{"kind":"Name","value":"entityFilter"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"typeIds"}},{"kind":"Field","name":{"kind":"Name","value":"backlinks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ImportNameValuesQuery, ImportNameValuesQueryVariables>;
 export const EntityTiebreakerBatchDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityTiebreakerBatch"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"EntityFilter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"entities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"backlinks"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}},{"kind":"Field","name":{"kind":"Name","value":"values"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"totalCount"}}]}}]}}]}}]} as unknown as DocumentNode<EntityTiebreakerBatchQuery, EntityTiebreakerBatchQueryVariables>;
 export const RelationEntityMinimalDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RelationEntityMinimal"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"relation"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"entity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"spaceIds"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allValuesList"},"name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"allRelationsList"},"name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}},{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"is"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"property"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"dataTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeId"}},{"kind":"Field","name":{"kind":"Name","value":"renderableTypeName"}},{"kind":"Field","name":{"kind":"Name","value":"format"}}]}},{"kind":"Field","name":{"kind":"Name","value":"text"}},{"kind":"Field","name":{"kind":"Name","value":"integer"}},{"kind":"Field","name":{"kind":"Name","value":"float"}},{"kind":"Field","name":{"kind":"Name","value":"point"}},{"kind":"Field","name":{"kind":"Name","value":"boolean"}},{"kind":"Field","name":{"kind":"Name","value":"time"}},{"kind":"Field","name":{"kind":"Name","value":"language"}},{"kind":"Field","name":{"kind":"Name","value":"unit"}},{"kind":"Field","name":{"kind":"Name","value":"datetime"}},{"kind":"Field","name":{"kind":"Name","value":"date"}},{"kind":"Field","name":{"kind":"Name","value":"decimal"}},{"kind":"Field","name":{"kind":"Name","value":"schedule"}}]}},{"kind":"Field","name":{"kind":"Name","value":"relationsList"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1000"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"verified"}},{"kind":"Field","name":{"kind":"Name","value":"toSpaceId"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"entityId"}},{"kind":"Field","name":{"kind":"Name","value":"fromEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"toEntity"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"RelationToEntity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"type"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}}]}}]}}]}}]}}]}},{"kind":"FragmentDefinition","name":{"kind":"Name","value":"RelationToEntity"},"typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Entity"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"types"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}}]}},{"kind":"Field","name":{"kind":"Name","value":"valuesList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"propertyId"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}}]} as unknown as DocumentNode<RelationEntityMinimalQuery, RelationEntityMinimalQueryVariables>;
-export const EntityVoteCountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityVoteCount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"votesCountsConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"condition"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nodes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"spaceId"}},{"kind":"Field","name":{"kind":"Name","value":"upvotes"}},{"kind":"Field","name":{"kind":"Name","value":"downvotes"}}]}}]}}]}}]} as unknown as DocumentNode<EntityVoteCountQuery, EntityVoteCountQueryVariables>;
-export const UserEntityVoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UserEntityVote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"userId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"userId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"userId"}}},{"kind":"Argument","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"Argument","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"voteType"}}]}}]}}]} as unknown as DocumentNode<UserEntityVoteQuery, UserEntityVoteQueryVariables>;
-export const EntityVotersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityVoters"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVotes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"condition"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"voteType"}}]}}]}}]} as unknown as DocumentNode<EntityVotersQuery, EntityVotersQueryVariables>;
+export const EntityResponseCountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityResponseCounts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"Argument","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"voteKind"},"value":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"positive"}},{"kind":"Field","name":{"kind":"Name","value":"negative"}},{"kind":"Field","name":{"kind":"Name","value":"voteKind"}}]}}]}}]} as unknown as DocumentNode<EntityResponseCountsQuery, EntityResponseCountsQueryVariables>;
+export const UserEntityResponseDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UserEntityResponse"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"userId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"userId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"userId"}}},{"kind":"Argument","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"Argument","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}},{"kind":"Argument","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"Argument","name":{"kind":"Name","value":"voteKind"},"value":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"voteType"}}]}}]}}]} as unknown as DocumentNode<UserEntityResponseQuery, UserEntityResponseQueryVariables>;
+export const EntityRespondersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EntityResponders"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVotes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"condition"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"objectId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectId"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"objectType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"objectType"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"spaceId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"spaceId"}}},{"kind":"ObjectField","name":{"kind":"Name","value":"voteKind"},"value":{"kind":"Variable","name":{"kind":"Name","value":"voteKind"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"voteType"}}]}}]}}]} as unknown as DocumentNode<EntityRespondersQuery, EntityRespondersQueryVariables>;
+export const ClaimResponseSummariesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"ClaimResponseSummaries"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"filter"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UserVoteFilter"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"first"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVotes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"filter"}}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"Variable","name":{"kind":"Name","value":"first"}}},{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}},{"kind":"Argument","name":{"kind":"Name","value":"orderBy"},"value":{"kind":"ListValue","values":[{"kind":"EnumValue","value":"OBJECT_ID_ASC"},{"kind":"EnumValue","value":"VOTE_KIND_ASC"},{"kind":"EnumValue","value":"USER_ID_ASC"}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"objectId"}},{"kind":"Field","name":{"kind":"Name","value":"voteType"}},{"kind":"Field","name":{"kind":"Name","value":"voteKind"}}]}}]}}]} as unknown as DocumentNode<ClaimResponseSummariesQuery, ClaimResponseSummariesQueryVariables>;
 export const UserHasEntityVoteDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UserHasEntityVote"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"userId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UUID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userVotes"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"condition"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"userId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"userId"}}}]}},{"kind":"Argument","name":{"kind":"Name","value":"first"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}}]}}]}}]} as unknown as DocumentNode<UserHasEntityVoteQuery, UserHasEntityVoteQueryVariables>;

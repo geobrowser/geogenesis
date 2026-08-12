@@ -81,9 +81,17 @@ export const fetchExploreSidePanelData = cache(
       pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
     }
 
+    const rankingSpaceAllowlist = new Set([
+      ...featuredSpaces.map(space => normId(space.spaceId)),
+      ...memberOrEditorSpaceIds.map(normId),
+    ]);
+    const visibleFeaturedRankings = featuredRankings.filter(ranking =>
+      rankingSpaceAllowlist.has(normId(ranking.spaceId))
+    );
+
     return {
       featuredSpaces,
-      featuredRankings,
+      featuredRankings: visibleFeaturedRankings,
       pendingMembershipSpaceIds,
       memberOrEditorSpaceIds,
       communityCalls,

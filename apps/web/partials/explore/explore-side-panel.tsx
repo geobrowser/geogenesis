@@ -60,7 +60,16 @@ export function ExploreSidePanel({
     sections.push({ key: 'join-spaces', node: <JoinSpacesSection spaces={joinableSpaces} /> });
   }
   if (featuredRankings.length > 0) {
-    sections.push({ key: 'featured-rankings', node: <FeaturedRankingsSection rankings={featuredRankings} /> });
+    sections.push({
+      key: 'featured-rankings',
+      node: (
+        <FeaturedRankingsSection
+          rankings={featuredRankings}
+          memberOrEditorSpaceIds={memberOrEditorSet}
+          pendingMembershipSpaceIds={pendingSet}
+        />
+      ),
+    });
   }
   if (communityCalls.length > 0) {
     sections.push({
