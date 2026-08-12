@@ -743,6 +743,14 @@ function CommentList({
   // The parent's avatar center is at -28px from this container's left edge.
   // We render a single continuous vertical line spanning from top to the last reply's
   // avatar center, then each reply gets a horizontal arm (or curve for the last one).
+  // The elbow lands on the reply avatar's vertical centre, so its geometry
+  // follows the density's avatar size rather than the 32px avatar these paths
+  // were originally drawn against.
+  const density = useCommentDensity();
+  const armY = density.avatarCenterPx - 0.5;
+  const elbowRadius = Math.min(9.5, Math.max(0, armY));
+  const elbowPath = `M 0.5 0 L 0.5 ${armY - elbowRadius} Q 0.5 ${armY}, ${0.5 + elbowRadius} ${armY} L 28 ${armY}`;
+
   const parentBundle =
     parentCommentId != null && hi.focus?.kind === 'parent-thread' && hi.focus.threadCommentId === parentCommentId;
   const listSpineLit = parentBundle || (parentCommentId != null && hi.spinePressedListParentId === parentCommentId);
@@ -801,16 +809,16 @@ function CommentList({
                     onPointerDown={() => hi.pressSpineForListParent(parentCommentId!)}
                     {...branchLeave}
                     className="comment-branch-hit comment-branch-parent-hit pointer-events-auto absolute cursor-pointer border-0 bg-transparent p-0"
-                    style={{ left: '-28px', top: '-2px', width: '28px', height: '22px' }}
+                    style={{ left: '-28px', top: '-2px', width: '28px', height: `${density.avatarCenterPx + 6}px` }}
                   >
                     <svg
                       className="pointer-events-none overflow-visible"
-                      style={{ width: '28px', height: '16px' }}
-                      viewBox="0 0 28 16"
+                      style={{ width: '28px', height: `${density.avatarCenterPx}px` }}
+                      viewBox={`0 0 28 ${density.avatarCenterPx}`}
                       fill="none"
                     >
                       <path
-                        d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
+                        d={elbowPath}
                         strokeWidth="1"
                         fill="none"
                         className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
@@ -820,12 +828,12 @@ function CommentList({
                 ) : (
                   <svg
                     className="pointer-events-none absolute overflow-visible"
-                    style={{ left: '-28px', top: 0, width: '28px', height: '16px' }}
-                    viewBox="0 0 28 16"
+                    style={{ left: '-28px', top: 0, width: '28px', height: `${density.avatarCenterPx}px` }}
+                    viewBox={`0 0 28 ${density.avatarCenterPx}`}
                     fill="none"
                   >
                     <path
-                      d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
+                      d={elbowPath}
                       strokeWidth="1"
                       fill="none"
                       className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
@@ -843,7 +851,7 @@ function CommentList({
                   onPointerDown={() => hi.pressSpineForListParent(parentCommentId!)}
                   {...branchLeave}
                   className="comment-branch-hit comment-branch-parent-hit pointer-events-auto absolute -translate-y-1/2 cursor-pointer border-0 bg-transparent p-0"
-                  style={{ left: '-28px', top: '16px', width: '28px', height: '12px' }}
+                  style={{ left: '-28px', top: `${density.avatarCenterPx}px`, width: '28px', height: '12px' }}
                 >
                   <span
                     className={cx(
@@ -860,7 +868,7 @@ function CommentList({
                     'pointer-events-none absolute h-px transition-colors',
                     spanFill
                   )}
-                  style={{ left: '-28px', top: '16px', width: '28px' }}
+                  style={{ left: '-28px', top: `${density.avatarCenterPx}px`, width: '28px' }}
                 />
               )}
             </div>
@@ -979,9 +987,10 @@ function CommentItem({
     if (commentRef.current && repliesRef.current) {
       const commentRect = commentRef.current.getBoundingClientRect();
       const repliesRect = repliesRef.current.getBoundingClientRect();
-      setParentLineHeight(repliesRect.top - commentRect.top - 32);
+      // The spine starts below the avatar, so drop that much off its length.
+      setParentLineHeight(repliesRect.top - commentRect.top - density.avatarPx);
     }
-  }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying]);
+  }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (
     <div className="flex items-center gap-3">
@@ -1211,7 +1220,8 @@ function CommentItem({
               className="comment-branch-parent-hit comment-branch-parent-spine absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
               style={{
                 left: `${density.avatarCenterPx}px`,
-                top: '32px',
+                // Starts just below the avatar it descends from.
+                top: `${density.avatarPx}px`,
                 height: `${parentLineHeight}px`,
                 width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
               }}
