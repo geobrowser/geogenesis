@@ -297,8 +297,9 @@ function DebateFeedItem({
     <section
       ref={itemRef}
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
-      // the claim header doesn't need to sit flush against the chrome.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3 md:pt-3"
+      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
+      // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
     >
       {/* The whole debate lifts with the nudge — title, media and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared

@@ -157,8 +157,8 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
-    // `pt-5` is the design's 20px gap under the navbar; `md:pt-3` keeps mobile's own spacing.
-    expect(feedItem).toHaveClass('items-start', 'pt-5', 'md:h-auto', 'md:min-h-full', 'md:py-3', 'md:pt-3');
+    // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.
+    expect(feedItem).toHaveClass('items-start', 'pt-5', 'md:h-auto', 'md:min-h-full', 'md:py-3');
     // One class per assertion: `not.toHaveClass(a, b)` only fails when *every* class is present,
     // so grouping them lets a regression on any single class slip through.
     expect(feedItem).not.toHaveClass('items-center');

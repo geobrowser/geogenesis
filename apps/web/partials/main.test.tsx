@@ -55,6 +55,10 @@ describe('Main', () => {
 
   it('keeps the chrome off routes that are already full-width', () => {
     mocks.pathname = '/space/space-1/debates';
-    expect(renderMain()).not.toHaveClass(...CHROME);
+    const main = renderMain();
+
+    // Individually: `not.toHaveClass(a, b)` only fails when *every* class is present, so the
+    // spread form would still pass if one chrome class crept back.
+    for (const className of CHROME) expect(main).not.toHaveClass(className);
   });
 });
