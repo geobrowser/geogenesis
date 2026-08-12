@@ -10,6 +10,7 @@ import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identi
 import {
   type Debate,
   type DebateActivity,
+  type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
@@ -121,6 +122,39 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
         signal
       ),
     enabled: shouldFetch,
+  });
+}
+
+/**
+ * The same per-space payload as {@link useDebateClaims}, for callers holding claims spread across
+ * several spaces — the rematch picker mixes geo-chat's session claims with published ones from
+ * anywhere. A hook per space is impossible when the list changes length, so this fans out.
+ */
+export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
+  // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateClaimsResponse>[]) => results.flatMap(result => result.data?.claims ?? []),
+    []
+  );
+
+  return useQueries({
+    queries: groups.map(group => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listDebateClaims(
+          group.spaceId,
+          group.claimIds,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled: authenticated && group.claimIds.length > 0,
+    })),
+    combine,
   });
 }
 
