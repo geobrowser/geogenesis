@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   setReadiness: vi.fn(),
   openSidePanel: vi.fn(),
   entityQueries: [] as unknown[],
+  entityQueryPlaceholder: false,
+  entities: [] as Array<Record<string, unknown>>,
+  claimReadinessLoading: false,
+  claimReadinessError: false,
   claimReadiness: [] as Array<{
     claim_entity_id: string;
     viewer_debate_ready: boolean;
@@ -56,7 +60,11 @@ vi.mock('~/core/debates/hooks', () => ({
     error: null,
   }),
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
-  useDebateClaimsBySpaces: () => mocks.claimReadiness,
+  useDebateClaimsBySpaces: () => ({
+    claims: mocks.claimReadiness,
+    isLoading: mocks.claimReadinessLoading,
+    isError: mocks.claimReadinessError,
+  }),
   useCreateDebateRematchRequest: () => mutation(),
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
@@ -67,20 +75,9 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: (options: { where?: unknown }) => {
     mocks.entityQueries.push(options.where);
     return {
-      entities: [
-        {
-          id: CLAIM_MORE,
-          name: 'A newly published claim',
-          description: null,
-          spaces: [SPACE_2],
-          relations: [
-            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
-            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
-          ],
-        },
-      ],
+      entities: mocks.entities,
       isLoading: false,
-      isPlaceholderData: false,
+      isPlaceholderData: mocks.entityQueryPlaceholder,
       endCursor: null,
       hasNextPage: false,
     };
@@ -132,9 +129,13 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.optimisticResponses.clear();
   mocks.claimReadiness = [];
+  mocks.claimReadinessLoading = false;
+  mocks.claimReadinessError = false;
   mocks.setReadiness.mockReset();
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
+  mocks.entityQueryPlaceholder = false;
+  mocks.entities = [publishedEntity()];
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -517,6 +518,53 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
   });
 
+  // A switch drawn from a guess is worse than one that waits: reading an unresolved lookup as
+  // "not ready" would report the opposite of the truth on a claim the viewer is standing ready on.
+  it('leaves the Debate toggle out until readiness is known', () => {
+    mocks.claimReadinessLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('switch', { name: 'Ready to debate this claim' })).toBeNull();
+  });
+
+  it('leaves it out when the readiness lookup failed', () => {
+    mocks.claimReadinessError = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('switch', { name: 'Ready to debate this claim' })).toBeNull();
+  });
+
+  // A settled lookup with no row for the claim genuinely means not ready, so the switch belongs.
+  it('shows the toggle off once a settled lookup reports nothing for the claim', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).not.toBeChecked();
+  });
+
+  // `keepPreviousData` keeps the previous term's page on screen while the new one fetches. Filing
+  // it under the new term would let a prior search's claims survive into this one — and into the
+  // unfiltered list once the term is cleared.
+  it('does not bank the previous search’s page against a new term', async () => {
+    const STALE = '019fedb4-3f74-7c61-8d44-5fa08b1e7732';
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // The new term is in flight, so the page still on hand belongs to the previous one. Its name
+    // contains the term, so nothing downstream would filter it out if it were banked.
+    mocks.entities = [publishedEntity(STALE, 'A stale claim from the previous search')];
+    mocks.entityQueryPlaceholder = true;
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'claim' } });
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'claim' } }));
+
+    // The real page for this term lands.
+    mocks.entities = [publishedEntity()];
+    mocks.entityQueryPlaceholder = false;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('A stale claim from the previous search')).toBeNull());
+  });
+
   // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
   it('turns the Debate toggle on when a position is first established here', () => {
     mocks.claims = [
@@ -666,6 +714,19 @@ function sharedClaim(): DebateRematchClaim {
     shared_preference: true,
     recently_rejected: false,
     previously_debated: false,
+  };
+}
+
+function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
+  return {
+    id,
+    name,
+    description: null,
+    spaces: [SPACE_2],
+    relations: [
+      { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+      { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-eth', name: 'Ethics' }, isDeleted: false },
+    ],
   };
 }
 

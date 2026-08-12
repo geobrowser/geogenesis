@@ -39,6 +39,12 @@ type Props = {
    * following a link there would navigate out of the app shell and abandon the live session.
    */
   onOpenClaim?: () => void;
+  /**
+   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
+   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
+   * report "not ready" on a claim they are in fact ready on.
+   */
+  hideReadinessToggle?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -58,7 +64,16 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, onOpenClaim, ref }: Props) {
+export function MatchmakingClaimCard({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  footer,
+  onOpenClaim,
+  hideReadinessToggle,
+  ref,
+}: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -74,6 +89,7 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
           readiness={readiness}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
         />
       ) : (
         <UnresolvableControls
@@ -82,6 +98,7 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
         />
       )}
 
@@ -144,12 +161,14 @@ function RespondableControls({
   readiness,
   activeDebate,
   onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
   onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -213,13 +232,15 @@ function RespondableControls({
         isOnGraph
         onOpenClaim={onOpenClaim}
         toggle={
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={viewerPosition !== null}
-            responseIndexing={isPublishing}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={viewerPosition !== null}
+              responseIndexing={isPublishing}
+            />
+          )
         }
       />
       <PositionRow
@@ -248,12 +269,14 @@ function UnresolvableControls({
   readiness,
   activeDebate,
   onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
   onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
@@ -263,12 +286,14 @@ function UnresolvableControls({
         onOpenClaim={onOpenClaim}
         toggle={
           /* Readiness is geo-chat state, so it still works without a graph id. */
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={readiness.viewer_response !== null}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={readiness.viewer_response !== null}
+            />
+          )
         }
       />
       <PositionRow

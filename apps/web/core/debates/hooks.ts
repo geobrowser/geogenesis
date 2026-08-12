@@ -140,8 +140,17 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
 
   // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
   // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
+  //
+  // Status rides along with the claims deliberately. Flattening to a bare list makes a pending or
+  // failed lookup indistinguishable from "no readiness on this claim", and callers rendering a
+  // readiness switch would then draw it off — misreporting a claim the viewer is standing ready on
+  // for as long as the failure lasts.
   const combine = React.useCallback(
-    (results: UseQueryResult<DebateClaimsResponse>[]) => results.flatMap(result => result.data?.claims ?? []),
+    (results: UseQueryResult<DebateClaimsResponse>[]) => ({
+      claims: results.flatMap(result => result.data?.claims ?? []),
+      isLoading: results.some(result => result.isLoading),
+      isError: results.some(result => result.isError),
+    }),
     []
   );
 

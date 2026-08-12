@@ -107,6 +107,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     entities: typeof publishedClaimsPage;
   }>({ search: '', entities: [] });
   React.useEffect(() => {
+    // `keepPreviousData` keeps the old term's page on screen while the new one fetches. Recording
+    // that under the new term would file the previous search's claims as matches for this one, and
+    // the real page would then merge on top of them rather than replace them.
+    if (publishedClaimsPlaceholder) return;
+
     setPublishedClaims(current => {
       const sameSearch = current.search === debouncedSearch;
       const base = sameSearch ? current.entities : [];
@@ -117,7 +122,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       if (sameSearch && next.size === base.length) return current;
       return { search: debouncedSearch, entities: [...next.values()] };
     });
-  }, [debouncedSearch, publishedClaimsPage]);
+  }, [debouncedSearch, publishedClaimsPage, publishedClaimsPlaceholder]);
   const publishedClaimIds = React.useMemo(() => publishedClaims.entities.map(claim => claim.id), [publishedClaims]);
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const publishedClaimsQuery = useDebateRematchClaims(sessionId, publishedClaimIds);
@@ -283,7 +288,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
     return bySpace;
   }, [claims]);
-  const readinessByClaimId = useClaimReadinessByClaimId(claimIdsBySpace);
+  const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } =
+    useClaimReadinessByClaimId(claimIdsBySpace);
 
   React.useEffect(() => {
     if (!session) return;
@@ -426,6 +432,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 session={session}
                 currentUserId={currentUserId}
                 readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
+                readinessUnresolved={readinessUnresolved}
                 onRequest={() =>
                   createRequest.mutate({
                     source_space_id: claim.claim.space_id,
@@ -495,18 +502,23 @@ function useClaimReadinessByClaimId(claimIdsBySpace: Map<string, string[]>) {
         .map(([spaceId, claimIds]) => ({ spaceId, claimIds })),
     [claimIdsBySpace]
   );
-  const claims = useDebateClaimsBySpaces(groups);
+  const { claims, isLoading, isError } = useDebateClaimsBySpaces(groups);
 
-  return React.useMemo(() => {
-    const byClaimId = new Map<string, ClaimReadinessState>();
+  const byClaimId = React.useMemo(() => {
+    const map = new Map<string, ClaimReadinessState>();
     for (const claim of claims) {
-      byClaimId.set(claim.claim_entity_id, {
+      map.set(claim.claim_entity_id, {
         viewer_debate_ready: claim.viewer_debate_ready,
         readiness_disabled_reason: claim.readiness_disabled_reason,
       });
     }
-    return byClaimId;
+    return map;
   }, [claims]);
+
+  // A claim missing from a settled lookup genuinely has no readiness row, so `false` is the truth.
+  // Missing while a lookup is still running or has failed means we don't know, and a switch drawn
+  // from a guess is worse than one that waits.
+  return { byClaimId, unresolved: isLoading || isError };
 }
 
 /**
@@ -519,6 +531,7 @@ function RematchClaimCard({
   session,
   currentUserId,
   readiness: claimReadiness,
+  readinessUnresolved,
   onRequest,
   busy,
 }: {
@@ -526,6 +539,8 @@ function RematchClaimCard({
   session: DebateRematchSession | null;
   currentUserId: string | null;
   readiness: ClaimReadinessState | null;
+  /** True while any readiness lookup is still running or has failed. */
+  readinessUnresolved: boolean;
   onRequest: () => void;
   busy: boolean;
 }) {
@@ -586,6 +601,9 @@ function RematchClaimCard({
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
+      // Rather than draw the switch off on a guess. Only while this claim's readiness is genuinely
+      // unknown — a settled lookup that simply has no row for it really does mean "not ready".
+      hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
         opposing || requesting ? (
           <div className="mt-3">
