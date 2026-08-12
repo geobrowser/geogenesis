@@ -497,6 +497,7 @@ type BountyStatusConfig = {
   cardHeightPx: number;
   cardWidthPx: number;
   emptyMessage: string;
+  isInfinite?: boolean;
 };
 
 const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
@@ -523,6 +524,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     cardHeightPx: AVAILABLE_CARD_HEIGHT_PX,
     cardWidthPx: AVAILABLE_CARD_WIDTH_PX,
     emptyMessage: 'No available bounties yet.',
+    isInfinite: true,
   },
 };
 
@@ -532,46 +534,12 @@ export function BountiesStatusFullView({ spaceId, status }: { spaceId: string; s
   );
 }
 
-export function CompletedBountiesSection({ spaceId }: { spaceId: string }) {
+export function BountiesStatusSection({ spaceId, status }: { spaceId: string; status: BountyStatusSlug }) {
   return (
     <BountiesSection
       spaceId={spaceId}
-      title="Completed bounties"
-      taskStatusId={BOUNTY_TASK_STATUS_DONE_ENTITY_ID}
-      emptyMessage="No completed bounties yet."
-      grid={CompletedBountyGrid}
-      cardHeightPx={COMPLETED_CARD_HEIGHT_PX}
-      viewAllHref={NavUtils.toCommunityBounties(spaceId, 'completed')}
-    />
-  );
-}
-
-export function InProgressBountiesSection({ spaceId }: { spaceId: string }) {
-  return (
-    <BountiesSection
-      spaceId={spaceId}
-      title="In progress bounties"
-      taskStatusId={BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID}
-      emptyMessage="No in progress bounties yet."
-      grid={InProgressBountyGrid}
-      cardHeightPx={IN_PROGRESS_CARD_HEIGHT_PX}
-      viewAllHref={NavUtils.toCommunityBounties(spaceId, 'in-progress')}
-    />
-  );
-}
-
-export function AvailableBountiesSection({ spaceId }: { spaceId: string }) {
-  return (
-    <BountiesSection
-      spaceId={spaceId}
-      title="Available bounties"
-      taskStatusId={BOUNTY_TASK_STATUS_TODO_ENTITY_ID}
-      emptyMessage="No available bounties yet."
-      grid={AvailableBountyGrid}
-      cardHeightPx={AVAILABLE_CARD_HEIGHT_PX}
-      cardWidthPx={AVAILABLE_CARD_WIDTH_PX}
-      isInfinite
-      viewAllHref={NavUtils.toCommunityBounties(spaceId, 'available')}
+      viewAllHref={NavUtils.toCommunityBounties(spaceId, status)}
+      {...BOUNTY_STATUS_CONFIG[status]}
     />
   );
 }

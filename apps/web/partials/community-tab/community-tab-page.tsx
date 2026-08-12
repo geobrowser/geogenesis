@@ -2,11 +2,7 @@
 
 import * as React from 'react';
 
-import {
-  AvailableBountiesSection,
-  CompletedBountiesSection,
-  InProgressBountiesSection,
-} from './community-bounties-sections';
+import { BountiesStatusSection } from './community-bounties-sections';
 import { CuratorLeaderboardSection } from './curator-leaderboard-section';
 
 type Props = {
@@ -17,9 +13,9 @@ export function CommunityTabPage({ spaceId }: Props) {
   return (
     <div className="flex min-w-0 flex-col gap-10 pb-8">
       <CuratorLeaderboardSection spaceId={spaceId} />
-      <CompletedBountiesSection spaceId={spaceId} />
-      <InProgressBountiesSection spaceId={spaceId} />
-      <AvailableBountiesSection spaceId={spaceId} />
+      <BountiesStatusSection spaceId={spaceId} status="completed" />
+      <BountiesStatusSection spaceId={spaceId} status="in-progress" />
+      <BountiesStatusSection spaceId={spaceId} status="available" />
     </div>
   );
 }
