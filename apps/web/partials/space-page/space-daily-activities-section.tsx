@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { DAILY_ACTIVITIES_PROGRESS_COLOR, type DailyActivityTask } from '~/core/space/daily-activities';
+import { type DailyActivityTask } from '~/core/space/daily-activities';
 import {
   useDailyUploadActivityComplete,
   useRankingDailyActivityComplete,
@@ -140,13 +140,17 @@ export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
       </div>
 
       <div className="mt-4 flex flex-col gap-2">
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-grey-02">
+        <div
+          role="progressbar"
+          aria-label="Daily activities progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={isLoading ? undefined : progressPercent}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-grey-02"
+        >
           <div
-            className="h-full rounded-full transition-[width] duration-300"
-            style={{
-              width: `${progressPercent}%`,
-              backgroundColor: DAILY_ACTIVITIES_PROGRESS_COLOR,
-            }}
+            className="h-full rounded-full bg-purple transition-[width] duration-300"
+            style={{ width: `${progressPercent}%` }}
           />
         </div>
         <p className="text-[13px] leading-[13px] font-normal text-text">

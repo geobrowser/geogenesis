@@ -1,5 +1,3 @@
-export const DAILY_ACTIVITIES_PROGRESS_COLOR = '#6833FF';
-
 export const RANKING_ACTIVITY_DESCRIPTION = 'Rank top content to impact what people see';
 
 export const UPLOAD_ACTIVITY_TITLE = 'Upload a news story';
