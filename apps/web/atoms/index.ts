@@ -16,6 +16,15 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
+/**
+ * Entity whose comments are open in the global comments panel, or `null` when
+ * it's closed. Comment buttons appear on entities all over the app — explore
+ * cards, feed rows, data blocks — and everywhere except an entity's own full
+ * page they should open the comments beside what you're reading rather than
+ * navigate away from it.
+ */
+export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
+
 export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */

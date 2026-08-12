@@ -20,6 +20,7 @@ import { Persistence } from '~/core/state/persistence';
 import { ClientOnly } from '~/design-system/client-only';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
 import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
@@ -127,6 +128,7 @@ export function App({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <EntitySidePanel />
+        <EntityCommentsPanelHost />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           <OnboardingDialog />
