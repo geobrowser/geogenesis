@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
+  openSidePanel: vi.fn(),
   claimReadiness: [] as Array<{
     claim_entity_id: string;
     viewer_debate_ready: boolean;
@@ -98,6 +99,10 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
 }));
 
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({
     spaces: [],
@@ -124,6 +129,7 @@ beforeEach(() => {
   mocks.optimisticResponses.clear();
   mocks.claimReadiness = [];
   mocks.setReadiness.mockReset();
+  mocks.openSidePanel.mockReset();
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -491,6 +497,19 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
     expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
+  });
+
+  // Following a link to the entity page would navigate out of the app shell and abandon the live
+  // session, so the claim opens beside the picker instead.
+  it('opens a claim in the side panel rather than navigating to it', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const claim = screen.getByText('A claim both participants chose');
+    expect(claim.closest('a')).toBeNull();
+
+    fireEvent.click(claim);
+
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
   });
 
   it('renders the card’s Debate toggle against real readiness', () => {

@@ -34,6 +34,7 @@ import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -291,7 +292,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : [];
 
   return (
-    <div className="fixed inset-0 z-[1000] overflow-y-auto bg-white text-text">
+    // Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
+    // and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
+    // the session keeps the screen to itself.
+    <div className="fixed inset-0 z-[150] overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 py-8 sm:px-8">
         <header className="mb-4 flex items-center justify-between gap-4">
           <h1 className="sr-only">Rematch {remoteName}</h1>
@@ -520,6 +524,7 @@ function RematchClaimCard({
         : optimisticResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
+  const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
@@ -544,6 +549,9 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
+      // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
+      // rematch behind, so open it beside the picker instead.
+      onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
       footer={
         opposing || requesting ? (
           <div className="mt-3">
