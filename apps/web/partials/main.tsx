@@ -3,9 +3,12 @@
 import * as React from 'react';
 
 import { motion } from 'framer-motion';
+import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 
 import { useDiff } from '~/core/state/diff-store';
+
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 type MainProps = {
   children: React.ReactNode;
@@ -15,8 +18,15 @@ export const Main = ({ children }: MainProps) => {
   const { isReviewOpen } = useDiff();
   const isHidden = isReviewOpen;
   const pathname = usePathname();
+  // A Debate entity page renders the full-screen debates feed from an ordinary
+  // `/space/{id}/{entityId}` route, which no pathname test can pick out — only the view itself
+  // knows. Wrapping that takeover in the page chrome below makes the document taller than the
+  // viewport, so the feed scrolls up under the sticky navbar.
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
   const isFullWidth =
-    /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) || /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
+    debateFullscreenActive ||
+    /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
+    /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
 
   return (
     <motion.main
