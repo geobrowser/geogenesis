@@ -128,11 +128,35 @@ function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, action }: { message: string; action?: React.ReactNode }) {
   return (
     <div className="rounded-lg border border-grey-02 bg-white px-4 py-8 text-center text-[16px] leading-[20px] text-grey-04">
       {message}
+      {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
     </div>
+  );
+}
+
+function BountiesEmptyState({
+  totalCount,
+  emptyMessage,
+  onShowAll,
+}: {
+  totalCount: number;
+  emptyMessage: string;
+  onShowAll: () => void;
+}) {
+  if (totalCount === 0) return <EmptyState message={emptyMessage} />;
+
+  return (
+    <EmptyState
+      message={`${totalCount === 1 ? '1 bounty is' : `${totalCount} bounties are`} hidden by the current filters.`}
+      action={
+        <button type="button" onClick={onShowAll} className={FILTER_PILL_CLASS}>
+          Show all
+        </button>
+      }
+    />
   );
 }
 
@@ -162,12 +186,14 @@ type BountyFilterSetters = {
   setScope: (next: BountyScope) => void;
   setDifficulties: (next: Set<string>) => void;
   setSelectedSkills: (next: Set<string> | null) => void;
+  clearFilters: () => void;
 };
 
 type BountyFilterState = {
   filtered: SpaceBounty[];
   filterKey: string;
   controls: React.ReactNode;
+  clearFilters: () => void;
 };
 
 const allDifficultiesSelected = (difficulties: Set<string>) =>
@@ -177,7 +203,7 @@ function useBountyFilterPresentation(
   bounties: SpaceBounty[],
   skills: string[],
   { scope, difficulties, selectedSkills }: BountyFilterValues,
-  { setScope, setDifficulties, setSelectedSkills }: BountyFilterSetters
+  { setScope, setDifficulties, setSelectedSkills, clearFilters }: BountyFilterSetters
 ): BountyFilterState {
   const skillSelection = React.useMemo(() => selectedSkills ?? new Set(skills), [selectedSkills, skills]);
 
@@ -203,7 +229,7 @@ function useBountyFilterPresentation(
     </>
   );
 
-  return { filtered, filterKey, controls };
+  return { filtered, filterKey, controls, clearFilters };
 }
 
 function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
@@ -211,11 +237,17 @@ function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bounty
   const [difficulties, setDifficulties] = React.useState<Set<string>>(() => new Set(BOUNTY_DIFFICULTY_LEVELS));
   const [selectedSkills, setSelectedSkills] = React.useState<Set<string> | null>(null);
 
+  const clearFilters = React.useCallback(() => {
+    setScope('all');
+    setDifficulties(new Set(BOUNTY_DIFFICULTY_LEVELS));
+    setSelectedSkills(null);
+  }, []);
+
   return useBountyFilterPresentation(
     bounties,
     skills,
     { scope, difficulties, selectedSkills },
-    { setScope, setDifficulties, setSelectedSkills }
+    { setScope, setDifficulties, setSelectedSkills, clearFilters }
   );
 }
 
@@ -269,6 +301,7 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
     setScope: nextScope => commit({ ...values, scope: nextScope }),
     setDifficulties: nextDifficulties => commit({ ...values, difficulties: nextDifficulties }),
     setSelectedSkills: nextSelectedSkills => commit({ ...values, selectedSkills: nextSelectedSkills }),
+    clearFilters: () => commit({ scope: 'all', difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
   };
 
   return useBountyFilterPresentation(bounties, skills, values, setters);
@@ -297,7 +330,7 @@ function BountiesSection({
   viewAllHref: string;
 }) {
   const { bounties, skills, isLoading } = useSpaceBounties(spaceId, taskStatusId);
-  const { filtered, filterKey, controls: filterControls } = useBountyFilterState(bounties, skills);
+  const { filtered, filterKey, controls: filterControls, clearFilters } = useBountyFilterState(bounties, skills);
 
   const [visibleCount, setVisibleCount] = React.useState(INFINITE_PAGE_SIZE);
 
@@ -343,7 +376,7 @@ function BountiesSection({
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState message={emptyMessage} />
+        <BountiesEmptyState totalCount={bounties.length} emptyMessage={emptyMessage} onShowAll={clearFilters} />
       ) : (
         <>
           <Grid bounties={inlineBounties} allBounties={bounties} />
@@ -397,7 +430,7 @@ function BountiesFullView({
   emptyMessage: string;
 }) {
   const { bounties, skills, isLoading } = useSpaceBounties(spaceId, taskStatusId);
-  const { filtered, controls: filterControls } = useUrlBountyFilterState(bounties, skills);
+  const { filtered, controls: filterControls, clearFilters } = useUrlBountyFilterState(bounties, skills);
 
   return (
     <CommunityFullscreen>
@@ -423,7 +456,7 @@ function BountiesFullView({
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <EmptyState message={emptyMessage} />
+          <BountiesEmptyState totalCount={bounties.length} emptyMessage={emptyMessage} onShowAll={clearFilters} />
         ) : (
           <Grid bounties={filtered} allBounties={bounties} />
         )}
@@ -448,7 +481,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     grid: CompletedBountyGrid,
     cardHeightPx: COMPLETED_CARD_HEIGHT_PX,
     cardWidthPx: CARD_WIDTH_PX,
-    emptyMessage: 'No completed bounties match these filters.',
+    emptyMessage: 'No completed bounties yet.',
   },
   'in-progress': {
     title: 'In progress bounties',
@@ -456,7 +489,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     grid: InProgressBountyGrid,
     cardHeightPx: IN_PROGRESS_CARD_HEIGHT_PX,
     cardWidthPx: CARD_WIDTH_PX,
-    emptyMessage: 'No in progress bounties match these filters.',
+    emptyMessage: 'No in progress bounties yet.',
   },
   available: {
     title: 'Available bounties',
@@ -464,7 +497,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     grid: AvailableBountyGrid,
     cardHeightPx: AVAILABLE_CARD_HEIGHT_PX,
     cardWidthPx: AVAILABLE_CARD_WIDTH_PX,
-    emptyMessage: 'No available bounties match these filters.',
+    emptyMessage: 'No available bounties yet.',
   },
 };
 
@@ -480,7 +513,7 @@ export function CompletedBountiesSection({ spaceId }: { spaceId: string }) {
       spaceId={spaceId}
       title="Completed bounties"
       taskStatusId={BOUNTY_TASK_STATUS_DONE_ENTITY_ID}
-      emptyMessage="No completed bounties match these filters."
+      emptyMessage="No completed bounties yet."
       grid={CompletedBountyGrid}
       cardHeightPx={COMPLETED_CARD_HEIGHT_PX}
       viewAllHref={NavUtils.toCommunityBounties(spaceId, 'completed')}
@@ -494,7 +527,7 @@ export function InProgressBountiesSection({ spaceId }: { spaceId: string }) {
       spaceId={spaceId}
       title="In progress bounties"
       taskStatusId={BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID}
-      emptyMessage="No in progress bounties match these filters."
+      emptyMessage="No in progress bounties yet."
       grid={InProgressBountyGrid}
       cardHeightPx={IN_PROGRESS_CARD_HEIGHT_PX}
       viewAllHref={NavUtils.toCommunityBounties(spaceId, 'in-progress')}
@@ -508,7 +541,7 @@ export function AvailableBountiesSection({ spaceId }: { spaceId: string }) {
       spaceId={spaceId}
       title="Available bounties"
       taskStatusId={BOUNTY_TASK_STATUS_TODO_ENTITY_ID}
-      emptyMessage="No available bounties match these filters."
+      emptyMessage="No available bounties yet."
       grid={AvailableBountyGrid}
       cardHeightPx={AVAILABLE_CARD_HEIGHT_PX}
       cardWidthPx={AVAILABLE_CARD_WIDTH_PX}
