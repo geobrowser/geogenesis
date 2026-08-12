@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   gatewayPaused: false,
   currentUserId: 'user-for' as string | null,
+  // What the token exchange answers with when the stored session hasn't been written yet.
+  resolvedUserId: null as string | null,
   refetch: vi.fn(),
 }));
 
@@ -42,7 +44,11 @@ vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
+  return {
+    ...actual,
+    getCurrentGeoChatUserId: () => mocks.currentUserId,
+    resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.resolvedUserId),
+  };
 });
 
 vi.mock('./hooks', () => ({
@@ -108,6 +114,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   mocks.currentUserId = 'user-for';
+  mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
@@ -242,6 +249,30 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
     expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
+  });
+
+  // The stored geo-chat session is what names the viewer, and it isn't always written yet. An
+  // absent id used to read as "not the recipient", which left the person the challenge was *for*
+  // with no popup at all — the bug this hook exists to close.
+  it('still prompts the recipient when the viewer id has to be resolved', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('keeps the sender uninterrupted once their id resolves', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
   });
 
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
