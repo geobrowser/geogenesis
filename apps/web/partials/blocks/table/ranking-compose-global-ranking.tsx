@@ -8,7 +8,7 @@ import cx from 'classnames';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
-import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
@@ -347,6 +347,17 @@ export function RankingComposeGlobalRanking({
 
   const isVoteTab = voteDirection !== null;
 
+  const { entries: voteTabEntries } = useRankingEntryEntities(spaceId, isVoteTab ? voteTabIds : []);
+
+  const entriesById = React.useMemo(() => {
+    if (!isVoteTab) return rankableEntriesById;
+    const map = new Map(rankableEntriesById);
+    for (const entry of voteTabEntries) {
+      if (!map.has(entry.entityId)) map.set(entry.entityId, entry);
+    }
+    return map;
+  }, [isVoteTab, rankableEntriesById, voteTabEntries]);
+
   const [tabFilteredRankedIds, tabFilteredUnrankedIds] = React.useMemo(() => {
     if (!isVoteTab) return [filteredRankedIds, filteredUnrankedIds];
 
@@ -500,7 +511,7 @@ export function RankingComposeGlobalRanking({
   ]);
 
   const renderPickEntity = (id: string, globalRank?: number) => {
-    const entry = rankableEntriesById.get(id);
+    const entry = entriesById.get(id);
     const row = rowsByEntityId.get(id);
     const searchHit = searchResultsById.get(id);
     const isInMyRanking = orderedIds.includes(id);
@@ -565,7 +576,7 @@ export function RankingComposeGlobalRanking({
   const hasExactNameMatch = React.useMemo(() => {
     if (!isSearchActive) return false;
     const extraNames = [...tabFilteredRankedIds, ...tabFilteredUnrankedIds, ...pendingPickIds].map(
-      id => rankableEntriesById.get(id)?.name ?? searchResultsById.get(id)?.name
+      id => entriesById.get(id)?.name ?? searchResultsById.get(id)?.name
     );
     return rankingSearchHasExactNameMatch(searchQuery, [...searchResultsById.values()], extraNames);
   }, [
@@ -573,7 +584,7 @@ export function RankingComposeGlobalRanking({
     tabFilteredUnrankedIds,
     isSearchActive,
     pendingPickIds,
-    rankableEntriesById,
+    entriesById,
     searchQuery,
     searchResultsById,
   ]);
