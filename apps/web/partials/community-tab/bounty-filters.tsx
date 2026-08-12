@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Checkbox } from '~/design-system/checkbox';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Menu } from '~/design-system/menu';
 
 import { FilterPillTrigger, SingleSelectPill } from './community-filter-pill';
@@ -27,8 +27,8 @@ export function CheckboxFilter({
 }) {
   const [open, setOpen] = React.useState(false);
 
-  const allSelected = options.length > 0 && options.every(option => selected.has(option));
-  const label = allSelected || selected.size === 0 ? allLabel : [...selected].join(', ');
+  const isAny = selected.size === 0 || options.every(option => selected.has(option));
+  const label = isAny ? allLabel : [...selected].join(', ');
 
   const toggle = (option: string) => {
     const next = new Set(selected);
@@ -37,7 +37,7 @@ export function CheckboxFilter({
     } else {
       next.add(option);
     }
-    onChange(next);
+    onChange(next.size === 0 ? new Set(options) : next);
   };
 
   if (options.length === 0) return null;
@@ -51,6 +51,15 @@ export function CheckboxFilter({
       trigger={<FilterPillTrigger label={label} className="max-w-[220px]" />}
     >
       <div className="flex flex-col p-2">
+        <button
+          type="button"
+          onClick={() => onChange(new Set(options))}
+          className="flex items-center gap-2 rounded px-2 py-2 text-left text-[16px] leading-[20px] text-[#2A2B2E] hover:bg-grey-01"
+        >
+          <CheckboxVisual checked={isAny} />
+          <span className="min-w-0 truncate">{allLabel}</span>
+        </button>
+        <div className="my-1 h-px shrink-0 bg-divider" aria-hidden />
         {options.map(option => (
           <button
             key={option}
@@ -58,7 +67,7 @@ export function CheckboxFilter({
             onClick={() => toggle(option)}
             className="flex items-center gap-2 rounded px-2 py-2 text-left text-[16px] leading-[20px] text-[#2A2B2E] hover:bg-grey-01"
           >
-            <Checkbox checked={selected.has(option)} />
+            <CheckboxVisual checked={selected.has(option)} />
             <span className="min-w-0 truncate">{option}</span>
           </button>
         ))}

@@ -48,6 +48,9 @@ const INFINITE_PAGE_SIZE = 8;
 
 const SECTION_TITLE_CLASS = 'text-[24px] leading-[29px] font-semibold tracking-[-0.75px] text-[#2A2B2E]';
 
+const selectsEverything = (selected: Set<string>, options: readonly string[]) =>
+  selected.size === 0 || options.every(option => selected.has(option));
+
 function applyFilters(
   bounties: SpaceBounty[],
   scope: BountyScope,
@@ -55,8 +58,8 @@ function applyFilters(
   skills: Set<string>,
   allSkills: string[]
 ): SpaceBounty[] {
-  const allDifficultiesSelected = BOUNTY_DIFFICULTY_LEVELS.every(level => difficulties.has(level));
-  const allSkillsSelected = allSkills.length === 0 || allSkills.every(skill => skills.has(skill));
+  const allDifficultiesSelected = selectsEverything(difficulties, BOUNTY_DIFFICULTY_LEVELS);
+  const allSkillsSelected = selectsEverything(skills, allSkills);
 
   return bounties.filter(bounty => {
     if (scope === 'featured' && !bounty.isFeatured) return false;
@@ -197,7 +200,7 @@ type BountyFilterState = {
 };
 
 const allDifficultiesSelected = (difficulties: Set<string>) =>
-  BOUNTY_DIFFICULTY_LEVELS.every(level => difficulties.has(level));
+  selectsEverything(difficulties, BOUNTY_DIFFICULTY_LEVELS);
 
 function useBountyFilterPresentation(
   bounties: SpaceBounty[],
@@ -285,7 +288,9 @@ function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bou
       else params.set('difficulty', [...next.difficulties].join(','));
 
       const noSkillFilter =
-        next.selectedSkills == null || (skills.length > 0 && skills.every(skill => next.selectedSkills!.has(skill)));
+        next.selectedSkills == null ||
+        (skills.length > 0 && selectsEverything(next.selectedSkills, skills)) ||
+        next.selectedSkills.size === 0;
       if (noSkillFilter) params.delete('skill');
       else params.set('skill', [...next.selectedSkills!].join(','));
 
