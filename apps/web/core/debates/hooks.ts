@@ -10,6 +10,7 @@ import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identi
 import {
   type Debate,
   type DebateActivity,
+  type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
@@ -55,7 +56,7 @@ import {
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
-import { useDebateGatewayScope } from './debate-gateway';
+import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
 export const debateQueryNetworkOptions = {
@@ -121,6 +122,53 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
         signal
       ),
     enabled: shouldFetch,
+  });
+}
+
+/**
+ * The same per-space payload as {@link useDebateClaims}, for callers holding claims spread across
+ * several spaces — the rematch picker mixes geo-chat's session claims with published ones from
+ * anywhere. A hook per space is impossible when the list changes length, so this fans out.
+ */
+export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
+  // delivers this space's claim changes, so nothing here would refresh when someone responds.
+  const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
+  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
+
+  // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
+  // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
+  //
+  // Status rides along with the claims deliberately. Flattening to a bare list makes a pending or
+  // failed lookup indistinguishable from "no readiness on this claim", and callers rendering a
+  // readiness switch would then draw it off — misreporting a claim the viewer is standing ready on
+  // for as long as the failure lasts.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateClaimsResponse>[]) => ({
+      claims: results.flatMap(result => result.data?.claims ?? []),
+      isLoading: results.some(result => result.isLoading),
+      isError: results.some(result => result.isError),
+    }),
+    []
+  );
+
+  return useQueries({
+    queries: groups.map(group => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listDebateClaims(
+          group.spaceId,
+          group.claimIds,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled: authenticated && group.claimIds.length > 0,
+    })),
+    combine,
   });
 }
 

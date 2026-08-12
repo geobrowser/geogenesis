@@ -106,4 +106,32 @@ describe('useClaimReadiness', () => {
       expect(claims[1]!.viewer_debate_ready).toBe(false);
     });
   });
+
+  // The rematch picker reads readiness from the per-space claims family, which keys the ids on the
+  // entry rather than nesting them under `claim`. Missing it left that toggle unmoved on click.
+  it('moves the switch in the per-space claims family too', async () => {
+    mocks.joinDebateQueue.mockResolvedValue({ claim: { id: 'claim-row-1' }, match: null });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['debates', 'claims', 'space-1', ['claim-1']];
+    queryClient.setQueryData(key, {
+      claims: [
+        { space_id: 'space-1', claim_entity_id: 'claim-1', viewer_debate_ready: false },
+        { space_id: 'space-2', claim_entity_id: 'claim-1', viewer_debate_ready: false },
+      ],
+    });
+
+    const { result } = renderHook(() => useClaimReadiness(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ spaceId: 'space-1', claimId: 'claim-1', ready: true });
+
+    await waitFor(() => {
+      const claims = (queryClient.getQueryData(key) as { claims: { viewer_debate_ready: boolean }[] }).claims;
+      expect(claims[0]!.viewer_debate_ready).toBe(true);
+      // Same claim entity in another space keeps its own switch.
+      expect(claims[1]!.viewer_debate_ready).toBe(false);
+    });
+  });
 });
