@@ -6,10 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 
+// Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
+// refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
+// are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
   readinessMutate: vi.fn(),
   submitResponse: vi.fn(),
   spaceName: 'Crypto',
+  spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
 }));
 
 vi.mock('./hooks', () => ({
@@ -32,7 +36,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({
     spaces: [],
-    spacesById: new Map([[SPACE_ID, { entity: { name: mocks.spaceName, image: null } }]]),
+    spacesById: new Map([[mocks.spaceId, { entity: { name: mocks.spaceName, image: null } }]]),
     isLoading: false,
   }),
 }));
@@ -41,9 +45,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: false }),
 }));
 
-// Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
-// refuses to touch the graph for anything else.
-const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
+const SPACE_ID = mocks.spaceId;
 const CLAIM_ENTITY_ID = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const CLAIM_TEXT = 'Chips are better than fries';
 
