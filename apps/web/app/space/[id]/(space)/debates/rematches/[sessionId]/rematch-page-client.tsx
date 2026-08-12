@@ -10,6 +10,7 @@ import { useRouter } from 'next/navigation';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateClaimPositionSummary,
+  type DebateClaimSummary,
   type DebateRematchClaim,
   type DebateRematchParticipant,
   type DebateRematchSession,
@@ -30,6 +31,7 @@ import {
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
+import { useClaimReadiness } from '~/core/debates/matchmaking/hooks';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
@@ -552,6 +554,12 @@ function RematchClaimCard({
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
+
+  useReadinessOnFirstPosition({
+    claim: claim.claim,
+    localPosition,
+    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
+  });
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
 
@@ -600,6 +608,41 @@ function RematchClaimCard({
       }
     />
   );
+}
+
+/**
+ * Taking a side here means you want to debate this claim, so readiness follows rather than being a
+ * second step the viewer has to find. Deliberately local to the picker: the hub's Claims tab keeps
+ * the two separate, where browsing and standing ready really are different intents.
+ *
+ * Only a side picked while the picker is open counts. Opting in for positions already held on
+ * arrival would fire a write per claim on load, and would silently undo a stand-down the viewer
+ * made somewhere else. Switching sides doesn't re-fire either, for the same reason.
+ */
+function useReadinessOnFirstPosition({
+  claim,
+  localPosition,
+  alreadyReady,
+}: {
+  claim: DebateClaimSummary;
+  localPosition: boolean | null;
+  alreadyReady: boolean;
+}) {
+  const setReadiness = useClaimReadiness();
+  // Seeded with the position held on mount, so arriving with one is not a transition.
+  const previousPosition = React.useRef(localPosition);
+  const optedIn = React.useRef(false);
+
+  React.useEffect(() => {
+    const previous = previousPosition.current;
+    previousPosition.current = localPosition;
+
+    const justEstablished = previous === null && localPosition !== null;
+    if (!justEstablished || alreadyReady || optedIn.current) return;
+
+    optedIn.current = true;
+    setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
+  }, [alreadyReady, claim.claim_entity_id, claim.space_id, localPosition, setReadiness]);
 }
 
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */

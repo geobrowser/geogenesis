@@ -517,6 +517,54 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
   });
 
+  // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
+  it('turns the Debate toggle on when a position is first established here', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED, ready: true });
+  });
+
+  // Standing down elsewhere is deliberate; arriving here mustn't quietly reverse it.
+  it('leaves readiness alone for positions already held on arrival', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+  });
+
+  it('does not re-publish readiness that is already on', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.claimReadiness = [
+      { claim_entity_id: CLAIM_SHARED, viewer_debate_ready: true, readiness_disabled_reason: null },
+    ];
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+  });
+
   // The All tab browses every published claim a page at a time, so filtering the loaded pages
   // only ever searched what had been paged in. The hub's Claims tab searches server-side.
   it('searches the whole claim corpus rather than the loaded pages', async () => {
