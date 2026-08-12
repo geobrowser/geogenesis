@@ -259,9 +259,14 @@ export function useDailyUploadActivityComplete(spaceId: string): boolean {
     window.addEventListener('storage', onStorage);
     window.addEventListener('geo:daily-activities-upload', onCustom);
 
-    const timeoutId = window.setTimeout(() => {
-      setComplete(readDailyUploadComplete(spaceId));
-    }, msUntilNextLocalMidnight() + 50);
+    let timeoutId: number;
+    const scheduleMidnightReset = () => {
+      timeoutId = window.setTimeout(() => {
+        setComplete(readDailyUploadComplete(spaceId));
+        scheduleMidnightReset();
+      }, msUntilNextLocalMidnight() + 50);
+    };
+    scheduleMidnightReset();
 
     return () => {
       window.removeEventListener('storage', onStorage);
