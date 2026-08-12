@@ -42,15 +42,7 @@ function pickHighlight(series: CallSeries[], now: number): { row: Row; isLive: b
  * all — with no live/upcoming occurrence, the rail still renders so "View all"
  * stays reachable.
  */
-export function SpaceCommunityCallsSection({
-  spaceId,
-  series,
-  embedded = false,
-}: {
-  spaceId: string;
-  series: CallSeries[];
-  embedded?: boolean;
-}) {
+export function SpaceCommunityCallsSection({ spaceId, series }: { spaceId: string; series: CallSeries[] }) {
   // Bucket after mount so SSR/CSR clock splits can't diverge (hydration-safe), then
   // keep refreshing so a call transitions live/upcoming while the page stays open.
   const [now, setNow] = React.useState<number | null>(null);
@@ -93,9 +85,7 @@ export function SpaceCommunityCallsSection({
     </>
   );
 
-  if (embedded) return <div>{content}</div>;
-
-  return <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">{content}</aside>;
+  return <div>{content}</div>;
 }
 
 function CardShell({ children }: { children: React.ReactNode }) {

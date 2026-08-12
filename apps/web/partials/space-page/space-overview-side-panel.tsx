@@ -29,7 +29,7 @@ export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {
     <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
       <div className="flex flex-col gap-6 pb-4">
         {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} /> : null}
-        {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} embedded /> : null}
+        {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
       </div>
     </aside>
   );
