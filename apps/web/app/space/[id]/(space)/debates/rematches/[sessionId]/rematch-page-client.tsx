@@ -9,9 +9,12 @@ import { useRouter } from 'next/navigation';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
+  type DebateClaimPositionSummary,
   type DebateRematchClaim,
   type DebateRematchParticipant,
   type DebateRematchSession,
+  type MatchmakingReadiness,
+  type MatchmakingTopic,
   getCurrentGeoChatUserId,
 } from '~/core/debates/api';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
@@ -25,16 +28,28 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
+import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
+import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
+import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
-import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
 import { getChecked } from '~/design-system/checkbox';
-import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
+
+const SEARCH_DEBOUNCE_MS = 250;
+
+type PickerTab = 'opponent' | 'all';
+
+/** "Jenna" -> "Jenna’s", "Chris" -> "Chris’". */
+function possessive(name: string) {
+  return name.endsWith('s') ? `${name}\u2019` : `${name}\u2019s`;
+}
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
@@ -141,18 +156,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Topics live on the KG claim entity (not the rematch API), so resolve them here to
   // label each card and drive the "Any topic" filter. A claim can carry several topics.
   const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, string[]>();
+    const map = new Map<string, MatchmakingTopic[]>();
     for (const entity of publishedClaims) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => relation.toEntity.name ?? relation.toEntity.id);
+        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
       if (topics.length > 0) map.set(entity.id, topics);
     }
     return map;
   }, [publishedClaims]);
 
-  const [tab, setTab] = React.useState<'all' | 'debate-now'>('all');
-  const [topicFilter, setTopicFilter] = React.useState<string>('');
+  const [tab, setTab] = React.useState<PickerTab>('all');
+  const [spaceId, setSpaceId] = React.useState<string | null>(null);
+  const [topicId, setTopicId] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState('');
+  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+
+  React.useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timeout);
+  }, [search]);
 
   const returnFromSession = React.useCallback(
     (endedSession: DebateRematchSession) => {
@@ -177,30 +200,41 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [currentUserId, router]
   );
 
-  // "Debate now" = claims the opponent has responded to; the tab badge counts them.
+  // The opponent tab shows claims they have already taken a side on; the badge counts them.
   const opponentPositionCount = React.useMemo(
     () => claims.filter(claim => opponentPositionOf(claim) !== null).length,
     [claims, opponentPositionOf]
   );
 
-  const availableTopics = React.useMemo(() => {
-    const topics = new Set<string>();
+  const facetSpaceIds = React.useMemo(() => [...new Set(claims.map(claim => claim.claim.space_id))], [claims]);
+
+  const facetTopics = React.useMemo(() => {
+    const seen = new Map<string, MatchmakingTopic>();
     for (const claim of claims) {
-      for (const topic of topicsByClaimId.get(claim.claim.claim_entity_id) ?? []) topics.add(topic);
+      for (const topic of topicsByClaimId.get(claim.claim.claim_entity_id) ?? []) {
+        if (!seen.has(topic.id)) seen.set(topic.id, topic);
+      }
     }
-    return [...topics].sort((a, b) => a.localeCompare(b));
+    return [...seen.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [claims, topicsByClaimId]);
 
+  // Everything narrows client-side: the rematch claim list is session-scoped (it already excludes
+  // the source debate's claim and anything rejected), so there's no server query to push this into
+  // the way the hub's Claims tab can.
   const visibleClaims = React.useMemo(
     () =>
       claims.filter(claim => {
-        if (tab === 'debate-now' && opponentPositionOf(claim) === null) return false;
-        if (topicFilter && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).includes(topicFilter))
+        if (tab === 'opponent' && opponentPositionOf(claim) === null) return false;
+        if (spaceId && claim.claim.space_id !== spaceId) return false;
+        if (topicId && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => t.id === topicId))
           return false;
+        if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch)) return false;
         return true;
       }),
-    [claims, opponentPositionOf, tab, topicFilter, topicsByClaimId]
+    [claims, debouncedSearch, opponentPositionOf, spaceId, tab, topicId, topicsByClaimId]
   );
+
+  const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
 
   React.useEffect(() => {
     if (!session) return;
@@ -242,19 +276,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         <header className="mb-4 flex items-center justify-between gap-4">
           <h1 className="sr-only">Rematch {remoteName}</h1>
           <div className="flex min-w-0 items-center gap-5">
-            <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
-              All
-            </TabButton>
-            <TabButton active={tab === 'debate-now'} onClick={() => setTab('debate-now')}>
-              <span>Debate now</span>
+            <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
+              <span className="truncate">{possessive(remoteName)} positions</span>
               <span
                 className={cx(
                   'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
-                  tab === 'debate-now' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+                  tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
                 )}
               >
                 {opponentPositionCount}
               </span>
+            </TabButton>
+            <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
+              All
             </TabButton>
           </div>
           <button
@@ -269,25 +303,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </button>
         </header>
 
-        <div className="mb-5">
-          <TopicFilter value={topicFilter} topics={availableTopics} onChange={setTopicFilter} />
+        <div className="mb-3 flex flex-col gap-3">
+          <SpaceTopicFilters
+            spaceId={spaceId}
+            onSpaceChange={setSpaceId}
+            topicId={topicId}
+            onTopicChange={setTopicId}
+            facetSpaceIds={facetSpaceIds}
+            facetTopics={facetTopics}
+            className="justify-between"
+          />
+          <Input
+            withSearchIcon
+            value={search}
+            onChange={event => setSearch(event.currentTarget.value)}
+            placeholder="Search claims"
+            aria-label="Search claims"
+          />
         </div>
 
-        {(sessionQuery.isLoading ||
-          savedClaimsQuery.isLoading ||
-          publishedClaimsQuery.isLoading ||
-          publishedClaimsLoading) && <Text color="grey-04">Loading claims...</Text>}
-        {(sessionQuery.error instanceof Error ||
-          savedClaimsQuery.error instanceof Error ||
-          publishedClaimsQuery.error instanceof Error) && (
-          <Text color="red-01">
-            {sessionQuery.error instanceof Error
-              ? sessionQuery.error.message
-              : savedClaimsQuery.error instanceof Error
-                ? savedClaimsQuery.error.message
-                : publishedClaimsQuery.error?.message}
-          </Text>
-        )}
         {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
           <Text color="red-01" className="mb-4">
             {createRequest.error instanceof Error
@@ -303,37 +337,57 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </Text>
         )}
 
-        <div className="grid gap-4">
-          {visibleClaims.map(claim => (
-            <RematchClaimCard
-              key={claim.claim.claim_entity_id}
-              claim={claim}
-              topic={topicsByClaimId.get(claim.claim.claim_entity_id)?.[0] ?? null}
-              session={session}
-              currentUserId={currentUserId}
-              onRequest={() =>
-                createRequest.mutate({
-                  source_space_id: claim.claim.space_id,
-                  claim_id: claim.claim.claim_entity_id,
-                  format_id: defaultDebateFormatId,
-                })
-              }
-              busy={createRequest.isPending || session?.status === 'request_pending'}
-            />
-          ))}
-        </div>
+        <HubQueryState
+          isLoading={
+            sessionQuery.isLoading ||
+            savedClaimsQuery.isLoading ||
+            publishedClaimsQuery.isLoading ||
+            publishedClaimsLoading
+          }
+          error={sessionQuery.error ?? savedClaimsQuery.error ?? publishedClaimsQuery.error}
+          isEmpty={visibleClaims.length === 0}
+          emptyMessage={
+            hasFilters
+              ? 'No claims match these filters.'
+              : tab === 'opponent'
+                ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                : 'No other eligible claims are available yet.'
+          }
+          emptyAction={
+            hasFilters
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('');
+                    setSpaceId(null);
+                    setTopicId(null);
+                  },
+                }
+              : undefined
+          }
+        >
+          <HubCardList>
+            {visibleClaims.map(claim => (
+              <RematchClaimCard
+                key={claim.claim.claim_entity_id}
+                claim={claim}
+                session={session}
+                currentUserId={currentUserId}
+                onRequest={() =>
+                  createRequest.mutate({
+                    source_space_id: claim.claim.space_id,
+                    claim_id: claim.claim.claim_entity_id,
+                    format_id: defaultDebateFormatId,
+                  })
+                }
+                busy={createRequest.isPending || session?.status === 'request_pending'}
+              />
+            ))}
+          </HubCardList>
+        </HubQueryState>
 
-        {!savedClaimsQuery.isLoading && !publishedClaimsQuery.isLoading && visibleClaims.length === 0 && (
-          <div className="rounded-lg border border-grey-02 bg-white p-6 text-center">
-            <Text color="grey-04">
-              {tab === 'debate-now'
-                ? `${remoteName} hasn't responded yet. When they do, those claims show up here.`
-                : topicFilter
-                  ? 'No claims match this topic.'
-                  : 'No other eligible claims are available yet.'}
-            </Text>
-          </div>
-        )}
+        {/* Outside the empty state on purpose: when a filter empties the list, fetching the next
+            page is exactly the way out, so the control has to stay reachable. */}
         {publishedClaimsHasNextPage && (
           <div className="mt-5 flex justify-center">
             <Button
@@ -372,98 +426,103 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 }
 
+/**
+ * A rematch claim in the hub's card, so this picker and the debates side panel read as one
+ * surface. The rematch API models positions per session participant, so the shared
+ * `DebateClaimPositionSummary` shape is built here.
+ */
 function RematchClaimCard({
   claim,
-  topic,
   session,
   currentUserId,
   onRequest,
   busy,
 }: {
   claim: DebateRematchClaim;
-  topic: string | null;
   session: DebateRematchSession | null;
   currentUserId: string | null;
   onRequest: () => void;
   busy: boolean;
 }) {
-  const localResponse = claim.participants.find(position => position.user_id === currentUserId) ?? null;
-  const remoteResponse = claim.participants.find(position => position.user_id !== currentUserId) ?? null;
-  const localPosition = localResponse?.position ?? null;
-  const remotePosition = remoteResponse?.position ?? null;
+  const localPosition = claim.participants.find(position => position.user_id === currentUserId)?.position ?? null;
+  const remotePosition = claim.participants.find(position => position.user_id !== currentUserId)?.position ?? null;
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  const { submitResponse, optimisticResponse, isConnected } = useEntityResponse({
-    entityId: claim.claim.claim_entity_id,
-    spaceId: claim.claim.space_id,
-    responseKind: claim.response_kind,
-  });
-  let displayedLocalPosition = localPosition;
-  if (optimisticResponse !== undefined) {
-    displayedLocalPosition = optimisticResponse === null ? null : optimisticResponse === 'positive';
-  }
   const request = session?.request;
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
 
-  return (
-    <article className="rounded-lg border border-grey-02 bg-white p-5">
-      <div className="flex items-start justify-between gap-3">
-        <Text as="div" variant="footnote" color="grey-04">
-          {topic ?? (claim.shared_preference ? 'You both responded' : 'More claims')}
-        </Text>
-        {claim.recently_rejected && (
-          <Text as="div" variant="footnote" color="grey-04">
-            Recently rejected
-          </Text>
-        )}
-      </div>
-      <Text as="h2" variant="smallTitle" className="mt-3">
-        {claim.claim.claim}
-      </Text>
-
-      <div className="mt-5 grid grid-cols-2 gap-2">
-        {[true, false].map(position => {
-          const positionLabel = responsePositionLabel(claim.response_kind, position);
-          const holderIds = new Set(
-            claim.participants
-              .filter(participant => participant.user_id !== currentUserId && participant.position === position)
-              .map(participant => participant.user_id)
-          );
-          if (currentUserId && displayedLocalPosition === position) holderIds.add(currentUserId);
-          const holders = session?.participants.filter(participant => holderIds.has(participant.user_id)) ?? [];
-          const selected = displayedLocalPosition === position;
-          return (
-            <button
-              type="button"
-              key={String(position)}
-              aria-pressed={selected}
-              disabled={!claim.response_kind || !isConnected}
-              onClick={() => submitResponse(selected ? 'clear' : position ? 'positive' : 'negative')}
-              className={cx(
-                'flex min-h-9 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors',
-                selected ? 'bg-text text-white' : 'bg-bg text-text hover:bg-grey-01',
-                (!claim.response_kind || !isConnected) && 'cursor-default opacity-50'
-              )}
-            >
-              <span>{positionLabel}</span>
-              {holders.length > 0 && <PositionAvatars participants={holders} />}
-            </button>
-          );
-        })}
-      </div>
-
-      {(opposing || requesting) && (
-        <button
-          type="button"
-          onClick={onRequest}
-          disabled={!opposing || busy || requesting || claim.recently_rejected}
-          className="mt-2 flex min-h-10 w-full items-center justify-center rounded-full bg-text px-4 text-button text-white transition-colors hover:bg-text/90 disabled:bg-grey-01 disabled:text-grey-04"
-        >
-          {requesting ? 'Requesting...' : 'Request debate'}
-        </button>
-      )}
-    </article>
+  // A claim whose stored kind didn't parse still has to render; 'stance' is the same fallback
+  // `responsePositionLabel` applies, so the labels agree either way.
+  const responseKind = claim.response_kind ?? 'stance';
+  const positions = React.useMemo(
+    () => rematchPositionSummaries(claim, session, responseKind),
+    [claim, responseKind, session]
   );
+  const readiness: MatchmakingReadiness = {
+    response_kind: responseKind,
+    viewer_response:
+      localPosition === null
+        ? null
+        : { position: localPosition, position_label: responsePositionLabel(responseKind, localPosition) },
+    // Unread: the readiness toggle is hidden below, because a rematch session carries no readiness
+    // state to drive it from.
+    viewer_debate_ready: false,
+    readiness_disabled_reason: null,
+  };
+
+  return (
+    <MatchmakingClaimCard
+      claim={claim.claim}
+      positions={positions}
+      readiness={readiness}
+      hideReadinessToggle
+      footer={
+        opposing || requesting ? (
+          <div className="mt-3">
+            <HubPillButton
+              onClick={onRequest}
+              disabled={!opposing || busy || requesting || claim.recently_rejected}
+              pending={requesting}
+              pendingLabel="Requesting…"
+              className="w-full"
+            >
+              Request debate
+            </HubPillButton>
+            {claim.recently_rejected ? (
+              <Text as="p" variant="footnote" color="grey-04" className="mt-1">
+                Recently rejected
+              </Text>
+            ) : null}
+          </div>
+        ) : null
+      }
+    />
+  );
+}
+
+/** Both sides of a rematch claim in the shape the shared card renders avatars from. */
+function rematchPositionSummaries(
+  claim: DebateRematchClaim,
+  session: DebateRematchSession | null,
+  responseKind: 'stance' | 'veracity'
+): DebateClaimPositionSummary[] {
+  return [true, false].map(position => {
+    const holders = claim.participants.filter(participant => participant.position === position);
+    const participants = holders
+      .map(holder => session?.participants.find(participant => participant.user_id === holder.user_id))
+      .filter((participant): participant is DebateRematchParticipant => participant !== undefined);
+
+    return {
+      position,
+      // Server labels win where a holder carries one, so an authoritative Verify/Dispute survives.
+      position_label:
+        holders.find(holder => holder.position_label)?.position_label ?? responsePositionLabel(responseKind, position),
+      total_count: holders.length,
+      // Only meaningful for the hub's "available now" counts; a rematch is already a fixed pair.
+      available_now_count: 0,
+      participants,
+    };
+  });
 }
 
 function claimResponseKind(
@@ -497,21 +556,6 @@ function rematchCancellationMessage(reason: string) {
   }
 }
 
-function PositionAvatars({ participants }: { participants: DebateRematchParticipant[] }) {
-  return (
-    <span className="flex -space-x-1.5">
-      {participants.map(participant => (
-        <span
-          key={participant.user_id}
-          className="relative box-content block size-5 overflow-hidden rounded-full border-2 border-white"
-        >
-          <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
-        </span>
-      ))}
-    </span>
-  );
-}
-
 function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -525,37 +569,6 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
     >
       {children}
     </button>
-  );
-}
-
-function TopicFilter({
-  value,
-  topics,
-  onChange,
-}: {
-  value: string;
-  topics: string[];
-  onChange: (topic: string) => void;
-}) {
-  return (
-    <div className="relative inline-flex">
-      <select
-        aria-label="Filter by topic"
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="min-h-9 appearance-none rounded-full border border-grey-02 bg-white py-2 pr-9 pl-4 text-button text-text outline-hidden hover:border-grey-04 focus:border-text"
-      >
-        <option value="">Any topic</option>
-        {topics.map(topic => (
-          <option key={topic} value={topic}>
-            {topic}
-          </option>
-        ))}
-      </select>
-      <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2">
-        <ChevronDownSmall color="grey-04" />
-      </span>
-    </div>
   );
 }
 

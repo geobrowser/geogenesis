@@ -34,6 +34,12 @@ type Props = {
   activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
+  /**
+   * Hides the readiness toggle. For hosts with no readiness data to render it from: the toggle
+   * reads `viewer_debate_ready`, so a host that can't supply it would draw the switch permanently
+   * off and misreport a claim the viewer is in fact standing ready on.
+   */
+  hideReadinessToggle?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -53,7 +59,15 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, ref }: Props) {
+export function MatchmakingClaimCard({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  footer,
+  hideReadinessToggle,
+  ref,
+}: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -79,9 +93,21 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
       )}
 
       {isOnGraph ? (
-        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
+        <RespondableControls
+          claim={claim}
+          positions={positions}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       ) : (
-        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+        <UnresolvableControls
+          positions={positions}
+          readiness={readiness}
+          claim={claim}
+          activeDebate={activeDebate}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       )}
 
       {footer}
@@ -95,11 +121,13 @@ function RespondableControls({
   positions,
   readiness,
   activeDebate,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  hideReadinessToggle?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -173,15 +201,17 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
-      <div className="mt-3 flex justify-end">
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={viewerPosition !== null}
-          responseIndexing={isPublishing}
-        />
-      </div>
+      {hideReadinessToggle ? null : (
+        <div className="mt-3 flex justify-end">
+          <ClaimReadinessToggle
+            claim={claim}
+            readiness={readiness}
+            activeDebate={activeDebate}
+            hasResponse={viewerPosition !== null}
+            responseIndexing={isPublishing}
+          />
+        </div>
+      )}
     </>
   );
 }
@@ -192,11 +222,13 @@ function UnresolvableControls({
   positions,
   readiness,
   activeDebate,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
@@ -210,12 +242,14 @@ function UnresolvableControls({
           Claim unavailable
         </Text>
         {/* Readiness is geo-chat state, so it still works without a graph id. */}
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={readiness.viewer_response !== null}
-        />
+        {hideReadinessToggle ? null : (
+          <ClaimReadinessToggle
+            claim={claim}
+            readiness={readiness}
+            activeDebate={activeDebate}
+            hasResponse={readiness.viewer_response !== null}
+          />
+        )}
       </div>
     </>
   );
