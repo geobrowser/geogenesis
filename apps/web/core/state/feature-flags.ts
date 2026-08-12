@@ -9,7 +9,7 @@ export const featureFlagDefinitions = [
   {
     id: 'questionsTab',
     label: 'Claims and debates',
-    description: 'Show the Claims and Debates tabs on spaces.',
+    description: 'Enable claim and debate features on spaces.',
   },
   {
     id: 'debateDebugging',
@@ -65,8 +65,8 @@ export function useFeatureFlag(id: FeatureFlagId) {
 }
 
 /**
- * The Debates feature — the space Claims/Debates tabs, the debate room, the
- * claim debate button, and the match coordinator — all gate on the single
+ * The Debates feature — the claims page, the debate room, the claim debate
+ * button, and the match coordinator — all gate on the single
  * `questionsTab` flag. Use this hook everywhere that renders claim/debate UI
  * instead of inlining the flag id, so every surface flips together.
  */

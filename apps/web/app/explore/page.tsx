@@ -87,6 +87,17 @@ export default async function ExploreRoutePage() {
     pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
   }
 
+  // Featured rankings surface only from spaces the viewer can already see in the
+  // panel: the featured (Join spaces) set or spaces they're a member/editor of. A
+  // ranking tagged Featured in some unrelated space shouldn't reach the panel.
+  const rankingSpaceAllowlist = new Set([
+    ...featuredSpaces.map(space => normId(space.spaceId)),
+    ...memberOrEditorSpaceIds.map(normId),
+  ]);
+  const visibleFeaturedRankings = featuredRankings.filter(ranking =>
+    rankingSpaceAllowlist.has(normId(ranking.spaceId))
+  );
+
   const seen = new Set<string>();
   const initialSpaceOptions: { value: string; label: string }[] = [];
   for (const row of [...browse.featured, ...browse.editorOf, ...browse.memberOf]) {
@@ -100,7 +111,7 @@ export default async function ExploreRoutePage() {
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
       featuredSpaces={featuredSpaces}
-      featuredRankings={featuredRankings}
+      featuredRankings={visibleFeaturedRankings}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
       communityCalls={communityCalls}

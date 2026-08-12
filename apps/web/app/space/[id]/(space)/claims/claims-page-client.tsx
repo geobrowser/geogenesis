@@ -86,8 +86,8 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     }
     return map;
   }, [debateClaimsQuery.data?.claims]);
-  const activeMatches = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_match ? [claim.active_match] : [])),
+  const activeDebates = React.useMemo(
+    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
     [debateClaimsQuery.data?.claims]
   );
   const responseKindsByEntityId = React.useMemo(
@@ -142,7 +142,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
             isLoading={isLoading}
             spaceId={spaceId}
             debatesEnabled={debatesEnabled}
-            debateJoinBlocked={activeMatches.length > 0}
+            debateJoinBlocked={activeDebates.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
             responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
@@ -337,7 +337,6 @@ function ClaimListItem({
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublished(claim);
-  const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
 
   return (
@@ -362,7 +361,7 @@ function ClaimListItem({
             debateClaim={debateClaim}
             entityId={claim.id}
             spaceId={spaceId}
-            canEnable={!activeDebate && !activeMatch && !debateJoinBlocked}
+            canEnable={!activeDebate && !debateJoinBlocked}
           />
         </div>
       )}
@@ -385,14 +384,6 @@ function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClai
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
         Debate {debateClaim.active_debate.status.replace('_', ' ')}
-      </Text>
-    );
-  }
-
-  if (debateClaim?.active_match) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Match found. Both speakers need to accept.
       </Text>
     );
   }

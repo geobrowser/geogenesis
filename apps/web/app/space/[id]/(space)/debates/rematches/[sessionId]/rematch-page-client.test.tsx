@@ -14,7 +14,9 @@ const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
+  back: vi.fn(),
   mutate: vi.fn(),
+  leaveMutate: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
@@ -22,7 +24,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
 }));
 
 vi.mock('~/core/debates/api', async importOriginal => {
@@ -39,7 +41,7 @@ vi.mock('~/core/debates/hooks', () => ({
   }),
   useDebate: () => ({ data: { claim: { claim_entity_id: 'claim-source' } } }),
   useCreateDebateRematchRequest: () => mutation(),
-  useLeaveDebateRematch: () => mutation(),
+  useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
 }));
@@ -79,7 +81,9 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   mocks.replace.mockReset();
+  mocks.back.mockReset();
   mocks.mutate.mockReset();
+  mocks.leaveMutate.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
   mocks.submitResponse.mockReset();
@@ -90,7 +94,10 @@ beforeEach(() => {
   document.documentElement.style.overflow = '';
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 describe('DebateRematchPageClient', () => {
   it('does not leave a browsing rematch during the Strict Mode effect rehearsal', async () => {
@@ -102,7 +109,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(await screen.findByRole('heading', { name: 'A claim both participants chose' })).toBeInTheDocument();
     await new Promise(resolve => window.setTimeout(resolve, 0));
-    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
   });
 
   it('does not end a browsing rematch when the page unmounts', async () => {
@@ -111,7 +118,7 @@ describe('DebateRematchPageClient', () => {
     unmount();
     await new Promise(resolve => window.setTimeout(resolve, 0));
 
-    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.leaveMutate).not.toHaveBeenCalled();
   });
 
   it('ends a browsing rematch only through the explicit leave action', () => {
@@ -119,7 +126,39 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
 
-    expect(mocks.mutate).toHaveBeenCalledOnce();
+    expect(mocks.leaveMutate).toHaveBeenCalledOnce();
+  });
+
+  it('returns a profile challenge to the page before the debate flow after leaving', () => {
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
+    const endedSession = session({ source_debate_id: null, status: 'ended' });
+    mocks.session = session({ source_debate_id: null });
+    mocks.leaveMutate.mockImplementation(
+      (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
+        options.onSuccess?.(endedSession);
+      }
+    );
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    expect(mocks.back).toHaveBeenCalledOnce();
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates');
+  });
+
+  it('preserves the debates-page exit for rematches started from a prior debate', () => {
+    const endedSession = session({ status: 'ended' });
+    mocks.leaveMutate.mockImplementation(
+      (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
+        options.onSuccess?.(endedSession);
+      }
+    );
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('pins shared preferences above additional published claims and enables opposing requests', () => {

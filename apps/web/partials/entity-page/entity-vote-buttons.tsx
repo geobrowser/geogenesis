@@ -65,6 +65,7 @@ type EntityVoteButtonsProps = {
   spaceId: string;
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
+  presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
 };
 
 export function EntityVoteButtons({
@@ -72,6 +73,7 @@ export function EntityVoteButtons({
   spaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
+  presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const responseBatch = useClaimResponseBatchState();
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({
@@ -232,6 +234,25 @@ export function EntityVoteButtons({
 
   const positiveActive = activeResponse === 'positive';
   const negativeActive = activeResponse === 'negative';
+  const responseDisabled = !!smartAccount && (!isConnected || isAccountSetupPending);
+  const positiveTitle = !smartAccount
+    ? responseCopy.signIn
+    : isAccountSetupPending
+      ? 'Finishing account setup…'
+      : isConnected
+        ? positiveActive
+          ? responseCopy.removePositive
+          : responseCopy.positiveAction
+        : responseCopy.connect;
+  const negativeTitle = !smartAccount
+    ? responseCopy.signIn
+    : isAccountSetupPending
+      ? 'Finishing account setup…'
+      : isConnected
+        ? negativeActive
+          ? responseCopy.removeNegative
+          : responseCopy.negativeAction
+        : responseCopy.connect;
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
@@ -300,6 +321,22 @@ export function EntityVoteButtons({
     );
   }
 
+  if (presentation !== 'inline') {
+    return (
+      <DebateVotePill
+        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
+        score={scoreLabel}
+        positiveActive={positiveActive}
+        negativeActive={negativeActive}
+        disabled={responseDisabled}
+        positiveTitle={positiveTitle}
+        negativeTitle={negativeTitle}
+        onPositive={handlePositiveResponse}
+        onNegative={handleNegativeResponse}
+      />
+    );
+  }
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
       {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
@@ -307,23 +344,13 @@ export function EntityVoteButtons({
       ) : null}
       <button
         onClick={handlePositiveResponse}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
-        title={
-          !smartAccount
-            ? responseCopy.signIn
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? positiveActive
-                  ? responseCopy.removePositive
-                  : responseCopy.positiveAction
-                : responseCopy.connect
-        }
+        disabled={responseDisabled}
+        title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(positiveActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          responseDisabled && 'cursor-default opacity-50'
         )}
       >
         {renderResponseIcon('up', positiveActive)}
@@ -356,23 +383,13 @@ export function EntityVoteButtons({
       </Popover.Root>
       <button
         onClick={handleNegativeResponse}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
-        title={
-          !smartAccount
-            ? responseCopy.signIn
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? negativeActive
-                  ? responseCopy.removeNegative
-                  : responseCopy.negativeAction
-                : responseCopy.connect
-        }
+        disabled={responseDisabled}
+        title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
           !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(negativeActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          responseDisabled && 'cursor-default opacity-50'
         )}
       >
         {renderResponseIcon('down', negativeActive)}
@@ -385,6 +402,62 @@ export function EntityVoteButtons({
           Response submitted. Waiting for confirmation.
         </span>
       ) : null}
+    </div>
+  );
+}
+
+function DebateVotePill({
+  orientation,
+  score,
+  positiveActive,
+  negativeActive,
+  disabled,
+  positiveTitle,
+  negativeTitle,
+  onPositive,
+  onNegative,
+}: {
+  orientation: 'vertical' | 'horizontal';
+  score: string;
+  positiveActive: boolean;
+  negativeActive: boolean;
+  disabled: boolean;
+  positiveTitle: string;
+  negativeTitle: string;
+  onPositive: () => void;
+  onNegative: () => void;
+}) {
+  return (
+    <div
+      data-entity-vote-presentation={`debate-${orientation}`}
+      className={cx(
+        'flex items-center justify-center gap-1.5 rounded-full border border-grey-02 bg-white text-text shadow-light',
+        orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
+      )}
+    >
+      <button
+        type="button"
+        aria-label={positiveTitle}
+        aria-pressed={positiveActive}
+        disabled={disabled}
+        title={positiveTitle}
+        onClick={onPositive}
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text aria-pressed:text-ctaPrimary disabled:cursor-default disabled:opacity-50"
+      >
+        <VoteArrow direction="up" filled={positiveActive} color={positiveActive ? 'ctaPrimary' : undefined} />
+      </button>
+      <span className="text-metadataMedium tabular-nums text-text">{score}</span>
+      <button
+        type="button"
+        aria-label={negativeTitle}
+        aria-pressed={negativeActive}
+        disabled={disabled}
+        title={negativeTitle}
+        onClick={onNegative}
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text aria-pressed:text-red-01 disabled:cursor-default disabled:opacity-50"
+      >
+        <VoteArrow direction="down" filled={negativeActive} color={negativeActive ? 'red-01' : undefined} />
+      </button>
     </div>
   );
 }

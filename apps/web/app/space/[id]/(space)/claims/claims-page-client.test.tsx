@@ -58,8 +58,6 @@ vi.mock('~/core/debates/hooks', () => ({
     error: null,
   }),
   useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
-  useAcceptDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
-  useDeclineDebateMatch: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
@@ -305,7 +303,7 @@ describe('ClaimsPageClient', () => {
     expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
   });
 
-  it('keeps readiness clickable while joining but unavailable for unpublished or matched claims', () => {
+  it('keeps readiness clickable while joining but unavailable for unpublished or debating claims', () => {
     const published = publishedClaim();
     claims = [published];
     debateClaimsResponse = {
@@ -338,11 +336,11 @@ describe('ClaimsPageClient', () => {
 
     claims = [published];
     debateClaimsResponse = {
-      claims: [debateClaim({ active_match: { id: 'match-1' } })],
+      claims: [debateClaim({ active_debate: { id: 'debate-1', status: 'in_progress' } })],
     };
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
-    expect(screen.getByText('Match found. Both speakers need to accept.')).toBeInTheDocument();
+    expect(screen.getByText('Debate in progress')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 });

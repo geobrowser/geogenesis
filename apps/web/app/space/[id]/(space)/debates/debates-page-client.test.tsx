@@ -32,6 +32,10 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
 }));
@@ -90,8 +94,9 @@ describe('DebatesPageClient browse feed', () => {
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });

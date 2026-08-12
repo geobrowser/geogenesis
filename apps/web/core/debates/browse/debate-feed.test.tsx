@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
@@ -9,6 +9,10 @@ import { DebatesBrowseFeed } from './debate-feed';
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
+  /** null = every debate reads as processed (the common-case default). */
+  processedIds: null as string[] | null,
+  mediaLoading: false,
+  mediaError: false,
   mediaMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
@@ -16,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   createObjectURL: vi.fn(() => 'blob:https://geo.test/social-video'),
   revokeObjectURL: vi.fn(),
   downloadClick: vi.fn(),
+  entityVoteProps: [] as Array<Record<string, unknown>>,
 }));
 
 type ObserverRecord = {
@@ -29,9 +34,9 @@ let observers: ObserverRecord[] = [];
 vi.mock('~/core/debates/hooks', () => ({
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
-    processedIds: mocks.debates.map(debate => debate.id),
-    isLoading: false,
-    hasError: false,
+    processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
+    isLoading: mocks.mediaLoading,
+    hasError: mocks.mediaError,
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
 }));
@@ -54,10 +59,25 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: (props: Record<string, unknown>) => {
+    mocks.entityVoteProps.push(props);
+    return <div data-testid={`entity-votes-${String(props.presentation)}`} />;
+  },
+}));
+
 vi.mock('./debate-feed-player', () => ({
   DebateFeedPlayer: ({ debate, active }: { debate: Debate; active: boolean }) => (
     <div data-testid={`player-${debate.id}`} data-active={active} />
   ),
+}));
+
+// Stubbed so these tests assert only where the nudge is placed; its bounce/dismiss
+// lifecycle is covered by debate-scroll-hint.test.tsx.
+vi.mock('./debate-scroll-hint', () => ({
+  useDebateScrollHint: (enabled: boolean) => ({ isVisible: enabled, isLeaving: false }),
+  scrollHintBounceProps: { className: 'bounce-stub', style: { animationIterationCount: 6 } },
+  DebateScrollHint: ({ className }: { className?: string }) => <div data-testid="scroll-hint" className={className} />,
 }));
 
 vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
@@ -67,7 +87,11 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
   observers = [];
+  mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
+  mocks.processedIds = null;
+  mocks.mediaLoading = false;
+  mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
   mocks.fetch.mockResolvedValue(videoResponse());
   mocks.canShare.mockReturnValue(false);
@@ -122,6 +146,141 @@ afterEach(() => {
 });
 
 describe('DebatesBrowseFeed video sharing', () => {
+  it('uses the full-screen responsive layout and design copy', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
+    const feedItem = heading.closest('section');
+    assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
+    expect(feedItem).toHaveClass('items-start', 'md:h-auto', 'md:min-h-full', 'md:py-3');
+    expect(feedItem).not.toHaveClass('items-center', 'pt-5', 'pb-[2.75rem]');
+    const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
+    assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
+    expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
+    expect(mediaColumn).toHaveStyle({
+      '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+    });
+    expect(screen.getByTestId('entity-votes-debate-horizontal')).toBeInTheDocument();
+    expect(screen.getByTestId('entity-votes-debate-vertical')).toBeInTheDocument();
+    expect(mocks.entityVoteProps).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ entityId: 'debate-1', spaceId: 'space-1', responseKind: 'curation' }),
+      ])
+    );
+  });
+
+  it('renders when ResizeObserver is unavailable', () => {
+    vi.stubGlobal('ResizeObserver', undefined);
+
+    expect(() => render(<DebatesBrowseFeed spaceId="space-1" />)).not.toThrow();
+  });
+
+  it('clamps long claims and lets mobile users expand them', () => {
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'H2' ? 72 : 0;
+      });
+    const clientHeight = vi
+      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.tagName === 'H2' ? 48 : 0;
+      });
+
+    try {
+      const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      const heading = screen.getByRole('heading', { name: claim });
+      expect(heading).toHaveClass('line-clamp-2');
+      expect(heading).not.toHaveClass('min-h-[42px]');
+      expect(heading).toHaveAttribute('title', claim);
+
+      const toggle = screen.getByRole('button', { name: 'Show more' });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+
+      expect(heading).toHaveClass('md:line-clamp-none');
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+    }
+  });
+
+  it('nudges only when there is something below to scroll to', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    // A lone debate has nothing to scroll to, so promising more would be a lie.
+    expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
+
+    cleanup();
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
+  });
+
+  // The media column has no height to spare for a hint in flow, and `100dvh` can overshoot
+  // what's actually on screen — so the nudge hangs off the debate out of flow, rather than
+  // being pinned to a container edge that may itself sit below the fold.
+  it('hangs the nudge off the debate, out of flow and inside the lifting card', () => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const hint = screen.getByTestId('scroll-hint');
+    expect(hint).toHaveClass('absolute', 'top-full');
+    // Inside the card, so it travels with the debate instead of animating separately.
+    expect(hint.closest('.bounce-stub')).not.toBeNull();
+    expect(hint.closest('section')).toContainElement(screen.getByTestId('player-debate-1'));
+  });
+
+  it('lifts the whole landing debate with the nudge, and nothing below it', () => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    // Title and controls travel with the media, so the card moves as one.
+    const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
+    assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
+    expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
+    expect(card.querySelectorAll('[aria-label="Comments"]').length).toBeGreaterThan(0);
+
+    expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
+  });
+
+  // An errored anchor holds the feed with nothing painted even though `isLoading` has gone
+  // false, so gating the nudge on the debate list alone would float it over an error screen.
+  it('keeps the nudge down while an anchored feed is held back', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second debate', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-3', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    // Two debates read as ready — enough to scroll between — but the anchor's lookup failed.
+    mocks.processedIds = ['debate-1', 'debate-2'];
+    mocks.mediaError = true;
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-3" />);
+
+    expect(screen.queryByTestId(/^player-/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
+  });
+
+  // The per-debate media lookups resolve independently and the list re-sorts on each
+  // arrival, so the feed is still rearranging under the viewer while they land.
+  it('holds the nudge back until the media lookups have settled', () => {
+    mocks.mediaLoading = true;
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(screen.queryByTestId('scroll-hint')).not.toBeInTheDocument();
+
+    cleanup();
+    mocks.mediaLoading = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
+  });
+
   it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
     mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
     render(<DebatesBrowseFeed spaceId="space-1" />);
@@ -323,6 +482,74 @@ describe('DebatesBrowseFeed video sharing', () => {
 
     resolveShare?.();
     await flushPromises();
+  });
+});
+
+describe('DebatesBrowseFeed deep-link anchoring', () => {
+  it('starts the feed on the linked debate, hoisted first and active', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" />);
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+    expect(screen.getByTestId('player-debate-1')).toHaveAttribute('data-active', 'false');
+  });
+
+  it('holds an anchored feed until the linked debate itself reads as ready', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    // The newest debate's readiness resolved first; the anchor's lookup is still in flight.
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaLoading = true;
+    const view = render(
+      <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />
+    );
+
+    // No partial paint: rendering debate-1 now would land the viewer on the
+    // wrong video and reorder once the anchor arrives.
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+
+    mocks.processedIds = ['debate-1', 'debate-2'];
+    mocks.mediaLoading = false;
+    view.rerender(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    const players = screen.getAllByTestId(/^player-/);
+    expect(players[0]).toHaveAttribute('data-testid', 'player-debate-2');
+    expect(players[0]).toHaveAttribute('data-active', 'true');
+  });
+
+  it('shows the readiness error instead of falling back when the anchor lookup failed', () => {
+    mocks.debates = [
+      completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+      completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z'),
+    ];
+    // Lookups settled, but the anchor's failed — its absence is unknown, not definitive.
+    mocks.processedIds = ['debate-1'];
+    mocks.mediaError = true;
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+
+    expect(
+      screen.getByText('Could not check which debates are ready to watch. Try again shortly.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    // Painting the resolved sibling would land the viewer on the wrong video.
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the entity page once loading settles without the anchor', () => {
+    mocks.debates = [completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z')];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-9" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    expect(screen.queryByTestId('player-debate-1')).not.toBeInTheDocument();
   });
 });
 
