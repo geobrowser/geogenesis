@@ -19,6 +19,9 @@ export interface CommentEntity {
     avatarUrl: string | null;
   };
   createdAt: string;
+  /** True when the comment has been edited since it was posted (indexer's
+   *  updatedAt is meaningfully later than createdAt). Drives the pencil badge. */
+  isEdited?: boolean;
   /** The space where this comment entity lives (commenter's personal space) */
   spaceId: string;
   /** Whether this comment has been resolved */

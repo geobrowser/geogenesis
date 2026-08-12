@@ -538,7 +538,9 @@ export function useCreateComment(targetEntityId: string) {
 
         // Optimistically update the comment in the query cache
         queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-          old.map(c => (c.id === commentId ? { ...c, markdownContent: newText, name: newName } : c))
+          // isEdited so the pencil badge appears immediately, rather than only
+          // after the indexer's updatedAt outruns createdAt on the next refetch.
+          old.map(c => (c.id === commentId ? { ...c, markdownContent: newText, name: newName, isEdited: true } : c))
         );
 
         const publish = Effect.gen(function* () {

@@ -41,6 +41,21 @@ function parseEntityTimestamp(raw: string | number | undefined | null): string |
 }
 
 /**
+ * Whether a comment has been edited since it was posted. The indexer bumps
+ * `updatedAt` for the edit itself, but also for incidental touches, and the two
+ * stamps can differ by a beat on the original write — so require a real gap
+ * rather than any inequality, and treat a missing stamp as "not edited".
+ */
+const EDITED_THRESHOLD_MS = 5_000;
+
+function wasEdited(createdAt: string | number | undefined | null, updatedAt: string | number | undefined | null) {
+  const created = parseEntityTimestamp(createdAt);
+  const updated = parseEntityTimestamp(updatedAt);
+  if (!created || !updated) return false;
+  return new Date(updated).getTime() - new Date(created).getTime() > EDITED_THRESHOLD_MS;
+}
+
+/**
  * Parse a fetched Entity into a CommentEntity.
  * The "Reply To" relations determine both the target entity and any parent comment.
  * - A reply-to pointing to a non-comment entity = the target entity
@@ -97,6 +112,7 @@ function parseCommentEntity(
     },
     createdAt:
       parseEntityTimestamp(entity.createdAt) ?? parseEntityTimestamp(entity.updatedAt) ?? new Date().toISOString(),
+    isEdited: wasEdited(entity.createdAt, entity.updatedAt),
     spaceId,
     resolved,
   };

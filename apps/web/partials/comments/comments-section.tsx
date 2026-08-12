@@ -904,7 +904,6 @@ function CommentItem({
   const threadCollapsed = isThreadCollapsed(comment.id);
 
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
-  const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
 
   const handleReply = (text: string) => {
     const fullAncestors = [{ id: comment.id, spaceId: comment.spaceId }, ...ancestors];
@@ -981,20 +980,21 @@ function CommentItem({
             {comment.author.name ?? 'Anonymous'}
           </Text>
         </a>
-        {isEditor && (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-grey-01">
+        {comment.isEdited && (
+          <span
+            title="Edited"
+            aria-label="Edited"
+            className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-grey-01"
+          >
             <EditSmall color="grey-04" />
           </span>
         )}
+        {/* While publishing, this stands in for the timestamp — a just-posted
+            comment has no meaningful age yet, and showing both read as noise. */}
         <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-          {relativeTime}
+          {comment.isPublishing ? 'Publishing…' : relativeTime}
         </Text>
         <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
-        {comment.isPublishing && (
-          <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-            Publishing…
-          </Text>
-        )}
         {comment.resolved && (
           <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -1162,14 +1162,9 @@ function CommentItem({
               </Text>
             </a>
             <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-              {relativeTime}
+              {comment.isPublishing ? 'Publishing…' : relativeTime}
             </Text>
             <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
-            {comment.isPublishing && (
-              <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-                Publishing…
-              </Text>
-            )}
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"
