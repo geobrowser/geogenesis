@@ -222,6 +222,40 @@ describe('DebateCoordinator', () => {
     expect(mocks.acceptRequestMutate).not.toHaveBeenCalled();
   });
 
+  // A claimless challenge interrupts the person who has to answer it, and nobody else. The sender
+  // has no decision to make, so their copy lives under Sent in the hub's Requests tab.
+  it('prompts the recipient of a claimless challenge', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+    expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
+  });
+
+  // The sender learns it was accepted the same way every other flow does: activity gains a rematch
+  // and the routing effect walks them into the claim picker. No popup is involved either way.
+  it('routes the sender into the claim picker once the challenge is accepted', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
   it('does not prompt for a request while a debate is under way', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = { ...activityWithDebate(), incoming_request_count: 1 };
@@ -723,6 +757,27 @@ function idleActivity(): DebateActivity {
     rematch: null,
     challenge: null,
   };
+}
+
+function pendingChallenge() {
+  const party = (userId: string, name: string) => ({
+    user_id: userId,
+    profile_space_id: `space-${userId}`,
+    display_name: name,
+    avatar_cid: null,
+  });
+
+  return {
+    id: 'challenge-1',
+    status: 'pending',
+    source_space_id: 'space-1',
+    requester: party('user-requester', 'Ada'),
+    recipient: party('user-recipient', 'Grace'),
+    rematch_session_id: null,
+    created_at: '2026-08-12T11:00:00.000Z',
+    // Comfortably ahead of the countdown filter, which drops expired challenges before they prompt.
+    expires_at: '2099-01-01T00:00:00.000Z',
+  } as DebateActivity['challenge'];
 }
 
 function incomingRequest() {

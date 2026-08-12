@@ -10,27 +10,27 @@ import { useScrollLock } from './use-scroll-lock';
 
 type DebateChallengeDialogProps = {
   challenge: DebateChallenge;
-  /** The sender sees a waiting state; only the recipient can accept. */
-  role: 'requester' | 'recipient';
   busy: boolean;
   error: string | null;
   onAccept: () => void;
-  /** Answers the challenge for good — rejecting it as the recipient, cancelling it as the sender. */
+  /** Rejects the challenge for good. */
   onReject: () => void;
   /** Closes this popup and nothing else. The challenge stays live in the hub's Requests tab. */
   onNotNow: () => void;
 };
 
 /**
- * The claimless debate request sent from someone's profile. Accepting drops both
- * people into the claim picker to choose one.
+ * The claimless debate request sent from someone's profile, shown to the person it was sent to.
+ * Accepting drops both people into the claim picker to choose one.
+ *
+ * Only the recipient is interrupted: the sender has nothing to decide, so their challenge waits
+ * in the hub's Requests tab under Sent rather than behind a modal.
  *
  * Turning it down and putting it off are deliberately separate: a challenge lives until it
  * expires, so "Not now" only closes this popup, and rejecting is the text action underneath.
  */
 export function DebateChallengeDialog({
   challenge,
-  role,
   busy,
   error,
   onAccept,
@@ -38,9 +38,8 @@ export function DebateChallengeDialog({
   onNotNow,
 }: DebateChallengeDialogProps) {
   const titleId = React.useId();
-  const isRecipient = role === 'recipient';
-  const you = isRecipient ? challenge.recipient : challenge.requester;
-  const other = isRecipient ? challenge.requester : challenge.recipient;
+  const you = challenge.recipient;
+  const other = challenge.requester;
 
   useScrollLock();
 
@@ -81,47 +80,31 @@ export function DebateChallengeDialog({
         )}
 
         <footer className="grid gap-5">
-          {isRecipient ? (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={onNotNow}
-                disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
-              >
-                Not now
-              </button>
-              <button
-                type="button"
-                onClick={onAccept}
-                disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-              >
-                Explore claims
-              </button>
-            </div>
-          ) : (
-            <>
-              <Text as="p" variant="body" color="grey-04" className="text-center">
-                Waiting for {participantName(other)} to accept...
-              </Text>
-              <button
-                type="button"
-                onClick={onNotNow}
-                disabled={busy}
-                className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
-              >
-                Not now
-              </button>
-            </>
-          )}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onNotNow}
+              disabled={busy}
+              className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+            >
+              Not now
+            </button>
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={busy}
+              className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+            >
+              Explore claims
+            </button>
+          </div>
           <button
             type="button"
             onClick={onReject}
             disabled={busy}
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
-            {isRecipient ? 'Reject request' : 'Cancel request'}
+            Reject request
           </button>
         </footer>
       </section>
