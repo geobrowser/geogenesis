@@ -60,6 +60,11 @@ vi.mock('~/core/debates/hooks', () => ({
     isLoading: false,
     error: null,
   }),
+  useDebateRematchClaimsForIds: () => ({
+    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    isLoading: false,
+    error: null,
+  }),
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
   useDebateClaimsBySpaces: () => ({
     claims: mocks.claimReadiness,

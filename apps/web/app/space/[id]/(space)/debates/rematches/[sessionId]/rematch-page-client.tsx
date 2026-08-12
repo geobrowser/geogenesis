@@ -27,6 +27,7 @@ import {
   useDebateClaimsBySpaces,
   useDebateRematch,
   useDebateRematchClaims,
+  useDebateRematchClaimsForIds,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
@@ -162,7 +163,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [publishedClaims.entities, recommendedEntities]);
 
   const publishedClaimIds = React.useMemo(() => claimEntities.map(claim => claim.id), [claimEntities]);
-  const publishedClaimsQuery = useDebateRematchClaims(sessionId, publishedClaimIds);
+  // Batched: geo-chat caps the ids per request, and the browsed list plus the curated claims runs
+  // past that cap after a page or two of Load more.
+  const publishedClaimsQuery = useDebateRematchClaimsForIds(sessionId, publishedClaimIds);
 
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(
