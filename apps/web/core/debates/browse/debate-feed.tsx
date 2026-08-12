@@ -22,8 +22,9 @@ import { Button } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
+import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+
 import { DebateClaimsPanel } from './debate-claims-panel';
-import { DebateCommentsPanel } from './debate-comments-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
@@ -237,7 +238,7 @@ export function DebatesBrowseFeed({
   ) : claimsDebate ? (
     <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
   ) : commentsDebate ? (
-    <DebateCommentsPanel debate={commentsDebate} spaceId={spaceId} onClose={() => setCommentsDebate(null)} />
+    <EntityCommentsPanel entityId={commentsDebate.id} spaceId={spaceId} onClose={() => setCommentsDebate(null)} />
   ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so

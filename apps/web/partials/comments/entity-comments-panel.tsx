@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import type { Debate } from '~/core/debates/api';
 import { useComments } from '~/core/hooks/use-comments';
 
 import { Close } from '~/design-system/icons/close';
@@ -11,25 +10,25 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 
 /**
- * "Comments" side panel opened from the browse feed's comment button. Reuses the
- * entity page's CommentSection against the Debate entity, so threads, replies,
- * votes, editing, and the winner-pick chips behave exactly as they do there.
+ * "Comments" side panel for any entity — opened from the debates feed's comment
+ * button today, and intended for other feeds (explore) next. It hosts the same
+ * CommentSection entity pages use, so threads, replies, votes, editing and the
+ * debater winner-pick chips behave identically wherever it's mounted.
  *
- * Desktop docks it beside the feed like the Claims panel; mobile presents it as
- * a bottom sheet over the video per the design (NB: breakpoints in this file are
- * desktop-first, so md: targets mobile).
+ * Desktop docks it beside the host surface; mobile presents it as a bottom sheet
+ * per the design (NB: breakpoints here are desktop-first, so md: targets mobile).
  */
-export function DebateCommentsPanel({
-  debate,
+export function EntityCommentsPanel({
+  entityId,
   spaceId,
   onClose,
 }: {
-  debate: Debate;
+  entityId: string;
   spaceId: string;
   onClose: () => void;
 }) {
-  // Same query key as the feed item's count, so posting here updates the rail.
-  const { totalCount } = useComments({ entityId: debate.id, spaceId });
+  // Same arguments as the host's own count query, so posting here updates it.
+  const { totalCount } = useComments({ entityId, spaceId });
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -50,7 +49,7 @@ export function DebateCommentsPanel({
         </button>
       </header>
       <div className="no-scrollbar flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-5 pb-6">
-        <CommentSection entityId={debate.id} spaceId={spaceId} variant="panel" />
+        <CommentSection entityId={entityId} spaceId={spaceId} variant="panel" />
       </div>
     </aside>
   );

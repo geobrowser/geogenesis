@@ -84,8 +84,8 @@ vi.mock('./debate-scroll-hint', () => ({
 
 vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
 vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
-vi.mock('./debate-comments-panel', () => ({
-  DebateCommentsPanel: ({ debate }: { debate: Debate }) => <div>Comments panel for {debate.id}</div>,
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
 
 vi.mock('~/core/hooks/use-comments', () => ({
