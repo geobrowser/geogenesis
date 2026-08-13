@@ -11,7 +11,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { activeDebate } from './activity-state';
+import { activeDebate, recordingCancelledDebateId } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
@@ -139,6 +139,10 @@ export function DebateCoordinator() {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
+    // A debate whose recording was cancelled cannot be re-entered: the room hides itself and
+    // returns whoever opens it. Pushing into it here turned that into a navigation loop — the
+    // screen flickered, and the opponent's "your debate was removed" dialog came back after Okay.
+    if (rematch.source_debate_id && rematch.source_debate_id === recordingCancelledDebateId(activity)) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
     if (rematch.status === 'deciding') {
       if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {

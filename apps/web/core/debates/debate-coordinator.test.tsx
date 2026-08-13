@@ -314,6 +314,39 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
+  // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
+  // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
+  // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.
+  it('does not route into a deciding rematch whose debate had its recording cancelled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithRematch('deciding'),
+      debate: {
+        ...activityWithDebate().debate!,
+        status: 'thanking',
+        participants: bothParticipants(),
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-against',
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    // Nor may it be offered: there is nothing left to join.
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('still routes into a deciding rematch while the debate is intact', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithRematch('deciding');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+  });
+
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = {
