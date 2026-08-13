@@ -4,17 +4,15 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+import { useSetAtom } from 'jotai';
+
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
-import {
-  getPreparedSocialVideoHandoffMethod,
-  handoffPreparedSocialVideo,
-  isAbortError,
-  usePreparedSocialVideo,
-} from '~/core/debates/social-video-share';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
+import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -24,13 +22,22 @@ import { Button } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
+import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
-import { DebateInteractionBar, type DebateShareAction, type DebateVote } from './debate-interaction-bar';
+import { DebateInteractionBar } from './debate-interaction-bar';
+import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
+import { useDebateShareAction } from './use-debate-share-action';
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
-const SHARE_PREPARATION_DWELL_MS = 5_000;
+const DEBATE_COLUMN_STYLE = {
+  // Grow or shrink the media with the viewport while reserving the navbar,
+  // claim title, media gap, and vertical breathing room.
+  '--debate-feed-column-width': 'clamp(280px, min(calc(100cqw - 4rem), calc(82.9dvh - 10.88rem)), 640px)',
+} as React.CSSProperties;
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -99,13 +106,38 @@ export function DebatesBrowseFeed({
   // leave them with the initial null (i.e. the viewport).
   const [scrollEl, setScrollEl] = React.useState<HTMLDivElement | null>(null);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
-  const [activeId, setActiveId] = React.useState<string | null>(null);
-  const [joinOpen, setJoinOpen] = React.useState(false);
-  const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
+  // An anchored feed starts active on the anchor so the linked debate is the one
+  // that autoplays, before any IntersectionObserver has fired.
+  const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
+  // Which panel is open, not which debate it was opened from: the claims and
+  // comments panels describe the debate you're watching, so they follow the feed
+  // as you scroll rather than staying pinned to the one whose button you pressed.
+  const [openPanel, setOpenPanel] = React.useState<'join' | 'claims' | 'comments' | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
   const isLoading = debatesQuery.isLoading || mediaLoading;
+
+  const anchorPresent = React.useMemo(
+    () => initialDebateId == null || debates.some(debate => ID.equals(debate.id, initialDebateId)),
+    [debates, initialDebateId]
+  );
+
+  const anchorUnresolved = initialDebateId != null && !anchorPresent;
+
+  // An anchor absent after a failed lookup is *unknown*, not missing: falling
+  // back would misread a transient readiness/query error as "this debate has no
+  // video", so the feed stays up and shows its own error state instead.
+  const anchorErrored = anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null);
+
+  // Hold an anchored feed until the anchor itself is ready: the per-debate
+  // readiness lookups resolve one at a time, so painting the partial list would
+  // open the feed on whichever debate resolved first and then reorder underneath
+  // the viewer once the anchor's lookup lands — landing them on the wrong video.
+  // Only the anchor's own readiness gates; other debates may still be resolving.
+  // The same hold applies while errored — the anchor can't render, and starting
+  // the feed on some other debate is exactly the wrong-video landing.
+  const anchorPending = anchorUnresolved && (isLoading || anchorErrored);
 
   // One message at a time, most specific first. A readiness lookup that failed has to read as an
   // error, not "none yet" — the debate list itself loaded fine, so its own error state can't say so.
@@ -120,15 +152,34 @@ export function DebatesBrowseFeed({
   // Anchored to a debate that isn't in this space's feed (space not registered for debates, or the
   // debate isn't watchable)? Fall back to the caller's view instead of stranding the visitor on the
   // feed's "space not found" error. Only applies when a fallback is supplied (the entity page); the
-  // Debates tab passes none and keeps its own empty/error states.
-  const anchorMissing =
-    initialDebateId != null && !isLoading && !debates.some(debate => ID.equals(debate.id, initialDebateId));
+  // Debates tab passes none and keeps its own empty/error states. Requires a clean read — an
+  // errored lookup holds the feed's error state above rather than falling back.
+  const anchorMissing = anchorUnresolved && !isLoading && !anchorErrored;
 
-  const visibleDebates = debates.slice(0, visibleCount);
+  // Tell the app shell it's hosting a viewport-filling takeover, so a Debate entity page —
+  // whose route `Main` can't recognise as full-width — drops its page chrome. Not set on the
+  // fallback path, where an ordinary entity page renders and does want that chrome. A layout
+  // effect so the padded layout is never painted, only to snap away a frame later.
+  const rendersFeed = !(anchorMissing && fallback != null);
+  const setDebateFullscreenActive = useSetAtom(debateFullscreenActiveAtom);
+  React.useLayoutEffect(() => {
+    if (!rendersFeed) return;
+    setDebateFullscreenActive(true);
+    return () => setDebateFullscreenActive(false);
+  }, [rendersFeed, setDebateFullscreenActive]);
+
+  const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
+
+  // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
+  // hold above, and holds the nudge back while the media lookups land one at a time and
+  // the list re-sorts underneath the viewer. Nothing to nudge toward with one debate.
+  const scrollHint = useDebateScrollHint(!isLoading && visibleDebates.length > 1);
 
   // Keep an active debate whenever the list is non-empty — including when a
   // refetch, pagination, or space switch drops the current activeId out of view,
-  // which would otherwise leave nothing active or autoplaying.
+  // which would otherwise leave nothing active or autoplaying. While the anchor
+  // is pending nothing renders, so don't let a partial list steal the anchor's
+  // active slot before it appears.
   React.useEffect(() => {
     if (visibleDebates.length === 0) return;
     if (!activeId || !visibleDebates.some(debate => debate.id === activeId)) {
@@ -144,40 +195,59 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
     >
-      {debates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
-      {visibleDebates.map(debate => (
+      {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
+      {visibleDebates.map((debate, index) => (
         <DebateFeedItem
           key={debate.id}
           debate={debate}
+          spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
           root={scrollEl}
+          // Only the debate the viewer is looking at carries the nudge and lifts with it.
+          scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
+          // Pressing a debate's own control makes it the active one rather than
+          // waiting for the scroll observer: its bar is reachable from 0%
+          // visibility but activation needs 60%, so mid-scroll the panel would
+          // otherwise open on the debate being scrolled away from.
           onOpenJoin={() => {
-            setClaimsDebate(null);
-            setJoinOpen(true);
+            setActiveId(debate.id);
+            setOpenPanel('join');
           }}
           onOpenClaims={() => {
-            setJoinOpen(false);
-            setClaimsDebate(debate);
+            setActiveId(debate.id);
+            setOpenPanel('claims');
+          }}
+          onOpenComments={() => {
+            setActiveId(debate.id);
+            setOpenPanel('comments');
           }}
         />
       ))}
-      {visibleCount < debates.length && (
+      {!anchorPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
   );
 
-  const sidePanel = joinOpen ? (
-    <JoinDebatePanel spaceId={spaceId} onClose={() => setJoinOpen(false)} />
-  ) : claimsDebate ? (
-    <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
-  ) : null;
+  const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
+  const closePanel = () => setOpenPanel(null);
+
+  const sidePanel =
+    openPanel === 'join' ? (
+      <JoinDebatePanel spaceId={spaceId} onClose={closePanel} />
+    ) : openPanel === 'claims' && activeDebate ? (
+      <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
+    ) : openPanel === 'comments' && activeDebate ? (
+      // Keyed so scrolling to the next debate resets the panel rather than
+      // carrying a half-typed reply across to a different debate's thread.
+      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+    ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.
@@ -191,49 +261,39 @@ export function DebatesBrowseFeed({
 
 function DebateFeedItem({
   debate,
+  spaceId,
   spaceName,
   spaceImage,
   topics,
   active,
   root,
+  scrollHint,
   onActivate,
   onOpenJoin,
   onOpenClaims,
+  onOpenComments,
 }: {
   debate: Debate;
+  spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
   active: boolean;
   root: HTMLElement | null;
+  scrollHint: { isVisible: boolean; isLeaving: boolean } | null;
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
+  onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
-  const [vote, setVote] = React.useState<DebateVote>(null);
-  const [preparationEnabled, setPreparationEnabled] = React.useState(false);
-  const [isSharing, setIsSharing] = React.useState(false);
-  const [shareError, setShareError] = React.useState<string | null>(null);
-  const sharingRef = React.useRef(false);
-  const activationGenerationRef = React.useRef(0);
   const winnerVotes = useDebateVotes(debate);
-  const preparedVideo = usePreparedSocialVideo(debate.id, {
-    enabled: active && preparationEnabled,
-    includePreview: false,
-  });
-
-  React.useEffect(() => {
-    setShareError(null);
-    if (!active) {
-      activationGenerationRef.current += 1;
-      setPreparationEnabled(false);
-      return;
-    }
-
-    const dwellTimer = window.setTimeout(() => setPreparationEnabled(true), SHARE_PREPARATION_DWELL_MS);
-    return () => window.clearTimeout(dwellTimer);
-  }, [active]);
+  const shareAction = useDebateShareAction(debate, active);
+  // Comments live on the Debate entity — same query key as the panel, so posting
+  // there updates this count without a refetch of our own.
+  // Same arguments as the Comments panel's own useComments, so the two share a
+  // cache entry and posting there updates this count without a refetch.
+  const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -250,72 +310,35 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
-  const handoffMethod = React.useMemo(
-    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
-    [preparedVideo.file]
-  );
-  let shareState: DebateShareAction['state'] = 'preparing';
-  if (isSharing) shareState = 'sharing';
-  else if (active && (shareError || preparedVideo.status === 'error')) shareState = 'error';
-  else if (active && preparedVideo.status === 'ready') shareState = 'ready';
-  const shareTooltipMessage = getShareTooltipMessage({
-    state: shareState,
-    method: handoffMethod,
-    error: shareError ?? preparedVideo.error,
-  });
-  const activateShare = () => {
-    if (!active || sharingRef.current) return;
-    if (preparedVideo.status === 'error') {
-      setShareError(null);
-      preparedVideo.retry();
-      return;
-    }
-    if (!preparedVideo.file || !preparedVideo.downloadUrl) return;
-
-    const file = preparedVideo.file;
-    const downloadUrl = preparedVideo.downloadUrl;
-    const activationGeneration = activationGenerationRef.current;
-    sharingRef.current = true;
-    setIsSharing(true);
-    setShareError(null);
-    const handoff = handoffPreparedSocialVideo({
-      debateId: debate.id,
-      title: debate.claim.claim,
-      file,
-      downloadUrl,
-    });
-    void handoff
-      .catch(error => {
-        if (activationGenerationRef.current === activationGeneration && !isAbortError(error)) {
-          setShareError(error instanceof Error ? error.message : 'Could not share the video.');
-        }
-      })
-      .finally(() => {
-        sharingRef.current = false;
-        setIsSharing(false);
-      });
-  };
-
   const interactionProps = {
-    score: vote === 'up' ? 1 : vote === 'down' ? -1 : 0,
-    vote,
-    onVote: setVote,
-    commentCount: 0,
+    entityId: debate.id,
+    spaceId,
+    commentCount,
     claimsCount: 0,
-    onComment: () => undefined,
+    onComment: onOpenComments,
     onClaims: onOpenClaims,
-    shareAction: {
-      state: shareState,
-      method: handoffMethod,
-      tooltipMessage: shareTooltipMessage,
-      onActivate: activateShare,
-    } satisfies DebateShareAction,
+    shareAction,
   };
 
   return (
-    <section ref={itemRef} className="flex h-full snap-start items-start justify-center px-4 pt-5 md:px-2 md:pt-3">
-      <div className="flex items-stretch gap-3">
-        <div className="flex w-[480px] min-w-0 flex-col md:w-[calc(100vw-1rem)]">
+    <section
+      ref={itemRef}
+      // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
+      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
+      // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
+    >
+      {/* The whole debate lifts with the nudge — title, media and controls together — so the
+          gesture reads as the feed scrolling rather than as one element twitching. Shared
+          animation props keep the card and the indicator in step. */}
+      <div
+        className={cx('flex items-stretch gap-3', scrollHint?.isVisible && scrollHintBounceProps.className)}
+        style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
+      >
+        <div
+          className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
+          style={DEBATE_COLUMN_STYLE}
+        >
           {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
               here are desktop-first (md = max-width:767px), so md: targets mobile. */}
           <button
@@ -328,6 +351,7 @@ function DebateFeedItem({
           </button>
           <div className="md:mt-4">
             <DebateTitleHeader
+              key={debate.claim.claim}
               claim={debate.claim.claim}
               spaceName={spaceName}
               spaceImage={spaceImage}
@@ -343,6 +367,11 @@ function DebateFeedItem({
           <div className="mt-3 hidden md:block">
             <DebateInteractionBar orientation="horizontal" {...interactionProps} />
           </div>
+          {/* `top-full` hangs it just below the debate without taking part in the column's
+              height, which the media sizing has no room to spare for. */}
+          {scrollHint?.isVisible && (
+            <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
+          )}
         </div>
         {/* Desktop: vertical rail to the right of the videos. */}
         <div className="flex flex-col justify-end md:hidden">
@@ -366,6 +395,26 @@ function DebateTitleHeader({
   topics: string[];
   onOpenJoin: () => void;
 }) {
+  const claimRef = React.useRef<HTMLHeadingElement | null>(null);
+  const [isClaimExpanded, setIsClaimExpanded] = React.useState(false);
+  const [isClaimOverflowing, setIsClaimOverflowing] = React.useState(false);
+
+  React.useEffect(() => setIsClaimExpanded(false), [claim]);
+
+  React.useLayoutEffect(() => {
+    const element = claimRef.current;
+    if (!element || isClaimExpanded) return;
+
+    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    measureOverflow();
+
+    if (typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(measureOverflow);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [claim, isClaimExpanded]);
+
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -402,14 +451,25 @@ function DebateTitleHeader({
           Join a debate
         </Button>
       </div>
-      <Text
-        as="h2"
-        variant="cardEntityTitle"
-        color="text"
-        className="!text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px]"
+      <h2
+        ref={claimRef}
+        title={isClaimOverflowing ? claim : undefined}
+        className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+          isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
+        }`}
       >
         {claim}
-      </Text>
+      </h2>
+      {isClaimOverflowing && (
+        <button
+          type="button"
+          aria-expanded={isClaimExpanded}
+          onClick={() => setIsClaimExpanded(expanded => !expanded)}
+          className="hidden self-start text-[16px] leading-5 text-grey-04 underline-offset-2 hover:underline md:inline-flex"
+        >
+          {isClaimExpanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
     </div>
   );
 }
@@ -442,18 +502,4 @@ function FeedMessage({ children }: { children: React.ReactNode }) {
 function completedTime(debate: Debate) {
   const value = debate.completed_at ?? debate.started_at ?? debate.created_at;
   return value ? new Date(value).getTime() : 0;
-}
-
-function getShareTooltipMessage({
-  state,
-  method,
-  error,
-}: Pick<DebateShareAction, 'state' | 'method'> & { error: string | null }) {
-  if (state === 'preparing') return 'Preparing video for sharing… You can share soon.';
-  if (state === 'sharing') return undefined;
-  if (state === 'error') {
-    const fallback = method ? 'Could not share the video.' : 'Could not prepare the video.';
-    return `${error ?? fallback} Select to try again.`;
-  }
-  return method === 'download' ? 'Download the debate video.' : undefined;
 }

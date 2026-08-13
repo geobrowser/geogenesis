@@ -32,6 +32,10 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
 }));
@@ -57,6 +61,17 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+// The feed's comment button opens a panel backed by the entity-comments stack,
+// whose storage-backed atoms initialize at import time. Stub it (and the live
+// count) the way the other debate suites do.
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: () => <div>Comments panel</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -92,6 +107,7 @@ describe('DebatesPageClient browse feed', () => {
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });

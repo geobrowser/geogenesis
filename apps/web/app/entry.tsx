@@ -20,8 +20,10 @@ import { Persistence } from '~/core/state/persistence';
 import { ClientOnly } from '~/design-system/client-only';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
@@ -81,6 +83,11 @@ const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m =>
   ssr: false,
 });
 
+const DebatesHubPanel = dynamic(
+  () => import('~/core/debates/matchmaking/debates-hub-panel').then(m => ({ default: m.DebatesHubPanel })),
+  { ssr: false }
+);
+
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
@@ -122,6 +129,7 @@ export function App({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <EntitySidePanel />
+        <EntityCommentsPanelHost />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           <OnboardingDialog />
@@ -139,11 +147,15 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
+          <DebatesHubPanel />
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </div>
+      <React.Suspense fallback={null}>
+        <PersonalProfileCreatePostSidePanelSync />
+      </React.Suspense>
     </DebateMediaSessionProvider>
   );
 }

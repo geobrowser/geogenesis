@@ -5,7 +5,7 @@ import * as React from 'react';
 import { parsePositivePixelDimension } from '~/core/blocks/data/resolve-main-media-property';
 import { PROPERTY_HEIGHT_PIXELS_ID, PROPERTY_WIDTH_PIXELS_ID } from '~/core/constants';
 import { ID } from '~/core/id';
-import { useHydrateEntity, useValues } from '~/core/sync/use-store';
+import { useValues } from '~/core/sync/use-store';
 
 export type BlockMediaDimensions = {
   width: number | null;
@@ -16,24 +16,37 @@ export type BlockMediaDimensions = {
 
 export const NO_BLOCK_MEDIA_DIMENSIONS: BlockMediaDimensions = { width: null, height: null, aspectRatio: null };
 
-/**
- * Reads Width (pixels) / Height (pixels) from an Image or Video property entity.
- */
-export function useBlockMediaDimensions(propertyId: string | null | undefined): BlockMediaDimensions {
-  useHydrateEntity({ id: propertyId ?? '', enabled: Boolean(propertyId) });
+export type BlockMediaDimensionsResult = {
+  dimensions: BlockMediaDimensions;
+  /**
+   * Whether the property entity is in the store at all. Without this, `dimensions` being empty
+   * is ambiguous — "this property configures no size" and "we haven't fetched it yet" look
+   * identical, and a gallery that can't tell them apart either stalls on a fetch it doesn't
+   * need or paints a ratio it's about to change.
+   */
+  isHydrated: boolean;
+};
 
-  const dimensionValues = useValues({
-    selector: v =>
-      Boolean(propertyId) &&
-      ID.equals(v.entity.id, propertyId as string) &&
-      (ID.equals(v.property.id, PROPERTY_WIDTH_PIXELS_ID) || ID.equals(v.property.id, PROPERTY_HEIGHT_PIXELS_ID)),
+/**
+ * Reads Width (pixels) / Height (pixels) from an already-hydrated Image or Video property entity.
+ *
+ * Hydration is the caller's job — the server sends these down with the page's blocks, and
+ * `useBlockMainMedia` fetches any that are missing. Fetching here instead would chain behind the
+ * property schema resolving which column is the media one, and the gallery would paint at the
+ * default ratio before the real one arrived.
+ */
+export function useBlockMediaDimensions(propertyId: string | null | undefined): BlockMediaDimensionsResult {
+  // Every value on the property, not just the two dimensions: a property that configures no size
+  // still has a name, and that's what separates "hydrated, no dimensions" from "not fetched".
+  const propertyValues = useValues({
+    selector: v => Boolean(propertyId) && ID.equals(v.entity.id, propertyId as string),
   });
 
   return React.useMemo(() => {
     let width: number | null = null;
     let height: number | null = null;
 
-    for (const value of dimensionValues) {
+    for (const value of propertyValues) {
       if (ID.equals(value.property.id, PROPERTY_WIDTH_PIXELS_ID)) {
         width = parsePositivePixelDimension(value.value) ?? width;
       } else if (ID.equals(value.property.id, PROPERTY_HEIGHT_PIXELS_ID)) {
@@ -42,11 +55,14 @@ export function useBlockMediaDimensions(propertyId: string | null | undefined): 
     }
 
     return {
-      width,
-      height,
-      aspectRatio: width != null && height != null ? `${width} / ${height}` : null,
+      dimensions: {
+        width,
+        height,
+        aspectRatio: width != null && height != null ? `${width} / ${height}` : null,
+      },
+      isHydrated: propertyValues.length > 0,
     };
-  }, [dimensionValues]);
+  }, [propertyValues]);
 }
 
 export type BlockMediaFrame = {

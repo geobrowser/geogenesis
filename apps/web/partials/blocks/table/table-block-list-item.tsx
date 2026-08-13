@@ -83,7 +83,7 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const image = useBlockMainMediaUrl({
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
     mediaPropertyId: mainMedia?.propertyId ?? null,
@@ -277,7 +277,7 @@ export function TableBlockListItem({
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? null : ( // Still looking it up — an empty frame beats flashing the fallback and swapping.
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"

@@ -23,6 +23,7 @@ import {
 } from '~/core/blocks/data/use-optimistic-rows';
 import { useSource } from '~/core/blocks/data/use-source';
 import { useBlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useCreatableSpaceIds } from '~/core/hooks/use-creatable-space-ids';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -67,6 +68,8 @@ import {
   shouldShowFilterAction,
   shouldShowFullscreenAction,
 } from './data-block-header-action-visibility';
+import { DataBlockLoadingPlaceholder } from './data-block-loading-placeholder';
+import { shouldShowDataBlockLoadingPlaceholder } from './data-block-loading-visibility';
 import { DataBlockScopeDropdown } from './data-block-scope-dropdown';
 import { DataBlockSortMenu } from './data-block-sort-menu';
 import { DataBlockViewMenu } from './data-block-view-menu';
@@ -80,9 +83,12 @@ import type { TableBlockFilterPromptHandle } from './table-block-filter-creation
 import { TableBlockFilterGroupPill, groupFilters } from './table-block-filter-pill';
 import TableBlockGalleryItemsDnd from './table-block-gallery-items-dnd';
 import TableBlockListItemsDnd from './table-block-list-items-dnd';
+import { TableBlockLoadingPlaceholder } from './table-block-loading-placeholder';
 import TableBlockPillItemsDnd from './table-block-pill-items-dnd';
 import { TableBlockPropertiesMenu } from './table-block-properties-menu';
 import { TableBlockTable } from './table-block-table';
+
+export { TableBlockLoadingPlaceholder } from './table-block-loading-placeholder';
 
 interface Props {
   spaceId: string;
@@ -596,7 +602,11 @@ const ConfiguredTableBlock = ({
     reorderShownPropertyRelations,
   } = useDataBlock({ canEdit });
 
-  const mainMedia = useBlockMainMedia(shownColumnIds, propertiesSchema);
+  const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, propertiesSchema, {
+    readsDimensions: view === 'GALLERY',
+  });
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
+  const showLoadingPlaceholder = shouldShowDataBlockLoadingPlaceholder({ isLoading, isFetched, view, isFramePending });
 
   const initialFiltersOpenConsumedRef = React.useRef(false);
   React.useEffect(() => {
@@ -1149,10 +1159,8 @@ const ConfiguredTableBlock = ({
         )}
 
         <motion.div layout="position" transition={{ duration: 0.15 }}>
-          {isLoading || !isFetched ? (
-            <>
-              <TableBlockLoadingPlaceholder />
-            </>
+          {showLoadingPlaceholder ? (
+            <DataBlockLoadingPlaceholder view={view} items={pageSize} mediaFrame={mediaFrame} />
           ) : (
             EntriesComponent
           )}
@@ -1212,64 +1220,6 @@ const ConfiguredTableBlock = ({
     </BlockLinkIngestionProvider>
   );
 };
-
-const DEFAULT_PLACEHOLDER_COLUMN_WIDTH = 880 / 3;
-
-type TableBlockPlaceholderProps = {
-  className?: string;
-  columns?: number;
-  rows?: number;
-  shimmer?: boolean;
-};
-
-export function TableBlockLoadingPlaceholder({
-  className = '',
-  columns = 3,
-  rows = 10,
-  shimmer = true,
-}: TableBlockPlaceholderProps) {
-  const PLACEHOLDER_COLUMNS = Array.from({ length: columns }, (_, i) => `column-${i}`);
-  const PLACEHOLDER_ROWS = Array.from({ length: rows }, (_, i) => `row-${i}`);
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-grey-02 p-0">
-      <div className={cx('overflow-x-clip rounded-lg', className)}>
-        <table className="relative w-full border-collapse border-hidden bg-white" cellSpacing={0} cellPadding={0}>
-          <thead>
-            <tr>
-              {PLACEHOLDER_COLUMNS.map(columnKey => (
-                <th
-                  key={columnKey}
-                  className="lg:min-w-none border border-b-0 border-grey-02 p-[10px] text-left"
-                  style={{ minWidth: DEFAULT_PLACEHOLDER_COLUMN_WIDTH }}
-                >
-                  <p className={cx('h-5 w-16 rounded-sm bg-divider align-middle', shimmer && 'animate-pulse')}></p>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {PLACEHOLDER_ROWS.map(rowKey => (
-              <tr key={rowKey}>
-                {PLACEHOLDER_COLUMNS.map(columnKey => (
-                  <td
-                    key={`${rowKey}-${columnKey}`}
-                    className={cx(
-                      'border border-grey-02 bg-transparent p-[10px] align-top',
-                      shimmer && 'animate-pulse'
-                    )}
-                  >
-                    <p className="h-5 rounded-sm bg-divider" />
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 
 export function TableBlockError({ spaceId, blockId }: { spaceId: string; blockId: string }) {
   return (

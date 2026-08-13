@@ -444,7 +444,10 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
   });
 
-  it('does not render the terminal room while returning a recording canceller', async () => {
+  // Forward, never back: the entry behind this room is often this same room (hub → room → rematch
+  // → room), and stepping back into a debate that ended under us re-runs the exit from a fresh
+  // mount. That was the flicker, and on the opponent's side it took a second Okay to escape.
+  it('sends a recording canceller forward to the debates page instead of back into the room', async () => {
     setHistoryLength(2);
     mocks.debate = {
       ...completedDebate(),
@@ -456,8 +459,51 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+  });
+
+  // The session is what keeps both sides "in a flow": it disables every Debate control and keeps
+  // DebateCoordinator routing back into the room the cancellation just emptied.
+  it('leaves the rematch the cancelled recording anchored', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('deciding');
+    mocks.leaveRematchMutateAsync.mockResolvedValue(rematchSession('ended'));
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('leaves the rematch on the opponent side too, and never blocks their exit on it', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('deciding');
+    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('rematch already gone'));
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-b',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('shows the pre-screen while the debate is waiting for readiness', async () => {
@@ -2942,6 +2988,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('tells the opponent their debate was removed when the other participant cancels the upload', async () => {
+    setHistoryLength(2);
     mocks.debate = {
       ...completedDebate(),
       recording_cancelled_at: '2026-07-02T00:01:20.000Z',
@@ -2958,7 +3005,9 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.deleteRecording).toHaveBeenCalledWith('user-a:debate-1'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    // One acknowledgement, one exit, and never backwards into the room that just emptied.
+    expect(mocks.replace).toHaveBeenCalledExactlyOnceWith('/space/space-1/debates');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 });
 
