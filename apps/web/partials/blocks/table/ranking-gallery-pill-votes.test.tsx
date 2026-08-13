@@ -16,7 +16,7 @@ vi.mock('~/core/hooks/use-properties', () => ({
 }));
 
 vi.mock('~/core/hooks/use-block-main-media', () => ({
-  useBlockMainMedia: () => null,
+  useBlockMainMedia: () => ({ mainMedia: null, isFramePending: false }),
 }));
 
 vi.mock('~/core/hooks/use-block-main-media-url', () => ({

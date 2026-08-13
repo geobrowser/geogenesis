@@ -221,7 +221,7 @@ export function RankingGalleryView({ state }: Props) {
 
   const { shownColumnIds } = useView();
   const properties = useProperties(shownColumnIds, spaceId);
-  const mainMedia = useBlockMainMedia(shownColumnIds, properties);
+  const { mainMedia } = useBlockMainMedia(shownColumnIds, properties);
 
   const cards = globalDisplayEntityIds
     .map(entityId => {

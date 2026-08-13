@@ -5,7 +5,7 @@ import * as React from 'react';
 import { parsePositivePixelDimension } from '~/core/blocks/data/resolve-main-media-property';
 import { PROPERTY_HEIGHT_PIXELS_ID, PROPERTY_WIDTH_PIXELS_ID } from '~/core/constants';
 import { ID } from '~/core/id';
-import { useHydrateEntity, useValues } from '~/core/sync/use-store';
+import { useValues } from '~/core/sync/use-store';
 
 export type BlockMediaDimensions = {
   width: number | null;
@@ -17,11 +17,13 @@ export type BlockMediaDimensions = {
 export const NO_BLOCK_MEDIA_DIMENSIONS: BlockMediaDimensions = { width: null, height: null, aspectRatio: null };
 
 /**
- * Reads Width (pixels) / Height (pixels) from an Image or Video property entity.
+ * Reads Width (pixels) / Height (pixels) from an already-hydrated Image or Video property entity.
+ *
+ * Hydration is the caller's job — see `useBlockMainMedia`, which fetches every shown column up
+ * front. Fetching here instead would chain behind the property schema resolving which column is
+ * the media one, and the gallery would paint at the default ratio before the real one arrived.
  */
 export function useBlockMediaDimensions(propertyId: string | null | undefined): BlockMediaDimensions {
-  useHydrateEntity({ id: propertyId ?? '', enabled: Boolean(propertyId) });
-
   const dimensionValues = useValues({
     selector: v =>
       Boolean(propertyId) &&

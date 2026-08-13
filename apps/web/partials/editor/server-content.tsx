@@ -1,16 +1,17 @@
+import type { DataBlockView } from '~/core/blocks/data/data-block-view';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { TableBlockLoadingPlaceholder } from '../blocks/table/table-block';
+import { DataBlockLoadingPlaceholder } from '../blocks/table/data-block-loading-placeholder';
 
 export type ServerBlock =
   | { type: 'text'; markdown: string }
   | { type: 'image'; src: string }
   | { type: 'video'; src: string }
-  | { type: 'data' };
+  | { type: 'data'; view?: DataBlockView; pageSize?: number };
 
 type ServerContentProps = {
   blocks: ServerBlock[];
@@ -70,7 +71,7 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
               <Skeleton className="h-4 w-4" />
               <Skeleton className="h-5 w-16" />
             </div>
-            <TableBlockLoadingPlaceholder />
+            <DataBlockLoadingPlaceholder view={block.view ?? 'TABLE'} items={block.pageSize} />
           </div>
         </>
       );

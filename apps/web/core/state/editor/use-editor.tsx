@@ -16,8 +16,10 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
 import {
   RANKING_DATE_PROPERTY_IDS,
@@ -425,7 +427,24 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
-          sBlocks.push({ type: 'data' });
+          // Shape the pre-hydration placeholder like the view the block actually renders in.
+          // Both live on the BLOCKS relation entity, which the server already sends down, so
+          // a gallery block doesn't have to flash a table skeleton before its cards arrive.
+          const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
+          const viewRelations = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              r.type.id === SystemIds.VIEW_PROPERTY &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+
+          sBlocks.push({
+            type: 'data',
+            view: dataBlockViewFromRelations(viewRelations),
+            pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+          });
 
           const dataSourceType = getRelations({
             mergeWith: initialBlockEntityRelations,
