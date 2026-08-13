@@ -567,18 +567,22 @@ function RematchClaimCard({
         : optimisticResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  // geo-chat validates the request against its own copy of your position, which trails the
-  // optimistic one by a publish, an index, and a notification. Showing the button on the optimistic
-  // answer is what keeps the card responsive; *sending* it before geo-chat agrees is what earns
-  // "respond to this claim before requesting a rematch". Comparing rather than null-checking also
-  // covers switching sides, where geo-chat still holds the side you just moved off.
+  // geo-chat validates against its own copy of your position, which trails the optimistic one by a
+  // publish, an index, and a notification. Acting before it agrees earns "respond to this claim
+  // before requesting a rematch". Comparing rather than null-checking also covers switching sides,
+  // where geo-chat still holds the side you just moved off — equally invalid to act on.
   const responseSettled = serverLocalPosition === localPosition;
+  // The side you picked still highlights immediately off the optimistic answer; only the request
+  // waits. It stays hidden rather than sitting there disabled — a button you cannot press yet reads
+  // as broken, and the wait is short.
+  const canRequest = opposing && responseSettled;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
   useReadinessOnFirstPosition({
     claim: claim.claim,
     localPosition,
+    responseSettled,
     alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
   });
   const requesting =
@@ -611,13 +615,13 @@ function RematchClaimCard({
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
-        opposing || requesting ? (
+        canRequest || requesting ? (
           <div className="mt-3">
             <HubPillButton
               onClick={onRequest}
-              disabled={!opposing || busy || requesting || claim.recently_rejected || !responseSettled}
-              pending={requesting || (opposing && !responseSettled)}
-              pendingLabel={requesting ? 'Requesting…' : 'Publishing…'}
+              disabled={!canRequest || busy || requesting || claim.recently_rejected}
+              pending={requesting}
+              pendingLabel="Requesting…"
               className="w-full"
             >
               Request debate
@@ -646,17 +650,22 @@ function RematchClaimCard({
 function useReadinessOnFirstPosition({
   claim,
   localPosition,
+  responseSettled,
   alreadyReady,
 }: {
   claim: DebateClaimSummary;
   localPosition: boolean | null;
+  /** Whether geo-chat's copy of the response has caught up with {@link localPosition}. */
+  responseSettled: boolean;
   alreadyReady: boolean;
 }) {
   const setReadiness = useClaimReadiness();
   // Seeded with the position held on mount, so arriving with one is not a transition.
   const previousPosition = React.useRef(localPosition);
   const optedIn = React.useRef(false);
+  const [wantsReadiness, setWantsReadiness] = React.useState(false);
 
+  // The intent is recorded off the optimistic position, so it survives the wait below.
   React.useEffect(() => {
     const previous = previousPosition.current;
     previousPosition.current = localPosition;
@@ -664,9 +673,19 @@ function useReadinessOnFirstPosition({
     const justEstablished = previous === null && localPosition !== null;
     if (!justEstablished || alreadyReady || optedIn.current) return;
 
+    setWantsReadiness(true);
+  }, [alreadyReady, localPosition]);
+
+  // ...but it is only sent once geo-chat can see the response readiness depends on. Firing on the
+  // optimistic position instead had the server reject it for a claim it had no response for, and
+  // the rollback in `useClaimReadiness` flipped the switch straight back off.
+  React.useEffect(() => {
+    if (!wantsReadiness || !responseSettled || optedIn.current) return;
+
     optedIn.current = true;
+    setWantsReadiness(false);
     setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
-  }, [alreadyReady, claim.claim_entity_id, claim.space_id, localPosition, setReadiness]);
+  }, [claim.claim_entity_id, claim.space_id, responseSettled, setReadiness, wantsReadiness]);
 }
 
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */

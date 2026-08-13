@@ -571,25 +571,6 @@ describe('DebateRematchPageClient', () => {
   });
 
   // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
-  it('turns the Debate toggle on when a position is first established here', () => {
-    mocks.claims = [
-      {
-        ...sharedClaim(),
-        participants: [
-          { user_id: 'user-local', position: null, position_label: null },
-          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
-        ],
-      },
-    ];
-    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
-
-    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
-    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.setReadiness).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED, ready: true });
-  });
-
   // Standing down elsewhere is deliberate; arriving here mustn't quietly reverse it.
   it('leaves readiness alone for positions already held on arrival', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -655,13 +636,12 @@ describe('DebateRematchPageClient', () => {
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
-    // Offered, but not yet sendable — see below.
-    expect(within(card!).getByRole('button', { name: 'Publishing…' })).toBeInTheDocument();
   });
 
   // geo-chat rejects a request for a claim it has no position for — "respond to this claim before
-  // requesting a rematch" — so the button has to wait for geo-chat's copy, not the optimistic one.
-  it('holds the request until geo-chat has the position it will be validated against', () => {
+  // requesting a rematch" — so the button waits for geo-chat's copy, not the optimistic one. It
+  // stays hidden rather than disabled: an unpressable button reads as broken.
+  it('withholds the request until geo-chat has the position it will be validated against', () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -674,10 +654,7 @@ describe('DebateRematchPageClient', () => {
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const publishing = screen.getByRole('button', { name: 'Publishing…' });
-    expect(publishing).toBeDisabled();
-    fireEvent.click(publishing);
-    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
   it('sends the request once geo-chat agrees with the side on screen', () => {
@@ -701,7 +678,7 @@ describe('DebateRematchPageClient', () => {
 
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
   // request against than holding none.
-  it('holds the request while a side switch is still publishing', () => {
+  it('withholds the request while a side switch is still publishing', () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -714,7 +691,76 @@ describe('DebateRematchPageClient', () => {
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  // Readiness is rejected for a claim geo-chat has no response for, and `useClaimReadiness` rolls
+  // the switch back when that happens — so opting in off the optimistic position made the toggle
+  // visibly flip on and straight back off.
+  it('waits for the response to settle before standing the viewer ready', () => {
+    const unresponded = {
+      ...sharedClaim(),
+      participants: [
+        { user_id: 'user-local', position: null, position_label: null },
+        { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+      ],
+    };
+    mocks.claims = [unresponded];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    // The side is picked: optimistic only, geo-chat still has nothing.
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    // geo-chat catches up, and only now is readiness sent.
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: SPACE_1,
+      claimId: CLAIM_SHARED,
+      ready: true,
+    });
+  });
+
+  it('stands the viewer ready only once, even as the claim keeps refetching', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledOnce();
   });
 });
 
