@@ -194,7 +194,7 @@ async function getProfilePage(
   ];
   const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
     fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
-    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
   ]);
 
   return {

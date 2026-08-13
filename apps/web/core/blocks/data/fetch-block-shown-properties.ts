@@ -16,11 +16,15 @@ import { Entity } from '~/core/types';
  *
  * Pass the block entities *and* their BLOCKS relation entities: the shown-column relations live
  * on the relation, not the block.
+ *
+ * Deliberately unscoped by space, unlike everything else the page fetches. A property is defined
+ * in whatever space owns it — Debate videos lives in the debates ontology space, not in the space
+ * of any page that shows it — and the batch query scopes both the entity lookup and its values to
+ * the space passed in. Hand it the page's space and this returns nothing at all.
  */
 export async function fetchShownPropertyEntitiesForBlocks(
   blocks: Entity[],
-  fetchBatch: (ids: string[], spaceId?: string) => Promise<Entity[]>,
-  spaceId?: string
+  fetchBatch: (ids: string[], spaceId?: string) => Promise<Entity[]>
 ): Promise<Entity[]> {
   const alreadyFetched = new Set(blocks.map(block => block.id));
   const propertyIds = new Set<string>();
@@ -37,5 +41,5 @@ export async function fetchShownPropertyEntitiesForBlocks(
 
   if (propertyIds.size === 0) return [];
 
-  return fetchBatch([...propertyIds], spaceId);
+  return fetchBatch([...propertyIds]);
 }

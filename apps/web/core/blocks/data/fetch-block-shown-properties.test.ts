@@ -11,7 +11,9 @@ const relation = (typeId: string, toEntityId: string, overrides: Record<string, 
 
 const entity = (id: string, relations: unknown[] = []) => ({ id, relations, values: [] }) as unknown as Entity;
 
-const fetcher = () => vi.fn(async (ids: string[]) => ids.map(id => entity(id)));
+// Mirrors `cachedFetchEntitiesBatch`, whose optional second argument is the whole point of the
+// "does not scope the fetch to a space" case below.
+const fetcher = () => vi.fn(async (ids: string[], _spaceId?: string) => ids.map(id => entity(id)));
 
 describe('fetchShownPropertyEntitiesForBlocks', () => {
   it('fetches the property behind every shown column, in one batch', async () => {
@@ -22,19 +24,32 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
         entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover'), relation(SystemIds.PROPERTIES, 'author')]),
         entity('block-relation-b', [relation(SystemIds.SHOWN_COLUMNS, 'video')]),
       ],
-      fetchBatch,
-      'space-1'
+      fetchBatch
     );
 
     expect(fetchBatch).toHaveBeenCalledTimes(1);
     expect(fetchBatch.mock.calls[0][0].sort()).toEqual(['author', 'cover', 'video']);
   });
 
+  it('does not scope the fetch to a space', async () => {
+    // A property is defined in whatever space owns it, not in the space of a page that shows it,
+    // and the batch query scopes the entity lookup *and* its values to whatever space it's given.
+    // Passing the page's space here returns nothing at all — silently, since an empty result
+    // looks exactly like "this block configures no dimensions".
+    const fetchBatch = fetcher();
+
+    await fetchShownPropertyEntitiesForBlocks(
+      [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')])],
+      fetchBatch
+    );
+
+    expect(fetchBatch.mock.calls[0][1]).toBeUndefined();
+  });
+
   it('returns the fetched property entities', async () => {
     const result = await fetchShownPropertyEntitiesForBlocks(
       [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')])],
-      fetcher(),
-      'space-1'
+      fetcher()
     );
 
     expect(result.map(e => e.id)).toEqual(['cover']);
@@ -48,8 +63,7 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
         entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')]),
         entity('block-relation-b', [relation(SystemIds.PROPERTIES, 'cover')]),
       ],
-      fetchBatch,
-      'space-1'
+      fetchBatch
     );
 
     expect(fetchBatch.mock.calls[0][0]).toEqual(['cover']);
@@ -60,8 +74,7 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
 
     await fetchShownPropertyEntitiesForBlocks(
       [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')]), entity('cover')],
-      fetchBatch,
-      'space-1'
+      fetchBatch
     );
 
     expect(fetchBatch).not.toHaveBeenCalled();
@@ -78,8 +91,7 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
           relation(SystemIds.FILTER, 'a-filter'),
         ]),
       ],
-      fetchBatch,
-      'space-1'
+      fetchBatch
     );
 
     expect(fetchBatch).not.toHaveBeenCalled();
@@ -88,7 +100,7 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
   it('does not call out for a page with no data blocks', async () => {
     const fetchBatch = fetcher();
 
-    expect(await fetchShownPropertyEntitiesForBlocks([], fetchBatch, 'space-1')).toEqual([]);
+    expect(await fetchShownPropertyEntitiesForBlocks([], fetchBatch)).toEqual([]);
     expect(fetchBatch).not.toHaveBeenCalled();
   });
 });

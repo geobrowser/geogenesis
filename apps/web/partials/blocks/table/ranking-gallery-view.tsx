@@ -8,7 +8,11 @@ import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { type BlockMainMedia, useBlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
-import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
+import {
+  type BlockMediaFrame,
+  NO_BLOCK_MEDIA_DIMENSIONS,
+  blockMediaFrame,
+} from '~/core/hooks/use-block-media-dimensions';
 import { useProperties } from '~/core/hooks/use-properties';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -89,10 +93,14 @@ function RankingGalleryCard({
   );
 }
 
-function RankingGalleryCardSkeleton({ keyId }: { keyId: string }) {
+function RankingGalleryCardSkeleton({ keyId, mediaFrame }: { keyId: string; mediaFrame: BlockMediaFrame }) {
   return (
     <div key={keyId} className="w-[240px] shrink-0">
-      <Skeleton className="h-[120px] w-[240px] rounded-xl" />
+      {/* Same frame `RankingGalleryCard` uses, so the row doesn't resize when the cards land. */}
+      <Skeleton
+        className={cx('w-[240px] rounded-xl', !mediaFrame.hasCustomHeight && 'h-[120px]')}
+        style={mediaFrame.style}
+      />
       <Skeleton className="mt-2 h-6 w-[180px]" />
       <Skeleton className="mt-1 h-5 w-16" />
     </div>
@@ -225,35 +233,43 @@ export function RankingGalleryView({ state }: Props) {
 
   const { shownColumnIds } = useView();
   const properties = useProperties(shownColumnIds, spaceId);
-  const { mainMedia } = useBlockMainMedia(shownColumnIds, properties);
+  const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, properties);
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
 
-  const cards = globalDisplayEntityIds
-    .map(entityId => {
-      const entry = globalRankingEntryByEntityId.get(entityId);
-      if (!entry) return null;
+  // Cards size themselves from `mediaFrame`, so rendering them before it resolves lays the row
+  // out at the default height and then jumps. The skeleton below already reserves the right box.
+  const cards = isFramePending
+    ? []
+    : globalDisplayEntityIds
+        .map(entityId => {
+          const entry = globalRankingEntryByEntityId.get(entityId);
+          if (!entry) return null;
 
-      return (
-        <RankingGalleryCard
-          key={entityId}
-          entityId={entityId}
-          spaceId={spaceId}
-          voteSpaceId={resolveEntitySpaceId(entityId)}
-          name={entry.name}
-          imageHint={entry.image}
-          mainMedia={mainMedia}
-        />
-      );
-    })
-    .filter(Boolean);
+          return (
+            <RankingGalleryCard
+              key={entityId}
+              entityId={entityId}
+              spaceId={spaceId}
+              voteSpaceId={resolveEntitySpaceId(entityId)}
+              name={entry.name}
+              imageHint={entry.image}
+              mainMedia={mainMedia}
+            />
+          );
+        })
+        .filter(Boolean);
 
-  const showLoadingCards = cards.length === 0 && entriesResolving && globalDisplayEntityIds.length > 0;
+  const showLoadingCards =
+    cards.length === 0 && (entriesResolving || isFramePending) && globalDisplayEntityIds.length > 0;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
       <RankingGalleryScrollRow itemCount={globalDisplayEntityIds.length}>
         {cards}
         {showLoadingCards
-          ? globalDisplayEntityIds.map(entityId => <RankingGalleryCardSkeleton key={entityId} keyId={entityId} />)
+          ? globalDisplayEntityIds.map(entityId => (
+              <RankingGalleryCardSkeleton key={entityId} keyId={entityId} mediaFrame={mediaFrame} />
+            ))
           : null}
       </RankingGalleryScrollRow>
       {!entriesResolving && cards.length === 0 && totalGlobalRankingEntityCount === 0 ? (

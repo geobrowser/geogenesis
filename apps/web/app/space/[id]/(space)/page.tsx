@@ -193,7 +193,7 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
   ];
   const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
     fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
-    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
   ]);
 
   // Shown-column properties ride along with the blocks so the editor hydrates them in the same
