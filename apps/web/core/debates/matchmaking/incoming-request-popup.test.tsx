@@ -9,13 +9,19 @@ import { IncomingRequestPopup } from './incoming-request-popup';
 const mocks = vi.hoisted(() => ({
   accept: vi.fn(),
   dismiss: vi.fn(),
+  dismissIsError: false,
   block: vi.fn(),
   setReadiness: vi.fn(),
 }));
 
 vi.mock('./hooks', () => ({
   useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, error: null }),
-  useDismissDebateRequest: () => ({ mutate: mocks.dismiss, isPending: false, error: null }),
+  useDismissDebateRequest: () => ({
+    mutate: mocks.dismiss,
+    isPending: false,
+    isError: mocks.dismissIsError,
+    error: mocks.dismissIsError ? new Error('nope') : null,
+  }),
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, error: null }),
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
 }));
@@ -66,6 +72,7 @@ const request: DebateRequest = {
 beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
+  mocks.dismissIsError = false;
   mocks.block.mockReset();
   mocks.setReadiness.mockReset();
 
@@ -111,9 +118,11 @@ describe('IncomingRequestPopup', () => {
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
   });
 
-  // Standing down from the claim is not an answer to this request — the request is left alone so
-  // it can still be accepted, or left to expire, from the Requests tab.
-  it('stands the viewer down from the claim without answering the request', () => {
+  // Saying you don't want to debate the claim answers this request too: leaving it pending would
+  // offer a debate the viewer just declined, and hold the requester waiting on someone who has
+  // stood down. Dismissing with the intent removed does both, and the server clears the request
+  // for the requester as well.
+  it('rejects the request when the viewer turns the claim toggle off', () => {
     renderPopup();
 
     const toggle = screen.getByRole('switch', { name: 'Debate this claim' });
@@ -121,12 +130,18 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(toggle);
 
-    expect(mocks.setReadiness).toHaveBeenCalledWith(
-      { spaceId: 'space-1', claimId: 'claim-1', ready: false },
-      expect.objectContaining({ onError: expect.any(Function) })
-    );
-    expect(mocks.dismiss).not.toHaveBeenCalled();
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
     expect(mocks.accept).not.toHaveBeenCalled();
+  });
+
+  it('answers once however fast the toggle is tapped', () => {
+    renderPopup();
+
+    const toggle = screen.getByRole('switch', { name: 'Debate this claim' });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
   });
 
   it('offers blocking behind the overflow menu', () => {
@@ -151,8 +166,10 @@ describe('IncomingRequestPopup answers', () => {
     expect(mocks.accept).toHaveBeenCalledTimes(1);
   });
 
-  it('puts the claim toggle back when standing down fails', () => {
-    mocks.setReadiness.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
+  // Otherwise the switch reads as "you are out of matchmaking for this claim" while the server
+  // still has the viewer standing ready and the request live.
+  it('puts the claim toggle back when the rejection fails', () => {
+    mocks.dismissIsError = true;
     render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));

@@ -8,7 +8,7 @@ import { Toggle } from '~/design-system/toggle';
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
 import { speakerLabel } from '../playback-utils';
-import { useAcceptDebateRequest, useBlockDebateUser, useClaimReadiness, useDismissDebateRequest } from './hooks';
+import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 
@@ -19,7 +19,9 @@ import { RequestOverflowMenu } from './request-overflow-menu';
  * - Not now → local only. The request stays live in the hub's Requests tab, under "Received",
  *   until it expires 25 minutes after it was sent.
  * - "Dismiss forever" → dismisses and drops the viewer's intent for that claim.
- * - "Debate this claim" → stands the viewer down from the claim without answering this request.
+ * - "Debate this claim" off → the same thing. Saying you don't want to debate the claim answers
+ *   this request too: leaving it pending would offer a debate the viewer just declined, and hold
+ *   the requester waiting on someone who has stood down.
  * - Block → dismisses and hides both users from each other's matchmaking.
  *
  * Dismissing (unlike "Not now") lets the server advance the request to the next candidate.
@@ -78,7 +80,13 @@ export function IncomingRequestPopup({
         label: 'Dismiss forever',
         onClick: () => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true })),
       }}
-      footerNote={<ClaimDebateToggle request={request} disabled={busy} />}
+      footerNote={
+        <ClaimDebateToggle
+          disabled={busy}
+          failed={dismissRequest.isError}
+          onStandDown={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }))}
+        />
+      }
       overflowMenu={
         <RequestOverflowMenu
           actions={[
@@ -96,22 +104,32 @@ export function IncomingRequestPopup({
 
 /**
  * Readiness for the claim this request is about. You only received the request because you were
- * standing ready on the claim, so it starts on — turning it off keeps you out of future matchmaking
- * for it without answering this request either way.
+ * standing ready on the claim, so it starts on — turning it off withdraws you from the claim and
+ * answers this request with it, the same way "Dismiss forever" does. The popup then closes on its
+ * own: the coordinator only prompts for requests that are still pending.
  */
-function ClaimDebateToggle({ request, disabled }: { request: DebateRequest; disabled: boolean }) {
-  const setReadiness = useClaimReadiness();
+function ClaimDebateToggle({
+  disabled,
+  failed,
+  onStandDown,
+}: {
+  disabled: boolean;
+  failed: boolean;
+  onStandDown: () => void;
+}) {
   const [ready, setReady] = React.useState(true);
 
-  // The switch moves first, but a failed call has to move it back and say so — otherwise it reads
-  // as "you are out of matchmaking for this claim" while the server still has you standing ready.
+  // The switch moves first — the popup is about to close, so waiting on the round trip would leave
+  // it looking unanswered. A failure has to move it back, or it reads as "you are out of
+  // matchmaking for this claim" while the server still has you standing ready and the request live.
+  React.useEffect(() => {
+    if (failed) setReady(true);
+  }, [failed]);
+
   const toggle = () => {
-    const next = !ready;
-    setReady(next);
-    setReadiness.mutate(
-      { spaceId: request.claim.space_id, claimId: request.claim.claim_entity_id, ready: next },
-      { onError: () => setReady(!next) }
-    );
+    if (!ready) return;
+    setReady(false);
+    onStandDown();
   };
 
   return (
@@ -121,7 +139,7 @@ function ClaimDebateToggle({ request, disabled }: { request: DebateRequest; disa
         role="switch"
         aria-checked={ready}
         aria-label="Debate this claim"
-        disabled={disabled || setReadiness.isPending}
+        disabled={disabled}
         onClick={toggle}
         className="flex items-center gap-1.5 px-4 py-1 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
       >
@@ -130,13 +148,6 @@ function ClaimDebateToggle({ request, disabled }: { request: DebateRequest; disa
           Debate this claim
         </Text>
       </button>
-      {setReadiness.error ? (
-        <div role="alert">
-          <Text as="p" variant="footnote" color="red-01">
-            Could not change your readiness for this claim.
-          </Text>
-        </div>
-      ) : null}
     </div>
   );
 }
