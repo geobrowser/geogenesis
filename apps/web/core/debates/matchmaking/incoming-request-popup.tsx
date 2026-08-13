@@ -117,18 +117,18 @@ function ClaimDebateToggle({
   failed: boolean;
   onStandDown: () => void;
 }) {
-  const [ready, setReady] = React.useState(true);
+  const [standDownRequested, setStandDownRequested] = React.useState(false);
 
-  // The switch moves first — the popup is about to close, so waiting on the round trip would leave
-  // it looking unanswered. A failure has to move it back, or it reads as "you are out of
-  // matchmaking for this claim" while the server still has you standing ready and the request live.
-  React.useEffect(() => {
-    if (failed) setReady(true);
-  }, [failed]);
+  // Derived rather than mirrored with an effect: the switch has to move before the round trip (the
+  // popup is about to close, so waiting reads as unanswered) but go back if the rejection fails —
+  // otherwise it says "you are out of matchmaking for this claim" while the server still has the
+  // viewer standing ready and the request live. An effect watching `failed` only fires on the
+  // transition, so it misses a mutation that was already in an error state.
+  const ready = !standDownRequested || failed;
 
   const toggle = () => {
     if (!ready) return;
-    setReady(false);
+    setStandDownRequested(true);
     onStandDown();
   };
 
