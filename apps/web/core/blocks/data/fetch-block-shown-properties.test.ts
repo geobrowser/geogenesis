@@ -6,14 +6,23 @@ import type { Entity } from '~/core/types';
 
 import { fetchShownPropertyEntitiesForBlocks } from './fetch-block-shown-properties';
 
-const relation = (typeId: string, toEntityId: string, overrides: Record<string, unknown> = {}) =>
-  ({ type: { id: typeId }, toEntity: { id: toEntityId }, ...overrides }) as never;
+const shownColumn = (propertyId: string, overrides: Record<string, unknown> = {}) =>
+  ({ type: { id: SystemIds.PROPERTIES }, toEntity: { id: propertyId }, position: 'a0', ...overrides }) as never;
+
+const shownColumnLegacy = (propertyId: string) =>
+  ({ type: { id: SystemIds.SHOWN_COLUMNS }, toEntity: { id: propertyId }, position: 'a0' }) as never;
+
+const view = (viewId: string) => ({ type: { id: SystemIds.VIEW_PROPERTY }, toEntity: { id: viewId } }) as never;
 
 const entity = (id: string, relations: unknown[] = []) => ({ id, relations, values: [] }) as unknown as Entity;
 
-// Mirrors `cachedFetchEntitiesBatch`, whose optional second argument is the whole point of the
+/** A BLOCKS relation entity for a gallery block — the only view that reads media dimensions. */
+const galleryBlock = (id: string, columns: unknown[]) => entity(id, [view(SystemIds.GALLERY_VIEW), ...columns]);
+
+// Typed like `cachedFetchEntitiesBatch`, whose optional second argument is the whole point of the
 // "does not scope the fetch to a space" case below.
-const fetcher = () => vi.fn(async (ids: string[], _spaceId?: string) => ids.map(id => entity(id)));
+const fetcher = () =>
+  vi.fn<(ids: string[], spaceId?: string) => Promise<Entity[]>>(async ids => ids.map(id => entity(id)));
 
 describe('fetchShownPropertyEntitiesForBlocks', () => {
   it('fetches the property behind every shown column, in one batch', async () => {
@@ -21,8 +30,8 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
 
     await fetchShownPropertyEntitiesForBlocks(
       [
-        entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover'), relation(SystemIds.PROPERTIES, 'author')]),
-        entity('block-relation-b', [relation(SystemIds.SHOWN_COLUMNS, 'video')]),
+        galleryBlock('block-relation-a', [shownColumn('cover'), shownColumn('author')]),
+        galleryBlock('block-relation-b', [shownColumnLegacy('video')]),
       ],
       fetchBatch
     );
@@ -38,21 +47,62 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
     // looks exactly like "this block configures no dimensions".
     const fetchBatch = fetcher();
 
-    await fetchShownPropertyEntitiesForBlocks(
-      [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')])],
-      fetchBatch
-    );
+    await fetchShownPropertyEntitiesForBlocks([galleryBlock('block-relation-a', [shownColumn('cover')])], fetchBatch);
 
     expect(fetchBatch.mock.calls[0][1]).toBeUndefined();
   });
 
   it('returns the fetched property entities', async () => {
     const result = await fetchShownPropertyEntitiesForBlocks(
-      [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')])],
+      [galleryBlock('block-relation-a', [shownColumn('cover')])],
       fetcher()
     );
 
     expect(result.map(e => e.id)).toEqual(['cover']);
+  });
+
+  it('resolves the property id the way the client does, preferring toEntity.value', () => {
+    const fetchBatch = fetcher();
+
+    return fetchShownPropertyEntitiesForBlocks(
+      [
+        galleryBlock('block-relation-a', [
+          shownColumn('stale-target-id', { toEntity: { id: 'stale-target-id', value: 'cover' } }),
+        ]),
+      ],
+      fetchBatch
+    ).then(() => {
+      expect(fetchBatch.mock.calls[0][0]).toEqual(['cover']);
+    });
+  });
+
+  it('skips blocks that do not render as a gallery', async () => {
+    // Only the gallery sizes itself from these, so nothing else should pay for the request or
+    // carry the entities in its serialized page payload.
+    const fetchBatch = fetcher();
+
+    await fetchShownPropertyEntitiesForBlocks(
+      [
+        entity('table-block', [view(SystemIds.TABLE_VIEW), shownColumn('cover')]),
+        entity('list-block', [view(SystemIds.LIST_VIEW), shownColumn('avatar')]),
+        // No view relation at all defaults to a table.
+        entity('default-block', [shownColumn('banner')]),
+      ],
+      fetchBatch
+    );
+
+    expect(fetchBatch).not.toHaveBeenCalled();
+  });
+
+  it('skips the implicit Name column', async () => {
+    const fetchBatch = fetcher();
+
+    await fetchShownPropertyEntitiesForBlocks(
+      [galleryBlock('block-relation-a', [shownColumn(SystemIds.NAME_PROPERTY), shownColumn('cover')])],
+      fetchBatch
+    );
+
+    expect(fetchBatch.mock.calls[0][0]).toEqual(['cover']);
   });
 
   it('de-duplicates a property shown by more than one block', async () => {
@@ -60,8 +110,8 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
 
     await fetchShownPropertyEntitiesForBlocks(
       [
-        entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')]),
-        entity('block-relation-b', [relation(SystemIds.PROPERTIES, 'cover')]),
+        galleryBlock('block-relation-a', [shownColumn('cover')]),
+        galleryBlock('block-relation-b', [shownColumn('cover')]),
       ],
       fetchBatch
     );
@@ -73,7 +123,7 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
     const fetchBatch = fetcher();
 
     await fetchShownPropertyEntitiesForBlocks(
-      [entity('block-relation-a', [relation(SystemIds.PROPERTIES, 'cover')]), entity('cover')],
+      [galleryBlock('block-relation-a', [shownColumn('cover')]), entity('cover')],
       fetchBatch
     );
 
@@ -85,10 +135,9 @@ describe('fetchShownPropertyEntitiesForBlocks', () => {
 
     await fetchShownPropertyEntitiesForBlocks(
       [
-        entity('block-relation-a', [
-          relation(SystemIds.PROPERTIES, 'deleted-column', { isDeleted: true }),
-          relation(SystemIds.VIEW_PROPERTY, 'gallery-view'),
-          relation(SystemIds.FILTER, 'a-filter'),
+        galleryBlock('block-relation-a', [
+          shownColumn('deleted-column', { isDeleted: true }),
+          { type: { id: SystemIds.FILTER }, toEntity: { id: 'a-filter' } } as never,
         ]),
       ],
       fetchBatch

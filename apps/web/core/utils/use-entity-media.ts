@@ -151,12 +151,19 @@ export function useEntityMedia(
    */
   isResolving: boolean;
 } {
-  const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
-  const [fetchedCoverUrl, setFetchedCoverUrl] = React.useState<string | undefined>(undefined);
-  // Which entity the fetch below has settled for, rather than a bare boolean: pointing the hook
-  // at a different entity has to put us back in "don't know yet".
-  const [fetchedForEntityId, setFetchedForEntityId] = React.useState<string | null>(null);
+  // Keyed by what it was fetched for, not held as bare URLs. Point the hook at a different
+  // entity and the previous one's results have to stop counting — otherwise the old image stays
+  // on screen, and because a URL is present `isResolving` reads false, so nothing ever corrects
+  // it if the new entity has no image of its own.
+  const [fetched, setFetched] = React.useState<{
+    key: string;
+    avatarUrl: string | undefined;
+    coverUrl: string | undefined;
+  } | null>(null);
   const cache = useQueryClient();
+
+  const fetchKey = `${entityId ?? ''}:${spaceId}`;
+  const settled = fetched?.key === fetchKey ? fetched : null;
 
   const storeAvatarRelation = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
@@ -182,6 +189,7 @@ export function useEntityMedia(
     // the store. These reuse the same cache keys as the single-purpose hooks
     // above, so all media hooks for one entity dedupe onto shared requests.
     const id = entityId;
+    const key = `${id}:${spaceId}`;
 
     const fetchMedia = async () => {
       try {
@@ -205,30 +213,33 @@ export function useEntityMedia(
         ]);
 
         const avatarUrl = avatarRelations[0]?.toEntity.value;
-        if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('ipfs://')) {
-          setFetchedAvatarUrl(avatarUrl);
-        }
-
         const coverUrl = coverRelations[0]?.toEntity.value;
-        if (coverUrl && typeof coverUrl === 'string' && coverUrl.startsWith('ipfs://')) {
-          setFetchedCoverUrl(coverUrl);
-        }
+
+        setFetched({
+          key,
+          avatarUrl: asImageUrl(avatarUrl),
+          coverUrl: asImageUrl(coverUrl),
+        });
       } catch {
-        // ignored — entity may not exist
-      } finally {
-        setFetchedForEntityId(id);
+        // Ignored — the entity may not exist. Still record the attempt: a caller waiting on
+        // `isResolving` would otherwise hold its loading state forever.
+        setFetched({ key, avatarUrl: undefined, coverUrl: undefined });
       }
     };
 
     fetchMedia();
-  }, [entityId, spaceId, storeAvatarUrl, storeCoverUrl, cache]);
+  }, [entityId, spaceId, fetchKey, storeAvatarUrl, storeCoverUrl, cache]);
 
-  const avatarUrl = storeAvatarUrl ?? fetchedAvatarUrl;
-  const coverUrl = storeCoverUrl ?? fetchedCoverUrl;
+  const avatarUrl = storeAvatarUrl ?? settled?.avatarUrl;
+  const coverUrl = storeCoverUrl ?? settled?.coverUrl;
 
   return {
     avatarUrl,
     coverUrl,
-    isResolving: Boolean(entityId) && !avatarUrl && !coverUrl && fetchedForEntityId !== entityId,
+    isResolving: Boolean(entityId) && !avatarUrl && !coverUrl && settled === null,
   };
+}
+
+function asImageUrl(value: unknown): string | undefined {
+  return typeof value === 'string' && value.startsWith('ipfs://') ? value : undefined;
 }

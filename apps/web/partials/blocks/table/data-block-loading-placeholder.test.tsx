@@ -88,4 +88,16 @@ describe('DataBlockLoadingPlaceholder', () => {
 
     expect(container.querySelector('table')).not.toBeNull();
   });
+
+  it('reserves one table row per row the block is about to render', () => {
+    const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" items={3} />);
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(3);
+  });
+
+  it('falls back to a default row count when the page size is unknown', () => {
+    const { container } = render(<DataBlockLoadingPlaceholder view="TABLE" />);
+
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(10);
+  });
 });

@@ -36,6 +36,6 @@ export function DataBlockLoadingPlaceholder({ view, items, mediaFrame }: Props) 
     case 'BULLETED_LIST':
       return <BulletedListViewSkeleton items={items} />;
     default:
-      return <TableBlockLoadingPlaceholder />;
+      return <TableBlockLoadingPlaceholder rows={items} />;
   }
 }

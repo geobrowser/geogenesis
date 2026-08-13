@@ -1,9 +1,12 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import type { MainMediaProperty, PropertyLookup } from '~/core/blocks/data/resolve-main-media-property';
 import { resolveMainMediaProperty } from '~/core/blocks/data/resolve-main-media-property';
+import { ID } from '~/core/id';
 import { useHydrateEntities } from '~/core/sync/use-store';
 
 import { type BlockMediaDimensions, useBlockMediaDimensions } from './use-block-media-dimensions';
@@ -45,17 +48,22 @@ export function useBlockMainMedia(
   const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
   const { dimensions, isHydrated } = useBlockMediaDimensions(mainMedia?.propertyId);
 
-  // The server ships shown-column properties with the page's blocks, so `isHydrated` is usually
-  // already true and there's nothing to fetch or wait for. Where it isn't — the entity side
-  // panel, a block whose columns changed since load — fetch every shown column at once rather
-  // than waiting for the property schema to say which one holds the media. That schema is its
-  // own round trip, and chaining off it lands the dimensions after the rows they're meant to
+  // Name is implicit in every block's columns and can never be the media property —
+  // `resolveMainMediaProperty` skips it outright. Counting it would mean a gallery that shows
+  // nothing but Name waits on a fetch that cannot change its frame.
+  const mediaCandidateIds = shownColumnIds.filter(id => !ID.equals(id, SystemIds.NAME_PROPERTY));
+  const mediaCandidateCount = mediaCandidateIds.length;
+
+  // The server ships gallery shown-column properties with the page's blocks, so `isHydrated` is
+  // usually already true and there's nothing to fetch or wait for. Where it isn't — the entity
+  // side panel, a block whose columns changed since load — fetch every candidate column at once
+  // rather than waiting for the property schema to say which one holds the media. That schema is
+  // its own round trip, and chaining off it lands the dimensions after the rows they're meant to
   // size. `useHydrateEntities` keys off the id contents, so a fresh array each render is fine.
   const { isFetched: areShownColumnsHydrated } = useHydrateEntities({
-    ids: [...shownColumnIds],
-    enabled: readsDimensions && !isHydrated,
+    ids: mediaCandidateIds,
+    enabled: readsDimensions && mediaCandidateCount > 0 && !isHydrated,
   });
-  const shownColumnCount = shownColumnIds.length;
 
   // Callers spread this into every row, and both `shownColumnIds` and the properties map are
   // rebuilt each render upstream, so memoize on the resolved values rather than on their identity.
@@ -71,8 +79,8 @@ export function useBlockMainMedia(
   return React.useMemo(
     () => ({
       mainMedia: resolved,
-      isFramePending: readsDimensions && shownColumnCount > 0 && !isHydrated && !areShownColumnsHydrated,
+      isFramePending: readsDimensions && mediaCandidateCount > 0 && !isHydrated && !areShownColumnsHydrated,
     }),
-    [resolved, readsDimensions, shownColumnCount, isHydrated, areShownColumnsHydrated]
+    [resolved, readsDimensions, mediaCandidateCount, isHydrated, areShownColumnsHydrated]
   );
 }

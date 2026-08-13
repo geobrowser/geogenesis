@@ -34,12 +34,21 @@ beforeEach(() => {
 });
 
 describe('useBlockMainMedia', () => {
-  it('hydrates every shown column without waiting to learn which one holds the media', () => {
+  it('hydrates every candidate column without waiting to learn which one holds the media', () => {
     // The property schema hasn't resolved yet, so `properties` is empty and no media column is
     // identifiable — the fetch still has to be in flight, or the dimensions land after the rows.
+    // Name is excluded: it's implicit in every block and can never be the media property.
     renderHook(() => useBlockMainMedia([NAME_PROPERTY, COVER_PROPERTY], {}));
 
-    expect(mocks.hydrateCalls[0]?.ids).toEqual([NAME_PROPERTY, COVER_PROPERTY]);
+    expect(mocks.hydrateCalls[0]?.ids).toEqual([COVER_PROPERTY]);
+  });
+
+  it('does not wait on a block whose only column is the implicit Name', () => {
+    // Nothing there could carry dimensions, so the default frame is already the final answer.
+    const { result } = renderHook(() => useBlockMainMedia([NAME_PROPERTY], {}));
+
+    expect(result.current.isFramePending).toBe(false);
+    expect(mocks.hydrateCalls[0]?.enabled).toBe(false);
   });
 
   it('skips the fetch for views that never size themselves from the dimensions', () => {

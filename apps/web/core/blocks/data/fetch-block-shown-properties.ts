@@ -1,21 +1,26 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { ID } from '~/core/id';
 import { Entity } from '~/core/types';
 
+import { dataBlockViewFromRelations } from './data-block-view';
+import { shownColumnIdsForBlock } from './read-block-media-dimensions';
+
 /**
- * The property entities behind every column a page's blocks show.
+ * The property entities behind the columns a page's *gallery* blocks show.
  *
- * Only Image/Video properties end up mattering — a gallery sizes its cards from the Width
- * (pixels) / Height (pixels) values on them — but which shown column holds the media is only
- * knowable from the property schema, which is a separate request the client makes later.
- * Waiting for that chain means the gallery lays itself out at the default 2:1 ratio and then
- * reflows the whole grid once the real dimensions arrive.
+ * The gallery is the only view that sizes itself from a property's Width (pixels) / Height
+ * (pixels), and those live on the property entity, which nothing else on the page fetches. Which
+ * shown column holds the media is only knowable from the property schema — a separate request the
+ * client makes later — so we fetch the block's columns rather than trying to pick one here.
+ * Waiting for that chain is what makes a gallery lay itself out at the default 2:1 ratio and then
+ * reflow the whole grid once the real dimensions arrive.
  *
- * Fetching all of them here is one batched call on a page the server is already assembling, and
- * it means the very first paint — server-rendered included — knows the card ratio.
+ * Fetching them is one batched call on a page the server is already assembling, and it means the
+ * very first paint — server-rendered included — knows the card ratio.
  *
- * Pass the block entities *and* their BLOCKS relation entities: the shown-column relations live
- * on the relation, not the block.
+ * Pass the block entities *and* their BLOCKS relation entities: the view and the shown-column
+ * relations both live on the relation, not the block.
  *
  * Deliberately unscoped by space, unlike everything else the page fetches. A property is defined
  * in whatever space owns it — Debate videos lives in the debates ontology space, not in the space
@@ -30,12 +35,14 @@ export async function fetchShownPropertyEntitiesForBlocks(
   const propertyIds = new Set<string>();
 
   for (const block of blocks) {
-    for (const relation of block.relations ?? []) {
-      const isShownColumn = relation.type.id === SystemIds.PROPERTIES || relation.type.id === SystemIds.SHOWN_COLUMNS;
-      if (!isShownColumn || relation.isDeleted) continue;
+    if (dataBlockViewFromRelations(block.relations) !== 'GALLERY') continue;
 
-      const propertyId = relation.toEntity.id;
-      if (propertyId && !alreadyFetched.has(propertyId)) propertyIds.add(propertyId);
+    for (const propertyId of shownColumnIdsForBlock(block)) {
+      // Name is implicit in every block and never holds media.
+      if (ID.equals(propertyId, SystemIds.NAME_PROPERTY)) continue;
+      if (alreadyFetched.has(propertyId)) continue;
+
+      propertyIds.add(propertyId);
     }
   }
 
