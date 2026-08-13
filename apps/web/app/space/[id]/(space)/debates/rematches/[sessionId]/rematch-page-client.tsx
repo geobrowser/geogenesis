@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -16,7 +17,6 @@ import {
   type DebateRematchSession,
   type MatchmakingReadiness,
   type MatchmakingTopic,
-  getCurrentGeoChatUserId,
 } from '~/core/debates/api';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
@@ -38,12 +38,14 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -65,7 +67,7 @@ function firstNamePossessive(name: string) {
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const currentUserId = getCurrentGeoChatUserId();
+  const currentUserId = useCurrentGeoChatUserId();
   const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
@@ -188,9 +190,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(browsedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
     for (const claim of claimEntities) {
+      const homeSpaceId = claimHomeSpaceId(claim);
       if (
         claim.name &&
-        claim.spaces[0] &&
+        homeSpaceId &&
         !excludedClaimIds.has(claim.id) &&
         claim.id !== sourceDebateQuery.data?.claim.claim_entity_id &&
         !synchronizedClaims.has(claim.id)
@@ -198,12 +201,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         synchronizedClaims.set(claim.id, {
           claim: {
             id: claim.id,
-            space_id: claim.spaces[0]!,
+            space_id: homeSpaceId,
             claim_entity_id: claim.id,
             claim: claim.name!,
             description: claim.description,
           },
-          response_kind: claimResponseKind(claim, claim.spaces[0]!),
+          response_kind: claimResponseKind(claim, homeSpaceId),
           participants: (session?.participants ?? []).map(participant => ({
             user_id: participant.user_id,
             position: null,
@@ -663,12 +666,26 @@ function RematchClaimCard({
         : optimisticResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
+  // geo-chat validates against its own copy of your position, which trails the optimistic one by a
+  // publish, an index, and a notification. Acting before it agrees earns "respond to this claim
+  // before requesting a rematch". Comparing rather than null-checking also covers switching sides,
+  // where geo-chat still holds the side you just moved off — equally invalid to act on.
+  const responseSettled = serverLocalPosition === localPosition;
+  // The side you picked still highlights immediately off the optimistic answer; only the request
+  // waits. It stays hidden rather than sitting there disabled — a button you cannot press yet reads
+  // as broken, and the wait is short.
+  const canRequest = opposing && responseSettled;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
   useReadinessOnFirstPosition({
     claim: claim.claim,
     localPosition,
+    // The optimistic copy exists only while this client's own submission is in flight, so it is
+    // what separates "the viewer just picked this side" from "we just learned the side they already
+    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
+    pickedHere: optimisticResponse !== undefined,
+    responseSettled,
     alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
   });
   const requesting =
@@ -701,11 +718,11 @@ function RematchClaimCard({
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
-        opposing || requesting ? (
+        canRequest || requesting ? (
           <div className="mt-3">
             <HubPillButton
               onClick={onRequest}
-              disabled={!opposing || busy || requesting || claim.recently_rejected}
+              disabled={!canRequest || busy || requesting || claim.recently_rejected}
               pending={requesting}
               pendingLabel="Requesting…"
               className="w-full"
@@ -736,27 +753,49 @@ function RematchClaimCard({
 function useReadinessOnFirstPosition({
   claim,
   localPosition,
+  pickedHere,
+  responseSettled,
   alreadyReady,
 }: {
   claim: DebateClaimSummary;
   localPosition: boolean | null;
+  /** Whether {@link localPosition} is this client's own in-flight submission. */
+  pickedHere: boolean;
+  /** Whether geo-chat's copy of the response has caught up with {@link localPosition}. */
+  responseSettled: boolean;
   alreadyReady: boolean;
 }) {
   const setReadiness = useClaimReadiness();
   // Seeded with the position held on mount, so arriving with one is not a transition.
   const previousPosition = React.useRef(localPosition);
   const optedIn = React.useRef(false);
+  const [wantsReadiness, setWantsReadiness] = React.useState(false);
 
+  // The intent is recorded off the optimistic position, so it survives the wait below.
   React.useEffect(() => {
     const previous = previousPosition.current;
     previousPosition.current = localPosition;
 
     const justEstablished = previous === null && localPosition !== null;
-    if (!justEstablished || alreadyReady || optedIn.current) return;
+    // A position can appear without anyone picking anything: the viewer's id resolves a beat after
+    // mount, or geo-chat's copy of a claim they had already answered lands late. Both look exactly
+    // like a fresh pick from here, and standing them ready for either silently undoes a stand-down
+    // they made elsewhere — the thing this hook is careful not to do.
+    if (!justEstablished || !pickedHere || alreadyReady || optedIn.current) return;
+
+    setWantsReadiness(true);
+  }, [alreadyReady, localPosition, pickedHere]);
+
+  // ...but it is only sent once geo-chat can see the response readiness depends on. Firing on the
+  // optimistic position instead had the server reject it for a claim it had no response for, and
+  // the rollback in `useClaimReadiness` flipped the switch straight back off.
+  React.useEffect(() => {
+    if (!wantsReadiness || !responseSettled || optedIn.current) return;
 
     optedIn.current = true;
+    setWantsReadiness(false);
     setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
-  }, [alreadyReady, claim.claim_entity_id, claim.space_id, localPosition, setReadiness]);
+  }, [claim.claim_entity_id, claim.space_id, responseSettled, setReadiness, wantsReadiness]);
 }
 
 /** One curated block, collapsible so a long page of recommendations stays scannable. */
@@ -809,6 +848,40 @@ function rematchPositionSummaries(
       participants,
     };
   });
+}
+
+/**
+ * The space a claim actually lives in.
+ *
+ * Everything the picker does with a claim is scoped to one space — the response is published
+ * against it, geo-chat keys its claim row and readiness on it, and the "Is factual" value that
+ * decides the response kind is read from it. Getting it wrong means responding in one space and
+ * asking to debate in another, which the server answers with "respond to this claim in this space
+ * before enabling debate readiness".
+ *
+ * `entity.spaces` can't answer it: it is ordered by a fixed space ranking and counts every space
+ * holding *any* value or even an inbound relation, so `spaces[0]` is a space that merely mentions
+ * the claim whenever that space outranks the claim's own — a Podcasts claim cited from Root or
+ * Crypto resolves to those. Prefer the spaces where the claim is actually named, which is how the
+ * entity side panel scopes the same entity.
+ */
+function claimHomeSpaceId(entity: {
+  spaces: string[];
+  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
+}): string | null {
+  const namedSpaceIds = new Set<string>();
+  for (const value of entity.values ?? []) {
+    if (
+      value.isDeleted !== true &&
+      uuidToHex(value.property.id) === uuidToHex(SystemIds.NAME_PROPERTY) &&
+      typeof value.value === 'string' &&
+      value.value.trim().length > 0
+    ) {
+      namedSpaceIds.add(value.spaceId);
+    }
+  }
+
+  return getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(entity.spaces) ?? null;
 }
 
 function claimResponseKind(
