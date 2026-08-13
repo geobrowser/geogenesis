@@ -156,6 +156,8 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      createdAt
+      updatedAt
 
       types {
         id

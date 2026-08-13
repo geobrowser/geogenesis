@@ -281,7 +281,7 @@ describe('EntityVoteButtons on unpublished data', () => {
   // published data, so there is nothing to respond to — and telling them to
   // publish first is noise on every row of a large import.
   it('renders nothing rather than a publish-first notice', () => {
-    // No indexed timestamps — this entity has never been published.
+    // Every row written locally — this entity has no indexed record at all.
     mocks.storeEntity = {
       relations: [
         {
@@ -311,8 +311,6 @@ describe('EntityVoteButtons on unpublished data', () => {
   // published record, so they stay available.
   it('keeps responses available on a published entity that carries local edits', () => {
     mocks.storeEntity = {
-      createdAt: '1784778383',
-      updatedAt: '1785350349',
       relations: [
         {
           spaceId: 'space-1',
@@ -323,7 +321,9 @@ describe('EntityVoteButtons on unpublished data', () => {
           isDeleted: false,
         },
       ],
-      values: [],
+      // An indexed row: this entity exists on the server regardless of the
+      // local-edit flags above.
+      values: [{ spaceId: 'space-1', property: { id: 'name' }, isLocal: false, isDeleted: false }],
     };
 
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });

@@ -97,16 +97,19 @@ export function EntityVoteButtons({
     ) === true;
   const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
-  // A never-published entity has no indexed timestamps — nothing carries them
-  // but the indexed record itself. That, rather than the local-edit flags, is
-  // what "unpublished" means here: those flags mark a row as locally written
-  // and nothing ever clears them, so a published entity that was once edited
-  // still looks unpublished to them.
+  // "Unpublished" here means the entity has no indexed record at all: every
+  // value and relation on it was written locally. Keying off the local-edit
+  // flags alone is wrong — nothing clears them, so a published entity that was
+  // ever edited keeps looking unpublished — and keying off timestamps is
+  // fragile, since not every query that hydrates the store selects them.
+  const hasIndexedRow =
+    entity?.values.some(value => value.isLocal !== true) ||
+    entity?.relations.some(relation => relation.isLocal !== true) ||
+    false;
   const isUnpublishedDraft =
     responseKindOverride === undefined &&
     entity != null &&
-    entity.createdAt == null &&
-    entity.updatedAt == null &&
+    !hasIndexedRow &&
     hasUnpublishedClaimResponseKindEdit(entity, spaceId);
   const queryResponseKind = responseKind ?? 'stance';
   const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
