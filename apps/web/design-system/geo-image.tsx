@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
 
 import cn from 'classnames';
@@ -25,15 +25,33 @@ function isRenderableSrc(src: string): boolean {
   return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
 }
 
+/**
+ * How far through the gateway chain this source has been pushed, reset whenever the source itself
+ * changes. Without the reset a new value inherits the previous one's progress and skips straight
+ * past gateways that would have served it — these components are long-lived in polled lists, where
+ * a row keeps its identity while its image url changes underneath.
+ */
+function useGatewayLevel(value: string) {
+  const [level, setLevel] = useState(0);
+  const [attempted, setAttempted] = useState(value);
+
+  if (attempted !== value) {
+    setAttempted(value);
+    setLevel(0);
+  }
+
+  return [attempted === value ? level : 0, setLevel] as const;
+}
+
 /** Image component that resolves IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
 export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
-  const [level, setLevel] = useState(0);
+  const [level, setLevel] = useGatewayLevel(value);
 
   const handleError = useCallback(() => {
     if (value.startsWith('ipfs://')) {
       setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
     }
-  }, [value]);
+  }, [setLevel, value]);
 
   const src = getImagePathAtLevel(value, level);
   if (!isRenderableSrc(src)) return null;
@@ -54,18 +72,30 @@ type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'on
 
 /** Native img element resolving IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
 export function NativeGeoImage({ value, alt = '', onExhausted, ...props }: NativeGeoImageProps) {
-  const [level, setLevel] = useState(0);
+  const [level, setLevel] = useGatewayLevel(value);
+  // Held in a ref so an inline callback doesn't re-fire the effect below on every render.
+  const onExhaustedRef = useRef(onExhausted);
+  onExhaustedRef.current = onExhausted;
+
+  const src = getImagePathAtLevel(value, level);
+  const renderable = isRenderableSrc(src);
+
+  // An unrenderable source — a bare CID, or an entity id that slipped through — mounts no image, so
+  // no error event is ever coming. Say so once per value, or a caller with a fallback of its own is
+  // left drawing a blank instead.
+  useEffect(() => {
+    if (!renderable) onExhaustedRef.current?.();
+  }, [renderable, value]);
 
   const handleError = useCallback(() => {
     if (value.startsWith('ipfs://') && level < IPFS_GATEWAY_COUNT - 1) {
       setLevel(level + 1);
       return;
     }
-    onExhausted?.();
-  }, [level, onExhausted, value]);
+    onExhaustedRef.current?.();
+  }, [level, setLevel, value]);
 
-  const src = getImagePathAtLevel(value, level);
-  if (!isRenderableSrc(src)) return null;
+  if (!renderable) return null;
 
   return <img {...props} src={src} alt={alt} onError={handleError} />;
 }
