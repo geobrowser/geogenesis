@@ -6,6 +6,7 @@ import type { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
@@ -183,14 +184,14 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
-  return { blocks, blockRelations, tabs, initialCollectionItems };
+  // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+  // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+  return { blocks: [...blocks, ...shownPropertyEntities], blockRelations, tabs, initialCollectionItems };
 }
 
 const SubtopicGallerySkeleton = () => {

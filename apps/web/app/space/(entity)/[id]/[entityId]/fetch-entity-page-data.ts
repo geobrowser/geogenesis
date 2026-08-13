@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { redirect } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import type { Tabs } from '~/core/state/editor/editor-provider';
 import type { Entity, Relation, TabEntity } from '~/core/types';
@@ -103,12 +104,10 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
     ...(blockRelations ?? []),
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     id: entityId,
@@ -125,7 +124,9 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
     relationEntityRelations,
 
     blockRelations: blockRelations ?? [],
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
   };
 }
