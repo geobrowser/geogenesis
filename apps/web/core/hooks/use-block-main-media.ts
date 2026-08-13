@@ -42,18 +42,20 @@ export function useBlockMainMedia(
   properties: PropertyLookup,
   { readsDimensions = true }: Options = {}
 ): BlockMainMediaState {
-  // Hydrate every shown column as soon as the block's columns are known rather than waiting
-  // for the property schema to tell us which one holds the media. The schema is a separate
-  // round trip, so chaining off it lands the dimensions after the rows they're meant to size.
-  // `useHydrateEntities` keys off the id contents, so passing a fresh array each render is fine.
+  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
+  const { dimensions, isHydrated } = useBlockMediaDimensions(mainMedia?.propertyId);
+
+  // The server ships shown-column properties with the page's blocks, so `isHydrated` is usually
+  // already true and there's nothing to fetch or wait for. Where it isn't — the entity side
+  // panel, a block whose columns changed since load — fetch every shown column at once rather
+  // than waiting for the property schema to say which one holds the media. That schema is its
+  // own round trip, and chaining off it lands the dimensions after the rows they're meant to
+  // size. `useHydrateEntities` keys off the id contents, so a fresh array each render is fine.
   const { isFetched: areShownColumnsHydrated } = useHydrateEntities({
     ids: [...shownColumnIds],
-    enabled: readsDimensions,
+    enabled: readsDimensions && !isHydrated,
   });
   const shownColumnCount = shownColumnIds.length;
-
-  const mainMedia = resolveMainMediaProperty(shownColumnIds, properties);
-  const dimensions = useBlockMediaDimensions(mainMedia?.propertyId);
 
   // Callers spread this into every row, and both `shownColumnIds` and the properties map are
   // rebuilt each render upstream, so memoize on the resolved values rather than on their identity.
@@ -69,8 +71,8 @@ export function useBlockMainMedia(
   return React.useMemo(
     () => ({
       mainMedia: resolved,
-      isFramePending: readsDimensions && shownColumnCount > 0 && !areShownColumnsHydrated,
+      isFramePending: readsDimensions && shownColumnCount > 0 && !isHydrated && !areShownColumnsHydrated,
     }),
-    [resolved, readsDimensions, shownColumnCount, areShownColumnsHydrated]
+    [resolved, readsDimensions, shownColumnCount, isHydrated, areShownColumnsHydrated]
   );
 }

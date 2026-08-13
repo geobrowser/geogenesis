@@ -97,4 +97,40 @@ describe('useBlockMainMedia', () => {
 
     expect(result.current.isFramePending).toBe(false);
   });
+
+  describe('when the server already sent the property down with the page', () => {
+    // A property entity in the store always has at least a name, which is what tells
+    // "hydrated, configures no size" apart from "not fetched yet".
+    const hydratedProperty = [
+      { entity: { id: COVER_PROPERTY }, property: { id: 'name-property' }, value: 'Cover' },
+      { entity: { id: COVER_PROPERTY }, property: { id: PROPERTY_WIDTH_PIXELS_ID }, value: '1080' },
+      { entity: { id: COVER_PROPERTY }, property: { id: PROPERTY_HEIGHT_PIXELS_ID }, value: '1920' },
+    ];
+
+    it('has the frame on the first render, with no fetch in flight', () => {
+      mocks.values = hydratedProperty;
+
+      const { result } = renderHook(() => useBlockMainMedia([NAME_PROPERTY, COVER_PROPERTY], schema));
+
+      expect(result.current.isFramePending).toBe(false);
+      expect(result.current.mainMedia?.dimensions.aspectRatio).toBe('1080 / 1920');
+    });
+
+    it('skips the fetch entirely', () => {
+      mocks.values = hydratedProperty;
+
+      renderHook(() => useBlockMainMedia([NAME_PROPERTY, COVER_PROPERTY], schema));
+
+      expect(mocks.hydrateCalls[0]?.enabled).toBe(false);
+    });
+
+    it('does not wait on a property that is hydrated but configures no size', () => {
+      mocks.values = [{ entity: { id: COVER_PROPERTY }, property: { id: 'name-property' }, value: 'Cover' }];
+
+      const { result } = renderHook(() => useBlockMainMedia([NAME_PROPERTY, COVER_PROPERTY], schema));
+
+      expect(result.current.isFramePending).toBe(false);
+      expect(result.current.mainMedia?.dimensions).toEqual({ width: null, height: null, aspectRatio: null });
+    });
+  });
 });

@@ -20,7 +20,7 @@ vi.mock('~/core/hooks/use-block-main-media', () => ({
 }));
 
 vi.mock('~/core/hooks/use-block-main-media-url', () => ({
-  useBlockMainMediaUrl: () => null,
+  useBlockMainMediaUrl: () => ({ url: null, isResolving: false }),
 }));
 
 vi.mock('~/core/utils/use-entity-media', () => ({

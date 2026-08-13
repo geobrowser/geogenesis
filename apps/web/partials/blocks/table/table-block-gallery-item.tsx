@@ -83,7 +83,7 @@ export function TableBlockGalleryItem({
     nameCell.description ??
     null;
 
-  const image = useBlockMainMediaUrl({
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
     mediaPropertyId: mainMedia?.propertyId ?? null,
@@ -283,7 +283,10 @@ export function TableBlockGalleryItem({
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? // Still looking the image up. Leaving the frame empty reads as the card still
+          // loading; dropping the placeholder in here would show every card the fallback
+          // image and then swap it for the real one.
+          null : (
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"

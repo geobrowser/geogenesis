@@ -1,4 +1,5 @@
 import type { DataBlockView } from '~/core/blocks/data/data-block-view';
+import type { BlockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
 import { PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL } from '~/core/state/editor/profile-overview-tail-placeholder';
 
@@ -11,7 +12,7 @@ export type ServerBlock =
   | { type: 'text'; markdown: string }
   | { type: 'image'; src: string }
   | { type: 'video'; src: string }
-  | { type: 'data'; view?: DataBlockView; pageSize?: number };
+  | { type: 'data'; view?: DataBlockView; pageSize?: number; mediaFrame?: BlockMediaFrame };
 
 type ServerContentProps = {
   blocks: ServerBlock[];
@@ -71,7 +72,11 @@ const ServerBlockRenderer = ({ block }: { block: ServerBlock }) => {
               <Skeleton className="h-4 w-4" />
               <Skeleton className="h-5 w-16" />
             </div>
-            <DataBlockLoadingPlaceholder view={block.view ?? 'TABLE'} items={block.pageSize} />
+            <DataBlockLoadingPlaceholder
+              view={block.view ?? 'TABLE'}
+              items={block.pageSize}
+              mediaFrame={block.mediaFrame}
+            />
           </div>
         </>
       );

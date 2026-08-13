@@ -141,9 +141,21 @@ export function useEntityMediaUrl(entityId: string | undefined, spaceId: string)
 export function useEntityMedia(
   entityId: string | undefined,
   spaceId: string
-): { avatarUrl: string | undefined; coverUrl: string | undefined } {
+): {
+  avatarUrl: string | undefined;
+  coverUrl: string | undefined;
+  /**
+   * True while the avatar/cover relations are still being fetched. Until it clears, two
+   * undefined URLs mean "we don't know yet", not "this entity has no image" — callers that
+   * swap in a placeholder need to tell those apart or they flash it on every card.
+   */
+  isResolving: boolean;
+} {
   const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
   const [fetchedCoverUrl, setFetchedCoverUrl] = React.useState<string | undefined>(undefined);
+  // Which entity the fetch below has settled for, rather than a bare boolean: pointing the hook
+  // at a different entity has to put us back in "don't know yet".
+  const [fetchedForEntityId, setFetchedForEntityId] = React.useState<string | null>(null);
   const cache = useQueryClient();
 
   const storeAvatarRelation = useRelation({
@@ -203,14 +215,20 @@ export function useEntityMedia(
         }
       } catch {
         // ignored — entity may not exist
+      } finally {
+        setFetchedForEntityId(id);
       }
     };
 
     fetchMedia();
   }, [entityId, spaceId, storeAvatarUrl, storeCoverUrl, cache]);
 
+  const avatarUrl = storeAvatarUrl ?? fetchedAvatarUrl;
+  const coverUrl = storeCoverUrl ?? fetchedCoverUrl;
+
   return {
-    avatarUrl: storeAvatarUrl ?? fetchedAvatarUrl,
-    coverUrl: storeCoverUrl ?? fetchedCoverUrl,
+    avatarUrl,
+    coverUrl,
+    isResolving: Boolean(entityId) && !avatarUrl && !coverUrl && fetchedForEntityId !== entityId,
   };
 }

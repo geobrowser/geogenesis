@@ -16,26 +16,37 @@ export type BlockMediaDimensions = {
 
 export const NO_BLOCK_MEDIA_DIMENSIONS: BlockMediaDimensions = { width: null, height: null, aspectRatio: null };
 
+export type BlockMediaDimensionsResult = {
+  dimensions: BlockMediaDimensions;
+  /**
+   * Whether the property entity is in the store at all. Without this, `dimensions` being empty
+   * is ambiguous — "this property configures no size" and "we haven't fetched it yet" look
+   * identical, and a gallery that can't tell them apart either stalls on a fetch it doesn't
+   * need or paints a ratio it's about to change.
+   */
+  isHydrated: boolean;
+};
+
 /**
  * Reads Width (pixels) / Height (pixels) from an already-hydrated Image or Video property entity.
  *
- * Hydration is the caller's job — see `useBlockMainMedia`, which fetches every shown column up
- * front. Fetching here instead would chain behind the property schema resolving which column is
- * the media one, and the gallery would paint at the default ratio before the real one arrived.
+ * Hydration is the caller's job — the server sends these down with the page's blocks, and
+ * `useBlockMainMedia` fetches any that are missing. Fetching here instead would chain behind the
+ * property schema resolving which column is the media one, and the gallery would paint at the
+ * default ratio before the real one arrived.
  */
-export function useBlockMediaDimensions(propertyId: string | null | undefined): BlockMediaDimensions {
-  const dimensionValues = useValues({
-    selector: v =>
-      Boolean(propertyId) &&
-      ID.equals(v.entity.id, propertyId as string) &&
-      (ID.equals(v.property.id, PROPERTY_WIDTH_PIXELS_ID) || ID.equals(v.property.id, PROPERTY_HEIGHT_PIXELS_ID)),
+export function useBlockMediaDimensions(propertyId: string | null | undefined): BlockMediaDimensionsResult {
+  // Every value on the property, not just the two dimensions: a property that configures no size
+  // still has a name, and that's what separates "hydrated, no dimensions" from "not fetched".
+  const propertyValues = useValues({
+    selector: v => Boolean(propertyId) && ID.equals(v.entity.id, propertyId as string),
   });
 
   return React.useMemo(() => {
     let width: number | null = null;
     let height: number | null = null;
 
-    for (const value of dimensionValues) {
+    for (const value of propertyValues) {
       if (ID.equals(value.property.id, PROPERTY_WIDTH_PIXELS_ID)) {
         width = parsePositivePixelDimension(value.value) ?? width;
       } else if (ID.equals(value.property.id, PROPERTY_HEIGHT_PIXELS_ID)) {
@@ -44,11 +55,14 @@ export function useBlockMediaDimensions(propertyId: string | null | undefined): 
     }
 
     return {
-      width,
-      height,
-      aspectRatio: width != null && height != null ? `${width} / ${height}` : null,
+      dimensions: {
+        width,
+        height,
+        aspectRatio: width != null && height != null ? `${width} / ${height}` : null,
+      },
+      isHydrated: propertyValues.length > 0,
     };
-  }, [dimensionValues]);
+  }, [propertyValues]);
 }
 
 export type BlockMediaFrame = {

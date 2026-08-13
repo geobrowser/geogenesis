@@ -37,14 +37,16 @@ function RankingGalleryCard({
   imageHint?: string | null;
   mainMedia: BlockMainMedia | null;
 }) {
-  const imageUrl =
-    useBlockMainMediaUrl({
-      entityId,
-      spaceId,
-      mediaPropertyId: mainMedia?.propertyId ?? null,
-      mediaKind: mainMedia?.kind,
-      fallbackHint: imageHint,
-    }) ?? PLACEHOLDER_SPACE_IMAGE;
+  const { url, isResolving: isImageResolving } = useBlockMainMediaUrl({
+    entityId,
+    spaceId,
+    mediaPropertyId: mainMedia?.propertyId ?? null,
+    mediaKind: mainMedia?.kind,
+    fallbackHint: imageHint,
+  });
+  // Hold the frame empty rather than falling back while the lookup is still running — the
+  // placeholder is for cards that have no image, not for cards whose image hasn't arrived.
+  const imageUrl = url ?? (isImageResolving ? null : PLACEHOLDER_SPACE_IMAGE);
 
   // When a property sets explicit dimensions, keep the card at the configured aspect ratio
   // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
@@ -62,13 +64,15 @@ function RankingGalleryCard({
           )}
           style={mediaFrame.style}
         >
-          <GeoImage
-            value={imageUrl}
-            className={cx('pointer-events-none', mediaImageFitClassName)}
-            fill
-            alt=""
-            draggable={false}
-          />
+          {imageUrl ? (
+            <GeoImage
+              value={imageUrl}
+              className={cx('pointer-events-none', mediaImageFitClassName)}
+              fill
+              alt=""
+              draggable={false}
+            />
+          ) : null}
         </div>
       </Link>
       <Link href={href} className="mt-2 block" draggable={false}>
