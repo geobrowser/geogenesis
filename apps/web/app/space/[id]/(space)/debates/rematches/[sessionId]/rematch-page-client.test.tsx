@@ -49,7 +49,11 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/debates/api', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/api')>();
-  return { ...actual, getCurrentGeoChatUserId: () => 'user-local' };
+  return {
+    ...actual,
+    getCurrentGeoChatUserId: () => 'user-local',
+    resolveCurrentGeoChatUserId: () => Promise.resolve('user-local'),
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -69,6 +73,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -650,7 +655,66 @@ describe('DebateRematchPageClient', () => {
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    // Offered, but not yet sendable — see below.
+    expect(within(card!).getByRole('button', { name: 'Publishing…' })).toBeInTheDocument();
+  });
+
+  // geo-chat rejects a request for a claim it has no position for — "respond to this claim before
+  // requesting a rematch" — so the button has to wait for geo-chat's copy, not the optimistic one.
+  it('holds the request until geo-chat has the position it will be validated against', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const publishing = screen.getByRole('button', { name: 'Publishing…' });
+    expect(publishing).toBeDisabled();
+    fireEvent.click(publishing);
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('sends the request once geo-chat agrees with the side on screen', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalled();
+  });
+
+  // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
+  // request against than holding none.
+  it('holds the request while a side switch is still publishing', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: false, position_label: 'Disagree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Publishing…' })).toBeDisabled();
   });
 });
 

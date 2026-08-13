@@ -16,7 +16,6 @@ import {
   type DebateRematchSession,
   type MatchmakingReadiness,
   type MatchmakingTopic,
-  getCurrentGeoChatUserId,
 } from '~/core/debates/api';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
@@ -36,6 +35,7 @@ import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { uuidToHex } from '~/core/id/normalize';
@@ -62,7 +62,7 @@ function firstNamePossessive(name: string) {
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
-  const currentUserId = getCurrentGeoChatUserId();
+  const currentUserId = useCurrentGeoChatUserId();
   const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
@@ -567,6 +567,12 @@ function RematchClaimCard({
         : optimisticResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
+  // geo-chat validates the request against its own copy of your position, which trails the
+  // optimistic one by a publish, an index, and a notification. Showing the button on the optimistic
+  // answer is what keeps the card responsive; *sending* it before geo-chat agrees is what earns
+  // "respond to this claim before requesting a rematch". Comparing rather than null-checking also
+  // covers switching sides, where geo-chat still holds the side you just moved off.
+  const responseSettled = serverLocalPosition === localPosition;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
@@ -609,9 +615,9 @@ function RematchClaimCard({
           <div className="mt-3">
             <HubPillButton
               onClick={onRequest}
-              disabled={!opposing || busy || requesting || claim.recently_rejected}
-              pending={requesting}
-              pendingLabel="Requesting…"
+              disabled={!opposing || busy || requesting || claim.recently_rejected || !responseSettled}
+              pending={requesting || (opposing && !responseSettled)}
+              pendingLabel={requesting ? 'Requesting…' : 'Publishing…'}
               className="w-full"
             >
               Request debate
