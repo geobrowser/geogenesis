@@ -97,7 +97,7 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
 
-    expect(mocks.accept).toHaveBeenCalledWith({ requestId: 'request-1' });
+    expect(mocks.accept).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
   });
 
   it('keeps "Not now" local so the request stays in the requests tab', () => {
@@ -115,7 +115,7 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss forever' }));
 
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
   });
 
   // Saying you don't want to debate the claim answers this request too: leaving it pending would
@@ -130,14 +130,15 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(toggle);
 
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
+    // A plain dismiss: the queue call below withdraws the viewer, and remove_intent additionally
+    // records that they don't want the claim, which outlives them turning it back on.
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
     // And leave the claim's queue: dismissing answers this request, but only leaving the queue
     // takes the viewer out of everyone else's matches for the claim.
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: 'space-1',
-      claimId: 'claim-1',
-      ready: false,
-    });
+    expect(mocks.setReadiness).toHaveBeenCalledWith(
+      { spaceId: 'space-1', claimId: 'claim-1', ready: false },
+      expect.anything()
+    );
     expect(mocks.accept).not.toHaveBeenCalled();
   });
 

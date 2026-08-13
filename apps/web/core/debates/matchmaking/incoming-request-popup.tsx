@@ -104,7 +104,11 @@ export function IncomingRequestPopup({
                 },
                 releaseAnswer
               );
-              dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer);
+              // A plain dismiss, not the remove-intent variant behind "Dismiss forever": the queue
+              // call above already withdraws the viewer, and `remove_intent` additionally records
+              // that they don't want this claim — which outlived them turning the claim back on and
+              // left the original requester unable to ask again.
+              dismissRequest.mutate({ requestId: request.id }, releaseAnswer);
             })
           }
         />
