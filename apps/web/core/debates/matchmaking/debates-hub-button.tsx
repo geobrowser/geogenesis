@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { useDebatesEnabled } from '~/core/state/feature-flags';
-
 import { Megaphone } from '~/design-system/icons/megaphone';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
@@ -20,18 +18,17 @@ import { useUnexpiredRequests } from './use-request-countdown';
  * open it for.
  */
 export function DebatesHubButton() {
-  const isDebatesEnabled = useDebatesEnabled();
   // False until Privy has restored the session, so the button stays hidden until we actually know
   // — appearing late beats flashing in and out for someone who was never signed in.
   const { authenticated } = useGeoChatAuth();
   const { isOpen, toggle } = useDebatesHub();
-  const { data: activity } = useDebateActivity(isDebatesEnabled);
+  const { data: activity } = useDebateActivity();
   // Read-only: the coordinator already fetches this list whenever there is anything in it, and the
   // badge must agree with the one in the panel rather than counting requests that have expired.
   const { data: requests } = useDebateRequests(false);
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  if (!isDebatesEnabled || !authenticated) return null;
+  if (!authenticated) return null;
 
   const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
 

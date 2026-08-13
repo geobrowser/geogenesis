@@ -2,7 +2,6 @@
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -18,22 +17,21 @@ type ClaimDebateButtonProps = {
 };
 
 export function ClaimDebateButton({ entityId, spaceId, entity: providedEntity }: ClaimDebateButtonProps) {
-  const isDebatesEnabled = useDebatesEnabled();
   const { entity: fetchedEntity } = useQueryEntity({
     id: entityId,
     spaceId,
-    enabled: isDebatesEnabled && providedEntity == null,
+    enabled: providedEntity == null,
   });
   const entity = providedEntity ?? fetchedEntity;
   const isClaim = entity?.types.some(type => type.id === CLAIM_TYPE_ID) ?? false;
   const published = entity ? isClaimPublished(entity) : false;
 
-  const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], isDebatesEnabled && isClaim);
+  const debateClaimsQuery = useDebateClaims(spaceId, published ? [entityId] : [], isClaim);
   const debateClaim = debateClaimsQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-  const activity = useDebateActivity(isDebatesEnabled && isClaim).data ?? null;
+  const activity = useDebateActivity(isClaim).data ?? null;
   const hasActiveFlowElsewhere = hasActiveDebateFlow(activity);
 
-  if (!isDebatesEnabled || !isClaim) return null;
+  if (!isClaim) return null;
 
   const canEnable = published && !debateClaim?.active_debate && !hasActiveFlowElsewhere;
 

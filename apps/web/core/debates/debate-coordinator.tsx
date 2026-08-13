@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useDebatesEnabled } from '~/core/state/feature-flags';
-
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
@@ -42,22 +40,21 @@ import { useScrollLock } from './use-scroll-lock';
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
-  const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
   const gateway = useDebateGateway(
-    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey,
     debatePresence
   );
   useClaimResponseIndexedNotifier(
-    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey
   );
-  const activityQuery = useDebateActivity(isDebatesEnabled);
+  const activityQuery = useDebateActivity();
   const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
   const debate = activeDebate(activity);
@@ -87,7 +84,7 @@ export function DebateCoordinator() {
   // Only fetch the request list once activity says one exists, so idle sessions stay quiet. "Not
   // now" snoozes a request for this session; it stays in the hub's Requests tab either way.
   const hasIncomingRequests = (activity?.incoming_request_count ?? 0) > 0;
-  const requestsQuery = useDebateRequests(isDebatesEnabled && hasIncomingRequests && !activeFlow);
+  const requestsQuery = useDebateRequests(hasIncomingRequests && !activeFlow);
   const [snoozedRequestIds, setSnoozedRequestIds] = React.useState<string[]>([]);
   // Expired requests are dropped here too, so the popup can never prompt for a dead request while
   // waiting on the server's `debate.requests_changed` event.
@@ -195,7 +192,6 @@ export function DebateCoordinator() {
     }
   }, [activity, pathname, router]);
 
-  if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
 

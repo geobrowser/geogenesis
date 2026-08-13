@@ -8,13 +8,11 @@ import { DebatesHubButton } from './debates-hub-button';
 import { debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
-  debatesEnabled: true,
   ready: true,
   authenticated: true,
   incomingRequestCount: 0,
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({ useDebatesEnabled: () => mocks.debatesEnabled }));
 
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
@@ -34,7 +32,6 @@ function renderButton() {
 }
 
 beforeEach(() => {
-  mocks.debatesEnabled = true;
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.incomingRequestCount = 0;
@@ -62,12 +59,6 @@ describe('DebatesHubButton', () => {
     mocks.authenticated = false;
     renderButton();
 
-    expect(screen.queryByRole('button', { name: /Debates/ })).not.toBeInTheDocument();
-  });
-
-  it('stays hidden when debates are switched off, even signed in', () => {
-    mocks.debatesEnabled = false;
-    renderButton();
     expect(screen.queryByRole('button', { name: /Debates/ })).not.toBeInTheDocument();
   });
 

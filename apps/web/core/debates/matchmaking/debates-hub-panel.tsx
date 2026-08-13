@@ -8,7 +8,6 @@ import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
@@ -56,7 +55,6 @@ function shouldStartSheetDrag(event: React.PointerEvent, root: HTMLElement): boo
 }
 
 export function DebatesHubPanel() {
-  const isDebatesEnabled = useDebatesEnabled();
   const isMobile = useIsMobileLayout();
   const dragControls = useDragControls();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
@@ -115,7 +113,7 @@ export function DebatesHubPanel() {
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
   }, [isOpen, isMobile, close]);
 
-  if (!isDebatesEnabled || !isOpen) return null;
+  if (!isOpen) return null;
   if (typeof document === 'undefined' || !document.body) return null;
 
   // Only the sheet gets a close button. `aria-modal` hides the rest of the page from assistive

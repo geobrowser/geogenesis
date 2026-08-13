@@ -58,7 +58,6 @@ const mocks = vi.hoisted(() => ({
   debate: null as Debate | null,
   rematch: null as DebateRematchSession | null,
   featureFlags: {
-    questionsTab: true,
     debateDebugging: false,
   } as Record<string, boolean>,
 }));
@@ -77,7 +76,6 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.featureFlags[id] ?? false,
-  useDebatesEnabled: () => mocks.featureFlags['questionsTab'] ?? false,
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -309,7 +307,6 @@ beforeEach(() => {
   mocks.debate = completedDebate();
   mocks.rematch = null;
   mocks.featureFlags = {
-    questionsTab: true,
     debateDebugging: false,
   };
   mocks.readyMutateAsync.mockResolvedValue(readyDebate({ localReady: true, remoteReady: false }));
