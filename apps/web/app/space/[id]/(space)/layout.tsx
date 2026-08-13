@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
@@ -245,12 +246,10 @@ const getSpaceFrontPage = async (spaceId: string) => {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     id: entity.id,
@@ -258,7 +257,9 @@ const getSpaceFrontPage = async (spaceId: string) => {
     tabRelations,
     tabs,
     blockRelations: entity.relations,
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
     space,
     avatarUrl: Entities.avatar(entity.relations) ?? null,
