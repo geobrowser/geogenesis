@@ -16,12 +16,13 @@ const mocks = vi.hoisted(() => ({
   joinReset: vi.fn(),
   leaveMutateAsync: vi.fn(),
   responseKinds: [] as Array<'stance' | 'veracity' | null>,
+  authReady: true,
   authenticated: true,
   accountKey: 'account-1' as string | null,
 }));
 
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
     reset: mocks.joinReset,
@@ -49,6 +50,7 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockReturnValue(deferred(queueResponse(false)).promise);
   mocks.responseKinds.length = 0;
+  mocks.authReady = true;
   mocks.authenticated = true;
   mocks.accountKey = 'account-1';
 });

@@ -34,7 +34,7 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
   useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),

@@ -15,12 +15,13 @@ const mocks = vi.hoisted(() => ({
   joinMutateAsync: vi.fn(),
   joinReset: vi.fn(),
   leaveMutateAsync: vi.fn(),
+  authReady: true,
   authenticated: true,
   accountKey: 'account-1' as string | null,
 }));
 
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
     reset: mocks.joinReset,
@@ -89,6 +90,7 @@ beforeEach(() => {
   mocks.joinReset.mockReset();
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockResolvedValue(queueResponse(false));
+  mocks.authReady = true;
   mocks.authenticated = true;
   mocks.accountKey = 'account-1';
 });
@@ -152,6 +154,67 @@ describe('ClaimReadinessToggle', () => {
     await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1));
     view.rerender(element(responded, view.queryClient));
     expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  // The response snapshot is retired the moment geo-chat reports the position — and the retiring
+  // component is the card, not the switch. Watching the run past that point dropped the intent at
+  // the instant it came good, which is the switch flicking itself off just before the card
+  // resettled into "My positions".
+  it('keeps the switch on when the card remounts after the response snapshot was retired', async () => {
+    const view = renderToggle(readiness({ viewer_response: null }), indexing('positive'));
+
+    fireEvent.click(toggle());
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    view.unmount();
+
+    // The card retires the snapshot once geo-chat confirms, then the list re-sorts and remounts it
+    // in "My positions" — so the switch comes back to a run that is already gone.
+    view.queryClient.setQueryData(
+      entityResponseIndexingQueryKey('profile-space-1', CLAIM_ID, SPACE_ID, 'stance'),
+      idleIndexingState()
+    );
+    render(element(readiness({ viewer_response: { position: true, position_label: 'Agree' } }), view.queryClient));
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1));
+  });
+
+  // Privy reports signed-out until it rehydrates. A card remounting through that window — which is
+  // what the hub list does when a claim changes section — must not read it as a sign-out.
+  it('holds the intent through an unsettled auth read rather than discarding it', async () => {
+    const view = renderToggle(readiness({ viewer_response: null }), indexing('positive'));
+
+    fireEvent.click(toggle());
+
+    mocks.authReady = false;
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    view.rerender(element(readiness({ viewer_response: null }), view.queryClient));
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
+
+    mocks.authReady = true;
+    mocks.authenticated = true;
+    mocks.accountKey = 'account-1';
+    view.rerender(
+      element(readiness({ viewer_response: { position: true, position_label: 'Agree' } }), view.queryClient)
+    );
+
+    await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1));
+  });
+
+  it('still discards the intent once a settled sign-out is confirmed', () => {
+    const view = renderToggle(readiness({ viewer_response: null }), indexing('positive'));
+
+    fireEvent.click(toggle());
+
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    view.rerender(element(readiness({ viewer_response: null }), view.queryClient));
+
+    expect(toggle()).toHaveAttribute('aria-checked', 'false');
+    expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });
 
   it('cancels held readiness when the switch is turned back off before it is sent', () => {

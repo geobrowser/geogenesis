@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: { claims: mocks.claims }, isLoading: false, error: null }),
   useDebateActivity: () => ({ data: { available_to_debate: false }, isPending: false }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.availabilityMutate, isPending: false }),

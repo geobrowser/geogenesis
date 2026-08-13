@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({ data: { outbound_request: null, available_to_debate: mocks.availableToDebate } }),
   // The readiness switch rides the shared queue-backed machine rather than a one-shot mutation.
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));

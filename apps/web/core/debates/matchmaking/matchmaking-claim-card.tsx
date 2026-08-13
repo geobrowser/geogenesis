@@ -11,6 +11,7 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -175,7 +176,7 @@ function RespondableControls({
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };
-  const { submitResponse, isConnected } = useEntityResponse(target);
+  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -193,7 +194,35 @@ function RespondableControls({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
-  const isPublishing = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+
+  // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
+  // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
+  // about someone we knew about all along.
+  const viewerSpaceIds = React.useMemo(() => (personalSpaceId ? [personalSpaceId] : []), [personalSpaceId]);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(viewerSpaceIds);
+  const viewerProfile = personalSpaceId ? profilesBySpaceId.get(personalSpaceId) : undefined;
+
+  const optimisticPositions = React.useMemo(
+    () =>
+      withViewerPosition({
+        positions,
+        responseKind: readiness.response_kind,
+        serverPosition: readiness.viewer_response?.position ?? null,
+        viewerPosition,
+        viewerSpaceId: personalSpaceId,
+        viewerName: viewerProfile?.name ?? null,
+        viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
+      }),
+    [
+      personalSpaceId,
+      positions,
+      readiness.response_kind,
+      readiness.viewer_response?.position,
+      viewerPosition,
+      viewerProfile?.avatarUrl,
+      viewerProfile?.name,
+    ]
+  );
 
   // Hand back to the server's copy only once it actually agrees, so there is no window where
   // neither side reports the response.
@@ -238,11 +267,14 @@ function RespondableControls({
         }
       />
       <PositionRow
-        positions={positions}
+        positions={optimisticPositions}
         responseKind={readiness.response_kind}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        disabled={!isConnected || isPublishing || isAccountSetupPending}
+        // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
+        // overlapping submissions, so there is nothing to protect against — and dimming the pills
+        // for the length of an indexing round trip read as the response not having landed.
+        disabled={!isConnected || isAccountSetupPending}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -254,6 +286,77 @@ function RespondableControls({
       ) : null}
     </>
   );
+}
+
+/**
+ * Move the viewer between the two sides to match the response they just gave, before geo-chat has
+ * indexed it and can report them itself.
+ *
+ * geo-chat's summaries are the only source of the avatar stacks, and they trail the viewer's own
+ * response by a publish, an index and a notification — so without this the side you just took
+ * fills in with your colour but not your face, which reads as the response not having counted.
+ */
+export function withViewerPosition({
+  positions,
+  responseKind,
+  serverPosition,
+  viewerPosition,
+  viewerSpaceId,
+  viewerName,
+  viewerAvatarUrl,
+}: {
+  positions: DebateClaimPositionSummary[];
+  responseKind: MatchmakingReadiness['response_kind'];
+  /** The position geo-chat currently reports for the viewer. */
+  serverPosition: boolean | null;
+  /** The position this client knows the viewer holds. */
+  viewerPosition: boolean | null;
+  viewerSpaceId: string | null;
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
+}): DebateClaimPositionSummary[] {
+  if (!viewerSpaceId || viewerPosition === serverPosition) return positions;
+
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const viewer = {
+    // Not geo-chat's id for this user — we don't have it here. Keyed on the personal space instead,
+    // which is unique per viewer and is what the avatar renders from anyway.
+    user_id: `viewer:${viewerSpaceId}`,
+    profile_space_id: viewerSpaceId,
+    display_name: viewerName,
+    avatar_cid: viewerAvatarUrl,
+  };
+
+  const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: side.total_count + 1,
+    participants: [viewer, ...side.participants],
+  });
+  const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: Math.max(0, side.total_count - 1),
+    participants: side.participants.filter(participant => participant.profile_space_id !== viewerSpaceId),
+  });
+
+  const adjusted = positions.map(side => {
+    if (side.position === viewerPosition) return withViewer(side);
+    if (side.position === serverPosition) return withoutViewer(side);
+    return side;
+  });
+
+  // A side nobody has taken yet has no summary to adjust, so the viewer would have nowhere to
+  // appear. The label matches what PositionRow falls back to for a missing side.
+  if (viewerPosition !== null && !adjusted.some(side => side.position === viewerPosition)) {
+    adjusted.push({
+      position: viewerPosition,
+      position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
+      total_count: 1,
+      available_now_count: 0,
+      participants: [viewer],
+    });
+  }
+
+  return adjusted;
 }
 
 /** The graph can't resolve this claim, so the sides are read-only and there's nothing to respond to. */

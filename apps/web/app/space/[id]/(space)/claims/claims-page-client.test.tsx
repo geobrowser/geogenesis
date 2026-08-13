@@ -49,7 +49,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutate,

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -16,6 +16,11 @@ const mocks = vi.hoisted(() => ({
   joinMutateAsync: vi.fn(),
   leaveMutateAsync: vi.fn(),
   submitResponse: vi.fn(),
+  indexing: { status: 'idle', pending: null, runId: null } as {
+    status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
+    pending: { expectedResponse: 'positive' | 'negative' | null } | null;
+    runId: string | null;
+  },
   spaceName: 'Crypto',
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
 }));
@@ -23,7 +28,7 @@ const mocks = vi.hoisted(() => ({
 // The readiness switch shares the entity page's queue-backed machine, so it needs geo-chat auth
 // and the join/leave mutations rather than the hub's old one-shot readiness mutation.
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));
@@ -37,8 +42,23 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isConnected: true,
     personalSpaceId: 'personal-space',
   }),
-  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
+}));
+
+// The viewer's own profile is already cached from the navbar, which is what lets their avatar join
+// the side they picked without waiting on anything.
+vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
+  useProfilesBySpaceIds: (spaceIds: string[]) => ({
+    profilesBySpaceId: new Map(
+      spaceIds.map(spaceId => [spaceId, { spaceId, name: 'You', avatarUrl: 'https://example.com/you.png' }])
+    ),
+    isLoading: false,
+  }),
+}));
+
+vi.mock('~/design-system/avatar', () => ({
+  Avatar: ({ avatarUrl }: { avatarUrl?: string | null }) => <span data-testid="avatar">{avatarUrl ?? 'none'}</span>,
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -93,6 +113,7 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.submitResponse.mockReset();
+  mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
 });
 
@@ -133,6 +154,42 @@ describe('MatchmakingClaimCard', () => {
     expect(toggle.parentElement?.parentElement?.contains(screen.getByText('Crypto'))).toBe(true);
     // The unavailable notice loses the toggle it used to sit beside, but must still be shown.
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
+  });
+
+  // geo-chat owns the avatar stacks, and its copy trails the response by a publish, an index and a
+  // notification. Filling the pill with your colour but not your face read as the response not
+  // having counted.
+  it('puts the viewer on the side they just took, before geo-chat reports them', () => {
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness({ viewer_response: null, viewer_debate_ready: false })}
+      />
+    );
+
+    // Three on the server plus the viewer: their face is shown, the other three counted over.
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).getByTestId('avatar')).toHaveTextContent('https://example.com/you.png');
+    expect(within(disagree).getByText('+3')).toBeInTheDocument();
+
+    // The side they didn't take is left exactly as the server reported it.
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).queryByTestId('avatar')).not.toBeInTheDocument();
+    expect(within(agree).getByText('+2')).toBeInTheDocument();
+  });
+
+  it('keeps the response pills live while the response is publishing', () => {
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    // Dimmed, dead pills for the length of an indexing round trip read as a stuck response.
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+    expect(mocks.submitResponse).toHaveBeenCalled();
   });
 
   it('explains why the toggle is unavailable without a response', () => {

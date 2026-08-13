@@ -50,14 +50,23 @@ export function useClaimDebateReadiness({
   const queryClient = useQueryClient();
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
-  const { accountKey, authenticated } = useGeoChatAuth();
+  const { accountKey, authenticated, ready: authReady } = useGeoChatAuth();
   const responseIndexing = useEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
     responseKind: readiness.response_kind,
   });
+  // Privy blanks the account while it rehydrates, and the intent is keyed on it — re-keying
+  // switches to an empty entry *and* wipes the one being held. A card remounting through that
+  // window (which is what the hub's list does when a claim changes section) would silently drop
+  // readiness the viewer is waiting on, flicking the switch off. Hold the last settled account
+  // until Privy actually has an answer; a real sign-out still re-keys, which is the point.
+  const settledAccountKey = React.useRef(accountKey);
+  if (authReady) settledAccountKey.current = accountKey;
+  const intentAccountKey = authReady ? accountKey : settledAccountKey.current;
+
   const { intent, setIntent, updateIntent } = useDebateReadinessIntent(
-    accountKey,
+    intentAccountKey,
     spaceId,
     entityId,
     readiness.response_kind
@@ -78,6 +87,10 @@ export function useClaimDebateReadiness({
   React.useEffect(
     function reconcileReadinessIntent() {
       if (!intent) return;
+      // Privy reports signed-out before it has rehydrated, and a card that remounts mid-rehydration
+      // (which is exactly what the hub's list does when a claim moves sections) would read that as
+      // a sign-out and throw the held readiness away.
+      if (!authReady) return;
       if (!authenticated || !accountKey) {
         setIntent(null);
         return;
@@ -96,8 +109,15 @@ export function useClaimDebateReadiness({
         return;
       }
 
-      if (intent.desiredReady && intent.responseRunId) {
-        if (responseIndexing.status === 'idle' || responseIndexing.runId !== intent.responseRunId) {
+      // Only watch the response run while we are still waiting on it. The run is retired the moment
+      // geo-chat reports the position, so policing it past that point dropped the intent at the
+      // instant it came good — the switch flicking itself off just before the card resettled.
+      if (intent.desiredReady && readiness.viewer_response?.position !== intent.expectedPosition) {
+        if (!intent.responseRunId || responseIndexing.status === 'idle') {
+          setIntent(null);
+          return;
+        }
+        if (responseIndexing.runId !== intent.responseRunId) {
           setIntent(null);
           return;
         }
@@ -108,10 +128,6 @@ export function useClaimDebateReadiness({
           setIntent(null);
           return;
         }
-      }
-
-      if (intent.desiredReady && readiness.viewer_response?.position !== intent.expectedPosition) {
-        if (!intent.responseRunId || responseIndexing.status === 'idle') setIntent(null);
         return;
       }
 
@@ -207,6 +223,7 @@ export function useClaimDebateReadiness({
     },
     [
       accountKey,
+      authReady,
       authenticated,
       backendReady,
       entityId,

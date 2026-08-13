@@ -36,7 +36,7 @@ vi.mock('./hooks', () => ({
 // The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
 // the join/leave mutations rather than a one-shot readiness mutation.
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
 }));
