@@ -466,6 +466,14 @@ export class DebateGatewayClient {
               queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))));
         if (isDebateClaimQuery) return true;
 
+        // The rematch picker lists claims from many spaces and draws both participants' sides, so
+        // it has to refresh whenever *anyone's* response lands — its own subscription only covers
+        // the viewer's. Without this the opponent's choices appeared only after rejoining.
+        const [, accountSegment, , rematchSegment, , claimsSegment] = query.queryKey;
+        if (accountSegment === 'account' && rematchSegment === 'rematch' && claimsSegment === 'claims') {
+          return true;
+        }
+
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
           targetKeys: changedResponseTargets,
@@ -685,6 +693,24 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
       scopeType === 'space' ? { scope: 'space', space_id: scopeId } : { scope: 'debate', debate_id: scopeId }
     );
   }, [enabled, scopeId, scopeType]);
+}
+
+/**
+ * Retains a space scope for every id in the list. `debate.claims_changed` is space-scoped, so a
+ * surface showing claims from several spaces at once — the rematch picker — has to hold them all
+ * or it only hears about some of its own rows.
+ */
+export function useDebateGatewaySpaceScopes(spaceIds: string[], enabled: boolean) {
+  // Joined so the effect keys off the ids themselves rather than a fresh array each render.
+  const key = spaceIds.join(',');
+
+  React.useEffect(() => {
+    if (!enabled || !key) return;
+    const releases = key.split(',').map(spaceId => debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
+    return () => {
+      for (const release of releases) release();
+    };
+  }, [enabled, key]);
 }
 
 /** Read-only view of the gateway snapshot. Unlike `useDebateGateway` this never starts a socket. */

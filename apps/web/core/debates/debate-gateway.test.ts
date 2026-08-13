@@ -315,6 +315,7 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
     queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
     queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']], new Map());
+    queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
     const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
 
     client.start(
@@ -362,6 +363,15 @@ describe('DebateGatewayClient', () => {
         queryClient
           .getQueryCache()
           .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']] })!
+      )
+    ).toBe(true);
+    // The rematch picker draws both participants' sides, so any claim change has to reach it —
+    // even one it isn't holding an id for, since the opponent's response is what it's waiting on.
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']] })!
       )
     ).toBe(true);
     expect(

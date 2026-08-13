@@ -19,10 +19,10 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreClaimsIcon } from './explore-claims-icon';
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
@@ -102,7 +102,10 @@ export function DebateExploreFeedCard({
   const processed = hasProcessedVideo(mediaQuery.data);
 
   const notWatchable =
-    debateQuery.isError || (debate != null && !watchable) || mediaQuery.isError || (mediaQuery.data != null && !processed);
+    debateQuery.isError ||
+    (debate != null && !watchable) ||
+    mediaQuery.isError ||
+    (mediaQuery.data != null && !processed);
 
   if (!debatesEnabled || notWatchable) {
     return <>{fallback}</>;
@@ -110,7 +113,6 @@ export function DebateExploreFeedCard({
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
   return (
     <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
@@ -161,10 +163,7 @@ export function DebateExploreFeedCard({
       </div>
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-        <Link href={entityHref} className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text">
-          <ExploreCommentsIcon className="text-grey-04" />
-          <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-        </Link>
+        <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
         {readyDebate ? <DebateCardExtras debate={readyDebate} active={active} /> : null}
       </EntityRowActions>
     </article>

@@ -4,7 +4,10 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
@@ -16,7 +19,6 @@ import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery,
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { useStableListOrder } from './use-stable-list-order';
@@ -100,6 +102,12 @@ export function ClaimsTab() {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: claimsQuery.hasNextPage,
+    isFetchingNextPage: claimsQuery.isFetchingNextPage,
+    fetchNextPage: claimsQuery.fetchNextPage,
+  });
+
   const visibleClaims = React.useMemo(
     () =>
       topicId
@@ -173,15 +181,11 @@ export function ClaimsTab() {
           {otherClaims.length > 0 ? (
             <ClaimSection label={showSections && myClaims.length > 0 ? 'All claims' : null} claims={otherClaims} />
           ) : null}
+          {/* Pages arrive as the viewer reaches the end of the list rather than on a button. The
+              sentinel only exists while there is a page left, so it can't sit in view asking for
+              one that isn't there. */}
           {claimsQuery.hasNextPage ? (
-            <HubPillButton
-              onClick={() => void claimsQuery.fetchNextPage()}
-              pending={claimsQuery.isFetchingNextPage}
-              pendingLabel="Loading…"
-              className="mt-2 w-full"
-            >
-              Load more
-            </HubPillButton>
+            <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
           ) : null}
         </>
       </HubQueryState>
@@ -222,6 +226,8 @@ type SpaceTopicFiltersProps = {
   facetTopics?: { id: string; name: string | null }[];
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
+  /** Overrides the row layout — the rematch picker spreads the two menus across its width. */
+  className?: string;
 };
 
 /**
@@ -236,6 +242,7 @@ export function SpaceTopicFilters({
   facetSpaceIds,
   facetTopics,
   leading,
+  className,
 }: SpaceTopicFiltersProps) {
   const { spacesById } = useSpacesByIds(facetSpaceIds);
 
@@ -263,7 +270,7 @@ export function SpaceTopicFilters({
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cx('flex flex-wrap items-center gap-2', className)}>
       {leading}
       <HubFilterMenu
         label={spaceLabel}

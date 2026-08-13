@@ -74,8 +74,10 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasRespon
           })
         }
         className={cx(
-          'flex h-6 shrink-0 items-center gap-1.5 text-footnote transition-colors disabled:opacity-50',
-          ready ? 'text-text' : 'text-grey-04',
+          // `min-h-4` matches the space chip's avatar so the two sit on one line in the card header.
+          // Per the design the label is grey whether or not readiness is on — the switch alone
+          // carries that signal. Hover still darkens it, as the affordance that it's clickable.
+          'flex min-h-4 shrink-0 items-center gap-2 text-footnoteMedium text-grey-04 transition-colors disabled:opacity-50',
           !disabled && 'hover:text-text'
         )}
       >

@@ -16,6 +16,15 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
+/**
+ * Entity whose comments are open in the global comments panel, or `null` when
+ * it's closed. Comment buttons appear on entities all over the app — explore
+ * cards, feed rows, data blocks — and everywhere except an entity's own full
+ * page they should open the comments beside what you're reading rather than
+ * navigate away from it.
+ */
+export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
+
 export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
 
 /** `null` while the debates matchmaking hub is closed. */
@@ -34,6 +43,12 @@ export const rankingPendingPublishedAtAtom = atom<number | null>(null);
 export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
 export const rankingFullscreenActiveAtom = atom<boolean>(false);
+
+// Set while the full-screen debates feed is on screen. A Debate entity page renders the feed
+// from a route `Main` otherwise treats as an ordinary entity page, so without this it wraps a
+// viewport-filling takeover in `max-w-[1200px] pt-8 pb-16` — which makes the document taller
+// than the viewport and lets the feed scroll up under the sticky navbar.
+export const debateFullscreenActiveAtom = atom<boolean>(false);
 
 export const entitySidePanelWantsEditAtom = atom(false);
 

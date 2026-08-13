@@ -34,6 +34,17 @@ type Props = {
   activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
+  /**
+   * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
+   * following a link there would navigate out of the app shell and abandon the live session.
+   */
+  onOpenClaim?: () => void;
+  /**
+   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
+   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
+   * report "not ready" on a claim they are in fact ready on.
+   */
+  hideReadinessToggle?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -53,7 +64,16 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, ref }: Props) {
+export function MatchmakingClaimCard({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  footer,
+  onOpenClaim,
+  hideReadinessToggle,
+  ref,
+}: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -62,30 +82,75 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
     <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
-      <div className="mb-2">
-        <SpaceChip spaceId={claim.space_id} />
-      </div>
       {isOnGraph ? (
-        <Link
-          href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-          className="mb-3 block text-metadataMedium hover:underline"
-        >
-          {claim.claim}
-        </Link>
+        <RespondableControls
+          claim={claim}
+          positions={positions}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       ) : (
-        <Text as="p" variant="metadataMedium" className="mb-3">
-          {claim.claim}
-        </Text>
-      )}
-
-      {isOnGraph ? (
-        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
-      ) : (
-        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+        <UnresolvableControls
+          positions={positions}
+          readiness={readiness}
+          claim={claim}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       )}
 
       {footer}
     </motion.article>
+  );
+}
+
+/**
+ * Space chip, readiness toggle, and the claim itself — the chrome both control variants share.
+ * The toggle rides in the header's top right per the design, but whether it can be turned on
+ * depends on response state only the respondable variant tracks, so each passes its own.
+ */
+function ClaimHeader({
+  claim,
+  isOnGraph,
+  toggle,
+  onOpenClaim,
+}: {
+  claim: DebateClaimSummary;
+  isOnGraph: boolean;
+  toggle: React.ReactNode;
+  onOpenClaim?: () => void;
+}) {
+  const openable = isOnGraph ? (
+    onOpenClaim ? (
+      <button type="button" onClick={onOpenClaim} className="mb-3 block text-left text-metadataMedium hover:underline">
+        {claim.claim}
+      </button>
+    ) : (
+      <Link
+        href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        className="mb-3 block text-metadataMedium hover:underline"
+      >
+        {claim.claim}
+      </Link>
+    )
+  ) : (
+    <Text as="p" variant="metadataMedium" className="mb-3">
+      {claim.claim}
+    </Text>
+  );
+
+  return (
+    <>
+      {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <SpaceChip spaceId={claim.space_id} />
+        {toggle}
+      </div>
+      {openable}
+    </>
   );
 }
 
@@ -95,11 +160,15 @@ function RespondableControls({
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -158,6 +227,22 @@ function RespondableControls({
 
   return (
     <>
+      <ClaimHeader
+        claim={claim}
+        isOnGraph
+        onOpenClaim={onOpenClaim}
+        toggle={
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={viewerPosition !== null}
+              responseIndexing={isPublishing}
+            />
+          )
+        }
+      />
       <PositionRow
         positions={positions}
         responseKind={readiness.response_kind}
@@ -173,15 +258,6 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
-      <div className="mt-3 flex justify-end">
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={viewerPosition !== null}
-          responseIndexing={isPublishing}
-        />
-      </div>
     </>
   );
 }
@@ -192,30 +268,43 @@ function UnresolvableControls({
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
+      <ClaimHeader
+        claim={claim}
+        isOnGraph={false}
+        onOpenClaim={onOpenClaim}
+        toggle={
+          /* Readiness is geo-chat state, so it still works without a graph id. */
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle
+              claim={claim}
+              readiness={readiness}
+              activeDebate={activeDebate}
+              hasResponse={readiness.viewer_response !== null}
+            />
+          )
+        }
+      />
       <PositionRow
         positions={positions}
         responseKind={readiness.response_kind}
         viewerPosition={readiness.viewer_response?.position ?? null}
       />
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3">
         <Text as="span" variant="footnote" color="grey-04">
           Claim unavailable
         </Text>
-        {/* Readiness is geo-chat state, so it still works without a graph id. */}
-        <ClaimReadinessToggle
-          claim={claim}
-          readiness={readiness}
-          activeDebate={activeDebate}
-          hasResponse={readiness.viewer_response !== null}
-        />
       </div>
     </>
   );

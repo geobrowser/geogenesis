@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
 
 import { DebatesBrowseFeed } from './debate-feed';
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   debates: [] as Debate[],
@@ -80,8 +82,17 @@ vi.mock('./debate-scroll-hint', () => ({
   DebateScrollHint: ({ className }: { className?: string }) => <div data-testid="scroll-hint" className={className} />,
 }));
 
-vi.mock('./debate-claims-panel', () => ({ DebateClaimsPanel: () => <div>Claims panel</div> }));
+vi.mock('./debate-claims-panel', () => ({
+  DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
+}));
 vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
+}));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -154,8 +165,12 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
-    expect(feedItem).toHaveClass('items-start', 'md:h-auto', 'md:min-h-full', 'md:py-3');
-    expect(feedItem).not.toHaveClass('items-center', 'pt-5', 'pb-[2.75rem]');
+    // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.
+    expect(feedItem).toHaveClass('items-start', 'pt-5', 'md:h-auto', 'md:min-h-full', 'md:py-3');
+    // One class per assertion: `not.toHaveClass(a, b)` only fails when *every* class is present,
+    // so grouping them lets a regression on any single class slip through.
+    expect(feedItem).not.toHaveClass('items-center');
+    expect(feedItem).not.toHaveClass('pb-[2.75rem]');
     const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement;
     assert(mediaColumn, 'Expected the debate player to be rendered inside the media column');
     expect(mediaColumn).toHaveClass('min-w-0', 'w-[var(--debate-feed-column-width)]', 'md:w-[calc(100vw-1rem)]');
@@ -178,16 +193,16 @@ describe('DebatesBrowseFeed video sharing', () => {
   });
 
   it('clamps long claims and lets mobile users expand them', () => {
-    const scrollHeight = vi
-      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
-      .mockImplementation(function (this: HTMLElement) {
-        return this.tagName === 'H2' ? 72 : 0;
-      });
-    const clientHeight = vi
-      .spyOn(HTMLElement.prototype, 'clientHeight', 'get')
-      .mockImplementation(function (this: HTMLElement) {
-        return this.tagName === 'H2' ? 48 : 0;
-      });
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.tagName === 'H2' ? 72 : 0;
+    });
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return this.tagName === 'H2' ? 48 : 0;
+    });
 
     try {
       const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
@@ -209,6 +224,33 @@ describe('DebatesBrowseFeed video sharing', () => {
       scrollHeight.mockRestore();
       clientHeight.mockRestore();
     }
+  });
+
+  // The takeover fills the viewport, but a Debate entity page reaches it through a route the app
+  // shell reads as an ordinary entity page. Left wrapped in that page's chrome, the document
+  // grows taller than the viewport and the feed scrolls up under the sticky navbar.
+  it('tells the app shell to drop its page chrome while the feed is on screen', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+
+    expect(store.get(debateFullscreenActiveAtom)).toBe(true);
+  });
+
+  it('leaves the chrome alone when it falls back to the entity page', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="not-in-this-space" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+    // An ordinary entity page renders here and does want the chrome.
+    expect(store.get(debateFullscreenActiveAtom)).toBe(false);
   });
 
   it('nudges only when there is something below to scroll to', () => {
@@ -482,6 +524,88 @@ describe('DebatesBrowseFeed video sharing', () => {
 
     resolveShare?.();
     await flushPromises();
+  });
+});
+
+describe('DebatesBrowseFeed comments', () => {
+  it('shows the comment count and opens the comments panel for the clicked debate', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const commentButtons = screen.getAllByRole('button', { name: 'Comments' });
+    expect(commentButtons.length).toBeGreaterThan(0);
+    expect(screen.getAllByText('7').length).toBeGreaterThan(0);
+
+    fireEvent.click(commentButtons[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+  });
+
+  it('closes the claims panel when comments open, and vice versa', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
+  });
+});
+
+// The panels describe the debate on screen, so scrolling the feed under an open
+// panel has to bring the panel along — otherwise you're reading one debate's
+// video beside another's comments.
+describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
+  beforeEach(() => {
+    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
+  });
+
+  it('moves the comments panel to the next debate on scroll', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
+  });
+
+  it('moves the claims panel to the next debate on scroll', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Claims' })[0]);
+    expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.getByText('Claims panel for debate-2')).toBeInTheDocument();
+  });
+
+  // A debate's bar is clickable from the moment any of it is on screen, but the
+  // scroll observer only activates it at 60% — so mid-scroll a press would
+  // otherwise open the panel on the debate being scrolled away from.
+  it('opens the panel for the pressed debate even before the scroll observer activates it', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    // debate-1 is active; debate-2 has not crossed the activation threshold.
+    const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
+    assert(adjacent, 'Expected a section for the adjacent debate');
+
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: 'Comments' })[0]);
+
+    expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
+  });
+
+  it('leaves a closed panel closed while scrolling', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    activateDebate('Adjacent debate');
+
+    expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
 });
 

@@ -13,10 +13,10 @@ import { NavUtils } from '~/core/utils/utils';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { SpaceThumb } from './space-thumb';
 
@@ -62,8 +62,6 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
     return out;
   }, [item.types]);
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
@@ -113,13 +111,7 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
             </p>
           ) : null}
           <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-            <Link
-              href={entityHref}
-              className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
-            >
-              <ExploreCommentsIcon className="text-grey-04" />
-              <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-            </Link>
+            <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
           </EntityRowActions>
         </div>
         {item.imageUrl ? (

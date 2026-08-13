@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '../api';
+import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
 import { useAcceptDebateRequest, useClaimReadiness } from './hooks';
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +50,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
   mocks.joinDebateQueue.mockReset();
+  clearEnteringDebate();
 });
 
 describe('useAcceptDebateRequest', () => {
@@ -61,6 +63,18 @@ describe('useAcceptDebateRequest', () => {
     result.current.mutate({ requestId: 'request-1' });
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+  });
+
+  // The room route outlasts the activity refetch this mutation also kicks off, so the coordinator
+  // needs to know this tab is on its way in — otherwise it prompts it to join what it is entering.
+  it('claims the debate it is entering before it starts routing', async () => {
+    mocks.acceptDebateRequest.mockResolvedValue({ request: { id: 'request-1' }, debate });
+    const { result: intent } = renderHook(() => useEnteringDebateId());
+
+    const { result } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+
+    await waitFor(() => expect(intent.current).toBe('debate-1'));
   });
 
   it('stays put when acceptance produced no debate', async () => {
@@ -103,6 +117,34 @@ describe('useClaimReadiness', () => {
       const claims = (queryClient.getQueryData(key) as { pages: { claims: { viewer_debate_ready: boolean }[] }[] })
         .pages[0]!.claims;
       expect(claims[0]!.viewer_debate_ready).toBe(true);
+      expect(claims[1]!.viewer_debate_ready).toBe(false);
+    });
+  });
+
+  // The rematch picker reads readiness from the per-space claims family, which keys the ids on the
+  // entry rather than nesting them under `claim`. Missing it left that toggle unmoved on click.
+  it('moves the switch in the per-space claims family too', async () => {
+    mocks.joinDebateQueue.mockResolvedValue({ claim: { id: 'claim-row-1' }, match: null });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['debates', 'claims', 'space-1', ['claim-1']];
+    queryClient.setQueryData(key, {
+      claims: [
+        { space_id: 'space-1', claim_entity_id: 'claim-1', viewer_debate_ready: false },
+        { space_id: 'space-2', claim_entity_id: 'claim-1', viewer_debate_ready: false },
+      ],
+    });
+
+    const { result } = renderHook(() => useClaimReadiness(), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ spaceId: 'space-1', claimId: 'claim-1', ready: true });
+
+    await waitFor(() => {
+      const claims = (queryClient.getQueryData(key) as { claims: { viewer_debate_ready: boolean }[] }).claims;
+      expect(claims[0]!.viewer_debate_ready).toBe(true);
+      // Same claim entity in another space keeps its own switch.
       expect(claims[1]!.viewer_debate_ready).toBe(false);
     });
   });
