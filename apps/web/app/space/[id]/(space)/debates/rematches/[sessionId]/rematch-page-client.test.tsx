@@ -1,7 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
-import { StrictMode } from 'react';
+import { type ReactElement, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +36,12 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
+  joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
+    Promise.resolve({ claim: null, match: null })
+  ),
+  leaveQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
+    Promise.resolve({ claim: null, match: null })
+  ),
   openSidePanel: vi.fn(),
   entityQueries: [] as Array<{ where?: unknown; after?: string }>,
   entityQueryPlaceholder: false,
@@ -107,7 +114,29 @@ vi.mock('~/core/debates/hooks', () => ({
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
+  // The card's Debate switch shares the entity page's queue-backed readiness machine.
+  useJoinDebateQueue: (spaceId: string) => ({
+    mutateAsync: (variables: { claimId: string }) => mocks.joinQueue({ spaceId, ...variables }),
+    reset: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
+  useLeaveDebateQueue: (spaceId: string) => ({
+    mutateAsync: (variables: { claimId: string }) => mocks.leaveQueue({ spaceId, ...variables }),
+    isPending: false,
+    error: null,
+  }),
 }));
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: ReactElement) =>
+      view.rerender(<QueryClientProvider client={queryClient}>{next}</QueryClientProvider>),
+  };
+}
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: (options: { where?: unknown; after?: string }) => {
@@ -988,14 +1017,19 @@ describe('DebateRematchPageClient', () => {
   // `spaces[0]` is a citing space whenever it outranks the claim's own. Responding in one space and
   // asking to debate in another is what the server answers with "respond to this claim in this
   // space before enabling debate readiness".
-  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', () => {
+  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', async () => {
     mocks.entities = [
       {
         ...publishedEntity(CLAIM_MORE, 'A claim that lives in Podcasts'),
         // Crypto (rank 2) outranks Podcasts (rank 8), but only Podcasts names the claim.
         spaces: [CRYPTO_SPACE, PODCASTS_SPACE],
         values: [
-          { isDeleted: false, property: { id: NAME_PROPERTY }, spaceId: PODCASTS_SPACE, value: 'A claim that lives in Podcasts' },
+          {
+            isDeleted: false,
+            property: { id: NAME_PROPERTY },
+            spaceId: PODCASTS_SPACE,
+            value: 'A claim that lives in Podcasts',
+          },
         ],
       },
     ];
@@ -1007,11 +1041,7 @@ describe('DebateRematchPageClient', () => {
     const card = screen.getByText('A claim that lives in Podcasts').closest('article');
     fireEvent.click(within(card!).getByRole('switch', { name: 'Ready to debate this claim' }));
 
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: PODCASTS_SPACE,
-      claimId: CLAIM_MORE,
-      ready: true,
-    });
+    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledWith({ spaceId: PODCASTS_SPACE, claimId: CLAIM_MORE }));
   });
 
   it('stands the viewer ready only once, even as the claim keeps refetching', () => {

@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,14 +13,19 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
-  readinessMutate: vi.fn(),
+  joinMutateAsync: vi.fn(),
+  leaveMutateAsync: vi.fn(),
   submitResponse: vi.fn(),
   spaceName: 'Crypto',
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
 }));
 
-vi.mock('./hooks', () => ({
-  useClaimReadiness: () => ({ mutate: mocks.readinessMutate, isPending: false, error: null }),
+// The readiness switch shares the entity page's queue-backed machine, so it needs geo-chat auth
+// and the join/leave mutations rather than the hub's old one-shot readiness mutation.
+vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -74,8 +82,16 @@ function readiness(overrides: Partial<MatchmakingReadiness> = {}): MatchmakingRe
 
 const toggleName = 'Ready to debate this claim';
 
+function renderCard(card: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{card}</QueryClientProvider>);
+}
+
 beforeEach(() => {
-  mocks.readinessMutate.mockReset();
+  mocks.joinMutateAsync.mockReset();
+  mocks.joinMutateAsync.mockResolvedValue({ claim: null, match: null });
+  mocks.leaveMutateAsync.mockReset();
+  mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.submitResponse.mockReset();
   mocks.spaceName = 'Crypto';
 });
@@ -84,7 +100,7 @@ afterEach(cleanup);
 
 describe('MatchmakingClaimCard', () => {
   it('puts the debate toggle in the card header beside the space name', () => {
-    render(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
     const toggle = screen.getByRole('switch', { name: toggleName });
     const spaceName = screen.getByText('Crypto');
@@ -101,7 +117,7 @@ describe('MatchmakingClaimCard', () => {
   });
 
   it('keeps the toggle above the response buttons', () => {
-    render(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
     const toggle = screen.getByRole('switch', { name: toggleName });
     const agree = screen.getByRole('button', { name: /^Agree/ });
@@ -111,7 +127,7 @@ describe('MatchmakingClaimCard', () => {
 
   it('still heads the card with the toggle when the claim is not on the graph', () => {
     const offGraph = { ...claim, claim_entity_id: 'not-a-graph-id' };
-    render(<MatchmakingClaimCard claim={offGraph} positions={positions} readiness={readiness()} />);
+    renderCard(<MatchmakingClaimCard claim={offGraph} positions={positions} readiness={readiness()} />);
 
     const toggle = screen.getByRole('switch', { name: toggleName });
     expect(toggle.parentElement?.parentElement?.contains(screen.getByText('Crypto'))).toBe(true);
@@ -120,7 +136,7 @@ describe('MatchmakingClaimCard', () => {
   });
 
   it('explains why the toggle is unavailable without a response', () => {
-    render(
+    renderCard(
       <MatchmakingClaimCard
         claim={claim}
         positions={positions}

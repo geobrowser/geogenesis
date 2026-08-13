@@ -233,13 +233,7 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         toggle={
           hideReadinessToggle ? null : (
-            <ClaimReadinessToggle
-              claim={claim}
-              readiness={readiness}
-              activeDebate={activeDebate}
-              hasResponse={viewerPosition !== null}
-              responseIndexing={isPublishing}
-            />
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
           )
         }
       />
@@ -287,12 +281,7 @@ function UnresolvableControls({
         toggle={
           /* Readiness is geo-chat state, so it still works without a graph id. */
           hideReadinessToggle ? null : (
-            <ClaimReadinessToggle
-              claim={claim}
-              readiness={readiness}
-              activeDebate={activeDebate}
-              hasResponse={readiness.viewer_response !== null}
-            />
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
           )
         }
       />

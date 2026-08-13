@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,7 +31,14 @@ vi.mock('./hooks', () => ({
       refetch: vi.fn(),
     };
   },
-  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
+// the join/leave mutations rather than a one-shot readiness mutation.
+vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -44,6 +54,11 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
 }));
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 
