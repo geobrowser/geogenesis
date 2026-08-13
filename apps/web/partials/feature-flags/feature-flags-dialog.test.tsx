@@ -64,6 +64,32 @@ describe('FeatureFlagsDialog', () => {
     });
   });
 
+  // The debate surfaces own the z-1000..z-1400 band (full-screen room and pre-join screen at
+  // z-1000, the coordinator's gateway banner at z-1400). A Radix modal below that band still traps
+  // focus and swallows pointer events while rendering behind the debate UI, which is what locked
+  // people out mid-recording with nothing visible to close. Numeric rather than a class-name match,
+  // so the invariant is what fails if someone lowers it.
+  it('opens above the debate surfaces rather than behind them', async () => {
+    const DEBATE_LAYER_CEILING = 1400;
+
+    render(
+      <Provider store={createStore()}>
+        <FeatureFlagsDialog />
+      </Provider>
+    );
+
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true, shiftKey: true });
+
+    const content = await screen.findByRole('dialog');
+    const overlay = content.parentElement?.querySelector('[class*="fixed inset-0"]');
+    const zIndexOf = (element: Element | null | undefined) =>
+      Number(/z-\[(\d+)\]/.exec(element?.className ?? '')?.[1] ?? NaN);
+
+    expect(zIndexOf(overlay)).toBeGreaterThan(DEBATE_LAYER_CEILING);
+    // The panel itself above its own overlay, or the flags render behind their scrim.
+    expect(zIndexOf(content)).toBeGreaterThan(zIndexOf(overlay));
+  });
+
   it('opens when visiting the hidden flags route', async () => {
     navigation.pathname = '/feature-flags';
 
