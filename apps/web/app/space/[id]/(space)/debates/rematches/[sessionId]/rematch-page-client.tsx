@@ -40,11 +40,11 @@ import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-cla
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
-import { Button } from '~/design-system/button';
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
@@ -329,6 +329,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
 
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: publishedClaimsHasNextPage && Boolean(publishedClaimsEndCursor),
+    // The cursor query keeps the previous page on screen while the next one loads, which is this
+    // list's "a fetch is already in flight".
+    isFetchingNextPage: publishedClaimsPlaceholder,
+    fetchNextPage: () => {
+      if (publishedClaimsEndCursor) setPublishedClaimsCursor(publishedClaimsEndCursor);
+    },
+  });
+
   // Each tab draws from a different set of queries, so each waits on its own. The browsed scan is
   // the slow one and only the All tab reads it.
   const tabIsLoading =
@@ -541,22 +551,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           )}
         </HubQueryState>
 
-        {/* Outside the empty state deliberately: when a filter empties the list, fetching another
-            page is the way out, so the control has to stay reachable. Not on the curated tab
-            though — its sections come from the page whole, so there is no next page to fetch. */}
+        {/* Outside the empty state deliberately: when a filter empties the list, the next page is
+            the way out, so the sentinel has to stay reachable — with nothing rendered it sits in
+            view and keeps paging until a match turns up or the corpus runs out. Not on the curated
+            tab, whose sections come from the page whole and have no next page to fetch. */}
         {tab !== 'recommended' && publishedClaimsHasNextPage && (
-          <div className="mt-5 flex justify-center">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                if (publishedClaimsEndCursor) setPublishedClaimsCursor(publishedClaimsEndCursor);
-              }}
-              disabled={publishedClaimsPlaceholder || !publishedClaimsEndCursor}
-            >
-              Load more
-            </Button>
-          </div>
+          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         )}
       </main>
 

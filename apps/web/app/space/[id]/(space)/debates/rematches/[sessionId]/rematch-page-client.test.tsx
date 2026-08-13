@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { StrictMode } from 'react';
 
@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => ({
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
   openSidePanel: vi.fn(),
-  entityQueries: [] as unknown[],
+  entityQueries: [] as Array<{ where?: unknown; after?: string }>,
   entityQueryPlaceholder: false,
   entityQueryHasNextPage: false,
   entityQueryLoading: false,
@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   curatedIds: [] as string[],
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
+  scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -98,8 +99,8 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: (options: { where?: unknown }) => {
-    mocks.entityQueries.push(options.where);
+  useQueryEntities: (options: { where?: unknown; after?: string }) => {
+    mocks.entityQueries.push(options);
     return {
       entities: mocks.entities,
       isLoading: mocks.entityQueryLoading,
@@ -180,6 +181,24 @@ beforeEach(() => {
   mocks.curatedIds = [];
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
+  // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
+  // the callback so a test can say the sentinel scrolled into view.
+  mocks.scrollSentinelIntoView = null;
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(element: Element) {
+        mocks.scrollSentinelIntoView = () =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+  );
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -524,15 +543,46 @@ describe('DebateRematchPageClient', () => {
 
   // Recommended comes from the curator's page whole, so paging the browsed corpus means nothing
   // there — offering it implies there are more recommendations waiting.
-  it('keeps Load more off the Recommended tab while offering it on the others', () => {
+  it('keeps the paging sentinel off the Recommended tab while placing it on the others', () => {
     mocks.entityQueryHasNextPage = true;
     mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
     showAllClaims();
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+  });
+
+  // No button to press any more; reaching the end of the list is what asks for the next page.
+  it('does not offer a Load more button', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  // The picker pages by cursor rather than through an infinite query, so the sentinel firing has
+  // to be shown to advance that cursor — a sentinel that renders but is wired to nothing would
+  // satisfy every other test here.
+  it('advances the cursor when the end of the list scrolls into view', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(browsedClaimsQueryOptions()?.after).toBeUndefined();
+
+    act(() => mocks.scrollSentinelIntoView?.());
+
+    expect(browsedClaimsQueryOptions()?.after).toBe('cursor-1');
+  });
+
+  it('leaves the sentinel out once there is no page left to fetch', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
 
   // Curated claims are picked by hand, so they can be ones the browsed pages never reach. They
@@ -820,14 +870,17 @@ describe('DebateRematchPageClient', () => {
 });
 
 /** The where clause of the query that browses published claims, not the curated lookups beside it. */
-function browsedClaimsWhere() {
+function browsedClaimsQueryOptions() {
   return mocks.entityQueries
-    .filter(
-      (where): where is { types?: Array<{ id?: { equals?: string } }> } =>
-        typeof where === 'object' && where !== null && 'types' in where
-    )
-    .filter(where => where.types?.[0]?.id?.equals === CLAIM_TYPE_ID)
+    .filter(options => {
+      const where = options.where as { types?: Array<{ id?: { equals?: string } }> } | undefined;
+      return where?.types?.[0]?.id?.equals === CLAIM_TYPE_ID;
+    })
     .at(-1);
+}
+
+function browsedClaimsWhere() {
+  return browsedClaimsQueryOptions()?.where;
 }
 
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
