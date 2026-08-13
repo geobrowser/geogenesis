@@ -10,7 +10,7 @@ import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-bl
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
@@ -110,7 +110,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
 
   return (
     <EntityStoreProvider id={topicEntityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={topicEntityId}
         spaceId={spaceId}
         initialBlocks={topic.blocks}
@@ -134,7 +134,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
             </React.Suspense>
           </TrackedErrorBoundary>
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }

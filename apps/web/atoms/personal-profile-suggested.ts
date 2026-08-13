@@ -3,6 +3,8 @@ import { ContentIds } from '@geoprotocol/geo-sdk/lite';
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { CreatePostFlowState } from '~/core/state/personal-profile/create-post-flow';
+
 /**
  * Prefix for session dismiss flags (per-wallet suffix). Cleared when the wallet disconnects
  * so the card can return after the next login (“second wave” + Dismiss forever).
@@ -57,3 +59,15 @@ export function propertyIsSkillsProperty(propertyId: string): boolean {
 }
 
 export const personalProfileBioStarterTriggerAtom = atom(0);
+
+export const createPostFlowAtom = atom<CreatePostFlowState>({ phase: 'idle' });
+
+export type PendingCreatePostSidePanel = {
+  postEntityId: string;
+  spaceId: string;
+  profileEntityId: string;
+  postsTabEntityId: string;
+  profilePathname: string;
+};
+
+export const pendingCreatePostSidePanelAtom = atom<PendingCreatePostSidePanel | null>(null);
