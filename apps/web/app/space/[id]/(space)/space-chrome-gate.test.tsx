@@ -25,12 +25,12 @@ describe('space chrome layout', () => {
     expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
   });
 
-  it('keeps the sidebar-aligned header width on nested space routes', () => {
+  it('drops the sidebar width on nested space routes, which render no rail', () => {
     navigation.pathname = '/space/test-space/activity';
 
     render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
 
-    expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
+    expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('content');
   });
 
   it('keeps the readable header width when the home page has no sidebar', () => {

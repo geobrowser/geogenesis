@@ -23,8 +23,11 @@ type SpaceHeaderContentContainerProps = {
 };
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
+  const pathname = usePathname();
+  const isOverviewRoute = pathname != null && /^\/space\/[^/]+\/?$/.test(pathname);
+
   return (
-    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
+    <EntityPageContentContainer variant={hasSidebar && isOverviewRoute ? 'with-sidebar' : 'content'}>
       {children}
     </EntityPageContentContainer>
   );
