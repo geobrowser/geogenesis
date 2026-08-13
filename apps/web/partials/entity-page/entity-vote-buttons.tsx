@@ -305,12 +305,11 @@ export function EntityVoteButtons({
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
+  // Responses are recorded against published data, so there's nothing to
+  // respond to yet. Render nothing rather than a notice: the reader is looking
+  // at their own draft and doesn't need to be told it isn't published.
   if (hasUnpublishedResponseKindEdit) {
-    return (
-      <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
-        Publish changes before responding
-      </span>
-    );
+    return null;
   }
 
   if (responseKind === null) {

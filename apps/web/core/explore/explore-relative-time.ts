@@ -19,8 +19,13 @@ export function parseEntityUpdatedAtToUnixSec(raw: string | undefined): number {
 /**
  * Compact relative labels for the feed metadata row (e.g. `3m ago`, `2d ago`).
  */
-export function formatExploreRelativeTime(timestampSec: number): string {
-  if (timestampSec <= 0) return '—';
+/**
+ * Relative age for a feed row, or null when there is no creation time to show —
+ * an entity that only exists as an unpublished local draft has none until it's
+ * published, and a dash in its place reads as a loading or broken value.
+ */
+export function formatExploreRelativeTime(timestampSec: number): string | null {
+  if (timestampSec <= 0) return null;
   const date = new Date(timestampSec * 1000);
   const diffSec = Math.max(0, (Date.now() - timestampSec * 1000) / 1000);
   if (diffSec < 45) return 'just now';

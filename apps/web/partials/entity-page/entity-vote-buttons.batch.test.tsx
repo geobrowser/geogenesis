@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
@@ -7,6 +8,7 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
 import {
   ClaimResponseBatchBoundary,
@@ -25,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   smartAccount: null as object | null,
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
+  storeEntity: null as { relations: unknown[]; values: unknown[] } | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -75,7 +78,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: (options: unknown) => {
     mocks.queryEntityOptions.push(options);
-    return { entity: null, isLoading: false };
+    return { entity: mocks.storeEntity, isLoading: false };
   },
 }));
 
@@ -87,6 +90,7 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 }));
 
 beforeEach(() => {
+  mocks.storeEntity = null;
   mocks.getCounts.mockReset();
   mocks.getCounts.mockReturnValue({ positive: 2, negative: 1 });
   mocks.getResponders.mockReset();
@@ -141,10 +145,7 @@ describe('EntityVoteButtons claims-page batching', () => {
       positive: 8,
       negative: 1,
     });
-    queryClient.setQueryData(
-      userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'),
-      'positive'
-    );
+    queryClient.setQueryData(userEntityResponseQueryKey('profile-1', 'debate-1', 'space-1', 0, 'curation'), 'positive');
 
     const view = render(
       <ClaimResponseBatchBoundary ready>
@@ -269,3 +270,33 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
     }
   );
 }
+
+describe('EntityVoteButtons on unpublished data', () => {
+  // The reader is looking at their own draft. Responses are recorded against
+  // published data, so there is nothing to respond to — and telling them to
+  // publish first is noise on every row of a large import.
+  it('renders nothing rather than a publish-first notice', () => {
+    mocks.storeEntity = {
+      relations: [
+        {
+          spaceId: 'space-1',
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        },
+      ],
+      values: [],
+    };
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<EntityVoteButtons entityId="claim-1" spaceId="space-1" />, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+});

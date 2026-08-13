@@ -140,7 +140,9 @@ export function DebateExploreFeedCard({
           <span className="rounded-[4px] bg-grey-01 px-1.5 py-0.5 text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
             Debate
           </span>
-          <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          {timeAgo ? (
+            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          ) : null}
         </div>
         <Link
           href={`/space/${item.spaceId}/debates`}

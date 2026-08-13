@@ -88,7 +88,9 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
               ))}
             </div>
           ) : null}
-          <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          {timeAgo ? (
+            <span className="text-[12px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">{timeAgo}</span>
+          ) : null}
         </div>
         {!hideJoinButton && !item.isMemberOrEditor ? (
           <ExploreJoinSpaceButton
