@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
@@ -33,6 +33,11 @@ export function useSpacesByIds(spaceIds: string[] = [], enabled = true): UseSpac
       };
     },
     enabled: enabled && normalizedIds.length > 0,
+    // The key is the whole id set, so adding one id (the viewer's own space, the moment they
+    // respond to a claim) would otherwise empty `spacesById` until a refetch lands and blank
+    // out every space image that was already on screen. Entries are looked up by id, so the
+    // held-over map can only ever serve ids it genuinely resolved.
+    placeholderData: keepPreviousData,
   });
 
   return {
