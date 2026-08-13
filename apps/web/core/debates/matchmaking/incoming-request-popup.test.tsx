@@ -130,9 +130,7 @@ describe('IncomingRequestPopup', () => {
 
     fireEvent.click(toggle);
 
-    // A plain dismiss: the queue call below withdraws the viewer, and remove_intent additionally
-    // records that they don't want the claim, which outlives them turning it back on.
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
     // And leave the claim's queue: dismissing answers this request, but only leaving the queue
     // takes the viewer out of everyone else's matches for the claim.
     expect(mocks.setReadiness).toHaveBeenCalledWith(

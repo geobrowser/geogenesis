@@ -104,11 +104,11 @@ export function IncomingRequestPopup({
                 },
                 releaseAnswer
               );
-              // A plain dismiss, not the remove-intent variant behind "Dismiss forever": the queue
-              // call above already withdraws the viewer, and `remove_intent` additionally records
-              // that they don't want this claim — which outlived them turning the claim back on and
-              // left the original requester unable to ask again.
-              dismissRequest.mutate({ requestId: request.id }, releaseAnswer);
+              // remove_intent is the variant behind "I don't want to debate this claim", which is
+              // what this switch says. (Sending a plain dismiss instead was tried while chasing a
+              // requester-side "nobody holding the opposite position is available" error and made
+              // no difference, so the exclusion comes from the dismissal itself, not this flag.)
+              dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer);
             })
           }
         />
