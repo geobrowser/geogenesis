@@ -283,6 +283,9 @@ beforeEach(() => {
     })
   );
   mocks.setThankingDebate.mockReset();
+  // The media session remembers a hand-picked microphone across sessions, which is the point of it
+  // — but that outlives a test too, and a device chosen in one is not a device chosen in the next.
+  window.localStorage.clear();
   mocks.enumerateDevices.mockReset().mockResolvedValue([
     { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
     { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },

@@ -181,9 +181,22 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     setAudioInputDevices(current => (sameMediaDeviceOptions(current, audioInputs) ? current : audioInputs));
     setAudioOutputDevices(current => (sameMediaDeviceOptions(current, availableOutputs) ? current : availableOutputs));
     setVideoInputDevices(current => (sameMediaDeviceOptions(current, videoInputs) ? current : videoInputs));
-    const nextAudioInputId = retainOrPreferDefaultDevice(selectedAudioInputIdRef.current, audioInputs);
-    const nextAudioOutputId = retainOrPreferDefaultDevice(selectedAudioOutputIdRef.current, availableOutputs);
-    const nextVideoInputId = retainOrPreferDefaultDevice(selectedVideoInputIdRef.current, videoInputs);
+    const remembered = readRememberedDevices();
+    const nextAudioInputId = retainRememberedOrDefault(
+      selectedAudioInputIdRef.current,
+      audioInputs,
+      remembered.audioinput
+    );
+    const nextAudioOutputId = retainRememberedOrDefault(
+      selectedAudioOutputIdRef.current,
+      availableOutputs,
+      remembered.audiooutput
+    );
+    const nextVideoInputId = retainRememberedOrDefault(
+      selectedVideoInputIdRef.current,
+      videoInputs,
+      remembered.videoinput
+    );
 
     selectedAudioInputIdRef.current = nextAudioInputId;
     selectedAudioOutputIdRef.current = nextAudioOutputId;
@@ -241,8 +254,13 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         localTracksRef.current = [];
         localMediaStreamRef.current = null;
         if (!replacingReadyPreview) setPreviewStreamState(null);
-        const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
-        const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
+        // Nothing is selected on a session's first capture, so without this the OS default is what
+        // opens — and on macOS that is regularly a Continuity iPhone. A remembered id is a plain
+        // preference rather than an `exact` constraint, so a device that has since gone away falls
+        // back to the default instead of failing the capture.
+        const remembered = readRememberedDevices();
+        const audioInputId = options.audioInputId ?? (selectedAudioInputIdRef.current || remembered.audioinput || '');
+        const videoInputId = options.videoInputId ?? (selectedVideoInputIdRef.current || remembered.videoinput || '');
         const tracks = (await livekit.createLocalTracks({
           audio: audioInputId ? { deviceId: audioInputId } : true,
           video: videoInputId ? { deviceId: videoInputId } : true,
@@ -298,6 +316,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
 
   const changeAudioInput = React.useCallback(
     (deviceId: string) => {
+      // An explicit pick outranks anything guessed from labels, this session and every one after.
+      rememberDevice('audioinput', deviceId);
       selectedAudioInputIdRef.current = deviceId;
       setSelectedAudioInputId(deviceId);
       void ensurePreview({
@@ -311,6 +331,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
 
   const changeVideoInput = React.useCallback(
     (deviceId: string) => {
+      rememberDevice('videoinput', deviceId);
       selectedVideoInputIdRef.current = deviceId;
       setSelectedVideoInputId(deviceId);
       void ensurePreview({
@@ -353,6 +374,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           );
         }
         if (!isCurrent()) return;
+        rememberDevice('audiooutput', selectedId);
         selectedAudioOutputIdRef.current = selectedId;
         setSelectedAudioOutputId(selectedId);
       } catch {
@@ -485,8 +507,55 @@ export function debateMediaSessionKey(debateId: string) {
   return `debate:${debateId}`;
 }
 
-function retainOrPreferDefaultDevice(current: string, devices: MediaDeviceOption[]) {
+/**
+ * macOS routes the system default microphone and speaker to a nearby iPhone or iPad over
+ * Continuity, so "the default device" is regularly a phone in another room — two testers hit it,
+ * and hit it again on every join, because nothing carried their correction forward. Remembering the
+ * pick is what fixes that: the OS default is the problem, so the answer is to stop asking it twice.
+ *
+ * Recognising a Continuity device up front and skipping it was the other half of the idea, and it
+ * is deliberately not here. Device labels only exist after permission has been granted, so choosing
+ * on label means enumerating before opening anything, which reorders the capture path — six of the
+ * room's own device tests caught it, one of them because the pre-capture enumeration swallowed the
+ * failure it exists to prove. Not worth it for a guess, when one deliberate pick settles it.
+ */
+const REMEMBERED_DEVICES_STORAGE_KEY = 'geo.debates.devices';
+
+type RememberedDevices = Partial<Record<MediaDeviceOption['kind'], string>>;
+
+/**
+ * The device the viewer last picked by hand, per kind. Persisted because the thing being worked
+ * around *is* the OS default: without remembering, the correction has to be made again on every
+ * join, which is the complaint rather than a detail of it.
+ */
+function readRememberedDevices(): RememberedDevices {
+  try {
+    const stored = window.localStorage.getItem(REMEMBERED_DEVICES_STORAGE_KEY);
+    if (!stored) return {};
+    const parsed: unknown = JSON.parse(stored);
+    return parsed && typeof parsed === 'object' ? (parsed as RememberedDevices) : {};
+  } catch {
+    // Private mode, a quota wall, or somebody else's JSON under this key. A forgotten preference is
+    // a far smaller problem than a media session that refuses to start.
+    return {};
+  }
+}
+
+function rememberDevice(kind: MediaDeviceOption['kind'], deviceId: string) {
+  if (!deviceId) return;
+  try {
+    window.localStorage.setItem(
+      REMEMBERED_DEVICES_STORAGE_KEY,
+      JSON.stringify({ ...readRememberedDevices(), [kind]: deviceId })
+    );
+  } catch {
+    // See above — none of this is worth failing a join over.
+  }
+}
+
+function retainRememberedOrDefault(current: string, devices: MediaDeviceOption[], remembered: string | undefined) {
   if (current && devices.some(device => device.deviceId === current)) return current;
+  if (remembered && devices.some(device => device.deviceId === remembered)) return remembered;
   return devices.find(device => device.deviceId === 'default')?.deviceId ?? devices[0]?.deviceId ?? '';
 }
 
