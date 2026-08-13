@@ -88,6 +88,7 @@ export async function MyGovernanceProposalsList({
             creatorName={creatorName}
             creatorAvatarUrl={creator.avatarUrl}
             creatorValue={creatorValue}
+            startTime={p.startTime}
             endTime={p.endTime}
             status={p.status}
             canExecute={p.canExecute}

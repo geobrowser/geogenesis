@@ -1373,7 +1373,7 @@ function useVisiblePropertySections(
         id: 'ungrouped',
         isGroup: true,
         groupId: 'ungrouped',
-        label: 'Ungrouped properties',
+        label: 'Other properties',
         defaultCollapsed: false,
         collapsible: false,
         entries: ungroupedEntries,

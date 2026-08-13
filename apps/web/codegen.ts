@@ -9,6 +9,12 @@ const config: CodegenConfig = {
   generates: {
     './core/gql/': {
       preset: 'client',
+      config: {
+        // Preserve the runtime enum values and permissive custom-scalar shape
+        // used by existing consumers while adopting the v6 operation-only output.
+        enumType: 'native',
+        defaultScalarType: 'any',
+      },
     },
   },
 };

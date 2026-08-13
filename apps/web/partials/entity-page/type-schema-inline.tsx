@@ -172,7 +172,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
           <div className="flex flex-col gap-2">
             {sections.groups.length > 0 && (
               <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
-                Ungrouped properties
+                Other properties
               </Text>
             )}
             <div className="flex flex-wrap gap-2">

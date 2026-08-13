@@ -74,14 +74,15 @@ export function Execute({ proposalId, spaceId, variant = 'default', fallback = n
     );
   }
 
-  // The proposal's own action reverts on-chain — it can never be executed and
-  // "Pending execution" would be a lie. Say so honestly. (Editors can recreate
-  // the request one click away from the Editors menu.)
+  // The proposal can never be executed — either the DAO has no record of it, or
+  // its own action reverts on-chain. "Pending execution" would be a lie. Say so
+  // honestly. (Editors can recreate the request one click away from the Editors
+  // menu; a proposal missing from the DAO has to be published again.)
   if (executability === 'dead' && status === 'idle') {
     return (
       <div
         className="inline-flex h-6 items-center rounded bg-errorTertiary px-1.5 text-metadata leading-none text-red-01"
-        title="One of this proposal's on-chain actions reverts when executed. Older editor and member requests can hit this permanently and need to be recreated."
+        title="This proposal can never be executed: either the space's DAO has no record of it, or one of its on-chain actions reverts. Older editor and member requests, and proposals that predate this space's migration, hit this permanently and need to be recreated."
       >
         Can&apos;t be completed
       </div>
