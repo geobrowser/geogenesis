@@ -115,16 +115,17 @@ export function DebateCoordinator() {
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
   // already, and this is the only thing that tells them. The accepting tab is on the debate page by
   // the time its activity catches up, so `viewingDebate` keeps the prompt off its screen.
-  const [snoozedDebateId, setSnoozedDebateId] = React.useState<string | null>(null);
+  //
+  // There is no snooze here, unlike the request and challenge popups. Those leave something behind
+  // that the other side is not waiting on; this one is a debate with an opponent already in the
+  // room, so the only two honest answers are to join or to decline — and declining cancels it for
+  // both of them. Dismissing it locally stranded the opponent in the ready screen.
+  //
   // The dialog names both sides, so it needs both. Deciding that here rather than letting the
   // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
   // without its participants would offer no way in at all.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && describable && !viewingDebate && debate.id !== snoozedDebateId ? debate : null;
-
-  React.useEffect(() => {
-    if (snoozedDebateId && debate?.id !== snoozedDebateId) setSnoozedDebateId(null);
-  }, [debate, snoozedDebateId]);
+  const promptedDebate = debate && describable && !viewingDebate ? debate : null;
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -174,12 +175,7 @@ export function DebateCoordinator() {
         </div>
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
-        <DebateReadyPrompt
-          key={promptedDebate.id}
-          debate={promptedDebate}
-          currentUserId={currentUserId}
-          onNotNow={() => setSnoozedDebateId(promptedDebate.id)}
-        />
+        <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
       {debate && !viewingDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the

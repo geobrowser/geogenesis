@@ -33,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
   refetch: vi.fn(),
+  abortMutateAsync: vi.fn(),
+  clearDebateActivity: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -59,6 +61,8 @@ vi.mock('./hooks', () => ({
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
+  useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
+  useClearDebateActivity: () => mocks.clearDebateActivity,
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -116,6 +120,9 @@ beforeEach(() => {
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
+  mocks.abortMutateAsync.mockReset();
+  mocks.abortMutateAsync.mockResolvedValue(undefined);
+  mocks.clearDebateActivity.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -188,6 +195,22 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  // Declining is the opposite of the request popup's "Not now" one line below: there is an opponent
+  // in the ready screen waiting on this answer, so it goes to the server instead of being snoozed.
+  it('cancels the debate when the viewer declines it', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+
+    render(<DebateCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
   it('does not offer a debate the viewer is already in', async () => {
