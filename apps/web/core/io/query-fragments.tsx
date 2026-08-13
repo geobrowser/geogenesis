@@ -118,6 +118,7 @@ export const entitiesQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      createdAt
       updatedAt
 
       types {
@@ -203,6 +204,7 @@ export const entityQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+      createdAt
       updatedAt
 
       types {

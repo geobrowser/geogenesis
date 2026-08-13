@@ -20,10 +20,13 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import type { Cell } from '~/core/types';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
+// Creation time first — the row shows how old the entity is, not when it was
+// last touched, and the two drift apart by days on entities that keep getting
+// edited. updatedAt is only a fallback for records indexed without a createdAt.
 function entityCreatedAtSec(entity: { createdAt?: string | number; updatedAt?: string | number } | null | undefined) {
   return (
-    parseEntityUpdatedAtToUnixSec(entity?.updatedAt != null ? String(entity.updatedAt) : undefined) ||
-    parseEntityUpdatedAtToUnixSec(entity?.createdAt != null ? String(entity.createdAt) : undefined)
+    parseEntityUpdatedAtToUnixSec(entity?.createdAt != null ? String(entity.createdAt) : undefined) ||
+    parseEntityUpdatedAtToUnixSec(entity?.updatedAt != null ? String(entity.updatedAt) : undefined)
   );
 }
 

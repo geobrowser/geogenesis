@@ -27,7 +27,12 @@ const mocks = vi.hoisted(() => ({
   smartAccount: null as object | null,
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
-  storeEntity: null as { relations: unknown[]; values: unknown[] } | null,
+  storeEntity: null as {
+    relations: unknown[];
+    values: unknown[];
+    createdAt?: string;
+    updatedAt?: string;
+  } | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -276,6 +281,7 @@ describe('EntityVoteButtons on unpublished data', () => {
   // published data, so there is nothing to respond to — and telling them to
   // publish first is noise on every row of a large import.
   it('renders nothing rather than a publish-first notice', () => {
+    // No indexed timestamps — this entity has never been published.
     mocks.storeEntity = {
       relations: [
         {
@@ -298,5 +304,35 @@ describe('EntityVoteButtons on unpublished data', () => {
     });
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // The local-edit flags are never cleared once set, so a published entity that
+  // was edited at some point still carries them. Responses belong to the
+  // published record, so they stay available.
+  it('keeps responses available on a published entity that carries local edits', () => {
+    mocks.storeEntity = {
+      createdAt: '1784778383',
+      updatedAt: '1785350349',
+      relations: [
+        {
+          spaceId: 'space-1',
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isLocal: true,
+          hasBeenPublished: false,
+          isDeleted: false,
+        },
+      ],
+      values: [],
+    };
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<EntityVoteButtons entityId="claim-1" spaceId="space-1" />, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    expect(container).not.toBeEmptyDOMElement();
   });
 });

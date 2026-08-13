@@ -97,8 +97,17 @@ export function EntityVoteButtons({
     ) === true;
   const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
-  const hasUnpublishedResponseKindEdit =
-    responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
+  // A never-published entity has no indexed timestamps — nothing carries them
+  // but the indexed record itself. That, rather than the local-edit flags, is
+  // what "unpublished" means here: those flags mark a row as locally written
+  // and nothing ever clears them, so a published entity that was once edited
+  // still looks unpublished to them.
+  const isUnpublishedDraft =
+    responseKindOverride === undefined &&
+    entity != null &&
+    entity.createdAt == null &&
+    entity.updatedAt == null &&
+    hasUnpublishedClaimResponseKindEdit(entity, spaceId);
   const queryResponseKind = responseKind ?? 'stance';
   const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
   const variant: ResponseVariant =
@@ -308,7 +317,7 @@ export function EntityVoteButtons({
   // Responses are recorded against published data, so there's nothing to
   // respond to yet. Render nothing rather than a notice: the reader is looking
   // at their own draft and doesn't need to be told it isn't published.
-  if (hasUnpublishedResponseKindEdit) {
+  if (isUnpublishedDraft) {
     return null;
   }
 
@@ -441,11 +450,11 @@ function DebateVotePill({
         disabled={disabled}
         title={positiveTitle}
         onClick={onPositive}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text aria-pressed:text-ctaPrimary disabled:cursor-default disabled:opacity-50"
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-ctaPrimary"
       >
         <VoteArrow direction="up" filled={positiveActive} color={positiveActive ? 'ctaPrimary' : undefined} />
       </button>
-      <span className="text-metadataMedium tabular-nums text-text">{score}</span>
+      <span className="text-metadataMedium text-text tabular-nums">{score}</span>
       <button
         type="button"
         aria-label={negativeTitle}
@@ -453,7 +462,7 @@ function DebateVotePill({
         disabled={disabled}
         title={negativeTitle}
         onClick={onNegative}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text aria-pressed:text-red-01 disabled:cursor-default disabled:opacity-50"
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-red-01"
       >
         <VoteArrow direction="down" filled={negativeActive} color={negativeActive ? 'red-01' : undefined} />
       </button>

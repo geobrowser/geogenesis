@@ -187,6 +187,12 @@ export class E {
       types,
       values: values,
       relations: relations,
+      // Carried through from the indexed entity. Rebuilding without these made
+      // any entity with a local edit look like it had never been created —
+      // feed rows lost their age for as long as an edit sat in review, and
+      // callers can't tell a draft from an edited published entity.
+      createdAt: remoteEntity.createdAt,
+      updatedAt: remoteEntity.updatedAt,
     };
   }
 
