@@ -27,6 +27,7 @@ import {
   useDebateClaimsBySpaces,
   useDebateRematch,
   useDebateRematchClaims,
+  useDebateRematchClaimsForIds,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
@@ -36,6 +37,7 @@ import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
@@ -46,12 +48,13 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { Button } from '~/design-system/button';
 import { getChecked } from '~/design-system/checkbox';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
-type PickerTab = 'opponent' | 'all';
+type PickerTab = 'recommended' | 'opponent' | 'all';
 
 /**
  * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
@@ -125,9 +128,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       return { search: debouncedSearch, entities: [...next.values()] };
     });
   }, [debouncedSearch, publishedClaimsPage, publishedClaimsPlaceholder]);
-  const publishedClaimIds = React.useMemo(() => publishedClaims.entities.map(claim => claim.id), [publishedClaims]);
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
-  const publishedClaimsQuery = useDebateRematchClaims(sessionId, publishedClaimIds);
   const createRequest = useCreateDebateRematchRequest(sessionId);
   const leaveSession = useLeaveDebateRematch(sessionId);
   const acceptRequest = useAcceptDebateRematchRequest();
@@ -135,18 +136,60 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const session = sessionQuery.data ?? null;
   // A session opened from a profile challenge has no source debate, so nothing to exclude.
   const sourceDebateQuery = useDebate(session?.source_debate_id ?? '', Boolean(session?.source_debate_id));
+
+  // The opponent is whichever participant isn't the local user; both drive the curated lookup.
+  const participantSpaceIds = React.useMemo(
+    () => (session?.participants ?? []).map(participant => participant.profile_space_id),
+    [session?.participants]
+  );
+  // Curated claims are picked by hand, so they can be ones the browsed pages haven't reached. The
+  // hook hands back their entities along with the sections, and they join the same pool the browsed
+  // claims feed — so the session lookup, response kinds and the cards treat them like any other
+  // published claim.
+  const {
+    sections: recommendedSections,
+    claimEntities: recommendedEntities,
+    isLoading: recommendedLoading,
+  } = useRecommendedClaimSections(participantSpaceIds);
+
+  const recommendedClaimIds = React.useMemo(
+    () => [...new Set(recommendedSections.flatMap(section => section.claimIds))],
+    [recommendedSections]
+  );
+
+  const claimEntities = React.useMemo(() => {
+    const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
+    for (const claim of recommendedEntities) if (!byId.has(claim.id)) byId.set(claim.id, claim);
+    return [...byId.values()];
+  }, [publishedClaims.entities, recommendedEntities]);
+
+  // Looked up separately from the browsed ids rather than as one list. Sharing a list would make
+  // the curated tab wait on the graph-wide claim scan below, which it draws nothing from — and
+  // that scan is the slowest thing on the page.
+  //
+  // Both batched: geo-chat caps the ids per request, and the browsed list alone runs past that cap
+  // after a page or two of Load more.
+  const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
+  const browsedClaimIds = React.useMemo(
+    () => publishedClaims.entities.map(claim => claim.id),
+    [publishedClaims.entities]
+  );
+  const browsedClaimsQuery = useDebateRematchClaimsForIds(sessionId, browsedClaimIds);
+
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(
-      [...(savedClaimsQuery.data?.claims ?? []), ...(publishedClaimsQuery.data?.claims ?? [])].map(claim => [
-        claim.claim.claim_entity_id,
-        claim,
-      ])
+      [
+        ...(savedClaimsQuery.data?.claims ?? []),
+        ...(curatedClaimsQuery.data?.claims ?? []),
+        ...(browsedClaimsQuery.data?.claims ?? []),
+      ].map(claim => [claim.claim.claim_entity_id, claim])
     );
     const excludedClaimIds = new Set([
       ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(publishedClaimsQuery.data?.excluded_claim_ids ?? []),
+      ...(curatedClaimsQuery.data?.excluded_claim_ids ?? []),
+      ...(browsedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
-    for (const claim of publishedClaims.entities) {
+    for (const claim of claimEntities) {
       const homeSpaceId = claimHomeSpaceId(claim);
       if (
         claim.name &&
@@ -179,8 +222,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
-    publishedClaims.entities,
-    publishedClaimsQuery.data,
+    browsedClaimsQuery.data,
+    claimEntities,
+    curatedClaimsQuery.data,
     savedClaimsQuery.data,
     session?.participants,
     sourceDebateQuery.data,
@@ -204,17 +248,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // label each card and drive the "Any topic" filter. A claim can carry several topics.
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of publishedClaims.entities) {
+    for (const entity of claimEntities) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
       if (topics.length > 0) map.set(entity.id, topics);
     }
     return map;
-  }, [publishedClaims.entities]);
+  }, [claimEntities]);
 
-  // Opens on the opponent's positions: those are the claims that can turn into a debate now.
-  const [tab, setTab] = React.useState<PickerTab>('opponent');
+  // Left unset until the viewer picks one: Recommended is the best landing tab when a curator has
+  // put something together for this pairing, and it doesn't exist otherwise. Deciding in state
+  // would fix the default before that lookup settles.
+  const [chosenTab, setChosenTab] = React.useState<PickerTab | null>(null);
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [topicId, setTopicId] = React.useState<string | null>(null);
 
@@ -246,6 +292,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => claims.filter(claim => opponentPositionOf(claim) !== null).length,
     [claims, opponentPositionOf]
   );
+
+  const hasRecommended = recommendedSections.length > 0;
+  // Held on the curated tab while the lookup runs, so an empty result mid-flight can't land the
+  // viewer on the opponent tab and then move them once it settles.
+  const tab: PickerTab = chosenTab ?? (hasRecommended || recommendedLoading ? 'recommended' : 'opponent');
+  const setTab = setChosenTab;
 
   const facetSpaceIds = React.useMemo(() => [...new Set(claims.map(claim => claim.claim.space_id))], [claims]);
 
@@ -280,6 +332,31 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
 
+  // Each tab draws from a different set of queries, so each waits on its own. The browsed scan is
+  // the slow one and only the All tab reads it.
+  const tabIsLoading =
+    sessionQuery.isLoading ||
+    (tab === 'recommended'
+      ? recommendedLoading || curatedClaimsQuery.isLoading
+      : tab === 'opponent'
+        ? savedClaimsQuery.isLoading
+        : savedClaimsQuery.isLoading || publishedClaimsLoading || browsedClaimsQuery.isLoading);
+
+  // The curated tab groups by block rather than listing flat, but narrows on the same filters.
+  const visibleSections = React.useMemo(() => {
+    if (tab !== 'recommended') return [];
+    const visibleById = new Map(visibleClaims.map(claim => [claim.claim.claim_entity_id, claim]));
+
+    return recommendedSections
+      .map(section => ({
+        ...section,
+        claims: section.claimIds
+          .map(claimId => visibleById.get(claimId))
+          .filter((claim): claim is DebateRematchClaim => claim !== undefined),
+      }))
+      .filter(section => section.claims.length > 0);
+  }, [recommendedSections, tab, visibleClaims]);
+
   // Readiness drives the card's Debate toggle and the rematch claims response doesn't carry it, so
   // read it from the per-space debate-claims endpoint instead — one query per space on screen.
   const claimIdsBySpace = React.useMemo(() => {
@@ -309,6 +386,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     });
   };
 
+  const renderClaimCard = (claim: DebateRematchClaim) => (
+    <RematchClaimCard
+      key={claim.claim.claim_entity_id}
+      claim={claim}
+      session={session}
+      currentUserId={currentUserId}
+      readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
+      readinessUnresolved={readinessUnresolved}
+      onRequest={() =>
+        createRequest.mutate({
+          source_space_id: claim.claim.space_id,
+          claim_id: claim.claim.claim_entity_id,
+          format_id: defaultDebateFormatId,
+        })
+      }
+      busy={createRequest.isPending || session?.status === 'request_pending'}
+    />
+  );
+
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
   const incomingRequestParticipants =
@@ -337,6 +433,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         <header className="mb-4 flex items-center justify-between gap-4">
           <h1 className="sr-only">Rematch {remoteName}</h1>
           <div className="flex min-w-0 items-center gap-5">
+            {hasRecommended || recommendedLoading ? (
+              <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
+                Recommended
+              </TabButton>
+            ) : null}
             <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
               <span className="truncate">{firstNamePossessive(remoteName)} positions</span>
               <span
@@ -399,20 +500,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )}
 
         <HubQueryState
+          // Only what the visible tab actually draws from, and only while it has nothing to show.
+          // Holding every tab on the slowest query meant the session's own claims — which arrive in
+          // one round trip — sat behind a graph-wide scan they don't come from.
           isLoading={
-            sessionQuery.isLoading ||
-            savedClaimsQuery.isLoading ||
-            publishedClaimsQuery.isLoading ||
-            publishedClaimsLoading
+            tabIsLoading && (tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0)
           }
-          error={sessionQuery.error ?? savedClaimsQuery.error ?? publishedClaimsQuery.error}
-          isEmpty={visibleClaims.length === 0}
+          error={sessionQuery.error ?? savedClaimsQuery.error ?? browsedClaimsQuery.error}
+          isEmpty={tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
             hasFilters
               ? 'No claims match these filters.'
-              : tab === 'opponent'
-                ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                : 'No other eligible claims are available yet.'
+              : tab === 'recommended'
+                ? `Nothing recommended for you and ${remoteName} yet.`
+                : tab === 'opponent'
+                  ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                  : 'No other eligible claims are available yet.'
           }
           emptyAction={
             hasFilters
@@ -427,31 +530,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               : undefined
           }
         >
-          <HubCardList>
-            {visibleClaims.map(claim => (
-              <RematchClaimCard
-                key={claim.claim.claim_entity_id}
-                claim={claim}
-                session={session}
-                currentUserId={currentUserId}
-                readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
-                readinessUnresolved={readinessUnresolved}
-                onRequest={() =>
-                  createRequest.mutate({
-                    source_space_id: claim.claim.space_id,
-                    claim_id: claim.claim.claim_entity_id,
-                    format_id: defaultDebateFormatId,
-                  })
-                }
-                busy={createRequest.isPending || session?.status === 'request_pending'}
-              />
-            ))}
-          </HubCardList>
+          {tab === 'recommended' ? (
+            // Each data block on the curator's page is its own section, in page order.
+            <div className="flex flex-col gap-4">
+              {visibleSections.map(section => (
+                <RecommendedSection key={section.id} name={section.name} count={section.claims.length}>
+                  <HubCardList>{section.claims.map(renderClaimCard)}</HubCardList>
+                </RecommendedSection>
+              ))}
+            </div>
+          ) : (
+            <HubCardList>{visibleClaims.map(renderClaimCard)}</HubCardList>
+          )}
         </HubQueryState>
 
         {/* Outside the empty state deliberately: when a filter empties the list, fetching another
-            page is the way out, so the control has to stay reachable. */}
-        {publishedClaimsHasNextPage && (
+            page is the way out, so the control has to stay reachable. Not on the curated tab
+            though — its sections come from the page whole, so there is no next page to fetch. */}
+        {tab !== 'recommended' && publishedClaimsHasNextPage && (
           <div className="mt-5 flex justify-center">
             <Button
               type="button"
@@ -689,6 +785,33 @@ function useReadinessOnFirstPosition({
     setWantsReadiness(false);
     setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
   }, [claim.claim_entity_id, claim.space_id, responseSettled, setReadiness, wantsReadiness]);
+}
+
+/** One curated block, collapsible so a long page of recommendations stays scannable. */
+function RecommendedSection({ name, count, children }: { name: string; count: number; children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(true);
+  const contentId = React.useId();
+
+  return (
+    <section>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={contentId}
+        onClick={() => setOpen(current => !current)}
+        className="mb-2 flex w-full items-center gap-2 text-left"
+      >
+        <Text as="h2" variant="smallTitle" color="text">
+          {name}
+        </Text>
+        <span className={cx('text-grey-04 transition-transform', open ? 'rotate-180' : undefined)}>
+          <ChevronDownSmall />
+        </span>
+        <span className="sr-only">{`${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
+      </button>
+      {open ? <div id={contentId}>{children}</div> : null}
+    </section>
+  );
 }
 
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */
