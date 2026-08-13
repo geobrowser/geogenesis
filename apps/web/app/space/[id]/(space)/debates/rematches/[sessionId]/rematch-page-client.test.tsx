@@ -10,13 +10,18 @@ import type { DebateRematchClaim, DebateRematchSession } from '~/core/debates/ap
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE } = vi.hoisted(() => ({
-  SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
-  SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
-  CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
-  CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
-  CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
-}));
+const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CRYPTO_SPACE, PODCASTS_SPACE, NAME_PROPERTY } =
+  vi.hoisted(() => ({
+    SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
+    SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
+    // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
+    CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
+    PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
+    NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
+    CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
+    CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
+    CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
+  }));
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
@@ -729,6 +734,36 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.setReadiness).toHaveBeenCalledWith({
       spaceId: SPACE_1,
       claimId: CLAIM_SHARED,
+      ready: true,
+    });
+  });
+
+  // `entity.spaces` is rank-ordered and counts any space that merely references the claim, so
+  // `spaces[0]` is a citing space whenever it outranks the claim's own. Responding in one space and
+  // asking to debate in another is what the server answers with "respond to this claim in this
+  // space before enabling debate readiness".
+  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', () => {
+    mocks.entities = [
+      {
+        ...publishedEntity(CLAIM_MORE, 'A claim that lives in Podcasts'),
+        // Crypto (rank 2) outranks Podcasts (rank 8), but only Podcasts names the claim.
+        spaces: [CRYPTO_SPACE, PODCASTS_SPACE],
+        values: [
+          { isDeleted: false, property: { id: NAME_PROPERTY }, spaceId: PODCASTS_SPACE, value: 'A claim that lives in Podcasts' },
+        ],
+      },
+    ];
+    // The toggle only offers itself once the viewer holds a position.
+    mocks.optimisticResponses.set(CLAIM_MORE, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const card = screen.getByText('A claim that lives in Podcasts').closest('article');
+    fireEvent.click(within(card!).getByRole('switch', { name: 'Ready to debate this claim' }));
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: PODCASTS_SPACE,
+      claimId: CLAIM_MORE,
       ready: true,
     });
   });

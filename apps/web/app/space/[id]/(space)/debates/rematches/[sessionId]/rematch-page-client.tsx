@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -41,6 +42,7 @@ import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { Button } from '~/design-system/button';
 import { getChecked } from '~/design-system/checkbox';
@@ -145,9 +147,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(publishedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
     for (const claim of publishedClaims.entities) {
+      const homeSpaceId = claimHomeSpaceId(claim);
       if (
         claim.name &&
-        claim.spaces[0] &&
+        homeSpaceId &&
         !excludedClaimIds.has(claim.id) &&
         claim.id !== sourceDebateQuery.data?.claim.claim_entity_id &&
         !synchronizedClaims.has(claim.id)
@@ -155,12 +158,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         synchronizedClaims.set(claim.id, {
           claim: {
             id: claim.id,
-            space_id: claim.spaces[0]!,
+            space_id: homeSpaceId,
             claim_entity_id: claim.id,
             claim: claim.name!,
             description: claim.description,
           },
-          response_kind: claimResponseKind(claim, claim.spaces[0]!),
+          response_kind: claimResponseKind(claim, homeSpaceId),
           participants: (session?.participants ?? []).map(participant => ({
             user_id: participant.user_id,
             position: null,
@@ -711,6 +714,40 @@ function rematchPositionSummaries(
       participants,
     };
   });
+}
+
+/**
+ * The space a claim actually lives in.
+ *
+ * Everything the picker does with a claim is scoped to one space — the response is published
+ * against it, geo-chat keys its claim row and readiness on it, and the "Is factual" value that
+ * decides the response kind is read from it. Getting it wrong means responding in one space and
+ * asking to debate in another, which the server answers with "respond to this claim in this space
+ * before enabling debate readiness".
+ *
+ * `entity.spaces` can't answer it: it is ordered by a fixed space ranking and counts every space
+ * holding *any* value or even an inbound relation, so `spaces[0]` is a space that merely mentions
+ * the claim whenever that space outranks the claim's own — a Podcasts claim cited from Root or
+ * Crypto resolves to those. Prefer the spaces where the claim is actually named, which is how the
+ * entity side panel scopes the same entity.
+ */
+function claimHomeSpaceId(entity: {
+  spaces: string[];
+  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
+}): string | null {
+  const namedSpaceIds = new Set<string>();
+  for (const value of entity.values ?? []) {
+    if (
+      value.isDeleted !== true &&
+      uuidToHex(value.property.id) === uuidToHex(SystemIds.NAME_PROPERTY) &&
+      typeof value.value === 'string' &&
+      value.value.trim().length > 0
+    ) {
+      namedSpaceIds.add(value.spaceId);
+    }
+  }
+
+  return getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(entity.spaces) ?? null;
 }
 
 function claimResponseKind(
